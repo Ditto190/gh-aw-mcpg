@@ -9,6 +9,16 @@ import (
 
 var logEvaluator = logger.New("difc:evaluator")
 
+// DIFC mode string constants - use these for consistent mode references
+const (
+	ModeStrict    = "strict"
+	ModeFilter    = "filter"
+	ModePropagate = "propagate"
+)
+
+// ValidModes contains all valid DIFC enforcement mode strings
+var ValidModes = []string{ModeStrict, ModeFilter, ModePropagate}
+
 // OperationType indicates the nature of the resource access
 type OperationType int
 
@@ -55,11 +65,11 @@ const (
 func (m EnforcementMode) String() string {
 	switch m {
 	case EnforcementStrict:
-		return "strict"
+		return ModeStrict
 	case EnforcementFilter:
-		return "filter"
+		return ModeFilter
 	case EnforcementPropagate:
-		return "propagate"
+		return ModePropagate
 	default:
 		return "unknown"
 	}
@@ -68,14 +78,14 @@ func (m EnforcementMode) String() string {
 // ParseEnforcementMode parses a string into an EnforcementMode
 func ParseEnforcementMode(s string) (EnforcementMode, error) {
 	switch strings.ToLower(s) {
-	case "strict", "":
+	case ModeStrict, "":
 		return EnforcementStrict, nil
-	case "filter":
+	case ModeFilter:
 		return EnforcementFilter, nil
-	case "propagate":
+	case ModePropagate:
 		return EnforcementPropagate, nil
 	default:
-		return EnforcementStrict, fmt.Errorf("unknown enforcement mode: %s (valid modes: strict, filter, propagate)", s)
+		return EnforcementStrict, fmt.Errorf("unknown enforcement mode: %s (valid modes: %s, %s, %s)", s, ModeStrict, ModeFilter, ModePropagate)
 	}
 }
 

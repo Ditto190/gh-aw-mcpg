@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/github/gh-aw-mcpg/internal/config"
+	"github.com/github/gh-aw-mcpg/internal/difc"
 	"github.com/github/gh-aw-mcpg/internal/logger"
 	"github.com/github/gh-aw-mcpg/internal/server"
 	"github.com/github/gh-aw-mcpg/internal/version"
@@ -295,11 +296,11 @@ func run(cmd *cobra.Command, args []string) error {
 	if enableDIFC {
 		log.Printf("DIFC enforcement enabled with mode: %s", difcMode)
 		switch difcMode {
-		case "strict":
+		case difc.ModeStrict:
 			log.Println("  - Strict mode: violations are denied")
-		case "filter":
+		case difc.ModeFilter:
 			log.Println("  - Filter mode: denied tools/resources are silently removed")
-		case "propagate":
+		case difc.ModePropagate:
 			log.Println("  - Propagate mode: agent labels auto-adjusted on reads")
 		}
 	} else {

@@ -4,6 +4,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/github/gh-aw-mcpg/internal/difc"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -206,13 +207,13 @@ func TestGetDefaultDIFCMode(t *testing.T) {
 func TestValidDIFCModes(t *testing.T) {
 	require := require.New(t)
 
-	// Verify all expected modes are in the map
-	require.True(validDIFCModes["strict"], "strict should be valid")
-	require.True(validDIFCModes["filter"], "filter should be valid")
-	require.True(validDIFCModes["propagate"], "propagate should be valid")
+	// Verify all expected modes are valid using isValidDIFCMode
+	require.True(isValidDIFCMode(difc.ModeStrict), "strict should be valid")
+	require.True(isValidDIFCMode(difc.ModeFilter), "filter should be valid")
+	require.True(isValidDIFCMode(difc.ModePropagate), "propagate should be valid")
 
-	// Verify map only has 3 entries
-	require.Len(validDIFCModes, 3, "should only have 3 valid modes")
+	// Verify ValidModes slice has 3 entries
+	require.Len(difc.ValidModes, 3, "should only have 3 valid modes")
 }
 
 func TestGetDefaultConfigExtensions(t *testing.T) {

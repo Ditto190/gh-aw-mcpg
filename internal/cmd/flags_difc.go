@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/github/gh-aw-mcpg/internal/difc"
 	"github.com/github/gh-aw-mcpg/internal/envutil"
 	"github.com/spf13/cobra"
 )
@@ -14,16 +15,8 @@ import (
 // DIFC flag defaults
 const (
 	defaultEnableDIFC       = false
-	defaultDIFCMode         = "strict" // strict, filter, or propagate
 	defaultConfigExtensions = false
 )
-
-// Valid DIFC enforcement modes
-var validDIFCModes = map[string]bool{
-	"strict":    true,
-	"filter":    true,
-	"propagate": true,
-}
 
 // DIFC flag variables
 var (
@@ -56,11 +49,21 @@ func getDefaultEnableDIFC() bool {
 func getDefaultDIFCMode() string {
 	if envMode := os.Getenv("MCP_GATEWAY_DIFC_MODE"); envMode != "" {
 		mode := strings.ToLower(envMode)
-		if validDIFCModes[mode] {
+		if isValidDIFCMode(mode) {
 			return mode
 		}
 	}
-	return defaultDIFCMode
+	return difc.ModeStrict
+}
+
+// isValidDIFCMode checks if the given mode string is a valid DIFC mode
+func isValidDIFCMode(mode string) bool {
+	for _, valid := range difc.ValidModes {
+		if mode == valid {
+			return true
+		}
+	}
+	return false
 }
 
 // getDefaultConfigExtensions returns the default config extensions setting,
@@ -83,8 +86,8 @@ func getDefaultSessionIntegrity() string {
 
 // ValidateDIFCMode validates the DIFC mode flag value and returns an error if invalid
 func ValidateDIFCMode(mode string) error {
-	if !validDIFCModes[strings.ToLower(mode)] {
-		return fmt.Errorf("invalid DIFC mode %q: must be one of: strict, filter, propagate", mode)
+	if !isValidDIFCMode(strings.ToLower(mode)) {
+		return fmt.Errorf("invalid DIFC mode %q: must be one of: %s, %s, %s", mode, difc.ModeStrict, difc.ModeFilter, difc.ModePropagate)
 	}
 	return nil
 }
