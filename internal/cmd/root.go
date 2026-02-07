@@ -180,6 +180,12 @@ func run(cmd *cobra.Command, args []string) error {
 	var cfg *config.Config
 	var err error
 
+	// Propagate enableConfigExt flag to environment for config.LoadFromStdin()
+	// This allows the config package to know if extensions are enabled via the flag
+	if enableConfigExt {
+		os.Setenv("MCP_GATEWAY_CONFIG_EXTENSIONS", "true")
+	}
+
 	if configStdin {
 		log.Println("Reading configuration from stdin...")
 		cfg, err = config.LoadFromStdin()

@@ -47,6 +47,9 @@ type Config struct {
 	// Servers maps server names to their configurations
 	Servers map[string]*ServerConfig `toml:"servers" json:"servers"`
 
+	// Guards maps guard names to their configurations
+	Guards map[string]*GuardConfig `toml:"guards" json:"guards,omitempty"`
+
 	// Gateway holds global gateway settings
 	Gateway *GatewayConfig `toml:"gateway" json:"gateway,omitempty"`
 
@@ -150,6 +153,21 @@ type ServerConfig struct {
 	// GuardPolicies holds guard policies for access control at the MCP gateway level.
 	// The structure is server-specific. For GitHub MCP server, see the GitHub guard policy schema.
 	GuardPolicies map[string]interface{} `toml:"guard_policies" json:"guard-policies,omitempty"`
+
+	// Guard is the name of the guard to use for this server (requires DIFC)
+	Guard string `toml:"guard" json:"guard,omitempty"`
+}
+
+// GuardConfig represents a guard configuration for DIFC enforcement.
+type GuardConfig struct {
+	// Type is the guard type: "wasm", "noop", etc.
+	Type string `toml:"type" json:"type"`
+
+	// Path is the path to the guard implementation (e.g., WASM file)
+	Path string `toml:"path" json:"path,omitempty"`
+
+	// Config holds guard-specific configuration
+	Config map[string]interface{} `toml:"config" json:"config,omitempty"`
 }
 
 // applyGatewayDefaults applies default values to a GatewayConfig if they are not set.
