@@ -214,3 +214,138 @@ func TestValidDIFCModes(t *testing.T) {
 	// Verify map only has 3 entries
 	require.Len(validDIFCModes, 3, "should only have 3 valid modes")
 }
+
+func TestGetDefaultConfigExtensions(t *testing.T) {
+	tests := []struct {
+		name     string
+		envValue string
+		want     bool
+	}{
+		{
+			name:     "no env var",
+			envValue: "",
+			want:     false,
+		},
+		{
+			name:     "env var true",
+			envValue: "true",
+			want:     true,
+		},
+		{
+			name:     "env var 1",
+			envValue: "1",
+			want:     true,
+		},
+		{
+			name:     "env var false",
+			envValue: "false",
+			want:     false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			originalEnv := os.Getenv("MCP_GATEWAY_CONFIG_EXTENSIONS")
+			defer func() {
+				if originalEnv != "" {
+					os.Setenv("MCP_GATEWAY_CONFIG_EXTENSIONS", originalEnv)
+				} else {
+					os.Unsetenv("MCP_GATEWAY_CONFIG_EXTENSIONS")
+				}
+			}()
+
+			if tt.envValue != "" {
+				os.Setenv("MCP_GATEWAY_CONFIG_EXTENSIONS", tt.envValue)
+			} else {
+				os.Unsetenv("MCP_GATEWAY_CONFIG_EXTENSIONS")
+			}
+
+			got := getDefaultConfigExtensions()
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestGetDefaultSessionSecrecy(t *testing.T) {
+	originalEnv := os.Getenv("MCP_GATEWAY_SESSION_SECRECY")
+	defer func() {
+		if originalEnv != "" {
+			os.Setenv("MCP_GATEWAY_SESSION_SECRECY", originalEnv)
+		} else {
+			os.Unsetenv("MCP_GATEWAY_SESSION_SECRECY")
+		}
+	}()
+
+	// Test empty
+	os.Unsetenv("MCP_GATEWAY_SESSION_SECRECY")
+	assert.Equal(t, "", getDefaultSessionSecrecy())
+
+	// Test with value
+	os.Setenv("MCP_GATEWAY_SESSION_SECRECY", "secret,confidential")
+	assert.Equal(t, "secret,confidential", getDefaultSessionSecrecy())
+}
+
+func TestGetDefaultSessionIntegrity(t *testing.T) {
+	originalEnv := os.Getenv("MCP_GATEWAY_SESSION_INTEGRITY")
+	defer func() {
+		if originalEnv != "" {
+			os.Setenv("MCP_GATEWAY_SESSION_INTEGRITY", originalEnv)
+		} else {
+			os.Unsetenv("MCP_GATEWAY_SESSION_INTEGRITY")
+		}
+	}()
+
+	// Test empty
+	os.Unsetenv("MCP_GATEWAY_SESSION_INTEGRITY")
+	assert.Equal(t, "", getDefaultSessionIntegrity())
+
+	// Test with value
+	os.Setenv("MCP_GATEWAY_SESSION_INTEGRITY", "trusted,verified")
+	assert.Equal(t, "trusted,verified", getDefaultSessionIntegrity())
+}
+
+func TestParseSessionLabels(t *testing.T) {
+	tests := []struct {
+		name   string
+		input  string
+		expect []string
+	}{
+		{
+			name:   "empty string",
+			input:  "",
+			expect: nil,
+		},
+		{
+			name:   "single label",
+			input:  "secret",
+			expect: []string{"secret"},
+		},
+		{
+			name:   "multiple labels",
+			input:  "secret,confidential,internal",
+			expect: []string{"secret", "confidential", "internal"},
+		},
+		{
+			name:   "labels with spaces",
+			input:  "secret , confidential , internal",
+			expect: []string{"secret", "confidential", "internal"},
+		},
+		{
+			name:   "empty items filtered",
+			input:  "secret,,confidential",
+			expect: []string{"secret", "confidential"},
+		},
+		{
+			name:   "only commas",
+			input:  ",,",
+			expect: []string{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := parseSessionLabels(tt.input)
+			assert.Equal(t, tt.expect, result)
+		})
+	}
+}

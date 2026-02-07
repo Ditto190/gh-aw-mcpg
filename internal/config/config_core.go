@@ -95,6 +95,19 @@ type GatewayConfig struct {
 	// Payloads larger than this threshold are stored to disk, smaller ones are returned inline.
 	// Default: 524288 bytes (512KB)
 	PayloadSizeThreshold int `toml:"payload_size_threshold" json:"payload_size_threshold,omitempty"`
+
+	// Session holds default session label configuration for DIFC
+	Session *SessionConfig `toml:"session" json:"session,omitempty"`
+}
+
+// SessionConfig holds default DIFC labels for agent sessions.
+// These labels are applied to new agent sessions when they are created.
+type SessionConfig struct {
+	// Secrecy is a list of initial secrecy labels for agent sessions
+	Secrecy []string `toml:"secrecy" json:"secrecy,omitempty"`
+
+	// Integrity is a list of initial integrity labels for agent sessions
+	Integrity []string `toml:"integrity" json:"integrity,omitempty"`
 }
 
 // GetAPIKey returns the gateway API key, handling a nil Gateway safely.

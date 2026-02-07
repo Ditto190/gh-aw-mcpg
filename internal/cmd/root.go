@@ -208,6 +208,24 @@ func run(cmd *cobra.Command, args []string) error {
 		logger.LogInfoMd("startup", "Loaded %d MCP server(s)", len(cfg.Servers))
 	}
 
+	// Validate extension flag prerequisites
+	// Session label features require --enable-config-extensions to be set
+	hasExtensionFeatures := sessionSecrecy != "" || sessionIntegrity != ""
+	if hasExtensionFeatures && !enableConfigExt {
+		var features []string
+		if sessionSecrecy != "" {
+			features = append(features, "--session-secrecy")
+		}
+		if sessionIntegrity != "" {
+			features = append(features, "--session-integrity")
+		}
+		return fmt.Errorf("the following flags require --enable-config-extensions (or MCP_GATEWAY_CONFIG_EXTENSIONS=1): %s", strings.Join(features, ", "))
+	}
+
+	if enableConfigExt {
+		log.Println("Config extensions enabled (guards, session labels)")
+	}
+
 	// Validate DIFC mode before applying
 	if err := ValidateDIFCMode(difcMode); err != nil {
 		return fmt.Errorf("invalid --difc-mode flag: %w", err)
@@ -221,6 +239,27 @@ func run(cmd *cobra.Command, args []string) error {
 	// Override gateway config with command-line flags
 	if cfg.Gateway == nil {
 		cfg.Gateway = &config.GatewayConfig{}
+	}
+
+	// Apply session labels from CLI flags (these override config file settings)
+	secrecyLabels := parseSessionLabels(sessionSecrecy)
+	integrityLabels := parseSessionLabels(sessionIntegrity)
+	if len(secrecyLabels) > 0 || len(integrityLabels) > 0 {
+		// Ensure Session config exists
+		if cfg.Gateway.Session == nil {
+			cfg.Gateway.Session = &config.SessionConfig{}
+		}
+		// Apply CLI flags (override config file)
+		if len(secrecyLabels) > 0 {
+			cfg.Gateway.Session.Secrecy = secrecyLabels
+		}
+		if len(integrityLabels) > 0 {
+			cfg.Gateway.Session.Integrity = integrityLabels
+		}
+		log.Printf("Session labels configured: secrecy=%v, integrity=%v",
+			cfg.Gateway.Session.Secrecy, cfg.Gateway.Session.Integrity)
+		logger.LogInfoMd("startup", "Session labels: secrecy=%v, integrity=%v",
+			cfg.Gateway.Session.Secrecy, cfg.Gateway.Session.Integrity)
 	}
 
 	// Apply payload directory flag (if different from default, it was explicitly set)
