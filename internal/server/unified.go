@@ -123,6 +123,13 @@ func NewUnified(ctx context.Context, cfg *config.Config) (*UnifiedServer, error)
 	logUnified.Printf("Payload configuration: dir=%s, pathPrefix=%s, sizeThreshold=%d bytes (%.2f KB)",
 		payloadDir, payloadPathPrefix, payloadSizeThreshold, float64(payloadSizeThreshold)/1024)
 
+	// Parse DIFC enforcement mode
+	difcMode, err := difc.ParseEnforcementMode(cfg.DIFCMode)
+	if err != nil {
+		// Default to strict mode if not specified or invalid
+		difcMode = difc.EnforcementStrict
+	}
+
 	us := &UnifiedServer{
 		launcher:             l,
 		sysServer:            sys.NewSysServer(l.ServerIDs()),
@@ -138,7 +145,7 @@ func NewUnified(ctx context.Context, cfg *config.Config) (*UnifiedServer, error)
 		guardRegistry: guard.NewRegistry(),
 		agentRegistry: difc.NewAgentRegistry(),
 		capabilities:  difc.NewCapabilities(),
-		evaluator:     difc.NewEvaluator(),
+		evaluator:     difc.NewEvaluatorWithMode(difcMode),
 		enableDIFC:    cfg.EnableDIFC,
 	}
 

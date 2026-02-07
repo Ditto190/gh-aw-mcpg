@@ -53,6 +53,12 @@ type Config struct {
 	// EnableDIFC enables Decentralized Information Flow Control
 	EnableDIFC bool `toml:"enable_difc" json:"enable_difc,omitempty"`
 
+	// DIFCMode specifies the DIFC enforcement mode: strict (default), filter, or propagate
+	// strict: deny access that violates DIFC rules
+	// filter: silently remove tools/resources that violate DIFC rules
+	// propagate: auto-adjust agent labels on reads to allow access
+	DIFCMode string `toml:"difc_mode" json:"difc_mode,omitempty"`
+
 	// SequentialLaunch launches servers sequentially instead of in parallel
 	SequentialLaunch bool `toml:"sequential_launch" json:"sequential_launch,omitempty"`
 }

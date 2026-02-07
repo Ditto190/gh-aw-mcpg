@@ -67,6 +67,55 @@ func (a *AgentLabels) DropIntegrityTag(tag Tag) {
 	log.Printf("[DIFC] Agent %s dropped integrity tag: %s", a.AgentID, tag)
 }
 
+// DropIntegrityTags removes multiple integrity tags from the agent
+func (a *AgentLabels) DropIntegrityTags(tags []Tag) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	for _, tag := range tags {
+		delete(a.Integrity.Label.tags, tag)
+	}
+	if len(tags) > 0 {
+		log.Printf("[DIFC] Agent %s dropped integrity tags: %v", a.AgentID, tags)
+	}
+}
+
+// AddSecrecyTags adds multiple secrecy tags to the agent
+func (a *AgentLabels) AddSecrecyTags(tags []Tag) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	for _, tag := range tags {
+		a.Secrecy.Label.tags[tag] = struct{}{}
+	}
+	if len(tags) > 0 {
+		log.Printf("[DIFC] Agent %s gained secrecy tags: %v", a.AgentID, tags)
+	}
+}
+
+// ApplyPropagation applies label changes from a propagate-mode evaluation result
+// This adds missing secrecy tags and drops missing integrity tags
+// Returns true if any labels were changed
+func (a *AgentLabels) ApplyPropagation(result *EvaluationResult) bool {
+	if result == nil || !result.RequiresPropagation() {
+		return false
+	}
+
+	changed := false
+
+	if len(result.SecrecyToAdd) > 0 {
+		a.AddSecrecyTags(result.SecrecyToAdd)
+		changed = true
+		log.Printf("[DIFC] Propagation: Agent %s tainted with secrecy tags %v", a.AgentID, result.SecrecyToAdd)
+	}
+
+	if len(result.IntegrityToDrop) > 0 {
+		a.DropIntegrityTags(result.IntegrityToDrop)
+		changed = true
+		log.Printf("[DIFC] Propagation: Agent %s lost integrity tags %v", a.AgentID, result.IntegrityToDrop)
+	}
+
+	return changed
+}
+
 // AccumulateFromRead updates agent labels after reading data
 // Agent gains secrecy and integrity tags from what they read
 func (a *AgentLabels) AccumulateFromRead(resource *LabeledResource) {

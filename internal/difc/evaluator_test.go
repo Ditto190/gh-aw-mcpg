@@ -709,3 +709,268 @@ func TestEvaluator_EdgeCases(t *testing.T) {
 		assert.Contains(t, result.IntegrityToDrop, Tag("y"))
 	})
 }
+
+// TestEnforcementMode_String tests the String() method for EnforcementMode
+func TestEnforcementMode_String(t *testing.T) {
+	tests := []struct {
+		name     string
+		mode     EnforcementMode
+		expected string
+	}{
+		{
+			name:     "EnforcementStrict",
+			mode:     EnforcementStrict,
+			expected: "strict",
+		},
+		{
+			name:     "EnforcementFilter",
+			mode:     EnforcementFilter,
+			expected: "filter",
+		},
+		{
+			name:     "EnforcementPropagate",
+			mode:     EnforcementPropagate,
+			expected: "propagate",
+		},
+		{
+			name:     "Unknown mode",
+			mode:     EnforcementMode(99),
+			expected: "unknown",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, tt.mode.String())
+		})
+	}
+}
+
+// TestParseEnforcementMode tests parsing enforcement mode strings
+func TestParseEnforcementMode(t *testing.T) {
+	tests := []struct {
+		name        string
+		input       string
+		expected    EnforcementMode
+		expectError bool
+	}{
+		{name: "strict", input: "strict", expected: EnforcementStrict},
+		{name: "filter", input: "filter", expected: EnforcementFilter},
+		{name: "propagate", input: "propagate", expected: EnforcementPropagate},
+		{name: "empty string defaults to strict", input: "", expected: EnforcementStrict},
+		{name: "STRICT (case insensitive)", input: "STRICT", expected: EnforcementStrict},
+		{name: "Propagate (case insensitive)", input: "Propagate", expected: EnforcementPropagate},
+		{name: "unknown mode", input: "invalid", expectError: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mode, err := ParseEnforcementMode(tt.input)
+			if tt.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.expected, mode)
+			}
+		})
+	}
+}
+
+// TestNewEvaluatorWithMode tests creating evaluator with specific mode
+func TestNewEvaluatorWithMode(t *testing.T) {
+	t.Run("creates evaluator with strict mode", func(t *testing.T) {
+		eval := NewEvaluatorWithMode(EnforcementStrict)
+		assert.Equal(t, EnforcementStrict, eval.GetMode())
+	})
+
+	t.Run("creates evaluator with propagate mode", func(t *testing.T) {
+		eval := NewEvaluatorWithMode(EnforcementPropagate)
+		assert.Equal(t, EnforcementPropagate, eval.GetMode())
+	})
+
+	t.Run("SetMode changes mode", func(t *testing.T) {
+		eval := NewEvaluator()
+		assert.Equal(t, EnforcementStrict, eval.GetMode())
+		eval.SetMode(EnforcementPropagate)
+		assert.Equal(t, EnforcementPropagate, eval.GetMode())
+	})
+}
+
+// TestEvaluationResult_RequiresPropagation tests the RequiresPropagation method
+func TestEvaluationResult_RequiresPropagation(t *testing.T) {
+	tests := []struct {
+		name     string
+		decision AccessDecision
+		expected bool
+	}{
+		{name: "Allow does not require propagation", decision: AccessAllow, expected: false},
+		{name: "Deny does not require propagation", decision: AccessDeny, expected: false},
+		{name: "AllowWithPropagate requires propagation", decision: AccessAllowWithPropagate, expected: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := &EvaluationResult{Decision: tt.decision}
+			assert.Equal(t, tt.expected, result.RequiresPropagation())
+		})
+	}
+}
+
+// TestAccessDecision_String_AllowWithPropagate tests the new decision type
+func TestAccessDecision_String_AllowWithPropagate(t *testing.T) {
+	assert.Equal(t, "allow-with-propagate", AccessAllowWithPropagate.String())
+}
+
+// TestEvaluator_PropagateMode_Read tests propagate mode read behavior
+func TestEvaluator_PropagateMode_Read(t *testing.T) {
+	t.Run("read with missing secrecy tags - propagate mode allows and marks tags to add", func(t *testing.T) {
+		eval := NewEvaluatorWithMode(EnforcementPropagate)
+
+		// Agent has no secrecy tags
+		agentSecrecy := NewSecrecyLabel()
+		agentIntegrity := NewIntegrityLabel()
+
+		// Resource has secret tag
+		resource := NewLabeledResource("secret-file")
+		resource.Secrecy.Label.Add("secret")
+
+		result := eval.Evaluate(agentSecrecy, agentIntegrity, resource, OperationRead)
+
+		assert.True(t, result.IsAllowed(), "Read should be allowed in propagate mode")
+		assert.True(t, result.RequiresPropagation(), "Should require propagation")
+		assert.Equal(t, AccessAllowWithPropagate, result.Decision)
+		assert.Contains(t, result.SecrecyToAdd, Tag("secret"), "Should indicate secret tag needs to be added")
+		assert.Empty(t, result.IntegrityToDrop, "No integrity changes needed")
+	})
+
+	t.Run("read with missing integrity tags on resource - propagate mode allows and marks tags to drop", func(t *testing.T) {
+		eval := NewEvaluatorWithMode(EnforcementPropagate)
+
+		// Agent has high integrity
+		agentSecrecy := NewSecrecyLabel()
+		agentIntegrity := NewIntegrityLabel()
+		agentIntegrity.Label.Add("trusted")
+		agentIntegrity.Label.Add("verified")
+
+		// Resource has no integrity (untrusted)
+		resource := NewLabeledResource("untrusted-file")
+
+		result := eval.Evaluate(agentSecrecy, agentIntegrity, resource, OperationRead)
+
+		assert.True(t, result.IsAllowed(), "Read should be allowed in propagate mode")
+		assert.True(t, result.RequiresPropagation(), "Should require propagation")
+		assert.Equal(t, AccessAllowWithPropagate, result.Decision)
+		assert.Empty(t, result.SecrecyToAdd, "No secrecy changes needed")
+		assert.Contains(t, result.IntegrityToDrop, Tag("trusted"), "Should indicate trusted tag needs to be dropped")
+		assert.Contains(t, result.IntegrityToDrop, Tag("verified"), "Should indicate verified tag needs to be dropped")
+	})
+
+	t.Run("read with both secrecy and integrity violations - propagate mode allows with both changes", func(t *testing.T) {
+		eval := NewEvaluatorWithMode(EnforcementPropagate)
+
+		// Agent has integrity but no secrecy clearance
+		agentSecrecy := NewSecrecyLabel()
+		agentIntegrity := NewIntegrityLabel()
+		agentIntegrity.Label.Add("trusted")
+
+		// Resource is secret and untrusted
+		resource := NewLabeledResource("secret-untrusted-file")
+		resource.Secrecy.Label.Add("classified")
+
+		result := eval.Evaluate(agentSecrecy, agentIntegrity, resource, OperationRead)
+
+		assert.True(t, result.IsAllowed(), "Read should be allowed in propagate mode")
+		assert.True(t, result.RequiresPropagation(), "Should require propagation")
+		assert.Contains(t, result.SecrecyToAdd, Tag("classified"), "Should add classified secrecy tag")
+		assert.Contains(t, result.IntegrityToDrop, Tag("trusted"), "Should drop trusted integrity tag")
+	})
+
+	t.Run("read with no violations - propagate mode allows without propagation", func(t *testing.T) {
+		eval := NewEvaluatorWithMode(EnforcementPropagate)
+
+		// Agent has matching labels
+		agentSecrecy := NewSecrecyLabel()
+		agentSecrecy.Label.Add("secret")
+		agentIntegrity := NewIntegrityLabel()
+
+		// Resource matches agent's capabilities
+		resource := NewLabeledResource("accessible-file")
+		resource.Secrecy.Label.Add("secret")
+
+		result := eval.Evaluate(agentSecrecy, agentIntegrity, resource, OperationRead)
+
+		assert.True(t, result.IsAllowed(), "Read should be allowed")
+		assert.False(t, result.RequiresPropagation(), "Should NOT require propagation when labels match")
+		assert.Equal(t, AccessAllow, result.Decision)
+	})
+}
+
+// TestEvaluator_PropagateMode_Write tests that writes are still blocked in propagate mode
+func TestEvaluator_PropagateMode_Write(t *testing.T) {
+	t.Run("write to public resource by agent with secret - still blocked", func(t *testing.T) {
+		eval := NewEvaluatorWithMode(EnforcementPropagate)
+
+		// Agent has secret data
+		agentSecrecy := NewSecrecyLabel()
+		agentSecrecy.Label.Add("secret")
+		agentIntegrity := NewIntegrityLabel()
+
+		// Public resource (no secrecy)
+		resource := NewLabeledResource("public-internet")
+
+		result := eval.Evaluate(agentSecrecy, agentIntegrity, resource, OperationWrite)
+
+		assert.False(t, result.IsAllowed(), "Write should be BLOCKED even in propagate mode")
+		assert.Equal(t, AccessDeny, result.Decision)
+		assert.Contains(t, result.Reason, "secrecy")
+	})
+
+	t.Run("write to high-integrity resource by low-integrity agent - still blocked", func(t *testing.T) {
+		eval := NewEvaluatorWithMode(EnforcementPropagate)
+
+		// Agent has no integrity
+		agentSecrecy := NewSecrecyLabel()
+		agentIntegrity := NewIntegrityLabel()
+
+		// Resource requires high integrity
+		resource := NewLabeledResource("production-database")
+		resource.Integrity.Label.Add("production")
+
+		result := eval.Evaluate(agentSecrecy, agentIntegrity, resource, OperationWrite)
+
+		assert.False(t, result.IsAllowed(), "Write should be BLOCKED even in propagate mode")
+		assert.Equal(t, AccessDeny, result.Decision)
+		assert.Contains(t, result.Reason, "integrity")
+	})
+}
+
+// TestEvaluator_StrictMode_Read_Unchanged verifies strict mode still denies reads
+func TestEvaluator_StrictMode_Read_Unchanged(t *testing.T) {
+	eval := NewEvaluator() // Default is strict mode
+
+	t.Run("read with missing secrecy - denied in strict mode", func(t *testing.T) {
+		agentSecrecy := NewSecrecyLabel()
+		agentIntegrity := NewIntegrityLabel()
+
+		resource := NewLabeledResource("secret-file")
+		resource.Secrecy.Label.Add("secret")
+
+		result := eval.Evaluate(agentSecrecy, agentIntegrity, resource, OperationRead)
+
+		assert.False(t, result.IsAllowed(), "Read should be denied in strict mode")
+		assert.Equal(t, AccessDeny, result.Decision)
+	})
+
+	t.Run("read with missing integrity - denied in strict mode", func(t *testing.T) {
+		agentSecrecy := NewSecrecyLabel()
+		agentIntegrity := NewIntegrityLabel()
+		agentIntegrity.Label.Add("trusted")
+
+		resource := NewLabeledResource("untrusted-file")
+
+		result := eval.Evaluate(agentSecrecy, agentIntegrity, resource, OperationRead)
+
+		assert.False(t, result.IsAllowed(), "Read should be denied in strict mode")
+		assert.Equal(t, AccessDeny, result.Decision)
+	})
+}

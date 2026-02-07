@@ -208,8 +208,14 @@ func run(cmd *cobra.Command, args []string) error {
 		logger.LogInfoMd("startup", "Loaded %d MCP server(s)", len(cfg.Servers))
 	}
 
+	// Validate DIFC mode before applying
+	if err := ValidateDIFCMode(difcMode); err != nil {
+		return fmt.Errorf("invalid --difc-mode flag: %w", err)
+	}
+
 	// Apply command-line flags to config
 	cfg.EnableDIFC = enableDIFC
+	cfg.DIFCMode = difcMode
 	cfg.SequentialLaunch = sequentialLaunch
 
 	// Override gateway config with command-line flags
@@ -242,7 +248,15 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 
 	if enableDIFC {
-		log.Println("DIFC enforcement and session requirement enabled")
+		log.Printf("DIFC enforcement enabled with mode: %s", difcMode)
+		switch difcMode {
+		case "strict":
+			log.Println("  - Strict mode: violations are denied")
+		case "filter":
+			log.Println("  - Filter mode: denied tools/resources are silently removed")
+		case "propagate":
+			log.Println("  - Propagate mode: agent labels auto-adjusted on reads")
+		}
 	} else {
 		log.Println("DIFC enforcement disabled (sessions auto-created for standard MCP client compatibility)")
 	}
@@ -259,7 +273,7 @@ func run(cmd *cobra.Command, args []string) error {
 		mode = "unified"
 	}
 
-	debugLog.Printf("Server mode: %s, DIFC enabled: %v", mode, cfg.EnableDIFC)
+	debugLog.Printf("Server mode: %s, DIFC enabled: %v, DIFC mode: %s", mode, cfg.EnableDIFC, cfg.DIFCMode)
 
 	// Create unified MCP server (backend for both modes)
 	unifiedServer, err := server.NewUnified(ctx, cfg)
