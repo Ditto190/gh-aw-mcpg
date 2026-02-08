@@ -764,24 +764,36 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 		resource.Description, operation, resource.Secrecy.Label.GetTags(), resource.Integrity.Label.GetTags())
 
 	// **Phase 2: Reference Monitor performs coarse-grained access check**
+	// For read operations in filter/propagate mode, we skip the coarse-grained block
+	// and let the request proceed. Fine-grained filtering at Phase 5 will filter
+	// individual items from the response based on their actual labels from LabelResponse().
+	isReadOperation := (operation == difc.OperationRead)
 	isWrite := (operation == difc.OperationWrite || operation == difc.OperationReadWrite)
+	enforcementMode := us.evaluator.GetMode()
 	result := us.evaluator.Evaluate(agentLabels.Secrecy, agentLabels.Integrity, resource, operation)
 
 	if !result.IsAllowed() {
-		// Access denied - log and return detailed error
-		log.Printf("[DIFC] Access DENIED for agent %s to %s: %s", agentID, resource.Description, result.Reason)
-		detailedErr := difc.FormatViolationError(result, agentLabels.Secrecy, agentLabels.Integrity, resource)
-		return &sdk.CallToolResult{
-			Content: []sdk.Content{
-				&sdk.TextContent{
-					Text: detailedErr.Error(),
+		if isReadOperation && (enforcementMode == difc.EnforcementFilter || enforcementMode == difc.EnforcementPropagate) {
+			// Read operation with filter/propagate mode - skip coarse-grained block
+			// The guard will label response items and Phase 5 will filter/propagate them
+			log.Printf("[DIFC] Coarse-grained check failed for read, but %s mode enabled - proceeding to backend", enforcementMode)
+			log.Printf("[DIFC] Response items will be evaluated at Phase 5 based on per-item labels from LabelResponse()")
+		} else {
+			// Write operation OR strict mode - block the request
+			log.Printf("[DIFC] Access DENIED for agent %s to %s: %s", agentID, resource.Description, result.Reason)
+			detailedErr := difc.FormatViolationError(result, agentLabels.Secrecy, agentLabels.Integrity, resource)
+			return &sdk.CallToolResult{
+				Content: []sdk.Content{
+					&sdk.TextContent{
+						Text: detailedErr.Error(),
+					},
 				},
-			},
-			IsError: true,
-		}, nil, detailedErr
+				IsError: true,
+			}, nil, detailedErr
+		}
+	} else {
+		log.Printf("[DIFC] Access ALLOWED for agent %s to %s", agentID, resource.Description)
 	}
-
-	log.Printf("[DIFC] Access ALLOWED for agent %s to %s", agentID, resource.Description)
 
 	// **Phase 3: Execute the backend call**
 	// Get or launch backend connection (use session-aware connection for stateful backends)
