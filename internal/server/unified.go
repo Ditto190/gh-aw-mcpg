@@ -88,6 +88,9 @@ type UnifiedServer struct {
 	evaluator     *difc.Evaluator
 	enableDIFC    bool // When true, DIFC enforcement and session requirement are enabled
 
+	// Configuration reference for guard loading
+	cfg *config.Config
+
 	// Shutdown state tracking
 	isShutdown     bool
 	shutdownMu     sync.RWMutex
@@ -161,6 +164,7 @@ func NewUnified(ctx context.Context, cfg *config.Config) (*UnifiedServer, error)
 		capabilities:  difc.NewCapabilities(),
 		evaluator:     difc.NewEvaluatorWithMode(difcMode),
 		enableDIFC:    cfg.EnableDIFC,
+		cfg:           cfg, // Store config for guard loading
 	}
 
 	// Create MCP server with logger
@@ -571,13 +575,70 @@ func (us *UnifiedServer) registerSysTools() error {
 }
 
 // registerGuard registers a guard for a specific backend server
+// Guards are loaded based on the server's configuration:
+// 1. If server has a "guard" field, look up the guard config by name
+// 2. Create the appropriate guard type (wasm, noop, etc.)
+// 3. Fall back to noop guard if no guard is configured
 func (us *UnifiedServer) registerGuard(serverID string) {
-	// For now, use noop guards for all servers
-	// In the future, this will load guards based on configuration
-	// or use guard.CreateGuard() with a guard name from config
-	g := guard.NewNoopGuard()
+	var g guard.Guard
+
+	// Check if server has a guard configured
+	serverCfg, hasServer := us.cfg.Servers[serverID]
+	if hasServer && serverCfg.Guard != "" {
+		guardName := serverCfg.Guard
+
+		// Look up guard config
+		guardCfg, hasGuardCfg := us.cfg.Guards[guardName]
+		if hasGuardCfg {
+			// Create guard based on type
+			var err error
+			g, err = us.createGuardFromConfig(guardName, guardCfg)
+			if err != nil {
+				log.Printf("[DIFC] WARNING: Failed to create guard '%s' for server '%s': %v (falling back to noop)", guardName, serverID, err)
+				g = guard.NewNoopGuard()
+			}
+		} else {
+			// Guard name specified but no config found - try registered guard types
+			var err error
+			g, err = guard.CreateGuard(guardName)
+			if err != nil {
+				log.Printf("[DIFC] WARNING: Guard '%s' not found for server '%s': %v (falling back to noop)", guardName, serverID, err)
+				g = guard.NewNoopGuard()
+			}
+		}
+	} else {
+		// No guard configured - use noop
+		g = guard.NewNoopGuard()
+	}
+
 	us.guardRegistry.Register(serverID, g)
 	log.Printf("[DIFC] Registered guard '%s' for server '%s'", g.Name(), serverID)
+}
+
+// createGuardFromConfig creates a guard instance from a guard configuration
+func (us *UnifiedServer) createGuardFromConfig(name string, cfg *config.GuardConfig) (guard.Guard, error) {
+	switch cfg.Type {
+	case "noop", "":
+		return guard.NewNoopGuard(), nil
+
+	case "wasm":
+		// WASM guard loading - requires path
+		if cfg.Path == "" {
+			return nil, fmt.Errorf("wasm guard '%s' requires a 'path' field", name)
+		}
+		// Try to create via registered factory first
+		g, err := guard.CreateGuard("wasm")
+		if err == nil {
+			log.Printf("[DIFC] Created WASM guard '%s' from path: %s", name, cfg.Path)
+			return g, nil
+		}
+		// WASM guard factory not registered - log warning and return error
+		return nil, fmt.Errorf("wasm guard type not available: %v (guard path: %s)", err, cfg.Path)
+
+	default:
+		// Try registered guard types
+		return guard.CreateGuard(cfg.Type)
+	}
 }
 
 // guardBackendCaller implements guard.BackendCaller for guards to query backend metadata
