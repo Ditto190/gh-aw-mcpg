@@ -2,6 +2,76 @@
 
 This document describes how guards label responses for DIFC (Decentralized Information Flow Control) enforcement in the MCP Gateway.
 
+## DIFC Label Rules
+
+DIFC uses two types of labels to control information flow:
+
+### Secrecy Labels
+
+Secrecy labels prevent unauthorized writes ("no write down"):
+
+| Operation | Rule | Example |
+|-----------|------|---------|
+| **Read** | Agent must have ≥ resource secrecy tags | Resource `S_r={'secret'}` requires agent to have `S_a={'secret'}` |
+| **Write** | Resource must have ≥ agent secrecy tags | Agent with `S_a={'secret'}` can only write to resources with `S_r={'secret'}` |
+
+**Intuition**: Secrecy tags track what sensitive data an agent has seen. Reading secret data "taints" the agent, and tainted agents cannot leak data to less-secret destinations.
+
+### Integrity Labels
+
+Integrity labels prevent untrusted reads ("no read down"):
+
+| Operation | Rule | Example |
+|-----------|------|---------|
+| **Read** | Resource must have ≥ agent integrity tags | Agent with `I_a={'verified'}` can only read from resources with `I_r={'verified'}` |
+| **Write** | Agent must have ≥ resource integrity tags | Resource `I_r={'trusted'}` requires agent to have `I_a={'trusted'}` |
+
+**Intuition**: Integrity tags track trustworthiness. Reading untrusted data "degrades" the agent's integrity, and degraded agents cannot write to high-integrity destinations.
+
+### Flow Rules Summary
+
+```
+Read:  resource.secrecy  ⊆ agent.secrecy    (agent has clearance)
+       resource.integrity ⊇ agent.integrity  (agent trusts resource)
+
+Write: agent.secrecy    ⊆ resource.secrecy  (no information leak)
+       agent.integrity  ⊇ resource.integrity (agent is trustworthy)
+```
+
+## DIFC Modes
+
+The gateway supports three enforcement modes:
+
+1. **Strict**: 
+
+Agent labels are NEVER updated. 
+
+For each tool call, the gateway first calls `LabelResource()` to get resource labels and operation type (i.e., read, write, read-write). 
+
+If the operation is a read, the gateway makes the tool call and then calls `LabelResponse()` to get fine-grained labels for the response. The Reference Monitor then checks DIFC rules for each item and blocks the entire response if any item violates the rules.
+
+If the operation is read-write or write, then the Reference Monitor checks DIFC rules based on resource labels before the tool call, and blocks if the rules are violated. For read-write and write operations, `LabelResponse()` is NOT called. 
+
+2. **Filter**: 
+
+Agent labels are NEVER updated. 
+
+For each tool call, the gateway first calls `LabelResource()` to get resource labels and operation type (i.e., read, write, read-write). 
+
+If the operation is a read, the gateway makes the tool call and then calls `LabelResponse()` to get fine-grained labels for the response. The Reference Monitor then checks DIFC rules for each item and removes any items that violate the rules from the response (instead of blocking the entire response). This allows agents to still get access to items they are authorized for, while filtering out unauthorized items.
+
+If the operation is read-write or write, then the Reference Monitor checks DIFC rules based on resource labels before the tool call, and blocks if the rules are violated. If the rules are not violated, the tool call proceeds. For read-write operations, the Reference Monitor calls `LabelResponse()` to get fine-grained labels for the response. The Reference Monitor then checks DIFC rules for each item and removes any items that violate the rules from the response (instead of blocking the entire response). This allows agents to still get access to items they are authorized for, while filtering out unauthorized items. For write operations in filter mode, `LabelResponse()` is NOT called.
+
+3. **Propagate**: 
+
+Agent labels are may be updated based on the labels of data they access. However, tool calls will only ever add tags to the agent's secrecy labels and remove tags from the agent's integrity labels, to ensure that agents can only become more restricted over time.
+
+For each tool call, the gateway first calls `LabelResource()` to get resource labels and operation type (i.e., read, write, read-write). 
+
+If the operation is a read, the gateway makes the tool call and then calls `LabelResponse()` to get fine-grained labels for the response. For each item in the response, the Reference Monitor sets the agent's secrecy label to the union of the agent's current secrecy label and the item's secrecy label and sets the agent's integrity label to the intersection of the agent's current integrity label and the item's integrity label. 
+
+If the operation is read-write or write, then the Reference Monitor checks DIFC rules based on resource labels before the tool call, and blocks if the rules are violated. If the rules are not violated, the tool call proceeds. For read-write operations, the Reference Monitor calls `LabelResponse()` to get fine-grained labels for the response. For each item in the response, the Reference Monitor sets the agent's secrecy label to the union of the agent's current secrecy label and the item's secrecy label and sets the agent's integrity label to the intersection of the agent's current integrity label and the item's integrity label.  For write operations in propagate mode, `LabelResponse()` is NOT called.
+
 ## Overview
 
 Guards implement two labeling methods:
@@ -16,72 +86,17 @@ Guards implement two labeling methods:
 
 ## Supported Response Labeling Formats
 
-The gateway supports multiple formats for `LabelResponse()` return values:
+The gateway supports multiple formats for `LabelResponse()` return values.
 
-### 1. No Fine-Grained Labeling (`nil`)
+### 1. Nil Response
 
-```go
-func (g *MyGuard) LabelResponse(...) (difc.LabeledData, error) {
-    return nil, nil
-}
-```
+Return `nil` to use the resource labels from `LabelResource()` for the entire response.
 
-**Behavior**: The entire response inherits labels from `LabelResource()`.
+**Use when**: The coarse-grained resource labels are sufficient (single resource or uniform collection).
 
-**Use when**: 
-- The response is a single item
-- All items in a collection have identical labels
-- Fine-grained filtering is not needed
+### 2. Path-Based Labeling (Preferred for Collections)
 
-### 2. Simple Labeled Data
-
-```go
-return &difc.SimpleLabeledData{
-    Data:   backendResult,
-    Labels: &difc.LabeledResource{
-        Description: "API response",
-        Secrecy:     secrecyLabel,
-        Integrity:   integrityLabel,
-    },
-}, nil
-```
-
-**Behavior**: Single item with specific labels.
-
-**Use when**: Response is a single resource with uniform labels different from coarse-grained resource labels.
-
-### 3. Collection Labeled Data (Legacy)
-
-```go
-return &difc.CollectionLabeledData{
-    Items: []difc.LabeledItem{
-        {
-            Data: item1,
-            Labels: &difc.LabeledResource{
-                Description: "Public repo",
-                Secrecy:     publicSecrecy,
-                Integrity:   verifiedIntegrity,
-            },
-        },
-        {
-            Data: item2,
-            Labels: &difc.LabeledResource{
-                Description: "Private repo user/secret",
-                Secrecy:     privateSecrecy,
-                Integrity:   verifiedIntegrity,
-            },
-        },
-    },
-}, nil
-```
-
-**Behavior**: Each item in the collection has its own labels.
-
-**Use when**: You need to build the labeled items list programmatically.
-
-**Note**: This requires copying/reconstructing the data structure.
-
-### 4. Path-Based Labeling (Preferred)
+Apply different labels to specific items in a collection. Return JSON with this structure:
 
 ```json
 {
@@ -113,7 +128,7 @@ return &difc.CollectionLabeledData{
 
 **Behavior**: Labels are associated with JSON Pointer paths (RFC 6901) rather than copying data.
 
-**Use when**: Labeling collections efficiently without data copying.
+**Use when**: Labeling collections where items have different sensitivity levels.
 
 **Fields**:
 
@@ -128,13 +143,32 @@ return &difc.CollectionLabeledData{
 | `default_labels` | object | Labels for items not explicitly listed (optional) |
 | `items_path` | string | JSON Pointer to the collection (e.g., `/items`, `""` for root array) |
 
+### 3. SimpleLabeledData (Go Guards Only)
+
+For native Go guards, return a `SimpleLabeledData` struct to override resource labels:
+
+```go
+return &difc.SimpleLabeledData{
+    Data:   result,  // The response data
+    Labels: &difc.LabeledResource{
+        Description: "API response",
+        Secrecy:     secrecyLabel,
+        Integrity:   integrityLabel,
+    },
+}, nil
+```
+
+**Note**: This format is not available for WASM guards. Use `nil` with appropriate `LabelResource()` labels instead.
+
 ## Format Detection (WASM Guards)
 
-For WASM guards, the gateway auto-detects the format:
+For WASM guards, the gateway auto-detects the format based on `LabelResponse()` output:
 
 1. If response contains `labeled_paths` key → Parse as **PathLabeledData**
 2. If response contains `items` array → Parse as **CollectionLabeledData** (legacy)
-3. Otherwise → Return `nil` (use resource labels)
+3. Empty or other response → Treat as `nil` (use resource labels)
+
+**Note**: SimpleLabeledData format detection is not currently implemented for WASM guards. Use `nil` response with appropriate `LabelResource()` labels, or use path-based labeling.
 
 ## JSON Pointer Syntax (RFC 6901)
 
@@ -193,19 +227,20 @@ Guard returns:
 
 ## Filtering Behavior
 
-After `LabelResponse()`, the Reference Monitor:
+After `LabelResponse()`, the Reference Monitor applies fine-grained filtering based on the enforcement mode:
 
-1. **Strict mode**: Blocks if any item violates DIFC policy
-2. **Filter mode**: Removes inaccessible items from the response
-3. **Propagate mode**: Allows access, updates agent labels based on what was read
+1. **Strict mode**: Read requests are blocked at the coarse-grained check (Phase 2) if agent labels don't satisfy resource labels. `LabelResponse()` is not called for blocked requests.
+
+2. **Filter mode**: Coarse-grained check is skipped for reads. After backend call, `LabelResponse()` provides per-item labels, and inaccessible items are filtered out. Agent labels are NOT updated.
+
+3. **Propagate mode**: Same as filter mode, but agent labels are updated to include the labels of data they accessed. This enables information flow tracking.
 
 ## Performance Considerations
 
 | Format | Data Copying | Memory | Best For |
 |--------|-------------|--------|----------|
 | `nil` | None | Minimal | Uniform labels |
-| `SimpleLabeledData` | Reference only | Low | Single items |
-| `CollectionLabeledData` | Full copy | High | Complex transformations |
-| `PathLabeledData` | None | Low | **Large collections** |
+| `SimpleLabeledData` | None | Low | Single items or uniform collections |
+| `PathLabeledData` | None | Low | **Collections with mixed labels** |
 
-**Recommendation**: Use path-based labeling for collections to avoid copying response data.
+**Recommendation**: Use path-based labeling for collections where items have different sensitivity levels.

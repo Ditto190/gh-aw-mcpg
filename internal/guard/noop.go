@@ -25,9 +25,9 @@ func (g *NoopGuard) Name() string {
 }
 
 // LabelResource returns an empty resource with no label requirements
-// Conservatively assumes all operations could be writes
+// Treats all operations as read-write (most conservative assumption)
 func (g *NoopGuard) LabelResource(ctx context.Context, toolName string, args interface{}, backend BackendCaller, caps *difc.Capabilities) (*difc.LabeledResource, difc.OperationType, error) {
-	log.Printf("Labeling resource: tool=%s, operation=write (conservative)", toolName)
+	log.Printf("Labeling resource: tool=%s, operation=read-write (conservative)", toolName)
 
 	// Empty resource = no label requirements = all operations allowed
 	resource := &difc.LabeledResource{
@@ -39,9 +39,8 @@ func (g *NoopGuard) LabelResource(ctx context.Context, toolName string, args int
 
 	log.Printf("Resource labeled with no restrictions: tool=%s", toolName)
 
-	// Conservatively treat as write to be safe
-	// (writes are more restrictive than reads in DIFC)
-	return resource, difc.OperationWrite, nil
+	// Conservatively treat as read-write (most restrictive)
+	return resource, difc.OperationReadWrite, nil
 }
 
 // LabelResponse returns nil, indicating no fine-grained labeling
