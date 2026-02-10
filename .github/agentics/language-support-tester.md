@@ -21,7 +21,7 @@ Test that Go, TypeScript/JavaScript, and Python programming language support wor
 ## Step 2: Test TypeScript/JavaScript Language Support
 
 1. **Activate a TypeScript/JavaScript project** using Serena's `activate_project` tool
-   - Use the test samples at `/workspace/test/serena-mcp-tests/samples/js_project/`
+   - Use the test samples at `{workspace}/test/serena-mcp-tests/samples/js_project/` (use the workspace path from github-context)
 2. **Verify TypeScript/JavaScript tooling works**:
    - Use Serena to analyze JavaScript/TypeScript files
    - Try to find functions or symbols in the JavaScript code
@@ -31,7 +31,7 @@ Test that Go, TypeScript/JavaScript, and Python programming language support wor
 ## Step 3: Test Python Language Support
 
 1. **Activate a Python project** using Serena's `activate_project` tool with the Python language
-   - Use the test samples at `/workspace/test/serena-mcp-tests/samples/python_project/`
+   - Use the test samples at `{workspace}/test/serena-mcp-tests/samples/python_project/` (use the workspace path from github-context)
 2. **Verify Python tooling works**:
    - Use Serena to analyze Python files (`calculator.py`, `utils.py`)
    - Try to find functions, classes, or symbols in Python code (e.g., `Calculator` class, `add` method, `format_number` function)
@@ -70,9 +70,9 @@ Test that Go, TypeScript/JavaScript, and Python programming language support wor
 ## Important Notes
 
 - This workflow tests the Serena MCP server container specified in the repository configuration
-- The Go project is the main repository code in `/workspace`
-- TypeScript/JavaScript test samples are located at `/workspace/test/serena-mcp-tests/samples/js_project/`
-- Python test samples are located at `/workspace/test/serena-mcp-tests/samples/python_project/`
+- The Go project is the main repository code in the workspace directory (see workspace path in github-context)
+- TypeScript/JavaScript test samples are located at `{workspace}/test/serena-mcp-tests/samples/js_project/` (use the workspace path from github-context)
+- Python test samples are located at `{workspace}/test/serena-mcp-tests/samples/python_project/` (use the workspace path from github-context)
 - Issues created will automatically expire after 7 days if not addressed
 - Focus on testing actual language server functionality, not just basic container operations
 - Serena uses "typescript" as the language identifier for both JavaScript and TypeScript files
