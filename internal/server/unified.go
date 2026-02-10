@@ -784,6 +784,7 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 	// Note: Session validation happens at the tool registration level via closures
 	// The closure captures the request and validates before calling this method
 	log.Printf("Calling tool on %s: %s with DIFC enforcement", serverID, toolName)
+	logUnified.Printf("callBackendTool: serverID=%s, toolName=%s, args=%+v", serverID, toolName, args)
 
 	// **Phase 0: Extract agent ID and get/create agent labels**
 	agentID := guard.GetAgentIDFromContext(ctx)

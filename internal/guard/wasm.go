@@ -282,7 +282,7 @@ func (g *WasmGuard) Name() string {
 
 // LabelResource calls the WASM module's label_resource function
 func (g *WasmGuard) LabelResource(ctx context.Context, toolName string, args interface{}, backend BackendCaller, caps *difc.Capabilities) (*difc.LabeledResource, difc.OperationType, error) {
-	logWasm.Printf("LabelResource called: toolName=%s", toolName)
+	logWasm.Printf("LabelResource called: toolName=%s, args=%+v", toolName, args)
 
 	// Serialize access to the WASM module
 	g.mu.Lock()
@@ -304,6 +304,8 @@ func (g *WasmGuard) LabelResource(ctx context.Context, toolName string, args int
 	if err != nil {
 		return nil, difc.OperationWrite, fmt.Errorf("failed to marshal input: %w", err)
 	}
+
+	logWasm.Printf("LabelResource input JSON (%d bytes): %s", len(inputJSON), string(inputJSON))
 
 	// Call WASM function
 	resultJSON, err := g.callWasmFunction("label_resource", inputJSON)
