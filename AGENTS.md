@@ -21,17 +21,24 @@ Quick reference for AI agents working with MCP Gateway (Go-based MCP proxy serve
 
 ## Project Structure
 
+- `internal/auth/` - Authentication header parsing and middleware
 - `internal/cmd/` - CLI (Cobra)
 - `internal/config/` - Config parsing (TOML/JSON) with validation
   - `validation.go` - Variable expansion and fail-fast validation
   - `validation_test.go` - 21 comprehensive validation tests
-- `internal/server/` - HTTP server (routed/unified modes)
-- `internal/mcp/` - MCP protocol types with enhanced error logging
-- `internal/launcher/` - Backend process management
+- `internal/difc/` - Data Information Flow Control
+- `internal/envutil/` - Environment variable utilities
 - `internal/guard/` - Security guards (NoopGuard active)
-- `internal/auth/` - Authentication header parsing and middleware
+- `internal/launcher/` - Backend process management
 - `internal/logger/` - Debug logging framework (micro logger)
+- `internal/mcp/` - MCP protocol types with enhanced error logging
+- `internal/middleware/` - HTTP middleware (jq schema processing)
+- `internal/server/` - HTTP server (routed/unified modes)
+- `internal/sys/` - System utilities
+- `internal/testutil/` - Test utilities and helpers
 - `internal/timeutil/` - Time formatting utilities
+- `internal/tty/` - Terminal detection utilities
+- `internal/version/` - Version management
 
 ## Key Tech
 
