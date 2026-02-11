@@ -41,6 +41,7 @@ func registerCoreFlags(cmd *cobra.Command) {
 	cmd.Flags().BoolVar(&validateEnv, "validate-env", false, "Validate execution environment (Docker, env vars) before starting")
 	cmd.Flags().CountVarP(&verbosity, "verbose", "v", "Increase verbosity level (use -v for info, -vv for debug, -vvv for trace)")
 
-	// Mark mutually exclusive flags
+	// Flag validation groups
 	cmd.MarkFlagsMutuallyExclusive("routed", "unified")
+	cmd.MarkFlagsOneRequired("config", "config-stdin")
 }

@@ -13,6 +13,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/github/gh-aw-mcpg/internal/config"
 	"github.com/github/gh-aw-mcpg/internal/logger"
@@ -48,11 +49,16 @@ It provides routing, aggregation, and management of multiple MCP backend servers
 	SilenceUsage:      true, // Don't show help on runtime errors
 	PersistentPreRunE: preRun,
 	RunE:              run,
+	PersistentPostRun: postRun,
 }
 
 func init() {
 	// Set custom error prefix for better branding
 	rootCmd.SetErrPrefix("MCPG Error:")
+
+	// Set custom version template with enhanced formatting
+	rootCmd.SetVersionTemplate(`MCPG Gateway {{.Version}}
+`)
 
 	// Register all flags from feature modules (flags_*.go files)
 	registerAllFlags(rootCmd)
@@ -91,15 +97,18 @@ func registerFlagCompletions(cmd *cobra.Command) {
 	cmd.RegisterFlagCompletionFunc("env", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return []string{"env"}, cobra.ShellCompDirectiveFilterFileExt
 	})
+
+	// Add ActiveHelp for --config and --config-stdin flags
+	cmd.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		// Provide helpful tips when completing the command
+		return cobra.AppendActiveHelp(nil,
+				"Tip: Use --config <file> for file-based config or --config-stdin for piped JSON config"),
+			cobra.ShellCompDirectiveNoFileComp
+	}
 }
 
 // preRun performs validation before command execution
 func preRun(cmd *cobra.Command, args []string) error {
-	// Validate that either --config or --config-stdin is provided
-	if !configStdin && configFile == "" {
-		return fmt.Errorf("configuration source required: specify either --config <file> or --config-stdin")
-	}
-
 	// Apply verbosity level to logging (if DEBUG is not already set)
 	// -v (1): info level, -vv (2): debug level, -vvv (3): trace level
 	debugEnv := os.Getenv(logger.EnvDebug)
@@ -128,33 +137,39 @@ func preRun(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+// postRun performs cleanup after command execution
+func postRun(cmd *cobra.Command, args []string) {
+	// Close all loggers
+	logger.CloseMarkdownLogger()
+	logger.CloseJSONLLogger()
+	logger.CloseServerFileLogger()
+	logger.CloseGlobalLogger()
+}
+
 func run(cmd *cobra.Command, args []string) error {
-	ctx, cancel := context.WithCancel(context.Background())
+	// Use signal.NotifyContext for proper cancellation on SIGINT/SIGTERM
+	ctx, cancel := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
 	// Initialize file logger early
 	if err := logger.InitFileLogger(logDir, "mcp-gateway.log"); err != nil {
 		log.Printf("Warning: Failed to initialize file logger: %v", err)
 	}
-	defer logger.CloseGlobalLogger()
 
 	// Initialize per-serverID logger
 	if err := logger.InitServerFileLogger(logDir); err != nil {
 		log.Printf("Warning: Failed to initialize server file logger: %v", err)
 	}
-	defer logger.CloseServerFileLogger()
 
 	// Initialize markdown logger for GitHub workflow preview
 	if err := logger.InitMarkdownLogger(logDir, "gateway.md"); err != nil {
 		log.Printf("Warning: Failed to initialize markdown logger: %v", err)
 	}
-	defer logger.CloseMarkdownLogger()
 
 	// Initialize JSONL logger for RPC message logging
 	if err := logger.InitJSONLLogger(logDir, "rpc-messages.jsonl"); err != nil {
 		log.Printf("Warning: Failed to initialize JSONL logger: %v", err)
 	}
-	defer logger.CloseJSONLLogger()
 
 	logger.LogInfoMd("startup", "MCPG Gateway version: %s", cliVersion)
 
@@ -270,19 +285,12 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 	defer unifiedServer.Close()
 
-	// Handle graceful shutdown
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-
+	// Handle graceful shutdown via context cancellation
 	go func() {
-		<-sigChan
+		<-ctx.Done()
 		logger.LogInfoMd("shutdown", "Shutting down gateway...")
 		log.Println("Shutting down...")
-		cancel()
 		unifiedServer.Close()
-		logger.CloseMarkdownLogger()
-		logger.CloseGlobalLogger()
-		os.Exit(0)
 	}()
 
 	// Create HTTP server based on mode
@@ -329,6 +337,14 @@ func run(cmd *cobra.Command, args []string) error {
 
 	// Wait for shutdown signal
 	<-ctx.Done()
+
+	// Gracefully shutdown HTTP server with timeout
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutdownCancel()
+	if err := httpServer.Shutdown(shutdownCtx); err != nil {
+		log.Printf("HTTP server shutdown error: %v", err)
+	}
+
 	return nil
 }
 
