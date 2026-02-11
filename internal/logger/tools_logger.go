@@ -50,7 +50,7 @@ func InitToolsLogger(logDir, fileName string) error {
 			if file != nil {
 				file.Close()
 			}
-			
+
 			tl := &ToolsLogger{
 				logDir:   logDir,
 				fileName: fileName,
