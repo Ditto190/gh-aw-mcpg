@@ -202,7 +202,7 @@ See **[Configuration Specification](https://github.com/github/gh-aw/blob/main/do
 
 **Configuration Alternatives**:
 - **`payloadSizeThreshold`** is not supported in JSON stdin format. Use:
-  - CLI flag: `--payload-size-threshold <bytes>` (default: 1024)
+  - CLI flag: `--payload-size-threshold <bytes>` (default: 10240)
   - Environment variable: `MCP_GATEWAY_PAYLOAD_SIZE_THRESHOLD=<bytes>`
   - Payloads **larger** than this threshold are stored to disk and return metadata
   - Payloads **smaller than or equal** to this threshold are returned inline
@@ -278,7 +278,7 @@ Flags:
   -l, --listen string                HTTP server listen address (default "127.0.0.1:3000")
       --log-dir string               Directory for log files (falls back to stdout if directory cannot be created) (default "/tmp/gh-aw/mcp-logs")
       --payload-dir string           Directory for storing large payload files (segmented by session ID) (default "/tmp/jq-payloads")
-      --payload-size-threshold int   Size threshold (in bytes) for storing payloads to disk. Payloads larger than this are stored, smaller ones returned inline (default 1024)
+      --payload-size-threshold int   Size threshold (in bytes) for storing payloads to disk. Payloads larger than this are stored, smaller ones returned inline (default 10240)
       --routed                       Run in routed mode (each backend at /mcp/<server>)
       --sequential-launch   Launch MCP servers sequentially during startup (parallel launch is default)
       --unified             Run in unified mode (all backends at /mcp)
@@ -316,7 +316,7 @@ When running locally (`run.sh`), these variables are optional (warnings shown if
 | `MODE` | Gateway mode flag | `--routed` |
 | `MCP_GATEWAY_LOG_DIR` | Log file directory (sets default for `--log-dir` flag) | `/tmp/gh-aw/mcp-logs` |
 | `MCP_GATEWAY_PAYLOAD_DIR` | Large payload storage directory (sets default for `--payload-dir` flag) | `/tmp/jq-payloads` |
-| `MCP_GATEWAY_PAYLOAD_SIZE_THRESHOLD` | Size threshold in bytes for payload storage (sets default for `--payload-size-threshold` flag) | `1024` |
+| `MCP_GATEWAY_PAYLOAD_SIZE_THRESHOLD` | Size threshold in bytes for payload storage (sets default for `--payload-size-threshold` flag) | `10240` |
 
 ### Docker Configuration
 
