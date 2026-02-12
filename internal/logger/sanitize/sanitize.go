@@ -130,7 +130,8 @@ func SanitizeJSON(payloadBytes []byte) json.RawMessage {
 
 // SanitizeArgs returns a sanitized version of command arguments for safe logging.
 // It specifically handles Docker-style environment variable arguments (-e VAR=VALUE)
-// by truncating the values to prevent exposing sensitive data like API tokens.
+// by selectively truncating values that look like secrets while leaving non-sensitive
+// values unchanged for debugging purposes.
 // Other arguments are passed through unchanged.
 func SanitizeArgs(args []string) []string {
 	if len(args) == 0 {
@@ -147,8 +148,16 @@ func SanitizeArgs(args []string) []string {
 			// Split on first = to get VAR and VALUE
 			parts := strings.SplitN(arg, "=", 2)
 			if len(parts) == 2 {
-				// Truncate the value part
-				sanitized[i] = parts[0] + "=" + TruncateSecret(parts[1])
+				varName := parts[0]
+				value := parts[1]
+				
+				// Only truncate if the value looks like a secret
+				if looksLikeSecret(varName, value) {
+					sanitized[i] = varName + "=" + TruncateSecret(value)
+				} else {
+					// Leave non-sensitive values unchanged for debugging
+					sanitized[i] = arg
+				}
 			} else {
 				sanitized[i] = arg
 			}
@@ -158,4 +167,76 @@ func SanitizeArgs(args []string) []string {
 		}
 	}
 	return sanitized
+}
+
+// looksLikeSecret determines if an environment variable value appears to be sensitive
+// based on the variable name and value patterns.
+func looksLikeSecret(varName, value string) bool {
+	// Empty values are not secrets
+	if value == "" {
+		return false
+	}
+	
+	// Check variable name for common secret indicators
+	varNameLower := strings.ToLower(varName)
+	secretNamePatterns := []string{
+		"token", "secret", "key", "password", "passwd", "pwd",
+		"credential", "auth", "api_key", "apikey", "access",
+	}
+	for _, pattern := range secretNamePatterns {
+		if strings.Contains(varNameLower, pattern) {
+			return true
+		}
+	}
+	
+	// Check if value matches secret patterns (long strings, tokens, etc.)
+	// Short values like "1", "true", "false" are unlikely to be secrets
+	if len(value) <= 4 {
+		return false
+	}
+	
+	// Check common non-sensitive values
+	nonSensitiveValues := []string{
+		"true", "false", "yes", "no", "on", "off",
+		"debug", "info", "warn", "error",
+		"dumb", "xterm", "ansi",
+	}
+	valueLower := strings.ToLower(value)
+	for _, nonSensitive := range nonSensitiveValues {
+		if valueLower == nonSensitive {
+			return false
+		}
+	}
+	
+	// Check if value looks like a token/key (GitHub PAT, JWT, API keys, etc.)
+	for _, pattern := range SecretPatterns {
+		if pattern.MatchString(value) {
+			return true
+		}
+	}
+	
+	// If value is longer than 16 chars and contains alphanumeric, treat as potential secret
+	if len(value) > 16 && containsAlphanumeric(value) {
+		return true
+	}
+	
+	return false
+}
+
+// containsAlphanumeric checks if a string contains both letters and numbers
+func containsAlphanumeric(s string) bool {
+	hasLetter := false
+	hasDigit := false
+	for _, c := range s {
+		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') {
+			hasLetter = true
+		}
+		if c >= '0' && c <= '9' {
+			hasDigit = true
+		}
+		if hasLetter && hasDigit {
+			return true
+		}
+	}
+	return false
 }

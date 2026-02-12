@@ -535,9 +535,9 @@ func TestSanitizeArgs(t *testing.T) {
 			},
 			expected: []string{
 				"run",
-				"-e", "GITHUB_PERSONAL_ACCESS_TOKEN=ghp_...",
-				"-e", "API_KEY=sk_t...",
-				"-e", "SHORT=...",
+				"-e", "GITHUB_PERSONAL_ACCESS_TOKEN=ghp_...",            // Secret detected by pattern
+				"-e", "API_KEY=sk_t...",                                 // Secret detected by name and pattern
+				"-e", "SHORT=abc",                                        // Non-sensitive: short value
 				"--rm",
 				"-i",
 				"image:latest",
@@ -560,11 +560,11 @@ func TestSanitizeArgs(t *testing.T) {
 				"run",
 				"--rm",
 				"-i",
-				"-e", "NO_COLOR=...",
-				"-e", "TERM=...",
-				"-e", "PYTHONUNBUFFERED=...",
-				"-e", "GITHUB_PERSONAL_ACCESS_TOKEN=ghp_...",
-				"-e", "GITHUB_READ_ONLY=...",
+				"-e", "NO_COLOR=1",                                      // Non-sensitive: unchanged
+				"-e", "TERM=dumb",                                       // Non-sensitive: unchanged
+				"-e", "PYTHONUNBUFFERED=1",                              // Non-sensitive: unchanged
+				"-e", "GITHUB_PERSONAL_ACCESS_TOKEN=ghp_...",            // Secret: truncated
+				"-e", "GITHUB_READ_ONLY=1",                              // Non-sensitive: unchanged
 				"ghcr.io/github/github-mcp-server:v0.29.0",
 			},
 		},
@@ -579,14 +579,14 @@ func TestSanitizeArgs(t *testing.T) {
 			expected: []string{"run", "-e", "EMPTY=", "image:latest"},
 		},
 		{
-			name: "env var with equals in value",
+			name: "env var with equals in value (non-sensitive config)",
 			input: []string{
 				"run",
-				"-e", "CONFIG=key=value=extra",
+				"-e", "LOG_FORMAT=json=pretty",
 			},
 			expected: []string{
 				"run",
-				"-e", "CONFIG=key=...",
+				"-e", "LOG_FORMAT=json=pretty",  // Non-sensitive: short value, no secret indicators
 			},
 		},
 		{
@@ -607,9 +607,49 @@ func TestSanitizeArgs(t *testing.T) {
 			expected: []string{
 				"run",
 				"--name", "test-container",
-				"-e", "API_KEY=secr...",
+				"-e", "API_KEY=secr...",        // Secret: detected by name "API_KEY"
 				"--network", "host",
-				"-e", "TOKEN=myto...",
+				"-e", "TOKEN=myto...",          // Secret: detected by name "TOKEN"
+				"image:latest",
+			},
+		},
+		{
+			name: "non-sensitive configuration values",
+			input: []string{
+				"run",
+				"-e", "DEBUG=true",
+				"-e", "LOG_LEVEL=info",
+				"-e", "ENABLE_FEATURE=yes",
+				"-e", "PORT=8080",
+				"image:latest",
+			},
+			expected: []string{
+				"run",
+				"-e", "DEBUG=true",              // Non-sensitive: common config value
+				"-e", "LOG_LEVEL=info",          // Non-sensitive: common config value
+				"-e", "ENABLE_FEATURE=yes",      // Non-sensitive: common config value
+				"-e", "PORT=8080",               // Non-sensitive: port number
+				"image:latest",
+			},
+		},
+		{
+			name: "mixed sensitive and non-sensitive values",
+			input: []string{
+				"run",
+				"-e", "NO_COLOR=1",
+				"-e", "GITHUB_TOKEN=ghp_abcdefghijklmnopqrstuvwxyz1234567890",
+				"-e", "TERM=xterm",
+				"-e", "DATABASE_PASSWORD=my_secret_db_pass_123",
+				"-e", "TIMEOUT=30",
+				"image:latest",
+			},
+			expected: []string{
+				"run",
+				"-e", "NO_COLOR=1",                                      // Non-sensitive
+				"-e", "GITHUB_TOKEN=ghp_...",                            // Secret: matches pattern
+				"-e", "TERM=xterm",                                      // Non-sensitive
+				"-e", "DATABASE_PASSWORD=my_s...",                       // Secret: detected by name
+				"-e", "TIMEOUT=30",                                      // Non-sensitive
 				"image:latest",
 			},
 		},
@@ -619,6 +659,51 @@ func TestSanitizeArgs(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := SanitizeArgs(tt.input)
 			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestLooksLikeSecret(t *testing.T) {
+	tests := []struct {
+		name     string
+		varName  string
+		value    string
+		expected bool
+	}{
+		// Secret detection by name
+		{name: "token in name", varName: "GITHUB_TOKEN", value: "abc123", expected: true},
+		{name: "secret in name", varName: "API_SECRET", value: "xyz789", expected: true},
+		{name: "key in name", varName: "DATABASE_KEY", value: "test123", expected: true},
+		{name: "password in name", varName: "DB_PASSWORD", value: "pass123", expected: true},
+		{name: "apikey in name", varName: "SERVICE_APIKEY", value: "key123", expected: true},
+		
+		// Non-sensitive names
+		{name: "color setting", varName: "NO_COLOR", value: "1", expected: false},
+		{name: "term setting", varName: "TERM", value: "dumb", expected: false},
+		{name: "debug flag", varName: "DEBUG", value: "true", expected: false},
+		{name: "port number", varName: "PORT", value: "8080", expected: false},
+		
+		// Secret detection by value pattern
+		{name: "github pat", varName: "VAR", value: "ghp_1234567890123456789012345678901234567890", expected: true},
+		{name: "long hex string", varName: "VAR", value: "abcdef1234567890abcdef1234567890abcdef12", expected: true},
+		{name: "jwt token", varName: "VAR", value: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.payload.signature", expected: true},
+		
+		// Short non-sensitive values
+		{name: "single digit", varName: "VAR", value: "1", expected: false},
+		{name: "boolean true", varName: "VAR", value: "true", expected: false},
+		{name: "boolean false", varName: "VAR", value: "false", expected: false},
+		{name: "yes value", varName: "VAR", value: "yes", expected: false},
+		
+		// Edge cases
+		{name: "empty value", varName: "VAR", value: "", expected: false},
+		{name: "long non-alphanumeric", varName: "VAR", value: "====================", expected: false},
+		{name: "long config path", varName: "CONFIG_PATH", value: "/usr/local/etc/app/config.json", expected: false},
+	}
+	
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := looksLikeSecret(tt.varName, tt.value)
+			assert.Equal(t, tt.expected, result, "looksLikeSecret(%q, %q) should return %v", tt.varName, tt.value, tt.expected)
 		})
 	}
 }
