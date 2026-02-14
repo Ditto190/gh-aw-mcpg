@@ -796,6 +796,21 @@ func (c *Connection) sendHTTPRequest(ctx context.Context, method string, params 
 	return &rpcResponse, nil
 }
 
+// marshalToResponse marshals an SDK result into a Response object.
+// This helper reduces code duplication across all MCP method wrappers.
+func marshalToResponse(result interface{}) (*Response, error) {
+	resultJSON, err := json.Marshal(result)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal result: %w", err)
+	}
+
+	return &Response{
+		JSONRPC: "2.0",
+		ID:      1, // Placeholder ID
+		Result:  resultJSON,
+	}, nil
+}
+
 func (c *Connection) listTools() (*Response, error) {
 	if c.session == nil {
 		return nil, fmt.Errorf("SDK session not available for plain JSON-RPC transport")
@@ -805,16 +820,7 @@ func (c *Connection) listTools() (*Response, error) {
 		return nil, err
 	}
 
-	resultJSON, err := json.Marshal(result)
-	if err != nil {
-		return nil, err
-	}
-
-	return &Response{
-		JSONRPC: "2.0",
-		ID:      1, // Placeholder ID
-		Result:  resultJSON,
-	}, nil
+	return marshalToResponse(result)
 }
 
 func (c *Connection) callTool(params interface{}) (*Response, error) {
@@ -848,16 +854,7 @@ func (c *Connection) callTool(params interface{}) (*Response, error) {
 		return nil, err
 	}
 
-	resultJSON, err := json.Marshal(result)
-	if err != nil {
-		return nil, err
-	}
-
-	return &Response{
-		JSONRPC: "2.0",
-		ID:      1,
-		Result:  resultJSON,
-	}, nil
+	return marshalToResponse(result)
 }
 
 func (c *Connection) listResources() (*Response, error) {
@@ -869,16 +866,7 @@ func (c *Connection) listResources() (*Response, error) {
 		return nil, err
 	}
 
-	resultJSON, err := json.Marshal(result)
-	if err != nil {
-		return nil, err
-	}
-
-	return &Response{
-		JSONRPC: "2.0",
-		ID:      1,
-		Result:  resultJSON,
-	}, nil
+	return marshalToResponse(result)
 }
 
 func (c *Connection) readResource(params interface{}) (*Response, error) {
@@ -900,16 +888,7 @@ func (c *Connection) readResource(params interface{}) (*Response, error) {
 		return nil, err
 	}
 
-	resultJSON, err := json.Marshal(result)
-	if err != nil {
-		return nil, err
-	}
-
-	return &Response{
-		JSONRPC: "2.0",
-		ID:      1,
-		Result:  resultJSON,
-	}, nil
+	return marshalToResponse(result)
 }
 
 func (c *Connection) listPrompts() (*Response, error) {
@@ -921,16 +900,7 @@ func (c *Connection) listPrompts() (*Response, error) {
 		return nil, err
 	}
 
-	resultJSON, err := json.Marshal(result)
-	if err != nil {
-		return nil, err
-	}
-
-	return &Response{
-		JSONRPC: "2.0",
-		ID:      1,
-		Result:  resultJSON,
-	}, nil
+	return marshalToResponse(result)
 }
 
 func (c *Connection) getPrompt(params interface{}) (*Response, error) {
@@ -954,16 +924,7 @@ func (c *Connection) getPrompt(params interface{}) (*Response, error) {
 		return nil, err
 	}
 
-	resultJSON, err := json.Marshal(result)
-	if err != nil {
-		return nil, err
-	}
-
-	return &Response{
-		JSONRPC: "2.0",
-		ID:      1,
-		Result:  resultJSON,
-	}, nil
+	return marshalToResponse(result)
 }
 
 // expandDockerEnvArgs expands Docker -e flags that reference environment variables
