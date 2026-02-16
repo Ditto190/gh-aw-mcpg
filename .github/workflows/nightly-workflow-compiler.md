@@ -1,6 +1,6 @@
 ---
-name: Nightly Workflow Compiler
-description: Nightly workflow that ensures all workflows are compiled with the latest agentic workflow release
+name: Nightly Workflow Upgrader
+description: Nightly workflow that upgrades all workflows to the latest agentic workflow release (agent files, codemods, and compilations)
 on:
   schedule: daily
   workflow_dispatch:

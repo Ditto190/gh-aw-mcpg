@@ -21,11 +21,11 @@
 #
 # For more information: https://github.github.com/gh-aw/introduction/overview/
 #
-# Nightly workflow that ensures all workflows are compiled with the latest agentic workflow release
+# Nightly workflow that upgrades all workflows to the latest agentic workflow release (agent files, codemods, and compilations)
 #
-# frontmatter-hash: 254da50352baecc7f6ad2aeb9e8aaccd97980534a00861c2cab0f24ead8f37ad
+# frontmatter-hash: 6fc04fdcdd2dc21022dc2c38d3a52b142358c341130ccdb039f00179795930e1
 
-name: "Nightly Workflow Compiler"
+name: "Nightly Workflow Upgrader"
 "on":
   schedule:
   - cron: "21 4 * * *"
@@ -37,7 +37,7 @@ permissions: {}
 concurrency:
   group: "gh-aw-${{ github.workflow }}"
 
-run-name: "Nightly Workflow Compiler"
+run-name: "Nightly Workflow Upgrader"
 
 jobs:
   activation:
@@ -139,7 +139,7 @@ jobs:
               version: "",
               agent_version: "0.0.410",
               cli_version: "v0.45.0",
-              workflow_name: "Nightly Workflow Compiler",
+              workflow_name: "Nightly Workflow Upgrader",
               experimental: false,
               supports_tools_allowlist: true,
               supports_http_transport: true,
@@ -801,7 +801,7 @@ jobs:
         env:
           GH_AW_AGENT_OUTPUT: ${{ env.GH_AW_AGENT_OUTPUT }}
           GH_AW_NOOP_MAX: 1
-          GH_AW_WORKFLOW_NAME: "Nightly Workflow Compiler"
+          GH_AW_WORKFLOW_NAME: "Nightly Workflow Upgrader"
         with:
           github-token: ${{ secrets.GH_AW_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
           script: |
@@ -816,7 +816,7 @@ jobs:
           GH_AW_AGENT_OUTPUT: ${{ env.GH_AW_AGENT_OUTPUT }}
           GH_AW_MISSING_TOOL_CREATE_ISSUE: "true"
           GH_AW_MISSING_TOOL_TITLE_PREFIX: "[missing tool]"
-          GH_AW_WORKFLOW_NAME: "Nightly Workflow Compiler"
+          GH_AW_WORKFLOW_NAME: "Nightly Workflow Upgrader"
         with:
           github-token: ${{ secrets.GH_AW_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
           script: |
@@ -829,7 +829,7 @@ jobs:
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
           GH_AW_AGENT_OUTPUT: ${{ env.GH_AW_AGENT_OUTPUT }}
-          GH_AW_WORKFLOW_NAME: "Nightly Workflow Compiler"
+          GH_AW_WORKFLOW_NAME: "Nightly Workflow Upgrader"
           GH_AW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           GH_AW_AGENT_CONCLUSION: ${{ needs.agent.result }}
           GH_AW_WORKFLOW_ID: "nightly-workflow-compiler"
@@ -847,7 +847,7 @@ jobs:
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
           GH_AW_AGENT_OUTPUT: ${{ env.GH_AW_AGENT_OUTPUT }}
-          GH_AW_WORKFLOW_NAME: "Nightly Workflow Compiler"
+          GH_AW_WORKFLOW_NAME: "Nightly Workflow Upgrader"
           GH_AW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           GH_AW_AGENT_CONCLUSION: ${{ needs.agent.result }}
           GH_AW_NOOP_MESSAGE: ${{ steps.noop.outputs.noop_message }}
@@ -864,7 +864,7 @@ jobs:
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
           GH_AW_AGENT_OUTPUT: ${{ env.GH_AW_AGENT_OUTPUT }}
-          GH_AW_WORKFLOW_NAME: "Nightly Workflow Compiler"
+          GH_AW_WORKFLOW_NAME: "Nightly Workflow Upgrader"
           GH_AW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         with:
           github-token: ${{ secrets.GH_AW_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
@@ -909,8 +909,8 @@ jobs:
       - name: Setup threat detection
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
-          WORKFLOW_NAME: "Nightly Workflow Compiler"
-          WORKFLOW_DESCRIPTION: "Nightly workflow that ensures all workflows are compiled with the latest agentic workflow release"
+          WORKFLOW_NAME: "Nightly Workflow Upgrader"
+          WORKFLOW_DESCRIPTION: "Nightly workflow that upgrades all workflows to the latest agentic workflow release (agent files, codemods, and compilations)"
           HAS_PATCH: ${{ needs.agent.outputs.has_patch }}
         with:
           script: |
@@ -990,7 +990,7 @@ jobs:
     env:
       GH_AW_ENGINE_ID: "copilot"
       GH_AW_WORKFLOW_ID: "nightly-workflow-compiler"
-      GH_AW_WORKFLOW_NAME: "Nightly Workflow Compiler"
+      GH_AW_WORKFLOW_NAME: "Nightly Workflow Upgrader"
     outputs:
       create_discussion_error_count: ${{ steps.process_safe_outputs.outputs.create_discussion_error_count }}
       create_discussion_errors: ${{ steps.process_safe_outputs.outputs.create_discussion_errors }}
