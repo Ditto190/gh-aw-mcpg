@@ -110,44 +110,36 @@ func (fl *FileLogger) GetWriter() io.Writer {
 
 // Global logging functions that use the global file logger
 
-// LogInfo logs an informational message
-func LogInfo(category, format string, args ...interface{}) {
+// logWithLevel is a helper that reduces code duplication for logging at different levels.
+// It handles mutex locking and nil-checking in a single place, eliminating the need
+// for repeated mutex lock/unlock patterns across LogInfo, LogWarn, LogError, and LogDebug.
+func logWithLevel(level LogLevel, category, format string, args ...interface{}) {
 	globalLoggerMu.RLock()
 	defer globalLoggerMu.RUnlock()
 
 	if globalFileLogger != nil {
-		globalFileLogger.Log(LogLevelInfo, category, format, args...)
+		globalFileLogger.Log(level, category, format, args...)
 	}
+}
+
+// LogInfo logs an informational message
+func LogInfo(category, format string, args ...interface{}) {
+	logWithLevel(LogLevelInfo, category, format, args...)
 }
 
 // LogWarn logs a warning message
 func LogWarn(category, format string, args ...interface{}) {
-	globalLoggerMu.RLock()
-	defer globalLoggerMu.RUnlock()
-
-	if globalFileLogger != nil {
-		globalFileLogger.Log(LogLevelWarn, category, format, args...)
-	}
+	logWithLevel(LogLevelWarn, category, format, args...)
 }
 
 // LogError logs an error message
 func LogError(category, format string, args ...interface{}) {
-	globalLoggerMu.RLock()
-	defer globalLoggerMu.RUnlock()
-
-	if globalFileLogger != nil {
-		globalFileLogger.Log(LogLevelError, category, format, args...)
-	}
+	logWithLevel(LogLevelError, category, format, args...)
 }
 
 // LogDebug logs a debug message
 func LogDebug(category, format string, args ...interface{}) {
-	globalLoggerMu.RLock()
-	defer globalLoggerMu.RUnlock()
-
-	if globalFileLogger != nil {
-		globalFileLogger.Log(LogLevelDebug, category, format, args...)
-	}
+	logWithLevel(LogLevelDebug, category, format, args...)
 }
 
 // CloseGlobalLogger closes the global file logger

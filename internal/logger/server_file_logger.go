@@ -158,56 +158,50 @@ func (sfl *ServerFileLogger) Close() error {
 
 // Global logging functions that use the global server file logger
 
-// LogInfoWithServer logs an informational message to the server-specific log file
-func LogInfoWithServer(serverID, category, format string, args ...interface{}) {
+// logWithLevelAndServer is a helper that reduces code duplication for per-server logging at different levels.
+// It handles mutex locking, nil-checking, and dual logging (server-specific + unified) in a single place,
+// eliminating repeated patterns across LogInfoWithServer, LogWarnWithServer, LogErrorWithServer, and LogDebugWithServer.
+func logWithLevelAndServer(serverID string, level LogLevel, category, format string, args ...interface{}) {
 	globalServerLoggerMu.RLock()
 	defer globalServerLoggerMu.RUnlock()
 
 	if globalServerFileLogger != nil {
-		globalServerFileLogger.Log(serverID, LogLevelInfo, category, format, args...)
+		globalServerFileLogger.Log(serverID, level, category, format, args...)
 	}
 
 	// Also log to the main log file for unified view
-	LogInfo(category, "[%s] %s", serverID, fmt.Sprintf(format, args...))
+	// Use the appropriate level function to maintain consistency
+	formattedMessage := fmt.Sprintf(format, args...)
+	switch level {
+	case LogLevelInfo:
+		LogInfo(category, "[%s] %s", serverID, formattedMessage)
+	case LogLevelWarn:
+		LogWarn(category, "[%s] %s", serverID, formattedMessage)
+	case LogLevelError:
+		LogError(category, "[%s] %s", serverID, formattedMessage)
+	case LogLevelDebug:
+		LogDebug(category, "[%s] %s", serverID, formattedMessage)
+	}
+}
+
+// LogInfoWithServer logs an informational message to the server-specific log file
+func LogInfoWithServer(serverID, category, format string, args ...interface{}) {
+	logWithLevelAndServer(serverID, LogLevelInfo, category, format, args...)
 }
 
 // LogWarnWithServer logs a warning message to the server-specific log file
 func LogWarnWithServer(serverID, category, format string, args ...interface{}) {
-	globalServerLoggerMu.RLock()
-	defer globalServerLoggerMu.RUnlock()
-
-	if globalServerFileLogger != nil {
-		globalServerFileLogger.Log(serverID, LogLevelWarn, category, format, args...)
-	}
-
-	// Also log to the main log file for unified view
-	LogWarn(category, "[%s] %s", serverID, fmt.Sprintf(format, args...))
+	logWithLevelAndServer(serverID, LogLevelWarn, category, format, args...)
 }
 
 // LogErrorWithServer logs an error message to the server-specific log file
 func LogErrorWithServer(serverID, category, format string, args ...interface{}) {
-	globalServerLoggerMu.RLock()
-	defer globalServerLoggerMu.RUnlock()
-
-	if globalServerFileLogger != nil {
-		globalServerFileLogger.Log(serverID, LogLevelError, category, format, args...)
-	}
-
-	// Also log to the main log file for unified view
-	LogError(category, "[%s] %s", serverID, fmt.Sprintf(format, args...))
+	logWithLevelAndServer(serverID, LogLevelError, category, format, args...)
 }
 
 // LogDebugWithServer logs a debug message to the server-specific log file
 func LogDebugWithServer(serverID, category, format string, args ...interface{}) {
-	globalServerLoggerMu.RLock()
-	defer globalServerLoggerMu.RUnlock()
-
-	if globalServerFileLogger != nil {
-		globalServerFileLogger.Log(serverID, LogLevelDebug, category, format, args...)
-	}
-
-	// Also log to the main log file for unified view
-	LogDebug(category, "[%s] %s", serverID, fmt.Sprintf(format, args...))
+	logWithLevelAndServer(serverID, LogLevelDebug, category, format, args...)
 }
 
 // CloseServerFileLogger closes the global server file logger
