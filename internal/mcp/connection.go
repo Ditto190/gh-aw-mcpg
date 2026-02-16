@@ -817,9 +817,19 @@ func marshalToResponse(result interface{}) (*Response, error) {
 	}, nil
 }
 
-func (c *Connection) listTools() (*Response, error) {
+// requireSession validates that a session is available for SDK operations.
+// This helper centralizes session validation logic across all MCP method wrappers.
+// Returns an error if the session is nil (e.g., for plain JSON-RPC transport).
+func (c *Connection) requireSession() error {
 	if c.session == nil {
-		return nil, fmt.Errorf("SDK session not available for plain JSON-RPC transport")
+		return fmt.Errorf("SDK session not available for plain JSON-RPC transport")
+	}
+	return nil
+}
+
+func (c *Connection) listTools() (*Response, error) {
+	if err := c.requireSession(); err != nil {
+		return nil, err
 	}
 	result, err := c.session.ListTools(c.ctx, &sdk.ListToolsParams{})
 	if err != nil {
@@ -830,8 +840,8 @@ func (c *Connection) listTools() (*Response, error) {
 }
 
 func (c *Connection) callTool(params interface{}) (*Response, error) {
-	if c.session == nil {
-		return nil, fmt.Errorf("SDK session not available for plain JSON-RPC transport")
+	if err := c.requireSession(); err != nil {
+		return nil, err
 	}
 	var callParams CallToolParams
 	paramsJSON, err := json.Marshal(params)
@@ -864,8 +874,8 @@ func (c *Connection) callTool(params interface{}) (*Response, error) {
 }
 
 func (c *Connection) listResources() (*Response, error) {
-	if c.session == nil {
-		return nil, fmt.Errorf("SDK session not available for plain JSON-RPC transport")
+	if err := c.requireSession(); err != nil {
+		return nil, err
 	}
 	result, err := c.session.ListResources(c.ctx, &sdk.ListResourcesParams{})
 	if err != nil {
@@ -876,8 +886,8 @@ func (c *Connection) listResources() (*Response, error) {
 }
 
 func (c *Connection) readResource(params interface{}) (*Response, error) {
-	if c.session == nil {
-		return nil, fmt.Errorf("SDK session not available for plain JSON-RPC transport")
+	if err := c.requireSession(); err != nil {
+		return nil, err
 	}
 	var readParams struct {
 		URI string `json:"uri"`
@@ -898,8 +908,8 @@ func (c *Connection) readResource(params interface{}) (*Response, error) {
 }
 
 func (c *Connection) listPrompts() (*Response, error) {
-	if c.session == nil {
-		return nil, fmt.Errorf("SDK session not available for plain JSON-RPC transport")
+	if err := c.requireSession(); err != nil {
+		return nil, err
 	}
 	result, err := c.session.ListPrompts(c.ctx, &sdk.ListPromptsParams{})
 	if err != nil {
@@ -910,8 +920,8 @@ func (c *Connection) listPrompts() (*Response, error) {
 }
 
 func (c *Connection) getPrompt(params interface{}) (*Response, error) {
-	if c.session == nil {
-		return nil, fmt.Errorf("SDK session not available for plain JSON-RPC transport")
+	if err := c.requireSession(); err != nil {
+		return nil, err
 	}
 	var getParams struct {
 		Name      string            `json:"name"`
