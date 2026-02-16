@@ -1,4 +1,26 @@
 // Package config provides configuration loading and parsing.
+//
+// # TOML Configuration Parsing
+//
+// This package uses BurntSushi/toml v1.6.0+ for robust TOML parsing with:
+//   - TOML 1.1 specification support (default in v1.6.0+)
+//   - Column-level error reporting (Position.Line, Position.Col)
+//   - Duplicate key detection (improved in v1.6.0)
+//   - Metadata tracking for unknown field detection
+//
+// # Design Patterns
+//
+// Streaming Decoder: Uses toml.NewDecoder() for memory efficiency with large configs
+// Error Reporting: Extracts line/column from ParseError for precise error messages
+// Unknown Fields: Uses MetaData.Undecoded() for typo warnings (not hard errors)
+// Validation: Multi-layer approach (parse → schema → field-level → variable expansion)
+//
+// # TOML 1.1 Features Used
+//
+//   - Multi-line inline arrays: newlines allowed in array definitions
+//   - Improved duplicate detection: duplicate keys now properly reported as errors
+//   - Large float encoding: proper round-trip with exponent syntax
+//
 // This file defines the core configuration types that are stable and rarely change.
 package config
 
@@ -90,6 +112,24 @@ type ServerConfig struct {
 }
 
 // LoadFromFile loads configuration from a TOML file.
+//
+// This function uses the BurntSushi/toml v1.6.0+ parser with TOML 1.1 support,
+// which enables modern syntax features like newlines in inline tables and
+// improved duplicate key detection.
+//
+// Error Handling:
+//   - Parse errors include both line AND column numbers (v1.5.0+ feature)
+//   - Unknown fields generate warnings instead of hard errors (typo detection)
+//   - Metadata tracks all decoded keys for validation purposes
+//
+// Example usage with TOML 1.1 multi-line arrays:
+//
+//	[servers.github]
+//	command = "docker"
+//	args = [
+//	    "run", "--rm", "-i",
+//	    "--name", "awmg-github-mcp"
+//	]
 func LoadFromFile(path string) (*Config, error) {
 	logConfig.Printf("Loading configuration from file: %s", path)
 
@@ -100,7 +140,7 @@ func LoadFromFile(path string) (*Config, error) {
 	}
 	defer file.Close()
 
-	// Use streaming decoder for better memory efficiency
+	// Use streaming decoder for better memory efficiency with large configs
 	var cfg Config
 	decoder := toml.NewDecoder(file)
 	md, err := decoder.Decode(&cfg)
@@ -125,6 +165,14 @@ func LoadFromFile(path string) (*Config, error) {
 	logConfig.Printf("Parsed TOML config with %d servers", len(cfg.Servers))
 
 	// Detect and warn about unknown configuration keys (typos, deprecated options)
+	// This uses MetaData.Undecoded() to identify keys present in TOML but not
+	// in the Config struct. This provides a balance between strict validation
+	// (hard errors) and user-friendliness (warnings allow config to load).
+	//
+	// Design decision: We use warnings rather than toml.Decoder.DisallowUnknownFields()
+	// (which doesn't exist) or hard errors to maintain backward compatibility and
+	// allow gradual config migration. Common typos like "prot" → "port" are caught
+	// while still allowing the gateway to start.
 	undecoded := md.Undecoded()
 	if len(undecoded) > 0 {
 		for _, key := range undecoded {
