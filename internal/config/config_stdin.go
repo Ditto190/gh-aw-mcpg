@@ -66,6 +66,15 @@ type StdinServerConfig struct {
 	Tools []string `json:"tools,omitempty"`
 }
 
+// intPtrOrDefault returns the value of the int pointer if not nil, otherwise returns the default value.
+// This helper reduces code duplication when handling optional integer fields with defaults.
+func intPtrOrDefault(ptr *int, defaultValue int) int {
+	if ptr != nil {
+		return *ptr
+	}
+	return defaultValue
+}
+
 // LoadFromStdin loads configuration from stdin JSON.
 func LoadFromStdin() (*Config, error) {
 	logConfig.Print("Loading configuration from stdin JSON")
@@ -136,30 +145,18 @@ func convertStdinConfig(stdinCfg *StdinConfig) (*Config, error) {
 	// Convert gateway config with defaults
 	if stdinCfg.Gateway != nil {
 		cfg.Gateway = &GatewayConfig{
-			Port:           DefaultPort,
+			Port:           intPtrOrDefault(stdinCfg.Gateway.Port, DefaultPort),
 			APIKey:         stdinCfg.Gateway.APIKey,
 			Domain:         stdinCfg.Gateway.Domain,
-			StartupTimeout: DefaultStartupTimeout,
-			ToolTimeout:    DefaultToolTimeout,
-		}
-		if stdinCfg.Gateway.Port != nil {
-			cfg.Gateway.Port = *stdinCfg.Gateway.Port
-		}
-		if stdinCfg.Gateway.StartupTimeout != nil {
-			cfg.Gateway.StartupTimeout = *stdinCfg.Gateway.StartupTimeout
-		}
-		if stdinCfg.Gateway.ToolTimeout != nil {
-			cfg.Gateway.ToolTimeout = *stdinCfg.Gateway.ToolTimeout
+			StartupTimeout: intPtrOrDefault(stdinCfg.Gateway.StartupTimeout, DefaultStartupTimeout),
+			ToolTimeout:    intPtrOrDefault(stdinCfg.Gateway.ToolTimeout, DefaultToolTimeout),
 		}
 		if stdinCfg.Gateway.PayloadDir != "" {
 			cfg.Gateway.PayloadDir = stdinCfg.Gateway.PayloadDir
 		}
 	} else {
-		cfg.Gateway = &GatewayConfig{
-			Port:           DefaultPort,
-			StartupTimeout: DefaultStartupTimeout,
-			ToolTimeout:    DefaultToolTimeout,
-		}
+		cfg.Gateway = &GatewayConfig{}
+		applyGatewayDefaults(cfg.Gateway)
 	}
 
 	// Apply feature-specific defaults
