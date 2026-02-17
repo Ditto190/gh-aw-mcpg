@@ -18,6 +18,11 @@ network:
     - containers
 
 steps:
+  - name: Checkout full repository
+    uses: actions/checkout@v6
+    with:
+      fetch-depth: 1
+
   - name: Set up Go
     uses: actions/setup-go@v6
     with:
@@ -36,19 +41,7 @@ tools:
   github:
     toolsets: [default]
   edit:
-  bash:
-    - "go test -coverprofile=coverage.out ./..."
-    - "go tool cover -func=coverage.out"
-    - "go tool cover -html=coverage.out -o coverage.html"
-    - "find internal -name '*.go' -type f ! -name '*_test.go'"
-    - "find internal -name '*_test.go' -type f"
-    - "cat internal/**/*.go"
-    - "cat internal/**/*_test.go"
-    - "go test -v ./..."
-    - "go build -o awmg"
-    - "go vet ./..."
-    - "wc -l internal/**/*.go"
-    - "grep -n 'func ' internal/**/*.go"
+  bash: ["*"]
 
 timeout-minutes: 45
 strict: true
