@@ -17,19 +17,20 @@ var varExprPattern = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}`)
 
 var logValidation = logger.New("config:validation")
 
-// expandVariables expands variable expressions in a string
-// Returns the expanded string and error if any variable is undefined
-func expandVariables(value, jsonPath string) (string, error) {
-	logValidation.Printf("Expanding variables: jsonPath=%s", jsonPath)
+// expandVariablesCore is the shared implementation for variable expansion.
+// It works with byte slices and handles the core expansion logic, tracking undefined variables.
+// This eliminates code duplication between expandVariables and ExpandRawJSONVariables.
+func expandVariablesCore(data []byte, contextDesc string) ([]byte, []string, error) {
+	logValidation.Printf("Expanding variables: context=%s", contextDesc)
 	var undefinedVars []string
 
-	result := varExprPattern.ReplaceAllStringFunc(value, func(match string) string {
+	result := varExprPattern.ReplaceAllFunc(data, func(match []byte) []byte {
 		// Extract variable name (remove ${ and })
-		varName := match[2 : len(match)-1]
+		varName := string(match[2 : len(match)-1])
 
 		if envValue, exists := os.LookupEnv(varName); exists {
 			logValidation.Printf("Expanded variable: %s (found in environment)", varName)
-			return envValue
+			return []byte(envValue)
 		}
 
 		// Track undefined variable
@@ -38,43 +39,34 @@ func expandVariables(value, jsonPath string) (string, error) {
 		return match // Keep original if undefined
 	})
 
+	logValidation.Printf("Variable expansion completed: context=%s, undefined_count=%d", contextDesc, len(undefinedVars))
+	return result, undefinedVars, nil
+}
+
+// expandVariables expands variable expressions in a string
+// Returns the expanded string and error if any variable is undefined
+func expandVariables(value, jsonPath string) (string, error) {
+	result, undefinedVars, _ := expandVariablesCore([]byte(value), fmt.Sprintf("jsonPath=%s", jsonPath))
+
 	if len(undefinedVars) > 0 {
 		logValidation.Printf("Variable expansion failed: undefined variables=%v", undefinedVars)
 		return "", rules.UndefinedVariable(undefinedVars[0], jsonPath)
 	}
 
-	logValidation.Print("Variable expansion completed successfully")
-	return result, nil
+	return string(result), nil
 }
 
 // ExpandRawJSONVariables expands all ${VAR} expressions in JSON data before schema validation.
 // This ensures the schema validates the expanded values, not the variable syntax.
 // It collects all undefined variables and reports them in a single error.
 func ExpandRawJSONVariables(data []byte) ([]byte, error) {
-	logValidation.Print("Expanding variables in raw JSON data")
-	var undefinedVars []string
-
-	result := varExprPattern.ReplaceAllFunc(data, func(match []byte) []byte {
-		// Extract variable name (remove ${ and })
-		varName := string(match[2 : len(match)-1])
-
-		if envValue, exists := os.LookupEnv(varName); exists {
-			logValidation.Printf("Expanded variable in JSON: %s", varName)
-			return []byte(envValue)
-		}
-
-		// Track undefined variable
-		undefinedVars = append(undefinedVars, varName)
-		logValidation.Printf("Undefined variable in JSON: %s", varName)
-		return match // Keep original if undefined
-	})
+	result, undefinedVars, _ := expandVariablesCore(data, "raw JSON data")
 
 	if len(undefinedVars) > 0 {
 		logValidation.Printf("Variable expansion failed: undefined variables=%v", undefinedVars)
 		return nil, rules.UndefinedVariable(undefinedVars[0], "configuration")
 	}
 
-	logValidation.Print("Raw JSON variable expansion completed")
 	return result, nil
 }
 
