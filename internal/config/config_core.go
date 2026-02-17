@@ -111,6 +111,21 @@ type ServerConfig struct {
 	Tools []string `toml:"tools" json:"tools,omitempty"`
 }
 
+// applyGatewayDefaults applies default values to a GatewayConfig if they are not set.
+// This helper ensures consistent default initialization across TOML and JSON config loading.
+// It only applies defaults for zero values, preserving any explicitly set values.
+func applyGatewayDefaults(cfg *GatewayConfig) {
+	if cfg.Port == 0 {
+		cfg.Port = DefaultPort
+	}
+	if cfg.StartupTimeout == 0 {
+		cfg.StartupTimeout = DefaultStartupTimeout
+	}
+	if cfg.ToolTimeout == 0 {
+		cfg.ToolTimeout = DefaultToolTimeout
+	}
+}
+
 // LoadFromFile loads configuration from a TOML file.
 //
 // This function uses the BurntSushi/toml v1.6.0+ parser with TOML 1.1 support,
@@ -193,15 +208,7 @@ func LoadFromFile(path string) (*Config, error) {
 	}
 
 	// Apply core gateway defaults
-	if cfg.Gateway.Port == 0 {
-		cfg.Gateway.Port = DefaultPort
-	}
-	if cfg.Gateway.StartupTimeout == 0 {
-		cfg.Gateway.StartupTimeout = DefaultStartupTimeout
-	}
-	if cfg.Gateway.ToolTimeout == 0 {
-		cfg.Gateway.ToolTimeout = DefaultToolTimeout
-	}
+	applyGatewayDefaults(cfg.Gateway)
 
 	// Apply feature-specific defaults
 	applyDefaults(&cfg)

@@ -155,11 +155,8 @@ func convertStdinConfig(stdinCfg *StdinConfig) (*Config, error) {
 			cfg.Gateway.PayloadDir = stdinCfg.Gateway.PayloadDir
 		}
 	} else {
-		cfg.Gateway = &GatewayConfig{
-			Port:           DefaultPort,
-			StartupTimeout: DefaultStartupTimeout,
-			ToolTimeout:    DefaultToolTimeout,
-		}
+		cfg.Gateway = &GatewayConfig{}
+		applyGatewayDefaults(cfg.Gateway)
 	}
 
 	// Apply feature-specific defaults
