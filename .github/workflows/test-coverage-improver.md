@@ -18,6 +18,11 @@ network:
     - containers
 
 steps:
+  - name: Checkout full repository
+    uses: actions/checkout@v6
+    with:
+      fetch-depth: 1
+
   - name: Set up Go
     uses: actions/setup-go@v6
     with:
