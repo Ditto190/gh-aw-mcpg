@@ -11,6 +11,12 @@ network:
   allowed:
     - defaults
     - containers
+steps:
+  - name: Set up Go
+    uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6
+    with:
+      go-version-file: go.mod
+      cache: true
 tools:
   serena: ["go", "typescript", "python"]
   github:
