@@ -184,10 +184,10 @@ func logWithMarkdown(level LogLevel, regularLogFunc func(string, string, ...inte
 }
 
 // logWithMarkdownLevel is a helper that reduces code duplication for markdown logging at different levels.
-// It uses the levelFuncs map (file_logger.go) to look up the regular log function for the given level,
+// It uses the logFuncs map (file_logger.go) to look up the regular log function for the given level,
 // eliminating repeated switch-on-level patterns across LogInfoMd, LogWarnMd, LogErrorMd, and LogDebugMd.
 func logWithMarkdownLevel(level LogLevel, category, format string, args ...interface{}) {
-	logWithMarkdown(level, levelFuncs[level], category, format, args...)
+	logWithMarkdown(level, logFuncs[level], category, format, args...)
 }
 
 // LogInfoMd logs to both regular and markdown loggers

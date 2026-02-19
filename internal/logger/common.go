@@ -215,12 +215,12 @@ import (
 //   - The one-liner wrappers are trivial and unlikely to diverge.
 //   - Go lacks the metaprogramming to eliminate them without sacrificing readability.
 //
-// The shared levelFuncs map (file_logger.go) centralises the LogLevel → log-function
+// The shared logFuncs map (file_logger.go) centralises the LogLevel → log-function
 // mapping so that the internal helpers (logWithMarkdownLevel, logWithLevelAndServer)
 // do not need their own switch-on-level blocks.
 //
 // When adding a new LogLevel constant (e.g., LogLevelTrace):
-//  1. Add a new entry to the levelFuncs map in file_logger.go.
+//  1. Add a new entry to the logFuncs map in file_logger.go.
 //  2. Add a new LogTrace wrapper to each of the three files above.
 
 // It syncs buffered data before closing and handles errors appropriately.
