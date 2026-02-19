@@ -95,7 +95,7 @@ args = [
     "custom/mcp-server:latest"
 ]
 
-# Example 4: HTTP-based MCP Server (not implemented yet)
+# Example 4: HTTP-based MCP Server
 # [servers.http-example]
 # type = "http"
 # url = "https://example.com/mcp"

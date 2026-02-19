@@ -201,7 +201,7 @@ See **[Configuration Specification](https://github.com/github/gh-aw/blob/main/do
   - Valid range: 1-65535
 - **`apiKey`** (optional): API key for authentication
 - **`domain`** (optional): Domain name for the gateway
-  - Allowed values: `"localhost"`, `"host.docker.internal"`
+  - Allowed values: `"localhost"`, `"host.docker.internal"`, or a variable expression (e.g., `"${MCP_GATEWAY_DOMAIN}"`)
 - **`startupTimeout`** (optional): Seconds to wait for backend startup (default: 60)
   - Must be positive integer
 - **`toolTimeout`** (optional): Seconds to wait for tool execution (default: 120)
@@ -330,6 +330,15 @@ When running locally (`run.sh`), these variables are optional (warnings shown if
 | `DEBUG_COLORS` | Control colored debug output (0 to disable, auto-disabled when piping) | Auto-detect |
 
 **Note:** The `HOST` and `MODE` environment variables are not used by the gateway application. Use the `--listen` flag to set the bind address (default: `127.0.0.1:3000`) and the `--routed` or `--unified` flags to set the gateway mode.
+
+### Containerized Deployment Variables
+
+When using `run_containerized.sh`, these additional variables are available:
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `MCP_GATEWAY_HOST` | Bind address for the gateway | `0.0.0.0` |
+| `MCP_GATEWAY_MODE` | Routing mode flag passed to `awmg` (e.g., `--routed`, `--unified`) | `--routed` |
 
 ### Docker Configuration
 
@@ -633,7 +642,7 @@ Configure MCP servers to connect directly via stdio transport for optimal perfor
 - ✅ Multi-language support (Go, Java, JavaScript, Python)
 - ✅ File operations, symbol operations, memory management
 - ✅ Error handling and protocol compliance
-- ✅ See [SERENA_TEST_RESULTS.md](SERENA_TEST_RESULTS.md) for detailed results
+- ✅ Detailed results available via `make test-serena-gateway`
 
 **GitHub MCP Server Testing:**
 - ✅ Full test suite validation (direct and gateway)

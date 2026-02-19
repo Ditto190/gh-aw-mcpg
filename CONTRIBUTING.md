@@ -491,7 +491,7 @@ Available environment variables for `run.sh`:
 - `HOST` - Server host (default: `0.0.0.0`)
 - `MODE` - Server mode flag (default: `--routed`, can be `--unified`)
 
-**Note:** Set `DOCKER_API_VERSION=1.43` for arm64 (Mac) or `1.44` for amd64 (Linux).
+**Note:** The `DOCKER_API_VERSION` is set automatically by `run.sh` using the Docker daemon's current API version (falls back to `1.44` for all architectures if detection fails).
 
 ## Pull Request Guidelines
 
