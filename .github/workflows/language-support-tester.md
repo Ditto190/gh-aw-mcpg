@@ -22,8 +22,8 @@ steps:
   - name: Build local MCP Gateway container
     run: |
       VERSION="dev-$(git rev-parse --short HEAD)"
-      docker build -t ghcr.io/github/gh-aw-mcpg:v0.1.4 --build-arg VERSION=${VERSION} .
-      echo "✅ Built local MCP Gateway container: ghcr.io/github/gh-aw-mcpg:v0.1.4 (VERSION=${VERSION})"
+      docker build -t ghcr.io/github/gh-aw-mcpg:latest --build-arg VERSION=${VERSION} .
+      echo "✅ Built local MCP Gateway container: ghcr.io/github/gh-aw-mcpg:latest (VERSION=${VERSION})"
   - name: Pull Serena MCP Server Container
     run: docker pull ghcr.io/github/serena-mcp-server:latest
 tools:
