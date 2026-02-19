@@ -1,6 +1,7 @@
 package rules
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -69,7 +70,7 @@ func TestPortRange(t *testing.T) {
 			err := PortRange(tt.port, tt.jsonPath)
 
 			if tt.shouldErr {
-				require.NotNil(t, err, "Expected error but got none")
+				require.Error(t, err, "Expected error but got none")
 				assert.Contains(t, err.Message, tt.errMsg, "Error message should contain expected text")
 				assert.Equal(t, tt.jsonPath, err.JSONPath, "JSONPath should match")
 			} else {
@@ -132,7 +133,7 @@ func TestTimeoutPositive(t *testing.T) {
 			err := TimeoutPositive(tt.timeout, tt.fieldName, tt.jsonPath)
 
 			if tt.shouldErr {
-				require.NotNil(t, err, "Expected error but got none")
+				require.Error(t, err, "Expected error but got none")
 				assert.Contains(t, err.Message, tt.errMsg, "Error message should contain expected text")
 				assert.Equal(t, tt.jsonPath, err.JSONPath, "JSONPath should match")
 				assert.Equal(t, tt.fieldName, err.Field, "Field name should match")
@@ -289,13 +290,9 @@ func TestMountFormat(t *testing.T) {
 			err := MountFormat(tt.mount, tt.jsonPath, tt.index)
 
 			if tt.shouldErr {
-				require.NotNil(t, err, "Expected error but got none")
+				require.Error(t, err, "Expected error but got none")
 				assert.Contains(t, err.Message, tt.errMsg, "Error message should contain expected text")
-				expectedPath := "mcpServers.github.mounts[0]"
-				if tt.index != 0 {
-					expectedPath = "mcpServers.github.mounts[1]"
-				}
-				assert.Equal(t, expectedPath, err.JSONPath, "JSONPath should match expected pattern")
+				assert.Equal(t, fmt.Sprintf("%s.mounts[%d]", tt.jsonPath, tt.index), err.JSONPath, "JSONPath should match expected pattern")
 			} else {
 				assert.Nil(t, err, "Unexpected error")
 			}
@@ -358,7 +355,7 @@ func TestUnsupportedType(t *testing.T) {
 		wantSubstr []string
 	}{
 		{
-			name:       "unsupported server type",
+			name:       "unsupported server type grpc",
 			fieldName:  "type",
 			actualType: "grpc",
 			jsonPath:   "mcpServers.github",
@@ -368,6 +365,28 @@ func TestUnsupportedType(t *testing.T) {
 				"unsupported server type 'grpc'",
 				"mcpServers.github.type",
 				"Use 'stdio'",
+			},
+		},
+		{
+			name:       "unsupported server type websocket",
+			fieldName:  "type",
+			actualType: "websocket",
+			jsonPath:   "mcpServers.my-server",
+			suggestion: "Use 'http' for HTTP transport",
+			wantSubstr: []string{
+				"unsupported server type 'websocket'",
+				"mcpServers.my-server.type",
+			},
+		},
+		{
+			name:       "unsupported empty type",
+			fieldName:  "type",
+			actualType: "",
+			jsonPath:   "mcpServers.test",
+			suggestion: "Specify a valid server type",
+			wantSubstr: []string{
+				"unsupported server type ''",
+				"mcpServers.test.type",
 			},
 		},
 	}
@@ -397,13 +416,31 @@ func TestUndefinedVariable(t *testing.T) {
 		wantSubstr []string
 	}{
 		{
-			name:     "undefined env variable",
+			name:     "undefined env variable with simple name",
 			varName:  "MY_VAR",
 			jsonPath: "mcpServers.github.env.TOKEN",
 			wantSubstr: []string{
 				"undefined environment variable referenced: MY_VAR",
 				"mcpServers.github.env.TOKEN",
 				"Set the environment variable MY_VAR",
+			},
+		},
+		{
+			name:     "undefined env variable with PAT token name",
+			varName:  "GITHUB_PERSONAL_ACCESS_TOKEN",
+			jsonPath: "mcpServers.github.env.GITHUB_PERSONAL_ACCESS_TOKEN",
+			wantSubstr: []string{
+				"undefined environment variable referenced: GITHUB_PERSONAL_ACCESS_TOKEN",
+				"Set the environment variable GITHUB_PERSONAL_ACCESS_TOKEN",
+			},
+		},
+		{
+			name:     "undefined env variable with config dir",
+			varName:  "GITHUB_CONFIG_DIR",
+			jsonPath: "mcpServers.github.env.CONFIG_PATH",
+			wantSubstr: []string{
+				"undefined environment variable referenced: GITHUB_CONFIG_DIR",
+				"Set the environment variable GITHUB_CONFIG_DIR",
 			},
 		},
 	}
@@ -501,6 +538,29 @@ func TestUnsupportedField(t *testing.T) {
 				"mcpServers.github",
 			},
 		},
+		{
+			name:       "unsupported args field",
+			fieldName:  "args",
+			message:    "'args' field is not supported in JSON stdin format",
+			jsonPath:   "mcpServers.myserver",
+			suggestion: "Remove 'args' field; use 'container' with image arguments instead",
+			wantSubstr: []string{
+				"args",
+				"not supported",
+				"mcpServers.myserver",
+			},
+		},
+		{
+			name:       "unsupported field with empty suggestion",
+			fieldName:  "deprecated_field",
+			message:    "'deprecated_field' has been removed",
+			jsonPath:   "mcpServers.legacy",
+			suggestion: "",
+			wantSubstr: []string{
+				"deprecated_field",
+				"mcpServers.legacy",
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -569,6 +629,13 @@ func TestNonEmptyString(t *testing.T) {
 			shouldErr: false,
 		},
 		{
+			name:      "valid whitespace-only string is not empty",
+			value:     "   ",
+			fieldName: "payloadDir",
+			jsonPath:  "gateway.payloadDir",
+			shouldErr: false,
+		},
+		{
 			name:      "empty string",
 			value:     "",
 			fieldName: "payloadDir",
@@ -595,9 +662,7 @@ func TestNonEmptyString(t *testing.T) {
 				assert.Contains(t, err.Error(), tt.errMsg)
 				assert.Contains(t, err.Error(), tt.jsonPath)
 			} else {
-				if err != nil {
-					t.Errorf("expected no error, got: %v", err)
-				}
+				assert.Nil(t, err)
 			}
 		})
 	}
@@ -721,9 +786,7 @@ func TestAbsolutePath(t *testing.T) {
 				assert.Contains(t, err.Error(), tt.errMsg)
 				assert.Contains(t, err.Error(), tt.jsonPath)
 			} else {
-				if err != nil {
-					t.Errorf("expected no error, got: %v", err)
-				}
+				assert.Nil(t, err)
 			}
 		})
 	}
