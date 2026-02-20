@@ -82,11 +82,8 @@ func CreateHTTPServerForRoutedMode(addr string, unifiedServer *UnifiedServer, ap
 	logRouted.Printf("Creating HTTP server for routed mode: addr=%s", addr)
 	mux := http.NewServeMux()
 
-	// OAuth discovery endpoints - return 404 since we don't use OAuth
-	// Standard path for OAuth discovery (per RFC 8414)
-	mux.Handle("/.well-known/oauth-authorization-server", withResponseLogging(handleOAuthDiscovery()))
-	// MCP-prefixed path for backward compatibility
-	mux.Handle("/mcp/.well-known/oauth-authorization-server", withResponseLogging(handleOAuthDiscovery()))
+	// Register common endpoints (OAuth discovery, health, close)
+	registerCommonEndpoints(mux, unifiedServer, apiKey)
 
 	// Create routes for all backends, plus sys only if DIFC is enabled
 	allBackends := unifiedServer.GetServerIDs()
@@ -147,30 +144,13 @@ func CreateHTTPServerForRoutedMode(addr string, unifiedServer *UnifiedServer, ap
 		shutdownHandler := rejectIfShutdown(unifiedServer, loggedHandler, "server:routed")
 
 		// Apply auth middleware if API key is configured (spec 7.1)
-		finalHandler := shutdownHandler
-		if apiKey != "" {
-			finalHandler = authMiddleware(apiKey, shutdownHandler.ServeHTTP)
-		}
+		finalHandler := applyAuthIfConfigured(apiKey, shutdownHandler.ServeHTTP)
 
 		// Mount the handler at both /mcp/<server> and /mcp/<server>/
 		mux.Handle(route+"/", finalHandler)
 		mux.Handle(route, finalHandler)
 		log.Printf("Registered route: %s", route)
 	}
-
-	// Health check (spec 8.1.1)
-	healthHandler := HandleHealth(unifiedServer)
-	mux.Handle("/health", withResponseLogging(healthHandler))
-
-	// Close endpoint for graceful shutdown (spec 5.1.3)
-	closeHandler := handleClose(unifiedServer)
-
-	// Apply auth middleware if API key is configured (spec 7.1)
-	finalCloseHandler := closeHandler
-	if apiKey != "" {
-		finalCloseHandler = authMiddleware(apiKey, closeHandler.ServeHTTP)
-	}
-	mux.Handle("/close", withResponseLogging(finalCloseHandler))
 
 	return &http.Server{
 		Addr:    addr,

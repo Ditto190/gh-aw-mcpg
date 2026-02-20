@@ -71,11 +71,8 @@ func CreateHTTPServerForMCP(addr string, unifiedServer *UnifiedServer, apiKey st
 	logTransport.Printf("Creating HTTP server for MCP: addr=%s, auth_enabled=%v", addr, apiKey != "")
 	mux := http.NewServeMux()
 
-	// OAuth discovery endpoints - return 404 since we don't use OAuth
-	// Standard path for OAuth discovery (per RFC 8414)
-	mux.Handle("/.well-known/oauth-authorization-server", withResponseLogging(handleOAuthDiscovery()))
-	// MCP-prefixed path for backward compatibility
-	mux.Handle("/mcp/.well-known/oauth-authorization-server", withResponseLogging(handleOAuthDiscovery()))
+	// Register common endpoints (OAuth discovery, health, close)
+	registerCommonEndpoints(mux, unifiedServer, apiKey)
 
 	logTransport.Print("Registering streamable HTTP handler for MCP protocol")
 	// Create StreamableHTTP handler for MCP protocol (supports POST requests)
@@ -130,17 +127,6 @@ func CreateHTTPServerForMCP(addr string, unifiedServer *UnifiedServer, apiKey st
 	// Mount handler at /mcp endpoint (logging is done in the callback above)
 	mux.Handle("/mcp/", finalHandler)
 	mux.Handle("/mcp", finalHandler)
-
-	// Health check (spec 8.1.1)
-	healthHandler := HandleHealth(unifiedServer)
-	mux.Handle("/health", withResponseLogging(healthHandler))
-
-	// Close endpoint for graceful shutdown (spec 5.1.3)
-	closeHandler := handleClose(unifiedServer)
-
-	// Apply auth middleware if API key is configured (spec 7.1)
-	finalCloseHandler := applyAuthIfConfigured(apiKey, closeHandler.ServeHTTP)
-	mux.Handle("/close", withResponseLogging(finalCloseHandler))
 
 	return &http.Server{
 		Addr:    addr,
