@@ -453,9 +453,69 @@ func (g *WasmGuard) callWasmFunction(funcName string, inputJSON []byte) ([]byte,
 // Returns (nil, requiredSize, nil) if buffer was too small
 // Returns (nil, 0, error) on actual error
 func (g *WasmGuard) tryCallWasmFunction(fn api.Function, mem api.Memory, inputJSON []byte, outputSize uint32) ([]byte, uint32, error) {
+	inputSize := uint32(len(inputJSON))
+
+	// Preferred path: use guard allocator if exported to avoid overlapping
+	// host-managed buffers with guard heap allocations.
+	allocFn := g.module.ExportedFunction("alloc")
+	deallocFn := g.module.ExportedFunction("dealloc")
+	if allocFn != nil {
+		inputPtr, err := g.wasmAlloc(allocFn, inputSize)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to allocate WASM input buffer: %w", err)
+		}
+		defer g.wasmDealloc(deallocFn, inputPtr, inputSize)
+
+		outputPtr, err := g.wasmAlloc(allocFn, outputSize)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to allocate WASM output buffer: %w", err)
+		}
+		defer g.wasmDealloc(deallocFn, outputPtr, outputSize)
+
+		if !mem.Write(inputPtr, inputJSON) {
+			return nil, 0, fmt.Errorf("failed to write input to WASM memory")
+		}
+
+		results, err := fn.Call(g.ctx,
+			uint64(inputPtr),
+			uint64(inputSize),
+			uint64(outputPtr),
+			uint64(outputSize))
+		if err != nil {
+			return nil, 0, fmt.Errorf("WASM function call failed: %w", err)
+		}
+
+		resultLen := int32(results[0])
+		if resultLen == -2 {
+			if sizeBytes, ok := mem.Read(outputPtr, 4); ok && len(sizeBytes) == 4 {
+				requiredSize := uint32(sizeBytes[0]) | uint32(sizeBytes[1])<<8 | uint32(sizeBytes[2])<<16 | uint32(sizeBytes[3])<<24
+				if requiredSize > 0 {
+					return nil, requiredSize, nil
+				}
+			}
+			return nil, 0, nil
+		}
+
+		if resultLen < 0 {
+			return nil, 0, fmt.Errorf("WASM function returned error code: %d", resultLen)
+		}
+
+		if resultLen == 0 {
+			return []byte{}, 0, nil
+		}
+
+		outputJSON, ok := mem.Read(outputPtr, uint32(resultLen))
+		if !ok {
+			return nil, 0, fmt.Errorf("failed to read output from WASM memory (len=%d)", resultLen)
+		}
+
+		// Copy out of WASM linear memory before deferred dealloc runs.
+		resultCopy := append([]byte(nil), outputJSON...)
+		return resultCopy, 0, nil
+	}
+
 	// Ensure memory is large enough for our buffers
 	// Layout: [...guard memory...][input buffer][output buffer]
-	inputSize := uint32(len(inputJSON))
 	requiredMemory := inputSize + outputSize + uint32(64*1024) // Extra 64KB for safety margin
 
 	memSize := mem.Size()
@@ -519,7 +579,33 @@ func (g *WasmGuard) tryCallWasmFunction(fn api.Function, mem api.Memory, inputJS
 		return nil, 0, fmt.Errorf("failed to read output from WASM memory (len=%d)", resultLen)
 	}
 
-	return outputJSON, 0, nil
+	// Copy out of WASM linear memory to avoid aliasing with future calls.
+	resultCopy := append([]byte(nil), outputJSON...)
+	return resultCopy, 0, nil
+}
+
+func (g *WasmGuard) wasmAlloc(allocFn api.Function, size uint32) (uint32, error) {
+	results, err := allocFn.Call(g.ctx, uint64(size))
+	if err != nil {
+		return 0, err
+	}
+	if len(results) == 0 {
+		return 0, fmt.Errorf("alloc returned no result")
+	}
+	ptr := uint32(results[0])
+	if ptr == 0 {
+		return 0, fmt.Errorf("alloc returned null pointer")
+	}
+	return ptr, nil
+}
+
+func (g *WasmGuard) wasmDealloc(deallocFn api.Function, ptr, size uint32) {
+	if deallocFn == nil || ptr == 0 || size == 0 {
+		return
+	}
+	if _, err := deallocFn.Call(g.ctx, uint64(ptr), uint64(size)); err != nil {
+		logWasm.Printf("WASM dealloc failed: ptr=%d size=%d err=%v", ptr, size, err)
+	}
 }
 
 // parseResourceResponse converts guard response to LabeledResource
