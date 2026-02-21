@@ -23,7 +23,7 @@ safe-outputs:
     expires: 7d
   missing-tool:
     create-issue: true
-timeout-minutes: 15
+timeout-minutes: 25
 ---
 
 <!-- Edit the file linked below to modify the agent without recompilation. Feel free to move the entire markdown body to that file. -->
