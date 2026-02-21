@@ -338,6 +338,13 @@ func (g *WasmGuard) LabelResponse(ctx context.Context, toolName string, result i
 		"tool_name":   toolName,
 		"tool_result": result,
 	}
+	if state := GetRequestStateFromContext(ctx); state != nil {
+		if stateMap, ok := state.(map[string]interface{}); ok {
+			if toolArgs, hasToolArgs := stateMap["tool_args"]; hasToolArgs {
+				input["tool_args"] = toolArgs
+			}
+		}
+	}
 	if caps != nil {
 		input["capabilities"] = caps
 	}

@@ -802,6 +802,12 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 		ctx:      ctx,
 	}
 
+	// Store request state for guards that need request context during response labeling.
+	// This allows LabelResponse() to access the original tool arguments.
+	ctx = guard.SetRequestStateInContext(ctx, map[string]interface{}{
+		"tool_args": args,
+	})
+
 	// **Phase 1: Guard labels the resource**
 	resource, operation, err := g.LabelResource(ctx, toolName, args, backendCaller, us.capabilities)
 	if err != nil {
