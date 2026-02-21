@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -400,7 +401,7 @@ func (us *UnifiedServer) registerToolsFromBackend(serverID string) error {
 		log.Printf("Registered tool: %s", prefixedName)
 	}
 
-	log.Printf("Registered %d tools from %s: %v", len(listResult.Tools), serverID, toolNames)
+	log.Printf("Registered %d tools from %s: %s", len(listResult.Tools), serverID, strings.Join(toolNames, ", "))
 	return nil
 }
 
