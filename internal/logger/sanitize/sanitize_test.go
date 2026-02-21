@@ -10,6 +10,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// requireContainsRedacted is a test helper that asserts the result contains [REDACTED]
+// and does not contain the given secret.
+func requireContainsRedacted(t *testing.T, result, mustNotContain string) {
+	t.Helper()
+	assert.Contains(t, result, "[REDACTED]", "Expected sanitized output to contain [REDACTED]")
+	if mustNotContain != "" {
+		assert.NotContains(t, result, mustNotContain, "Sanitized output still contains secret")
+	}
+}
+
 func TestSanitizeString(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -94,20 +104,9 @@ func TestSanitizeString(t *testing.T) {
 			result := SanitizeString(tt.input)
 
 			if tt.shouldRedact {
-				// Should contain [REDACTED]
-				if !strings.Contains(result, "[REDACTED]") {
-					t.Errorf("Expected sanitized string to contain [REDACTED], got: %s", result)
-				}
-
-				// Should NOT contain the secret
-				if tt.mustNotContain != "" && strings.Contains(result, tt.mustNotContain) {
-					t.Errorf("Sanitized string still contains secret: %s", tt.mustNotContain)
-				}
+				requireContainsRedacted(t, result, tt.mustNotContain)
 			} else {
-				// Should not be modified
-				if result != tt.input {
-					t.Errorf("Clean message was modified. Input: %s, Output: %s", tt.input, result)
-				}
+				assert.Equal(t, tt.input, result, "Clean message should not be modified")
 			}
 		})
 	}
@@ -140,13 +139,8 @@ func TestSanitizeStringPreservesPrefix(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := SanitizeString(tt.input)
 
-			if !strings.Contains(result, tt.expectedStart) {
-				t.Errorf("Expected result to contain prefix '%s', got: %s", tt.expectedStart, result)
-			}
-
-			if !strings.Contains(result, "[REDACTED]") {
-				t.Errorf("Expected result to contain [REDACTED], got: %s", result)
-			}
+			assert.Contains(t, result, tt.expectedStart, "Result should preserve prefix '%s'", tt.expectedStart)
+			assert.Contains(t, result, "[REDACTED]", "Result should contain [REDACTED]")
 		})
 	}
 }
@@ -192,27 +186,15 @@ func TestSanitizeJSON(t *testing.T) {
 			resultStr := string(result)
 
 			if tt.expectRedacted {
-				// Should contain [REDACTED]
-				if !strings.Contains(resultStr, "[REDACTED]") {
-					t.Errorf("Expected sanitized JSON to contain [REDACTED], got: %s", resultStr)
-				}
-
-				// Should NOT contain the original secret
-				if tt.mustNotContain != "" && strings.Contains(resultStr, tt.mustNotContain) {
-					t.Errorf("Sanitized JSON still contains secret: %s", tt.mustNotContain)
-				}
+				requireContainsRedacted(t, resultStr, tt.mustNotContain)
 			} else {
-				// Should not contain [REDACTED] for clean payloads
-				if strings.Contains(resultStr, "[REDACTED]") {
-					t.Errorf("Clean payload should not be redacted, got: %s", resultStr)
-				}
+				assert.NotContains(t, resultStr, "[REDACTED]", "Clean payload should not be redacted")
 			}
 
-			// Result should be valid JSON
+			// Result should always be valid JSON
 			var tmp interface{}
-			if err := json.Unmarshal(result, &tmp); err != nil {
-				t.Errorf("Result is not valid JSON: %v", err)
-			}
+			err := json.Unmarshal(result, &tmp)
+			assert.NoError(t, err, "Result should be valid JSON")
 		})
 	}
 }
@@ -237,7 +219,7 @@ func TestSanitizeJSONWithNestedStructures(t *testing.T) {
 	resultStr := string(result)
 
 	// Should redact all secrets at all levels
-	assert.True(t, strings.Contains(resultStr, "[REDACTED]"), "Expected [REDACTED] in sanitized output")
+	assert.Contains(t, resultStr, "[REDACTED]", "Expected [REDACTED] in sanitized output")
 
 	// Should NOT contain original secrets
 	secrets := []string{
@@ -246,20 +228,17 @@ func TestSanitizeJSONWithNestedStructures(t *testing.T) {
 		"password123",
 	}
 	for _, secret := range secrets {
-		if strings.Contains(resultStr, secret) {
-			t.Errorf("Secret not sanitized: %s", secret)
-		}
+		assert.NotContains(t, resultStr, secret, "Secret not sanitized: %s", secret)
 	}
 
 	// Should preserve non-secret values
-	assert.True(t, strings.Contains(resultStr, "item1"), "Non-secret value 'item1' was lost")
-	assert.True(t, strings.Contains(resultStr, "safe"), "Non-secret value 'safe' was lost")
+	assert.Contains(t, resultStr, "item1", "Non-secret value 'item1' was lost")
+	assert.Contains(t, resultStr, "safe", "Non-secret value 'safe' was lost")
 
 	// Result should be valid JSON
 	var tmp interface{}
-	if err := json.Unmarshal(result, &tmp); err != nil {
-		t.Errorf("Result is not valid JSON: %v", err)
-	}
+	err := json.Unmarshal(result, &tmp)
+	assert.NoError(t, err, "Result should be valid JSON")
 }
 
 func TestSanitizeJSONCompactsMultiline(t *testing.T) {
@@ -276,21 +255,17 @@ func TestSanitizeJSONCompactsMultiline(t *testing.T) {
 	result := SanitizeJSON([]byte(multilineJSON))
 	resultStr := string(result)
 
-	// Should not contain newlines
-	if strings.Contains(resultStr, "\n") {
-		t.Errorf("Result contains newlines, should be single-line JSON: %s", resultStr)
-	}
+	// Should not contain newlines (compacted to single-line JSON)
+	assert.NotContains(t, resultStr, "\n", "Result should be single-line JSON")
 
 	// Should still be valid JSON
 	var tmp interface{}
-	if err := json.Unmarshal(result, &tmp); err != nil {
-		t.Errorf("Result is not valid JSON: %v", err)
-	}
+	err := json.Unmarshal(result, &tmp)
+	assert.NoError(t, err, "Result should be valid JSON")
 
 	// Should contain expected values
-	if !strings.Contains(resultStr, "jsonrpc") || !strings.Contains(resultStr, "test") {
-		t.Errorf("Result missing expected content: %s", resultStr)
-	}
+	assert.Contains(t, resultStr, "jsonrpc", "Result missing expected content 'jsonrpc'")
+	assert.Contains(t, resultStr, "test", "Result missing expected content 'test'")
 }
 
 func TestSanitizeJSONWithInvalidJSON(t *testing.T) {
@@ -300,19 +275,16 @@ func TestSanitizeJSONWithInvalidJSON(t *testing.T) {
 
 	// Should still return valid JSON (wrapped)
 	var payloadObj map[string]interface{}
-	if err := json.Unmarshal(result, &payloadObj); err != nil {
-		t.Fatalf("Failed to parse result as JSON: %v", err)
-	}
+	err := json.Unmarshal(result, &payloadObj)
+	require.NoError(t, err, "Result should be valid JSON even for invalid input")
 
 	// Should have error marker
-	if payloadObj["_error"] != "invalid JSON" {
-		t.Errorf("Expected _error field in result, got: %v", payloadObj)
-	}
+	assert.Equal(t, "invalid JSON", payloadObj["_error"], "Expected _error field with 'invalid JSON'")
 
 	// Should preserve original content in _raw field
-	if !strings.Contains(fmt.Sprintf("%v", payloadObj["_raw"]), "invalid") {
-		t.Errorf("Expected _raw field to contain original content, got: %v", payloadObj["_raw"])
-	}
+	rawValue, ok := payloadObj["_raw"].(string)
+	require.True(t, ok, "_raw field should be a string")
+	assert.Contains(t, rawValue, "invalid", "Expected _raw field to contain original content")
 }
 
 func TestSanitizeStringMultipleSecretsInSameString(t *testing.T) {
@@ -320,16 +292,14 @@ func TestSanitizeStringMultipleSecretsInSameString(t *testing.T) {
 
 	result := SanitizeString(input)
 
-	// Should redact all secrets
+	// Should redact all secrets (at least 3 [REDACTED] markers)
 	secretCount := strings.Count(result, "[REDACTED]")
-	assert.False(t, secretCount < 3, "Expected at least 3 [REDACTED] markers, got %d in: %s")
+	assert.GreaterOrEqual(t, secretCount, 3, "Expected at least 3 [REDACTED] markers, got %d in: %s", secretCount, result)
 
 	// Should not contain any of the secrets
 	secrets := []string{"ghp_", "mysecret", "sk_test_"}
 	for _, secret := range secrets {
-		if strings.Contains(result, secret) {
-			t.Errorf("Secret not sanitized: %s", secret)
-		}
+		assert.NotContains(t, result, secret, "Secret not sanitized: %s", secret)
 	}
 }
 
@@ -338,7 +308,7 @@ func TestSecretPatternsCount(t *testing.T) {
 	expectedPatternCount := 10
 	actualCount := len(SecretPatterns)
 
-	assert.Equal(t, expectedPatternCount, actualCount, "%d secret patterns, got %d")
+	assert.Equal(t, expectedPatternCount, actualCount, "Expected %d secret patterns, got %d", expectedPatternCount, actualCount)
 }
 
 func TestTruncateSecret(t *testing.T) {
