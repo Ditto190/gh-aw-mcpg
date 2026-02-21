@@ -819,7 +819,7 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 		resource.Description, operation, resource.Secrecy.Label.GetTags(), resource.Integrity.Label.GetTags())
 
 	// **Phase 2: Reference Monitor performs coarse-grained access check**
-	// For read operations in filter/propagate mode, we skip the coarse-grained block
+	// For read operations in any mode, we skip the coarse-grained block
 	// and let the request proceed. Fine-grained filtering at Phase 5 will filter
 	// individual items from the response based on their actual labels from LabelResponse().
 	isReadOperation := (operation == difc.OperationRead)
@@ -827,13 +827,13 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 	result := us.evaluator.Evaluate(agentLabels.Secrecy, agentLabels.Integrity, resource, operation)
 
 	if !result.IsAllowed() {
-		if isReadOperation && (enforcementMode == difc.EnforcementFilter || enforcementMode == difc.EnforcementPropagate) {
-			// Read operation with filter/propagate mode - skip coarse-grained block
-			// The guard will label response items and Phase 5 will filter/propagate them
-			log.Printf("[DIFC] Coarse-grained check failed for read, but %s mode enabled - proceeding to backend", enforcementMode)
+		if isReadOperation {
+			// Read operation in any mode - skip coarse-grained block
+			// The guard will label response items and Phase 5 will enforce per-item policy
+			log.Printf("[DIFC] Coarse-grained check failed for read in %s mode - proceeding to backend for response labeling", enforcementMode)
 			log.Printf("[DIFC] Response items will be evaluated at Phase 5 based on per-item labels from LabelResponse()")
 		} else {
-			// Write operation OR strict mode - block the request
+			// Non-read operation - block the request
 			log.Printf("[DIFC] Access DENIED for agent %s to %s: %s", agentID, resource.Description, result.Reason)
 			detailedErr := difc.FormatViolationError(result, agentLabels.Secrecy, agentLabels.Integrity, resource)
 			return &sdk.CallToolResult{
