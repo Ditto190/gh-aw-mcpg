@@ -220,6 +220,7 @@ See **[Configuration Specification](https://github.com/github/gh-aw/blob/main/do
 - **`payloadSizeThreshold`** is not supported in JSON stdin format. Use:
   - CLI flag: `--payload-size-threshold <bytes>` (default: 10240)
   - Environment variable: `MCP_GATEWAY_PAYLOAD_SIZE_THRESHOLD=<bytes>`
+  - TOML config file: `payload_size_threshold = <bytes>` in `[gateway]` section
   - Payloads **larger** than this threshold are stored to disk and return metadata
   - Payloads **smaller than or equal** to this threshold are returned inline
 
@@ -350,7 +351,7 @@ When using `run_containerized.sh`, these additional variables are available:
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `DOCKER_HOST` | Docker daemon socket path | `/var/run/docker.sock` |
-| `DOCKER_API_VERSION` | Docker API version (set by helper scripts, Docker client auto-negotiates) | Set by run.sh based on architecture |
+| `DOCKER_API_VERSION` | Docker API version (set by helper scripts, Docker client auto-negotiates) | Set by querying Docker daemon's current API version; falls back to `1.44` if detection fails |
 
 ## Containerized Mode
 
