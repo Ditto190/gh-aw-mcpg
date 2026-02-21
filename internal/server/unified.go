@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -310,7 +311,8 @@ func (us *UnifiedServer) registerToolsFromBackend(serverID string) error {
 	for _, tool := range listResult.Tools {
 		prefixedName := fmt.Sprintf("%s___%s", serverID, tool.Name)
 		toolDesc := fmt.Sprintf("[%s] %s", serverID, tool.Description)
-		toolNames = append(toolNames, prefixedName)
+		logName := fmt.Sprintf("%s-%s", serverID, tool.Name)
+		toolNames = append(toolNames, logName)
 
 		// Normalize the input schema to fix common validation issues
 		normalizedSchema := mcp.NormalizeInputSchema(tool.InputSchema, prefixedName)
@@ -397,10 +399,10 @@ func (us *UnifiedServer) registerToolsFromBackend(serverID string) error {
 			InputSchema: normalizedSchema, // Include the schema for clients to understand parameters
 		}, wrappedHandler)
 
-		log.Printf("Registered tool: %s", prefixedName)
+		log.Printf("Registered tool: %s", logName)
 	}
 
-	log.Printf("Registered %d tools from %s: %v", len(listResult.Tools), serverID, toolNames)
+	log.Printf("Registered %d tools from %s: %s", len(listResult.Tools), serverID, strings.Join(toolNames, ", "))
 	return nil
 }
 
