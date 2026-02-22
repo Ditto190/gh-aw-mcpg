@@ -562,6 +562,86 @@ func TestIsConfigExtensionsEnabled(t *testing.T) {
 	}
 }
 
+func TestGuardPolicy_StdinParsingAndConversion(t *testing.T) {
+	jsonConfig := `{
+		"mcpServers": {
+			"github": {
+				"type": "stdio",
+				"container": "ghcr.io/github/github-mcp-server:latest",
+				"guard": "github-guard"
+			}
+		},
+		"guards": {
+			"github-guard": {
+				"type": "wasm",
+				"path": "/guard/github-guard-rust.wasm",
+				"policy": {
+					"AllowOnly": {
+						"Scope": {"owner": "lpcox", "repo": "github-guard"},
+						"MinIntegrity": "reader-contrib"
+					}
+				}
+			}
+		}
+	}`
+
+	var stdinCfg StdinConfig
+	err := json.Unmarshal([]byte(jsonConfig), &stdinCfg)
+	require.NoError(t, err)
+
+	cfg, err := convertStdinConfig(&stdinCfg)
+	require.NoError(t, err)
+	require.NotNil(t, cfg.Guards["github-guard"].Policy)
+
+	normalized, err := NormalizeGuardPolicy(cfg.Guards["github-guard"].Policy)
+	require.NoError(t, err)
+	assert.Equal(t, "repo", normalized.ScopeKind)
+	assert.Equal(t, "lpcox", normalized.ScopeOwner)
+	assert.Equal(t, "github-guard", normalized.ScopeRepo)
+	assert.Equal(t, MinIntegrityReaderContrib, normalized.MinIntegrity)
+}
+
+func TestGuardPolicy_InvalidRejected(t *testing.T) {
+	stdinCfg := &StdinConfig{
+		MCPServers: map[string]*StdinServerConfig{
+			"github": {
+				Type:      "stdio",
+				Container: "ghcr.io/github/github-mcp-server:latest",
+				Guard:     "github-guard",
+			},
+		},
+		Guards: map[string]*StdinGuardConfig{
+			"github-guard": {
+				Type: "wasm",
+				Path: "/guard/github-guard.wasm",
+				Policy: &GuardPolicy{
+					AllowOnly: &AllowOnlyPolicy{
+						Scope: map[string]interface{}{
+							"repo": "repo-without-owner",
+						},
+						MinIntegrity: "invalid-integrity",
+					},
+				},
+			},
+		},
+	}
+
+	_, err := convertStdinConfig(stdinCfg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid policy")
+}
+
+func TestParseGuardPolicyJSON(t *testing.T) {
+	policy, err := ParseGuardPolicyJSON(`{"AllowOnly":{"Scope":"public","MinIntegrity":"unverified"}}`)
+	require.NoError(t, err)
+	require.NotNil(t, policy)
+
+	normalized, err := NormalizeGuardPolicy(policy)
+	require.NoError(t, err)
+	assert.Equal(t, "public", normalized.ScopeKind)
+	assert.Equal(t, MinIntegrityUnverified, normalized.MinIntegrity)
+}
+
 // Helper function for creating int pointers in tests
 func intPtrDIFC(i int) *int {
 	return &i

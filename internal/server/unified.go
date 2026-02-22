@@ -36,6 +36,16 @@ type Session struct {
 	Token     string
 	SessionID string
 	StartTime time.Time
+	GuardInit map[string]*GuardSessionState
+}
+
+// GuardSessionState stores label_agent initialization state for a guard within a session.
+type GuardSessionState struct {
+	Initialized      bool
+	PolicyHash       string
+	PolicySource     string
+	DIFCMode         difc.EnforcementMode
+	NormalizedPolicy map[string]interface{}
 }
 
 // ServerStatus represents the health status of a backend server
@@ -50,6 +60,7 @@ func NewSession(sessionID, token string) *Session {
 		Token:     token,
 		SessionID: sessionID,
 		StartTime: time.Now(),
+		GuardInit: make(map[string]*GuardSessionState),
 	}
 }
 
@@ -786,14 +797,9 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 	log.Printf("Calling tool on %s: %s with DIFC enforcement", serverID, toolName)
 	logUnified.Printf("callBackendTool: serverID=%s, toolName=%s, args=%+v", serverID, toolName, args)
 
-	// **Phase 0: Extract agent ID and get/create agent labels**
-	agentID := guard.GetAgentIDFromContext(ctx)
-	agentLabels := us.agentRegistry.GetOrCreate(agentID)
-	log.Printf("[DIFC] Agent %s | Secrecy: %v | Integrity: %v",
-		agentID, agentLabels.GetSecrecyTags(), agentLabels.GetIntegrityTags())
-
 	// Get guard for this backend
 	g := us.guardRegistry.Get(serverID)
+	sessionID := us.getSessionID(ctx)
 
 	// Create backend caller for the guard
 	backendCaller := &guardBackendCaller{
@@ -801,6 +807,20 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 		serverID: serverID,
 		ctx:      ctx,
 	}
+
+	// Initialize policy-driven guard session state (label_agent) before first guarded call.
+	enforcementMode, err := us.ensureGuardInitialized(ctx, sessionID, serverID, g, backendCaller)
+	if err != nil {
+		return newErrorCallToolResult(fmt.Errorf("guard session initialization failed: %w", err))
+	}
+
+	requestEvaluator := difc.NewEvaluatorWithMode(enforcementMode)
+
+	// **Phase 0: Extract agent ID and get/create agent labels**
+	agentID := guard.GetAgentIDFromContext(ctx)
+	agentLabels := us.agentRegistry.GetOrCreate(agentID)
+	log.Printf("[DIFC] Agent %s | Secrecy: %v | Integrity: %v",
+		agentID, agentLabels.GetSecrecyTags(), agentLabels.GetIntegrityTags())
 
 	// Store request state for guards that need request context during response labeling.
 	// This allows LabelResponse() to access the original tool arguments.
@@ -823,8 +843,7 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 	// and let the request proceed. Fine-grained filtering at Phase 5 will filter
 	// individual items from the response based on their actual labels from LabelResponse().
 	isReadOperation := (operation == difc.OperationRead)
-	enforcementMode := us.evaluator.GetMode()
-	result := us.evaluator.Evaluate(agentLabels.Secrecy, agentLabels.Integrity, resource, operation)
+	result := requestEvaluator.Evaluate(agentLabels.Secrecy, agentLabels.Integrity, resource, operation)
 
 	if !result.IsAllowed() {
 		if isReadOperation {
@@ -851,7 +870,6 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 
 	// **Phase 3: Execute the backend call**
 	// Get or launch backend connection (use session-aware connection for stateful backends)
-	sessionID := us.getSessionID(ctx)
 	conn, err := launcher.GetOrLaunchForSession(us.launcher, serverID, sessionID)
 	if err != nil {
 		return newErrorCallToolResult(fmt.Errorf("failed to connect: %w", err))
@@ -900,7 +918,7 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 		// Guard provided fine-grained labels - check if it's a collection
 		if collection, ok := labeledData.(*difc.CollectionLabeledData); ok {
 			// Filter collection based on agent labels
-			filtered := us.evaluator.FilterCollection(agentLabels.Secrecy, agentLabels.Integrity, collection, operation)
+			filtered := requestEvaluator.FilterCollection(agentLabels.Secrecy, agentLabels.Integrity, collection, operation)
 
 			log.Printf("[DIFC] Filtered collection: %d/%d items accessible",
 				filtered.GetAccessibleCount(), filtered.TotalCount)
@@ -1007,6 +1025,132 @@ func (us *UnifiedServer) getSessionID(ctx context.Context) string {
 	// In production multi-agent scenarios, the SDK will provide session IDs after initialize
 	log.Printf("No session ID in context, using 'default' (this is normal before SDK session is established)")
 	return "default"
+}
+
+func toDIFCTags(values []string) []difc.Tag {
+	tags := make([]difc.Tag, 0, len(values))
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed != "" {
+			tags = append(tags, difc.Tag(trimmed))
+		}
+	}
+	return tags
+}
+
+func (us *UnifiedServer) resolveGuardPolicy(serverID string) (*config.GuardPolicy, string, error) {
+	if us.cfg != nil && us.cfg.GuardPolicy != nil {
+		if err := config.ValidateGuardPolicy(us.cfg.GuardPolicy); err != nil {
+			return nil, "", err
+		}
+		source := us.cfg.GuardPolicySource
+		if source == "" {
+			source = "override"
+		}
+		return us.cfg.GuardPolicy, source, nil
+	}
+
+	if us.cfg == nil {
+		return nil, "legacy", nil
+	}
+
+	serverCfg, ok := us.cfg.Servers[serverID]
+	if !ok || serverCfg == nil || serverCfg.Guard == "" {
+		return nil, "legacy", nil
+	}
+
+	guardCfg, ok := us.cfg.Guards[serverCfg.Guard]
+	if !ok || guardCfg == nil || guardCfg.Policy == nil {
+		return nil, "legacy", nil
+	}
+
+	if err := config.ValidateGuardPolicy(guardCfg.Policy); err != nil {
+		return nil, "", err
+	}
+
+	return guardCfg.Policy, "config", nil
+}
+
+func (us *UnifiedServer) ensureGuardInitialized(
+	ctx context.Context,
+	sessionID string,
+	serverID string,
+	g guard.Guard,
+	backendCaller guard.BackendCaller,
+) (difc.EnforcementMode, error) {
+	defaultMode := us.evaluator.GetMode()
+
+	policy, source, err := us.resolveGuardPolicy(serverID)
+	if err != nil {
+		return defaultMode, fmt.Errorf("failed to resolve guard policy: %w", err)
+	}
+	if policy == nil {
+		log.Printf("[DIFC] Guard policy not configured for server '%s'; using legacy session labels", serverID)
+		return defaultMode, nil
+	}
+
+	policyJSON, err := json.Marshal(policy)
+	if err != nil {
+		return defaultMode, fmt.Errorf("failed to serialize guard policy: %w", err)
+	}
+	policyHash := string(policyJSON)
+
+	us.sessionMu.RLock()
+	session := us.sessions[sessionID]
+	if session != nil {
+		if state, ok := session.GuardInit[serverID]; ok && state.Initialized && state.PolicyHash == policyHash {
+			mode := state.DIFCMode
+			us.sessionMu.RUnlock()
+			return mode, nil
+		}
+	}
+	us.sessionMu.RUnlock()
+
+	log.Printf("[DIFC] Initializing guard session state: server=%s, session=%s, policy_source=%s", serverID, sessionID, source)
+	labelAgentResult, err := g.LabelAgent(ctx, policy, backendCaller, us.capabilities)
+	if err != nil {
+		return defaultMode, fmt.Errorf("label_agent failed: %w", err)
+	}
+	if labelAgentResult == nil {
+		return defaultMode, fmt.Errorf("label_agent returned nil result")
+	}
+
+	mode := defaultMode
+	if labelAgentResult.DIFCMode != "" {
+		parsedMode, err := difc.ParseEnforcementMode(labelAgentResult.DIFCMode)
+		if err != nil {
+			return defaultMode, fmt.Errorf("invalid difc_mode from label_agent: %w", err)
+		}
+		mode = parsedMode
+	}
+
+	agentID := guard.GetAgentIDFromContext(ctx)
+	secrecyTags := toDIFCTags(labelAgentResult.Agent.Secrecy)
+	integrityTags := toDIFCTags(labelAgentResult.Agent.Integrity)
+	us.agentRegistry.Register(agentID, secrecyTags, integrityTags)
+
+	us.sessionMu.Lock()
+	session = us.sessions[sessionID]
+	if session == nil {
+		session = NewSession(sessionID, "")
+		us.sessions[sessionID] = session
+	}
+	if session.GuardInit == nil {
+		session.GuardInit = make(map[string]*GuardSessionState)
+	}
+	session.GuardInit[serverID] = &GuardSessionState{
+		Initialized:      true,
+		PolicyHash:       policyHash,
+		PolicySource:     source,
+		DIFCMode:         mode,
+		NormalizedPolicy: labelAgentResult.NormalizedPolicy,
+	}
+	us.sessionMu.Unlock()
+
+	log.Printf("[DIFC] Guard policy initialized: server=%s, session=%s, guard_policy.source=%s, difc_mode=%s, guard_policy.normalized=%v",
+		serverID, sessionID, source, mode, labelAgentResult.NormalizedPolicy)
+
+	return mode, nil
 }
 
 // GetPayloadSizeThreshold returns the configured payload size threshold (in bytes).

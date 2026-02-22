@@ -269,6 +269,17 @@ func run(cmd *cobra.Command, args []string) error {
 			cfg.Gateway.Session.Secrecy, cfg.Gateway.Session.Integrity)
 	}
 
+	policyOverride, policySource, err := resolveGuardPolicyOverride(cmd)
+	if err != nil {
+		return fmt.Errorf("invalid guard policy configuration: %w", err)
+	}
+	if policyOverride != nil {
+		cfg.GuardPolicy = policyOverride
+		cfg.GuardPolicySource = policySource
+		log.Printf("Guard policy override configured (source=%s)", policySource)
+		logger.LogInfoMd("startup", "Guard policy override configured (source=%s)", policySource)
+	}
+
 	// Apply payload directory flag (if different from default, it was explicitly set)
 	if cmd.Flags().Changed("payload-dir") {
 		cfg.Gateway.PayloadDir = payloadDir
@@ -386,6 +397,58 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+func resolveGuardPolicyOverride(cmd *cobra.Command) (*config.GuardPolicy, string, error) {
+	cliChanged := cmd.Flags().Changed("guard-policy-json") ||
+		cmd.Flags().Changed("allowonly-scope-public") ||
+		cmd.Flags().Changed("allowonly-scope-owner") ||
+		cmd.Flags().Changed("allowonly-scope-repo") ||
+		cmd.Flags().Changed("allowonly-min-integrity")
+
+	if cliChanged {
+		if strings.TrimSpace(guardPolicyJSON) != "" {
+			policy, err := config.ParseGuardPolicyJSON(guardPolicyJSON)
+			if err != nil {
+				return nil, "", err
+			}
+			return policy, "cli", nil
+		}
+
+		policy, err := buildAllowOnlyPolicy(allowOnlyPublic, allowOnlyOwner, allowOnlyRepo, allowOnlyMinInt)
+		if err != nil {
+			return nil, "", err
+		}
+		return policy, "cli", nil
+	}
+
+	if envPolicyJSON := strings.TrimSpace(os.Getenv("MCP_GATEWAY_GUARD_POLICY_JSON")); envPolicyJSON != "" {
+		policy, err := config.ParseGuardPolicyJSON(envPolicyJSON)
+		if err != nil {
+			return nil, "", err
+		}
+		return policy, "env", nil
+	}
+
+	_, hasScopePublic := os.LookupEnv("MCP_GATEWAY_ALLOWONLY_SCOPE_PUBLIC")
+	_, hasScopeOwner := os.LookupEnv("MCP_GATEWAY_ALLOWONLY_SCOPE_OWNER")
+	_, hasScopeRepo := os.LookupEnv("MCP_GATEWAY_ALLOWONLY_SCOPE_REPO")
+	_, hasMinIntegrity := os.LookupEnv("MCP_GATEWAY_ALLOWONLY_MIN_INTEGRITY")
+
+	if hasScopePublic || hasScopeOwner || hasScopeRepo || hasMinIntegrity {
+		policy, err := buildAllowOnlyPolicy(
+			getDefaultAllowOnlyScopePublic(),
+			getDefaultAllowOnlyScopeOwner(),
+			getDefaultAllowOnlyScopeRepo(),
+			getDefaultAllowOnlyMinIntegrity(),
+		)
+		if err != nil {
+			return nil, "", err
+		}
+		return policy, "env", nil
+	}
+
+	return nil, "", nil
 }
 
 // writeGatewayConfigToStdout writes the rewritten gateway configuration to stdout

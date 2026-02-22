@@ -350,3 +350,81 @@ func TestParseSessionLabels(t *testing.T) {
 		})
 	}
 }
+
+func TestBuildAllowOnlyPolicy(t *testing.T) {
+	t.Run("public scope valid", func(t *testing.T) {
+		policy, err := buildAllowOnlyPolicy(true, "", "", "unverified")
+		require.NoError(t, err)
+		require.NotNil(t, policy)
+		require.NotNil(t, policy.AllowOnly)
+		assert.Equal(t, "unverified", policy.AllowOnly.MinIntegrity)
+		assert.Equal(t, "public", policy.AllowOnly.Scope)
+	})
+
+	t.Run("owner and repo scope valid", func(t *testing.T) {
+		policy, err := buildAllowOnlyPolicy(false, "lpcox", "gh-aw-mcpg", "reader-contrib")
+		require.NoError(t, err)
+		require.NotNil(t, policy)
+		scope, ok := policy.AllowOnly.Scope.(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, "lpcox", scope["owner"])
+		assert.Equal(t, "gh-aw-mcpg", scope["repo"])
+	})
+
+	t.Run("repo without owner invalid", func(t *testing.T) {
+		_, err := buildAllowOnlyPolicy(false, "", "repo", "reader-contrib")
+		require.Error(t, err)
+	})
+
+	t.Run("missing min integrity invalid", func(t *testing.T) {
+		_, err := buildAllowOnlyPolicy(true, "", "", "")
+		require.Error(t, err)
+	})
+}
+
+func TestGetDefaultGuardPolicyInputs(t *testing.T) {
+	originalJSON := os.Getenv("MCP_GATEWAY_GUARD_POLICY_JSON")
+	originalPublic := os.Getenv("MCP_GATEWAY_ALLOWONLY_SCOPE_PUBLIC")
+	originalOwner := os.Getenv("MCP_GATEWAY_ALLOWONLY_SCOPE_OWNER")
+	originalRepo := os.Getenv("MCP_GATEWAY_ALLOWONLY_SCOPE_REPO")
+	originalMin := os.Getenv("MCP_GATEWAY_ALLOWONLY_MIN_INTEGRITY")
+	defer func() {
+		if originalJSON != "" {
+			os.Setenv("MCP_GATEWAY_GUARD_POLICY_JSON", originalJSON)
+		} else {
+			os.Unsetenv("MCP_GATEWAY_GUARD_POLICY_JSON")
+		}
+		if originalPublic != "" {
+			os.Setenv("MCP_GATEWAY_ALLOWONLY_SCOPE_PUBLIC", originalPublic)
+		} else {
+			os.Unsetenv("MCP_GATEWAY_ALLOWONLY_SCOPE_PUBLIC")
+		}
+		if originalOwner != "" {
+			os.Setenv("MCP_GATEWAY_ALLOWONLY_SCOPE_OWNER", originalOwner)
+		} else {
+			os.Unsetenv("MCP_GATEWAY_ALLOWONLY_SCOPE_OWNER")
+		}
+		if originalRepo != "" {
+			os.Setenv("MCP_GATEWAY_ALLOWONLY_SCOPE_REPO", originalRepo)
+		} else {
+			os.Unsetenv("MCP_GATEWAY_ALLOWONLY_SCOPE_REPO")
+		}
+		if originalMin != "" {
+			os.Setenv("MCP_GATEWAY_ALLOWONLY_MIN_INTEGRITY", originalMin)
+		} else {
+			os.Unsetenv("MCP_GATEWAY_ALLOWONLY_MIN_INTEGRITY")
+		}
+	}()
+
+	os.Setenv("MCP_GATEWAY_GUARD_POLICY_JSON", `{"AllowOnly":{"Scope":"public","MinIntegrity":"unverified"}}`)
+	os.Setenv("MCP_GATEWAY_ALLOWONLY_SCOPE_PUBLIC", "1")
+	os.Setenv("MCP_GATEWAY_ALLOWONLY_SCOPE_OWNER", "lpcox")
+	os.Setenv("MCP_GATEWAY_ALLOWONLY_SCOPE_REPO", "gh-aw-mcpg")
+	os.Setenv("MCP_GATEWAY_ALLOWONLY_MIN_INTEGRITY", "reader-contrib")
+
+	assert.NotEmpty(t, getDefaultGuardPolicyJSON())
+	assert.True(t, getDefaultAllowOnlyScopePublic())
+	assert.Equal(t, "lpcox", getDefaultAllowOnlyScopeOwner())
+	assert.Equal(t, "gh-aw-mcpg", getDefaultAllowOnlyScopeRepo())
+	assert.Equal(t, "reader-contrib", getDefaultAllowOnlyMinIntegrity())
+}

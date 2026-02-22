@@ -24,6 +24,18 @@ func (g *NoopGuard) Name() string {
 	return "noop"
 }
 
+// LabelAgent initializes noop guard session state.
+func (g *NoopGuard) LabelAgent(ctx context.Context, policy interface{}, backend BackendCaller, caps *difc.Capabilities) (*LabelAgentResult, error) {
+	log.Printf("Initializing agent labels with noop guard")
+	return &LabelAgentResult{
+		Agent: AgentLabelsPayload{
+			Secrecy:   []string{},
+			Integrity: []string{},
+		},
+		DIFCMode: difc.ModeStrict,
+	}, nil
+}
+
 // LabelResource returns an empty resource with no label requirements
 // Treats all operations as read-write (most conservative assumption)
 func (g *NoopGuard) LabelResource(ctx context.Context, toolName string, args interface{}, backend BackendCaller, caps *difc.Capabilities) (*difc.LabeledResource, difc.OperationType, error) {

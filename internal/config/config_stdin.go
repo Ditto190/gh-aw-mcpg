@@ -61,6 +61,9 @@ type StdinGuardConfig struct {
 
 	// Config holds guard-specific configuration
 	Config map[string]interface{} `json:"config,omitempty"`
+
+	// Policy holds guard policy configuration for label_agent lifecycle initialization
+	Policy *GuardPolicy `json:"policy,omitempty"`
 }
 
 // StdinServerConfig represents a single server configuration in stdin JSON format.
@@ -295,12 +298,17 @@ func convertStdinConfig(stdinCfg *StdinConfig) (*Config, error) {
 				Type:   guard.Type,
 				Path:   guard.Path,
 				Config: guard.Config,
+				Policy: guard.Policy,
 			}
 		}
 	}
 
 	// Apply feature-specific stdin conversions
 	applyStdinConverters(cfg, stdinCfg)
+
+	if err := validateGuardPolicies(cfg); err != nil {
+		return nil, err
+	}
 
 	return cfg, nil
 }

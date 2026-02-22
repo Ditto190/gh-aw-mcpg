@@ -64,6 +64,12 @@ type Config struct {
 
 	// SequentialLaunch launches servers sequentially instead of in parallel
 	SequentialLaunch bool `toml:"sequential_launch" json:"sequential_launch,omitempty"`
+
+	// GuardPolicy optionally overrides per-guard policy via CLI/environment precedence.
+	GuardPolicy *GuardPolicy `toml:"-" json:"-"`
+
+	// GuardPolicySource describes where GuardPolicy was resolved from (cli|env|config|legacy).
+	GuardPolicySource string `toml:"-" json:"-"`
 }
 
 // GatewayConfig holds global gateway settings.
@@ -168,6 +174,9 @@ type GuardConfig struct {
 
 	// Config holds guard-specific configuration
 	Config map[string]interface{} `toml:"config" json:"config,omitempty"`
+
+	// Policy holds guard policy configuration for label_agent lifecycle initialization
+	Policy *GuardPolicy `toml:"policy" json:"policy,omitempty"`
 }
 
 // applyGatewayDefaults applies default values to a GatewayConfig if they are not set.
@@ -276,6 +285,10 @@ func LoadFromFile(path string) (*Config, error) {
 
 	// Apply feature-specific defaults
 	applyDefaults(&cfg)
+
+	if err := validateGuardPolicies(&cfg); err != nil {
+		return nil, err
+	}
 
 	logConfig.Printf("Successfully loaded %d servers from TOML file", len(cfg.Servers))
 	return &cfg, nil

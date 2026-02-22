@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/github/gh-aw-mcpg/internal/config"
 	"github.com/github/gh-aw-mcpg/internal/difc"
 	"github.com/github/gh-aw-mcpg/internal/envutil"
 	"github.com/spf13/cobra"
@@ -25,6 +26,11 @@ var (
 	enableConfigExt  bool   // Enable config extensions (guards, session labels)
 	sessionSecrecy   string // Comma-separated initial secrecy labels
 	sessionIntegrity string // Comma-separated initial integrity labels
+	guardPolicyJSON  string
+	allowOnlyPublic  bool
+	allowOnlyOwner   string
+	allowOnlyRepo    string
+	allowOnlyMinInt  string
 )
 
 func init() {
@@ -35,6 +41,11 @@ func init() {
 		cmd.Flags().BoolVar(&enableConfigExt, "enable-config-extensions", getDefaultConfigExtensions(), "Enable config extensions (guards, session labels) - required for DIFC session label features")
 		cmd.Flags().StringVar(&sessionSecrecy, "session-secrecy", getDefaultSessionSecrecy(), "Comma-separated initial secrecy labels for agent sessions (requires --enable-config-extensions)")
 		cmd.Flags().StringVar(&sessionIntegrity, "session-integrity", getDefaultSessionIntegrity(), "Comma-separated initial integrity labels for agent sessions (requires --enable-config-extensions)")
+		cmd.Flags().StringVar(&guardPolicyJSON, "guard-policy-json", getDefaultGuardPolicyJSON(), "Guard policy JSON (e.g. {\"AllowOnly\":{\"Scope\":\"public\",\"MinIntegrity\":\"unverified\"}})")
+		cmd.Flags().BoolVar(&allowOnlyPublic, "allowonly-scope-public", getDefaultAllowOnlyScopePublic(), "Use public AllowOnly scope")
+		cmd.Flags().StringVar(&allowOnlyOwner, "allowonly-scope-owner", getDefaultAllowOnlyScopeOwner(), "AllowOnly owner scope value")
+		cmd.Flags().StringVar(&allowOnlyRepo, "allowonly-scope-repo", getDefaultAllowOnlyScopeRepo(), "AllowOnly repo name (requires owner)")
+		cmd.Flags().StringVar(&allowOnlyMinInt, "allowonly-min-integrity", getDefaultAllowOnlyMinIntegrity(), "AllowOnly minimum integrity: unverified|reader-contrib|writer-contrib|merged")
 	})
 }
 
@@ -82,6 +93,77 @@ func getDefaultSessionSecrecy() string {
 // MCP_GATEWAY_SESSION_INTEGRITY environment variable
 func getDefaultSessionIntegrity() string {
 	return os.Getenv("MCP_GATEWAY_SESSION_INTEGRITY")
+}
+
+func getDefaultGuardPolicyJSON() string {
+	return os.Getenv("MCP_GATEWAY_GUARD_POLICY_JSON")
+}
+
+func getDefaultAllowOnlyScopePublic() bool {
+	return envutil.GetEnvBool("MCP_GATEWAY_ALLOWONLY_SCOPE_PUBLIC", false)
+}
+
+func getDefaultAllowOnlyScopeOwner() string {
+	return os.Getenv("MCP_GATEWAY_ALLOWONLY_SCOPE_OWNER")
+}
+
+func getDefaultAllowOnlyScopeRepo() string {
+	return os.Getenv("MCP_GATEWAY_ALLOWONLY_SCOPE_REPO")
+}
+
+func getDefaultAllowOnlyMinIntegrity() string {
+	return os.Getenv("MCP_GATEWAY_ALLOWONLY_MIN_INTEGRITY")
+}
+
+func buildAllowOnlyPolicy(public bool, owner, repo, minIntegrity string) (*config.GuardPolicy, error) {
+	owner = strings.TrimSpace(owner)
+	repo = strings.TrimSpace(repo)
+	minIntegrity = strings.TrimSpace(strings.ToLower(minIntegrity))
+
+	scopeCount := 0
+	if public {
+		scopeCount++
+	}
+	if owner != "" {
+		scopeCount++
+	}
+	if repo != "" && owner == "" {
+		return nil, fmt.Errorf("allowonly scope repo requires allowonly scope owner")
+	}
+
+	if scopeCount == 0 && minIntegrity == "" {
+		return nil, nil
+	}
+	if scopeCount != 1 {
+		return nil, fmt.Errorf("exactly one AllowOnly scope variant must be set (public or owner[/repo])")
+	}
+	if minIntegrity == "" {
+		return nil, fmt.Errorf("allowonly min integrity is required")
+	}
+
+	var scope interface{}
+	if public {
+		scope = "public"
+	} else {
+		scopeObj := map[string]interface{}{"owner": owner}
+		if repo != "" {
+			scopeObj["repo"] = repo
+		}
+		scope = scopeObj
+	}
+
+	policy := &config.GuardPolicy{
+		AllowOnly: &config.AllowOnlyPolicy{
+			Scope:        scope,
+			MinIntegrity: minIntegrity,
+		},
+	}
+
+	if err := config.ValidateGuardPolicy(policy); err != nil {
+		return nil, err
+	}
+
+	return policy, nil
 }
 
 // ValidateDIFCMode validates the DIFC mode flag value and returns an error if invalid

@@ -21,6 +21,13 @@ type Guard interface {
 	// Name returns the identifier for this guard (e.g., "github", "noop")
 	Name() string
 
+	// LabelAgent initializes guard policy and returns effective agent/session state
+	// for the current session.
+	// Returns:
+	//   - result: effective labels, mode, and normalized policy
+	//   - error: any validation/initialization error
+	LabelAgent(ctx context.Context, policy interface{}, backend BackendCaller, caps *difc.Capabilities) (*LabelAgentResult, error)
+
 	// LabelResource determines the resource being accessed and its labels
 	// This may call the backend (via BackendCaller) to gather metadata needed for labeling
 	// Returns:
@@ -37,6 +44,19 @@ type Guard interface {
 	// If the guard returns nil for labeledData, the reference monitor will use the
 	// resource labels from LabelResource for the entire response
 	LabelResponse(ctx context.Context, toolName string, result interface{}, backend BackendCaller, caps *difc.Capabilities) (difc.LabeledData, error)
+}
+
+// LabelAgentResult describes the effective policy/session state returned by a guard.
+type LabelAgentResult struct {
+	Agent            AgentLabelsPayload     `json:"agent"`
+	DIFCMode         string                 `json:"difc_mode"`
+	NormalizedPolicy map[string]interface{} `json:"normalized_policy,omitempty"`
+}
+
+// AgentLabelsPayload holds effective secrecy/integrity labels for the session.
+type AgentLabelsPayload struct {
+	Secrecy   []string `json:"secrecy"`
+	Integrity []string `json:"integrity"`
 }
 
 // RequestState represents any state that the guard needs to pass from request to response
