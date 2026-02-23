@@ -576,9 +576,9 @@ func TestGuardPolicy_StdinParsingAndConversion(t *testing.T) {
 				"type": "wasm",
 				"path": "/guard/github-guard-rust.wasm",
 				"policy": {
-					"AllowOnly": {
-						"Repos": {"owner": "lpcox", "repo": "github-guard"},
-						"Integrity": "ReaderContrib"
+					"allowonly": {
+						"repos": ["lpcox/github-guard"],
+						"integrity": "reader"
 					}
 				}
 			}
@@ -595,9 +595,8 @@ func TestGuardPolicy_StdinParsingAndConversion(t *testing.T) {
 
 	normalized, err := NormalizeGuardPolicy(cfg.Guards["github-guard"].Policy)
 	require.NoError(t, err)
-	assert.Equal(t, "repo", normalized.ScopeKind)
-	assert.Equal(t, "lpcox", normalized.ScopeOwner)
-	assert.Equal(t, "github-guard", normalized.ScopeRepo)
+	assert.Equal(t, "scoped", normalized.ScopeKind)
+	assert.Equal(t, []string{"lpcox/github-guard"}, normalized.ScopeValues)
 	assert.Equal(t, IntegrityReaderContrib, normalized.Integrity)
 }
 
@@ -616,9 +615,7 @@ func TestGuardPolicy_InvalidRejected(t *testing.T) {
 				Path: "/guard/github-guard.wasm",
 				Policy: &GuardPolicy{
 					AllowOnly: &AllowOnlyPolicy{
-						Repos: map[string]interface{}{
-							"repo": "repo-without-owner",
-						},
+						Repos:     []interface{}{"Invalid/Repo"},
 						Integrity: "invalid-integrity",
 					},
 				},
@@ -632,7 +629,7 @@ func TestGuardPolicy_InvalidRejected(t *testing.T) {
 }
 
 func TestParseGuardPolicyJSON(t *testing.T) {
-	policy, err := ParseGuardPolicyJSON(`{"AllowOnly":{"Repos":"Public","Integrity":"None"}}`)
+	policy, err := ParseGuardPolicyJSON(`{"allowonly":{"repos":"public","integrity":"none"}}`)
 	require.NoError(t, err)
 	require.NotNil(t, policy)
 
@@ -640,6 +637,26 @@ func TestParseGuardPolicyJSON(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "public", normalized.ScopeKind)
 	assert.Equal(t, IntegrityNone, normalized.Integrity)
+}
+
+func TestParseGuardPolicyJSON_UpdatedRepoRegex(t *testing.T) {
+	t.Run("accepts underscore scopes", func(t *testing.T) {
+		policy, err := ParseGuardPolicyJSON(`{"allowonly":{"repos":["owner_name/repo_name","owner-name/*","owner_name/repo_prefix*"],"integrity":"reader"}}`)
+		require.NoError(t, err)
+		require.NotNil(t, policy)
+
+		normalized, err := NormalizeGuardPolicy(policy)
+		require.NoError(t, err)
+		assert.Equal(t, "scoped", normalized.ScopeKind)
+		assert.Equal(t, []string{"owner-name/*", "owner_name/repo_name", "owner_name/repo_prefix*"}, normalized.ScopeValues)
+		assert.Equal(t, IntegrityReaderContrib, normalized.Integrity)
+	})
+
+	t.Run("rejects dot in repo scope", func(t *testing.T) {
+		_, err := ParseGuardPolicyJSON(`{"allowonly":{"repos":["owner/repo.name"],"integrity":"reader"}}`)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid")
+	})
 }
 
 // Helper function for creating int pointers in tests

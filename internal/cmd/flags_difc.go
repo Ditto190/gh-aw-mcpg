@@ -41,11 +41,11 @@ func init() {
 		cmd.Flags().BoolVar(&enableConfigExt, "enable-config-extensions", getDefaultConfigExtensions(), "Enable config extensions (guards, session labels) - required for DIFC session label features")
 		cmd.Flags().StringVar(&sessionSecrecy, "session-secrecy", getDefaultSessionSecrecy(), "Comma-separated initial secrecy labels for agent sessions (requires --enable-config-extensions)")
 		cmd.Flags().StringVar(&sessionIntegrity, "session-integrity", getDefaultSessionIntegrity(), "Comma-separated initial integrity labels for agent sessions (requires --enable-config-extensions)")
-		cmd.Flags().StringVar(&guardPolicyJSON, "guard-policy-json", getDefaultGuardPolicyJSON(), "Guard policy JSON (e.g. {\"AllowOnly\":{\"Repos\":\"Public\",\"Integrity\":\"None\"}})")
+		cmd.Flags().StringVar(&guardPolicyJSON, "guard-policy-json", getDefaultGuardPolicyJSON(), "Guard policy JSON (e.g. {\"allowonly\":{\"repos\":\"public\",\"integrity\":\"none\"}})")
 		cmd.Flags().BoolVar(&allowOnlyPublic, "allowonly-scope-public", getDefaultAllowOnlyScopePublic(), "Use public AllowOnly scope")
 		cmd.Flags().StringVar(&allowOnlyOwner, "allowonly-scope-owner", getDefaultAllowOnlyScopeOwner(), "AllowOnly owner scope value")
 		cmd.Flags().StringVar(&allowOnlyRepo, "allowonly-scope-repo", getDefaultAllowOnlyScopeRepo(), "AllowOnly repo name (requires owner)")
-		cmd.Flags().StringVar(&allowOnlyMinInt, "allowonly-min-integrity", getDefaultAllowOnlyMinIntegrity(), "AllowOnly integrity: None|ReaderContrib|WriterContrib|Merged")
+		cmd.Flags().StringVar(&allowOnlyMinInt, "allowonly-min-integrity", getDefaultAllowOnlyMinIntegrity(), "AllowOnly integrity: none|reader|writer|merged")
 	})
 }
 
@@ -123,7 +123,9 @@ func buildAllowOnlyPolicy(public bool, owner, repo, minIntegrity string) (*confi
 
 	integrityByInput := map[string]string{
 		"none":          config.IntegrityNone,
+		"reader":        config.IntegrityReaderContrib,
 		"readercontrib": config.IntegrityReaderContrib,
+		"writer":        config.IntegrityWriterContrib,
 		"writercontrib": config.IntegrityWriterContrib,
 		"merged":        config.IntegrityMerged,
 	}
@@ -150,18 +152,18 @@ func buildAllowOnlyPolicy(public bool, owner, repo, minIntegrity string) (*confi
 		return nil, fmt.Errorf("allowonly integrity is required")
 	}
 	if !hasIntegrity {
-		return nil, fmt.Errorf("allowonly integrity must be one of: None, ReaderContrib, WriterContrib, Merged")
+		return nil, fmt.Errorf("allowonly integrity must be one of: none, reader, writer, merged")
 	}
 
 	var repos interface{}
 	if public {
-		repos = "Public"
+		repos = "public"
 	} else {
-		reposObj := map[string]interface{}{"owner": owner}
+		scope := owner + "/*"
 		if repo != "" {
-			reposObj["repo"] = repo
+			scope = owner + "/" + repo
 		}
-		repos = reposObj
+		repos = []string{scope}
 	}
 
 	policy := &config.GuardPolicy{

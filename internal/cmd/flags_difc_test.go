@@ -359,22 +359,21 @@ func TestBuildAllowOnlyPolicy(t *testing.T) {
 		require.NotNil(t, policy)
 		require.NotNil(t, policy.AllowOnly)
 		assert.Equal(t, config.IntegrityNone, policy.AllowOnly.Integrity)
-		assert.Equal(t, "Public", policy.AllowOnly.Repos)
+		assert.Equal(t, "public", policy.AllowOnly.Repos)
 	})
 
 	t.Run("owner and repo scope valid", func(t *testing.T) {
-		policy, err := buildAllowOnlyPolicy(false, "lpcox", "gh-aw-mcpg", "reader-contrib")
+		policy, err := buildAllowOnlyPolicy(false, "lpcox", "gh-aw-mcpg", "reader")
 		require.NoError(t, err)
 		require.NotNil(t, policy)
-		repos, ok := policy.AllowOnly.Repos.(map[string]interface{})
+		repos, ok := policy.AllowOnly.Repos.([]string)
 		require.True(t, ok)
-		assert.Equal(t, "lpcox", repos["owner"])
-		assert.Equal(t, "gh-aw-mcpg", repos["repo"])
+		assert.Equal(t, []string{"lpcox/gh-aw-mcpg"}, repos)
 		assert.Equal(t, config.IntegrityReaderContrib, policy.AllowOnly.Integrity)
 	})
 
 	t.Run("repo without owner invalid", func(t *testing.T) {
-		_, err := buildAllowOnlyPolicy(false, "", "repo", "reader-contrib")
+		_, err := buildAllowOnlyPolicy(false, "", "repo", "reader")
 		require.Error(t, err)
 	})
 
@@ -418,15 +417,15 @@ func TestGetDefaultGuardPolicyInputs(t *testing.T) {
 		}
 	}()
 
-	os.Setenv("MCP_GATEWAY_GUARD_POLICY_JSON", `{"AllowOnly":{"Repos":"Public","Integrity":"None"}}`)
+	os.Setenv("MCP_GATEWAY_GUARD_POLICY_JSON", `{"allowonly":{"repos":"public","integrity":"none"}}`)
 	os.Setenv("MCP_GATEWAY_ALLOWONLY_SCOPE_PUBLIC", "1")
 	os.Setenv("MCP_GATEWAY_ALLOWONLY_SCOPE_OWNER", "lpcox")
 	os.Setenv("MCP_GATEWAY_ALLOWONLY_SCOPE_REPO", "gh-aw-mcpg")
-	os.Setenv("MCP_GATEWAY_ALLOWONLY_MIN_INTEGRITY", "reader-contrib")
+	os.Setenv("MCP_GATEWAY_ALLOWONLY_MIN_INTEGRITY", "reader")
 
 	assert.NotEmpty(t, getDefaultGuardPolicyJSON())
 	assert.True(t, getDefaultAllowOnlyScopePublic())
 	assert.Equal(t, "lpcox", getDefaultAllowOnlyScopeOwner())
 	assert.Equal(t, "gh-aw-mcpg", getDefaultAllowOnlyScopeRepo())
-	assert.Equal(t, "reader-contrib", getDefaultAllowOnlyMinIntegrity())
+	assert.Equal(t, "reader", getDefaultAllowOnlyMinIntegrity())
 }

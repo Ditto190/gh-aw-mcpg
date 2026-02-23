@@ -642,9 +642,9 @@ func TestRequestStateContext(t *testing.T) {
 func TestNormalizePolicyPayload(t *testing.T) {
 	t.Run("accepts object policy", func(t *testing.T) {
 		input := map[string]interface{}{
-			"AllowOnly": map[string]interface{}{
-				"Repos":     "Public",
-				"Integrity": "None",
+			"allowonly": map[string]interface{}{
+				"repos":     "public",
+				"integrity": "none",
 			},
 		}
 
@@ -654,13 +654,13 @@ func TestNormalizePolicyPayload(t *testing.T) {
 	})
 
 	t.Run("parses stringified json policy to object", func(t *testing.T) {
-		input := `{"AllowOnly":{"Repos":"Public","Integrity":"None"}}`
+		input := `{"allowonly":{"repos":"public","integrity":"none"}}`
 
 		result, err := normalizePolicyPayload(input)
 		require.NoError(t, err)
 		resultMap, ok := result.(map[string]interface{})
 		require.True(t, ok)
-		require.NotNil(t, resultMap["AllowOnly"])
+		require.NotNil(t, resultMap["allowonly"])
 	})
 
 	t.Run("rejects invalid policy string", func(t *testing.T) {
@@ -671,7 +671,7 @@ func TestNormalizePolicyPayload(t *testing.T) {
 
 func TestParseLabelAgentResponse(t *testing.T) {
 	t.Run("success payload parses", func(t *testing.T) {
-		payload := []byte(`{"agent":{"secrecy":[],"integrity":[]},"difc_mode":"strict","normalized_policy":{"scope_kind":"public","integrity":"None"}}`)
+		payload := []byte(`{"agent":{"secrecy":[],"integrity":[]},"difc_mode":"strict","normalized_policy":{"scope_kind":"public","integrity":"none"}}`)
 
 		result, err := parseLabelAgentResponse(payload)
 		require.NoError(t, err)
@@ -680,11 +680,11 @@ func TestParseLabelAgentResponse(t *testing.T) {
 	})
 
 	t.Run("non success fails closed", func(t *testing.T) {
-		payload := []byte(`{"success":false,"error":"missing field AllowOnly"}`)
+		payload := []byte(`{"success":false,"error":"missing field allowonly"}`)
 
 		result, err := parseLabelAgentResponse(payload)
 		require.Error(t, err)
 		assert.Nil(t, result)
-		assert.Contains(t, err.Error(), "missing field AllowOnly")
+		assert.Contains(t, err.Error(), "missing field allowonly")
 	})
 }

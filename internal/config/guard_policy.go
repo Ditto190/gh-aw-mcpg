@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -13,30 +14,115 @@ const (
 	IntegrityMerged        = "merged"
 )
 
+const (
+	integrityNoneValue   = "none"
+	integrityUnapprovedValue = "unapproved"
+	integrityApprovedValue = "approved"
+	integrityMergedValue = "merged"
+)
+
 var validMinIntegrityValues = map[string]struct{}{
-	IntegrityNone:          {},
-	IntegrityUnapproved: {},
-	IntegrityApproved: {},
-	IntegrityMerged:        {},
+	integrityNoneValue:   {},
+	integrityUnapprovedValue: {},
+	integrityApprovedValue: {},
+	integrityMergedValue: {},
 }
 
 // GuardPolicy represents the policy payload passed to guard label_agent.
 type GuardPolicy struct {
-	AllowOnly *AllowOnlyPolicy `toml:"AllowOnly" json:"AllowOnly,omitempty"`
+	AllowOnly *AllowOnlyPolicy `toml:"AllowOnly" json:"allowonly,omitempty"`
 }
 
 // AllowOnlyPolicy configures scope and minimum required integrity.
 type AllowOnlyPolicy struct {
-	Repos     interface{} `toml:"Repos" json:"Repos"`
-	Integrity string      `toml:"Integrity" json:"Integrity"`
+	Repos     interface{} `toml:"Repos" json:"repos"`
+	Integrity string      `toml:"Integrity" json:"integrity"`
 }
 
 // NormalizedGuardPolicy is a canonical policy representation for caching and observability.
 type NormalizedGuardPolicy struct {
-	ScopeKind    string `json:"scope_kind"`
-	ScopeOwner   string `json:"scope_owner,omitempty"`
-	ScopeRepo    string `json:"scope_repo,omitempty"`
-	Integrity    string `json:"integrity"`
+	ScopeKind   string   `json:"scope_kind"`
+	ScopeValues []string `json:"scope_values,omitempty"`
+	Integrity   string   `json:"integrity"`
+}
+
+func (p *GuardPolicy) UnmarshalJSON(data []byte) error {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	var allowOnlyRaw json.RawMessage
+	for key, value := range raw {
+		switch strings.ToLower(key) {
+		case "allowonly":
+			allowOnlyRaw = value
+		default:
+			return fmt.Errorf("policy contains unsupported field %q", key)
+		}
+	}
+
+	if len(allowOnlyRaw) == 0 {
+		return fmt.Errorf("policy must include allowonly")
+	}
+
+	var allowOnly AllowOnlyPolicy
+	if err := json.Unmarshal(allowOnlyRaw, &allowOnly); err != nil {
+		return err
+	}
+	p.AllowOnly = &allowOnly
+	return nil
+}
+
+func (p GuardPolicy) MarshalJSON() ([]byte, error) {
+	type serializedPolicy struct {
+		AllowOnly *AllowOnlyPolicy `json:"allowonly,omitempty"`
+	}
+
+	return json.Marshal(serializedPolicy{AllowOnly: p.AllowOnly})
+}
+
+func (p *AllowOnlyPolicy) UnmarshalJSON(data []byte) error {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	for key, value := range raw {
+		switch strings.ToLower(key) {
+		case "repos":
+			if err := json.Unmarshal(value, &p.Repos); err != nil {
+				return fmt.Errorf("invalid allowonly.repos: %w", err)
+			}
+		case "integrity":
+			if err := json.Unmarshal(value, &p.Integrity); err != nil {
+				return fmt.Errorf("invalid allowonly.integrity: %w", err)
+			}
+		default:
+			return fmt.Errorf("allowonly contains unsupported field %q", key)
+		}
+	}
+
+	if p.Repos == nil {
+		return fmt.Errorf("allowonly must include repos")
+	}
+	if strings.TrimSpace(p.Integrity) == "" {
+		return fmt.Errorf("allowonly must include integrity")
+	}
+
+	return nil
+}
+
+func (p AllowOnlyPolicy) MarshalJSON() ([]byte, error) {
+	type serializedAllowOnly struct {
+		Repos     interface{} `json:"repos"`
+		Integrity string      `json:"integrity"`
+	}
+
+	return json.Marshal(serializedAllowOnly{
+		Repos:     p.Repos,
+		Integrity: p.Integrity,
+	})
 }
 
 // ValidateGuardPolicy validates AllowOnly policy input.
@@ -48,56 +134,165 @@ func ValidateGuardPolicy(policy *GuardPolicy) error {
 // NormalizeGuardPolicy validates and normalizes policy shape.
 func NormalizeGuardPolicy(policy *GuardPolicy) (*NormalizedGuardPolicy, error) {
 	if policy == nil || policy.AllowOnly == nil {
-		return nil, fmt.Errorf("policy must include AllowOnly")
+		return nil, fmt.Errorf("policy must include allowonly")
 	}
 
-	integrity := strings.TrimSpace(policy.AllowOnly.Integrity)
+	integrity := strings.ToLower(strings.TrimSpace(policy.AllowOnly.Integrity))
 	if _, ok := validMinIntegrityValues[integrity]; !ok {
-		return nil, fmt.Errorf("AllowOnly.Integrity must be one of: none, unapproved, approved, merged")
+		return nil, fmt.Errorf("allowonly.integrity must be one of: none, unapproved, approved, merged")
 	}
 
 	normalized := &NormalizedGuardPolicy{Integrity: integrity}
 
 	switch scope := policy.AllowOnly.Repos.(type) {
 	case string:
-		if strings.TrimSpace(scope) != "public" {
-			return nil, fmt.Errorf("AllowOnly.Repos string must be 'public'")
+		scopeValue := strings.ToLower(strings.TrimSpace(scope))
+		if scopeValue != "all" && scopeValue != "public" {
+			return nil, fmt.Errorf("allowonly.repos string must be 'all' or 'public'")
 		}
-		normalized.ScopeKind = "public"
+		normalized.ScopeKind = scopeValue
 		return normalized, nil
 
-	case map[string]interface{}:
-		owner, ownerOK := scope["owner"].(string)
-		repo, repoOK := scope["repo"].(string)
-		owner = strings.TrimSpace(owner)
-		repo = strings.TrimSpace(repo)
+	case []interface{}:
+		scopes, err := normalizeAndValidateScopeArray(scope)
+		if err != nil {
+			return nil, err
+		}
+		normalized.ScopeKind = "scoped"
+		normalized.ScopeValues = scopes
+		return normalized, nil
 
-		if repoOK && !ownerOK {
-			return nil, fmt.Errorf("AllowOnly.Repos repo requires owner")
+	case []string:
+		generic := make([]interface{}, len(scope))
+		for i := range scope {
+			generic[i] = scope[i]
 		}
-		if ownerOK && owner == "" {
-			return nil, fmt.Errorf("AllowOnly.Repos owner must not be empty")
+		scopes, err := normalizeAndValidateScopeArray(generic)
+		if err != nil {
+			return nil, err
 		}
-		if repoOK && repo == "" {
-			return nil, fmt.Errorf("AllowOnly.Repos repo must not be empty")
-		}
-
-		if repoOK {
-			normalized.ScopeKind = "repo"
-			normalized.ScopeOwner = owner
-			normalized.ScopeRepo = repo
-			return normalized, nil
-		}
-		if ownerOK {
-			normalized.ScopeKind = "owner"
-			normalized.ScopeOwner = owner
-			return normalized, nil
-		}
-		return nil, fmt.Errorf("AllowOnly.Repos object must include owner, or owner+repo")
+		normalized.ScopeKind = "scoped"
+		normalized.ScopeValues = scopes
+		return normalized, nil
 
 	default:
-		return nil, fmt.Errorf("AllowOnly.Repos must be 'public' or an object with owner[/repo]")
+		return nil, fmt.Errorf("allowonly.repos must be 'all', 'public', or a non-empty array of repo scope strings")
 	}
+}
+
+func normalizeAndValidateScopeArray(scopes []interface{}) ([]string, error) {
+	if len(scopes) == 0 {
+		return nil, fmt.Errorf("allowonly.repos array must contain at least one scope")
+	}
+
+	seen := make(map[string]struct{}, len(scopes))
+	normalized := make([]string, 0, len(scopes))
+
+	for _, scopeValue := range scopes {
+		scopeString, ok := scopeValue.(string)
+		if !ok {
+			return nil, fmt.Errorf("allowonly.repos array values must be strings")
+		}
+
+		scopeString = strings.TrimSpace(scopeString)
+		if scopeString == "" {
+			return nil, fmt.Errorf("allowonly.repos scope entries must not be empty")
+		}
+
+		if !isValidRepoScope(scopeString) {
+			return nil, fmt.Errorf("allowonly.repos scope %q is invalid; expected owner/*, owner/repo, or owner/re*", scopeString)
+		}
+
+		if _, exists := seen[scopeString]; exists {
+			return nil, fmt.Errorf("allowonly.repos must not contain duplicates")
+		}
+		seen[scopeString] = struct{}{}
+		normalized = append(normalized, scopeString)
+	}
+
+	sort.Strings(normalized)
+	return normalized, nil
+}
+
+func isValidRepoScope(scope string) bool {
+	parts := strings.Split(scope, "/")
+	if len(parts) != 2 {
+		return false
+	}
+
+	owner := parts[0]
+	repoPart := parts[1]
+
+	if !isValidRepoOwner(owner) {
+		return false
+	}
+
+	if repoPart == "*" {
+		return true
+	}
+
+	if strings.Count(repoPart, "*") > 1 {
+		return false
+	}
+
+	isPrefixWildcard := strings.HasSuffix(repoPart, "*")
+	if strings.Contains(repoPart, "*") && !isPrefixWildcard {
+		return false
+	}
+
+	repoName := repoPart
+	if isPrefixWildcard {
+		repoName = strings.TrimSuffix(repoPart, "*")
+		if repoName == "" {
+			return false
+		}
+	}
+
+	if !isValidRepoName(repoName) {
+		return false
+	}
+
+	if isPrefixWildcard && strings.HasSuffix(repoName, ".") {
+		return false
+	}
+
+	return true
+}
+
+func isValidRepoOwner(owner string) bool {
+	if len(owner) < 1 || len(owner) > 39 {
+		return false
+	}
+
+	for i := 0; i < len(owner); i++ {
+		char := owner[i]
+		if isScopeTokenChar(char) {
+			continue
+		}
+		return false
+	}
+
+	return true
+}
+
+func isValidRepoName(repo string) bool {
+	if len(repo) < 1 || len(repo) > 100 {
+		return false
+	}
+
+	for i := 0; i < len(repo); i++ {
+		char := repo[i]
+		if isScopeTokenChar(char) {
+			continue
+		}
+		return false
+	}
+
+	return true
+}
+
+func isScopeTokenChar(char byte) bool {
+	return (char >= 'a' && char <= 'z') || (char >= '0' && char <= '9') || char == '_' || char == '-'
 }
 
 // ParseGuardPolicyJSON parses policy JSON and validates it.
