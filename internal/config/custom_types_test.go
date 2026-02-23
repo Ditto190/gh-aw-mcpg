@@ -13,8 +13,8 @@ import (
 // TestCustomServerTypes tests the compliance requirements for custom server types
 // as specified in section 4.1.4 of the MCP Gateway specification.
 
-// T-CFG-009: Valid custom server type with registered schema
-func TestTCFG009_ValidCustomTypeWithRegisteredSchema(t *testing.T) {
+// T-CFG-010: Valid custom server type with registered schema
+func TestTCFG010_ValidCustomTypeWithRegisteredSchema(t *testing.T) {
 	// Create a mock HTTP server that returns a valid JSON schema for the custom type
 	mockSchemaServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		schema := map[string]interface{}{
@@ -73,8 +73,8 @@ func TestTCFG009_ValidCustomTypeWithRegisteredSchema(t *testing.T) {
 	assert.NoError(t, err, "Valid custom server type with registered schema should pass validation")
 }
 
-// T-CFG-010: Reject custom type without schema registration
-func TestTCFG010_RejectCustomTypeWithoutRegistration(t *testing.T) {
+// T-CFG-011: Reject custom type without schema registration
+func TestTCFG011_RejectCustomTypeWithoutRegistration(t *testing.T) {
 	// Configuration with unregistered custom server type
 	configJSON := map[string]interface{}{
 		"mcpServers": map[string]interface{}{
@@ -102,8 +102,8 @@ func TestTCFG010_RejectCustomTypeWithoutRegistration(t *testing.T) {
 	assert.Contains(t, err.Error(), "not registered in customSchemas")
 }
 
-// T-CFG-011: Validate custom configuration against registered schema
-func TestTCFG011_ValidateAgainstCustomSchema(t *testing.T) {
+// T-CFG-012: Validate custom configuration against registered schema
+func TestTCFG012_ValidateAgainstCustomSchema(t *testing.T) {
 	t.Run("valid_custom_config", func(t *testing.T) {
 		// Create a mock schema server that requires a specific field
 		mockSchemaServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -155,6 +155,58 @@ func TestTCFG011_ValidateAgainstCustomSchema(t *testing.T) {
 		assert.NoError(t, err, "Configuration matching custom schema should pass validation")
 	})
 
+	t.Run("invalid_custom_config", func(t *testing.T) {
+		// Create a mock schema server that requires a specific field
+		mockSchemaServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			schema := map[string]interface{}{
+				"$schema": "http://json-schema.org/draft-07/schema#",
+				"type":    "object",
+				"properties": map[string]interface{}{
+					"type": map[string]interface{}{
+						"type": "string",
+						"enum": []string{"mytype"},
+					},
+					"requiredField": map[string]interface{}{
+						"type": "string",
+					},
+					"container": map[string]interface{}{
+						"type": "string",
+					},
+				},
+				"required": []string{"type", "requiredField", "container"},
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(schema)
+		}))
+		defer mockSchemaServer.Close()
+
+		// Invalid configuration that MISSING requiredField
+		configJSON := map[string]interface{}{
+			"customSchemas": map[string]string{
+				"mytype": mockSchemaServer.URL,
+			},
+			"mcpServers": map[string]interface{}{
+				"invalid-custom": map[string]interface{}{
+					"type":      "mytype",
+					"container": "ghcr.io/example/mytype:latest",
+					// Missing requiredField - should fail validation
+				},
+			},
+		}
+
+		data, err := json.Marshal(configJSON)
+		require.NoError(t, err)
+
+		var stdinCfg StdinConfig
+		err = json.Unmarshal(data, &stdinCfg)
+		require.NoError(t, err)
+
+		server := stdinCfg.MCPServers["invalid-custom"]
+		err = validateServerConfigWithCustomSchemas("invalid-custom", server, stdinCfg.CustomSchemas)
+		assert.Error(t, err, "Configuration missing required fields should fail validation")
+		assert.Contains(t, err.Error(), "does not match custom schema")
+	})
+
 	t.Run("empty_string_skips_validation", func(t *testing.T) {
 		// Empty string means skip validation
 		configJSON := map[string]interface{}{
@@ -183,8 +235,8 @@ func TestTCFG011_ValidateAgainstCustomSchema(t *testing.T) {
 	})
 }
 
-// T-CFG-012: Reject custom type conflicting with reserved types (stdio/http)
-func TestTCFG012_RejectReservedTypeNames(t *testing.T) {
+// T-CFG-013: Reject custom type conflicting with reserved types (stdio/http)
+func TestTCFG013_RejectReservedTypeNames(t *testing.T) {
 	tests := []struct {
 		name         string
 		reservedType string
@@ -224,8 +276,8 @@ func TestTCFG012_RejectReservedTypeNames(t *testing.T) {
 	}
 }
 
-// T-CFG-013: Custom schema URL fetch and cache
-func TestTCFG013_SchemaURLFetchAndCache(t *testing.T) {
+// T-CFG-014: Custom schema URL fetch and cache
+func TestTCFG014_SchemaURLFetchAndCache(t *testing.T) {
 	t.Run("empty_string_skips_validation", func(t *testing.T) {
 		// Empty string means skip validation
 		customSchemas := map[string]interface{}{
