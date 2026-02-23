@@ -67,6 +67,57 @@ type StdinServerConfig struct {
 
 	// Registry is the URI to the installation location in an MCP registry (informational)
 	Registry string `json:"registry,omitempty"`
+
+	// AdditionalProperties stores any extra fields for custom server types
+	// This allows custom schemas to define their own fields beyond the standard ones
+	AdditionalProperties map[string]interface{} `json:"-"`
+}
+
+// UnmarshalJSON implements custom JSON unmarshaling to capture additional properties
+func (s *StdinServerConfig) UnmarshalJSON(data []byte) error {
+	// Define an auxiliary type to avoid infinite recursion
+	type Alias StdinServerConfig
+	aux := &struct {
+		*Alias
+	}{
+		Alias: (*Alias)(s),
+	}
+
+	// Unmarshal into the auxiliary struct first
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+
+	// Now unmarshal into a map to capture all fields
+	var allFields map[string]interface{}
+	if err := json.Unmarshal(data, &allFields); err != nil {
+		return err
+	}
+
+	// Known fields in the struct
+	knownFields := map[string]bool{
+		"type":           true,
+		"container":      true,
+		"entrypoint":     true,
+		"entrypointArgs": true,
+		"args":           true,
+		"mounts":         true,
+		"env":            true,
+		"url":            true,
+		"headers":        true,
+		"tools":          true,
+		"registry":       true,
+	}
+
+	// Store additional properties (fields not in the struct)
+	s.AdditionalProperties = make(map[string]interface{})
+	for key, value := range allFields {
+		if !knownFields[key] {
+			s.AdditionalProperties[key] = value
+		}
+	}
+
+	return nil
 }
 
 // intPtrOrDefault returns the value of the int pointer if not nil, otherwise returns the default value.

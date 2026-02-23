@@ -1,12 +1,15 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"regexp"
+	"strings"
 
 	"github.com/github/gh-aw-mcpg/internal/config/rules"
 	"github.com/github/gh-aw-mcpg/internal/logger"
+	"github.com/santhosh-tekuri/jsonschema/v5"
 )
 
 // ValidationError is an alias for rules.ValidationError for backward compatibility
@@ -192,9 +195,121 @@ func validateCustomServerConfig(name string, server *StdinServerConfig, customSc
 	}
 
 	// Fetch and validate against custom schema
-	// For now, we just validate that the schema is fetchable
-	// Full JSON schema validation against custom schemas can be added in the future
-	logValidation.Printf("Custom schema validation passed: name=%s, type=%s", name, serverType)
+	return validateAgainstCustomSchema(name, server, schemaURL, jsonPath)
+}
+
+// validateAgainstCustomSchema fetches and validates a server config against its custom schema
+func validateAgainstCustomSchema(name string, server *StdinServerConfig, schemaURL string, jsonPath string) error {
+	logValidation.Printf("Fetching custom schema for validation: name=%s, url=%s", name, schemaURL)
+
+	// Fetch the custom schema using the existing helper
+	schemaJSON, err := fetchAndFixSchema(schemaURL)
+	if err != nil {
+		logValidation.Printf("Failed to fetch custom schema: name=%s, url=%s, error=%v", name, schemaURL, err)
+		return &rules.ValidationError{
+			Field:      "type",
+			Message:    fmt.Sprintf("failed to fetch custom schema for server type '%s': %v", server.Type, err),
+			JSONPath:   jsonPath,
+			Suggestion: fmt.Sprintf("Ensure the schema URL '%s' is accessible and returns a valid JSON Schema", schemaURL),
+		}
+	}
+
+	logValidation.Printf("Custom schema fetched successfully: name=%s, size=%d bytes", name, len(schemaJSON))
+
+	// Parse the schema to extract its $id
+	var schemaObj map[string]interface{}
+	if err := json.Unmarshal(schemaJSON, &schemaObj); err != nil {
+		return &rules.ValidationError{
+			Field:      "type",
+			Message:    fmt.Sprintf("failed to parse custom schema for server type '%s': %v", server.Type, err),
+			JSONPath:   jsonPath,
+			Suggestion: fmt.Sprintf("The schema at '%s' must be valid JSON", schemaURL),
+		}
+	}
+
+	schemaID, ok := schemaObj["$id"].(string)
+	if !ok || schemaID == "" {
+		schemaID = schemaURL
+	}
+
+	// Compile the custom schema
+	compiler := jsonschema.NewCompiler()
+	compiler.Draft = jsonschema.Draft7
+
+	// Add the schema with both URLs (the fetch URL and the $id URL)
+	if err := compiler.AddResource(schemaURL, strings.NewReader(string(schemaJSON))); err != nil {
+		return &rules.ValidationError{
+			Field:      "type",
+			Message:    fmt.Sprintf("failed to compile custom schema for server type '%s': %v", server.Type, err),
+			JSONPath:   jsonPath,
+			Suggestion: fmt.Sprintf("The schema at '%s' must be a valid JSON Schema Draft 7 document", schemaURL),
+		}
+	}
+	if schemaID != schemaURL {
+		if err := compiler.AddResource(schemaID, strings.NewReader(string(schemaJSON))); err != nil {
+			return &rules.ValidationError{
+				Field:      "type",
+				Message:    fmt.Sprintf("failed to compile custom schema with $id for server type '%s': %v", server.Type, err),
+				JSONPath:   jsonPath,
+				Suggestion: fmt.Sprintf("Check the $id field in the schema at '%s'", schemaURL),
+			}
+		}
+	}
+
+	schema, err := compiler.Compile(schemaID)
+	if err != nil {
+		return &rules.ValidationError{
+			Field:      "type",
+			Message:    fmt.Sprintf("failed to compile custom schema for server type '%s': %v", server.Type, err),
+			JSONPath:   jsonPath,
+			Suggestion: fmt.Sprintf("The schema at '%s' must be a valid JSON Schema Draft 7 document", schemaURL),
+		}
+	}
+
+	logValidation.Printf("Custom schema compiled successfully: name=%s", name)
+
+	// Convert server config to a map that includes both struct fields and additional properties
+	// This ensures custom fields are validated against the custom schema
+	serverMap := make(map[string]interface{})
+
+	// Marshal the struct to JSON first
+	serverJSON, err := json.Marshal(server)
+	if err != nil {
+		return &rules.ValidationError{
+			Field:      "type",
+			Message:    fmt.Sprintf("failed to marshal server config for validation: %v", err),
+			JSONPath:   jsonPath,
+			Suggestion: "Internal error - please report this issue",
+		}
+	}
+
+	// Unmarshal to map to get struct fields
+	if err := json.Unmarshal(serverJSON, &serverMap); err != nil {
+		return &rules.ValidationError{
+			Field:      "type",
+			Message:    fmt.Sprintf("failed to unmarshal server config for validation: %v", err),
+			JSONPath:   jsonPath,
+			Suggestion: "Internal error - please report this issue",
+		}
+	}
+
+	// Merge additional properties (custom fields) into the map
+	for key, value := range server.AdditionalProperties {
+		serverMap[key] = value
+	}
+
+	// Validate the merged map against the custom schema
+	if err := schema.Validate(serverMap); err != nil {
+		logValidation.Printf("Custom schema validation failed: name=%s, error=%v", name, err)
+		return &rules.ValidationError{
+			Field:      "type",
+			Message:    fmt.Sprintf("server configuration does not match custom schema for type '%s': %v", server.Type, err),
+			JSONPath:   jsonPath,
+			Suggestion: fmt.Sprintf("Update the server configuration to match the schema requirements at '%s'", schemaURL),
+		}
+	}
+
+	logValidation.Printf("Custom schema validation passed: name=%s, type=%s", name, server.Type)
 	return nil
 }
 
