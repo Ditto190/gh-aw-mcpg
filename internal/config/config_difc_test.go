@@ -577,8 +577,8 @@ func TestGuardPolicy_StdinParsingAndConversion(t *testing.T) {
 				"path": "/guard/github-guard-rust.wasm",
 				"policy": {
 					"AllowOnly": {
-						"Scope": {"owner": "lpcox", "repo": "github-guard"},
-						"MinIntegrity": "reader-contrib"
+						"Repos": {"owner": "lpcox", "repo": "github-guard"},
+						"Integrity": "ReaderContrib"
 					}
 				}
 			}
@@ -598,7 +598,7 @@ func TestGuardPolicy_StdinParsingAndConversion(t *testing.T) {
 	assert.Equal(t, "repo", normalized.ScopeKind)
 	assert.Equal(t, "lpcox", normalized.ScopeOwner)
 	assert.Equal(t, "github-guard", normalized.ScopeRepo)
-	assert.Equal(t, MinIntegrityReaderContrib, normalized.MinIntegrity)
+	assert.Equal(t, IntegrityReaderContrib, normalized.Integrity)
 }
 
 func TestGuardPolicy_InvalidRejected(t *testing.T) {
@@ -616,10 +616,10 @@ func TestGuardPolicy_InvalidRejected(t *testing.T) {
 				Path: "/guard/github-guard.wasm",
 				Policy: &GuardPolicy{
 					AllowOnly: &AllowOnlyPolicy{
-						Scope: map[string]interface{}{
+						Repos: map[string]interface{}{
 							"repo": "repo-without-owner",
 						},
-						MinIntegrity: "invalid-integrity",
+						Integrity: "invalid-integrity",
 					},
 				},
 			},
@@ -632,14 +632,14 @@ func TestGuardPolicy_InvalidRejected(t *testing.T) {
 }
 
 func TestParseGuardPolicyJSON(t *testing.T) {
-	policy, err := ParseGuardPolicyJSON(`{"AllowOnly":{"Scope":"public","MinIntegrity":"unverified"}}`)
+	policy, err := ParseGuardPolicyJSON(`{"AllowOnly":{"Repos":"Public","Integrity":"None"}}`)
 	require.NoError(t, err)
 	require.NotNil(t, policy)
 
 	normalized, err := NormalizeGuardPolicy(policy)
 	require.NoError(t, err)
 	assert.Equal(t, "public", normalized.ScopeKind)
-	assert.Equal(t, MinIntegrityUnverified, normalized.MinIntegrity)
+	assert.Equal(t, IntegrityNone, normalized.Integrity)
 }
 
 // Helper function for creating int pointers in tests

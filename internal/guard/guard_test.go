@@ -643,8 +643,8 @@ func TestNormalizePolicyPayload(t *testing.T) {
 	t.Run("accepts object policy", func(t *testing.T) {
 		input := map[string]interface{}{
 			"AllowOnly": map[string]interface{}{
-				"Scope":        "public",
-				"MinIntegrity": "unverified",
+				"Repos":     "Public",
+				"Integrity": "None",
 			},
 		}
 
@@ -654,7 +654,7 @@ func TestNormalizePolicyPayload(t *testing.T) {
 	})
 
 	t.Run("parses stringified json policy to object", func(t *testing.T) {
-		input := `{"AllowOnly":{"Scope":"public","MinIntegrity":"unverified"}}`
+		input := `{"AllowOnly":{"Repos":"Public","Integrity":"None"}}`
 
 		result, err := normalizePolicyPayload(input)
 		require.NoError(t, err)
@@ -671,7 +671,7 @@ func TestNormalizePolicyPayload(t *testing.T) {
 
 func TestParseLabelAgentResponse(t *testing.T) {
 	t.Run("success payload parses", func(t *testing.T) {
-		payload := []byte(`{"agent":{"secrecy":[],"integrity":[]},"difc_mode":"strict","normalized_policy":{"scope_kind":"public","min_integrity":"unverified"}}`)
+		payload := []byte(`{"agent":{"secrecy":[],"integrity":[]},"difc_mode":"strict","normalized_policy":{"scope_kind":"public","integrity":"None"}}`)
 
 		result, err := parseLabelAgentResponse(payload)
 		require.NoError(t, err)

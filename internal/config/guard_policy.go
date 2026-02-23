@@ -7,17 +7,17 @@ import (
 )
 
 const (
-	MinIntegrityNone    = "none"
-	MinIntegrityUnapproved = "unapproved"
-	MinIntegrityApproved    = "approved"
-	MinIntegrityMerged        = "merged"
+	IntegrityNone          = "none"
+	IntegrityUnapproved    = "unapproved"
+	IntegrityApproved      = "approved"
+	IntegrityMerged        = "merged"
 )
 
 var validMinIntegrityValues = map[string]struct{}{
-	MinIntegrityNone:    {},
-	MinIntegrityUnapproved: {},
-	MinIntegrityApproved: {},
-	MinIntegrityMerged:        {},
+	IntegrityNone:          {},
+	IntegrityUnapproved: {},
+	IntegrityApproved: {},
+	IntegrityMerged:        {},
 }
 
 // GuardPolicy represents the policy payload passed to guard label_agent.
@@ -27,8 +27,8 @@ type GuardPolicy struct {
 
 // AllowOnlyPolicy configures scope and minimum required integrity.
 type AllowOnlyPolicy struct {
-	Scope        interface{} `toml:"Scope" json:"Scope"`
-	MinIntegrity string      `toml:"MinIntegrity" json:"MinIntegrity"`
+	Repos     interface{} `toml:"Repos" json:"Repos"`
+	Integrity string      `toml:"Integrity" json:"Integrity"`
 }
 
 // NormalizedGuardPolicy is a canonical policy representation for caching and observability.
@@ -36,7 +36,7 @@ type NormalizedGuardPolicy struct {
 	ScopeKind    string `json:"scope_kind"`
 	ScopeOwner   string `json:"scope_owner,omitempty"`
 	ScopeRepo    string `json:"scope_repo,omitempty"`
-	MinIntegrity string `json:"min_integrity"`
+	Integrity    string `json:"integrity"`
 }
 
 // ValidateGuardPolicy validates AllowOnly policy input.
@@ -51,17 +51,17 @@ func NormalizeGuardPolicy(policy *GuardPolicy) (*NormalizedGuardPolicy, error) {
 		return nil, fmt.Errorf("policy must include AllowOnly")
 	}
 
-	minIntegrity := strings.ToLower(strings.TrimSpace(policy.AllowOnly.MinIntegrity))
-	if _, ok := validMinIntegrityValues[minIntegrity]; !ok {
-		return nil, fmt.Errorf("AllowOnly.MinIntegrity must be one of: none, unapproved, approved, merged")
+	integrity := strings.TrimSpace(policy.AllowOnly.Integrity)
+	if _, ok := validMinIntegrityValues[integrity]; !ok {
+		return nil, fmt.Errorf("AllowOnly.Integrity must be one of: none, unapproved, approved, merged")
 	}
 
-	normalized := &NormalizedGuardPolicy{MinIntegrity: minIntegrity}
+	normalized := &NormalizedGuardPolicy{Integrity: integrity}
 
-	switch scope := policy.AllowOnly.Scope.(type) {
+	switch scope := policy.AllowOnly.Repos.(type) {
 	case string:
 		if strings.TrimSpace(scope) != "public" {
-			return nil, fmt.Errorf("AllowOnly.Scope string must be 'public'")
+			return nil, fmt.Errorf("AllowOnly.Repos string must be 'public'")
 		}
 		normalized.ScopeKind = "public"
 		return normalized, nil
@@ -73,13 +73,13 @@ func NormalizeGuardPolicy(policy *GuardPolicy) (*NormalizedGuardPolicy, error) {
 		repo = strings.TrimSpace(repo)
 
 		if repoOK && !ownerOK {
-			return nil, fmt.Errorf("AllowOnly.Scope repo requires owner")
+			return nil, fmt.Errorf("AllowOnly.Repos repo requires owner")
 		}
 		if ownerOK && owner == "" {
-			return nil, fmt.Errorf("AllowOnly.Scope owner must not be empty")
+			return nil, fmt.Errorf("AllowOnly.Repos owner must not be empty")
 		}
 		if repoOK && repo == "" {
-			return nil, fmt.Errorf("AllowOnly.Scope repo must not be empty")
+			return nil, fmt.Errorf("AllowOnly.Repos repo must not be empty")
 		}
 
 		if repoOK {
@@ -93,10 +93,10 @@ func NormalizeGuardPolicy(policy *GuardPolicy) (*NormalizedGuardPolicy, error) {
 			normalized.ScopeOwner = owner
 			return normalized, nil
 		}
-		return nil, fmt.Errorf("AllowOnly.Scope object must include owner, or owner+repo")
+		return nil, fmt.Errorf("AllowOnly.Repos object must include owner, or owner+repo")
 
 	default:
-		return nil, fmt.Errorf("AllowOnly.Scope must be 'public' or an object with owner[/repo]")
+		return nil, fmt.Errorf("AllowOnly.Repos must be 'public' or an object with owner[/repo]")
 	}
 }
 

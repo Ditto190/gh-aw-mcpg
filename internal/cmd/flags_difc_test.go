@@ -4,6 +4,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/github/gh-aw-mcpg/internal/config"
 	"github.com/github/gh-aw-mcpg/internal/difc"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -353,22 +354,23 @@ func TestParseSessionLabels(t *testing.T) {
 
 func TestBuildAllowOnlyPolicy(t *testing.T) {
 	t.Run("public scope valid", func(t *testing.T) {
-		policy, err := buildAllowOnlyPolicy(true, "", "", "unverified")
+		policy, err := buildAllowOnlyPolicy(true, "", "", "none")
 		require.NoError(t, err)
 		require.NotNil(t, policy)
 		require.NotNil(t, policy.AllowOnly)
-		assert.Equal(t, "unverified", policy.AllowOnly.MinIntegrity)
-		assert.Equal(t, "public", policy.AllowOnly.Scope)
+		assert.Equal(t, config.IntegrityNone, policy.AllowOnly.Integrity)
+		assert.Equal(t, "Public", policy.AllowOnly.Repos)
 	})
 
 	t.Run("owner and repo scope valid", func(t *testing.T) {
 		policy, err := buildAllowOnlyPolicy(false, "lpcox", "gh-aw-mcpg", "reader-contrib")
 		require.NoError(t, err)
 		require.NotNil(t, policy)
-		scope, ok := policy.AllowOnly.Scope.(map[string]interface{})
+		repos, ok := policy.AllowOnly.Repos.(map[string]interface{})
 		require.True(t, ok)
-		assert.Equal(t, "lpcox", scope["owner"])
-		assert.Equal(t, "gh-aw-mcpg", scope["repo"])
+		assert.Equal(t, "lpcox", repos["owner"])
+		assert.Equal(t, "gh-aw-mcpg", repos["repo"])
+		assert.Equal(t, config.IntegrityReaderContrib, policy.AllowOnly.Integrity)
 	})
 
 	t.Run("repo without owner invalid", func(t *testing.T) {
@@ -416,7 +418,7 @@ func TestGetDefaultGuardPolicyInputs(t *testing.T) {
 		}
 	}()
 
-	os.Setenv("MCP_GATEWAY_GUARD_POLICY_JSON", `{"AllowOnly":{"Scope":"public","MinIntegrity":"unverified"}}`)
+	os.Setenv("MCP_GATEWAY_GUARD_POLICY_JSON", `{"AllowOnly":{"Repos":"Public","Integrity":"None"}}`)
 	os.Setenv("MCP_GATEWAY_ALLOWONLY_SCOPE_PUBLIC", "1")
 	os.Setenv("MCP_GATEWAY_ALLOWONLY_SCOPE_OWNER", "lpcox")
 	os.Setenv("MCP_GATEWAY_ALLOWONLY_SCOPE_REPO", "gh-aw-mcpg")
