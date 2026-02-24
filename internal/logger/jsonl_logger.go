@@ -26,15 +26,15 @@ var (
 
 // JSONLRPCMessage represents a single RPC message log entry in JSONL format
 type JSONLRPCMessage struct {
-	Timestamp string          `json:"timestamp"`
-	Direction string          `json:"direction"` // "IN" or "OUT"
-	Type      string          `json:"type"`      // "REQUEST" or "RESPONSE"
-	ServerID  string          `json:"server_id"`
-	Method    string          `json:"method,omitempty"`
-	Error     string          `json:"error,omitempty"`
+	Timestamp      string          `json:"timestamp"`
+	Direction      string          `json:"direction"` // "IN" or "OUT"
+	Type           string          `json:"type"`      // "REQUEST" or "RESPONSE"
+	ServerID       string          `json:"server_id"`
+	Method         string          `json:"method,omitempty"`
+	Error          string          `json:"error,omitempty"`
 	AgentSecrecy   []string        `json:"agent_secrecy,omitempty"`
 	AgentIntegrity []string        `json:"agent_integrity,omitempty"`
-	Payload   json.RawMessage `json:"payload"` // Full sanitized payload as raw JSON
+	Payload        json.RawMessage `json:"payload"` // Full sanitized payload as raw JSON
 }
 
 // InitJSONLLogger initializes the global JSONL logger
