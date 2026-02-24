@@ -3,6 +3,9 @@ package dockerutil
 import (
 	"os"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestExpandEnvArgs(t *testing.T) {
@@ -43,13 +46,13 @@ func TestExpandEnvArgs(t *testing.T) {
 			expected: []string{"run", "-e", "VAR1=value1", "-e", "VAR2=fixed", "image"},
 		},
 		{
-			name:     "undefined env variable",
+			name:     "undefined env variable leaves arg unchanged",
 			args:     []string{"run", "-e", "UNDEFINED_VAR", "image"},
 			envVars:  map[string]string{},
 			expected: []string{"run", "-e", "UNDEFINED_VAR", "image"},
 		},
 		{
-			name:     "empty env variable value",
+			name:     "empty env variable value expands to key=",
 			args:     []string{"run", "-e", "EMPTY_VAR", "image"},
 			envVars:  map[string]string{"EMPTY_VAR": ""},
 			expected: []string{"run", "-e", "EMPTY_VAR=", "image"},
@@ -60,15 +63,37 @@ func TestExpandEnvArgs(t *testing.T) {
 			envVars:  map[string]string{},
 			expected: []string{"run", "image", "-e"},
 		},
+		{
+			name:     "nil args returns empty slice",
+			args:     nil,
+			envVars:  map[string]string{},
+			expected: []string{},
+		},
+		{
+			name:     "empty args returns empty slice",
+			args:     []string{},
+			envVars:  map[string]string{},
+			expected: []string{},
+		},
+		{
+			name:     "-e followed by empty string arg is not expanded",
+			args:     []string{"run", "-e", "", "image"},
+			envVars:  map[string]string{},
+			expected: []string{"run", "-e", "", "image"},
+		},
+		{
+			name:     "value with equals sign in env var value",
+			args:     []string{"run", "-e", "KEY_WITH_EQUALS", "image"},
+			envVars:  map[string]string{"KEY_WITH_EQUALS": "a=b=c"},
+			expected: []string{"run", "-e", "KEY_WITH_EQUALS=a=b=c", "image"},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Set up environment variables for test
 			for k, v := range tt.envVars {
-				os.Setenv(k, v)
+				require.NoError(t, os.Setenv(k, v))
 			}
-			// Clean up after test
 			t.Cleanup(func() {
 				for k := range tt.envVars {
 					os.Unsetenv(k)
@@ -76,16 +101,7 @@ func TestExpandEnvArgs(t *testing.T) {
 			})
 
 			result := ExpandEnvArgs(tt.args)
-
-			if len(result) != len(tt.expected) {
-				t.Fatalf("Expected %d args, got %d: %v", len(tt.expected), len(result), result)
-			}
-
-			for i := range result {
-				if result[i] != tt.expected[i] {
-					t.Errorf("Arg %d: expected '%s', got '%s'", i, tt.expected[i], result[i])
-				}
-			}
+			assert.Equal(t, tt.expected, result)
 		})
 	}
 }
