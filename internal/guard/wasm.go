@@ -314,6 +314,93 @@ func normalizePolicyPayload(policy interface{}) (interface{}, error) {
 	return policy, nil
 }
 
+func buildStrictLabelAgentPayload(policy interface{}) (map[string]interface{}, error) {
+	if policy == nil {
+		return nil, fmt.Errorf("Invalid guard policy transport shape. Expected {\"allowonly\":{\"repos\":...,\"integrity\":...}}.")
+	}
+
+	if policyMap, ok := policy.(map[string]interface{}); ok {
+		if nested, hasPolicy := policyMap["policy"]; hasPolicy {
+			if nestedMap, nestedOK := nested.(map[string]interface{}); nestedOK {
+				if _, hasAllowOnly := nestedMap["allowonly"]; hasAllowOnly {
+					return nil, fmt.Errorf("Gateway policy adapter is outdated: remove legacy envelope key policy before calling label_agent.")
+				}
+			}
+		}
+	}
+
+	policyJSON, err := json.Marshal(policy)
+	if err != nil {
+		return nil, fmt.Errorf("failed to serialize label_agent policy: %w", err)
+	}
+
+	var payload map[string]interface{}
+	if err := json.Unmarshal(policyJSON, &payload); err != nil {
+		return nil, fmt.Errorf("failed to decode label_agent policy payload: %w", err)
+	}
+
+	if _, hasPolicyEnvelope := payload["policy"]; hasPolicyEnvelope {
+		return nil, fmt.Errorf("Gateway policy adapter is outdated: remove legacy envelope key policy before calling label_agent.")
+	}
+
+	allowOnlyRaw, ok := payload["allowonly"]
+	if !ok {
+		return nil, fmt.Errorf("label_agent policy must use top-level allowonly object (received policy.allowonly).")
+	}
+
+	if len(payload) != 1 {
+		return nil, fmt.Errorf("Invalid guard policy transport shape. Expected {\"allowonly\":{\"repos\":...,\"integrity\":...}}.")
+	}
+
+	allowOnly, ok := allowOnlyRaw.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("Invalid guard policy transport shape. Expected {\"allowonly\":{\"repos\":...,\"integrity\":...}}.")
+	}
+
+	reposRaw, hasRepos := allowOnly["repos"]
+	integrityRaw, hasIntegrity := allowOnly["integrity"]
+	if !hasRepos || !hasIntegrity || len(allowOnly) != 2 {
+		return nil, fmt.Errorf("Invalid guard policy transport shape. Expected {\"allowonly\":{\"repos\":...,\"integrity\":...}}.")
+	}
+
+	if !isValidAllowOnlyRepos(reposRaw) {
+		return nil, fmt.Errorf("Invalid repos value: expected all, public, or non-empty array of scoped strings.")
+	}
+
+	integrity, ok := integrityRaw.(string)
+	if !ok {
+		return nil, fmt.Errorf("Invalid integrity value: expected one of none|reader|writer|merged.")
+	}
+
+	switch strings.ToLower(strings.TrimSpace(integrity)) {
+	case "none", "reader", "writer", "merged":
+	default:
+		return nil, fmt.Errorf("Invalid integrity value: expected one of none|reader|writer|merged.")
+	}
+
+	return payload, nil
+}
+
+func isValidAllowOnlyRepos(repos interface{}) bool {
+	switch value := repos.(type) {
+	case string:
+		trimmed := strings.TrimSpace(strings.ToLower(value))
+		return trimmed == "all" || trimmed == "public"
+	case []interface{}:
+		if len(value) == 0 {
+			return false
+		}
+		for _, entry := range value {
+			if _, ok := entry.(string); !ok {
+				return false
+			}
+		}
+		return true
+	default:
+		return false
+	}
+}
+
 func parseLabelAgentResponse(resultJSON []byte) (*LabelAgentResult, error) {
 	var raw map[string]interface{}
 	if err := json.Unmarshal(resultJSON, &raw); err != nil {
@@ -371,12 +458,11 @@ func (g *WasmGuard) LabelAgent(ctx context.Context, policy interface{}, backend 
 	if err != nil {
 		return nil, err
 	}
+	_ = caps
 
-	input := map[string]interface{}{
-		"policy": normalizedPolicy,
-	}
-	if caps != nil {
-		input["capabilities"] = caps
+	input, err := buildStrictLabelAgentPayload(normalizedPolicy)
+	if err != nil {
+		return nil, err
 	}
 
 	inputJSON, err := json.Marshal(input)

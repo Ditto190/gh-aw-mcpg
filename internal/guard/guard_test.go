@@ -669,6 +669,74 @@ func TestNormalizePolicyPayload(t *testing.T) {
 	})
 }
 
+func TestBuildStrictLabelAgentPayload(t *testing.T) {
+	t.Run("accepts top-level allowonly payload", func(t *testing.T) {
+		input := map[string]interface{}{
+			"allowonly": map[string]interface{}{
+				"repos":     "public",
+				"integrity": "none",
+			},
+		}
+
+		payload, err := buildStrictLabelAgentPayload(input)
+		require.NoError(t, err)
+		require.NotNil(t, payload)
+		assert.Contains(t, payload, "allowonly")
+		assert.NotContains(t, payload, "policy")
+	})
+
+	t.Run("rejects legacy policy envelope", func(t *testing.T) {
+		input := map[string]interface{}{
+			"policy": map[string]interface{}{
+				"allowonly": map[string]interface{}{
+					"repos":     "public",
+					"integrity": "none",
+				},
+			},
+		}
+
+		_, err := buildStrictLabelAgentPayload(input)
+		require.Error(t, err)
+		assert.Equal(t, "Gateway policy adapter is outdated: remove legacy envelope key policy before calling label_agent.", err.Error())
+	})
+
+	t.Run("rejects missing top-level allowonly", func(t *testing.T) {
+		input := map[string]interface{}{
+			"something_else": map[string]interface{}{},
+		}
+
+		_, err := buildStrictLabelAgentPayload(input)
+		require.Error(t, err)
+		assert.Equal(t, "label_agent policy must use top-level allowonly object (received policy.allowonly).", err.Error())
+	})
+
+	t.Run("rejects invalid repos value", func(t *testing.T) {
+		input := map[string]interface{}{
+			"allowonly": map[string]interface{}{
+				"repos":     []interface{}{},
+				"integrity": "none",
+			},
+		}
+
+		_, err := buildStrictLabelAgentPayload(input)
+		require.Error(t, err)
+		assert.Equal(t, "Invalid repos value: expected all, public, or non-empty array of scoped strings.", err.Error())
+	})
+
+	t.Run("rejects invalid integrity value", func(t *testing.T) {
+		input := map[string]interface{}{
+			"allowonly": map[string]interface{}{
+				"repos":     "all",
+				"integrity": "ReaderContrib",
+			},
+		}
+
+		_, err := buildStrictLabelAgentPayload(input)
+		require.Error(t, err)
+		assert.Equal(t, "Invalid integrity value: expected one of none|reader|writer|merged.", err.Error())
+	})
+}
+
 func TestParseLabelAgentResponse(t *testing.T) {
 	t.Run("success payload parses", func(t *testing.T) {
 		payload := []byte(`{"agent":{"secrecy":[],"integrity":[]},"difc_mode":"strict","normalized_policy":{"scope_kind":"public","integrity":"none"}}`)
