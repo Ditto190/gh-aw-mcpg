@@ -1038,6 +1038,23 @@ func toDIFCTags(values []string) []difc.Tag {
 	return tags
 }
 
+func normalizeScopeKind(policy map[string]interface{}) map[string]interface{} {
+	if policy == nil {
+		return nil
+	}
+
+	normalized := make(map[string]interface{}, len(policy))
+	for key, value := range policy {
+		normalized[key] = value
+	}
+
+	if scopeKind, ok := normalized["scope_kind"].(string); ok {
+		normalized["scope_kind"] = strings.ToLower(strings.TrimSpace(scopeKind))
+	}
+
+	return normalized
+}
+
 func (us *UnifiedServer) resolveGuardPolicy(serverID string) (*config.GuardPolicy, string, error) {
 	if us.cfg != nil && us.cfg.GuardPolicy != nil {
 		if err := config.ValidateGuardPolicy(us.cfg.GuardPolicy); err != nil {
@@ -1131,6 +1148,7 @@ func (us *UnifiedServer) ensureGuardInitialized(
 
 	us.sessionMu.Lock()
 	session = us.sessions[sessionID]
+	normalizedPolicy := normalizeScopeKind(labelAgentResult.NormalizedPolicy)
 	if session == nil {
 		session = NewSession(sessionID, "")
 		us.sessions[sessionID] = session
@@ -1143,12 +1161,12 @@ func (us *UnifiedServer) ensureGuardInitialized(
 		PolicyHash:       policyHash,
 		PolicySource:     source,
 		DIFCMode:         mode,
-		NormalizedPolicy: labelAgentResult.NormalizedPolicy,
+		NormalizedPolicy: normalizedPolicy,
 	}
 	us.sessionMu.Unlock()
 
 	log.Printf("[DIFC] Guard policy initialized: server=%s, session=%s, guard_policy.source=%s, difc_mode=%s, guard_policy.normalized=%v",
-		serverID, sessionID, source, mode, labelAgentResult.NormalizedPolicy)
+		serverID, sessionID, source, mode, normalizedPolicy)
 
 	return mode, nil
 }

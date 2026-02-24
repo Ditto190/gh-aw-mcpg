@@ -33,7 +33,7 @@ func (g *labelAgentTestGuard) LabelAgent(ctx context.Context, policy interface{}
 		},
 		DIFCMode: "filter",
 		NormalizedPolicy: map[string]interface{}{
-			"scope_kind": "public",
+			"scope_kind": "Composite",
 			"integrity":  "none",
 		},
 	}, nil
@@ -174,4 +174,5 @@ func TestCallBackendTool_LabelAgentInitializationCached(t *testing.T) {
 	require.NotNil(session)
 	require.NotNil(session.GuardInit["test-backend"])
 	assert.Equal(difc.EnforcementFilter, session.GuardInit["test-backend"].DIFCMode)
+	assert.Equal("composite", session.GuardInit["test-backend"].NormalizedPolicy["scope_kind"])
 }
