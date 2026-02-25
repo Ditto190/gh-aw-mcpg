@@ -151,3 +151,138 @@ func TestSchemaNormalization_PreservesOriginal(t *testing.T) {
 	_, originalHasProperties := original["properties"]
 	assert.False(t, originalHasProperties, "Original schema should not have properties")
 }
+
+// TestNormalizeInputSchema tests all branches of the NormalizeInputSchema function.
+func TestNormalizeInputSchema(t *testing.T) {
+	tests := []struct {
+		name     string
+		schema   map[string]interface{}
+		expected map[string]interface{}
+	}{
+		{
+			name:   "nil schema returns default empty object schema",
+			schema: nil,
+			expected: map[string]interface{}{
+				"type":       "object",
+				"properties": map[string]interface{}{},
+			},
+		},
+		{
+			name:   "empty schema (no type, no properties) returns empty object schema",
+			schema: map[string]interface{}{},
+			expected: map[string]interface{}{
+				"type":       "object",
+				"properties": map[string]interface{}{},
+			},
+		},
+		{
+			name: "schema without type but with properties adds object type",
+			schema: map[string]interface{}{
+				"properties": map[string]interface{}{
+					"query": map[string]interface{}{"type": "string"},
+				},
+			},
+			expected: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"query": map[string]interface{}{"type": "string"},
+				},
+			},
+		},
+		{
+			name: "string type schema returned as-is",
+			schema: map[string]interface{}{
+				"type": "string",
+			},
+			expected: map[string]interface{}{
+				"type": "string",
+			},
+		},
+		{
+			name: "array type schema returned as-is",
+			schema: map[string]interface{}{
+				"type":  "array",
+				"items": map[string]interface{}{"type": "string"},
+			},
+			expected: map[string]interface{}{
+				"type":  "array",
+				"items": map[string]interface{}{"type": "string"},
+			},
+		},
+		{
+			name: "non-string type value returned as-is",
+			schema: map[string]interface{}{
+				"type": 42,
+			},
+			expected: map[string]interface{}{
+				"type": 42,
+			},
+		},
+		{
+			name: "object with properties and additionalProperties returned as-is",
+			schema: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"name": map[string]interface{}{"type": "string"},
+				},
+				"additionalProperties": true,
+			},
+			expected: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"name": map[string]interface{}{"type": "string"},
+				},
+				"additionalProperties": true,
+			},
+		},
+		{
+			name: "object with only additionalProperties returned as-is",
+			schema: map[string]interface{}{
+				"type":                 "object",
+				"additionalProperties": false,
+			},
+			expected: map[string]interface{}{
+				"type":                 "object",
+				"additionalProperties": false,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := mcp.NormalizeInputSchema(tt.schema, "test-tool")
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+// TestNormalizeInputSchema_PreservesOriginalForAllMutatingBranches verifies that
+// the normalization never modifies the original schema for any code path that
+// creates a copy (no-type-with-properties and object-without-properties branches).
+func TestNormalizeInputSchema_PreservesOriginalForAllMutatingBranches(t *testing.T) {
+	t.Run("no-type schema with properties is not mutated", func(t *testing.T) {
+		original := map[string]interface{}{
+			"properties": map[string]interface{}{
+				"query": map[string]interface{}{"type": "string"},
+			},
+		}
+		_, hadType := original["type"]
+
+		mcp.NormalizeInputSchema(original, "test-tool")
+
+		_, nowHasType := original["type"]
+		assert.Equal(t, hadType, nowHasType, "Original schema should not gain a type field")
+	})
+
+	t.Run("object schema without properties is not mutated", func(t *testing.T) {
+		original := map[string]interface{}{
+			"type": "object",
+		}
+		_, hadProperties := original["properties"]
+
+		mcp.NormalizeInputSchema(original, "test-tool")
+
+		_, nowHasProperties := original["properties"]
+		assert.Equal(t, hadProperties, nowHasProperties, "Original schema should not gain a properties field")
+	})
+}
