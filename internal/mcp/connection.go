@@ -13,112 +13,16 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/github/gh-aw-mcpg/internal/dockerutil"
 	"github.com/github/gh-aw-mcpg/internal/logger"
 	"github.com/github/gh-aw-mcpg/internal/logger/sanitize"
-	"github.com/github/gh-aw-mcpg/internal/strutil"
-	"github.com/github/gh-aw-mcpg/internal/version"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 var logConn = logger.New("mcp:connection")
 
-// isHTTPConnectionError checks if an error is a network connection error
-// This helper reduces code duplication for checking common connection error patterns.
-// Note: Uses string matching which is fragile but consistent with existing patterns in the codebase.
-// TODO: Consider using errors.Is() or type assertions (*net.OpError) for more robust error classification.
-func isHTTPConnectionError(err error) bool {
-	if err == nil {
-		return false
-	}
-	errMsg := err.Error()
-	return strings.Contains(errMsg, "connection refused") ||
-		strings.Contains(errMsg, "no such host") ||
-		strings.Contains(errMsg, "network is unreachable")
-}
-
-// parseSSEResponse extracts JSON data from SSE-formatted response
-// SSE format: "event: message\ndata: {json}\n\n"
-func parseSSEResponse(body []byte) ([]byte, error) {
-	lines := strings.Split(string(body), "\n")
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "data: ") {
-			jsonData := strings.TrimPrefix(line, "data: ")
-			return []byte(jsonData), nil
-		}
-	}
-	return nil, fmt.Errorf("no data field found in SSE response")
-}
-
-// parseJSONRPCResponseWithSSE parses a JSON-RPC response that might be in SSE format.
-// This helper consolidates duplicate response parsing logic that appears in multiple places.
-//
-// The function tries to parse the body as JSON first. If that fails, it attempts to extract
-// JSON from SSE format (event: message\ndata: {...}). This handles backends that return
-// responses in Server-Sent Events format.
-//
-// Parameters:
-//   - body: Raw response body bytes
-//   - statusCode: HTTP status code (used for enhanced error messages)
-//   - contextDesc: Description of the calling context (e.g., "initialize response", "JSON-RPC response")
-//
-// Returns:
-//   - *Response: Parsed JSON-RPC response on success
-//   - error: Detailed parsing error with body preview on failure
-func parseJSONRPCResponseWithSSE(body []byte, statusCode int, contextDesc string) (*Response, error) {
-	var rpcResponse Response
-	httpErrorResponse := func() *Response {
-		return &Response{
-			JSONRPC: "2.0",
-			Error: &ResponseError{
-				Code:    -32603, // Internal error
-				Message: fmt.Sprintf("HTTP %d: %s", statusCode, http.StatusText(statusCode)),
-				Data:    json.RawMessage(body),
-			},
-		}
-	}
-
-	// Try parsing as standard JSON first
-	if err := json.Unmarshal(body, &rpcResponse); err != nil {
-		// Try parsing as SSE format
-		logConn.Printf("Initial JSON parse failed, attempting SSE format parsing")
-		sseData, sseErr := parseSSEResponse(body)
-		if sseErr != nil {
-			// If we have a non-OK HTTP status and can't parse the response,
-			// construct a JSON-RPC error response with HTTP error details
-			if statusCode != http.StatusOK {
-				logConn.Printf("HTTP error status=%d, body cannot be parsed as JSON-RPC", statusCode)
-				return httpErrorResponse(), nil
-			}
-			// Include the response body to help debug what the server actually returned
-			bodyPreview := strutil.TruncateWithSuffix(string(body), 500, "... (truncated)")
-			return nil, fmt.Errorf("failed to parse %s (received non-JSON or malformed response): %w\nResponse body: %s", contextDesc, sseErr, bodyPreview)
-		}
-
-		// Successfully extracted JSON from SSE, now parse it
-		if err := json.Unmarshal(sseData, &rpcResponse); err != nil {
-			// If we have a non-OK HTTP status and can't parse the SSE data,
-			// construct a JSON-RPC error response with HTTP error details
-			if statusCode != http.StatusOK {
-				logConn.Printf("HTTP error status=%d, SSE data cannot be parsed as JSON-RPC", statusCode)
-				return httpErrorResponse(), nil
-			}
-			return nil, fmt.Errorf("failed to parse JSON data extracted from SSE response: %w\nJSON data: %s", err, string(sseData))
-		}
-		logConn.Printf("Successfully parsed SSE-formatted response")
-	}
-
-	if statusCode != http.StatusOK {
-		logConn.Printf("HTTP error status=%d, returning synthetic JSON-RPC error response", statusCode)
-		return httpErrorResponse(), nil
-	}
-
-	return &rpcResponse, nil
-}
 // ContextKey for session ID
 type ContextKey string
 
@@ -194,20 +98,6 @@ func isDIFCSinkServerID(serverID string) bool {
 	return false
 }
 
-// requestIDCounter is used to generate unique request IDs for HTTP requests
-var requestIDCounter uint64
-
-// HTTPTransportType represents the type of HTTP transport being used
-type HTTPTransportType string
-
-const (
-	// HTTPTransportStreamable uses the streamable HTTP transport (2025-03-26 spec)
-	HTTPTransportStreamable HTTPTransportType = "streamable"
-	// HTTPTransportSSE uses the SSE transport (2024-11-05 spec)
-	HTTPTransportSSE HTTPTransportType = "sse"
-	// HTTPTransportPlainJSON uses plain JSON-RPC 2.0 over HTTP POST (non-standard)
-	HTTPTransportPlainJSON HTTPTransportType = "plain-json"
-)
 // Connection represents a connection to an MCP server using the official SDK
 type Connection struct {
 	client   *sdk.Client

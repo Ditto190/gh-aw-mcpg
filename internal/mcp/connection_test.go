@@ -33,6 +33,11 @@ func TestHTTPRequest_SessionIDHeader(t *testing.T) {
 			"id":      1,
 			"result": map[string]interface{}{
 				"tools": []map[string]interface{}{},
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+	}))
 	defer testServer.Close()
 
 	// Create an HTTP connection
@@ -246,10 +251,7 @@ func TestExpandDockerEnvArgs(t *testing.T) {
 		})
 	}
 }
-<<<<<<< HEAD
-=======
 
->>>>>>> 7616a44 (Resolve rebase conflicts and restore passing test suite)
 // TestHTTPRequest_ErrorResponses tests handling of various error conditions
 func TestHTTPRequest_ErrorResponses(t *testing.T) {
 	tests := []struct {
