@@ -316,6 +316,7 @@ func (c *Connection) SendRequestWithServerID(ctx context.Context, method string,
 // callSDKMethod calls the appropriate SDK method based on the method name
 // This centralizes the method dispatch logic used by both HTTP SDK transports and stdio
 func (c *Connection) callSDKMethod(method string, params interface{}) (*Response, error) {
+	logConn.Printf("Dispatching SDK method: %s, serverID=%s", method, c.serverID)
 	switch method {
 	case "tools/list":
 		return c.listTools()
@@ -330,6 +331,7 @@ func (c *Connection) callSDKMethod(method string, params interface{}) (*Response
 	case "prompts/get":
 		return c.getPrompt(params)
 	default:
+		logConn.Printf("Unsupported method: %s", method)
 		return nil, fmt.Errorf("unsupported method: %s", method)
 	}
 }
@@ -375,6 +377,7 @@ func unmarshalParams(params interface{}, target interface{}) error {
 }
 
 func (c *Connection) listTools() (*Response, error) {
+	logConn.Printf("listTools: requesting tool list from backend serverID=%s", c.serverID)
 	if err := c.requireSession(); err != nil {
 		return nil, err
 	}
@@ -383,6 +386,7 @@ func (c *Connection) listTools() (*Response, error) {
 		return nil, err
 	}
 
+	logConn.Printf("listTools: received %d tools from serverID=%s", len(result.Tools), c.serverID)
 	return marshalToResponse(result)
 }
 
@@ -415,6 +419,7 @@ func (c *Connection) callTool(params interface{}) (*Response, error) {
 }
 
 func (c *Connection) listResources() (*Response, error) {
+	logConn.Printf("listResources: requesting resource list from backend serverID=%s", c.serverID)
 	if err := c.requireSession(); err != nil {
 		return nil, err
 	}
@@ -423,6 +428,7 @@ func (c *Connection) listResources() (*Response, error) {
 		return nil, err
 	}
 
+	logConn.Printf("listResources: received %d resources from serverID=%s", len(result.Resources), c.serverID)
 	return marshalToResponse(result)
 }
 
@@ -437,6 +443,7 @@ func (c *Connection) readResource(params interface{}) (*Response, error) {
 		return nil, err
 	}
 
+	logConn.Printf("readResource: reading resource uri=%s from serverID=%s", readParams.URI, c.serverID)
 	result, err := c.session.ReadResource(c.ctx, &sdk.ReadResourceParams{
 		URI: readParams.URI,
 	})
@@ -448,6 +455,7 @@ func (c *Connection) readResource(params interface{}) (*Response, error) {
 }
 
 func (c *Connection) listPrompts() (*Response, error) {
+	logConn.Printf("listPrompts: requesting prompt list from backend serverID=%s", c.serverID)
 	if err := c.requireSession(); err != nil {
 		return nil, err
 	}
@@ -456,6 +464,7 @@ func (c *Connection) listPrompts() (*Response, error) {
 		return nil, err
 	}
 
+	logConn.Printf("listPrompts: received %d prompts from serverID=%s", len(result.Prompts), c.serverID)
 	return marshalToResponse(result)
 }
 
@@ -471,6 +480,7 @@ func (c *Connection) getPrompt(params interface{}) (*Response, error) {
 		return nil, err
 	}
 
+	logConn.Printf("getPrompt: getting prompt name=%s from serverID=%s", getParams.Name, c.serverID)
 	result, err := c.session.GetPrompt(c.ctx, &sdk.GetPromptParams{
 		Name:      getParams.Name,
 		Arguments: getParams.Arguments,
@@ -484,6 +494,7 @@ func (c *Connection) getPrompt(params interface{}) (*Response, error) {
 
 // Close closes the connection
 func (c *Connection) Close() error {
+	logConn.Printf("Closing connection: serverID=%s, isHTTP=%v", c.serverID, c.isHTTP)
 	c.cancel()
 	if c.session != nil {
 		return c.session.Close()
