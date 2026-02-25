@@ -321,11 +321,23 @@ func validateCustomSchemas(customSchemas map[string]interface{}) error {
 
 	logValidation.Printf("Validating customSchemas: count=%d", len(customSchemas))
 
-	for typeName := range customSchemas {
+	for typeName, schemaValue := range customSchemas {
 		// Check for reserved type names
 		if typeName == "stdio" || typeName == "http" {
 			logValidation.Printf("Reserved type name in customSchemas: %s", typeName)
 			return rules.UnsupportedType("customSchemas", typeName, fmt.Sprintf("customSchemas.%s", typeName), "Custom type name '"+typeName+"' conflicts with reserved type. Use a different name for your custom type (reserved types: stdio, http)")
+		}
+		// Enforce HTTPS-only for non-empty schema URLs (spec section 4.1.4)
+		if schemaURL, ok := schemaValue.(string); ok && schemaURL != "" {
+			if !strings.HasPrefix(schemaURL, "https://") {
+				logValidation.Printf("Non-HTTPS schema URL in customSchemas: typeName=%s, url=%s", typeName, schemaURL)
+				return &rules.ValidationError{
+					Field:      "customSchemas." + typeName,
+					Message:    fmt.Sprintf("custom schema URL must use HTTPS, got '%s'", schemaURL),
+					JSONPath:   "customSchemas." + typeName,
+					Suggestion: "Use an HTTPS URL for the custom schema (e.g., 'https://example.com/schema.json')",
+				}
+			}
 		}
 	}
 

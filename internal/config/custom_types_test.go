@@ -276,6 +276,52 @@ func TestTCFG013_RejectReservedTypeNames(t *testing.T) {
 	}
 }
 
+// T-CFG-013b: Reject non-HTTPS custom schema URLs (spec section 4.1.4)
+func TestTCFG013b_RejectNonHTTPSSchemaURLs(t *testing.T) {
+	tests := []struct {
+		name      string
+		schemaURL string
+	}{
+		{"http_url", "http://example.com/schema.json"},
+		{"ftp_url", "ftp://example.com/schema.json"},
+		{"no_scheme", "example.com/schema.json"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			customSchemas := map[string]interface{}{
+				"mytype": tt.schemaURL,
+			}
+
+			err := validateCustomSchemas(customSchemas)
+			assert.Error(t, err, "Non-HTTPS schema URL %q should be rejected", tt.schemaURL)
+			assert.Contains(t, err.Error(), "must use HTTPS")
+		})
+	}
+}
+
+// T-CFG-013c: Accept valid HTTPS custom schema URLs (spec section 4.1.4)
+func TestTCFG013c_AcceptHTTPSSchemaURLs(t *testing.T) {
+	tests := []struct {
+		name      string
+		schemaURL string
+	}{
+		{"https_url", "https://example.com/schema.json"},
+		{"empty_url", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			customSchemas := map[string]interface{}{
+				"mytype": tt.schemaURL,
+			}
+
+			err := validateCustomSchemas(customSchemas)
+			assert.NoError(t, err, "Schema URL %q should be accepted", tt.schemaURL)
+		})
+	}
+}
+
 // T-CFG-014: Custom schema URL fetch and cache
 func TestTCFG014_SchemaURLFetchAndCache(t *testing.T) {
 	t.Run("empty_string_skips_validation", func(t *testing.T) {
