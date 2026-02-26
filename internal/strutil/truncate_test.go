@@ -100,6 +100,43 @@ func TestTruncateWithSuffix(t *testing.T) {
 			suffix:   "...",
 			expected: "hi",
 		},
+		{
+			name:     "string equal to max",
+			input:    "hello",
+			maxLen:   5,
+			suffix:   "...",
+			expected: "hello",
+		},
+		{
+			name:     "empty string",
+			input:    "",
+			maxLen:   10,
+			suffix:   "...",
+			expected: "",
+		},
+		{
+			// Unlike Truncate(s, 0) which returns "..." for non-empty strings,
+			// TruncateWithSuffix returns the original string unchanged when maxLen <= 0.
+			name:     "zero maxLen with non-empty string returns original",
+			input:    "hello",
+			maxLen:   0,
+			suffix:   "...",
+			expected: "hello",
+		},
+		{
+			name:     "negative maxLen returns original",
+			input:    "hello",
+			maxLen:   -1,
+			suffix:   "...",
+			expected: "hello",
+		},
+		{
+			name:     "very long string",
+			input:    "this is a very long string that should be truncated to a reasonable length",
+			maxLen:   20,
+			suffix:   " (truncated)",
+			expected: "this is a very long  (truncated)",
+		},
 	}
 
 	for _, tt := range tests {
