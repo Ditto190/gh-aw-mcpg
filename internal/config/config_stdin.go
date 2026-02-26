@@ -8,7 +8,11 @@ import (
 	"io"
 	"log"
 	"os"
+
+	"github.com/github/gh-aw-mcpg/internal/logger"
 )
+
+var logStdin = logger.New("config:config_stdin")
 
 // StdinConfig represents the JSON configuration format read from stdin.
 type StdinConfig struct {
@@ -192,6 +196,7 @@ func LoadFromStdin() (*Config, error) {
 
 // convertStdinConfig converts StdinConfig to internal Config format.
 func convertStdinConfig(stdinCfg *StdinConfig) (*Config, error) {
+	logStdin.Printf("Converting stdin config: %d servers", len(stdinCfg.MCPServers))
 	cfg := &Config{
 		Servers: make(map[string]*ServerConfig),
 	}
@@ -209,6 +214,7 @@ func convertStdinConfig(stdinCfg *StdinConfig) (*Config, error) {
 			cfg.Gateway.PayloadDir = stdinCfg.Gateway.PayloadDir
 		}
 	} else {
+		logStdin.Print("No gateway config in stdin, applying defaults")
 		cfg.Gateway = &GatewayConfig{}
 		applyGatewayDefaults(cfg.Gateway)
 	}
@@ -265,6 +271,8 @@ func convertStdinServerConfig(name string, server *StdinServerConfig, customSche
 		serverType = "stdio"
 	}
 
+	logStdin.Printf("Converting server %q: type=%s", name, serverType)
+
 	// Handle HTTP servers
 	if serverType == "http" {
 		logConfig.Printf("Configured HTTP MCP server: name=%s, url=%s", name, server.URL)
@@ -297,6 +305,7 @@ func buildStdioServerConfig(name string, server *StdinServerConfig) *ServerConfi
 
 	// Add entrypoint override if specified
 	if server.Entrypoint != "" {
+		logStdin.Printf("Server %q: using custom entrypoint %q", name, server.Entrypoint)
 		args = append(args, "--entrypoint", server.Entrypoint)
 	}
 
@@ -378,6 +387,7 @@ func normalizeLocalType(data []byte) ([]byte, error) {
 
 	// If we modified anything, re-marshal the data
 	if modified {
+		logStdin.Print("Normalized 'local' server type to 'stdio' for backward compatibility")
 		return json.Marshal(rawConfig)
 	}
 
