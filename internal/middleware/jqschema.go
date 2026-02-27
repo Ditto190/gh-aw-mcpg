@@ -176,7 +176,8 @@ func applyJqSchema(ctx context.Context, jsonData interface{}) (interface{}, erro
 
 // savePayload saves the payload to disk and returns the file path
 // The file is saved to {baseDir}/{sessionID}/{queryID}/payload.json
-func savePayload(baseDir, sessionID, queryID string, payload []byte) (string, error) {
+// The returned path uses pathPrefix if provided, otherwise returns the actual filesystem path
+func savePayload(baseDir, pathPrefix, sessionID, queryID string, payload []byte) (string, error) {
 	// Create directory structure: {baseDir}/{sessionID}/{queryID}
 	dir := filepath.Join(baseDir, sessionID, queryID)
 
@@ -214,7 +215,19 @@ func savePayload(baseDir, sessionID, queryID string, payload []byte) (string, er
 			filePath, stat.Size(), stat.Mode())
 	}
 
-	return filePath, nil
+	// If pathPrefix is provided, use it to remap the path for the client
+	// This allows the gateway to save files at one path (e.g., /tmp/jq-payloads)
+	// while returning a different path to clients (e.g., /workspace/payloads)
+	returnPath := filePath
+	if pathPrefix != "" {
+		// Replace baseDir with pathPrefix in the file path
+		relPath := filepath.Join(sessionID, queryID, "payload.json")
+		returnPath = filepath.Join(pathPrefix, relPath)
+		logger.LogInfo("payload", "Remapped payload path for client: filesystem=%s, clientPath=%s, pathPrefix=%s",
+			filePath, returnPath, pathPrefix)
+	}
+
+	return returnPath, nil
 }
 
 // WrapToolHandler wraps a tool handler with jqschema middleware
@@ -224,10 +237,12 @@ func savePayload(baseDir, sessionID, queryID string, payload []byte) (string, er
 // 3. If payload size > sizeThreshold: saves to {baseDir}/{sessionID}/{queryID}/payload.json and returns metadata
 // 4. If payload size <= sizeThreshold: returns original response directly (no file storage)
 // 5. For large payloads: returns first PayloadPreviewSize chars of payload + jq inferred schema
+// 6. Uses pathPrefix to remap returned payloadPath for clients (if configured)
 func WrapToolHandler(
 	handler func(context.Context, *sdk.CallToolRequest, interface{}) (*sdk.CallToolResult, interface{}, error),
 	toolName string,
 	baseDir string,
+	pathPrefix string,
 	sizeThreshold int,
 	getSessionID func(context.Context) string,
 ) func(context.Context, *sdk.CallToolRequest, interface{}) (*sdk.CallToolResult, interface{}, error) {
@@ -299,7 +314,7 @@ func WrapToolHandler(
 		logMiddleware.Printf("Payload exceeds threshold: tool=%s, queryID=%s, size=%d bytes, threshold=%d bytes, saving to disk",
 			toolName, queryID, payloadSize, sizeThreshold)
 
-		filePath, saveErr := savePayload(baseDir, sessionID, queryID, payloadJSON)
+		filePath, saveErr := savePayload(baseDir, pathPrefix, sessionID, queryID, payloadJSON)
 		if saveErr != nil {
 			logMiddleware.Printf("Failed to save payload: tool=%s, queryID=%s, sessionID=%s, error=%v", toolName, queryID, sessionID, saveErr)
 			logger.LogError("payload", "Failed to save payload to filesystem: tool=%s, queryID=%s, session=%s, error=%v",

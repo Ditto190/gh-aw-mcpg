@@ -78,9 +78,16 @@ type GatewayConfig struct {
 	// PayloadDir is the directory for storing large payloads
 	PayloadDir string `toml:"payload_dir" json:"payload_dir,omitempty"`
 
+	// PayloadPathPrefix is the path prefix to use when returning payloadPath to clients.
+	// This allows remapping the host filesystem path to a path accessible in the client/agent container.
+	// If empty, the actual filesystem path (PayloadDir) is returned.
+	// Example: If PayloadDir="/tmp/jq-payloads" and PayloadPathPrefix="/workspace/payloads",
+	// then payloadPath will be "/workspace/payloads/{sessionID}/{queryID}/payload.json"
+	PayloadPathPrefix string `toml:"payload_path_prefix" json:"payload_path_prefix,omitempty"`
+
 	// PayloadSizeThreshold is the size threshold (in bytes) for storing payloads to disk.
 	// Payloads larger than this threshold are stored to disk, smaller ones are returned inline.
-	// Default: 10240 bytes (10KB)
+	// Default: 524288 bytes (512KB)
 	PayloadSizeThreshold int `toml:"payload_size_threshold" json:"payload_size_threshold,omitempty"`
 }
 

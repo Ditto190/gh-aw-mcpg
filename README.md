@@ -220,11 +220,18 @@ See **[Configuration Specification](https://github.com/github/gh-aw/blob/main/do
 
 **Configuration Alternatives**:
 - **`payloadSizeThreshold`** is not supported in JSON stdin format. Use:
-  - CLI flag: `--payload-size-threshold <bytes>` (default: 10240)
+  - CLI flag: `--payload-size-threshold <bytes>` (default: 524288)
   - Environment variable: `MCP_GATEWAY_PAYLOAD_SIZE_THRESHOLD=<bytes>`
   - TOML config file: `payload_size_threshold = <bytes>` in `[gateway]` section
   - Payloads **larger** than this threshold are stored to disk and return metadata
   - Payloads **smaller than or equal** to this threshold are returned inline
+- **`payloadPathPrefix`** is not supported in JSON stdin format. Use:
+  - CLI flag: `--payload-path-prefix <path>` (default: empty - use actual filesystem path)
+  - Environment variable: `MCP_GATEWAY_PAYLOAD_PATH_PREFIX=<path>`
+  - TOML config file: `payload_path_prefix = "<path>"` in `[gateway]` section
+  - When set, the `payloadPath` returned to clients uses this prefix instead of the actual filesystem path
+  - Example: Gateway saves to `/tmp/jq-payloads/session/query/payload.json`, but returns `/workspace/payloads/session/query/payload.json` to clients if `payload_path_prefix = "/workspace/payloads"`
+  - This allows agents running in containers to access payload files via mounted volumes
 
 **Environment Variable Features**:
 - **Passthrough**: Set value to empty string (`""`) to pass through from host
@@ -297,13 +304,14 @@ Flags:
   -l, --listen string                HTTP server listen address (default "127.0.0.1:3000")
       --log-dir string               Directory for log files (falls back to stdout if directory cannot be created) (default "/tmp/gh-aw/mcp-logs")
       --payload-dir string           Directory for storing large payload files (segmented by session ID) (default "/tmp/jq-payloads")
-      --payload-size-threshold int   Size threshold (in bytes) for storing payloads to disk. Payloads larger than this are stored, smaller ones returned inline (default 10240)
+      --payload-path-prefix string   Path prefix to use when returning payloadPath to clients (allows remapping host paths to client/agent container paths)
+      --payload-size-threshold int   Size threshold (in bytes) for storing payloads to disk. Payloads larger than this are stored, smaller ones returned inline (default 524288)
       --routed                       Run in routed mode (each backend at /mcp/<server>)
-      --sequential-launch   Launch MCP servers sequentially during startup (parallel launch is default)
-      --unified             Run in unified mode (all backends at /mcp)
-      --validate-env        Validate execution environment (Docker, env vars) before starting
-  -v, --verbose count       Increase verbosity level (use -v for info, -vv for debug, -vvv for trace)
-      --version             version for awmg
+      --sequential-launch            Launch MCP servers sequentially during startup (parallel launch is default)
+      --unified                      Run in unified mode (all backends at /mcp)
+      --validate-env                 Validate execution environment (Docker, env vars) before starting
+  -v, --verbose count                Increase verbosity level (use -v for info, -vv for debug, -vvv for trace)
+      --version                      version for awmg
 
 Use "awmg [command] --help" for more information about a command.
 ```
@@ -333,7 +341,8 @@ When running locally (`run.sh`), these variables are optional (warnings shown if
 | `MCP_GATEWAY_API_KEY` | API authentication key | (disabled) |
 | `MCP_GATEWAY_LOG_DIR` | Log file directory (sets default for `--log-dir` flag) | `/tmp/gh-aw/mcp-logs` |
 | `MCP_GATEWAY_PAYLOAD_DIR` | Large payload storage directory (sets default for `--payload-dir` flag) | `/tmp/jq-payloads` |
-| `MCP_GATEWAY_PAYLOAD_SIZE_THRESHOLD` | Size threshold in bytes for payload storage (sets default for `--payload-size-threshold` flag) | `10240` |
+| `MCP_GATEWAY_PAYLOAD_PATH_PREFIX` | Path prefix for remapping payloadPath returned to clients (sets default for `--payload-path-prefix` flag) | (empty - use actual filesystem path) |
+| `MCP_GATEWAY_PAYLOAD_SIZE_THRESHOLD` | Size threshold in bytes for payload storage (sets default for `--payload-size-threshold` flag) | `524288` |
 | `DEBUG` | Enable debug logging with pattern matching (e.g., `*`, `server:*,launcher:*`) | (disabled) |
 | `DEBUG_COLORS` | Control colored debug output (0 to disable, auto-disabled when piping) | Auto-detect |
 

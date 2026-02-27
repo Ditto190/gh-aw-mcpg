@@ -117,7 +117,7 @@ func TestSavePayload(t *testing.T) {
 	queryID := "test-query-456"
 	payload := []byte(`{"test": "data"}`)
 
-	filePath, err := savePayload(baseDir, sessionID, queryID, payload)
+	filePath, err := savePayload(baseDir, "", sessionID, queryID, payload)
 	require.NoError(t, err, "savePayload should not return error")
 
 	// Verify file exists
@@ -131,6 +131,34 @@ func TestSavePayload(t *testing.T) {
 	// Verify directory structure
 	expectedDir := filepath.Join(baseDir, sessionID, queryID)
 	assert.DirExists(t, expectedDir, "Directory should exist")
+}
+
+func TestSavePayloadWithPathPrefix(t *testing.T) {
+	// Create temporary directory for test
+	baseDir := filepath.Join(os.TempDir(), "test-jq-payloads-prefix")
+	defer os.RemoveAll(baseDir)
+
+	sessionID := "test-session-789"
+	queryID := "test-query-abc"
+	payload := []byte(`{"test": "data with prefix"}`)
+	pathPrefix := "/workspace/payloads"
+
+	returnedPath, err := savePayload(baseDir, pathPrefix, sessionID, queryID, payload)
+	require.NoError(t, err, "savePayload should not return error")
+
+	// Verify the actual file was written to the baseDir (filesystem path)
+	actualFilePath := filepath.Join(baseDir, sessionID, queryID, "payload.json")
+	assert.FileExists(t, actualFilePath, "Payload file should exist at actual filesystem path")
+
+	// Verify file content
+	content, err := os.ReadFile(actualFilePath)
+	require.NoError(t, err, "Should be able to read payload file")
+	assert.Equal(t, payload, content, "File content should match payload")
+
+	// Verify the returned path uses the pathPrefix (remapped for client)
+	expectedReturnPath := filepath.Join(pathPrefix, sessionID, queryID, "payload.json")
+	assert.Equal(t, expectedReturnPath, returnedPath, "Returned path should use pathPrefix")
+	assert.NotEqual(t, actualFilePath, returnedPath, "Returned path should differ from actual filesystem path")
 }
 
 func TestWrapToolHandler(t *testing.T) {
@@ -150,7 +178,7 @@ func TestWrapToolHandler(t *testing.T) {
 	}
 
 	// Wrap the handler with size threshold of 10 bytes (payload will exceed this)
-	wrapped := WrapToolHandler(mockHandler, "test_tool", baseDir, 10, testGetSessionID)
+	wrapped := WrapToolHandler(mockHandler, "test_tool", baseDir, "", 10, testGetSessionID)
 
 	// Call the wrapped handler
 	result, data, err := wrapped(context.Background(), &sdk.CallToolRequest{}, map[string]interface{}{})
@@ -199,7 +227,7 @@ func TestWrapToolHandler_ErrorHandling(t *testing.T) {
 			return &sdk.CallToolResult{IsError: true}, nil, assert.AnError
 		}
 
-		wrapped := WrapToolHandler(mockHandler, "test_tool", baseDir, 1024, testGetSessionID)
+		wrapped := WrapToolHandler(mockHandler, "test_tool", baseDir, "", 1024, testGetSessionID)
 		result, data, err := wrapped(context.Background(), &sdk.CallToolRequest{}, map[string]interface{}{})
 
 		assert.Error(t, err, "Should return error from handler")
@@ -212,7 +240,7 @@ func TestWrapToolHandler_ErrorHandling(t *testing.T) {
 			return &sdk.CallToolResult{IsError: false}, nil, nil
 		}
 
-		wrapped := WrapToolHandler(mockHandler, "test_tool", baseDir, 1024, testGetSessionID)
+		wrapped := WrapToolHandler(mockHandler, "test_tool", baseDir, "", 1024, testGetSessionID)
 		result, data, err := wrapped(context.Background(), &sdk.CallToolRequest{}, map[string]interface{}{})
 
 		assert.NoError(t, err, "Should not return error")
@@ -235,7 +263,7 @@ func TestWrapToolHandler_LongPayload(t *testing.T) {
 		return &sdk.CallToolResult{IsError: false}, largeData, nil
 	}
 
-	wrapped := WrapToolHandler(mockHandler, "test_tool", baseDir, 100, testGetSessionID)
+	wrapped := WrapToolHandler(mockHandler, "test_tool", baseDir, "", 100, testGetSessionID)
 	result, _, err := wrapped(context.Background(), &sdk.CallToolRequest{}, map[string]interface{}{})
 
 	require.NoError(t, err, "Should not return error")
@@ -278,12 +306,12 @@ func TestPayloadStorage_SessionIsolation(t *testing.T) {
 	getSession2 := func(ctx context.Context) string { return session2 }
 
 	// Call handler for session 1
-	wrapped1 := WrapToolHandler(mockHandler, "test_tool", baseDir, 5, getSession1)
+	wrapped1 := WrapToolHandler(mockHandler, "test_tool", baseDir, "", 5, getSession1)
 	_, data1, err := wrapped1(context.Background(), &sdk.CallToolRequest{}, map[string]interface{}{})
 	require.NoError(t, err)
 
 	// Call handler for session 2
-	wrapped2 := WrapToolHandler(mockHandler, "test_tool", baseDir, 5, getSession2)
+	wrapped2 := WrapToolHandler(mockHandler, "test_tool", baseDir, "", 5, getSession2)
 	_, data2, err := wrapped2(context.Background(), &sdk.CallToolRequest{}, map[string]interface{}{})
 	require.NoError(t, err)
 
@@ -342,7 +370,7 @@ func TestPayloadStorage_LargePayloadPreserved(t *testing.T) {
 		return &sdk.CallToolResult{IsError: false}, largePayload, nil
 	}
 
-	wrapped := WrapToolHandler(mockHandler, "test_tool", baseDir, 1024, testGetSessionID)
+	wrapped := WrapToolHandler(mockHandler, "test_tool", baseDir, "", 1024, testGetSessionID)
 	_, data, err := wrapped(context.Background(), &sdk.CallToolRequest{}, map[string]interface{}{})
 	require.NoError(t, err)
 
@@ -391,7 +419,7 @@ func TestPayloadStorage_DirectoryStructure(t *testing.T) {
 		return &sdk.CallToolResult{IsError: false}, map[string]interface{}{"test": "data"}, nil
 	}
 
-	wrapped := WrapToolHandler(mockHandler, "test_tool", baseDir, 5, getSessionID)
+	wrapped := WrapToolHandler(mockHandler, "test_tool", baseDir, "", 5, getSessionID)
 	_, data, err := wrapped(context.Background(), &sdk.CallToolRequest{}, map[string]interface{}{})
 	require.NoError(t, err)
 
@@ -427,7 +455,7 @@ func TestPayloadStorage_MultipleRequestsSameSession(t *testing.T) {
 		return &sdk.CallToolResult{IsError: false}, map[string]interface{}{"request": "data"}, nil
 	}
 
-	wrapped := WrapToolHandler(mockHandler, "test_tool", baseDir, 5, getSessionID)
+	wrapped := WrapToolHandler(mockHandler, "test_tool", baseDir, "", 5, getSessionID)
 
 	// Make multiple requests
 	var payloadPaths []string
@@ -477,7 +505,7 @@ func TestPayloadStorage_FilePermissions(t *testing.T) {
 	queryID := "test-query-perms"
 	payload := []byte(`{"secure": "data"}`)
 
-	filePath, err := savePayload(baseDir, sessionID, queryID, payload)
+	filePath, err := savePayload(baseDir, "", sessionID, queryID, payload)
 	require.NoError(t, err)
 
 	// Check directory permissions
@@ -504,7 +532,7 @@ func TestPayloadStorage_DefaultSessionID(t *testing.T) {
 	}
 
 	// Use 5-byte threshold to ensure storage happens for this 15-byte payload
-	wrapped := WrapToolHandler(mockHandler, "test_tool", baseDir, 5, getEmptySessionID)
+	wrapped := WrapToolHandler(mockHandler, "test_tool", baseDir, "", 5, getEmptySessionID)
 	_, data, err := wrapped(context.Background(), &sdk.CallToolRequest{}, map[string]interface{}{})
 	require.NoError(t, err)
 
@@ -801,7 +829,7 @@ func TestPayloadSizeThreshold_SmallPayload(t *testing.T) {
 	}
 
 	// Set threshold to 1024 bytes - payload should be ~40 bytes
-	wrapped := WrapToolHandler(mockHandler, "test_tool", baseDir, 1024, testGetSessionID)
+	wrapped := WrapToolHandler(mockHandler, "test_tool", baseDir, "", 1024, testGetSessionID)
 	result, data, err := wrapped(context.Background(), &sdk.CallToolRequest{}, map[string]interface{}{})
 
 	require.NoError(t, err, "Should not return error")
@@ -841,7 +869,7 @@ func TestPayloadSizeThreshold_LargePayload(t *testing.T) {
 	}
 
 	// Set threshold to 1024 bytes - payload should be ~1520 bytes
-	wrapped := WrapToolHandler(mockHandler, "test_tool", baseDir, 1024, testGetSessionID)
+	wrapped := WrapToolHandler(mockHandler, "test_tool", baseDir, "", 1024, testGetSessionID)
 	result, data, err := wrapped(context.Background(), &sdk.CallToolRequest{}, map[string]interface{}{})
 
 	require.NoError(t, err, "Should not return error")
@@ -888,7 +916,7 @@ func TestPayloadSizeThreshold_ExactBoundary(t *testing.T) {
 			return &sdk.CallToolResult{IsError: false}, payload, nil
 		}
 
-		wrapped := WrapToolHandler(mockHandler, "test_tool", baseDir, threshold, testGetSessionID)
+		wrapped := WrapToolHandler(mockHandler, "test_tool", baseDir, "", threshold, testGetSessionID)
 		result, data, err := wrapped(context.Background(), &sdk.CallToolRequest{}, map[string]interface{}{})
 
 		require.NoError(t, err, "Should not return error")
@@ -911,7 +939,7 @@ func TestPayloadSizeThreshold_ExactBoundary(t *testing.T) {
 			return &sdk.CallToolResult{IsError: false}, payload, nil
 		}
 
-		wrapped := WrapToolHandler(mockHandler, "test_tool", baseDir, threshold, testGetSessionID)
+		wrapped := WrapToolHandler(mockHandler, "test_tool", baseDir, "", threshold, testGetSessionID)
 		result, data, err := wrapped(context.Background(), &sdk.CallToolRequest{}, map[string]interface{}{})
 
 		require.NoError(t, err, "Should not return error")
@@ -939,7 +967,7 @@ func TestPayloadSizeThreshold_CustomThreshold(t *testing.T) {
 
 	t.Run("low threshold triggers storage", func(t *testing.T) {
 		// Use very low threshold (50 bytes) - should trigger storage
-		wrapped := WrapToolHandler(mockHandler, "test_tool", baseDir, 50, testGetSessionID)
+		wrapped := WrapToolHandler(mockHandler, "test_tool", baseDir, "", 50, testGetSessionID)
 		_, data, err := wrapped(context.Background(), &sdk.CallToolRequest{}, map[string]interface{}{})
 
 		require.NoError(t, err)
@@ -950,7 +978,7 @@ func TestPayloadSizeThreshold_CustomThreshold(t *testing.T) {
 
 	t.Run("high threshold returns inline", func(t *testing.T) {
 		// Use very high threshold (10000 bytes) - should return inline
-		wrapped := WrapToolHandler(mockHandler, "test_tool", baseDir, 10000, testGetSessionID)
+		wrapped := WrapToolHandler(mockHandler, "test_tool", baseDir, "", 10000, testGetSessionID)
 		_, data, err := wrapped(context.Background(), &sdk.CallToolRequest{}, map[string]interface{}{})
 
 		require.NoError(t, err)
@@ -1011,7 +1039,7 @@ func TestThresholdBehavior_SmallPayloadsAsIs(t *testing.T) {
 				return &sdk.CallToolResult{IsError: false}, tt.payload, nil
 			}
 
-			wrapped := WrapToolHandler(mockHandler, "test_tool", baseDir, tt.threshold, testGetSessionID)
+			wrapped := WrapToolHandler(mockHandler, "test_tool", baseDir, "", tt.threshold, testGetSessionID)
 			result, data, err := wrapped(context.Background(), &sdk.CallToolRequest{}, map[string]interface{}{})
 
 			require.NoError(t, err, "Should not return error")
@@ -1091,7 +1119,7 @@ func TestThresholdBehavior_LargePayloadsUsePayloadDir(t *testing.T) {
 				return &sdk.CallToolResult{IsError: false}, tt.payload, nil
 			}
 
-			wrapped := WrapToolHandler(mockHandler, "test_tool", baseDir, tt.threshold, testGetSessionID)
+			wrapped := WrapToolHandler(mockHandler, "test_tool", baseDir, "", tt.threshold, testGetSessionID)
 			result, data, err := wrapped(context.Background(), &sdk.CallToolRequest{}, map[string]interface{}{})
 
 			require.NoError(t, err, "Should not return error")
@@ -1148,7 +1176,7 @@ func TestThresholdBehavior_MixedPayloads(t *testing.T) {
 	// Small payload (under threshold)
 	smallPayload := map[string]interface{}{"status": "ok", "code": 200}
 	smallHandler := createHandler(smallPayload)
-	wrappedSmall := WrapToolHandler(smallHandler, "test_tool", baseDir, threshold, testGetSessionID)
+	wrappedSmall := WrapToolHandler(smallHandler, "test_tool", baseDir, "", threshold, testGetSessionID)
 
 	_, smallData, err := wrappedSmall(context.Background(), &sdk.CallToolRequest{}, map[string]interface{}{})
 	require.NoError(t, err)
@@ -1162,7 +1190,7 @@ func TestThresholdBehavior_MixedPayloads(t *testing.T) {
 	// Large payload (over threshold)
 	largePayload := map[string]interface{}{"data": strings.Repeat("x", 200)}
 	largeHandler := createHandler(largePayload)
-	wrappedLarge := WrapToolHandler(largeHandler, "test_tool", baseDir, threshold, testGetSessionID)
+	wrappedLarge := WrapToolHandler(largeHandler, "test_tool", baseDir, "", threshold, testGetSessionID)
 
 	_, largeData, err := wrappedLarge(context.Background(), &sdk.CallToolRequest{}, map[string]interface{}{})
 	require.NoError(t, err)
@@ -1210,7 +1238,7 @@ func TestThresholdBehavior_ConfigurableThresholds(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			wrapped := WrapToolHandler(mockHandler, "test_tool", baseDir, tc.threshold, testGetSessionID)
+			wrapped := WrapToolHandler(mockHandler, "test_tool", baseDir, "", tc.threshold, testGetSessionID)
 			_, data, err := wrapped(context.Background(), &sdk.CallToolRequest{}, map[string]interface{}{})
 
 			require.NoError(t, err)

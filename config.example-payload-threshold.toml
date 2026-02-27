@@ -5,7 +5,7 @@
 # 1. Command-line flag: --payload-size-threshold 2048
 # 2. Environment variable: MCP_GATEWAY_PAYLOAD_SIZE_THRESHOLD=2048
 # 3. Config file: payload_size_threshold = 2048
-# 4. Default: 10240 bytes (10KB)
+# 4. Default: 524288 bytes (512KB)
 
 [gateway]
 port = 3000
@@ -18,6 +18,21 @@ api_key = "your-api-key-here"
 # Default: /tmp/jq-payloads
 payload_dir = "/tmp/jq-payloads"
 
+# Payload path prefix for remapping file paths returned to clients
+# When set, payloadPath uses this prefix instead of the actual filesystem path
+# This allows agents in containers to access payload files via mounted volumes
+#
+# Can also be set via:
+# - Flag: --payload-path-prefix /workspace/payloads
+# - Env:  MCP_GATEWAY_PAYLOAD_PATH_PREFIX=/workspace/payloads
+# Default: (empty - use actual filesystem path)
+#
+# Example:
+#   Gateway saves to:   /tmp/jq-payloads/session123/query456/payload.json
+#   Returns to client:  /workspace/payloads/session123/query456/payload.json
+#   Agent mounts:       -v /tmp/jq-payloads:/workspace/payloads
+# payload_path_prefix = "/workspace/payloads"
+
 # Payload size threshold (in bytes) for storing responses to disk
 # Payloads LARGER than this threshold are stored to disk and return metadata
 # Payloads SMALLER than or equal to this threshold are returned inline
@@ -25,14 +40,13 @@ payload_dir = "/tmp/jq-payloads"
 # Can also be set via:
 # - Flag: --payload-size-threshold 2048
 # - Env:  MCP_GATEWAY_PAYLOAD_SIZE_THRESHOLD=2048
-# Default: 10240 bytes (10KB)
+# Default: 524288 bytes (512KB)
 #
 # Examples:
-#   payload_size_threshold = 512    # 512 bytes - more aggressive file storage
-#   payload_size_threshold = 1024   # 1KB - more aggressive file storage
-#   payload_size_threshold = 2048   # 2KB - fewer files, more inline responses
-#   payload_size_threshold = 10240  # 10KB - default, good for most use cases
-payload_size_threshold = 10240
+#   payload_size_threshold = 262144  # 256KB - more aggressive file storage
+#   payload_size_threshold = 524288  # 512KB - default, balances inline vs disk storage
+#   payload_size_threshold = 1048576 # 1MB - minimize disk storage for most use cases
+payload_size_threshold = 524288
 
 [servers.github]
 command = "docker"
