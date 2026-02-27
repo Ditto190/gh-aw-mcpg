@@ -42,47 +42,131 @@ Write: agent.secrecy    ⊆ resource.secrecy  (no information leak)
 
 The gateway supports three enforcement modes:
 
-1. **Strict**: 
+1. **Strict**:
 
-Agent labels are NEVER updated. 
+Agent labels are NEVER updated.
 
-For each tool call, the gateway first calls `LabelResource()` to get resource labels and operation type (i.e., read, write, read-write). 
+For each tool call, the gateway first calls `LabelResource()` to get resource labels and operation type (i.e., read, write, read-write).
 
 If the operation is a read, the gateway makes the tool call and then calls `LabelResponse()` to get fine-grained labels for the response. The Reference Monitor then checks DIFC rules for each item and blocks the entire response if any item violates the rules.
 
-If the operation is read-write or write, then the Reference Monitor checks DIFC rules based on resource labels before the tool call, and blocks if the rules are violated. For read-write and write operations, `LabelResponse()` is NOT called. 
+If the operation is read-write or write, then the Reference Monitor checks DIFC rules based on resource labels before the tool call, and blocks if the rules are violated. For read-write and write operations, `LabelResponse()` is NOT called.
 
-2. **Filter**: 
+2. **Filter**:
 
-Agent labels are NEVER updated. 
+Agent labels are NEVER updated.
 
-For each tool call, the gateway first calls `LabelResource()` to get resource labels and operation type (i.e., read, write, read-write). 
+For each tool call, the gateway first calls `LabelResource()` to get resource labels and operation type (i.e., read, write, read-write).
 
 If the operation is a read, the gateway makes the tool call and then calls `LabelResponse()` to get fine-grained labels for the response. The Reference Monitor then checks DIFC rules for each item and removes any items that violate the rules from the response (instead of blocking the entire response). This allows agents to still get access to items they are authorized for, while filtering out unauthorized items.
 
 If the operation is read-write or write, then the Reference Monitor checks DIFC rules based on resource labels before the tool call, and blocks if the rules are violated. If the rules are not violated, the tool call proceeds. For read-write operations, the Reference Monitor calls `LabelResponse()` to get fine-grained labels for the response. The Reference Monitor then checks DIFC rules for each item and removes any items that violate the rules from the response (instead of blocking the entire response). This allows agents to still get access to items they are authorized for, while filtering out unauthorized items. For write operations in filter mode, `LabelResponse()` is NOT called.
 
-3. **Propagate**: 
+3. **Propagate**:
 
 Agent labels are may be updated based on the labels of data they access. However, tool calls will only ever add tags to the agent's secrecy labels and remove tags from the agent's integrity labels, to ensure that agents can only become more restricted over time.
 
-For each tool call, the gateway first calls `LabelResource()` to get resource labels and operation type (i.e., read, write, read-write). 
+For each tool call, the gateway first calls `LabelResource()` to get resource labels and operation type (i.e., read, write, read-write).
 
-If the operation is a read, the gateway makes the tool call and then calls `LabelResponse()` to get fine-grained labels for the response. For each item in the response, the Reference Monitor sets the agent's secrecy label to the union of the agent's current secrecy label and the item's secrecy label and sets the agent's integrity label to the intersection of the agent's current integrity label and the item's integrity label. 
+If the operation is a read, the gateway makes the tool call and then calls `LabelResponse()` to get fine-grained labels for the response. For each item in the response, the Reference Monitor sets the agent's secrecy label to the union of the agent's current secrecy label and the item's secrecy label and sets the agent's integrity label to the intersection of the agent's current integrity label and the item's integrity label.
 
 If the operation is read-write or write, then the Reference Monitor checks DIFC rules based on resource labels before the tool call, and blocks if the rules are violated. If the rules are not violated, the tool call proceeds. For read-write operations, the Reference Monitor calls `LabelResponse()` to get fine-grained labels for the response. For each item in the response, the Reference Monitor sets the agent's secrecy label to the union of the agent's current secrecy label and the item's secrecy label and sets the agent's integrity label to the intersection of the agent's current integrity label and the item's integrity label.  For write operations in propagate mode, `LabelResponse()` is NOT called.
 
 ## Overview
 
-Guards implement two labeling methods:
+Guards implement three labeling methods:
 
-1. **`LabelResource()`** - Called BEFORE the backend request to determine:
+1. **`LabelAgent()`** - Called ONCE per session/guard/policy combination to initialize agent state:
+   - Validates and normalizes the guard policy (e.g., `AllowOnly` rules)
+   - Returns effective agent secrecy/integrity labels for the session
+   - Returns the DIFC enforcement mode (`strict`, `filter`, or `propagate`)
+   - Returns a normalized policy for subsequent calls
+   - Results are cached per session — subsequent tool calls skip re-initialization if the policy hash is unchanged
+
+2. **`LabelResource()`** - Called BEFORE the backend request to determine:
    - Resource labels (secrecy/integrity requirements)
    - Operation type (read, write, read-write)
 
-2. **`LabelResponse()`** - Called AFTER the backend request to provide:
+3. **`LabelResponse()`** - Called AFTER the backend request to provide:
    - Fine-grained per-item labels (for collections)
    - Or `nil` to use resource labels for entire response
+
+## LabelAgent Details
+
+`LabelAgent()` is the session initialization entry point. It is called by `ensureGuardInitialized()` in the server before any tool call is processed.
+
+### Call Flow
+
+```
+Client Request → ensureGuardInitialized()
+                    ├── resolveGuardPolicy() → load policy from config
+                    ├── Check session cache (skip if already initialized with same policy hash)
+                    └── guard.LabelAgent(ctx, policy, backendCaller, caps)
+                           ├── Validate & normalize policy
+                           └── Return LabelAgentResult {agent labels, difc_mode, normalized_policy}
+                    └── Register agent labels in agent registry
+```
+
+### Interface
+
+```go
+LabelAgent(ctx context.Context, policy interface{}, backend BackendCaller, caps *difc.Capabilities) (*LabelAgentResult, error)
+```
+
+### LabelAgentResult
+
+```go
+type LabelAgentResult struct {
+    Agent            AgentLabelsPayload     `json:"agent"`
+    DIFCMode         string                 `json:"difc_mode"`
+    NormalizedPolicy map[string]interface{} `json:"normalized_policy,omitempty"`
+}
+
+type AgentLabelsPayload struct {
+    Secrecy   []string `json:"secrecy"`
+    Integrity []string `json:"integrity"`
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `Agent.Secrecy` | Initial secrecy tags for the agent session |
+| `Agent.Integrity` | Initial integrity tags for the agent session |
+| `DIFCMode` | Enforcement mode: `strict`, `filter`, or `propagate` |
+| `NormalizedPolicy` | Policy in normalized form for use by `LabelResource`/`LabelResponse` |
+
+### Session Caching
+
+The server caches `LabelAgent` results per `(sessionID, serverID)` pair. A cached result is reused if the serialized policy JSON matches. This means `LabelAgent` is typically called only once per session, not on every tool call.
+
+### WASM Guards
+
+For WASM guards, the gateway:
+
+1. Normalizes the policy payload (handles both raw JSON and Go map inputs)
+2. Validates the policy structure via `buildStrictLabelAgentPayload()`:
+   - Requires a top-level `allowonly` key with `repos` and `integrity` fields
+   - `repos`: `"all"`, `"public"`, or an array of scoped repo strings
+   - `integrity`: one of `"none"`, `"reader"`, `"writer"`, `"merged"`
+   - Rejects legacy `policy` envelope keys
+3. Calls the WASM module's exported `label_agent` function
+4. Parses the response via `parseLabelAgentResponse()`, which validates:
+   - No error/failure status in the response
+   - `difc_mode` is present and valid
+
+### NoopGuard
+
+The `NoopGuard` returns empty labels and `strict` mode, imposing no restrictions:
+
+```go
+return &LabelAgentResult{
+    Agent: AgentLabelsPayload{
+        Secrecy:   []string{},
+        Integrity: []string{},
+    },
+    DIFCMode: difc.ModeStrict,
+}, nil
+```
 
 ## Supported Response Labeling Formats
 
@@ -110,7 +194,7 @@ Apply different labels to specific items in a collection. Return JSON with this 
       }
     },
     {
-      "path": "/items/1", 
+      "path": "/items/1",
       "labels": {
         "description": "Private repository user/secret-project",
         "secrecy": ["repo_private", "private:user/secret-project"],
