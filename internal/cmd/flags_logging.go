@@ -11,7 +11,7 @@ import (
 const (
 	defaultLogDir               = "/tmp/gh-aw/mcp-logs"
 	defaultPayloadDir           = "/tmp/jq-payloads"
-	defaultPayloadSizeThreshold = 10240 // 10KB default threshold
+	defaultPayloadSizeThreshold = 524288 // 512KB default threshold
 )
 
 // Logging flag variables

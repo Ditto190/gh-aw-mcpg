@@ -154,7 +154,7 @@ func TestPayloadSizeThresholdFlagDefault(t *testing.T) {
 	t.Setenv("MCP_GATEWAY_PAYLOAD_SIZE_THRESHOLD", "")
 
 	result := getDefaultPayloadSizeThreshold()
-	assert.Equal(t, 10240, result, "Default should be 10240 bytes")
+	assert.Equal(t, 524288, result, "Default should be 524288 bytes (512KB)")
 }
 
 func TestPayloadSizeThresholdEnvVar(t *testing.T) {
