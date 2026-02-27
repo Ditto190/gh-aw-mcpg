@@ -78,6 +78,7 @@ type UnifiedServer struct {
 	toolsMu              sync.RWMutex
 	sequentialLaunch     bool   // When true, launches MCP servers sequentially during startup. Default is false (parallel launch).
 	payloadDir           string // Base directory for storing large payload files (segmented by session ID)
+	payloadPathPrefix    string // Path prefix to use when returning payloadPath to clients (allows remapping host paths to client/agent container paths)
 	payloadSizeThreshold int    // Size threshold (in bytes) for storing payloads to disk. Payloads larger than this are stored to disk, smaller ones are returned inline.
 
 	// DIFC components
@@ -107,13 +108,19 @@ func NewUnified(ctx context.Context, cfg *config.Config) (*UnifiedServer, error)
 		payloadDir = cfg.Gateway.PayloadDir
 	}
 
+	// Get payload path prefix from config (empty by default)
+	payloadPathPrefix := ""
+	if cfg.Gateway != nil && cfg.Gateway.PayloadPathPrefix != "" {
+		payloadPathPrefix = cfg.Gateway.PayloadPathPrefix
+	}
+
 	// Get payload size threshold from config, with fallback to default
 	payloadSizeThreshold := config.DefaultPayloadSizeThreshold
 	if cfg.Gateway != nil && cfg.Gateway.PayloadSizeThreshold > 0 {
 		payloadSizeThreshold = cfg.Gateway.PayloadSizeThreshold
 	}
-	logUnified.Printf("Payload configuration: dir=%s, sizeThreshold=%d bytes (%.2f KB)",
-		payloadDir, payloadSizeThreshold, float64(payloadSizeThreshold)/1024)
+	logUnified.Printf("Payload configuration: dir=%s, pathPrefix=%s, sizeThreshold=%d bytes (%.2f KB)",
+		payloadDir, payloadPathPrefix, payloadSizeThreshold, float64(payloadSizeThreshold)/1024)
 
 	us := &UnifiedServer{
 		launcher:             l,
@@ -123,6 +130,7 @@ func NewUnified(ctx context.Context, cfg *config.Config) (*UnifiedServer, error)
 		tools:                make(map[string]*ToolInfo),
 		sequentialLaunch:     cfg.SequentialLaunch,
 		payloadDir:           payloadDir,
+		payloadPathPrefix:    payloadPathPrefix,
 		payloadSizeThreshold: payloadSizeThreshold,
 
 		// Initialize DIFC components
@@ -369,7 +377,7 @@ func (us *UnifiedServer) registerToolsFromBackend(serverID string) error {
 		// Wrap handler with jqschema middleware if applicable
 		finalHandler := handler
 		if middleware.ShouldApplyMiddleware(prefixedName) {
-			finalHandler = middleware.WrapToolHandler(handler, prefixedName, us.payloadDir, us.payloadSizeThreshold, us.getSessionID)
+			finalHandler = middleware.WrapToolHandler(handler, prefixedName, us.payloadDir, us.payloadPathPrefix, us.payloadSizeThreshold, us.getSessionID)
 		}
 
 		// Store handler for routed mode to reuse

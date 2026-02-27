@@ -225,6 +225,13 @@ See **[Configuration Specification](https://github.com/github/gh-aw/blob/main/do
   - TOML config file: `payload_size_threshold = <bytes>` in `[gateway]` section
   - Payloads **larger** than this threshold are stored to disk and return metadata
   - Payloads **smaller than or equal** to this threshold are returned inline
+- **`payloadPathPrefix`** configures path remapping for clients/agents:
+  - CLI flag: `--payload-path-prefix <path>` (default: empty - use actual filesystem path)
+  - Environment variable: `MCP_GATEWAY_PAYLOAD_PATH_PREFIX=<path>`
+  - TOML config file: `payload_path_prefix = "<path>"` in `[gateway]` section
+  - When set, the `payloadPath` returned to clients uses this prefix instead of the actual filesystem path
+  - Example: Gateway saves to `/tmp/jq-payloads/session/query/payload.json`, but returns `/workspace/payloads/session/query/payload.json` to clients if `payload_path_prefix = "/workspace/payloads"`
+  - This allows agents running in containers to access payload files via mounted volumes
 
 **Environment Variable Features**:
 - **Passthrough**: Set value to empty string (`""`) to pass through from host
@@ -333,6 +340,7 @@ When running locally (`run.sh`), these variables are optional (warnings shown if
 | `MCP_GATEWAY_API_KEY` | API authentication key | (disabled) |
 | `MCP_GATEWAY_LOG_DIR` | Log file directory (sets default for `--log-dir` flag) | `/tmp/gh-aw/mcp-logs` |
 | `MCP_GATEWAY_PAYLOAD_DIR` | Large payload storage directory (sets default for `--payload-dir` flag) | `/tmp/jq-payloads` |
+| `MCP_GATEWAY_PAYLOAD_PATH_PREFIX` | Path prefix for remapping payloadPath returned to clients (sets default for `--payload-path-prefix` flag) | (empty - use actual filesystem path) |
 | `MCP_GATEWAY_PAYLOAD_SIZE_THRESHOLD` | Size threshold in bytes for payload storage (sets default for `--payload-size-threshold` flag) | `524288` |
 | `DEBUG` | Enable debug logging with pattern matching (e.g., `*`, `server:*,launcher:*`) | (disabled) |
 | `DEBUG_COLORS` | Control colored debug output (0 to disable, auto-disabled when piping) | Auto-detect |

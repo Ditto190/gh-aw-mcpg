@@ -18,6 +18,21 @@ api_key = "your-api-key-here"
 # Default: /tmp/jq-payloads
 payload_dir = "/tmp/jq-payloads"
 
+# Payload path prefix for remapping file paths returned to clients
+# When set, payloadPath uses this prefix instead of the actual filesystem path
+# This allows agents in containers to access payload files via mounted volumes
+#
+# Can also be set via:
+# - Flag: --payload-path-prefix /workspace/payloads
+# - Env:  MCP_GATEWAY_PAYLOAD_PATH_PREFIX=/workspace/payloads
+# Default: (empty - use actual filesystem path)
+#
+# Example:
+#   Gateway saves to:   /tmp/jq-payloads/session123/query456/payload.json
+#   Returns to client:  /workspace/payloads/session123/query456/payload.json
+#   Agent mounts:       -v /tmp/jq-payloads:/workspace/payloads
+# payload_path_prefix = "/workspace/payloads"
+
 # Payload size threshold (in bytes) for storing responses to disk
 # Payloads LARGER than this threshold are stored to disk and return metadata
 # Payloads SMALLER than or equal to this threshold are returned inline

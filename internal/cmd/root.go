@@ -225,6 +225,14 @@ func run(cmd *cobra.Command, args []string) error {
 		cfg.Gateway.PayloadDir = payloadDir
 	}
 
+	// Apply payload path prefix flag (if different from default, it was explicitly set)
+	if cmd.Flags().Changed("payload-path-prefix") {
+		cfg.Gateway.PayloadPathPrefix = payloadPathPrefix
+	} else if payloadPathPrefix != "" && payloadPathPrefix != defaultPayloadPathPrefix {
+		// Environment variable was set
+		cfg.Gateway.PayloadPathPrefix = payloadPathPrefix
+	}
+
 	// Apply payload size threshold flag (if different from default, it was explicitly set)
 	if cmd.Flags().Changed("payload-size-threshold") {
 		cfg.Gateway.PayloadSizeThreshold = payloadSizeThreshold
