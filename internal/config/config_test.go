@@ -1544,8 +1544,8 @@ func TestLoadFromStdin_WithGuardPolicies(t *testing.T) {
 				"container": "ghcr.io/github/github-mcp-server:latest",
 				"guard-policies": {
 					"github": {
-						"owner": "github",
-						"repos": ["gh-aw-mcpg", "gh-aw"]
+						"repos": ["github/gh-aw-mcpg", "github/gh-aw"],
+						"min-integrity": "reader"
 					}
 				}
 			},
@@ -1590,7 +1590,18 @@ func TestLoadFromStdin_WithGuardPolicies(t *testing.T) {
 	require.True(t, ok, "GitHub policy not found in guard-policies")
 	githubPolicyMap, ok := githubPolicy.(map[string]interface{})
 	require.True(t, ok, "GitHub policy should be a map")
-	assert.Equal(t, "github", githubPolicyMap["owner"], "Owner field mismatch")
+
+	// Verify repos field (array format)
+	repos, ok := githubPolicyMap["repos"]
+	require.True(t, ok, "repos field not found")
+	reposArray, ok := repos.([]interface{})
+	require.True(t, ok, "repos should be an array")
+	assert.Len(t, reposArray, 2, "repos should have 2 entries")
+
+	// Verify min-integrity field
+	minIntegrity, ok := githubPolicyMap["min-integrity"]
+	require.True(t, ok, "min-integrity field not found")
+	assert.Equal(t, "reader", minIntegrity, "min-integrity should be 'reader'")
 
 	// Test HTTP server with guard policies
 	httpServer, ok := cfg.Servers["http-server"]
@@ -1616,10 +1627,9 @@ api_key = "test-key"
 command = "docker"
 args = ["run", "--rm", "-i", "ghcr.io/github/github-mcp-server:latest"]
 
-[servers.github.guard_policies]
 [servers.github.guard_policies.github]
-owner = "github"
-repos = ["gh-aw-mcpg", "gh-aw"]
+repos = ["github/gh-aw-mcpg", "github/gh-aw"]
+min-integrity = "reader"
 `
 
 	err := os.WriteFile(tmpFile, []byte(tomlContent), 0644)
@@ -1637,5 +1647,16 @@ repos = ["gh-aw-mcpg", "gh-aw"]
 	require.True(t, ok, "GitHub policy not found in guard_policies")
 	githubPolicyMap, ok := githubPolicy.(map[string]interface{})
 	require.True(t, ok, "GitHub policy should be a map")
-	assert.Equal(t, "github", githubPolicyMap["owner"], "Owner field mismatch in TOML config")
+
+	// Verify repos field
+	repos, ok := githubPolicyMap["repos"]
+	require.True(t, ok, "repos field not found in TOML config")
+	reposArray, ok := repos.([]interface{})
+	require.True(t, ok, "repos should be an array")
+	assert.Len(t, reposArray, 2, "repos should have 2 entries")
+
+	// Verify min-integrity field
+	minIntegrity, ok := githubPolicyMap["min-integrity"]
+	require.True(t, ok, "min-integrity field not found in TOML config")
+	assert.Equal(t, "reader", minIntegrity, "min-integrity should be 'reader' in TOML config")
 }
