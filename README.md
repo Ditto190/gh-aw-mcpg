@@ -192,13 +192,24 @@ For the complete JSON configuration specification with all validation rules, see
   - Structure is server-specific and depends on the MCP server implementation
   - For **GitHub MCP server**, controls repository access with the following structure:
     ```toml
-    [servers.github.guard_policies]
     [servers.github.guard_policies.github]
-    owner = "github"                      # GitHub organization or user name
-    repos = ["gh-aw-mcpg", "gh-aw"]      # List of allowed repositories
+    repos = ["github/gh-aw-mcpg", "github/gh-aw"]  # Repository patterns
+    min-integrity = "reader"                        # Minimum integrity level
     ```
-    - **Meaning**: Restricts the GitHub MCP server to only access repositories `github/gh-aw-mcpg` and `github/gh-aw`
-    - Tools like `get_file_contents`, `search_code`, etc. will only work on these repositories
+    - **`repos`**: Repository access scope
+      - `"all"` - All repositories accessible by the token
+      - `"public"` - Public repositories only
+      - Array of patterns:
+        - `"owner/repo"` - Exact repository match
+        - `"owner/*"` - All repositories under owner
+        - `"owner/prefix*"` - Repositories with name prefix under owner
+    - **`min-integrity`**: Minimum integrity level required
+      - `"none"` - No integrity requirements
+      - `"reader"` - Read-level integrity
+      - `"writer"` - Write-level integrity
+      - `"merged"` - Merged-level integrity
+    - **Meaning**: Restricts the GitHub MCP server to only access specified repositories
+    - Tools like `get_file_contents`, `search_code`, etc. will only work on allowed repositories
     - Attempts to access other repositories will be denied by the guard policy
   - For **other MCP servers** (Jira, WorkIQ, etc.), different policy schemas apply
   - JSON format uses `"guard-policies"` (with hyphen), TOML uses `guard_policies` (with underscore)
