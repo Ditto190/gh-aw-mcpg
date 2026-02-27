@@ -1531,3 +1531,78 @@ registry = "https://api.mcp.github.com/v0/servers/github/github-mcp-server"
 
 	assert.Equal(t, "https://api.mcp.github.com/v0/servers/github/github-mcp-server", server.Registry, "Registry field not preserved in TOML config")
 }
+
+// ============================================================
+// Direct unit tests for applyGatewayDefaults
+// ============================================================
+
+// TestApplyGatewayDefaults_AllZeroValues verifies that all zero-value fields are
+// replaced with their defaults.
+func TestApplyGatewayDefaults_AllZeroValues(t *testing.T) {
+	cfg := &GatewayConfig{}
+	applyGatewayDefaults(cfg)
+
+	assert.Equal(t, DefaultPort, cfg.Port)
+	assert.Equal(t, DefaultStartupTimeout, cfg.StartupTimeout)
+	assert.Equal(t, DefaultToolTimeout, cfg.ToolTimeout)
+}
+
+// TestApplyGatewayDefaults_PortAlreadySet verifies that an explicitly set Port is preserved.
+func TestApplyGatewayDefaults_PortAlreadySet(t *testing.T) {
+	cfg := &GatewayConfig{Port: 8080}
+	applyGatewayDefaults(cfg)
+
+	assert.Equal(t, 8080, cfg.Port)
+	assert.Equal(t, DefaultStartupTimeout, cfg.StartupTimeout)
+	assert.Equal(t, DefaultToolTimeout, cfg.ToolTimeout)
+}
+
+// TestApplyGatewayDefaults_StartupTimeoutAlreadySet verifies an explicit StartupTimeout is preserved.
+func TestApplyGatewayDefaults_StartupTimeoutAlreadySet(t *testing.T) {
+	cfg := &GatewayConfig{StartupTimeout: 30}
+	applyGatewayDefaults(cfg)
+
+	assert.Equal(t, DefaultPort, cfg.Port)
+	assert.Equal(t, 30, cfg.StartupTimeout)
+	assert.Equal(t, DefaultToolTimeout, cfg.ToolTimeout)
+}
+
+// TestApplyGatewayDefaults_ToolTimeoutAlreadySet verifies an explicit ToolTimeout is preserved.
+func TestApplyGatewayDefaults_ToolTimeoutAlreadySet(t *testing.T) {
+	cfg := &GatewayConfig{ToolTimeout: 300}
+	applyGatewayDefaults(cfg)
+
+	assert.Equal(t, DefaultPort, cfg.Port)
+	assert.Equal(t, DefaultStartupTimeout, cfg.StartupTimeout)
+	assert.Equal(t, 300, cfg.ToolTimeout)
+}
+
+// TestApplyGatewayDefaults_AllFieldsSet verifies that no fields are overwritten
+// when all are explicitly set.
+func TestApplyGatewayDefaults_AllFieldsSet(t *testing.T) {
+	cfg := &GatewayConfig{
+		Port:           9999,
+		StartupTimeout: 120,
+		ToolTimeout:    240,
+	}
+	applyGatewayDefaults(cfg)
+
+	assert.Equal(t, 9999, cfg.Port)
+	assert.Equal(t, 120, cfg.StartupTimeout)
+	assert.Equal(t, 240, cfg.ToolTimeout)
+}
+
+// TestApplyGatewayDefaults_OtherFieldsUnaffected verifies that fields not managed by
+// applyGatewayDefaults (APIKey, Domain, etc.) are not touched.
+func TestApplyGatewayDefaults_OtherFieldsUnaffected(t *testing.T) {
+	cfg := &GatewayConfig{
+		APIKey: "my-api-key",
+		Domain: "example.com",
+	}
+	applyGatewayDefaults(cfg)
+
+	assert.Equal(t, "my-api-key", cfg.APIKey, "APIKey should not be modified by applyGatewayDefaults")
+	assert.Equal(t, "example.com", cfg.Domain, "Domain should not be modified by applyGatewayDefaults")
+	// Defaults applied for the zero fields
+	assert.Equal(t, DefaultPort, cfg.Port)
+}
