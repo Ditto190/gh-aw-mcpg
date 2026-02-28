@@ -78,35 +78,33 @@ grep -n "schemaURL\|SchemaURL\|raw.githubusercontent.com/github/gh-aw" \
 The files and variables to update are:
 
 - **`internal/config/validation_schema.go`** — variable `schemaURL` (around line 45)
-  - Current pattern: `https://raw.githubusercontent.com/github/gh-aw/main/pkg/workflow/schemas/mcp-gateway-config.schema.json`
-  - Target pattern: `https://raw.githubusercontent.com/github/gh-aw/<TAG>/pkg/workflow/schemas/mcp-gateway-config.schema.json`
+  - Current pattern: `https://raw.githubusercontent.com/github/gh-aw/main/docs/public/schemas/mcp-gateway-config.schema.json`
+  - Target pattern: `https://raw.githubusercontent.com/github/gh-aw/<TAG>/docs/public/schemas/mcp-gateway-config.schema.json`
 
 - **`internal/config/rules/rules.go`** — constant `SchemaURL` (around line 15)
   - Current pattern: `https://raw.githubusercontent.com/github/gh-aw/main/docs/public/schemas/mcp-gateway-config.schema.json`
   - Target pattern: `https://raw.githubusercontent.com/github/gh-aw/<TAG>/docs/public/schemas/mcp-gateway-config.schema.json`
 
+- **`internal/config/validation_schema_test.go`** — may contain hardcoded schema URLs that also need updating
+  - Run `grep -n "raw.githubusercontent.com/github/gh-aw" internal/config/validation_schema_test.go` to check
+
 ## Step 3: Compare Versions
 
-Parse the current URL to extract the version segment (the part between `gh-aw/` and `/pkg` or `/docs`).
+Parse the current URL to extract the version segment (the part between `gh-aw/` and `/docs`).
 
 - If the current version is already the latest tag, **stop here** — no changes needed, exit successfully.
 - If the current version is `main` or an older tag, proceed to update.
 
 ## Step 4: Verify the Schema Exists at the New Tag
 
-Before making changes, confirm the schema files actually exist at the new tag URL:
-
-```bash
-curl -s -o /dev/null -w "%{http_code}" \
-  "https://raw.githubusercontent.com/github/gh-aw/<TAG>/pkg/workflow/schemas/mcp-gateway-config.schema.json"
-```
+Before making changes, confirm the schema file actually exists at the new tag URL:
 
 ```bash
 curl -s -o /dev/null -w "%{http_code}" \
   "https://raw.githubusercontent.com/github/gh-aw/<TAG>/docs/public/schemas/mcp-gateway-config.schema.json"
 ```
 
-Both should return `200`. If either returns non-200, **stop** and create an issue instead of a PR:
+This should return `200`. If it returns non-200, **stop** and create an issue instead of a PR:
 
 ```
 Schema file not found at tag <TAG>. Skipping update.
@@ -114,15 +112,25 @@ Schema file not found at tag <TAG>. Skipping update.
 
 ## Step 5: Update the Schema URLs
 
-Update both files using the `edit` tool:
+Update the URL-bearing files using the `edit` tool. **Important**: only change the URL string value itself — do not modify any surrounding code, comments (except those described below), or other logic.
 
 ### Update `internal/config/validation_schema.go`
 
-Replace the `schemaURL` value with the new versioned URL. If the file contains a comment line matching `// Current schema version: ...`, update it to reflect the new version; otherwise skip the comment update.
+Replace only the `schemaURL` value with the new versioned URL. If the file contains a comment line matching `// Current schema version: ...`, update it to reflect the new version; otherwise skip the comment update.
 
 ### Update `internal/config/rules/rules.go`
 
-Replace the `SchemaURL` constant value with the new versioned URL.
+Replace only the `SchemaURL` constant value with the new versioned URL.
+
+### Update `internal/config/validation_schema_test.go` (if needed)
+
+Check if the test file contains hardcoded schema URLs and update them to use the new tag:
+
+```bash
+grep -n "raw.githubusercontent.com/github/gh-aw" internal/config/validation_schema_test.go
+```
+
+If any URLs reference `main` or an older tag, update them to `<TAG>`.
 
 ## Step 6: Validate the Changes
 
@@ -153,6 +161,7 @@ Updates the MCP Gateway JSON schema validation URL from the previous version to 
 
 - `internal/config/validation_schema.go` — `schemaURL` variable updated to `<TAG>`
 - `internal/config/rules/rules.go` — `SchemaURL` constant updated to `<TAG>`
+- `internal/config/validation_schema_test.go` — hardcoded schema URLs updated to `<TAG>` (if present)
 
 ### Why
 
