@@ -3,13 +3,22 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/github/gh-aw-mcpg/internal/config"
 )
+
+// errWriter is an io.Writer that always returns an error, used to test error propagation.
+type errWriter struct{}
+
+func (errWriter) Write(_ []byte) (int, error) {
+	return 0, fmt.Errorf("write error")
+}
 
 func TestWriteGatewayConfigToStdout(t *testing.T) {
 	tests := []struct {
@@ -113,94 +122,43 @@ func TestWriteGatewayConfigToStdout(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create buffer to capture output
 			var buf bytes.Buffer
-
-			// Write configuration to buffer
 			err := writeGatewayConfig(tt.cfg, tt.listenAddr, tt.mode, &buf)
+			require.NoError(t, err)
 
-			require.NoError(t, err, "writeGatewayConfig() error = ")
-			output := buf.String()
-
-			// Parse JSON output
 			var result map[string]interface{}
-			if err := json.Unmarshal([]byte(output), &result); err != nil {
-				t.Fatalf("Failed to parse JSON output: %v\nOutput: %s", err, output)
-			}
+			require.NoError(t, json.Unmarshal(buf.Bytes(), &result), "Output should be valid JSON")
 
-			// Verify structure
 			mcpServers, ok := result["mcpServers"].(map[string]interface{})
-			if !ok {
-				t.Fatal("Output missing 'mcpServers' field or wrong type")
-			}
+			require.True(t, ok, "Output should have mcpServers field of correct type")
+			assert.Len(t, mcpServers, len(tt.cfg.Servers))
 
-			// Verify all servers are present
-			if len(mcpServers) != len(tt.cfg.Servers) {
-				t.Errorf("Expected %d servers, got %d", len(tt.cfg.Servers), len(mcpServers))
-			}
-
-			// Verify each server configuration
 			for serverName := range tt.cfg.Servers {
-				serverConfig, ok := mcpServers[serverName].(map[string]interface{})
-				if !ok {
-					t.Errorf("Server '%s' missing or wrong type", serverName)
-					continue
-				}
+				t.Run("server:"+serverName, func(t *testing.T) {
+					serverConfig, ok := mcpServers[serverName].(map[string]interface{})
+					require.True(t, ok, "Server '%s' should exist and be a map", serverName)
 
-				// Verify type is "http"
-				if serverType, ok := serverConfig["type"].(string); !ok || serverType != "http" {
-					t.Errorf("Server '%s' type = %v, want 'http'", serverName, serverConfig["type"])
-				}
+					assert.Equal(t, "http", serverConfig["type"])
 
-				// Verify URL format
-				url, ok := serverConfig["url"].(string)
-				if !ok {
-					t.Errorf("Server '%s' missing url or wrong type", serverName)
-					continue
-				}
+					url, ok := serverConfig["url"].(string)
+					require.True(t, ok, "Server '%s' url should be a string", serverName)
 
-				// Check URL contains expected components
-				expectedPrefix := "http://" + tt.wantHost + ":" + tt.wantPort + "/mcp"
-				if len(url) < len(expectedPrefix) || url[:len(expectedPrefix)] != expectedPrefix {
-					t.Errorf("Server '%s' url = %v, want prefix %v", serverName, url, expectedPrefix)
-				}
-
-				// In routed mode, URL should include server name
-				if tt.mode == "routed" {
-					expectedURL := expectedPrefix + "/" + serverName
-					if url != expectedURL {
-						t.Errorf("Server '%s' url = %v, want %v", serverName, url, expectedURL)
-					}
-				} else {
-					// In unified mode, URL should be just /mcp
-					if url != expectedPrefix {
-						t.Errorf("Server '%s' url = %v, want %v", serverName, url, expectedPrefix)
-					}
-				}
-
-				// Verify headers per MCP Gateway Specification Section 5.4
-				if tt.wantAPIKey != "" {
-					headers, ok := serverConfig["headers"].(map[string]interface{})
-					if !ok {
-						t.Errorf("Server '%s' missing headers or wrong type", serverName)
-						continue
+					expectedBase := "http://" + tt.wantHost + ":" + tt.wantPort + "/mcp"
+					if tt.mode == "routed" {
+						assert.Equal(t, expectedBase+"/"+serverName, url)
+					} else {
+						assert.Equal(t, expectedBase, url)
 					}
 
-					authHeader, ok := headers["Authorization"].(string)
-					if !ok {
-						t.Errorf("Server '%s' missing Authorization header or wrong type", serverName)
-						continue
+					// Verify auth headers per MCP Gateway Specification Section 5.4
+					if tt.wantAPIKey != "" {
+						headers, ok := serverConfig["headers"].(map[string]interface{})
+						require.True(t, ok, "Server '%s' should have headers when API key is configured", serverName)
+						assert.Equal(t, tt.wantAPIKey, headers["Authorization"])
+					} else {
+						assert.Nil(t, serverConfig["headers"], "Server '%s' should not have headers when no API key", serverName)
 					}
-
-					if authHeader != tt.wantAPIKey {
-						t.Errorf("Server '%s' Authorization header = %v, want %v", serverName, authHeader, tt.wantAPIKey)
-					}
-				} else {
-					// If no API key, headers should not be present
-					if headers, ok := serverConfig["headers"]; ok {
-						t.Errorf("Server '%s' should not have headers when no API key is configured, got: %v", serverName, headers)
-					}
-				}
+				})
 			}
 		})
 	}
@@ -211,23 +169,16 @@ func TestWriteGatewayConfigToStdout_EmptyConfig(t *testing.T) {
 		Servers: map[string]*config.ServerConfig{},
 	}
 
-	// Create buffer to capture output
 	var buf bytes.Buffer
-
 	err := writeGatewayConfig(cfg, "127.0.0.1:8080", "routed", &buf)
+	require.NoError(t, err)
 
-	require.NoError(t, err, "writeGatewayConfig() error = ")
-
-	// Parse output
 	var result map[string]interface{}
-	if err := json.Unmarshal(buf.Bytes(), &result); err != nil {
-		t.Fatalf("Failed to parse JSON: %v", err)
-	}
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &result), "Output should be valid JSON")
 
-	mcpServers := result["mcpServers"].(map[string]interface{})
-	if len(mcpServers) != 0 {
-		t.Errorf("Expected empty mcpServers, got %d servers", len(mcpServers))
-	}
+	mcpServers, ok := result["mcpServers"].(map[string]interface{})
+	require.True(t, ok, "Output should have mcpServers field")
+	assert.Empty(t, mcpServers, "mcpServers should be empty")
 }
 
 func TestWriteGatewayConfigToStdout_JSONFormat(t *testing.T) {
@@ -239,25 +190,16 @@ func TestWriteGatewayConfigToStdout_JSONFormat(t *testing.T) {
 		},
 	}
 
-	// Create buffer to capture output
 	var buf bytes.Buffer
-
 	err := writeGatewayConfig(cfg, "localhost:3000", "routed", &buf)
-
-	require.NoError(t, err, "writeGatewayConfig() error = ")
-
-	output := buf.String()
+	require.NoError(t, err)
 
 	// Verify it's valid JSON
 	var result interface{}
-	if err := json.Unmarshal([]byte(output), &result); err != nil {
-		t.Errorf("Output is not valid JSON: %v\nOutput: %s", err, output)
-	}
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &result), "Output should be valid JSON")
 
 	// Verify output is pretty-printed (contains newlines)
-	if !bytes.Contains(buf.Bytes(), []byte("\n")) {
-		t.Error("Output should be pretty-printed with indentation")
-	}
+	assert.Contains(t, buf.String(), "\n", "Output should be pretty-printed with indentation")
 }
 
 func TestWriteGatewayConfigToStdout_WithPipe(t *testing.T) {
@@ -279,36 +221,69 @@ func TestWriteGatewayConfigToStdout_WithPipe(t *testing.T) {
 	// Write configuration to pipe in a goroutine
 	errCh := make(chan error, 1)
 	go func() {
-		err := writeGatewayConfig(cfg, "127.0.0.1:3000", "unified", w)
+		writeErr := writeGatewayConfig(cfg, "127.0.0.1:3000", "unified", w)
 		w.Close() // Close writer to signal EOF
-		errCh <- err
+		errCh <- writeErr
 	}()
 
 	// Read from pipe
 	var buf bytes.Buffer
-	if _, err := buf.ReadFrom(r); err != nil {
-		t.Fatalf("Failed to read from pipe: %v", err)
-	}
+	_, err = buf.ReadFrom(r)
+	require.NoError(t, err, "Failed to read from pipe")
 
 	// Check for errors from write operation
-	if err := <-errCh; err != nil {
-		t.Fatalf("writeGatewayConfig() error = %v", err)
-	}
+	require.NoError(t, <-errCh)
 
 	// Verify output is valid JSON
 	var result map[string]interface{}
-	if err := json.Unmarshal(buf.Bytes(), &result); err != nil {
-		t.Fatalf("Failed to parse JSON output: %v\nOutput: %s", err, buf.String())
-	}
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &result), "Output should be valid JSON")
 
 	// Verify structure
 	mcpServers, ok := result["mcpServers"].(map[string]interface{})
-	if !ok {
-		t.Fatal("Output missing 'mcpServers' field or wrong type")
+	require.True(t, ok, "Output should have mcpServers field")
+	assert.Contains(t, mcpServers, "github", "github server should be present in output")
+}
+
+// TestWriteGatewayConfig_WriteError tests that encoding errors are propagated correctly.
+// This covers the error return path of writeGatewayConfig when the writer fails.
+func TestWriteGatewayConfig_WriteError(t *testing.T) {
+	cfg := &config.Config{
+		Servers: map[string]*config.ServerConfig{
+			"test": {Command: "echo"},
+		},
 	}
 
-	// Verify github server is present
-	if _, ok := mcpServers["github"]; !ok {
-		t.Error("Expected 'github' server in output")
+	err := writeGatewayConfig(cfg, "127.0.0.1:8080", "routed", errWriter{})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to encode configuration")
+}
+
+// TestWriteGatewayConfig_PortOnlyAddress tests that a ":port" style address
+// (where host is empty after parsing) falls back to the default host.
+func TestWriteGatewayConfig_PortOnlyAddress(t *testing.T) {
+	cfg := &config.Config{
+		Servers: map[string]*config.ServerConfig{
+			"test": {Command: "echo"},
+		},
 	}
+
+	var buf bytes.Buffer
+	err := writeGatewayConfig(cfg, ":8080", "unified", &buf)
+	require.NoError(t, err)
+
+	var result map[string]interface{}
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &result))
+
+	mcpServers, ok := result["mcpServers"].(map[string]interface{})
+	require.True(t, ok)
+
+	serverConfig, ok := mcpServers["test"].(map[string]interface{})
+	require.True(t, ok)
+
+	url, ok := serverConfig["url"].(string)
+	require.True(t, ok)
+
+	// Empty host from SplitHostPort should fall back to DefaultListenIPv4
+	assert.Contains(t, url, DefaultListenIPv4, "Should use default IPv4 host when address has no host")
+	assert.Contains(t, url, "8080", "Should preserve the port")
 }
