@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestValidateContainerID(t *testing.T) {
@@ -70,11 +71,9 @@ func TestValidateContainerID(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := validateContainerID(tt.containerID)
 			if tt.shouldError {
-				if err == nil {
-					t.Error("Expected error but got none")
-				}
+				require.Error(t, err, "Expected an error for container ID: %s", tt.containerID)
 			} else {
-				assert.NoError(t, err, "Unexpected error")
+				require.NoError(t, err, "Unexpected error for container ID: %s", tt.containerID)
 			}
 		})
 	}
@@ -90,9 +89,7 @@ func TestDetectContainerized(t *testing.T) {
 
 	// If we detect a container, the ID should have some content
 	if isContainerized && containerID != "" {
-		if len(containerID) < 12 {
-			t.Errorf("Container ID should be at least 12 characters, got %d", len(containerID))
-		}
+		assert.GreaterOrEqual(t, len(containerID), 12, "Container ID should be at least 12 characters")
 	}
 }
 
@@ -177,24 +174,7 @@ func TestCheckRequiredEnvVars(t *testing.T) {
 
 			missing := checkRequiredEnvVars()
 
-			if len(missing) != len(tt.expected) {
-				t.Errorf("Expected %d missing vars, got %d. Missing: %v", len(tt.expected), len(missing), missing)
-				return
-			}
-
-			// Check each expected var is in the missing list
-			for _, expectedVar := range tt.expected {
-				found := false
-				for _, missingVar := range missing {
-					if missingVar == expectedVar {
-						found = true
-						break
-					}
-				}
-				if !found {
-					t.Errorf("Expected %s to be in missing list, but it wasn't. Missing: %v", expectedVar, missing)
-				}
-			}
+			assert.ElementsMatch(t, tt.expected, missing, "Unexpected missing vars")
 		})
 	}
 }
@@ -270,12 +250,10 @@ func TestGetGatewayPortFromEnv(t *testing.T) {
 			port, err := GetGatewayPortFromEnv()
 
 			if tt.shouldError {
-				if err == nil {
-					t.Error("Expected error but got none")
-				}
+				require.Error(t, err, "Expected error for port value: %q", tt.envValue)
 			} else {
-				assert.NoError(t, err, "Unexpected error")
-				assert.Equal(t, tt.expected, port, "port %d, got %d")
+				require.NoError(t, err, "Unexpected error")
+				assert.Equal(t, tt.expected, port)
 			}
 		})
 	}
@@ -313,11 +291,10 @@ func TestGetGatewayDomainFromEnv(t *testing.T) {
 
 			domain := GetGatewayDomainFromEnv()
 
-			if tt.setEnv && domain != tt.envValue {
-				t.Errorf("Expected domain %s, got %s", tt.envValue, domain)
-			}
-			if !tt.setEnv && domain != "" {
-				t.Errorf("Expected empty domain when not set, got %s", domain)
+			if tt.setEnv {
+				assert.Equal(t, tt.envValue, domain)
+			} else {
+				assert.Empty(t, domain, "Expected empty domain when not set")
 			}
 		})
 	}
@@ -355,11 +332,10 @@ func TestGetGatewayAPIKeyFromEnv(t *testing.T) {
 
 			key := GetGatewayAPIKeyFromEnv()
 
-			if tt.setEnv && key != tt.envValue {
-				t.Errorf("Expected key %s, got %s", tt.envValue, key)
-			}
-			if !tt.setEnv && key != "" {
-				t.Errorf("Expected empty key when not set, got %s", key)
+			if tt.setEnv {
+				assert.Equal(t, tt.envValue, key)
+			} else {
+				assert.Empty(t, key, "Expected empty key when not set")
 			}
 		})
 	}
@@ -401,9 +377,7 @@ func TestEnvValidationResultIsValid(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.result.IsValid(); got != tt.valid {
-				t.Errorf("IsValid() = %v, want %v", got, tt.valid)
-			}
+			assert.Equal(t, tt.valid, tt.result.IsValid())
 		})
 	}
 }
@@ -437,9 +411,7 @@ func TestEnvValidationResultError(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.result.Error(); got != tt.expected {
-				t.Errorf("Error() = %q, want %q", got, tt.expected)
-			}
+			assert.Equal(t, tt.expected, tt.result.Error())
 		})
 	}
 }
@@ -472,7 +444,7 @@ func TestValidateExecutionEnvironment(t *testing.T) {
 		result := ValidateExecutionEnvironment()
 
 		// Should not have missing env vars
-		assert.False(t, len(result.MissingEnvVars) > 0, "Expected no missing env vars, got %v")
+		assert.Empty(t, result.MissingEnvVars, "Expected no missing env vars")
 	})
 
 	t.Run("with missing env vars", func(t *testing.T) {
@@ -483,14 +455,10 @@ func TestValidateExecutionEnvironment(t *testing.T) {
 		result := ValidateExecutionEnvironment()
 
 		// Should have missing env vars
-		if len(result.MissingEnvVars) != 3 {
-			t.Errorf("Expected 3 missing env vars, got %d: %v", len(result.MissingEnvVars), result.MissingEnvVars)
-		}
+		assert.Len(t, result.MissingEnvVars, 3, "Expected 3 missing env vars")
 
 		// Should have validation errors
-		if len(result.ValidationErrors) == 0 {
-			t.Error("Expected validation errors for missing env vars")
-		}
+		assert.NotEmpty(t, result.ValidationErrors, "Expected validation errors for missing env vars")
 	})
 }
 
@@ -807,7 +775,7 @@ func TestValidateContainerizedEnvironment(t *testing.T) {
 		// Log dir check will fail (container doesn't exist)
 		assert.False(t, result.LogDirMounted, "Log dir should not be mounted for nonexistent container")
 		// Should have a warning about log dir not being mounted
-		assert.Greater(t, len(result.ValidationWarnings), 0, "Should have warnings")
+		assert.NotEmpty(t, result.ValidationWarnings, "Should have warnings")
 	})
 
 	t.Run("log directory mount check with custom dir", func(t *testing.T) {
@@ -855,8 +823,8 @@ func TestValidateContainerizedEnvironment(t *testing.T) {
 		assert.False(t, result.IsValid(), "Should be invalid when Docker is not accessible")
 		// Should have error about Docker not being accessible
 		hasDockerError := false
-		for _, err := range result.ValidationErrors {
-			if assert.Contains(t, err, "Docker daemon") {
+		for _, errMsg := range result.ValidationErrors {
+			if strings.Contains(errMsg, "Docker daemon") {
 				hasDockerError = true
 				break
 			}
