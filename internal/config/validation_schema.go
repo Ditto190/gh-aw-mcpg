@@ -30,20 +30,18 @@ var (
 	// This URL points to the source of truth for the MCP Gateway configuration schema.
 	//
 	// Schema Version Pinning:
-	// The schema is pinned to a specific gh-aw version (v0.41.1) for build reproducibility.
-	// This ensures predictable builds and prevents unexpected breaking changes from upstream
-	// schema updates.
+	// The schema is fetched from the main branch to get the latest version.
 	//
-	// To update the schema version:
+	// To update to a specific pinned version:
 	//   1. Check the latest gh-aw release: https://github.com/github/gh-aw/releases
-	//   2. Update the version tag in the URL below
+	//   2. Update the URL below to use a version tag instead of main
 	//   3. Run tests to ensure compatibility: make test
-	//   4. Update this comment with the new version number
+	//   4. Update this comment with the version number
 	//
-	// Current schema version: v0.41.1 (February 2026)
+	// Current schema version: main (latest)
 	//
 	// Alternative: Embed the schema using go:embed directive for zero network dependency.
-	schemaURL = "https://raw.githubusercontent.com/github/gh-aw/v0.41.1/docs/public/schemas/mcp-gateway-config.schema.json"
+	schemaURL = "https://raw.githubusercontent.com/github/gh-aw/main/docs/public/schemas/mcp-gateway-config.schema.json"
 
 	// Schema caching to avoid recompiling the JSON schema on every validation
 	// This improves performance by compiling the schema once and reusing it
@@ -157,9 +155,12 @@ func fetchAndFixSchema(url string) ([]byte, error) {
 		}
 	}
 
-	// Add registry field to stdioServerConfig and httpServerConfig
-	// Spec Section 4.1.2 defines registry as a valid optional field for both server types
-	// Temporary workaround until the upstream schema is updated
+	// Add registry and guard-policies fields to stdioServerConfig and httpServerConfig.
+	// These are workarounds for fields supported by this gateway implementation that are
+	// not present in the upstream schema:
+	//   - registry: Spec Section 4.1.2 defines this as a valid optional field.
+	//   - guard-policies: Actively used in this implementation for server-level access control.
+	//     The upstream schema previously included this field and may add it back in a future version.
 	if definitions, ok := schema["definitions"].(map[string]interface{}); ok {
 		// Define the registry property schema
 		registryProperty := map[string]interface{}{
@@ -167,17 +168,26 @@ func fetchAndFixSchema(url string) ([]byte, error) {
 			"description": "URI to the installation location when MCP is installed from a registry. This is an informational field used for documentation and tooling discovery.",
 		}
 
-		// Add registry to stdioServerConfig
+		// Define the guard-policies property schema
+		guardPoliciesProperty := map[string]interface{}{
+			"type":                 "object",
+			"description":          "Guard policies for access control at the MCP gateway level. The structure of guard policies is server-specific.",
+			"additionalProperties": true,
+		}
+
+		// Add registry and guard-policies to stdioServerConfig
 		if stdioConfig, ok := definitions["stdioServerConfig"].(map[string]interface{}); ok {
 			if props, ok := stdioConfig["properties"].(map[string]interface{}); ok {
 				props["registry"] = registryProperty
+				props["guard-policies"] = guardPoliciesProperty
 			}
 		}
 
-		// Add registry to httpServerConfig
+		// Add registry and guard-policies to httpServerConfig
 		if httpConfig, ok := definitions["httpServerConfig"].(map[string]interface{}); ok {
 			if props, ok := httpConfig["properties"].(map[string]interface{}); ok {
 				props["registry"] = registryProperty
+				props["guard-policies"] = guardPoliciesProperty
 			}
 		}
 	}

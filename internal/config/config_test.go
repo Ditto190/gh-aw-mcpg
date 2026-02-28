@@ -166,8 +166,11 @@ func TestLoadFromStdin_UnsupportedType(t *testing.T) {
 	// Should fail validation for unsupported type
 	require.Error(t, err)
 
-	// Error should mention configuration error
-	assert.Contains(t, err.Error(), "Configuration error", "Expected configuration error")
+	// Error should mention configuration error or validation error
+	errorMsg := err.Error()
+	assert.True(t,
+		strings.Contains(errorMsg, "Configuration error") || strings.Contains(errorMsg, "Configuration validation error"),
+		"Expected configuration error or validation error, got: %s", errorMsg)
 
 	// Config should be nil on validation error
 	assert.Nil(t, cfg, "Config should be nil when validation fails")

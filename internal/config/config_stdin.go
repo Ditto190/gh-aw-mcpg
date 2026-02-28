@@ -8,7 +8,11 @@ import (
 	"io"
 	"log"
 	"os"
+
+	"github.com/github/gh-aw-mcpg/internal/logger"
 )
+
+var logStdin = logger.New("config:config_stdin")
 
 // StdinConfig represents the JSON configuration format read from stdin.
 type StdinConfig struct {
@@ -68,6 +72,10 @@ type StdinServerConfig struct {
 	// Registry is the URI to the installation location in an MCP registry (informational)
 	Registry string `json:"registry,omitempty"`
 
+	// GuardPolicies holds guard policies for access control at the MCP gateway level.
+	// The structure is server-specific. For GitHub MCP server, see the GitHub guard policy schema.
+	GuardPolicies map[string]interface{} `json:"guard-policies,omitempty"`
+
 	// AdditionalProperties stores any extra fields for custom server types
 	// This allows custom schemas to define their own fields beyond the standard ones
 	AdditionalProperties map[string]interface{} `json:"-"`
@@ -107,6 +115,7 @@ func (s *StdinServerConfig) UnmarshalJSON(data []byte) error {
 		"headers":        true,
 		"tools":          true,
 		"registry":       true,
+		"guard-policies": true,
 	}
 
 	// Store additional properties (fields not in the struct)
@@ -192,6 +201,7 @@ func LoadFromStdin() (*Config, error) {
 
 // convertStdinConfig converts StdinConfig to internal Config format.
 func convertStdinConfig(stdinCfg *StdinConfig) (*Config, error) {
+	logStdin.Printf("Converting stdin config: %d servers", len(stdinCfg.MCPServers))
 	cfg := &Config{
 		Servers: make(map[string]*ServerConfig),
 	}
@@ -209,6 +219,7 @@ func convertStdinConfig(stdinCfg *StdinConfig) (*Config, error) {
 			cfg.Gateway.PayloadDir = stdinCfg.Gateway.PayloadDir
 		}
 	} else {
+		logStdin.Print("No gateway config in stdin, applying defaults")
 		cfg.Gateway = &GatewayConfig{}
 		applyGatewayDefaults(cfg.Gateway)
 	}
@@ -265,16 +276,19 @@ func convertStdinServerConfig(name string, server *StdinServerConfig, customSche
 		serverType = "stdio"
 	}
 
+	logStdin.Printf("Converting server %q: type=%s", name, serverType)
+
 	// Handle HTTP servers
 	if serverType == "http" {
 		logConfig.Printf("Configured HTTP MCP server: name=%s, url=%s", name, server.URL)
 		log.Printf("[CONFIG] Configured HTTP MCP server: %s -> %s", name, server.URL)
 		return &ServerConfig{
-			Type:     "http",
-			URL:      server.URL,
-			Headers:  server.Headers,
-			Tools:    server.Tools,
-			Registry: server.Registry,
+			Type:          "http",
+			URL:           server.URL,
+			Headers:       server.Headers,
+			Tools:         server.Tools,
+			Registry:      server.Registry,
+			GuardPolicies: server.GuardPolicies,
 		}, nil
 	}
 
@@ -297,6 +311,7 @@ func buildStdioServerConfig(name string, server *StdinServerConfig) *ServerConfi
 
 	// Add entrypoint override if specified
 	if server.Entrypoint != "" {
+		logStdin.Printf("Server %q: using custom entrypoint %q", name, server.Entrypoint)
 		args = append(args, "--entrypoint", server.Entrypoint)
 	}
 
@@ -332,12 +347,13 @@ func buildStdioServerConfig(name string, server *StdinServerConfig) *ServerConfi
 	logConfig.Printf("Configured stdio MCP server: name=%s, container=%s", name, server.Container)
 
 	return &ServerConfig{
-		Type:     "stdio",
-		Command:  "docker",
-		Args:     args,
-		Env:      make(map[string]string),
-		Tools:    server.Tools,
-		Registry: server.Registry,
+		Type:          "stdio",
+		Command:       "docker",
+		Args:          args,
+		Env:           make(map[string]string),
+		Tools:         server.Tools,
+		Registry:      server.Registry,
+		GuardPolicies: server.GuardPolicies,
 	}
 }
 
@@ -378,6 +394,7 @@ func normalizeLocalType(data []byte) ([]byte, error) {
 
 	// If we modified anything, re-marshal the data
 	if modified {
+		logStdin.Print("Normalized 'local' server type to 'stdio' for backward compatibility")
 		return json.Marshal(rawConfig)
 	}
 
