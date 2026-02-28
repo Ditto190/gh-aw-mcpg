@@ -133,8 +133,8 @@ For the complete JSON configuration specification with all validation rules, see
       },
       "guard-policies": {
         "github": {
-          "owner": "github",
-          "repos": ["gh-aw-mcpg", "gh-aw"]
+          "repos": ["github/gh-aw-mcpg", "github/gh-aw"],
+          "min-integrity": "reader"
         }
       }
     }
@@ -377,8 +377,9 @@ When running locally (`run.sh`), these variables are optional (warnings shown if
 | `MCP_GATEWAY_PAYLOAD_SIZE_THRESHOLD` | Size threshold in bytes for payload storage (sets default for `--payload-size-threshold` flag) | `524288` |
 | `DEBUG` | Enable debug logging with pattern matching (e.g., `*`, `server:*,launcher:*`) | (disabled) |
 | `DEBUG_COLORS` | Control colored debug output (0 to disable, auto-disabled when piping) | Auto-detect |
+| `RUNNING_IN_CONTAINER` | Signals the gateway is running inside a container (set automatically by container runtimes) | `true` |
 
-**Note:** The `HOST` and `MODE` environment variables are not used by the gateway application. Use the `--listen` flag to set the bind address (default: `127.0.0.1:3000`) and the `--routed` or `--unified` flags to set the gateway mode.
+**Note:** The `PORT`, `HOST`, and `MODE` environment variables are not used by the gateway application. Use the `--listen` flag to set the bind address (default: `127.0.0.1:3000`) and the `--routed` or `--unified` flags to set the gateway mode.
 
 ### Containerized Deployment Variables
 
