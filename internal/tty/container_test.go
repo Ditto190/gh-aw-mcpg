@@ -2,6 +2,7 @@ package tty
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -312,12 +313,8 @@ func TestIsRunningInContainer_ConcurrentAccess(t *testing.T) {
 // Helper function to check if a string contains any of the given substrings
 func containsAny(s string, substrings []string) bool {
 	for _, substr := range substrings {
-		if len(s) >= len(substr) {
-			for i := 0; i <= len(s)-len(substr); i++ {
-				if s[i:i+len(substr)] == substr {
-					return true
-				}
-			}
+		if strings.Contains(s, substr) {
+			return true
 		}
 	}
 	return false
