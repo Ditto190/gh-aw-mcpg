@@ -25,6 +25,8 @@ import (
 
 var logUnified = logger.New("server:unified")
 
+const wasmGuardsDirEnvVar = "MCP_GATEWAY_WASM_GUARDS_DIR"
+
 // MCPProtocolVersion is the MCP protocol version supported by this gateway
 const MCPProtocolVersion = mcp.MCPProtocolVersion
 
@@ -593,6 +595,23 @@ func (us *UnifiedServer) registerSysTools() error {
 func (us *UnifiedServer) registerGuard(serverID string) {
 	var g guard.Guard
 
+	// Check if a per-server WASM guard exists in MCP_GATEWAY_WASM_GUARDS_DIR.
+	// If found and loadable, it takes precedence over config-defined guards.
+	if wasmPath, found, err := findServerWASMGuardFile(serverID); err != nil {
+		log.Printf("[DIFC] WARNING: Failed to discover WASM guard for server '%s' from %s: %v", serverID, wasmGuardsDirEnvVar, err)
+	} else if found {
+		ctx := context.Background()
+		loadedGuard, loadErr := guard.NewWasmGuard(ctx, serverID, wasmPath, nil)
+		if loadErr != nil {
+			log.Printf("[DIFC] WARNING: Failed to load discovered WASM guard for server '%s' from %s: %v", serverID, wasmPath, loadErr)
+		} else {
+			log.Printf("[DIFC] Loaded discovered WASM guard for server '%s' from file: %s", serverID, filepath.Base(wasmPath))
+			us.guardRegistry.Register(serverID, loadedGuard)
+			log.Printf("[DIFC] Registered guard '%s' for server '%s'", loadedGuard.Name(), serverID)
+			return
+		}
+	}
+
 	// Check if server has a guard configured
 	serverCfg, hasServer := us.cfg.Servers[serverID]
 	if hasServer && serverCfg.Guard != "" {
@@ -624,6 +643,34 @@ func (us *UnifiedServer) registerGuard(serverID string) {
 
 	us.guardRegistry.Register(serverID, g)
 	log.Printf("[DIFC] Registered guard '%s' for server '%s'", g.Name(), serverID)
+}
+
+func findServerWASMGuardFile(serverID string) (string, bool, error) {
+	guardsRootDir := strings.TrimSpace(os.Getenv(wasmGuardsDirEnvVar))
+	if guardsRootDir == "" {
+		return "", false, nil
+	}
+
+	serverGuardDir := filepath.Join(guardsRootDir, serverID)
+	entries, err := os.ReadDir(serverGuardDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", false, nil
+		}
+		return "", false, fmt.Errorf("failed to read server guard directory %q: %w", serverGuardDir, err)
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+
+		if strings.EqualFold(filepath.Ext(entry.Name()), ".wasm") {
+			return filepath.Join(serverGuardDir, entry.Name()), true, nil
+		}
+	}
+
+	return "", false, nil
 }
 
 // createGuardFromConfig creates a guard instance from a guard configuration
