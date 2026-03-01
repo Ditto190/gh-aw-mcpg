@@ -189,6 +189,7 @@ func NewUnified(ctx context.Context, cfg *config.Config) (*UnifiedServer, error)
 	})
 
 	us.server = server
+	us.logWASMGuardsDirConfiguration()
 
 	// Register guards for all backends
 	for _, serverID := range l.ServerIDs() {
@@ -671,6 +672,16 @@ func findServerWASMGuardFile(serverID string) (string, bool, error) {
 	}
 
 	return "", false, nil
+}
+
+func (us *UnifiedServer) logWASMGuardsDirConfiguration() {
+	guardsRootDir := strings.TrimSpace(os.Getenv(wasmGuardsDirEnvVar))
+	if guardsRootDir == "" {
+		log.Printf("[DIFC] %s is not set", wasmGuardsDirEnvVar)
+		return
+	}
+
+	log.Printf("[DIFC] %s=%s", wasmGuardsDirEnvVar, guardsRootDir)
 }
 
 // createGuardFromConfig creates a guard instance from a guard configuration
