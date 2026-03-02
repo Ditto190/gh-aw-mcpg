@@ -595,6 +595,7 @@ func (us *UnifiedServer) registerSysTools() error {
 // 3. Fall back to noop guard if no guard is configured
 func (us *UnifiedServer) registerGuard(serverID string) {
 	var g guard.Guard
+	us.logServerGuardPolicies(serverID)
 
 	// Check if a per-server WASM guard exists in MCP_GATEWAY_WASM_GUARDS_DIR.
 	// If found and loadable, it takes precedence over config-defined guards.
@@ -644,6 +645,27 @@ func (us *UnifiedServer) registerGuard(serverID string) {
 
 	us.guardRegistry.Register(serverID, g)
 	log.Printf("[DIFC] Registered guard '%s' for server '%s'", g.Name(), serverID)
+}
+
+func (us *UnifiedServer) logServerGuardPolicies(serverID string) {
+	if us.cfg == nil || us.cfg.Servers == nil {
+		log.Printf("[DIFC] no guard policy was set for MCP server '%s'", serverID)
+		return
+	}
+
+	serverCfg, ok := us.cfg.Servers[serverID]
+	if !ok || serverCfg == nil || len(serverCfg.GuardPolicies) == 0 {
+		log.Printf("[DIFC] no guard policy was set for MCP server '%s'", serverID)
+		return
+	}
+
+	policyJSON, err := json.Marshal(serverCfg.GuardPolicies)
+	if err != nil {
+		log.Printf("[DIFC] guard policy is set for MCP server '%s' (failed to serialize policy: %v)", serverID, err)
+		return
+	}
+
+	log.Printf("[DIFC] guard policy for MCP server '%s': %s", serverID, string(policyJSON))
 }
 
 func findServerWASMGuardFile(serverID string) (string, bool, error) {
