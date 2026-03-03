@@ -193,7 +193,9 @@ func NewUnified(ctx context.Context, cfg *config.Config) (*UnifiedServer, error)
 
 	// Register guards for all backends
 	for _, serverID := range l.ServerIDs() {
-		us.registerGuard(serverID)
+		if err := us.registerGuard(serverID); err != nil {
+			return nil, fmt.Errorf("failed to register guard for server %q: %w", serverID, err)
+		}
 	}
 
 	// Register aggregated tools from all backends
@@ -593,7 +595,7 @@ func (us *UnifiedServer) registerSysTools() error {
 // 1. If server has a "guard" field, look up the guard config by name
 // 2. Create the appropriate guard type (wasm, noop, etc.)
 // 3. Fall back to noop guard if no guard is configured
-func (us *UnifiedServer) registerGuard(serverID string) {
+func (us *UnifiedServer) registerGuard(serverID string) error {
 	var g guard.Guard
 	us.logServerGuardPolicies(serverID)
 
@@ -608,43 +610,65 @@ func (us *UnifiedServer) registerGuard(serverID string) {
 			log.Printf("[DIFC] WARNING: Failed to load discovered WASM guard for server '%s' from %s: %v", serverID, wasmPath, loadErr)
 		} else {
 			log.Printf("[DIFC] Loaded discovered WASM guard for server '%s' from file: %s", serverID, filepath.Base(wasmPath))
-			us.guardRegistry.Register(serverID, loadedGuard)
-			log.Printf("[DIFC] Registered guard '%s' for server '%s'", loadedGuard.Name(), serverID)
-			return
+			g = loadedGuard
 		}
 	}
 
-	// Check if server has a guard configured
-	serverCfg, hasServer := us.cfg.Servers[serverID]
-	if hasServer && serverCfg.Guard != "" {
-		guardName := serverCfg.Guard
+	if g == nil {
+		// Check if server has a guard configured
+		serverCfg, hasServer := us.cfg.Servers[serverID]
+		if hasServer && serverCfg.Guard != "" {
+			guardName := serverCfg.Guard
 
-		// Look up guard config
-		guardCfg, hasGuardCfg := us.cfg.Guards[guardName]
-		if hasGuardCfg {
-			// Create guard based on type
-			var err error
-			g, err = us.createGuardFromConfig(guardName, guardCfg)
-			if err != nil {
-				log.Printf("[DIFC] WARNING: Failed to create guard '%s' for server '%s': %v (falling back to noop)", guardName, serverID, err)
-				g = guard.NewNoopGuard()
+			// Look up guard config
+			guardCfg, hasGuardCfg := us.cfg.Guards[guardName]
+			if hasGuardCfg {
+				// Create guard based on type
+				var err error
+				g, err = us.createGuardFromConfig(guardName, guardCfg)
+				if err != nil {
+					log.Printf("[DIFC] WARNING: Failed to create guard '%s' for server '%s': %v (falling back to noop)", guardName, serverID, err)
+					g = guard.NewNoopGuard()
+				}
+			} else {
+				// Guard name specified but no config found - try registered guard types
+				var err error
+				g, err = guard.CreateGuard(guardName)
+				if err != nil {
+					log.Printf("[DIFC] WARNING: Guard '%s' not found for server '%s': %v (falling back to noop)", guardName, serverID, err)
+					g = guard.NewNoopGuard()
+				}
 			}
 		} else {
-			// Guard name specified but no config found - try registered guard types
-			var err error
-			g, err = guard.CreateGuard(guardName)
-			if err != nil {
-				log.Printf("[DIFC] WARNING: Guard '%s' not found for server '%s': %v (falling back to noop)", guardName, serverID, err)
-				g = guard.NewNoopGuard()
-			}
+			// No guard configured - use noop
+			g = guard.NewNoopGuard()
 		}
-	} else {
-		// No guard configured - use noop
-		g = guard.NewNoopGuard()
+	}
+
+	if err := us.requireGuardPolicyIfGuardEnabled(serverID, g); err != nil {
+		return err
 	}
 
 	us.guardRegistry.Register(serverID, g)
 	log.Printf("[DIFC] Registered guard '%s' for server '%s'", g.Name(), serverID)
+	return nil
+}
+
+func (us *UnifiedServer) requireGuardPolicyIfGuardEnabled(serverID string, g guard.Guard) error {
+	if g == nil || g.Name() == "noop" {
+		return nil
+	}
+
+	if us.cfg == nil || us.cfg.Servers == nil {
+		return fmt.Errorf("guard '%s' is available but server configuration is missing", g.Name())
+	}
+
+	serverCfg, ok := us.cfg.Servers[serverID]
+	if !ok || serverCfg == nil || len(serverCfg.GuardPolicies) == 0 {
+		return fmt.Errorf("guard '%s' is available for MCP server '%s' but no guard policy is set", g.Name(), serverID)
+	}
+
+	return nil
 }
 
 func (us *UnifiedServer) logServerGuardPolicies(serverID string) {
@@ -1165,7 +1189,17 @@ func (us *UnifiedServer) resolveGuardPolicy(serverID string) (*config.GuardPolic
 	}
 
 	serverCfg, ok := us.cfg.Servers[serverID]
-	if !ok || serverCfg == nil || serverCfg.Guard == "" {
+	if !ok || serverCfg == nil {
+		return nil, "legacy", nil
+	}
+
+	if policy, err := parseServerGuardPolicy(serverID, serverCfg.GuardPolicies); err != nil {
+		return nil, "", err
+	} else if policy != nil {
+		return policy, "server", nil
+	}
+
+	if serverCfg.Guard == "" {
 		return nil, "legacy", nil
 	}
 
@@ -1179,6 +1213,89 @@ func (us *UnifiedServer) resolveGuardPolicy(serverID string) (*config.GuardPolic
 	}
 
 	return guardCfg.Policy, "config", nil
+}
+
+func parseServerGuardPolicy(serverID string, raw map[string]interface{}) (*config.GuardPolicy, error) {
+	if len(raw) == 0 {
+		return nil, nil
+	}
+
+	if policy, err := parsePolicyMap(raw); err != nil {
+		return nil, err
+	} else if policy != nil {
+		return policy, nil
+	}
+
+	if nested, ok := raw[serverID]; ok {
+		nestedMap, ok := nested.(map[string]interface{})
+		if !ok {
+			return nil, fmt.Errorf("invalid guard policy for server '%s': expected object", serverID)
+		}
+		if policy, err := parsePolicyMap(nestedMap); err != nil {
+			return nil, err
+		} else if policy != nil {
+			return policy, nil
+		}
+	}
+
+	if len(raw) == 1 {
+		for _, value := range raw {
+			nestedMap, ok := value.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if policy, err := parsePolicyMap(nestedMap); err != nil {
+				return nil, err
+			} else if policy != nil {
+				return policy, nil
+			}
+		}
+	}
+
+	return nil, nil
+}
+
+func parsePolicyMap(raw map[string]interface{}) (*config.GuardPolicy, error) {
+	if len(raw) == 0 {
+		return nil, nil
+	}
+
+	if _, hasAllowOnly := raw["allowonly"]; hasAllowOnly {
+		policyBytes, err := json.Marshal(raw)
+		if err != nil {
+			return nil, fmt.Errorf("failed to serialize server guard policy: %w", err)
+		}
+		policy, err := config.ParseGuardPolicyJSON(string(policyBytes))
+		if err != nil {
+			return nil, fmt.Errorf("invalid server guard policy: %w", err)
+		}
+		return policy, nil
+	}
+
+	repos, hasRepos := raw["repos"]
+	if !hasRepos {
+		return nil, nil
+	}
+
+	integrityValue, hasIntegrity := raw["integrity"]
+	if !hasIntegrity {
+		integrityValue, hasIntegrity = raw["min-integrity"]
+	}
+	if !hasIntegrity {
+		return nil, fmt.Errorf("invalid server guard policy: repos specified without integrity/min-integrity")
+	}
+
+	policy := &config.GuardPolicy{
+		AllowOnly: &config.AllowOnlyPolicy{
+			Repos:     repos,
+			Integrity: fmt.Sprintf("%v", integrityValue),
+		},
+	}
+	if err := config.ValidateGuardPolicy(policy); err != nil {
+		return nil, fmt.Errorf("invalid server guard policy: %w", err)
+	}
+
+	return policy, nil
 }
 
 func (us *UnifiedServer) ensureGuardInitialized(
@@ -1217,12 +1334,21 @@ func (us *UnifiedServer) ensureGuardInitialized(
 	us.sessionMu.RUnlock()
 
 	log.Printf("[DIFC] Initializing guard session state: server=%s, session=%s, policy_source=%s", serverID, sessionID, source)
+	log.Printf("[DIFC] Calling label_agent: server=%s, session=%s, guard=%s, policy=%s", serverID, sessionID, g.Name(), string(policyJSON))
 	labelAgentResult, err := g.LabelAgent(ctx, policy, backendCaller, us.capabilities)
 	if err != nil {
+		log.Printf("[DIFC] label_agent failed: server=%s, session=%s, guard=%s, error=%v", serverID, sessionID, g.Name(), err)
 		return defaultMode, fmt.Errorf("label_agent failed: %w", err)
 	}
 	if labelAgentResult == nil {
+		log.Printf("[DIFC] label_agent returned nil result: server=%s, session=%s, guard=%s", serverID, sessionID, g.Name())
 		return defaultMode, fmt.Errorf("label_agent returned nil result")
+	}
+	resultJSON, marshalErr := json.Marshal(labelAgentResult)
+	if marshalErr != nil {
+		log.Printf("[DIFC] label_agent returned result (failed to serialize for logging): server=%s, session=%s, guard=%s, error=%v", serverID, sessionID, g.Name(), marshalErr)
+	} else {
+		log.Printf("[DIFC] label_agent response: server=%s, session=%s, guard=%s, response=%s", serverID, sessionID, g.Name(), string(resultJSON))
 	}
 
 	mode := defaultMode

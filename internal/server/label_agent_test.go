@@ -127,6 +127,11 @@ func TestCallBackendTool_LabelAgentInitializationCached(t *testing.T) {
 				Type:  "http",
 				URL:   backend.URL,
 				Guard: "test-guard",
+				GuardPolicies: map[string]interface{}{
+					"label-agent-test": map[string]interface{}{
+						"repos": "public",
+					},
+				},
 			},
 		},
 		Guards: map[string]*config.GuardConfig{
@@ -175,4 +180,123 @@ func TestCallBackendTool_LabelAgentInitializationCached(t *testing.T) {
 	require.NotNil(session.GuardInit["test-backend"])
 	assert.Equal(difc.EnforcementFilter, session.GuardInit["test-backend"].DIFCMode)
 	assert.Equal("composite", session.GuardInit["test-backend"].NormalizedPolicy["scope_kind"])
+}
+
+func TestCallBackendTool_LabelAgentInitializationFromServerGuardPolicies(t *testing.T) {
+	require := require.New(t)
+	assert := assert.New(t)
+
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req map[string]interface{}
+		err := json.NewDecoder(r.Body).Decode(&req)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		method, ok := req["method"].(string)
+		if !ok {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		switch method {
+		case "initialize":
+			response := map[string]interface{}{
+				"jsonrpc": "2.0",
+				"id":      req["id"],
+				"result": map[string]interface{}{
+					"protocolVersion": "2024-11-05",
+					"capabilities":    map[string]interface{}{},
+					"serverInfo": map[string]interface{}{
+						"name":    "test-backend",
+						"version": "1.0.0",
+					},
+				},
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(response)
+		case "tools/list":
+			response := map[string]interface{}{
+				"jsonrpc": "2.0",
+				"id":      req["id"],
+				"result": map[string]interface{}{
+					"tools": []map[string]interface{}{
+						{
+							"name":        "test_tool",
+							"description": "test tool",
+							"inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{}},
+						},
+					},
+				},
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(response)
+		case "tools/call":
+			response := map[string]interface{}{
+				"jsonrpc": "2.0",
+				"id":      req["id"],
+				"result": map[string]interface{}{
+					"content": []map[string]interface{}{{"type": "text", "text": "ok"}},
+					"isError": false,
+				},
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(response)
+		}
+	}))
+	defer backend.Close()
+
+	customGuard := &labelAgentTestGuard{}
+	guard.RegisterGuardType("label-agent-server-policy-test-type", func() (guard.Guard, error) {
+		return customGuard, nil
+	})
+
+	cfg := &config.Config{
+		EnableDIFC: true,
+		DIFCMode:   "strict",
+		Servers: map[string]*config.ServerConfig{
+			"test-backend": {
+				Type:  "http",
+				URL:   backend.URL,
+				Guard: "test-guard",
+				GuardPolicies: map[string]interface{}{
+					"allowonly": map[string]interface{}{
+						"repos":     "public",
+						"integrity": "none",
+					},
+				},
+			},
+		},
+		Guards: map[string]*config.GuardConfig{
+			"test-guard": {
+				Type: "label-agent-server-policy-test-type",
+			},
+		},
+	}
+
+	us, err := NewUnified(context.Background(), cfg)
+	require.NoError(err)
+
+	ctx := context.WithValue(context.Background(), SessionIDContextKey, "session-456")
+	ctx = guard.SetAgentIDInContext(ctx, "session-456")
+
+	result1, _, err := us.callBackendTool(ctx, "test-backend", "test_tool", map[string]interface{}{})
+	require.NoError(err)
+	require.NotNil(result1)
+	require.False(result1.IsError)
+
+	result2, _, err := us.callBackendTool(ctx, "test-backend", "test_tool", map[string]interface{}{})
+	require.NoError(err)
+	require.NotNil(result2)
+
+	customGuard.mu.Lock()
+	calls := customGuard.labelAgentCalls
+	customGuard.mu.Unlock()
+	assert.Equal(1, calls, "label_agent should run once per session/server policy from guard-policies")
+
+	agentLabels, ok := us.agentRegistry.Get("session-456")
+	require.True(ok)
+	assert.Contains(agentLabels.GetSecrecyTags(), difc.Tag("policy-secret"))
+	assert.Contains(agentLabels.GetIntegrityTags(), difc.Tag("policy-integrity"))
 }

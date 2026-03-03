@@ -309,6 +309,7 @@ func TestDIFCModeFilterViaEnv(t *testing.T) {
 	cmd.Env = append(os.Environ(),
 		"MCP_GATEWAY_ENABLE_DIFC=true",
 		"MCP_GATEWAY_DIFC_MODE=filter",
+		"MCP_GATEWAY_WASM_GUARDS_DIR=",
 	)
 
 	var stdout, stderr bytes.Buffer
@@ -355,6 +356,7 @@ func TestDIFCModePropagateViaEnv(t *testing.T) {
 	cmd.Env = append(os.Environ(),
 		"MCP_GATEWAY_ENABLE_DIFC=true",
 		"MCP_GATEWAY_DIFC_MODE=propagate",
+		"MCP_GATEWAY_WASM_GUARDS_DIR=",
 	)
 
 	var stdout, stderr bytes.Buffer

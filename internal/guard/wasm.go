@@ -404,35 +404,44 @@ func isValidAllowOnlyRepos(repos interface{}) bool {
 func parseLabelAgentResponse(resultJSON []byte) (*LabelAgentResult, error) {
 	var raw map[string]interface{}
 	if err := json.Unmarshal(resultJSON, &raw); err != nil {
+		logWasm.Printf("label_agent response parse error (invalid JSON): error=%v, raw=%s", err, string(resultJSON))
 		return nil, fmt.Errorf("failed to unmarshal label_agent response: %w", err)
 	}
 
 	if success, ok := raw["success"].(bool); ok && !success {
 		if message, msgOK := raw["error"].(string); msgOK && strings.TrimSpace(message) != "" {
+			logWasm.Printf("label_agent response indicated failure: error=%s, response=%s", message, string(resultJSON))
 			return nil, fmt.Errorf("label_agent rejected policy: %s", message)
 		}
+		logWasm.Printf("label_agent response indicated non-success status: response=%s", string(resultJSON))
 		return nil, fmt.Errorf("label_agent returned non-success status")
 	}
 	if okValue, ok := raw["ok"].(bool); ok && !okValue {
 		if message, msgOK := raw["error"].(string); msgOK && strings.TrimSpace(message) != "" {
+			logWasm.Printf("label_agent response indicated failure: error=%s, response=%s", message, string(resultJSON))
 			return nil, fmt.Errorf("label_agent rejected policy: %s", message)
 		}
+		logWasm.Printf("label_agent response indicated non-success status: response=%s", string(resultJSON))
 		return nil, fmt.Errorf("label_agent returned non-success status")
 	}
 	if message, ok := raw["error"].(string); ok && strings.TrimSpace(message) != "" {
+		logWasm.Printf("label_agent response contained error field: error=%s, response=%s", message, string(resultJSON))
 		return nil, fmt.Errorf("label_agent returned error: %s", message)
 	}
 
 	var result LabelAgentResult
 	if err := json.Unmarshal(resultJSON, &result); err != nil {
+		logWasm.Printf("label_agent response decode error: error=%v, response=%s", err, string(resultJSON))
 		return nil, fmt.Errorf("failed to decode label_agent response: %w", err)
 	}
 
 	if strings.TrimSpace(result.DIFCMode) == "" {
+		logWasm.Printf("label_agent response missing difc_mode: response=%s", string(resultJSON))
 		return nil, fmt.Errorf("label_agent response missing difc_mode")
 	}
 
 	if _, err := difc.ParseEnforcementMode(result.DIFCMode); err != nil {
+		logWasm.Printf("label_agent response invalid difc_mode=%q: error=%v, response=%s", result.DIFCMode, err, string(resultJSON))
 		return nil, fmt.Errorf("invalid difc_mode from label_agent: %w", err)
 	}
 
@@ -441,7 +450,7 @@ func parseLabelAgentResponse(resultJSON []byte) (*LabelAgentResult, error) {
 
 // LabelAgent calls the WASM module's label_agent function.
 func (g *WasmGuard) LabelAgent(ctx context.Context, policy interface{}, backend BackendCaller, caps *difc.Capabilities) (*LabelAgentResult, error) {
-	logWasm.Printf("LabelAgent called")
+	logWasm.Printf("LabelAgent called: guard=%s", g.name)
 
 	if g.module.ExportedFunction("label_agent") == nil {
 		return nil, fmt.Errorf("WASM guard does not export label_agent")
@@ -456,12 +465,20 @@ func (g *WasmGuard) LabelAgent(ctx context.Context, policy interface{}, backend 
 
 	normalizedPolicy, err := normalizePolicyPayload(policy)
 	if err != nil {
+		logWasm.Printf("LabelAgent normalizePolicyPayload failed: guard=%s, error=%v", g.name, err)
 		return nil, err
+	}
+	normalizedPolicyJSON, normalizeMarshalErr := json.Marshal(normalizedPolicy)
+	if normalizeMarshalErr != nil {
+		logWasm.Printf("LabelAgent normalized policy (marshal failed): guard=%s, error=%v", g.name, normalizeMarshalErr)
+	} else {
+		logWasm.Printf("LabelAgent normalized policy: guard=%s, policy=%s", g.name, string(normalizedPolicyJSON))
 	}
 	_ = caps
 
 	input, err := buildStrictLabelAgentPayload(normalizedPolicy)
 	if err != nil {
+		logWasm.Printf("LabelAgent buildStrictLabelAgentPayload failed: guard=%s, error=%v", g.name, err)
 		return nil, err
 	}
 
@@ -474,14 +491,30 @@ func (g *WasmGuard) LabelAgent(ctx context.Context, policy interface{}, backend 
 
 	resultJSON, err := g.callWasmFunction("label_agent", inputJSON)
 	if err != nil {
+		logWasm.Printf("LabelAgent callWasmFunction failed: guard=%s, error=%v", g.name, err)
 		return nil, err
 	}
+	logWasm.Printf("LabelAgent raw response JSON (%d bytes): %s", len(resultJSON), string(resultJSON))
 
 	if len(resultJSON) == 0 {
+		logWasm.Printf("LabelAgent returned empty response: guard=%s", g.name)
 		return nil, fmt.Errorf("label_agent returned empty response")
 	}
 
-	return parseLabelAgentResponse(resultJSON)
+	result, err := parseLabelAgentResponse(resultJSON)
+	if err != nil {
+		logWasm.Printf("LabelAgent response validation failed: guard=%s, error=%v", g.name, err)
+		return nil, err
+	}
+
+	resultLogJSON, resultMarshalErr := json.Marshal(result)
+	if resultMarshalErr != nil {
+		logWasm.Printf("LabelAgent parsed response (marshal failed): guard=%s, error=%v", g.name, resultMarshalErr)
+	} else {
+		logWasm.Printf("LabelAgent parsed response: guard=%s, response=%s", g.name, string(resultLogJSON))
+	}
+
+	return result, nil
 }
 
 // LabelResource calls the WASM module's label_resource function
