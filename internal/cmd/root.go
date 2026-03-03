@@ -341,7 +341,7 @@ func writeGatewayConfigToStdout(cfg *config.Config, listenAddr, mode string) err
 }
 
 func writeGatewayConfig(cfg *config.Config, listenAddr, mode string, w io.Writer) error {
-	debugLog.Printf("Writing gateway config: listenAddr=%s, mode=%s, servers=%d", listenAddr, mode, len(cfg.Servers))
+	debugLog.Printf("Writing gateway config: listenAddr=%s, mode=%s, serverCount=%d", listenAddr, mode, len(cfg.Servers))
 
 	// Parse listen address to extract host and port
 	// Use net.SplitHostPort which properly handles both IPv4 and IPv6 addresses
@@ -354,6 +354,7 @@ func writeGatewayConfig(cfg *config.Config, listenAddr, mode string, w io.Writer
 			port = p
 		}
 	}
+	debugLog.Printf("Parsed listen address: host=%s, port=%s", host, port)
 
 	// Determine domain (use host from listen address)
 	domain := host
@@ -365,6 +366,7 @@ func writeGatewayConfig(cfg *config.Config, listenAddr, mode string, w io.Writer
 	if cfg.Gateway != nil {
 		apiKey = cfg.Gateway.APIKey
 	}
+	debugLog.Printf("Gateway config: auth_enabled=%v", apiKey != "")
 
 	debugLog.Printf("Gateway auth: apiKeyConfigured=%v", apiKey != "")
 
@@ -380,12 +382,15 @@ func writeGatewayConfig(cfg *config.Config, listenAddr, mode string, w io.Writer
 			"type": "http",
 		}
 
+		var serverURL string
 		if mode == "routed" {
-			serverConfig["url"] = fmt.Sprintf("http://%s:%s/mcp/%s", domain, port, name)
+			serverURL = fmt.Sprintf("http://%s:%s/mcp/%s", domain, port, name)
 		} else {
 			// Unified mode - all servers use /mcp endpoint
-			serverConfig["url"] = fmt.Sprintf("http://%s:%s/mcp", domain, port)
+			serverURL = fmt.Sprintf("http://%s:%s/mcp", domain, port)
 		}
+		serverConfig["url"] = serverURL
+		debugLog.Printf("Writing server config: name=%s, url=%s, toolCount=%d", name, serverURL, len(server.Tools))
 
 		// Add auth headers per MCP Gateway Specification Section 5.4
 		// Authorization header contains API key directly (not Bearer scheme per spec 7.1)
@@ -412,6 +417,7 @@ func writeGatewayConfig(cfg *config.Config, listenAddr, mode string, w io.Writer
 	if err := encoder.Encode(outputConfig); err != nil {
 		return fmt.Errorf("failed to encode configuration: %w", err)
 	}
+	debugLog.Printf("Gateway config written successfully: serverCount=%d", len(servers))
 
 	debugLog.Printf("Gateway config written successfully: serverCount=%d", len(servers))
 

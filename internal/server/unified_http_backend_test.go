@@ -15,89 +15,87 @@ import (
 	"github.com/github/gh-aw-mcpg/internal/mcp"
 )
 
-// TestHTTPBackendInitialization tests that HTTP backends receive session ID during initialization
+// TestHTTPBackendInitialization tests that HTTP backends use the session ID issued by the
+// server during initialize (not a locally-fabricated one) when calling tools/list.
+// This is a regression test for https://github.com/github/gh-aw/issues/18712 where
+// gateway-issued fake session IDs overrode the real server-issued session ID, causing
+// HTTP 400 on tools/list from strict backends like Datadog.
 func TestHTTPBackendInitialization(t *testing.T) {
-	// Track whether the session ID header was received
-	var receivedSessionID string
-	var requestMethod string
+	const serverSessionID = "server-issued-session-42"
+	var toolsListSessionID string
 
-	// Create a mock HTTP MCP server that requires Mcp-Session-Id header
+	// Create a mock HTTP MCP server that:
+	// 1. Issues a specific session ID during initialize
+	// 2. Requires that exact session ID for subsequent requests
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		receivedSessionID = r.Header.Get("Mcp-Session-Id")
-
-		// Parse the JSON-RPC request to get the method
 		var req struct {
 			Method string `json:"method"`
 		}
 		json.NewDecoder(r.Body).Decode(&req)
-		requestMethod = req.Method
 
-		// Simulate a backend that requires Mcp-Session-Id header
-		if receivedSessionID == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			response := map[string]interface{}{
+		switch req.Method {
+		case "initialize":
+			// Issue a specific session ID (as Datadog and other Streamable HTTP servers do)
+			w.Header().Set("Mcp-Session-Id", serverSessionID)
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]interface{}{
 				"jsonrpc": "2.0",
-				"error": map[string]interface{}{
-					"code":    -32600,
-					"message": "Invalid Request: Missing Mcp-Session-Id header",
+				"id":      1,
+				"result": map[string]interface{}{
+					"protocolVersion": "2024-11-05",
+					"capabilities":    map[string]interface{}{},
+					"serverInfo":      map[string]interface{}{"name": "test-server", "version": "1.0.0"},
 				},
-				"id": 1,
+			})
+		case "tools/list":
+			toolsListSessionID = r.Header.Get("Mcp-Session-Id")
+			// Reject requests with wrong or missing session ID (as strict backends do)
+			if toolsListSessionID != serverSessionID {
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"jsonrpc": "2.0",
+					"error":   map[string]interface{}{"code": -32603, "message": "Invalid session ID"},
+					"id":      1,
+				})
+				return
 			}
-			json.NewEncoder(w).Encode(response)
-			return
-		}
-
-		// Return a successful tools/list response
-		response := map[string]interface{}{
-			"jsonrpc": "2.0",
-			"id":      1,
-			"result": map[string]interface{}{
-				"tools": []map[string]interface{}{
-					{
-						"name":        "test_tool",
-						"description": "A test tool",
-						"inputSchema": map[string]interface{}{
-							"type": "object",
-						},
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"jsonrpc": "2.0",
+				"id":      1,
+				"result": map[string]interface{}{
+					"tools": []map[string]interface{}{
+						{"name": "test_tool", "description": "A test tool", "inputSchema": map[string]interface{}{"type": "object"}},
 					},
 				},
-			},
+			})
 		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
 	}))
 	defer mockServer.Close()
 
-	// Create config with HTTP backend
+	// Use a custom header to force plain JSON-RPC transport (avoids SDK transport timeouts in tests)
 	cfg := &config.Config{
 		Servers: map[string]*config.ServerConfig{
 			"http-backend": {
 				Type:    "http",
 				URL:     mockServer.URL,
-				Headers: map[string]string{},
+				Headers: map[string]string{"X-Auth": "test"},
 			},
 		},
 	}
 
-	// Create unified server - this should call tools/list during initialization
+	// Create unified server - this calls tools/list during initialization
 	ctx := context.Background()
 	us, err := NewUnified(ctx, cfg)
-	require.NoError(t, err, "Failed to create unified server")
+	require.NoError(t, err, "Failed to create unified server: gateway must use server-issued session ID for tools/list")
 	defer us.Close()
 
-	// Verify that the session ID was sent
-	assert.False(t, receivedSessionID == "", "Expected Mcp-Session-Id header to be sent during initialization, but it was empty")
+	// The session ID used for tools/list must be the one issued by the server during initialize,
+	// not a locally-fabricated "gateway-init-*" value.
+	assert.Equal(t, serverSessionID, toolsListSessionID,
+		"tools/list must use the session ID issued by the server during initialize, not a fabricated one")
 
-	// Verify the session ID follows the gateway-init pattern
-	expectedPrefix := "gateway-init-"
-	if len(receivedSessionID) < len(expectedPrefix) || receivedSessionID[:len(expectedPrefix)] != expectedPrefix {
-		t.Errorf("Expected session ID to start with '%s', got '%s'", expectedPrefix, receivedSessionID)
-	}
-
-	// Verify it was a tools/list request
-	assert.Equal(t, "tools/list", requestMethod, "method 'tools/list', got '%s'")
-
-	t.Logf("Successfully initialized HTTP backend with session ID: %s", receivedSessionID)
+	t.Logf("Correctly used server-issued session ID for tools/list: %s", toolsListSessionID)
 }
 
 // TestHTTPBackendInitializationWithSessionIDRequirement tests the exact error scenario from the problem statement

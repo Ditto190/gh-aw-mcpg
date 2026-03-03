@@ -275,12 +275,8 @@ func (us *UnifiedServer) registerToolsFromBackend(serverID string) error {
 		return fmt.Errorf("failed to connect: %w", err)
 	}
 
-	// Create a context with session ID for HTTP backends
-	// HTTP backends may require Mcp-Session-Id header even during initialization
-	ctx := context.WithValue(context.Background(), SessionIDContextKey, fmt.Sprintf("gateway-init-%s", serverID))
-
 	// List tools from backend
-	result, err := conn.SendRequestWithServerID(ctx, "tools/list", nil, serverID)
+	result, err := conn.SendRequestWithServerID(context.Background(), "tools/list", nil, serverID)
 	if err != nil {
 		return fmt.Errorf("failed to list tools: %w", err)
 	}

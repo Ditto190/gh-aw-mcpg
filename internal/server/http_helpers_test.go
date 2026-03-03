@@ -14,6 +14,242 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// TestSetupSessionCallback tests the setupSessionCallback helper function which
+// combines session extraction, logging, and context injection into one call.
+func TestSetupSessionCallback(t *testing.T) {
+	tests := []struct {
+		name             string
+		authHeader       string
+		backendID        string
+		requestMethod    string
+		requestBody      string
+		expectOK         bool
+		expectedSession  string
+		expectBackendInCtx bool
+	}{
+		{
+			name:               "routed mode - valid session with backendID",
+			authHeader:         "my-api-key",
+			backendID:          "github",
+			requestMethod:      "POST",
+			requestBody:        `{"method":"initialize"}`,
+			expectOK:           true,
+			expectedSession:    "my-api-key",
+			expectBackendInCtx: true,
+		},
+		{
+			name:               "unified mode - valid session without backendID",
+			authHeader:         "my-api-key",
+			backendID:          "",
+			requestMethod:      "POST",
+			requestBody:        `{"method":"tools/call"}`,
+			expectOK:           true,
+			expectedSession:    "my-api-key",
+			expectBackendInCtx: false,
+		},
+		{
+			name:               "missing Authorization header - rejected",
+			authHeader:         "",
+			backendID:          "github",
+			requestMethod:      "POST",
+			requestBody:        "",
+			expectOK:           false,
+			expectedSession:    "",
+			expectBackendInCtx: false,
+		},
+		{
+			name:               "Bearer token - valid session",
+			authHeader:         "Bearer session-token-123",
+			backendID:          "slack",
+			requestMethod:      "GET",
+			requestBody:        "",
+			expectOK:           true,
+			expectedSession:    "session-token-123",
+			expectBackendInCtx: true,
+		},
+		{
+			name:               "routed mode - POST with no body",
+			authHeader:         "session-xyz",
+			backendID:          "backend-1",
+			requestMethod:      "POST",
+			requestBody:        "",
+			expectOK:           true,
+			expectedSession:    "session-xyz",
+			expectBackendInCtx: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var req *http.Request
+			if tt.requestBody != "" {
+				req = httptest.NewRequest(tt.requestMethod, "/mcp", bytes.NewBufferString(tt.requestBody))
+			} else {
+				req = httptest.NewRequest(tt.requestMethod, "/mcp", nil)
+			}
+			if tt.authHeader != "" {
+				req.Header.Set("Authorization", tt.authHeader)
+			}
+
+			sessionID, ok := setupSessionCallback(req, tt.backendID)
+
+			assert.Equal(t, tt.expectOK, ok, "ok flag should match expected")
+			assert.Equal(t, tt.expectedSession, sessionID, "returned session ID should match")
+
+			if tt.expectOK {
+				// Verify context was injected into req (pointer mutation via *r = *...)
+				ctxSessionID := req.Context().Value(SessionIDContextKey)
+				require.NotNil(t, ctxSessionID, "session ID should be in request context")
+				assert.Equal(t, tt.expectedSession, ctxSessionID, "context session ID should match")
+
+				if tt.expectBackendInCtx {
+					ctxBackendID := req.Context().Value(mcp.ContextKey("backend-id"))
+					require.NotNil(t, ctxBackendID, "backend ID should be in context for routed mode")
+					assert.Equal(t, tt.backendID, ctxBackendID, "context backend ID should match")
+				} else {
+					ctxBackendID := req.Context().Value(mcp.ContextKey("backend-id"))
+					assert.Nil(t, ctxBackendID, "backend ID should not be in context for unified mode")
+				}
+
+				// Verify body is still readable after logging (body restoration)
+				if tt.requestBody != "" && tt.requestMethod == "POST" {
+					bodyBytes, err := io.ReadAll(req.Body)
+					require.NoError(t, err, "body should be readable after setupSessionCallback")
+					assert.Equal(t, tt.requestBody, string(bodyBytes), "body content should be preserved")
+				}
+			}
+		})
+	}
+}
+
+// TestSetupSessionCallback_MutatesRequest verifies that setupSessionCallback
+// mutates the request in-place via pointer dereference (*r = *...).
+func TestSetupSessionCallback_MutatesRequest(t *testing.T) {
+	req := httptest.NewRequest("POST", "/mcp", nil)
+	req.Header.Set("Authorization", "my-session-id")
+
+	// Verify context does not have session ID before call
+	assert.Nil(t, req.Context().Value(SessionIDContextKey), "context should be empty before call")
+
+	sessionID, ok := setupSessionCallback(req, "backend-a")
+
+	require.True(t, ok, "call should succeed")
+	assert.Equal(t, "my-session-id", sessionID, "returned session ID should match")
+
+	// After the call, the request should have been mutated in-place
+	ctxSessionID := req.Context().Value(SessionIDContextKey)
+	assert.Equal(t, "my-session-id", ctxSessionID, "request context should be mutated in-place")
+}
+
+// TestWithResponseLogging tests the withResponseLogging middleware which wraps
+// an http.Handler to log response bodies.
+func TestWithResponseLogging(t *testing.T) {
+	tests := []struct {
+		name           string
+		responseBody   string
+		statusCode     int
+		expectBody     string
+		expectStatus   int
+	}{
+		{
+			name:         "response with body is passed through",
+			responseBody: `{"result":"ok"}`,
+			statusCode:   http.StatusOK,
+			expectBody:   `{"result":"ok"}`,
+			expectStatus: http.StatusOK,
+		},
+		{
+			name:         "empty response body",
+			responseBody: "",
+			statusCode:   http.StatusOK,
+			expectBody:   "",
+			expectStatus: http.StatusOK,
+		},
+		{
+			name:         "error response is passed through",
+			responseBody: `{"error":"not found"}`,
+			statusCode:   http.StatusNotFound,
+			expectBody:   `{"error":"not found"}`,
+			expectStatus: http.StatusNotFound,
+		},
+		{
+			name:         "large response body is passed through",
+			responseBody: `{"items":[1,2,3,4,5,6,7,8,9,10]}`,
+			statusCode:   http.StatusOK,
+			expectBody:   `{"items":[1,2,3,4,5,6,7,8,9,10]}`,
+			expectStatus: http.StatusOK,
+		},
+		{
+			name:         "server error response",
+			responseBody: "Internal Server Error",
+			statusCode:   http.StatusInternalServerError,
+			expectBody:   "Internal Server Error",
+			expectStatus: http.StatusInternalServerError,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			innerCalled := false
+			innerHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				innerCalled = true
+				w.WriteHeader(tt.statusCode)
+				if tt.responseBody != "" {
+					w.Write([]byte(tt.responseBody))
+				}
+			})
+
+			wrappedHandler := withResponseLogging(innerHandler)
+
+			req := httptest.NewRequest("GET", "/test", nil)
+			req.RemoteAddr = "127.0.0.1:12345"
+			w := httptest.NewRecorder()
+
+			wrappedHandler.ServeHTTP(w, req)
+
+			assert.True(t, innerCalled, "inner handler should be called")
+			assert.Equal(t, tt.expectStatus, w.Code, "status code should be passed through")
+
+			if tt.expectBody != "" {
+				assert.Equal(t, tt.expectBody, w.Body.String(), "response body should be passed through")
+			}
+		})
+	}
+}
+
+// TestWithResponseLogging_PreservesHeaders verifies that withResponseLogging
+// does not interfere with response headers set by the inner handler.
+func TestWithResponseLogging_PreservesHeaders(t *testing.T) {
+	innerHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("X-Custom-Header", "test-value")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"ok":true}`))
+	})
+
+	wrappedHandler := withResponseLogging(innerHandler)
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	w := httptest.NewRecorder()
+
+	wrappedHandler.ServeHTTP(w, req)
+
+	assert.Equal(t, "application/json", w.Header().Get("Content-Type"), "Content-Type header should be preserved")
+	assert.Equal(t, "test-value", w.Header().Get("X-Custom-Header"), "custom header should be preserved")
+	assert.Equal(t, http.StatusOK, w.Code, "status code should be preserved")
+	assert.Equal(t, `{"ok":true}`, w.Body.String(), "response body should be preserved")
+}
+
+// TestWithResponseLogging_ReturnsHTTPHandler verifies the return type.
+func TestWithResponseLogging_ReturnsHTTPHandler(t *testing.T) {
+	innerHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	wrapped := withResponseLogging(innerHandler)
+	assert.Implements(t, (*http.Handler)(nil), wrapped, "should return an http.Handler")
+}
+
 func TestExtractAndValidateSession(t *testing.T) {
 	tests := []struct {
 		name          string
