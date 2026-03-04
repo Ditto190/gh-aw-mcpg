@@ -18,13 +18,13 @@ import (
 // combines session extraction, logging, and context injection into one call.
 func TestSetupSessionCallback(t *testing.T) {
 	tests := []struct {
-		name             string
-		authHeader       string
-		backendID        string
-		requestMethod    string
-		requestBody      string
-		expectOK         bool
-		expectedSession  string
+		name               string
+		authHeader         string
+		backendID          string
+		requestMethod      string
+		requestBody        string
+		expectOK           bool
+		expectedSession    string
 		expectBackendInCtx bool
 	}{
 		{
@@ -145,11 +145,11 @@ func TestSetupSessionCallback_MutatesRequest(t *testing.T) {
 // an http.Handler to log response bodies.
 func TestWithResponseLogging(t *testing.T) {
 	tests := []struct {
-		name           string
-		responseBody   string
-		statusCode     int
-		expectBody     string
-		expectStatus   int
+		name         string
+		responseBody string
+		statusCode   int
+		expectBody   string
+		expectStatus int
 	}{
 		{
 			name:         "response with body is passed through",
