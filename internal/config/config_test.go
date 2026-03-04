@@ -1609,3 +1609,21 @@ func TestApplyGatewayDefaults_OtherFieldsUnaffected(t *testing.T) {
 	// Defaults applied for the zero fields
 	assert.Equal(t, DefaultPort, cfg.Port)
 }
+
+// TestGetAPIKey verifies that GetAPIKey handles nil Gateway and returns the key when set.
+func TestGetAPIKey(t *testing.T) {
+	t.Run("nil Gateway returns empty string", func(t *testing.T) {
+		cfg := &Config{}
+		assert.Equal(t, "", cfg.GetAPIKey())
+	})
+
+	t.Run("Gateway with no key returns empty string", func(t *testing.T) {
+		cfg := &Config{Gateway: &GatewayConfig{}}
+		assert.Equal(t, "", cfg.GetAPIKey())
+	})
+
+	t.Run("Gateway with key returns key", func(t *testing.T) {
+		cfg := &Config{Gateway: &GatewayConfig{APIKey: "my-secret-key"}}
+		assert.Equal(t, "my-secret-key", cfg.GetAPIKey())
+	})
+}

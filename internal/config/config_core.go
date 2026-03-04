@@ -91,6 +91,14 @@ type GatewayConfig struct {
 	PayloadSizeThreshold int `toml:"payload_size_threshold" json:"payload_size_threshold,omitempty"`
 }
 
+// GetAPIKey returns the gateway API key, handling a nil Gateway safely.
+func (c *Config) GetAPIKey() string {
+	if c.Gateway == nil {
+		return ""
+	}
+	return c.Gateway.APIKey
+}
+
 // ServerConfig represents an individual MCP server configuration.
 type ServerConfig struct {
 	// Type is the server type: "stdio" or "http"

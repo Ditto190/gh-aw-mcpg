@@ -1,7 +1,6 @@
 package server
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"github.com/github/gh-aw-mcpg/internal/logger"
@@ -52,11 +51,8 @@ func HandleHealth(unifiedServer *UnifiedServer) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		logHealth.Printf("Health check request: method=%s, remote=%s", r.Method, r.RemoteAddr)
 
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-
 		response := BuildHealthResponse(unifiedServer)
 		logHealth.Printf("Health response: status=%s, servers=%d", response.Status, len(response.Servers))
-		json.NewEncoder(w).Encode(response)
+		writeJSONResponse(w, http.StatusOK, response)
 	}
 }

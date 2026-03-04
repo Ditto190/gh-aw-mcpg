@@ -285,10 +285,7 @@ func run(cmd *cobra.Command, args []string) error {
 		logger.LogInfoMd("startup", "Routes: /mcp/<server> for servers: %v", unifiedServer.GetServerIDs())
 
 		// Extract API key from gateway config (spec 7.1)
-		apiKey := ""
-		if cfg.Gateway != nil {
-			apiKey = cfg.Gateway.APIKey
-		}
+		apiKey := cfg.GetAPIKey()
 
 		httpServer = server.CreateHTTPServerForRoutedMode(listenAddr, unifiedServer, apiKey)
 	} else {
@@ -298,10 +295,7 @@ func run(cmd *cobra.Command, args []string) error {
 		logger.LogInfoMd("startup", "Endpoint: /mcp")
 
 		// Extract API key from gateway config (spec 7.1)
-		apiKey := ""
-		if cfg.Gateway != nil {
-			apiKey = cfg.Gateway.APIKey
-		}
+		apiKey := cfg.GetAPIKey()
 
 		httpServer = server.CreateHTTPServerForMCP(listenAddr, unifiedServer, apiKey)
 	}
@@ -362,10 +356,7 @@ func writeGatewayConfig(cfg *config.Config, listenAddr, mode string, w io.Writer
 	debugLog.Printf("Resolved gateway address: host=%s, port=%s", host, port)
 
 	// Extract API key from gateway config (per spec section 7.1)
-	apiKey := ""
-	if cfg.Gateway != nil {
-		apiKey = cfg.Gateway.APIKey
-	}
+	apiKey := cfg.GetAPIKey()
 	debugLog.Printf("Gateway config: auth_enabled=%v", apiKey != "")
 
 	debugLog.Printf("Gateway auth: apiKeyConfigured=%v", apiKey != "")
