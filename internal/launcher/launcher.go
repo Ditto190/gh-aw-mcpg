@@ -123,56 +123,12 @@ func GetOrLaunch(l *Launcher, serverID string) (*mcp.Connection, error) {
 	}
 
 	// stdio backends from this point
-	// Warn if using direct command in a container
-	isDirectCommand := serverCfg.Command != "docker"
-	if l.runningInContainer && isDirectCommand {
-		l.logSecurityWarning(serverID, serverCfg)
+	conn, err := l.launchStdioConnection(serverID, "", serverCfg)
+	if err != nil {
+		return nil, err
 	}
-
-	// Log the command being executed
-	l.logLaunchStart(serverID, "", serverCfg, isDirectCommand)
-
-	// Check for environment variable passthrough (only check args after -e flags)
-	l.logEnvPassthrough(serverCfg.Args)
-
-	if len(serverCfg.Env) > 0 {
-		log.Printf("[LAUNCHER] Additional env vars: %v", sanitize.TruncateSecretMap(serverCfg.Env))
-	}
-
-	log.Printf("[LAUNCHER] Starting server with %v timeout", l.startupTimeout)
-	logLauncher.Printf("Starting server with timeout: serverID=%s, timeout=%v", serverID, l.startupTimeout)
-
-	// Create a buffered channel to receive connection result
-	// Buffer size of 1 prevents goroutine leak if timeout occurs before connection completes
-	resultChan := make(chan connectionResult, 1)
-
-	logLauncher.Printf("Starting connection goroutine: serverID=%s", serverID)
-	// Launch connection in a goroutine
-	go func() {
-		conn, err := mcp.NewConnection(l.ctx, serverID, serverCfg.Command, serverCfg.Args, serverCfg.Env)
-		resultChan <- connectionResult{conn, err}
-	}()
-
-	// Wait for connection with timeout
-	select {
-	case result := <-resultChan:
-		conn, err := result.conn, result.err
-		if err != nil {
-			// Enhanced error logging for command-based servers
-			l.logLaunchError(serverID, "", err, serverCfg, isDirectCommand)
-			return nil, fmt.Errorf("failed to create connection: %w", err)
-		}
-
-		l.logLaunchSuccess(serverID, "")
-
-		l.connections[serverID] = conn
-		return conn, nil
-
-	case <-time.After(l.startupTimeout):
-		// Timeout occurred
-		l.logTimeoutError(serverID, "")
-		return nil, fmt.Errorf("server startup timeout after %v", l.startupTimeout)
-	}
+	l.connections[serverID] = conn
+	return conn, nil
 }
 
 // GetOrLaunchForSession returns a session-aware connection or launches a new one
@@ -219,6 +175,22 @@ func GetOrLaunchForSession(l *Launcher, serverID, sessionID string) (*mcp.Connec
 		return conn, nil
 	}
 
+	conn, err := l.launchStdioConnection(serverID, sessionID, serverCfg)
+	if err != nil {
+		// Record error in session pool
+		l.sessionPool.RecordError(serverID, sessionID)
+		return nil, err
+	}
+
+	// Add to session pool
+	l.sessionPool.Set(serverID, sessionID, conn)
+	return conn, nil
+}
+
+// launchStdioConnection creates a new stdio connection using a goroutine+timeout pattern.
+// It handles the security warning, launch logging, and the buffered-channel/select timeout.
+// Returns the raw *mcp.Connection on success; the caller is responsible for storing it.
+func (l *Launcher) launchStdioConnection(serverID, sessionID string, serverCfg *config.ServerConfig) (*mcp.Connection, error) {
 	// Warn if using direct command in a container
 	isDirectCommand := serverCfg.Command != "docker"
 	if l.runningInContainer && isDirectCommand {
@@ -235,13 +207,14 @@ func GetOrLaunchForSession(l *Launcher, serverID, sessionID string) (*mcp.Connec
 		log.Printf("[LAUNCHER] Additional env vars: %v", sanitize.TruncateSecretMap(serverCfg.Env))
 	}
 
-	log.Printf("[LAUNCHER] Starting server for session with %v timeout", l.startupTimeout)
-	logLauncher.Printf("Starting session server with timeout: serverID=%s, sessionID=%s, timeout=%v", serverID, sessionID, l.startupTimeout)
+	log.Printf("[LAUNCHER] Starting server with %v timeout", l.startupTimeout)
+	logLauncher.Printf("Starting server with timeout: serverID=%s, sessionID=%s, timeout=%v", serverID, sessionID, l.startupTimeout)
 
 	// Create a buffered channel to receive connection result
 	// Buffer size of 1 prevents goroutine leak if timeout occurs before connection completes
 	resultChan := make(chan connectionResult, 1)
 
+	logLauncher.Printf("Starting connection goroutine: serverID=%s", serverID)
 	// Launch connection in a goroutine
 	go func() {
 		conn, err := mcp.NewConnection(l.ctx, serverID, serverCfg.Command, serverCfg.Args, serverCfg.Env)
@@ -254,24 +227,13 @@ func GetOrLaunchForSession(l *Launcher, serverID, sessionID string) (*mcp.Connec
 		conn, err := result.conn, result.err
 		if err != nil {
 			l.logLaunchError(serverID, sessionID, err, serverCfg, isDirectCommand)
-
-			// Record error in session pool
-			l.sessionPool.RecordError(serverID, sessionID)
-
 			return nil, fmt.Errorf("failed to create connection: %w", err)
 		}
-
 		l.logLaunchSuccess(serverID, sessionID)
-
-		// Add to session pool
-		l.sessionPool.Set(serverID, sessionID, conn)
 		return conn, nil
 
 	case <-time.After(l.startupTimeout):
-		// Timeout occurred
 		l.logTimeoutError(serverID, sessionID)
-		// Record error in session pool before returning
-		l.sessionPool.RecordError(serverID, sessionID)
 		return nil, fmt.Errorf("server startup timeout after %v", l.startupTimeout)
 	}
 }

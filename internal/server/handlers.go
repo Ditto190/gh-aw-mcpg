@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"encoding/json"
 	"log"
 	"net/http"
 	"os"
@@ -51,9 +50,7 @@ func handleClose(unifiedServer *UnifiedServer) http.Handler {
 		if unifiedServer.IsShutdown() {
 			logHandlers.Print("Gateway already shutdown, returning 410 Gone")
 			logger.LogWarn("shutdown", "Close endpoint called but gateway already closed, remote=%s", r.RemoteAddr)
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusGone) // 410 Gone
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			writeJSONResponse(w, http.StatusGone, map[string]interface{}{
 				"error": "Gateway has already been closed",
 			})
 			return
@@ -65,14 +62,11 @@ func handleClose(unifiedServer *UnifiedServer) http.Handler {
 		logHandlers.Printf("Shutdown completed: servers_terminated=%d", serversTerminated)
 
 		// Return success response (spec 5.1.3)
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		response := map[string]interface{}{
+		writeJSONResponse(w, http.StatusOK, map[string]interface{}{
 			"status":            "closed",
 			"message":           "Gateway shutdown initiated",
 			"serversTerminated": serversTerminated,
-		}
-		json.NewEncoder(w).Encode(response)
+		})
 
 		logger.LogInfo("shutdown", "Close endpoint response sent, servers_terminated=%d", serversTerminated)
 		log.Printf("Gateway shutdown initiated. Terminated %d server(s)", serversTerminated)
