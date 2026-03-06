@@ -1,9 +1,12 @@
 // Package config provides configuration loading and parsing.
-// This file defines payload-related configuration and defaults.
+// This file defines operational defaults for payload and logging.
 package config
 
 // DefaultPayloadDir is the default directory for storing large payloads.
 const DefaultPayloadDir = "/tmp/jq-payloads"
+
+// DefaultLogDir is the default directory for storing log files.
+const DefaultLogDir = "/tmp/gh-aw/mcp-logs"
 
 // DefaultPayloadSizeThreshold is the default size threshold (in bytes) for storing payloads to disk.
 // Payloads larger than this threshold are stored to disk, smaller ones are returned inline.
