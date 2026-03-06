@@ -454,9 +454,15 @@ func TestGitHubMCPRealBackend(t *testing.T) {
 
 		body, _ := io.ReadAll(resp.Body)
 		t.Logf("Tools list response length: %d bytes", len(body))
-		t.Logf("Tools list response body: %q", string(body))
+		bodyStr := string(body)
+		const maxLoggedBodyLen = 1024
+		if len(bodyStr) > maxLoggedBodyLen {
+			t.Logf("Tools list response body (truncated to %d bytes): %q", maxLoggedBodyLen, bodyStr[:maxLoggedBodyLen])
+		} else {
+			t.Logf("Tools list response body: %q", bodyStr)
+		}
 
-		require.Equal(t, http.StatusOK, resp.StatusCode, "Tools list failed with status %d: %s", resp.StatusCode, string(body))
+		require.Equal(t, http.StatusOK, resp.StatusCode, "Tools list failed with status %d: %s", resp.StatusCode, bodyStr)
 
 		// Check if response uses SSE-formatted streaming
 		contentType := resp.Header.Get("Content-Type")
