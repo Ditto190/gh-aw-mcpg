@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
