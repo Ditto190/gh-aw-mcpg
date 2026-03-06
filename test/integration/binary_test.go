@@ -566,7 +566,9 @@ func createMinimalMockMCPBackend(t *testing.T) *httptest.Server {
 	})
 	handler := sdk.NewStreamableHTTPHandler(func(_ *http.Request) *sdk.Server {
 		return mcpServer
-	}, nil)
+	}, &sdk.StreamableHTTPOptions{
+		Stateless: false,
+	})
 	mux := http.NewServeMux()
 	mux.Handle("/mcp", handler)
 	mux.Handle("/mcp/", handler)
