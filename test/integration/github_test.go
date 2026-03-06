@@ -378,6 +378,7 @@ func TestGitHubMCPRealBackend(t *testing.T) {
 		// Capture Mcp-Session-Id for stateful session reuse in subsequent requests
 		mcpSessionID = resp.Header.Get("Mcp-Session-Id")
 		t.Logf("Captured Mcp-Session-Id: %q", mcpSessionID)
+		require.NotEmpty(t, mcpSessionID, "Mcp-Session-Id header must be present for stateful session reuse; ensure the gateway/SDK returns this header on initialize")
 
 		require.Equal(t, http.StatusOK, resp.StatusCode, "Initialize failed with status %d: %s", resp.StatusCode, string(body))
 
