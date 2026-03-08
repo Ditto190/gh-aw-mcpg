@@ -312,7 +312,8 @@ func TestBinaryInvocation_PipeOutput(t *testing.T) {
 			"apiKey": "test-pipe-key",
 		},
 	}
-	configBytes, _ := json.Marshal(configJSON)
+	configBytes, err := json.Marshal(configJSON)
+	require.NoError(t, err)
 
 	cmd := exec.CommandContext(ctx, binaryPath,
 		"--config-stdin",
