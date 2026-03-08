@@ -48,6 +48,22 @@ func (l *Label) AddAll(tags []Tag) {
 	}
 }
 
+// Remove removes a single tag from this label
+func (l *Label) Remove(tag Tag) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	delete(l.tags, tag)
+}
+
+// RemoveAll removes multiple tags from this label
+func (l *Label) RemoveAll(tags []Tag) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for _, tag := range tags {
+		delete(l.tags, tag)
+	}
+}
+
 // Contains checks if this label contains a specific tag
 func (l *Label) Contains(tag Tag) bool {
 	l.mu.RLock()
