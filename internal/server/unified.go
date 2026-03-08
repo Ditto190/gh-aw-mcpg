@@ -1254,7 +1254,13 @@ func parsePolicyMap(raw map[string]interface{}) (*config.GuardPolicy, error) {
 		return nil, nil
 	}
 
-	if _, hasAllowOnly := raw["allowonly"]; hasAllowOnly {
+	hasAllowOnly := false
+	if _, ok := raw["allow-only"]; ok {
+		hasAllowOnly = true
+	} else if _, ok := raw["allowonly"]; ok { // Accept legacy "allowonly" form for backward compatibility
+		hasAllowOnly = true
+	}
+	if hasAllowOnly {
 		policyBytes, err := json.Marshal(raw)
 		if err != nil {
 			return nil, fmt.Errorf("failed to serialize server guard policy: %w", err)

@@ -316,13 +316,13 @@ func normalizePolicyPayload(policy interface{}) (interface{}, error) {
 
 func buildStrictLabelAgentPayload(policy interface{}) (map[string]interface{}, error) {
 	if policy == nil {
-		return nil, fmt.Errorf("invalid guard policy transport shape: expected {\"allowonly\":{\"repos\":...,\"integrity\":...}}")
+		return nil, fmt.Errorf("invalid guard policy transport shape: expected {\"allow-only\":{\"repos\":...,\"min-integrity\":...}}")
 	}
 
 	if policyMap, ok := policy.(map[string]interface{}); ok {
 		if nested, hasPolicy := policyMap["policy"]; hasPolicy {
 			if nestedMap, nestedOK := nested.(map[string]interface{}); nestedOK {
-				if _, hasAllowOnly := nestedMap["allowonly"]; hasAllowOnly {
+				if _, hasAllowOnly := nestedMap["allow-only"]; hasAllowOnly {
 					return nil, fmt.Errorf("gateway policy adapter is outdated: remove legacy envelope key policy before calling label_agent")
 				}
 			}
@@ -343,18 +343,22 @@ func buildStrictLabelAgentPayload(policy interface{}) (map[string]interface{}, e
 		return nil, fmt.Errorf("gateway policy adapter is outdated: remove legacy envelope key policy before calling label_agent")
 	}
 
-	allowOnlyRaw, ok := payload["allowonly"]
+	allowOnlyRaw, ok := payload["allow-only"]
 	if !ok {
-		return nil, fmt.Errorf("label_agent policy must use top-level allowonly object (received policy.allowonly)")
+		// Accept legacy "allowonly" form for backward compatibility
+		allowOnlyRaw, ok = payload["allowonly"]
+	}
+	if !ok {
+		return nil, fmt.Errorf("label_agent policy must use top-level allow-only object (received policy.allow-only)")
 	}
 
 	if len(payload) != 1 {
-		return nil, fmt.Errorf("invalid guard policy transport shape: expected {\"allowonly\":{\"repos\":...,\"min-integrity\":...}}")
+		return nil, fmt.Errorf("invalid guard policy transport shape: expected {\"allow-only\":{\"repos\":...,\"min-integrity\":...}}")
 	}
 
 	allowOnly, ok := allowOnlyRaw.(map[string]interface{})
 	if !ok {
-		return nil, fmt.Errorf("invalid guard policy transport shape: expected {\"allowonly\":{\"repos\":...,\"min-integrity\":...}}")
+		return nil, fmt.Errorf("invalid guard policy transport shape: expected {\"allow-only\":{\"repos\":...,\"min-integrity\":...}}")
 	}
 
 	reposRaw, hasRepos := allowOnly["repos"]
@@ -363,7 +367,7 @@ func buildStrictLabelAgentPayload(policy interface{}) (map[string]interface{}, e
 		integrityRaw, hasIntegrity = allowOnly["integrity"]
 	}
 	if !hasRepos || !hasIntegrity || len(allowOnly) != 2 {
-		return nil, fmt.Errorf("invalid guard policy transport shape: expected {\"allowonly\":{\"repos\":...,\"min-integrity\":...}}")
+		return nil, fmt.Errorf("invalid guard policy transport shape: expected {\"allow-only\":{\"repos\":...,\"min-integrity\":...}}")
 	}
 
 	if !isValidAllowOnlyRepos(reposRaw) {

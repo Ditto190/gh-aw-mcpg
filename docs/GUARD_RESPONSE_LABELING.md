@@ -145,9 +145,9 @@ For WASM guards, the gateway:
 
 1. Normalizes the policy payload (handles both raw JSON and Go map inputs)
 2. Validates the policy structure via `buildStrictLabelAgentPayload()`:
-   - Requires a top-level `allowonly` key with `repos` and `integrity` fields
+   - Requires a top-level `allow-only` key with `repos` and `min-integrity` fields
    - `repos`: `"all"`, `"public"`, or an array of scoped repo strings
-   - `integrity`: one of `"none"`, `"unapproved"`, `"approved"`, `"merged"`
+   - `min-integrity`: one of `"none"`, `"unapproved"`, `"approved"`, `"merged"`
    - Rejects legacy `policy` envelope keys
 3. Calls the WASM module's exported `label_agent` function
 4. Parses the response via `parseLabelAgentResponse()`, which validates:
@@ -280,9 +280,9 @@ The GitHub guard uses an `AllowOnly` policy with two fields:
 
 ```json
 {
-  "allowonly": {
+  "allow-only": {
     "repos": "<scope>",
-    "integrity": "<level>"
+    "min-integrity": "<level>"
   }
 }
 ```
@@ -303,7 +303,7 @@ Scoped array entries support three patterns (all lowercase):
 | `owner/repo` | Exact repo | `"acme/web-app"` |
 | `owner/prefix*` | Repos matching prefix | `"acme/api-*"` |
 
-**`integrity`** sets the minimum trust level for content the agent may read:
+**`min-integrity`** sets the minimum trust level for content the agent may read:
 
 | Value | Meaning |
 |-------|---------|
@@ -318,9 +318,9 @@ Given this policy in the gateway config:
 
 ```json
 {
-  "allowonly": {
+  "allow-only": {
     "repos": ["acme/web-app", "acme/api-*"],
-    "integrity": "approved"
+    "min-integrity": "approved"
   }
 }
 ```
