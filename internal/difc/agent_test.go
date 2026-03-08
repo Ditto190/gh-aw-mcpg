@@ -282,6 +282,61 @@ func TestAgentLabels_ConcurrentAccess(t *testing.T) {
 	assert.NotNil(t, agent)
 }
 
+// TestAgentLabels_ConcurrentBulkMutations tests that AddSecrecyTags/DropIntegrityTags
+// are safe to call concurrently with direct Label reads (GetTags/Contains).
+// This specifically exercises the race fixed by switching from direct map mutation
+// to Label.AddAll/RemoveAll which hold Label.mu.
+func TestAgentLabels_ConcurrentBulkMutations(t *testing.T) {
+	agent := NewAgentLabelsWithTags(
+		"bulk-agent",
+		[]Tag{"s1", "s2", "s3"},
+		[]Tag{"i1", "i2", "i3"},
+	)
+	var wg sync.WaitGroup
+	iterations := 200
+
+	// Bulk mutations via the previously-racy methods
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < iterations; i++ {
+			agent.AddSecrecyTags([]Tag{"s4", "s5"})
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for i := 0; i < iterations; i++ {
+			agent.DropIntegrityTags([]Tag{"i1", "i2"})
+		}
+	}()
+
+	// Concurrent direct Label reads — these held Label.mu and could race with
+	// the direct map writes that AddSecrecyTags/DropIntegrityTags previously did.
+	wg.Add(3)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < iterations; i++ {
+			_ = agent.Secrecy.Label.GetTags()
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for i := 0; i < iterations; i++ {
+			_ = agent.Integrity.Label.GetTags()
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for i := 0; i < iterations; i++ {
+			_ = agent.Secrecy.Label.Contains("s1")
+			_ = agent.Integrity.Label.Contains("i3")
+		}
+	}()
+
+	wg.Wait()
+	assert.NotNil(t, agent)
+}
+
 // TestAgentRegistry_GetOrCreate tests the core registry functionality
 func TestAgentRegistry_GetOrCreate(t *testing.T) {
 	tests := []struct {

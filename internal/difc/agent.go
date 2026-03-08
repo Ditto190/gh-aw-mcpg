@@ -62,8 +62,7 @@ func (a *AgentLabels) DropIntegrityTag(tag Tag) {
 	logAgent.Printf("Agent %s dropping integrity tag: %s", a.AgentID, tag)
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	// Remove from the underlying label
-	delete(a.Integrity.Label.tags, tag)
+	a.Integrity.Label.Remove(tag)
 	log.Printf("[DIFC] Agent %s dropped integrity tag: %s", a.AgentID, tag)
 }
 
@@ -71,9 +70,7 @@ func (a *AgentLabels) DropIntegrityTag(tag Tag) {
 func (a *AgentLabels) DropIntegrityTags(tags []Tag) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	for _, tag := range tags {
-		delete(a.Integrity.Label.tags, tag)
-	}
+	a.Integrity.Label.RemoveAll(tags)
 	if len(tags) > 0 {
 		log.Printf("[DIFC] Agent %s dropped integrity tags: %v", a.AgentID, tags)
 	}
@@ -83,9 +80,7 @@ func (a *AgentLabels) DropIntegrityTags(tags []Tag) {
 func (a *AgentLabels) AddSecrecyTags(tags []Tag) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	for _, tag := range tags {
-		a.Secrecy.Label.tags[tag] = struct{}{}
-	}
+	a.Secrecy.Label.AddAll(tags)
 	if len(tags) > 0 {
 		log.Printf("[DIFC] Agent %s gained secrecy tags: %v", a.AgentID, tags)
 	}
