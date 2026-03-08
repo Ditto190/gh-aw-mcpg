@@ -62,28 +62,87 @@ func (a *AgentLabels) DropIntegrityTag(tag Tag) {
 	logAgent.Printf("Agent %s dropping integrity tag: %s", a.AgentID, tag)
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	// Remove from the underlying label
-	delete(a.Integrity.Label.tags, tag)
+	a.Integrity.Label.Remove(tag)
 	log.Printf("[DIFC] Agent %s dropped integrity tag: %s", a.AgentID, tag)
 }
 
-// AccumulateFromRead updates agent labels after reading data
-// Agent gains secrecy and integrity tags from what they read
+// DropIntegrityTags removes multiple integrity tags from the agent
+func (a *AgentLabels) DropIntegrityTags(tags []Tag) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.Integrity.Label.RemoveAll(tags)
+	if len(tags) > 0 {
+		log.Printf("[DIFC] Agent %s dropped integrity tags: %v", a.AgentID, tags)
+	}
+}
+
+// AddSecrecyTags adds multiple secrecy tags to the agent
+func (a *AgentLabels) AddSecrecyTags(tags []Tag) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.Secrecy.Label.AddAll(tags)
+	if len(tags) > 0 {
+		log.Printf("[DIFC] Agent %s gained secrecy tags: %v", a.AgentID, tags)
+	}
+}
+
+// ApplyPropagation applies label changes from a propagate-mode evaluation result
+// This adds missing secrecy tags and drops missing integrity tags
+// Returns true if any labels were changed
+func (a *AgentLabels) ApplyPropagation(result *EvaluationResult) bool {
+	if result == nil || !result.RequiresPropagation() {
+		return false
+	}
+
+	changed := false
+
+	if len(result.SecrecyToAdd) > 0 {
+		a.AddSecrecyTags(result.SecrecyToAdd)
+		changed = true
+		log.Printf("[DIFC] Propagation: Agent %s tainted with secrecy tags %v", a.AgentID, result.SecrecyToAdd)
+	}
+
+	if len(result.IntegrityToDrop) > 0 {
+		a.DropIntegrityTags(result.IntegrityToDrop)
+		changed = true
+		log.Printf("[DIFC] Propagation: Agent %s lost integrity tags %v", a.AgentID, result.IntegrityToDrop)
+	}
+
+	return changed
+}
+
+// AccumulateFromRead updates agent labels after reading data in propagate mode
+//
+// DIFC propagate mode semantics:
+//
+//   - Secrecy: UNION - agent becomes "tainted" with all secret classifications from the data
+//     Agent secrecy = Union(agent_secrecy, resource_secrecy)
+//     Reading secret data means the agent now carries that secret classification
+//
+//   - Integrity: INTERSECTION - agent's trustworthiness is reduced to the minimum
+//     Agent integrity = Intersection(agent_integrity, resource_integrity)
+//     Reading from untrusted sources reduces agent's integrity to the lowest common denominator
 func (a *AgentLabels) AccumulateFromRead(resource *LabeledResource) {
 	logAgent.Printf("Agent %s accumulating labels from resource: %s", a.AgentID, resource.Description)
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	// Gain secrecy tags from the data we read
+	// Secrecy: UNION - agent gains all secrecy tags from the data read
+	// This "taints" the agent with the secret classification of the data
 	if resource.Secrecy.Label != nil && !resource.Secrecy.Label.IsEmpty() {
+		prevTags := a.Secrecy.Label.GetTags()
 		a.Secrecy.Label.Union(resource.Secrecy.Label)
-		log.Printf("[DIFC] Agent %s accumulated secrecy tags from read: %v", a.AgentID, resource.Secrecy.Label.GetTags())
+		log.Printf("[DIFC] Agent %s secrecy UNION: %v + %v = %v",
+			a.AgentID, prevTags, resource.Secrecy.Label.GetTags(), a.Secrecy.Label.GetTags())
 	}
 
-	// Gain integrity tags from the data we read (we're influenced by it)
-	if resource.Integrity.Label != nil && !resource.Integrity.Label.IsEmpty() {
-		a.Integrity.Label.Union(resource.Integrity.Label)
-		log.Printf("[DIFC] Agent %s accumulated integrity tags from read: %v", a.AgentID, resource.Integrity.Label.GetTags())
+	// Integrity: INTERSECTION - agent's integrity is reduced to tags present in BOTH
+	// Reading from lower-integrity sources reduces agent's trustworthiness
+	if resource.Integrity.Label != nil {
+		prevTags := a.Integrity.Label.GetTags()
+		a.Integrity.Label.Intersect(resource.Integrity.Label)
+		log.Printf("[DIFC] Agent %s integrity INTERSECT: %v ∩ %v = %v",
+			a.AgentID, prevTags, resource.Integrity.Label.GetTags(), a.Integrity.Label.GetTags())
 	}
 }
 

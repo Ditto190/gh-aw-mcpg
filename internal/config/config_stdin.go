@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/github/gh-aw-mcpg/internal/logger"
 )
@@ -22,6 +23,9 @@ type StdinConfig struct {
 	// Gateway holds global gateway settings
 	Gateway *StdinGatewayConfig `json:"gateway,omitempty"`
 
+	// Guards holds guard configurations for DIFC enforcement
+	Guards map[string]*StdinGuardConfig `json:"guards,omitempty"`
+
 	// CustomSchemas defines custom server types
 	CustomSchemas map[string]interface{} `json:"customSchemas,omitempty"`
 }
@@ -29,12 +33,37 @@ type StdinConfig struct {
 // StdinGatewayConfig represents gateway configuration in stdin JSON format.
 // Uses pointers for optional fields to distinguish between unset and zero values.
 type StdinGatewayConfig struct {
-	Port           *int   `json:"port,omitempty"`
-	APIKey         string `json:"apiKey,omitempty"`
-	Domain         string `json:"domain,omitempty"`
-	StartupTimeout *int   `json:"startupTimeout,omitempty"`
-	ToolTimeout    *int   `json:"toolTimeout,omitempty"`
-	PayloadDir     string `json:"payloadDir,omitempty"`
+	Port           *int                `json:"port,omitempty"`
+	APIKey         string              `json:"apiKey,omitempty"`
+	Domain         string              `json:"domain,omitempty"`
+	StartupTimeout *int                `json:"startupTimeout,omitempty"`
+	ToolTimeout    *int                `json:"toolTimeout,omitempty"`
+	PayloadDir     string              `json:"payloadDir,omitempty"`
+	Session        *StdinSessionConfig `json:"session,omitempty"`
+}
+
+// StdinSessionConfig represents session label configuration in stdin JSON format.
+type StdinSessionConfig struct {
+	// Secrecy is a list of initial secrecy labels for agent sessions
+	Secrecy []string `json:"secrecy,omitempty"`
+
+	// Integrity is a list of initial integrity labels for agent sessions
+	Integrity []string `json:"integrity,omitempty"`
+}
+
+// StdinGuardConfig represents a guard configuration in stdin JSON format.
+type StdinGuardConfig struct {
+	// Type is the guard type: "wasm", "noop", etc.
+	Type string `json:"type"`
+
+	// Path is the path to the guard implementation (e.g., WASM file)
+	Path string `json:"path,omitempty"`
+
+	// Config holds guard-specific configuration
+	Config map[string]interface{} `json:"config,omitempty"`
+
+	// Policy holds guard policy configuration for label_agent lifecycle initialization
+	Policy *GuardPolicy `json:"policy,omitempty"`
 }
 
 // StdinServerConfig represents a single server configuration in stdin JSON format.
@@ -76,6 +105,9 @@ type StdinServerConfig struct {
 	// The structure is server-specific. For GitHub MCP server, see the GitHub guard policy schema.
 	GuardPolicies map[string]interface{} `json:"guard-policies,omitempty"`
 
+	// Guard is the name of the guard to use for this server (requires DIFC)
+	Guard string `json:"guard,omitempty"`
+
 	// AdditionalProperties stores any extra fields for custom server types
 	// This allows custom schemas to define their own fields beyond the standard ones
 	AdditionalProperties map[string]interface{} `json:"-"`
@@ -116,6 +148,7 @@ func (s *StdinServerConfig) UnmarshalJSON(data []byte) error {
 		"tools":          true,
 		"registry":       true,
 		"guard-policies": true,
+		"guard":          true,
 	}
 
 	// Store additional properties (fields not in the struct)
@@ -127,6 +160,13 @@ func (s *StdinServerConfig) UnmarshalJSON(data []byte) error {
 	}
 
 	return nil
+}
+
+// isConfigExtensionsEnabled checks if config extensions are enabled via environment variable.
+// When enabled, schema validation is relaxed to allow extension fields like "guards", "guard", and "session".
+func isConfigExtensionsEnabled() bool {
+	val := strings.ToLower(os.Getenv("MCP_GATEWAY_CONFIG_EXTENSIONS"))
+	return val == "true" || val == "1" || val == "yes" || val == "on"
 }
 
 // intPtrOrDefault returns the value of the int pointer if not nil, otherwise returns the default value.
@@ -162,9 +202,16 @@ func LoadFromStdin() (*Config, error) {
 		return nil, err
 	}
 
-	// Validate against JSON schema first (fail-fast, spec-compliant)
-	if err := validateJSONSchema(data); err != nil {
-		return nil, err
+	// Validate against JSON schema (fail-fast, spec-compliant)
+	// Skip schema validation when config extensions are enabled, as extensions like
+	// "guards", "guard", and "session" are not in the official schema yet.
+	if isConfigExtensionsEnabled() {
+		logConfig.Print("Config extensions enabled - skipping strict JSON schema validation")
+		log.Println("Config extensions enabled - schema validation relaxed for extension fields")
+	} else {
+		if err := validateJSONSchema(data); err != nil {
+			return nil, err
+		}
 	}
 
 	var stdinCfg StdinConfig
@@ -218,6 +265,13 @@ func convertStdinConfig(stdinCfg *StdinConfig) (*Config, error) {
 		if stdinCfg.Gateway.PayloadDir != "" {
 			cfg.Gateway.PayloadDir = stdinCfg.Gateway.PayloadDir
 		}
+		// Convert session config
+		if stdinCfg.Gateway.Session != nil {
+			cfg.Gateway.Session = &SessionConfig{
+				Secrecy:   stdinCfg.Gateway.Session.Secrecy,
+				Integrity: stdinCfg.Gateway.Session.Integrity,
+			}
+		}
 	} else {
 		logStdin.Print("No gateway config in stdin, applying defaults")
 		cfg.Gateway = &GatewayConfig{}
@@ -236,8 +290,25 @@ func convertStdinConfig(stdinCfg *StdinConfig) (*Config, error) {
 		cfg.Servers[name] = serverCfg
 	}
 
+	// Convert guards
+	if len(stdinCfg.Guards) > 0 {
+		cfg.Guards = make(map[string]*GuardConfig)
+		for name, guard := range stdinCfg.Guards {
+			cfg.Guards[name] = &GuardConfig{
+				Type:   guard.Type,
+				Path:   guard.Path,
+				Config: guard.Config,
+				Policy: guard.Policy,
+			}
+		}
+	}
+
 	// Apply feature-specific stdin conversions
 	applyStdinConverters(cfg, stdinCfg)
+
+	if err := validateGuardPolicies(cfg); err != nil {
+		return nil, err
+	}
 
 	return cfg, nil
 }
@@ -289,6 +360,7 @@ func convertStdinServerConfig(name string, server *StdinServerConfig, customSche
 			Tools:         server.Tools,
 			Registry:      server.Registry,
 			GuardPolicies: server.GuardPolicies,
+			Guard:         server.Guard,
 		}, nil
 	}
 
@@ -354,6 +426,7 @@ func buildStdioServerConfig(name string, server *StdinServerConfig) *ServerConfi
 		Tools:         server.Tools,
 		Registry:      server.Registry,
 		GuardPolicies: server.GuardPolicies,
+		Guard:         server.Guard,
 	}
 }
 

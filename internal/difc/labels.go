@@ -48,6 +48,22 @@ func (l *Label) AddAll(tags []Tag) {
 	}
 }
 
+// Remove removes a single tag from this label
+func (l *Label) Remove(tag Tag) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	delete(l.tags, tag)
+}
+
+// RemoveAll removes multiple tags from this label
+func (l *Label) RemoveAll(tags []Tag) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for _, tag := range tags {
+		delete(l.tags, tag)
+	}
+}
+
 // Contains checks if this label contains a specific tag
 func (l *Label) Contains(tag Tag) bool {
 	l.mu.RLock()
@@ -74,6 +90,28 @@ func (l *Label) Union(other *Label) {
 	}
 	if added > 0 {
 		logLabels.Printf("Label union: merged %d new tags from other label", added)
+	}
+}
+
+// Intersect removes tags from this label that are not in the other label
+// After this operation, this label contains only tags present in both labels
+func (l *Label) Intersect(other *Label) {
+	if other == nil {
+		// Intersection with nil/empty is empty
+		l.mu.Lock()
+		defer l.mu.Unlock()
+		l.tags = make(map[Tag]struct{})
+		return
+	}
+	other.mu.RLock()
+	defer other.mu.RUnlock()
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	// Remove tags not in other
+	for tag := range l.tags {
+		if _, ok := other.tags[tag]; !ok {
+			delete(l.tags, tag)
+		}
 	}
 }
 

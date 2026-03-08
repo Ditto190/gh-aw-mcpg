@@ -282,6 +282,61 @@ func TestAgentLabels_ConcurrentAccess(t *testing.T) {
 	assert.NotNil(t, agent)
 }
 
+// TestAgentLabels_ConcurrentBulkMutations tests that AddSecrecyTags/DropIntegrityTags
+// are safe to call concurrently with direct Label reads (GetTags/Contains).
+// This specifically exercises the race fixed by switching from direct map mutation
+// to Label.AddAll/RemoveAll which hold Label.mu.
+func TestAgentLabels_ConcurrentBulkMutations(t *testing.T) {
+	agent := NewAgentLabelsWithTags(
+		"bulk-agent",
+		[]Tag{"s1", "s2", "s3"},
+		[]Tag{"i1", "i2", "i3"},
+	)
+	var wg sync.WaitGroup
+	iterations := 200
+
+	// Bulk mutations via the previously-racy methods
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < iterations; i++ {
+			agent.AddSecrecyTags([]Tag{"s4", "s5"})
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for i := 0; i < iterations; i++ {
+			agent.DropIntegrityTags([]Tag{"i1", "i2"})
+		}
+	}()
+
+	// Concurrent direct Label reads — these held Label.mu and could race with
+	// the direct map writes that AddSecrecyTags/DropIntegrityTags previously did.
+	wg.Add(3)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < iterations; i++ {
+			_ = agent.Secrecy.Label.GetTags()
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for i := 0; i < iterations; i++ {
+			_ = agent.Integrity.Label.GetTags()
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for i := 0; i < iterations; i++ {
+			_ = agent.Secrecy.Label.Contains("s1")
+			_ = agent.Integrity.Label.Contains("i3")
+		}
+	}()
+
+	wg.Wait()
+	assert.NotNil(t, agent)
+}
+
 // TestAgentRegistry_GetOrCreate tests the core registry functionality
 func TestAgentRegistry_GetOrCreate(t *testing.T) {
 	tests := []struct {
@@ -818,4 +873,212 @@ func TestAgentRegistry_SetDefaultLabels_DoesNotAffectExisting(t *testing.T) {
 	newAgent := registry.GetOrCreate("new-agent")
 	assert.ElementsMatch(t, []Tag{"new-secret"}, newAgent.GetSecrecyTags())
 	assert.ElementsMatch(t, []Tag{"new-trust"}, newAgent.GetIntegrityTags())
+}
+
+// TestAgentLabels_AddSecrecyTags tests adding multiple secrecy tags at once
+func TestAgentLabels_AddSecrecyTags(t *testing.T) {
+	t.Run("adds multiple tags", func(t *testing.T) {
+		agent := NewAgentLabels("test-agent")
+		agent.AddSecrecyTags([]Tag{"secret", "classified", "confidential"})
+
+		tags := agent.GetSecrecyTags()
+		assert.Len(t, tags, 3)
+		assert.Contains(t, tags, Tag("secret"))
+		assert.Contains(t, tags, Tag("classified"))
+		assert.Contains(t, tags, Tag("confidential"))
+	})
+
+	t.Run("adding empty slice does nothing", func(t *testing.T) {
+		agent := NewAgentLabels("test-agent")
+		agent.AddSecrecyTags([]Tag{})
+		assert.Empty(t, agent.GetSecrecyTags())
+	})
+
+	t.Run("adding duplicate tags is idempotent", func(t *testing.T) {
+		agent := NewAgentLabels("test-agent")
+		agent.AddSecrecyTag("secret")
+		agent.AddSecrecyTags([]Tag{"secret", "secret"})
+		assert.Len(t, agent.GetSecrecyTags(), 1)
+	})
+}
+
+// TestAgentLabels_DropIntegrityTags tests dropping multiple integrity tags at once
+func TestAgentLabels_DropIntegrityTags(t *testing.T) {
+	t.Run("drops multiple tags", func(t *testing.T) {
+		agent := NewAgentLabels("test-agent")
+		agent.AddIntegrityTag("trusted")
+		agent.AddIntegrityTag("verified")
+		agent.AddIntegrityTag("production")
+
+		agent.DropIntegrityTags([]Tag{"trusted", "verified"})
+
+		tags := agent.GetIntegrityTags()
+		assert.Len(t, tags, 1)
+		assert.Contains(t, tags, Tag("production"))
+	})
+
+	t.Run("dropping non-existent tags is safe", func(t *testing.T) {
+		agent := NewAgentLabels("test-agent")
+		agent.AddIntegrityTag("trusted")
+
+		agent.DropIntegrityTags([]Tag{"nonexistent", "alsononexistent"})
+
+		tags := agent.GetIntegrityTags()
+		assert.Len(t, tags, 1)
+		assert.Contains(t, tags, Tag("trusted"))
+	})
+
+	t.Run("dropping empty slice does nothing", func(t *testing.T) {
+		agent := NewAgentLabels("test-agent")
+		agent.AddIntegrityTag("trusted")
+		agent.DropIntegrityTags([]Tag{})
+		assert.Len(t, agent.GetIntegrityTags(), 1)
+	})
+}
+
+// TestAgentLabels_ApplyPropagation tests the ApplyPropagation method
+func TestAgentLabels_ApplyPropagation(t *testing.T) {
+	t.Run("applies secrecy propagation", func(t *testing.T) {
+		agent := NewAgentLabels("test-agent")
+
+		result := &EvaluationResult{
+			Decision:        AccessAllowWithPropagate,
+			SecrecyToAdd:    []Tag{"secret", "classified"},
+			IntegrityToDrop: []Tag{},
+		}
+
+		changed := agent.ApplyPropagation(result)
+
+		assert.True(t, changed, "Labels should have changed")
+		tags := agent.GetSecrecyTags()
+		assert.Contains(t, tags, Tag("secret"))
+		assert.Contains(t, tags, Tag("classified"))
+	})
+
+	t.Run("applies integrity propagation", func(t *testing.T) {
+		agent := NewAgentLabels("test-agent")
+		agent.AddIntegrityTag("trusted")
+		agent.AddIntegrityTag("verified")
+		agent.AddIntegrityTag("production")
+
+		result := &EvaluationResult{
+			Decision:        AccessAllowWithPropagate,
+			SecrecyToAdd:    []Tag{},
+			IntegrityToDrop: []Tag{"trusted", "verified"},
+		}
+
+		changed := agent.ApplyPropagation(result)
+
+		assert.True(t, changed, "Labels should have changed")
+		tags := agent.GetIntegrityTags()
+		assert.Len(t, tags, 1)
+		assert.Contains(t, tags, Tag("production"))
+	})
+
+	t.Run("applies both secrecy and integrity propagation", func(t *testing.T) {
+		agent := NewAgentLabels("test-agent")
+		agent.AddIntegrityTag("trusted")
+
+		result := &EvaluationResult{
+			Decision:        AccessAllowWithPropagate,
+			SecrecyToAdd:    []Tag{"secret"},
+			IntegrityToDrop: []Tag{"trusted"},
+		}
+
+		changed := agent.ApplyPropagation(result)
+
+		assert.True(t, changed, "Labels should have changed")
+		assert.Contains(t, agent.GetSecrecyTags(), Tag("secret"))
+		assert.Empty(t, agent.GetIntegrityTags())
+	})
+
+	t.Run("returns false for nil result", func(t *testing.T) {
+		agent := NewAgentLabels("test-agent")
+		changed := agent.ApplyPropagation(nil)
+		assert.False(t, changed)
+	})
+
+	t.Run("returns false for non-propagate decision", func(t *testing.T) {
+		agent := NewAgentLabels("test-agent")
+
+		result := &EvaluationResult{
+			Decision:        AccessAllow,
+			SecrecyToAdd:    []Tag{"should-not-be-added"},
+			IntegrityToDrop: []Tag{"should-not-be-dropped"},
+		}
+
+		changed := agent.ApplyPropagation(result)
+
+		assert.False(t, changed, "Should not apply for non-propagate decisions")
+		assert.Empty(t, agent.GetSecrecyTags())
+	})
+
+	t.Run("returns false when no changes needed", func(t *testing.T) {
+		agent := NewAgentLabels("test-agent")
+
+		result := &EvaluationResult{
+			Decision:        AccessAllowWithPropagate,
+			SecrecyToAdd:    []Tag{},
+			IntegrityToDrop: []Tag{},
+		}
+
+		changed := agent.ApplyPropagation(result)
+
+		assert.False(t, changed, "Should return false when no changes needed")
+	})
+}
+
+// TestPropagateMode_EndToEnd tests the complete propagation workflow
+func TestPropagateMode_EndToEnd(t *testing.T) {
+	t.Run("reading secret data taints agent and blocks public writes", func(t *testing.T) {
+		// Create propagate mode evaluator
+		eval := NewEvaluatorWithMode(EnforcementPropagate)
+
+		// Agent starts with no labels
+		agent := NewAgentLabels("demo-agent")
+
+		// First, agent reads a secret resource
+		secretResource := NewLabeledResource("secret-document")
+		secretResource.Secrecy.Label.Add("secret")
+
+		readResult := eval.Evaluate(agent.Secrecy, agent.Integrity, secretResource, OperationRead)
+		assert.True(t, readResult.IsAllowed(), "Read should be allowed in propagate mode")
+
+		// Apply propagation
+		agent.ApplyPropagation(readResult)
+		assert.Contains(t, agent.GetSecrecyTags(), Tag("secret"), "Agent should now have secret tag")
+
+		// Now try to write to public resource
+		publicResource := NewLabeledResource("public-internet")
+
+		writeResult := eval.Evaluate(agent.Secrecy, agent.Integrity, publicResource, OperationWrite)
+		assert.False(t, writeResult.IsAllowed(), "Write to public should be blocked after reading secret")
+	})
+
+	t.Run("reading untrusted data drops integrity and blocks high-integrity writes", func(t *testing.T) {
+		// Create propagate mode evaluator
+		eval := NewEvaluatorWithMode(EnforcementPropagate)
+
+		// Agent starts with high integrity
+		agent := NewAgentLabels("demo-agent")
+		agent.AddIntegrityTag("trusted")
+		agent.AddIntegrityTag("verified")
+
+		// First, agent reads an untrusted resource
+		untrustedResource := NewLabeledResource("random-internet-page")
+
+		readResult := eval.Evaluate(agent.Secrecy, agent.Integrity, untrustedResource, OperationRead)
+		assert.True(t, readResult.IsAllowed(), "Read should be allowed in propagate mode")
+
+		// Apply propagation
+		agent.ApplyPropagation(readResult)
+		assert.Empty(t, agent.GetIntegrityTags(), "Agent should have lost all integrity tags")
+
+		// Now try to write to high-integrity resource
+		productionDB := NewLabeledResource("production-database")
+		productionDB.Integrity.Label.Add("trusted")
+
+		writeResult := eval.Evaluate(agent.Secrecy, agent.Integrity, productionDB, OperationWrite)
+		assert.False(t, writeResult.IsAllowed(), "Write to production should be blocked after reading untrusted")
+	})
 }

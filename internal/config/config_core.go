@@ -47,14 +47,29 @@ type Config struct {
 	// Servers maps server names to their configurations
 	Servers map[string]*ServerConfig `toml:"servers" json:"servers"`
 
+	// Guards maps guard names to their configurations
+	Guards map[string]*GuardConfig `toml:"guards" json:"guards,omitempty"`
+
 	// Gateway holds global gateway settings
 	Gateway *GatewayConfig `toml:"gateway" json:"gateway,omitempty"`
 
 	// EnableDIFC enables Decentralized Information Flow Control
 	EnableDIFC bool `toml:"enable_difc" json:"enable_difc,omitempty"`
 
+	// DIFCMode specifies the DIFC enforcement mode: strict (default), filter, or propagate
+	// strict: deny access that violates DIFC rules
+	// filter: silently remove tools/resources that violate DIFC rules
+	// propagate: auto-adjust agent labels on reads to allow access
+	DIFCMode string `toml:"difc_mode" json:"difc_mode,omitempty"`
+
 	// SequentialLaunch launches servers sequentially instead of in parallel
 	SequentialLaunch bool `toml:"sequential_launch" json:"sequential_launch,omitempty"`
+
+	// GuardPolicy optionally overrides per-guard policy via CLI/environment precedence.
+	GuardPolicy *GuardPolicy `toml:"-" json:"-"`
+
+	// GuardPolicySource describes where GuardPolicy was resolved from (cli|env|config|legacy).
+	GuardPolicySource string `toml:"-" json:"-"`
 }
 
 // GatewayConfig holds global gateway settings.
@@ -89,6 +104,19 @@ type GatewayConfig struct {
 	// Payloads larger than this threshold are stored to disk, smaller ones are returned inline.
 	// Default: 524288 bytes (512KB)
 	PayloadSizeThreshold int `toml:"payload_size_threshold" json:"payload_size_threshold,omitempty"`
+
+	// Session holds default session label configuration for DIFC
+	Session *SessionConfig `toml:"session" json:"session,omitempty"`
+}
+
+// SessionConfig holds default DIFC labels for agent sessions.
+// These labels are applied to new agent sessions when they are created.
+type SessionConfig struct {
+	// Secrecy is a list of initial secrecy labels for agent sessions
+	Secrecy []string `toml:"secrecy" json:"secrecy,omitempty"`
+
+	// Integrity is a list of initial integrity labels for agent sessions
+	Integrity []string `toml:"integrity" json:"integrity,omitempty"`
 }
 
 // GetAPIKey returns the gateway API key, handling a nil Gateway safely.
@@ -131,6 +159,24 @@ type ServerConfig struct {
 	// GuardPolicies holds guard policies for access control at the MCP gateway level.
 	// The structure is server-specific. For GitHub MCP server, see the GitHub guard policy schema.
 	GuardPolicies map[string]interface{} `toml:"guard_policies" json:"guard-policies,omitempty"`
+
+	// Guard is the name of the guard to use for this server (requires DIFC)
+	Guard string `toml:"guard" json:"guard,omitempty"`
+}
+
+// GuardConfig represents a guard configuration for DIFC enforcement.
+type GuardConfig struct {
+	// Type is the guard type: "wasm", "noop", etc.
+	Type string `toml:"type" json:"type"`
+
+	// Path is the path to the guard implementation (e.g., WASM file)
+	Path string `toml:"path" json:"path,omitempty"`
+
+	// Config holds guard-specific configuration
+	Config map[string]interface{} `toml:"config" json:"config,omitempty"`
+
+	// Policy holds guard policy configuration for label_agent lifecycle initialization
+	Policy *GuardPolicy `toml:"policy" json:"policy,omitempty"`
 }
 
 // applyGatewayDefaults applies default values to a GatewayConfig if they are not set.
@@ -239,6 +285,10 @@ func LoadFromFile(path string) (*Config, error) {
 
 	// Apply feature-specific defaults
 	applyDefaults(&cfg)
+
+	if err := validateGuardPolicies(&cfg); err != nil {
+		return nil, err
+	}
 
 	logConfig.Printf("Successfully loaded %d servers from TOML file", len(cfg.Servers))
 	return &cfg, nil

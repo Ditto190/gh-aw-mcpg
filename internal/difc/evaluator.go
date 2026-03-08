@@ -9,6 +9,16 @@ import (
 
 var logEvaluator = logger.New("difc:evaluator")
 
+// DIFC mode string constants - use these for consistent mode references
+const (
+	ModeStrict    = "strict"
+	ModeFilter    = "filter"
+	ModePropagate = "propagate"
+)
+
+// ValidModes contains all valid DIFC enforcement mode strings
+var ValidModes = []string{ModeStrict, ModeFilter, ModePropagate}
+
 // OperationType indicates the nature of the resource access
 type OperationType int
 
@@ -31,12 +41,62 @@ func (o OperationType) String() string {
 	}
 }
 
+// EnforcementMode determines how DIFC policy violations are handled
+type EnforcementMode int
+
+const (
+	// EnforcementStrict blocks any access that violates DIFC rules
+	// This is the default mode for strong security guarantees
+	EnforcementStrict EnforcementMode = iota
+
+	// EnforcementFilter allows reads but filters out inaccessible items from collections
+	// Writes that violate DIFC rules are still blocked
+	EnforcementFilter
+
+	// EnforcementPropagate allows reads by automatically adjusting agent labels:
+	// - If agent lacks secrecy clearance for a resource, the missing secrecy tags
+	//   are added to the agent's secrecy label (agent becomes "tainted" with secret data)
+	// - If resource lacks integrity tags that agent has, those integrity tags
+	//   are removed from the agent's integrity label (agent is "influenced" by untrusted data)
+	// Writes that violate DIFC rules are still blocked (no propagation for writes)
+	EnforcementPropagate
+)
+
+func (m EnforcementMode) String() string {
+	switch m {
+	case EnforcementStrict:
+		return ModeStrict
+	case EnforcementFilter:
+		return ModeFilter
+	case EnforcementPropagate:
+		return ModePropagate
+	default:
+		return "unknown"
+	}
+}
+
+// ParseEnforcementMode parses a string into an EnforcementMode
+func ParseEnforcementMode(s string) (EnforcementMode, error) {
+	switch strings.ToLower(s) {
+	case ModeStrict, "":
+		return EnforcementStrict, nil
+	case ModeFilter:
+		return EnforcementFilter, nil
+	case ModePropagate:
+		return EnforcementPropagate, nil
+	default:
+		return EnforcementStrict, fmt.Errorf("unknown enforcement mode: %s (valid modes: %s, %s, %s)", s, ModeStrict, ModeFilter, ModePropagate)
+	}
+}
+
 // AccessDecision represents the result of a DIFC evaluation
 type AccessDecision int
 
 const (
 	AccessAllow AccessDecision = iota
 	AccessDeny
+	// AccessAllowWithPropagate indicates access is allowed but requires label propagation
+	AccessAllowWithPropagate
 )
 
 func (a AccessDecision) String() string {
@@ -45,6 +105,8 @@ func (a AccessDecision) String() string {
 		return "allow"
 	case AccessDeny:
 		return "deny"
+	case AccessAllowWithPropagate:
+		return "allow-with-propagate"
 	default:
 		return "unknown"
 	}
@@ -58,17 +120,39 @@ type EvaluationResult struct {
 	Reason          string // Human-readable reason for denial
 }
 
-// IsAllowed returns true if access is allowed
+// IsAllowed returns true if access is allowed (either directly or with propagation)
 func (e *EvaluationResult) IsAllowed() bool {
-	return e.Decision == AccessAllow
+	return e.Decision == AccessAllow || e.Decision == AccessAllowWithPropagate
+}
+
+// RequiresPropagation returns true if access requires label propagation
+func (e *EvaluationResult) RequiresPropagation() bool {
+	return e.Decision == AccessAllowWithPropagate
 }
 
 // Evaluator performs DIFC policy evaluation
-type Evaluator struct{}
+type Evaluator struct {
+	mode EnforcementMode
+}
 
-// NewEvaluator creates a new DIFC evaluator
+// NewEvaluator creates a new DIFC evaluator with strict enforcement mode
 func NewEvaluator() *Evaluator {
-	return &Evaluator{}
+	return &Evaluator{mode: EnforcementStrict}
+}
+
+// NewEvaluatorWithMode creates a new DIFC evaluator with the specified enforcement mode
+func NewEvaluatorWithMode(mode EnforcementMode) *Evaluator {
+	return &Evaluator{mode: mode}
+}
+
+// SetMode sets the enforcement mode
+func (e *Evaluator) SetMode(mode EnforcementMode) {
+	e.mode = mode
+}
+
+// GetMode returns the current enforcement mode
+func (e *Evaluator) GetMode() EnforcementMode {
+	return e.mode
 }
 
 // Evaluate checks if an agent can perform an operation on a resource
@@ -115,8 +199,8 @@ func (e *Evaluator) evaluateRead(
 	agentIntegrity *IntegrityLabel,
 	resource *LabeledResource,
 ) *EvaluationResult {
-	logEvaluator.Printf("Evaluating read access: resource=%s, agentSecrecy=%v, agentIntegrity=%v",
-		resource.Description, agentSecrecy.Label.GetTags(), agentIntegrity.Label.GetTags())
+	logEvaluator.Printf("Evaluating read access (mode=%s): resource=%s, agentSecrecy=%v, agentIntegrity=%v",
+		e.mode, resource.Description, agentSecrecy.Label.GetTags(), agentIntegrity.Label.GetTags())
 
 	result := &EvaluationResult{
 		Decision:        AccessAllow,
@@ -126,28 +210,56 @@ func (e *Evaluator) evaluateRead(
 
 	// For reads: resource integrity must flow to agent (trust check)
 	// Agent must trust the resource (resource has all integrity tags agent requires)
-	ok, missingTags := resource.Integrity.CheckFlow(agentIntegrity)
-	if !ok {
-		logEvaluator.Printf("Read denied: integrity check failed, missingTags=%v", missingTags)
-		result.Decision = AccessDeny
-		result.IntegrityToDrop = missingTags
-		result.Reason = fmt.Sprintf("Resource '%s' has lower integrity than agent requires. "+
-			"Agent would need to drop integrity tags %v to trust this resource.",
-			resource.Description, missingTags)
-		return result
-	}
+	integrityOk, integrityMissingTags := resource.Integrity.CheckFlow(agentIntegrity)
 
 	// For reads: agent must be able to handle resource's secrecy
 	// Agent secrecy must be superset of resource secrecy (agent has clearance)
 	// Check: resource.Secrecy ⊆ agentSecrecy (all resource secrecy tags are in agent)
-	ok, extraTags := resource.Secrecy.CheckFlow(agentSecrecy)
-	if !ok {
-		logEvaluator.Printf("Read denied: secrecy check failed, extraTags=%v", extraTags)
+	secrecyOk, secrecyExtraTags := resource.Secrecy.CheckFlow(agentSecrecy)
+
+	// In propagate mode, reads are allowed but may require label changes
+	if e.mode == EnforcementPropagate {
+		// Propagate mode: allow the read and record which labels need to change
+		if !integrityOk || !secrecyOk {
+			result.Decision = AccessAllowWithPropagate
+			result.IntegrityToDrop = integrityMissingTags
+			result.SecrecyToAdd = secrecyExtraTags
+
+			var reasons []string
+			if !secrecyOk {
+				reasons = append(reasons, fmt.Sprintf("adding secrecy tags %v", secrecyExtraTags))
+			}
+			if !integrityOk {
+				reasons = append(reasons, fmt.Sprintf("dropping integrity tags %v", integrityMissingTags))
+			}
+			result.Reason = fmt.Sprintf("Read allowed with label propagation: %s", strings.Join(reasons, " and "))
+			logEvaluator.Printf("Read access allowed with propagation: resource=%s, secrecyToAdd=%v, integrityToDrop=%v",
+				resource.Description, secrecyExtraTags, integrityMissingTags)
+			return result
+		}
+
+		logEvaluator.Printf("Read access allowed (no propagation needed): resource=%s", resource.Description)
+		return result
+	}
+
+	// Strict/Filter mode: deny if checks fail
+	if !integrityOk {
+		logEvaluator.Printf("Read denied: integrity check failed, missingTags=%v", integrityMissingTags)
 		result.Decision = AccessDeny
-		result.SecrecyToAdd = extraTags
+		result.IntegrityToDrop = integrityMissingTags
+		result.Reason = fmt.Sprintf("Resource '%s' has lower integrity than agent requires. "+
+			"Agent would need to drop integrity tags %v to trust this resource.",
+			resource.Description, integrityMissingTags)
+		return result
+	}
+
+	if !secrecyOk {
+		logEvaluator.Printf("Read denied: secrecy check failed, extraTags=%v", secrecyExtraTags)
+		result.Decision = AccessDeny
+		result.SecrecyToAdd = secrecyExtraTags
 		result.Reason = fmt.Sprintf("Resource '%s' has secrecy requirements that agent doesn't meet. "+
 			"Agent would need to add secrecy tags %v to read this resource.",
-			resource.Description, extraTags)
+			resource.Description, secrecyExtraTags)
 		return result
 	}
 

@@ -123,7 +123,108 @@ func TestLabel_GetTags(t *testing.T) {
 	})
 }
 
-// TestSecrecyLabel_CheckFlow tests CheckFlow for SecrecyLabel.
+// TestLabel_Remove tests the Remove method.
+func TestLabel_Remove(t *testing.T) {
+	tests := []struct {
+		name     string
+		initial  []Tag
+		remove   Tag
+		wantTags []Tag
+		wantGone []Tag
+	}{
+		{
+			name:     "remove existing tag",
+			initial:  []Tag{"a", "b", "c"},
+			remove:   "b",
+			wantTags: []Tag{"a", "c"},
+			wantGone: []Tag{"b"},
+		},
+		{
+			name:     "remove non-existent tag is a no-op",
+			initial:  []Tag{"a", "b"},
+			remove:   "z",
+			wantTags: []Tag{"a", "b"},
+		},
+		{
+			name:     "remove from empty label is a no-op",
+			initial:  nil,
+			remove:   "x",
+			wantTags: []Tag{},
+		},
+		{
+			name:     "remove last tag leaves empty label",
+			initial:  []Tag{"only"},
+			remove:   "only",
+			wantTags: []Tag{},
+			wantGone: []Tag{"only"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := newLabelWithTags(tt.initial)
+			l.Remove(tt.remove)
+
+			tags := l.GetTags()
+			assert.ElementsMatch(t, tt.wantTags, tags)
+			for _, absent := range tt.wantGone {
+				assert.False(t, l.Contains(absent), "expected %q to be removed", absent)
+			}
+		})
+	}
+}
+
+// TestLabel_RemoveAll tests the RemoveAll method.
+func TestLabel_RemoveAll(t *testing.T) {
+	tests := []struct {
+		name     string
+		initial  []Tag
+		remove   []Tag
+		wantTags []Tag
+	}{
+		{
+			name:     "remove subset of tags",
+			initial:  []Tag{"a", "b", "c", "d"},
+			remove:   []Tag{"b", "d"},
+			wantTags: []Tag{"a", "c"},
+		},
+		{
+			name:     "remove all tags leaves empty label",
+			initial:  []Tag{"x", "y"},
+			remove:   []Tag{"x", "y"},
+			wantTags: []Tag{},
+		},
+		{
+			name:     "remove nil tags is a no-op",
+			initial:  []Tag{"a", "b"},
+			remove:   nil,
+			wantTags: []Tag{"a", "b"},
+		},
+		{
+			name:     "remove non-existent tags is a no-op",
+			initial:  []Tag{"a", "b"},
+			remove:   []Tag{"z", "w"},
+			wantTags: []Tag{"a", "b"},
+		},
+		{
+			name:     "remove from empty label is a no-op",
+			initial:  nil,
+			remove:   []Tag{"x"},
+			wantTags: []Tag{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := newLabelWithTags(tt.initial)
+			l.RemoveAll(tt.remove)
+
+			tags := l.GetTags()
+			assert.ElementsMatch(t, tt.wantTags, tags)
+		})
+	}
+}
+
 func TestSecrecyLabel_CheckFlow(t *testing.T) {
 	tests := []struct {
 		name        string

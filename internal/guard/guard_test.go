@@ -18,6 +18,9 @@ type mockGuard struct {
 }
 
 func (m *mockGuard) Name() string { return "mock-" + m.id }
+func (m *mockGuard) LabelAgent(ctx context.Context, policy interface{}, backend BackendCaller, caps *difc.Capabilities) (*LabelAgentResult, error) {
+	return &LabelAgentResult{DIFCMode: difc.ModeStrict}, nil
+}
 func (m *mockGuard) LabelResource(ctx context.Context, toolName string, args interface{}, backend BackendCaller, caps *difc.Capabilities) (*difc.LabeledResource, difc.OperationType, error) {
 	return &difc.LabeledResource{}, difc.OperationRead, nil
 }
@@ -45,7 +48,19 @@ func TestNoopGuard(t *testing.T) {
 
 		assert.True(t, resource.Integrity.Label.IsEmpty(), "Expected empty integrity labels")
 
-		assert.Equal(t, difc.OperationWrite, operation)
+		assert.Equal(t, difc.OperationReadWrite, operation)
+	})
+
+	t.Run("LabelAgent returns defaults", func(t *testing.T) {
+		ctx := context.Background()
+		caps := difc.NewCapabilities()
+
+		result, err := guard.LabelAgent(ctx, map[string]interface{}{"AllowOnly": map[string]interface{}{}}, nil, caps)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, difc.ModeStrict, result.DIFCMode)
+		assert.Empty(t, result.Agent.Secrecy)
+		assert.Empty(t, result.Agent.Integrity)
 	})
 
 	t.Run("LabelResponse returns nil", func(t *testing.T) {
@@ -67,7 +82,7 @@ func TestNoopGuard(t *testing.T) {
 		require.NotNil(t, resource)
 		assert.True(t, resource.Secrecy.Label.IsEmpty())
 		assert.True(t, resource.Integrity.Label.IsEmpty())
-		assert.Equal(t, difc.OperationWrite, operation)
+		assert.Equal(t, difc.OperationReadWrite, operation)
 	})
 
 	t.Run("LabelResponse with nil capabilities", func(t *testing.T) {
@@ -85,7 +100,7 @@ func TestNoopGuard(t *testing.T) {
 		resource, operation, err := guard.LabelResource(ctx, "", map[string]interface{}{}, nil, caps)
 		require.NoError(t, err)
 		require.NotNil(t, resource)
-		assert.Equal(t, difc.OperationWrite, operation)
+		assert.Equal(t, difc.OperationReadWrite, operation)
 	})
 
 	t.Run("LabelResource with nil args", func(t *testing.T) {
@@ -95,7 +110,7 @@ func TestNoopGuard(t *testing.T) {
 		resource, operation, err := guard.LabelResource(ctx, "test_tool", nil, nil, caps)
 		require.NoError(t, err)
 		require.NotNil(t, resource)
-		assert.Equal(t, difc.OperationWrite, operation)
+		assert.Equal(t, difc.OperationReadWrite, operation)
 	})
 
 	t.Run("LabelResponse with various result types", func(t *testing.T) {
@@ -621,5 +636,123 @@ func TestRequestStateContext(t *testing.T) {
 
 		state := GetRequestStateFromContext(ctx)
 		assert.Equal(t, "third", state, "Should get most recent state")
+	})
+}
+
+func TestNormalizePolicyPayload(t *testing.T) {
+	t.Run("accepts object policy", func(t *testing.T) {
+		input := map[string]interface{}{
+			"allowonly": map[string]interface{}{
+				"repos":     "public",
+				"integrity": "none",
+			},
+		}
+
+		result, err := normalizePolicyPayload(input)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+	})
+
+	t.Run("parses stringified json policy to object", func(t *testing.T) {
+		input := `{"allowonly":{"repos":"public","integrity":"none"}}`
+
+		result, err := normalizePolicyPayload(input)
+		require.NoError(t, err)
+		resultMap, ok := result.(map[string]interface{})
+		require.True(t, ok)
+		require.NotNil(t, resultMap["allowonly"])
+	})
+
+	t.Run("rejects invalid policy string", func(t *testing.T) {
+		_, err := normalizePolicyPayload("not-json")
+		require.Error(t, err)
+	})
+}
+
+func TestBuildStrictLabelAgentPayload(t *testing.T) {
+	t.Run("accepts top-level allowonly payload", func(t *testing.T) {
+		input := map[string]interface{}{
+			"allowonly": map[string]interface{}{
+				"repos":     "public",
+				"integrity": "none",
+			},
+		}
+
+		payload, err := buildStrictLabelAgentPayload(input)
+		require.NoError(t, err)
+		require.NotNil(t, payload)
+		assert.Contains(t, payload, "allowonly")
+		assert.NotContains(t, payload, "policy")
+	})
+
+	t.Run("rejects legacy policy envelope", func(t *testing.T) {
+		input := map[string]interface{}{
+			"policy": map[string]interface{}{
+				"allowonly": map[string]interface{}{
+					"repos":     "public",
+					"integrity": "none",
+				},
+			},
+		}
+
+		_, err := buildStrictLabelAgentPayload(input)
+		require.Error(t, err)
+		assert.Equal(t, "gateway policy adapter is outdated: remove legacy envelope key policy before calling label_agent", err.Error())
+	})
+
+	t.Run("rejects missing top-level allowonly", func(t *testing.T) {
+		input := map[string]interface{}{
+			"something_else": map[string]interface{}{},
+		}
+
+		_, err := buildStrictLabelAgentPayload(input)
+		require.Error(t, err)
+		assert.Equal(t, "label_agent policy must use top-level allowonly object (received policy.allowonly)", err.Error())
+	})
+
+	t.Run("rejects invalid repos value", func(t *testing.T) {
+		input := map[string]interface{}{
+			"allowonly": map[string]interface{}{
+				"repos":     []interface{}{},
+				"integrity": "none",
+			},
+		}
+
+		_, err := buildStrictLabelAgentPayload(input)
+		require.Error(t, err)
+		assert.Equal(t, "invalid repos value: expected all, public, or non-empty array of scoped strings", err.Error())
+	})
+
+	t.Run("rejects invalid integrity value", func(t *testing.T) {
+		input := map[string]interface{}{
+			"allowonly": map[string]interface{}{
+				"repos":     "all",
+				"integrity": "reader-contrib",
+			},
+		}
+
+		_, err := buildStrictLabelAgentPayload(input)
+		require.Error(t, err)
+		assert.Equal(t, "invalid integrity value: expected one of none|unapproved|approved|merged", err.Error())
+	})
+}
+
+func TestParseLabelAgentResponse(t *testing.T) {
+	t.Run("success payload parses", func(t *testing.T) {
+		payload := []byte(`{"agent":{"secrecy":[],"integrity":[]},"difc_mode":"strict","normalized_policy":{"scope_kind":"public","integrity":"none"}}`)
+
+		result, err := parseLabelAgentResponse(payload)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, "strict", result.DIFCMode)
+	})
+
+	t.Run("non success fails closed", func(t *testing.T) {
+		payload := []byte(`{"success":false,"error":"missing field allowonly"}`)
+
+		result, err := parseLabelAgentResponse(payload)
+		require.Error(t, err)
+		assert.Nil(t, result)
+		assert.Contains(t, err.Error(), "missing field allowonly")
 	})
 }

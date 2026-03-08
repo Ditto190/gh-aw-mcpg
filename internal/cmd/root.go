@@ -16,7 +16,9 @@ import (
 	"time"
 
 	"github.com/github/gh-aw-mcpg/internal/config"
+	"github.com/github/gh-aw-mcpg/internal/difc"
 	"github.com/github/gh-aw-mcpg/internal/logger"
+	"github.com/github/gh-aw-mcpg/internal/mcp"
 	"github.com/github/gh-aw-mcpg/internal/server"
 	"github.com/github/gh-aw-mcpg/internal/version"
 	"github.com/spf13/cobra"
@@ -180,6 +182,12 @@ func run(cmd *cobra.Command, args []string) error {
 	var cfg *config.Config
 	var err error
 
+	// Propagate enableConfigExt flag to environment for config.LoadFromStdin()
+	// This allows the config package to know if extensions are enabled via the flag
+	if enableConfigExt {
+		os.Setenv("MCP_GATEWAY_CONFIG_EXTENSIONS", "true")
+	}
+
 	if configStdin {
 		log.Println("Reading configuration from stdin...")
 		cfg, err = config.LoadFromStdin()
@@ -208,13 +216,93 @@ func run(cmd *cobra.Command, args []string) error {
 		logger.LogInfoMd("startup", "Loaded %d MCP server(s)", len(cfg.Servers))
 	}
 
+	// Validate extension flag prerequisites
+	// Session label features require --enable-config-extensions to be set
+	hasExtensionFeatures := sessionSecrecy != "" || sessionIntegrity != ""
+	if hasExtensionFeatures && !enableConfigExt {
+		var features []string
+		if sessionSecrecy != "" {
+			features = append(features, "--session-secrecy")
+		}
+		if sessionIntegrity != "" {
+			features = append(features, "--session-integrity")
+		}
+		return fmt.Errorf("the following flags require --enable-config-extensions (or MCP_GATEWAY_CONFIG_EXTENSIONS=1): %s", strings.Join(features, ", "))
+	}
+
+	if enableConfigExt {
+		log.Println("Config extensions enabled (guards, session labels)")
+	}
+
+	// Validate DIFC mode before applying
+	if err := ValidateDIFCMode(difcMode); err != nil {
+		return fmt.Errorf("invalid --difc-mode flag: %w", err)
+	}
+
 	// Apply command-line flags to config
 	cfg.EnableDIFC = enableDIFC
+	cfg.DIFCMode = difcMode
 	cfg.SequentialLaunch = sequentialLaunch
 
 	// Override gateway config with command-line flags
 	if cfg.Gateway == nil {
 		cfg.Gateway = &config.GatewayConfig{}
+	}
+
+	// Apply session labels from CLI flags (these override config file settings)
+	secrecyLabels := parseSessionLabels(sessionSecrecy)
+	integrityLabels := parseSessionLabels(sessionIntegrity)
+	if len(secrecyLabels) > 0 || len(integrityLabels) > 0 {
+		// Ensure Session config exists
+		if cfg.Gateway.Session == nil {
+			cfg.Gateway.Session = &config.SessionConfig{}
+		}
+		// Apply CLI flags (override config file)
+		if len(secrecyLabels) > 0 {
+			cfg.Gateway.Session.Secrecy = secrecyLabels
+		}
+		if len(integrityLabels) > 0 {
+			cfg.Gateway.Session.Integrity = integrityLabels
+		}
+		log.Printf("Session labels configured: secrecy=%v, integrity=%v",
+			cfg.Gateway.Session.Secrecy, cfg.Gateway.Session.Integrity)
+		logger.LogInfoMd("startup", "Session labels: secrecy=%v, integrity=%v",
+			cfg.Gateway.Session.Secrecy, cfg.Gateway.Session.Integrity)
+	}
+
+	policyOverride, policySource, err := resolveGuardPolicyOverride(cmd)
+	if err != nil {
+		return fmt.Errorf("invalid guard policy configuration: %w", err)
+	}
+	if policyOverride != nil {
+		cfg.GuardPolicy = policyOverride
+		cfg.GuardPolicySource = policySource
+		log.Printf("Guard policy override configured (source=%s)", policySource)
+		logger.LogInfoMd("startup", "Guard policy override configured (source=%s)", policySource)
+	}
+
+	if envSinkServerIDs, exists := os.LookupEnv("MCP_GATEWAY_DIFC_SINK_SERVER_IDS"); exists {
+		log.Printf("MCP_GATEWAY_DIFC_SINK_SERVER_IDS=%q", envSinkServerIDs)
+		logger.LogInfoMd("startup", "MCP_GATEWAY_DIFC_SINK_SERVER_IDS=%q", envSinkServerIDs)
+	}
+
+	resolvedSinkServerIDs, err := parseDIFCSinkServerIDs(difcSinkServerIDs)
+	if err != nil {
+		return fmt.Errorf("invalid --difc-sink-server-ids value: %w", err)
+	}
+	mcp.SetDIFCSinkServerIDs(resolvedSinkServerIDs)
+	if len(resolvedSinkServerIDs) == 0 {
+		log.Println("DIFC sink server ID logging enrichment disabled (no sink server IDs configured)")
+		logger.LogInfoMd("startup", "DIFC sink server ID logging enrichment disabled")
+	} else {
+		log.Printf("DIFC sink server IDs configured for JSONL tag enrichment: %v", resolvedSinkServerIDs)
+		logger.LogInfoMd("startup", "DIFC sink server IDs configured for JSONL tag enrichment: %v", resolvedSinkServerIDs)
+		for _, sinkServerID := range resolvedSinkServerIDs {
+			if _, exists := cfg.Servers[sinkServerID]; !exists {
+				log.Printf("Warning: DIFC sink server ID '%s' is not configured in mcpServers", sinkServerID)
+				logger.LogWarn("startup", "DIFC sink server ID '%s' is not configured in mcpServers", sinkServerID)
+			}
+		}
 	}
 
 	// Apply payload directory flag (if different from default, it was explicitly set)
@@ -242,7 +330,15 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 
 	if enableDIFC {
-		log.Println("DIFC enforcement and session requirement enabled")
+		log.Printf("DIFC enforcement enabled with mode: %s", difcMode)
+		switch difcMode {
+		case difc.ModeStrict:
+			log.Println("  - Strict mode: violations are denied")
+		case difc.ModeFilter:
+			log.Println("  - Filter mode: denied tools/resources are silently removed")
+		case difc.ModePropagate:
+			log.Println("  - Propagate mode: agent labels auto-adjusted on reads")
+		}
 	} else {
 		log.Println("DIFC enforcement disabled (sessions auto-created for standard MCP client compatibility)")
 	}
@@ -259,7 +355,7 @@ func run(cmd *cobra.Command, args []string) error {
 		mode = "unified"
 	}
 
-	debugLog.Printf("Server mode: %s, DIFC enabled: %v", mode, cfg.EnableDIFC)
+	debugLog.Printf("Server mode: %s, DIFC enabled: %v, DIFC mode: %s", mode, cfg.EnableDIFC, cfg.DIFCMode)
 
 	// Create unified MCP server (backend for both modes)
 	unifiedServer, err := server.NewUnified(ctx, cfg)
@@ -326,6 +422,58 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+func resolveGuardPolicyOverride(cmd *cobra.Command) (*config.GuardPolicy, string, error) {
+	cliChanged := cmd.Flags().Changed("guard-policy-json") ||
+		cmd.Flags().Changed("allowonly-scope-public") ||
+		cmd.Flags().Changed("allowonly-scope-owner") ||
+		cmd.Flags().Changed("allowonly-scope-repo") ||
+		cmd.Flags().Changed("allowonly-min-integrity")
+
+	if cliChanged {
+		if strings.TrimSpace(guardPolicyJSON) != "" {
+			policy, err := config.ParseGuardPolicyJSON(guardPolicyJSON)
+			if err != nil {
+				return nil, "", err
+			}
+			return policy, "cli", nil
+		}
+
+		policy, err := buildAllowOnlyPolicy(allowOnlyPublic, allowOnlyOwner, allowOnlyRepo, allowOnlyMinInt)
+		if err != nil {
+			return nil, "", err
+		}
+		return policy, "cli", nil
+	}
+
+	if envPolicyJSON := strings.TrimSpace(os.Getenv("MCP_GATEWAY_GUARD_POLICY_JSON")); envPolicyJSON != "" {
+		policy, err := config.ParseGuardPolicyJSON(envPolicyJSON)
+		if err != nil {
+			return nil, "", err
+		}
+		return policy, "env", nil
+	}
+
+	_, hasScopePublic := os.LookupEnv("MCP_GATEWAY_ALLOWONLY_SCOPE_PUBLIC")
+	_, hasScopeOwner := os.LookupEnv("MCP_GATEWAY_ALLOWONLY_SCOPE_OWNER")
+	_, hasScopeRepo := os.LookupEnv("MCP_GATEWAY_ALLOWONLY_SCOPE_REPO")
+	_, hasMinIntegrity := os.LookupEnv("MCP_GATEWAY_ALLOWONLY_MIN_INTEGRITY")
+
+	if hasScopePublic || hasScopeOwner || hasScopeRepo || hasMinIntegrity {
+		policy, err := buildAllowOnlyPolicy(
+			getDefaultAllowOnlyScopePublic(),
+			getDefaultAllowOnlyScopeOwner(),
+			getDefaultAllowOnlyScopeRepo(),
+			getDefaultAllowOnlyMinIntegrity(),
+		)
+		if err != nil {
+			return nil, "", err
+		}
+		return policy, "env", nil
+	}
+
+	return nil, "", nil
 }
 
 // writeGatewayConfigToStdout writes the rewritten gateway configuration to stdout

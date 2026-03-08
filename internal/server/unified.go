@@ -25,6 +25,8 @@ import (
 
 var logUnified = logger.New("server:unified")
 
+const wasmGuardsDirEnvVar = "MCP_GATEWAY_WASM_GUARDS_DIR"
+
 // MCPProtocolVersion is the MCP protocol version supported by this gateway
 const MCPProtocolVersion = mcp.MCPProtocolVersion
 
@@ -36,6 +38,16 @@ type Session struct {
 	Token     string
 	SessionID string
 	StartTime time.Time
+	GuardInit map[string]*GuardSessionState
+}
+
+// GuardSessionState stores label_agent initialization state for a guard within a session.
+type GuardSessionState struct {
+	Initialized      bool
+	PolicyHash       string
+	PolicySource     string
+	DIFCMode         difc.EnforcementMode
+	NormalizedPolicy map[string]interface{}
 }
 
 // ServerStatus represents the health status of a backend server
@@ -50,6 +62,7 @@ func NewSession(sessionID, token string) *Session {
 		Token:     token,
 		SessionID: sessionID,
 		StartTime: time.Now(),
+		GuardInit: make(map[string]*GuardSessionState),
 	}
 }
 
@@ -88,6 +101,9 @@ type UnifiedServer struct {
 	evaluator     *difc.Evaluator
 	enableDIFC    bool // When true, DIFC enforcement and session requirement are enabled
 
+	// Configuration reference for guard loading
+	cfg *config.Config
+
 	// Shutdown state tracking
 	isShutdown     bool
 	shutdownMu     sync.RWMutex
@@ -123,6 +139,27 @@ func NewUnified(ctx context.Context, cfg *config.Config) (*UnifiedServer, error)
 	logUnified.Printf("Payload configuration: dir=%s, pathPrefix=%s, sizeThreshold=%d bytes (%.2f KB)",
 		payloadDir, payloadPathPrefix, payloadSizeThreshold, float64(payloadSizeThreshold)/1024)
 
+	// Parse DIFC enforcement mode
+	difcMode, err := difc.ParseEnforcementMode(cfg.DIFCMode)
+	if err != nil {
+		// Default to strict mode if not specified or invalid
+		difcMode = difc.EnforcementStrict
+	}
+
+	// Get default session labels from config
+	var defaultSecrecy, defaultIntegrity []difc.Tag
+	if cfg.Gateway != nil && cfg.Gateway.Session != nil {
+		for _, s := range cfg.Gateway.Session.Secrecy {
+			defaultSecrecy = append(defaultSecrecy, difc.Tag(s))
+		}
+		for _, i := range cfg.Gateway.Session.Integrity {
+			defaultIntegrity = append(defaultIntegrity, difc.Tag(i))
+		}
+		if len(defaultSecrecy) > 0 || len(defaultIntegrity) > 0 {
+			logUnified.Printf("Using default session labels: secrecy=%v, integrity=%v", defaultSecrecy, defaultIntegrity)
+		}
+	}
+
 	us := &UnifiedServer{
 		launcher:             l,
 		sysServer:            sys.NewSysServer(l.ServerIDs()),
@@ -136,10 +173,11 @@ func NewUnified(ctx context.Context, cfg *config.Config) (*UnifiedServer, error)
 
 		// Initialize DIFC components
 		guardRegistry: guard.NewRegistry(),
-		agentRegistry: difc.NewAgentRegistry(),
+		agentRegistry: difc.NewAgentRegistryWithDefaults(defaultSecrecy, defaultIntegrity),
 		capabilities:  difc.NewCapabilities(),
-		evaluator:     difc.NewEvaluator(),
+		evaluator:     difc.NewEvaluatorWithMode(difcMode),
 		enableDIFC:    cfg.EnableDIFC,
+		cfg:           cfg, // Store config for guard loading
 	}
 
 	// Create MCP server with logger
@@ -151,10 +189,13 @@ func NewUnified(ctx context.Context, cfg *config.Config) (*UnifiedServer, error)
 	})
 
 	us.server = server
+	us.logWASMGuardsDirConfiguration()
 
 	// Register guards for all backends
 	for _, serverID := range l.ServerIDs() {
-		us.registerGuard(serverID)
+		if err := us.registerGuard(serverID); err != nil {
+			return nil, fmt.Errorf("failed to register guard for server %q: %w", serverID, err)
+		}
 	}
 
 	// Register aggregated tools from all backends
@@ -412,10 +453,12 @@ func (us *UnifiedServer) registerToolsFromBackend(serverID string) error {
 }
 
 // registerSysTool is a helper function that registers a sys tool by storing its metadata
-// in the internal tools map and registering it with the SDK. This eliminates duplication
-// of tool metadata (Name, Description, InputSchema) that was previously defined twice.
+// in the internal tools map. Sys tools are deprecated: agent labels are set when a guard
+// is initialized via label_agent, so sys tools no longer need to be exposed to agents.
+// The handler implementations are kept for potential future use.
 func (us *UnifiedServer) registerSysTool(name, description string, inputSchema map[string]interface{}, handler func(context.Context, *sdk.CallToolRequest, interface{}) (*sdk.CallToolResult, interface{}, error)) {
-	// Store tool info
+	// Store tool info internally only -- sys tools are intentionally NOT registered
+	// with the MCP SDK server and therefore never appear in tools/list.
 	us.toolsMu.Lock()
 	us.tools[name] = &ToolInfo{
 		Name:        name,
@@ -425,13 +468,6 @@ func (us *UnifiedServer) registerSysTool(name, description string, inputSchema m
 		Handler:     handler,
 	}
 	us.toolsMu.Unlock()
-
-	// Register with SDK
-	sdk.AddTool(us.server, &sdk.Tool{
-		Name:        name,
-		Description: description,
-		InputSchema: inputSchema,
-	}, handler)
 }
 
 // registerSysTools registers built-in sys tools
@@ -550,13 +586,169 @@ func (us *UnifiedServer) registerSysTools() error {
 }
 
 // registerGuard registers a guard for a specific backend server
-func (us *UnifiedServer) registerGuard(serverID string) {
-	// For now, use noop guards for all servers
-	// In the future, this will load guards based on configuration
-	// or use guard.CreateGuard() with a guard name from config
-	g := guard.NewNoopGuard()
+// Guards are loaded based on the server's configuration:
+// 1. If server has a "guard" field, look up the guard config by name
+// 2. Create the appropriate guard type (wasm, noop, etc.)
+// 3. Fall back to noop guard if no guard is configured
+func (us *UnifiedServer) registerGuard(serverID string) error {
+	var g guard.Guard
+	us.logServerGuardPolicies(serverID)
+
+	// Check if a per-server WASM guard exists in MCP_GATEWAY_WASM_GUARDS_DIR.
+	// If found and loadable, it takes precedence over config-defined guards.
+	if wasmPath, found, err := findServerWASMGuardFile(serverID); err != nil {
+		log.Printf("[DIFC] WARNING: Failed to discover WASM guard for server '%s' from %s: %v", serverID, wasmGuardsDirEnvVar, err)
+	} else if found {
+		ctx := context.Background()
+		loadedGuard, loadErr := guard.NewWasmGuard(ctx, serverID, wasmPath, nil)
+		if loadErr != nil {
+			log.Printf("[DIFC] WARNING: Failed to load discovered WASM guard for server '%s' from %s: %v", serverID, wasmPath, loadErr)
+		} else {
+			log.Printf("[DIFC] Loaded discovered WASM guard for server '%s' from file: %s", serverID, filepath.Base(wasmPath))
+			g = loadedGuard
+		}
+	}
+
+	if g == nil {
+		// Check if server has a guard configured
+		serverCfg, hasServer := us.cfg.Servers[serverID]
+		if hasServer && serverCfg.Guard != "" {
+			guardName := serverCfg.Guard
+
+			// Look up guard config
+			guardCfg, hasGuardCfg := us.cfg.Guards[guardName]
+			if hasGuardCfg {
+				// Create guard based on type
+				var err error
+				g, err = us.createGuardFromConfig(guardName, guardCfg)
+				if err != nil {
+					log.Printf("[DIFC] WARNING: Failed to create guard '%s' for server '%s': %v (falling back to noop)", guardName, serverID, err)
+					g = guard.NewNoopGuard()
+				}
+			} else {
+				// Guard name specified but no config found - try registered guard types
+				var err error
+				g, err = guard.CreateGuard(guardName)
+				if err != nil {
+					log.Printf("[DIFC] WARNING: Guard '%s' not found for server '%s': %v (falling back to noop)", guardName, serverID, err)
+					g = guard.NewNoopGuard()
+				}
+			}
+		} else {
+			// No guard configured - use noop
+			g = guard.NewNoopGuard()
+		}
+	}
+
+	if err := us.requireGuardPolicyIfGuardEnabled(serverID, g); err != nil {
+		return err
+	}
+
 	us.guardRegistry.Register(serverID, g)
 	log.Printf("[DIFC] Registered guard '%s' for server '%s'", g.Name(), serverID)
+	return nil
+}
+
+func (us *UnifiedServer) requireGuardPolicyIfGuardEnabled(serverID string, g guard.Guard) error {
+	if g == nil || g.Name() == "noop" {
+		return nil
+	}
+
+	policy, _, err := us.resolveGuardPolicy(serverID)
+	if err != nil {
+		return err
+	}
+	if policy == nil {
+		return fmt.Errorf("guard '%s' is available for MCP server '%s' but no guard policy is set", g.Name(), serverID)
+	}
+
+	return nil
+}
+
+func (us *UnifiedServer) logServerGuardPolicies(serverID string) {
+	if us.cfg == nil || us.cfg.Servers == nil {
+		log.Printf("[DIFC] no guard policy was set for MCP server '%s'", serverID)
+		return
+	}
+
+	serverCfg, ok := us.cfg.Servers[serverID]
+	if !ok || serverCfg == nil || len(serverCfg.GuardPolicies) == 0 {
+		log.Printf("[DIFC] no guard policy was set for MCP server '%s'", serverID)
+		return
+	}
+
+	policyJSON, err := json.Marshal(serverCfg.GuardPolicies)
+	if err != nil {
+		log.Printf("[DIFC] guard policy is set for MCP server '%s' (failed to serialize policy: %v)", serverID, err)
+		return
+	}
+
+	log.Printf("[DIFC] guard policy for MCP server '%s': %s", serverID, string(policyJSON))
+}
+
+func findServerWASMGuardFile(serverID string) (string, bool, error) {
+	guardsRootDir := strings.TrimSpace(os.Getenv(wasmGuardsDirEnvVar))
+	if guardsRootDir == "" {
+		return "", false, nil
+	}
+
+	serverGuardDir := filepath.Join(guardsRootDir, serverID)
+	entries, err := os.ReadDir(serverGuardDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", false, nil
+		}
+		return "", false, fmt.Errorf("failed to read server guard directory %q: %w", serverGuardDir, err)
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+
+		if strings.EqualFold(filepath.Ext(entry.Name()), ".wasm") {
+			return filepath.Join(serverGuardDir, entry.Name()), true, nil
+		}
+	}
+
+	return "", false, nil
+}
+
+func (us *UnifiedServer) logWASMGuardsDirConfiguration() {
+	guardsRootDir := strings.TrimSpace(os.Getenv(wasmGuardsDirEnvVar))
+	if guardsRootDir == "" {
+		log.Printf("[DIFC] %s is not set", wasmGuardsDirEnvVar)
+		return
+	}
+
+	log.Printf("[DIFC] %s=%s", wasmGuardsDirEnvVar, guardsRootDir)
+}
+
+// createGuardFromConfig creates a guard instance from a guard configuration
+func (us *UnifiedServer) createGuardFromConfig(name string, cfg *config.GuardConfig) (guard.Guard, error) {
+	switch cfg.Type {
+	case "noop", "":
+		return guard.NewNoopGuard(), nil
+
+	case "wasm":
+		// WASM guard loading - requires path
+		if cfg.Path == "" {
+			return nil, fmt.Errorf("wasm guard '%s' requires a 'path' field", name)
+		}
+		// Create WASM guard directly with the path
+		ctx := context.Background()
+		// Create a backend caller that can be updated later per-request
+		g, err := guard.NewWasmGuard(ctx, name, cfg.Path, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load WASM guard from %s: %w", cfg.Path, err)
+		}
+		log.Printf("[DIFC] Created WASM guard '%s' from path: %s", name, cfg.Path)
+		return g, nil
+
+	default:
+		// Try registered guard types
+		return guard.CreateGuard(cfg.Type)
+	}
 }
 
 // guardBackendCaller implements guard.BackendCaller for guards to query backend metadata
@@ -612,7 +804,45 @@ func convertToCallToolResult(data interface{}) (*sdk.CallToolResult, error) {
 		return nil, fmt.Errorf("failed to marshal backend result: %w", err)
 	}
 
-	// Parse the backend result structure
+	// First, try to detect if the response is an array (some backends return arrays directly)
+	var rawArray []json.RawMessage
+	if err := json.Unmarshal(dataBytes, &rawArray); err == nil {
+		// It's an array - wrap it as a single text content item
+		log.Printf("[convertToCallToolResult] Backend returned array with %d items, wrapping as text", len(rawArray))
+		return &sdk.CallToolResult{
+			Content: []sdk.Content{
+				&sdk.TextContent{
+					Text: string(dataBytes),
+				},
+			},
+			IsError: false,
+		}, nil
+	}
+
+	// Check if response is an object with a "content" field (standard MCP format)
+	// We need to distinguish between:
+	// 1. {"content": []} - empty array, should preserve as 0 content items
+	// 2. {"content": [...]} - has items, process normally
+	// 3. {"some": "other"} - no content field, wrap as text
+	var hasContentField struct {
+		Content *json.RawMessage `json:"content"`
+		IsError bool             `json:"isError,omitempty"`
+	}
+
+	if err := json.Unmarshal(dataBytes, &hasContentField); err != nil || hasContentField.Content == nil {
+		// No "content" field or parse error - wrap raw response as text
+		log.Printf("[convertToCallToolResult] No content field found, wrapping raw response as text")
+		return &sdk.CallToolResult{
+			Content: []sdk.Content{
+				&sdk.TextContent{
+					Text: string(dataBytes),
+				},
+			},
+			IsError: false,
+		}, nil
+	}
+
+	// Parse the backend result structure (standard MCP CallToolResult format)
 	var backendResult struct {
 		Content []struct {
 			Type string `json:"type"`
@@ -622,10 +852,20 @@ func convertToCallToolResult(data interface{}) (*sdk.CallToolResult, error) {
 	}
 
 	if err := json.Unmarshal(dataBytes, &backendResult); err != nil {
-		return nil, fmt.Errorf("failed to parse backend result structure: %w", err)
+		// If parsing fails, wrap the raw response as text content
+		log.Printf("[convertToCallToolResult] Failed to parse as CallToolResult, wrapping raw response: %v", err)
+		return &sdk.CallToolResult{
+			Content: []sdk.Content{
+				&sdk.TextContent{
+					Text: string(dataBytes),
+				},
+			},
+			IsError: false,
+		}, nil
 	}
 
 	// Convert content items to SDK Content format
+	// Note: Empty content array is valid and should be preserved (0 items)
 	content := make([]sdk.Content, 0, len(backendResult.Content))
 	for _, item := range backendResult.Content {
 		switch item.Type {
@@ -653,15 +893,11 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 	// Note: Session validation happens at the tool registration level via closures
 	// The closure captures the request and validates before calling this method
 	log.Printf("Calling tool on %s: %s with DIFC enforcement", serverID, toolName)
-
-	// **Phase 0: Extract agent ID and get/create agent labels**
-	agentID := guard.GetAgentIDFromContext(ctx)
-	agentLabels := us.agentRegistry.GetOrCreate(agentID)
-	log.Printf("[DIFC] Agent %s | Secrecy: %v | Integrity: %v",
-		agentID, agentLabels.GetSecrecyTags(), agentLabels.GetIntegrityTags())
+	logUnified.Printf("callBackendTool: serverID=%s, toolName=%s, args=%+v", serverID, toolName, args)
 
 	// Get guard for this backend
 	g := us.guardRegistry.Get(serverID)
+	sessionID := us.getSessionID(ctx)
 
 	// Create backend caller for the guard
 	backendCaller := &guardBackendCaller{
@@ -669,6 +905,31 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 		serverID: serverID,
 		ctx:      ctx,
 	}
+
+	// Initialize policy-driven guard session state (label_agent) before first guarded call.
+	enforcementMode, err := us.ensureGuardInitialized(ctx, sessionID, serverID, g, backendCaller)
+	if err != nil {
+		return newErrorCallToolResult(fmt.Errorf("guard session initialization failed: %w", err))
+	}
+
+	requestEvaluator := difc.NewEvaluatorWithMode(enforcementMode)
+
+	// **Phase 0: Extract agent ID and get/create agent labels**
+	agentID := guard.GetAgentIDFromContext(ctx)
+	agentLabels := us.agentRegistry.GetOrCreate(agentID)
+	log.Printf("[DIFC] Agent %s | Secrecy: %v | Integrity: %v",
+		agentID, agentLabels.GetSecrecyTags(), agentLabels.GetIntegrityTags())
+
+	ctx = context.WithValue(ctx, mcp.AgentTagsSnapshotContextKey, &mcp.AgentTagsSnapshot{
+		Secrecy:   tagsToStrings(agentLabels.GetSecrecyTags()),
+		Integrity: tagsToStrings(agentLabels.GetIntegrityTags()),
+	})
+
+	// Store request state for guards that need request context during response labeling.
+	// This allows LabelResponse() to access the original tool arguments.
+	ctx = guard.SetRequestStateInContext(ctx, map[string]interface{}{
+		"tool_args": args,
+	})
 
 	// **Phase 1: Guard labels the resource**
 	resource, operation, err := g.LabelResource(ctx, toolName, args, backendCaller, us.capabilities)
@@ -681,28 +942,37 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 		resource.Description, operation, resource.Secrecy.Label.GetTags(), resource.Integrity.Label.GetTags())
 
 	// **Phase 2: Reference Monitor performs coarse-grained access check**
-	isWrite := (operation == difc.OperationWrite || operation == difc.OperationReadWrite)
-	result := us.evaluator.Evaluate(agentLabels.Secrecy, agentLabels.Integrity, resource, operation)
+	// For read operations in any mode, we skip the coarse-grained block
+	// and let the request proceed. Fine-grained filtering at Phase 5 will filter
+	// individual items from the response based on their actual labels from LabelResponse().
+	isReadOperation := (operation == difc.OperationRead)
+	result := requestEvaluator.Evaluate(agentLabels.Secrecy, agentLabels.Integrity, resource, operation)
 
 	if !result.IsAllowed() {
-		// Access denied - log and return detailed error
-		log.Printf("[DIFC] Access DENIED for agent %s to %s: %s", agentID, resource.Description, result.Reason)
-		detailedErr := difc.FormatViolationError(result, agentLabels.Secrecy, agentLabels.Integrity, resource)
-		return &sdk.CallToolResult{
-			Content: []sdk.Content{
-				&sdk.TextContent{
-					Text: detailedErr.Error(),
+		if isReadOperation {
+			// Read operation in any mode - skip coarse-grained block
+			// The guard will label response items and Phase 5 will enforce per-item policy
+			log.Printf("[DIFC] Coarse-grained check failed for read in %s mode - proceeding to backend for response labeling", enforcementMode)
+			log.Printf("[DIFC] Response items will be evaluated at Phase 5 based on per-item labels from LabelResponse()")
+		} else {
+			// Non-read operation - block the request
+			log.Printf("[DIFC] Access DENIED for agent %s to %s: %s", agentID, resource.Description, result.Reason)
+			detailedErr := difc.FormatViolationError(result, agentLabels.Secrecy, agentLabels.Integrity, resource)
+			return &sdk.CallToolResult{
+				Content: []sdk.Content{
+					&sdk.TextContent{
+						Text: detailedErr.Error(),
+					},
 				},
-			},
-			IsError: true,
-		}, nil, detailedErr
+				IsError: true,
+			}, nil, detailedErr
+		}
+	} else {
+		log.Printf("[DIFC] Access ALLOWED for agent %s to %s", agentID, resource.Description)
 	}
-
-	log.Printf("[DIFC] Access ALLOWED for agent %s to %s", agentID, resource.Description)
 
 	// **Phase 3: Execute the backend call**
 	// Get or launch backend connection (use session-aware connection for stateful backends)
-	sessionID := us.getSessionID(ctx)
 	conn, err := launcher.GetOrLaunchForSession(us.launcher, serverID, sessionID)
 	if err != nil {
 		return newErrorCallToolResult(fmt.Errorf("failed to connect: %w", err))
@@ -728,10 +998,21 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 	}
 
 	// **Phase 4: Guard labels the response data (for fine-grained filtering)**
-	labeledData, err := g.LabelResponse(ctx, toolName, backendResult, backendCaller, us.capabilities)
-	if err != nil {
-		log.Printf("[DIFC] Response labeling failed: %v", err)
-		return newErrorCallToolResult(fmt.Errorf("response labeling failed: %w", err))
+	// Per spec: LabelResponse() is only called for read operations in all modes,
+	// and for read-write operations in filter/propagate modes.
+	// For write operations and read-write in strict mode, skip LabelResponse().
+	isPureWrite := (operation == difc.OperationWrite)
+	shouldCallLabelResponse := !isPureWrite && (operation != difc.OperationReadWrite || enforcementMode != difc.EnforcementStrict)
+
+	var labeledData difc.LabeledData
+	if shouldCallLabelResponse {
+		labeledData, err = g.LabelResponse(ctx, toolName, backendResult, backendCaller, us.capabilities)
+		if err != nil {
+			log.Printf("[DIFC] Response labeling failed: %v", err)
+			return newErrorCallToolResult(fmt.Errorf("response labeling failed: %w", err))
+		}
+	} else {
+		log.Printf("[DIFC] Skipping LabelResponse() for %s operation in %s mode", operation, enforcementMode)
 	}
 
 	// **Phase 5: Reference Monitor performs fine-grained filtering (if applicable)**
@@ -740,10 +1021,26 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 		// Guard provided fine-grained labels - check if it's a collection
 		if collection, ok := labeledData.(*difc.CollectionLabeledData); ok {
 			// Filter collection based on agent labels
-			filtered := us.evaluator.FilterCollection(agentLabels.Secrecy, agentLabels.Integrity, collection, operation)
+			filtered := requestEvaluator.FilterCollection(agentLabels.Secrecy, agentLabels.Integrity, collection, operation)
 
 			log.Printf("[DIFC] Filtered collection: %d/%d items accessible",
 				filtered.GetAccessibleCount(), filtered.TotalCount)
+
+			// **Strict mode: block entire response if ANY item is filtered**
+			if enforcementMode == difc.EnforcementStrict && filtered.GetFilteredCount() > 0 {
+				log.Printf("[DIFC] STRICT MODE: Blocking entire response - %d/%d items violate DIFC policy",
+					filtered.GetFilteredCount(), filtered.TotalCount)
+				blockErr := fmt.Errorf("DIFC policy violation: %d of %d items in response are not accessible to agent %s",
+					filtered.GetFilteredCount(), filtered.TotalCount, agentID)
+				return &sdk.CallToolResult{
+					Content: []sdk.Content{
+						&sdk.TextContent{
+							Text: blockErr.Error(),
+						},
+					},
+					IsError: true,
+				}, nil, blockErr
+			}
 
 			if filtered.GetFilteredCount() > 0 {
 				log.Printf("[DIFC] Filtered out %d items due to DIFC policy", filtered.GetFilteredCount())
@@ -762,21 +1059,23 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 			}
 		}
 
-		// **Phase 6: Accumulate labels from this operation (for reads)**
-		if !isWrite {
+		// **Phase 6: Accumulate labels from this operation (for reads in PROPAGATE mode only)**
+		// Label accumulation should only happen when mode is EnforcementPropagate
+		// Filter mode does NOT accumulate - it just filters what the agent can see
+		if !isPureWrite && enforcementMode == difc.EnforcementPropagate {
 			overall := labeledData.Overall()
 			agentLabels.AccumulateFromRead(overall)
-			log.Printf("[DIFC] Agent %s accumulated labels | Secrecy: %v | Integrity: %v",
+			log.Printf("[DIFC] Agent %s accumulated labels (propagate mode) | Secrecy: %v | Integrity: %v",
 				agentID, agentLabels.GetSecrecyTags(), agentLabels.GetIntegrityTags())
 		}
 	} else {
 		// No fine-grained labeling - use original backend result
 		finalResult = backendResult
 
-		// **Phase 6: Accumulate labels from resource (for reads)**
-		if !isWrite {
+		// **Phase 6: Accumulate labels from resource (for reads in PROPAGATE mode only)**
+		if !isPureWrite && enforcementMode == difc.EnforcementPropagate {
 			agentLabels.AccumulateFromRead(resource)
-			log.Printf("[DIFC] Agent %s accumulated labels | Secrecy: %v | Integrity: %v",
+			log.Printf("[DIFC] Agent %s accumulated labels (propagate mode) | Secrecy: %v | Integrity: %v",
 				agentID, agentLabels.GetSecrecyTags(), agentLabels.GetIntegrityTags())
 		}
 	}
@@ -829,6 +1128,260 @@ func (us *UnifiedServer) getSessionID(ctx context.Context) string {
 	// In production multi-agent scenarios, the SDK will provide session IDs after initialize
 	log.Printf("No session ID in context, using 'default' (this is normal before SDK session is established)")
 	return "default"
+}
+
+func toDIFCTags(values []string) []difc.Tag {
+	tags := make([]difc.Tag, 0, len(values))
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed != "" {
+			tags = append(tags, difc.Tag(trimmed))
+		}
+	}
+	return tags
+}
+
+func tagsToStrings(tags []difc.Tag) []string {
+	values := make([]string, 0, len(tags))
+	for _, tag := range tags {
+		values = append(values, string(tag))
+	}
+	return values
+}
+
+func normalizeScopeKind(policy map[string]interface{}) map[string]interface{} {
+	if policy == nil {
+		return nil
+	}
+
+	normalized := make(map[string]interface{}, len(policy))
+	for key, value := range policy {
+		normalized[key] = value
+	}
+
+	if scopeKind, ok := normalized["scope_kind"].(string); ok {
+		normalized["scope_kind"] = strings.ToLower(strings.TrimSpace(scopeKind))
+	}
+
+	return normalized
+}
+
+func (us *UnifiedServer) resolveGuardPolicy(serverID string) (*config.GuardPolicy, string, error) {
+	if us.cfg != nil && us.cfg.GuardPolicy != nil {
+		if err := config.ValidateGuardPolicy(us.cfg.GuardPolicy); err != nil {
+			return nil, "", err
+		}
+		source := us.cfg.GuardPolicySource
+		if source == "" {
+			source = "override"
+		}
+		return us.cfg.GuardPolicy, source, nil
+	}
+
+	if us.cfg == nil {
+		return nil, "legacy", nil
+	}
+
+	serverCfg, ok := us.cfg.Servers[serverID]
+	if !ok || serverCfg == nil {
+		return nil, "legacy", nil
+	}
+
+	if policy, err := parseServerGuardPolicy(serverID, serverCfg.GuardPolicies); err != nil {
+		return nil, "", err
+	} else if policy != nil {
+		return policy, "server", nil
+	}
+
+	if serverCfg.Guard == "" {
+		return nil, "legacy", nil
+	}
+
+	guardCfg, ok := us.cfg.Guards[serverCfg.Guard]
+	if !ok || guardCfg == nil || guardCfg.Policy == nil {
+		return nil, "legacy", nil
+	}
+
+	if err := config.ValidateGuardPolicy(guardCfg.Policy); err != nil {
+		return nil, "", err
+	}
+
+	return guardCfg.Policy, "config", nil
+}
+
+func parseServerGuardPolicy(serverID string, raw map[string]interface{}) (*config.GuardPolicy, error) {
+	if len(raw) == 0 {
+		return nil, nil
+	}
+
+	if policy, err := parsePolicyMap(raw); err != nil {
+		return nil, err
+	} else if policy != nil {
+		return policy, nil
+	}
+
+	if nested, ok := raw[serverID]; ok {
+		nestedMap, ok := nested.(map[string]interface{})
+		if !ok {
+			return nil, fmt.Errorf("invalid guard policy for server '%s': expected object", serverID)
+		}
+		if policy, err := parsePolicyMap(nestedMap); err != nil {
+			return nil, err
+		} else if policy != nil {
+			return policy, nil
+		}
+	}
+
+	if len(raw) == 1 {
+		for _, value := range raw {
+			nestedMap, ok := value.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if policy, err := parsePolicyMap(nestedMap); err != nil {
+				return nil, err
+			} else if policy != nil {
+				return policy, nil
+			}
+		}
+	}
+
+	return nil, nil
+}
+
+func parsePolicyMap(raw map[string]interface{}) (*config.GuardPolicy, error) {
+	if len(raw) == 0 {
+		return nil, nil
+	}
+
+	if _, hasAllowOnly := raw["allowonly"]; hasAllowOnly {
+		policyBytes, err := json.Marshal(raw)
+		if err != nil {
+			return nil, fmt.Errorf("failed to serialize server guard policy: %w", err)
+		}
+		policy, err := config.ParseGuardPolicyJSON(string(policyBytes))
+		if err != nil {
+			return nil, fmt.Errorf("invalid server guard policy: %w", err)
+		}
+		return policy, nil
+	}
+
+	repos, hasRepos := raw["repos"]
+	if !hasRepos {
+		return nil, nil
+	}
+
+	integrityValue, hasIntegrity := raw["min-integrity"]
+	if !hasIntegrity {
+		integrityValue, hasIntegrity = raw["integrity"]
+	}
+	if !hasIntegrity {
+		return nil, fmt.Errorf("invalid server guard policy: repos specified without min-integrity")
+	}
+
+	policy := &config.GuardPolicy{
+		AllowOnly: &config.AllowOnlyPolicy{
+			Repos:        repos,
+			MinIntegrity: fmt.Sprintf("%v", integrityValue),
+		},
+	}
+	if err := config.ValidateGuardPolicy(policy); err != nil {
+		return nil, fmt.Errorf("invalid server guard policy: %w", err)
+	}
+
+	return policy, nil
+}
+
+func (us *UnifiedServer) ensureGuardInitialized(
+	ctx context.Context,
+	sessionID string,
+	serverID string,
+	g guard.Guard,
+	backendCaller guard.BackendCaller,
+) (difc.EnforcementMode, error) {
+	defaultMode := us.evaluator.GetMode()
+
+	policy, source, err := us.resolveGuardPolicy(serverID)
+	if err != nil {
+		return defaultMode, fmt.Errorf("failed to resolve guard policy: %w", err)
+	}
+	if policy == nil {
+		log.Printf("[DIFC] Guard policy not configured for server '%s'; using legacy session labels", serverID)
+		return defaultMode, nil
+	}
+
+	policyJSON, err := json.Marshal(policy)
+	if err != nil {
+		return defaultMode, fmt.Errorf("failed to serialize guard policy: %w", err)
+	}
+	policyHash := string(policyJSON)
+
+	us.sessionMu.RLock()
+	session := us.sessions[sessionID]
+	if session != nil {
+		if state, ok := session.GuardInit[serverID]; ok && state.Initialized && state.PolicyHash == policyHash {
+			mode := state.DIFCMode
+			us.sessionMu.RUnlock()
+			return mode, nil
+		}
+	}
+	us.sessionMu.RUnlock()
+
+	log.Printf("[DIFC] Initializing guard session state: server=%s, session=%s, policy_source=%s", serverID, sessionID, source)
+	log.Printf("[DIFC] Calling label_agent: server=%s, session=%s, guard=%s, policy=%s", serverID, sessionID, g.Name(), string(policyJSON))
+	labelAgentResult, err := g.LabelAgent(ctx, policy, backendCaller, us.capabilities)
+	if err != nil {
+		log.Printf("[DIFC] label_agent failed: server=%s, session=%s, guard=%s, error=%v", serverID, sessionID, g.Name(), err)
+		return defaultMode, fmt.Errorf("label_agent failed: %w", err)
+	}
+	if labelAgentResult == nil {
+		log.Printf("[DIFC] label_agent returned nil result: server=%s, session=%s, guard=%s", serverID, sessionID, g.Name())
+		return defaultMode, fmt.Errorf("label_agent returned nil result")
+	}
+	resultJSON, marshalErr := json.Marshal(labelAgentResult)
+	if marshalErr != nil {
+		log.Printf("[DIFC] label_agent returned result (failed to serialize for logging): server=%s, session=%s, guard=%s, error=%v", serverID, sessionID, g.Name(), marshalErr)
+	} else {
+		log.Printf("[DIFC] label_agent response: server=%s, session=%s, guard=%s, response=%s", serverID, sessionID, g.Name(), string(resultJSON))
+	}
+
+	mode := defaultMode
+	if labelAgentResult.DIFCMode != "" {
+		parsedMode, err := difc.ParseEnforcementMode(labelAgentResult.DIFCMode)
+		if err != nil {
+			return defaultMode, fmt.Errorf("invalid difc_mode from label_agent: %w", err)
+		}
+		mode = parsedMode
+	}
+
+	agentID := guard.GetAgentIDFromContext(ctx)
+	secrecyTags := toDIFCTags(labelAgentResult.Agent.Secrecy)
+	integrityTags := toDIFCTags(labelAgentResult.Agent.Integrity)
+	us.agentRegistry.Register(agentID, secrecyTags, integrityTags)
+
+	us.sessionMu.Lock()
+	session = us.sessions[sessionID]
+	normalizedPolicy := normalizeScopeKind(labelAgentResult.NormalizedPolicy)
+	if session == nil {
+		session = NewSession(sessionID, "")
+		us.sessions[sessionID] = session
+	}
+	if session.GuardInit == nil {
+		session.GuardInit = make(map[string]*GuardSessionState)
+	}
+	session.GuardInit[serverID] = &GuardSessionState{
+		Initialized:      true,
+		PolicyHash:       policyHash,
+		PolicySource:     source,
+		DIFCMode:         mode,
+		NormalizedPolicy: normalizedPolicy,
+	}
+	us.sessionMu.Unlock()
+
+	log.Printf("[DIFC] Guard policy initialized: server=%s, session=%s, guard_policy.source=%s, difc_mode=%s, guard_policy.normalized=%v",
+		serverID, sessionID, source, mode, normalizedPolicy)
+
+	return mode, nil
 }
 
 // GetPayloadSizeThreshold returns the configured payload size threshold (in bytes).
