@@ -2,6 +2,7 @@ package integration
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -105,7 +106,7 @@ func TestDIFCEnvironmentVariables(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			port := 13200 + len(tt.name)%100 // Generate unique port per test
 
-			// Create minimal config
+			// Create minimal config with apiKey (required by JSON stdin schema)
 			config := fmt.Sprintf(`{
 				"mcpServers": {
 					"test": {
@@ -114,11 +115,15 @@ func TestDIFCEnvironmentVariables(t *testing.T) {
 					}
 				},
 				"gateway": {
-					"port": %d
+					"port": %d,
+					"apiKey": "test-key"
 				}
 			}`, port)
 
-			cmd := exec.Command(binary, "--config-stdin")
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+
+			cmd := exec.CommandContext(ctx, binary, "--config-stdin")
 			cmd.Stdin = strings.NewReader(config)
 
 			// Set environment variables
@@ -199,7 +204,10 @@ func TestDIFCConfigWithGuards(t *testing.T) {
 		}
 	}`
 
-	cmd := exec.Command(binary, "--config-stdin")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, binary, "--config-stdin")
 	cmd.Stdin = strings.NewReader(config)
 
 	var stdout, stderr bytes.Buffer
@@ -244,11 +252,15 @@ func TestDIFCSessionLabelsViaEnv(t *testing.T) {
 			}
 		},
 		"gateway": {
-			"port": 13301
+			"port": 13301,
+			"apiKey": "test-key"
 		}
 	}`
 
-	cmd := exec.Command(binary, "--config-stdin")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, binary, "--config-stdin")
 	cmd.Stdin = strings.NewReader(config)
 	cmd.Env = append(os.Environ(),
 		"MCP_GATEWAY_CONFIG_EXTENSIONS=true",
@@ -304,7 +316,10 @@ func TestDIFCModeFilterViaEnv(t *testing.T) {
 		}
 	}`
 
-	cmd := exec.Command(binary, "--config-stdin")
+	ctx2, cancel2 := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel2()
+
+	cmd := exec.CommandContext(ctx2, binary, "--config-stdin")
 	cmd.Stdin = strings.NewReader(config)
 	cmd.Env = append(os.Environ(),
 		"MCP_GATEWAY_ENABLE_DIFC=true",
@@ -351,7 +366,10 @@ func TestDIFCModePropagateViaEnv(t *testing.T) {
 		}
 	}`
 
-	cmd := exec.Command(binary, "--config-stdin")
+	ctx3, cancel3 := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel3()
+
+	cmd := exec.CommandContext(ctx3, binary, "--config-stdin")
 	cmd.Stdin = strings.NewReader(config)
 	cmd.Env = append(os.Environ(),
 		"MCP_GATEWAY_ENABLE_DIFC=true",
@@ -398,7 +416,10 @@ func TestSessionLabelsRequireConfigExtensions(t *testing.T) {
 		}
 	}`
 
-	cmd := exec.Command(binary, "--config-stdin")
+	ctx4, cancel4 := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel4()
+
+	cmd := exec.CommandContext(ctx4, binary, "--config-stdin")
 	cmd.Stdin = strings.NewReader(config)
 	// Note: NOT setting MCP_GATEWAY_CONFIG_EXTENSIONS
 	cmd.Env = append(os.Environ(),
@@ -456,7 +477,10 @@ func TestFullDIFCConfigFromJSON(t *testing.T) {
 		}
 	}`
 
-	cmd := exec.Command(binary, "--config-stdin", "--enable-config-extensions")
+	ctx5, cancel5 := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel5()
+
+	cmd := exec.CommandContext(ctx5, binary, "--config-stdin", "--enable-config-extensions")
 	cmd.Stdin = strings.NewReader(config)
 	cmd.Env = append(os.Environ(),
 		"MCP_GATEWAY_ENABLE_DIFC=true",

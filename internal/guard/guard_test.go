@@ -642,7 +642,7 @@ func TestRequestStateContext(t *testing.T) {
 func TestNormalizePolicyPayload(t *testing.T) {
 	t.Run("accepts object policy", func(t *testing.T) {
 		input := map[string]interface{}{
-			"allowonly": map[string]interface{}{
+			"allow-only": map[string]interface{}{
 				"repos":     "public",
 				"integrity": "none",
 			},
@@ -654,13 +654,13 @@ func TestNormalizePolicyPayload(t *testing.T) {
 	})
 
 	t.Run("parses stringified json policy to object", func(t *testing.T) {
-		input := `{"allowonly":{"repos":"public","integrity":"none"}}`
+		input := `{"allow-only":{"repos":"public","integrity":"none"}}`
 
 		result, err := normalizePolicyPayload(input)
 		require.NoError(t, err)
 		resultMap, ok := result.(map[string]interface{})
 		require.True(t, ok)
-		require.NotNil(t, resultMap["allowonly"])
+		require.NotNil(t, resultMap["allow-only"])
 	})
 
 	t.Run("rejects invalid policy string", func(t *testing.T) {
@@ -670,9 +670,9 @@ func TestNormalizePolicyPayload(t *testing.T) {
 }
 
 func TestBuildStrictLabelAgentPayload(t *testing.T) {
-	t.Run("accepts top-level allowonly payload", func(t *testing.T) {
+	t.Run("accepts top-level allow-only payload", func(t *testing.T) {
 		input := map[string]interface{}{
-			"allowonly": map[string]interface{}{
+			"allow-only": map[string]interface{}{
 				"repos":     "public",
 				"integrity": "none",
 			},
@@ -681,14 +681,14 @@ func TestBuildStrictLabelAgentPayload(t *testing.T) {
 		payload, err := buildStrictLabelAgentPayload(input)
 		require.NoError(t, err)
 		require.NotNil(t, payload)
-		assert.Contains(t, payload, "allowonly")
+		assert.Contains(t, payload, "allow-only")
 		assert.NotContains(t, payload, "policy")
 	})
 
 	t.Run("rejects legacy policy envelope", func(t *testing.T) {
 		input := map[string]interface{}{
 			"policy": map[string]interface{}{
-				"allowonly": map[string]interface{}{
+				"allow-only": map[string]interface{}{
 					"repos":     "public",
 					"integrity": "none",
 				},
@@ -700,19 +700,19 @@ func TestBuildStrictLabelAgentPayload(t *testing.T) {
 		assert.Equal(t, "gateway policy adapter is outdated: remove legacy envelope key policy before calling label_agent", err.Error())
 	})
 
-	t.Run("rejects missing top-level allowonly", func(t *testing.T) {
+	t.Run("rejects missing top-level allow-only", func(t *testing.T) {
 		input := map[string]interface{}{
 			"something_else": map[string]interface{}{},
 		}
 
 		_, err := buildStrictLabelAgentPayload(input)
 		require.Error(t, err)
-		assert.Equal(t, "label_agent policy must use top-level allowonly object (received policy.allowonly)", err.Error())
+		assert.Equal(t, "label_agent policy must use top-level allow-only object (received policy.allow-only)", err.Error())
 	})
 
 	t.Run("rejects invalid repos value", func(t *testing.T) {
 		input := map[string]interface{}{
-			"allowonly": map[string]interface{}{
+			"allow-only": map[string]interface{}{
 				"repos":     []interface{}{},
 				"integrity": "none",
 			},
@@ -725,7 +725,7 @@ func TestBuildStrictLabelAgentPayload(t *testing.T) {
 
 	t.Run("rejects invalid integrity value", func(t *testing.T) {
 		input := map[string]interface{}{
-			"allowonly": map[string]interface{}{
+			"allow-only": map[string]interface{}{
 				"repos":     "all",
 				"integrity": "reader-contrib",
 			},
@@ -748,11 +748,11 @@ func TestParseLabelAgentResponse(t *testing.T) {
 	})
 
 	t.Run("non success fails closed", func(t *testing.T) {
-		payload := []byte(`{"success":false,"error":"missing field allowonly"}`)
+		payload := []byte(`{"success":false,"error":"missing field allow-only"}`)
 
 		result, err := parseLabelAgentResponse(payload)
 		require.Error(t, err)
 		assert.Nil(t, result)
-		assert.Contains(t, err.Error(), "missing field allowonly")
+		assert.Contains(t, err.Error(), "missing field allow-only")
 	})
 }

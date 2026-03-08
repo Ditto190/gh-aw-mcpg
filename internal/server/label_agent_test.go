@@ -261,7 +261,7 @@ func TestCallBackendTool_LabelAgentInitializationFromServerGuardPolicies(t *test
 				URL:   backend.URL,
 				Guard: "test-guard",
 				GuardPolicies: map[string]interface{}{
-					"allowonly": map[string]interface{}{
+					"allow-only": map[string]interface{}{
 						"repos":         "public",
 						"min-integrity": "none",
 					},
