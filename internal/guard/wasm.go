@@ -349,18 +349,21 @@ func buildStrictLabelAgentPayload(policy interface{}) (map[string]interface{}, e
 	}
 
 	if len(payload) != 1 {
-		return nil, fmt.Errorf("invalid guard policy transport shape: expected {\"allowonly\":{\"repos\":...,\"integrity\":...}}")
+		return nil, fmt.Errorf("invalid guard policy transport shape: expected {\"allowonly\":{\"repos\":...,\"min-integrity\":...}}")
 	}
 
 	allowOnly, ok := allowOnlyRaw.(map[string]interface{})
 	if !ok {
-		return nil, fmt.Errorf("invalid guard policy transport shape: expected {\"allowonly\":{\"repos\":...,\"integrity\":...}}")
+		return nil, fmt.Errorf("invalid guard policy transport shape: expected {\"allowonly\":{\"repos\":...,\"min-integrity\":...}}")
 	}
 
 	reposRaw, hasRepos := allowOnly["repos"]
-	integrityRaw, hasIntegrity := allowOnly["integrity"]
+	integrityRaw, hasIntegrity := allowOnly["min-integrity"]
+	if !hasIntegrity {
+		integrityRaw, hasIntegrity = allowOnly["integrity"]
+	}
 	if !hasRepos || !hasIntegrity || len(allowOnly) != 2 {
-		return nil, fmt.Errorf("invalid guard policy transport shape: expected {\"allowonly\":{\"repos\":...,\"integrity\":...}}")
+		return nil, fmt.Errorf("invalid guard policy transport shape: expected {\"allowonly\":{\"repos\":...,\"min-integrity\":...}}")
 	}
 
 	if !isValidAllowOnlyRepos(reposRaw) {

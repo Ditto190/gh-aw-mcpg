@@ -1277,18 +1277,18 @@ func parsePolicyMap(raw map[string]interface{}) (*config.GuardPolicy, error) {
 		return nil, nil
 	}
 
-	integrityValue, hasIntegrity := raw["integrity"]
+	integrityValue, hasIntegrity := raw["min-integrity"]
 	if !hasIntegrity {
-		integrityValue, hasIntegrity = raw["min-integrity"]
+		integrityValue, hasIntegrity = raw["integrity"]
 	}
 	if !hasIntegrity {
-		return nil, fmt.Errorf("invalid server guard policy: repos specified without integrity/min-integrity")
+		return nil, fmt.Errorf("invalid server guard policy: repos specified without min-integrity")
 	}
 
 	policy := &config.GuardPolicy{
 		AllowOnly: &config.AllowOnlyPolicy{
-			Repos:     repos,
-			Integrity: fmt.Sprintf("%v", integrityValue),
+			Repos:        repos,
+			MinIntegrity: fmt.Sprintf("%v", integrityValue),
 		},
 	}
 	if err := config.ValidateGuardPolicy(policy); err != nil {

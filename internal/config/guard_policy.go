@@ -8,24 +8,24 @@ import (
 )
 
 const (
-	IntegrityNone          = "none"
-	IntegrityUnapproved    = "unapproved"
-	IntegrityApproved      = "approved"
-	IntegrityMerged        = "merged"
+	IntegrityNone       = "none"
+	IntegrityUnapproved = "unapproved"
+	IntegrityApproved   = "approved"
+	IntegrityMerged     = "merged"
 )
 
 const (
-	integrityNoneValue   = "none"
+	integrityNoneValue       = "none"
 	integrityUnapprovedValue = "unapproved"
-	integrityApprovedValue = "approved"
-	integrityMergedValue = "merged"
+	integrityApprovedValue   = "approved"
+	integrityMergedValue     = "merged"
 )
 
 var validMinIntegrityValues = map[string]struct{}{
-	integrityNoneValue:   {},
+	integrityNoneValue:       {},
 	integrityUnapprovedValue: {},
-	integrityApprovedValue: {},
-	integrityMergedValue: {},
+	integrityApprovedValue:   {},
+	integrityMergedValue:     {},
 }
 
 // GuardPolicy represents the policy payload passed to guard label_agent.
@@ -35,15 +35,15 @@ type GuardPolicy struct {
 
 // AllowOnlyPolicy configures scope and minimum required integrity.
 type AllowOnlyPolicy struct {
-	Repos     interface{} `toml:"Repos" json:"repos"`
-	Integrity string      `toml:"Integrity" json:"integrity"`
+	Repos        interface{} `toml:"Repos" json:"repos"`
+	MinIntegrity string      `toml:"MinIntegrity" json:"min-integrity"`
 }
 
 // NormalizedGuardPolicy is a canonical policy representation for caching and observability.
 type NormalizedGuardPolicy struct {
-	ScopeKind   string   `json:"scope_kind"`
-	ScopeValues []string `json:"scope_values,omitempty"`
-	Integrity   string   `json:"integrity"`
+	ScopeKind    string   `json:"scope_kind"`
+	ScopeValues  []string `json:"scope_values,omitempty"`
+	MinIntegrity string   `json:"min-integrity"`
 }
 
 func (p *GuardPolicy) UnmarshalJSON(data []byte) error {
@@ -94,9 +94,9 @@ func (p *AllowOnlyPolicy) UnmarshalJSON(data []byte) error {
 			if err := json.Unmarshal(value, &p.Repos); err != nil {
 				return fmt.Errorf("invalid allowonly.repos: %w", err)
 			}
-		case "integrity":
-			if err := json.Unmarshal(value, &p.Integrity); err != nil {
-				return fmt.Errorf("invalid allowonly.integrity: %w", err)
+		case "min-integrity", "integrity":
+			if err := json.Unmarshal(value, &p.MinIntegrity); err != nil {
+				return fmt.Errorf("invalid allowonly.min-integrity: %w", err)
 			}
 		default:
 			return fmt.Errorf("allowonly contains unsupported field %q", key)
@@ -106,8 +106,8 @@ func (p *AllowOnlyPolicy) UnmarshalJSON(data []byte) error {
 	if p.Repos == nil {
 		return fmt.Errorf("allowonly must include repos")
 	}
-	if strings.TrimSpace(p.Integrity) == "" {
-		return fmt.Errorf("allowonly must include integrity")
+	if strings.TrimSpace(p.MinIntegrity) == "" {
+		return fmt.Errorf("allowonly must include min-integrity")
 	}
 
 	return nil
@@ -115,8 +115,8 @@ func (p *AllowOnlyPolicy) UnmarshalJSON(data []byte) error {
 
 func (p AllowOnlyPolicy) MarshalJSON() ([]byte, error) {
 	type serializedAllowOnly struct {
-		Repos     interface{} `json:"repos"`
-		Integrity string      `json:"integrity"`
+		Repos        interface{} `json:"repos"`
+		MinIntegrity string      `json:"min-integrity"`
 	}
 
 	return json.Marshal(serializedAllowOnly(p))
@@ -134,12 +134,12 @@ func NormalizeGuardPolicy(policy *GuardPolicy) (*NormalizedGuardPolicy, error) {
 		return nil, fmt.Errorf("policy must include allowonly")
 	}
 
-	integrity := strings.ToLower(strings.TrimSpace(policy.AllowOnly.Integrity))
+	integrity := strings.ToLower(strings.TrimSpace(policy.AllowOnly.MinIntegrity))
 	if _, ok := validMinIntegrityValues[integrity]; !ok {
-		return nil, fmt.Errorf("allowonly.integrity must be one of: none, unapproved, approved, merged")
+		return nil, fmt.Errorf("allowonly.min-integrity must be one of: none, unapproved, approved, merged")
 	}
 
-	normalized := &NormalizedGuardPolicy{Integrity: integrity}
+	normalized := &NormalizedGuardPolicy{MinIntegrity: integrity}
 
 	switch scope := policy.AllowOnly.Repos.(type) {
 	case string:

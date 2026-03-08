@@ -428,7 +428,7 @@ func TestBuildAllowOnlyPolicy(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, policy)
 		require.NotNil(t, policy.AllowOnly)
-		assert.Equal(t, config.IntegrityNone, policy.AllowOnly.Integrity)
+		assert.Equal(t, config.IntegrityNone, policy.AllowOnly.MinIntegrity)
 		assert.Equal(t, "public", policy.AllowOnly.Repos)
 	})
 
@@ -439,7 +439,7 @@ func TestBuildAllowOnlyPolicy(t *testing.T) {
 		repos, ok := policy.AllowOnly.Repos.([]string)
 		require.True(t, ok)
 		assert.Equal(t, []string{"lpcox/gh-aw-mcpg"}, repos)
-		assert.Equal(t, config.IntegrityUnapproved, policy.AllowOnly.Integrity)
+		assert.Equal(t, config.IntegrityUnapproved, policy.AllowOnly.MinIntegrity)
 	})
 
 	t.Run("repo without owner invalid", func(t *testing.T) {
@@ -487,7 +487,7 @@ func TestGetDefaultGuardPolicyInputs(t *testing.T) {
 		}
 	}()
 
-	os.Setenv("MCP_GATEWAY_GUARD_POLICY_JSON", `{"allowonly":{"repos":"public","integrity":"none"}}`)
+	os.Setenv("MCP_GATEWAY_GUARD_POLICY_JSON", `{"allowonly":{"repos":"public","min-integrity":"none"}}`)
 	os.Setenv("MCP_GATEWAY_ALLOWONLY_SCOPE_PUBLIC", "1")
 	os.Setenv("MCP_GATEWAY_ALLOWONLY_SCOPE_OWNER", "lpcox")
 	os.Setenv("MCP_GATEWAY_ALLOWONLY_SCOPE_REPO", "gh-aw-mcpg")

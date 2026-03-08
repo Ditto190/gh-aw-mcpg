@@ -33,8 +33,8 @@ func (g *labelAgentTestGuard) LabelAgent(ctx context.Context, policy interface{}
 		},
 		DIFCMode: "filter",
 		NormalizedPolicy: map[string]interface{}{
-			"scope_kind": "Composite",
-			"integrity":  "none",
+			"scope_kind":    "Composite",
+			"min-integrity": "none",
 		},
 	}, nil
 }
@@ -141,8 +141,8 @@ func TestCallBackendTool_LabelAgentInitializationCached(t *testing.T) {
 		},
 		GuardPolicy: &config.GuardPolicy{
 			AllowOnly: &config.AllowOnlyPolicy{
-				Repos:     "public",
-				Integrity: config.IntegrityNone,
+				Repos:        "public",
+				MinIntegrity: config.IntegrityNone,
 			},
 		},
 		GuardPolicySource: "cli",
@@ -262,8 +262,8 @@ func TestCallBackendTool_LabelAgentInitializationFromServerGuardPolicies(t *test
 				Guard: "test-guard",
 				GuardPolicies: map[string]interface{}{
 					"allowonly": map[string]interface{}{
-						"repos":     "public",
-						"integrity": "none",
+						"repos":         "public",
+						"min-integrity": "none",
 					},
 				},
 			},

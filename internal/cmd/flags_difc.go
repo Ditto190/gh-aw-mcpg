@@ -172,8 +172,8 @@ func buildAllowOnlyPolicy(public bool, owner, repo, minIntegrity string) (*confi
 
 	policy := &config.GuardPolicy{
 		AllowOnly: &config.AllowOnlyPolicy{
-			Repos:     repos,
-			Integrity: integrity,
+			Repos:        repos,
+			MinIntegrity: integrity,
 		},
 	}
 
