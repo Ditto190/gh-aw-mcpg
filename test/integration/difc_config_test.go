@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -31,6 +32,19 @@ func binaryPath(t *testing.T) string {
 	}
 
 	return binary
+}
+
+// getFreePort asks the OS for a free ephemeral TCP port and returns it.
+// The listener is closed before the port number is returned, so there is a
+// small TOCTOU window where another process could bind the same port before
+// the gateway subprocess does. This is the standard approach when a port must
+// be passed to a child process; callers should be aware of this limitation.
+func getFreePort(t *testing.T) int {
+	t.Helper()
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err, "failed to find a free port")
+	defer l.Close()
+	return l.Addr().(*net.TCPAddr).Port
 }
 
 // TestDIFCEnvironmentVariables tests that all DIFC-related environment variables are recognized
@@ -103,7 +117,7 @@ func TestDIFCEnvironmentVariables(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			port := 13200 + len(tt.name)%100 // Generate unique port per test
+			port := getFreePort(t) // Allocate a unique free port for each subtest
 
 			// Create minimal config
 			config := fmt.Sprintf(`{

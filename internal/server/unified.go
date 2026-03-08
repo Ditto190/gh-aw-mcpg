@@ -659,12 +659,11 @@ func (us *UnifiedServer) requireGuardPolicyIfGuardEnabled(serverID string, g gua
 		return nil
 	}
 
-	if us.cfg == nil || us.cfg.Servers == nil {
-		return fmt.Errorf("guard '%s' is available but server configuration is missing", g.Name())
+	policy, _, err := us.resolveGuardPolicy(serverID)
+	if err != nil {
+		return err
 	}
-
-	serverCfg, ok := us.cfg.Servers[serverID]
-	if !ok || serverCfg == nil || len(serverCfg.GuardPolicies) == 0 {
+	if policy == nil {
 		return fmt.Errorf("guard '%s' is available for MCP server '%s' but no guard policy is set", g.Name(), serverID)
 	}
 
