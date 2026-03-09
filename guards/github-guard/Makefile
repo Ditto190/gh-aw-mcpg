@@ -1,22 +1,34 @@
-.PHONY: all build build-gateway test test-all test-unit test-wasm test-integration test-integrity-harness capture-integrity-corpus test-copilot test-copilot-yolo test-copilot-all test-copilot-public-only test-copilot-owner-only test-copilot-repo-only test-copilot-prefix-only test-copilot-multi-only test-copilot-lockdown clean help
+.PHONY: all test test-all test-unit test-wasm test-integration test-integrity-harness capture-integrity-corpus test-copilot test-copilot-yolo test-copilot-all test-copilot-public-only test-copilot-owner-only test-copilot-repo-only test-copilot-prefix-only test-copilot-multi-only test-copilot-lockdown clean help
 
 # Gateway Docker image name (built from repo root Dockerfile)
 GATEWAY_IMAGE ?= local/gh-aw-mcpg
 REPO_ROOT := $(shell cd ../.. && pwd)
+STAMP := .build-gateway-stamp
+WASM_OUTPUT := github-guard-rust.wasm
+
+# Source files that should trigger an image rebuild
+GATEWAY_SOURCES := $(shell find $(REPO_ROOT) -name '*.go' -not -path '*/vendor/*' 2>/dev/null)
+GATEWAY_SOURCES += $(REPO_ROOT)/go.mod $(REPO_ROOT)/go.sum
+GATEWAY_SOURCES += $(REPO_ROOT)/Dockerfile $(REPO_ROOT)/run_containerized.sh $(REPO_ROOT)/run.sh
+GATEWAY_SOURCES += $(wildcard rust-guard/src/*.rs) $(wildcard rust-guard/Cargo.toml)
+RUST_GUARD_SOURCES := $(wildcard rust-guard/src/*.rs) rust-guard/Cargo.toml rust-guard/Cargo.lock rust-guard/build.sh
 
 # Default target
 all: build test
 
 # Build the WASM module
-build:
+build: $(WASM_OUTPUT)
+$(WASM_OUTPUT): $(RUST_GUARD_SOURCES)
 	@echo "Building guard..."
 	@cd rust-guard && ./build.sh
 
-# Build the MCP Gateway Docker image from the repo root Dockerfile
-# Depends on 'build' to ensure WASM is available for baking into the image
-build-gateway: build
+# Build the MCP Gateway Docker image from the repo root Dockerfile.
+# Only rebuilds when Go sources, entrypoint scripts, Dockerfile, or Rust guard change.
+build-gateway: $(STAMP)
+$(STAMP): $(GATEWAY_SOURCES) $(WASM_OUTPUT)
 	@echo "Building gateway Docker image ($(GATEWAY_IMAGE))..."
 	@docker build -t "$(GATEWAY_IMAGE)" "$(REPO_ROOT)"
+	@touch $(STAMP)
 	@echo "✓ Gateway image built: $(GATEWAY_IMAGE)"
 
 # Run default test pipeline
@@ -95,7 +107,7 @@ capture-integrity-corpus:
 # Clean build artifacts
 clean:
 	@echo "Cleaning build artifacts..."
-	@rm -f github-guard-rust.wasm
+	@rm -f $(WASM_OUTPUT) $(STAMP)
 	@rm -rf rust-guard/target
 	@echo "✓ Clean complete"
 
