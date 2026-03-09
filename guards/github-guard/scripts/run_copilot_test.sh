@@ -695,7 +695,7 @@ In all mode, all repos and all objects within the repos are accessible (min-inte
 
 ## Test Configuration
 - **Mode**: all
-- **DIFC Mode**: strict/filter (guard-managed)
+- **DIFC Mode**: filter
 - **AllowOnly Policy**: ${ALLOW_ONLY_ALL_POLICY}
 
 ## Expected Behavior
