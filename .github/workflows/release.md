@@ -276,6 +276,16 @@ jobs:
           echo "version=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
           echo "✓ Version: $RELEASE_TAG"
 
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip1
+
+      - name: Build baked WASM guard
+        run: |
+          make -C guards/github-guard build
+          test -f guards/github-guard/github-guard-rust.wasm
+
       - name: Build and push (multi-arch)
         uses: docker/build-push-action@v6
         with:
