@@ -77,6 +77,9 @@ esac
 
 SERVER_GUARD_POLICIES_JSON="{}"
 
+# Markdown code fence helper (three backticks; avoids command-substitution issues in heredocs)
+FENCE='```'
+
 # Configuration
 GATEWAY_IMAGE="${GATEWAY_IMAGE:-local/gh-aw-mcpg}"
 GITHUB_MCP_IMAGE="${GITHUB_MCP_IMAGE:-ghcr.io/github/github-mcp-server:latest}"
@@ -762,7 +765,7 @@ Repo-scoped read-only tools to test:
 
 Use this exact format for your final report:
 
-\`\`\`
+${FENCE}
 # GitHub Guard All Mode Test Results
 
 ## Test Configuration
@@ -807,7 +810,7 @@ Use this exact format for your final report:
 
 ## Final Assessment
 [Detailed explanation of whether all mode provides unrestricted access to all repositories and data]
-\`\`\`
+${FENCE}
 EOF
     ;;
   lockdown)
@@ -905,7 +908,7 @@ Repo-scoped read-only tools to test:
 
 Use this exact format for your final report:
 
-\`\`\`
+${FENCE}
 # GitHub Guard Public-Only Mode Test Results
 
 ## Test Configuration
@@ -950,7 +953,7 @@ Use this exact format for your final report:
 
 ## Final Assessment
 [Detailed explanation of whether public-only mode correctly blocks private data while allowing public data]
-\`\`\`
+${FENCE}
 EOF
     ;;
   owner-only)
@@ -1031,7 +1034,7 @@ Repo-scoped read-only tools to test:
 
 Use this exact format for your final report:
 
-\`\`\`
+${FENCE}
 # GitHub Guard Owner-Only Mode Test Results
 
 ## Test Configuration
@@ -1077,7 +1080,7 @@ Use this exact format for your final report:
 
 ## Final Assessment
 [Detailed explanation of whether owner-only mode correctly enforces owner-scoped access while blocking non-owner data]
-\`\`\`
+${FENCE}
 - private data from owners other than ${ALLOW_OWNER} must not be exposed
 - search_repositories/search_code/search_issues/search_pull_requests must not leak out-of-scope private content
 
@@ -1169,7 +1172,7 @@ Repo-scoped read-only tools to test:
 
 Use this exact format for your final report:
 
-\`\`\`
+${FENCE}
 # GitHub Guard Repo-Only Mode Test Results
 
 ## Test Configuration
@@ -1214,7 +1217,7 @@ Use this exact format for your final report:
 
 ## Final Assessment
 [Detailed explanation of whether repo-only mode correctly enforces the expected behavior]
-\`\`\`
+${FENCE}
 EOF
   ;;
     prefix-only)
@@ -1296,7 +1299,7 @@ EOF
 
   Use this exact format for your final report:
 
-  \`\`\`
+  ${FENCE}
   # GitHub Guard Prefix-Only Mode Test Results
 
   ## Test Configuration
@@ -1342,7 +1345,7 @@ EOF
 
   ## Final Assessment
   [Detailed explanation of whether prefix-only mode correctly enforces prefix-based access while blocking non-prefix data]
-  \`\`\`
+  ${FENCE}
 EOF
     ;;
   multi-only)
@@ -1425,7 +1428,7 @@ EOF
 
   Use this exact format for your final report:
 
-  \`\`\`
+  ${FENCE}
   # GitHub Guard Multi-Only Mode Test Results
 
   ## Test Configuration
@@ -1471,7 +1474,7 @@ EOF
 
   ## Final Assessment
   [Detailed explanation of whether multi-only mode correctly enforces matching criteria with merged integrity requirements while blocking non-matching data]
-  \`\`\`
+  ${FENCE}
 EOF
   ;;
 esac
