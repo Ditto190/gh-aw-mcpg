@@ -363,7 +363,8 @@ main() {
     log_info ""
 
     # Execute - stdin will be passed through
-    exec $CMD $FLAGS
+    # Any extra args passed to the container (Docker CMD) are appended
+    exec $CMD $FLAGS "$@"
 }
 
 main "$@"

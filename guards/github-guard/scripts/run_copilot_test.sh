@@ -78,7 +78,7 @@ esac
 SERVER_GUARD_POLICIES_JSON="{}"
 
 # Configuration
-GATEWAY_IMAGE="${GATEWAY_IMAGE:-ghcr.io/lpcox/github-guard:latest}"
+GATEWAY_IMAGE="${GATEWAY_IMAGE:-local/gh-aw-mcpg}"
 GITHUB_MCP_IMAGE="${GITHUB_MCP_IMAGE:-ghcr.io/github/github-mcp-server:latest}"
 GATEWAY_PORT="${GATEWAY_PORT:-18080}"
 GATEWAY_API_KEY="${GATEWAY_API_KEY:-test-api-key-12345}"

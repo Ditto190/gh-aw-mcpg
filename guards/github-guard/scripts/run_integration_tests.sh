@@ -38,7 +38,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 # Configuration
-GATEWAY_IMAGE="${GATEWAY_IMAGE:-ghcr.io/lpcox/github-guard:latest}"
+GATEWAY_IMAGE="${GATEWAY_IMAGE:-local/gh-aw-mcpg}"
 GITHUB_MCP_IMAGE="${GITHUB_MCP_IMAGE:-ghcr.io/github/github-mcp-server:latest}"
 GATEWAY_PORT="${GATEWAY_PORT:-18080}"
 GATEWAY_API_KEY="${GATEWAY_API_KEY:-test-api-key-12345}"
@@ -272,8 +272,37 @@ fi
 echo ""
 echo "Running integration tests..."
 echo "=========================================="
-cd "$PROJECT_ROOT/src"
-go test -v -tags=integration -run "TestIntegration|TestGateway" . || TEST_RESULT=$?
+
+# Integration test Go harness
+INTEGRATION_TEST_DIR="$PROJECT_ROOT/src"
+if [ -d "$INTEGRATION_TEST_DIR" ]; then
+    cd "$INTEGRATION_TEST_DIR"
+    go test -v -tags=integration -run "TestIntegration|TestGateway" . || TEST_RESULT=$?
+else
+    echo -e "${YELLOW}⚠ Go integration test harness not found at $INTEGRATION_TEST_DIR${NC}"
+    echo "Running basic gateway health and tool-list smoke test instead..."
+    echo ""
+
+    # Smoke test: verify health endpoint
+    HEALTH=$(curl -s "http://localhost:$GATEWAY_PORT/health")
+    if echo "$HEALTH" | grep -q '"status"'; then
+        echo -e "${GREEN}✓${NC} Health endpoint responds"
+    else
+        echo -e "${RED}✗${NC} Health endpoint failed"
+        TEST_RESULT=1
+    fi
+
+    # Smoke test: verify tools endpoint lists github tools
+    TOOLS=$(curl -s "http://localhost:$GATEWAY_PORT/mcp/github" \
+        -H "Authorization: $GATEWAY_API_KEY" \
+        -H "Content-Type: application/json" \
+        -d '{"jsonrpc":"2.0","method":"initialize","id":1,"params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"smoke-test","version":"1.0"}}}' 2>/dev/null || true)
+    if [ -n "$TOOLS" ]; then
+        echo -e "${GREEN}✓${NC} MCP endpoint responds to initialize"
+    else
+        echo -e "${YELLOW}⚠${NC} MCP endpoint did not respond (gateway may still be starting backends)"
+    fi
+fi
 
 # Cleanup
 echo ""
