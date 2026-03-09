@@ -754,7 +754,7 @@ Repo-scoped read-only tools to test:
 - search_pull_requests: Should return all accessible PRs without filtering
 
 **All Repositories** (expected: FULL ACCESS):
-- Both private (lpcox/github-guard) and public (octocat/Hello-World) repositories should be fully accessible
+- Both private (${DIFC_SCOPE}) and public (octocat/Hello-World) repositories should be fully accessible
 - All repo-scoped calls should return complete data when it exists
 - No filtering should occur in any repository
 
@@ -768,7 +768,7 @@ Use this exact format for your final report:
 ## Test Configuration
 - **Mode**: all
 - **Policy**: ${ALLOW_ONLY_ALL_POLICY}
-- **Private Repository**: lpcox/github-guard
+- **Private Repository**: ${DIFC_SCOPE}
 - **Public Repository**: octocat/Hello-World
 
 ## Global/User API Results (Expected: FULL ACCESS)
@@ -781,7 +781,7 @@ Use this exact format for your final report:
 | search_pull_requests | [result] | ✅ PASS / ❌ FAIL | [reason] |
 
 ## Repo-Scoped API Results
-| Tool | Private Repo (lpcox/github-guard) | Public Repo (octocat/Hello-World) | Status |
+| Tool | Private Repo (${DIFC_SCOPE}) | Public Repo (octocat/Hello-World) | Status |
 |------|-------------------------------------|-------------------------------------|--------|
 | list_issues | [result] | [result] | ✅ PASS / ❌ FAIL |
 | issue_read | [result] | [result] | ✅ PASS / ❌ FAIL |
@@ -1019,7 +1019,7 @@ Repo-scoped read-only tools to test:
 - search_issues: Should filter out non-owner issues, show ${ALLOW_OWNER} issues only
 - search_pull_requests: Should filter out non-owner PRs, show ${ALLOW_OWNER} PRs only
 
-**Owner's Repository (${ALLOW_OWNER}/github-guard)** (expected: FULL ACCESS):
+**Owner's Repository (${DIFC_SCOPE})** (expected: FULL ACCESS):
 - All repo-scoped calls should return complete data when it exists
 - No filtering should occur within the owner's repositories
 
@@ -1038,7 +1038,7 @@ Use this exact format for your final report:
 - **Mode**: owner-only
 - **Policy**: ${ALLOW_ONLY_OWNER_POLICY}
 - **Allowed Owner**: ${ALLOW_OWNER}
-- **Owner Repository**: ${ALLOW_OWNER}/github-guard
+- **Owner Repository**: ${DIFC_SCOPE}
 - **Non-Owner Repository**: octocat/Hello-World
 
 ## Global/User API Results (Expected: OWNER DATA ONLY)
@@ -1051,7 +1051,7 @@ Use this exact format for your final report:
 | search_pull_requests | [result] | ✅ PASS / ❌ FAIL | [reason] |
 
 ## Repo-Scoped API Results
-| Tool | Owner Repo (${ALLOW_OWNER}/github-guard) | Non-Owner Repo (octocat/Hello-World) | Status |
+| Tool | Owner Repo (${DIFC_SCOPE}) | Non-Owner Repo (octocat/Hello-World) | Status |
 |------|-------------------------------------------|---------------------------------------|--------|
 | list_issues | [result] | [result] | ✅ PASS / ❌ FAIL |
 | issue_read | [result] | [result] | ✅ PASS / ❌ FAIL |
@@ -1412,7 +1412,7 @@ EOF
   - search_issues: Should filter to matching repos with merged-level integrity only
   - search_pull_requests: Should filter to matching repos with merged-level integrity only
 
-  **Matching Repository (lpcox/github-guard)** (expected: MERGED DATA ONLY):
+  **Matching Repository (${DIFC_SCOPE})** (expected: MERGED DATA ONLY):
   - All repo-scoped calls should return merged-level integrity data only when it exists
   - Lower integrity data (unapproved, approved) should be filtered out
   - Only commits on main branch, merged PRs, etc. should be accessible
@@ -1431,7 +1431,7 @@ EOF
   ## Test Configuration
   - **Mode**: multi-only
   - **Policy**: ${ALLOW_ONLY_MULTI_POLICY}
-  - **Matching Repository**: lpcox/github-guard
+  - **Matching Repository**: ${DIFC_SCOPE}
   - **Non-Matching Repository**: octocat/Hello-World
   - **Integrity Requirement**: merged
 
@@ -1445,7 +1445,7 @@ EOF
   | search_pull_requests | [result] | ✅ PASS / ❌ FAIL | [reason] |
 
   ## Repo-Scoped API Results
-  | Tool | Matching Repo (lpcox/github-guard) | Non-Matching Repo (octocat/Hello-World) | Status |
+  | Tool | Matching Repo (${DIFC_SCOPE}) | Non-Matching Repo (octocat/Hello-World) | Status |
   |------|-------------------------------------|------------------------------------------|--------|
   | list_issues | [result] | [result] | ✅ PASS / ❌ FAIL |
   | issue_read | [result] | [result] | ✅ PASS / ❌ FAIL |
