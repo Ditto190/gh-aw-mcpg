@@ -77,6 +77,9 @@ esac
 
 SERVER_GUARD_POLICIES_JSON="{}"
 
+# Markdown code fence helper (three backticks; avoids command-substitution issues in heredocs)
+FENCE='```'
+
 # Configuration
 GATEWAY_IMAGE="${GATEWAY_IMAGE:-local/gh-aw-mcpg}"
 GITHUB_MCP_IMAGE="${GITHUB_MCP_IMAGE:-ghcr.io/github/github-mcp-server:latest}"
@@ -691,12 +694,19 @@ EOF
     cat > "$GENERATED_PROMPT_FILE" <<EOF
 You are testing GitHub Guard in all mode through the MCP Gateway.
 
-In all mode, policy allows all repos and enforces a approved integrity floor.
+In all mode, all repos and all objects within the repos are accessible (min-integrity == none).
 
 ## Test Configuration
 - **Mode**: all
-- **DIFC Mode**: strict/filter (guard-managed)
+- **DIFC Mode**: filter
 - **AllowOnly Policy**: ${ALLOW_ONLY_ALL_POLICY}
+
+## Expected Behavior
+**ALL MODE**: All repos and all objects within the repos are accessible (min-integrity == none).
+
+- ✅ **All Repositories**: Full access to ALL data when it exists (private and public)
+- ✅ **Global/User APIs**: Should work without any filtering
+- ✅ **No Repository Restrictions**: Access should be unrestricted across all repositories
 
 ## Test Plan
 
@@ -738,20 +748,69 @@ Repo-scoped read-only tools to test:
 - If all attempts return 404 Not Found, mark get_tag as expected skip (lightweight tags), not failure.
 - Only mark get_tag failed for non-404 errors (auth, permission, transport, etc.).
 
-### Part 3: Expected Behavior Checks
-- Both private and public repo calls may succeed when data exists.
-- Results below approved integrity may be filtered/denied by guard policy.
-- Empty arrays / zero-count search results should be recorded as **NO_DATA** (not failure) when no matching data exists.
-- get_latest_release returning 404 Not Found should be recorded as **NO_RELEASE** (expected for repos without releases), not failure.
-- get_label returning empty/filtered output should be recorded as **NO_LABEL_OR_FILTERED** unless there is a transport/auth/tool error.
-- Treat only transport/auth/tool errors as hard failures (for example non-404 API errors, gateway/tool invocation errors, or malformed responses).
+### Part 3: Expected Behavior Validation
+**Global/User APIs** (expected: FULL ACCESS):
+- get_me: Should work normally
+- search_users: Should work normally
+- search_repositories: Should return all accessible repositories without filtering
+- search_issues: Should return all accessible issues without filtering
+- search_pull_requests: Should return all accessible PRs without filtering
 
-### Part 4: Final Report (required)
-Provide:
-1. A checklist of every read-only tool above with status for private and public calls.
-2. Any skips/NO_DATA outcomes with exact reason (e.g., no releases/tags in that repo).
-3. A final PASS/FAIL for "all mode applies approved integrity while allowing all repo scope".
-4. Do not mark overall FAIL solely because of empty results or expected 404 no-release outcomes.
+**All Repositories** (expected: FULL ACCESS):
+- Both private (${DIFC_SCOPE}) and public (octocat/Hello-World) repositories should be fully accessible
+- All repo-scoped calls should return complete data when it exists
+- No filtering should occur in any repository
+
+## Report Template (required)
+
+Use this exact format for your final report:
+
+${FENCE}
+# GitHub Guard All Mode Test Results
+
+## Test Configuration
+- **Mode**: all
+- **Policy**: ${ALLOW_ONLY_ALL_POLICY}
+- **Private Repository**: ${DIFC_SCOPE}
+- **Public Repository**: octocat/Hello-World
+
+## Global/User API Results (Expected: FULL ACCESS)
+| Tool | Result | Status | Notes |
+|------|--------|--------|-------|
+| get_me | [result] | ✅ PASS / ❌ FAIL | [reason] |
+| search_users | [result] | ✅ PASS / ❌ FAIL | [reason] |
+| search_repositories | [result] | ✅ PASS / ❌ FAIL | [reason] |
+| search_issues | [result] | ✅ PASS / ❌ FAIL | [reason] |
+| search_pull_requests | [result] | ✅ PASS / ❌ FAIL | [reason] |
+
+## Repo-Scoped API Results
+| Tool | Private Repo (${DIFC_SCOPE}) | Public Repo (octocat/Hello-World) | Status |
+|------|-------------------------------------|-------------------------------------|--------|
+| list_issues | [result] | [result] | ✅ PASS / ❌ FAIL |
+| issue_read | [result] | [result] | ✅ PASS / ❌ FAIL |
+| list_pull_requests | [result] | [result] | ✅ PASS / ❌ FAIL |
+| pull_request_read | [result] | [result] | ✅ PASS / ❌ FAIL |
+| list_commits | [result] | [result] | ✅ PASS / ❌ FAIL |
+| get_commit | [result] | [result] | ✅ PASS / ❌ FAIL |
+| get_file_contents | [result] | [result] | ✅ PASS / ❌ FAIL |
+| list_branches | [result] | [result] | ✅ PASS / ❌ FAIL |
+| list_tags | [result] | [result] | ✅ PASS / ❌ FAIL |
+| get_tag | [result] | [result] | ✅ PASS / ❌ FAIL |
+| list_releases | [result] | [result] | ✅ PASS / ❌ FAIL |
+| get_latest_release | [result] | [result] | ✅ PASS / ❌ FAIL |
+| get_release_by_tag | [result] | [result] | ✅ PASS / ❌ FAIL |
+| get_label | [result] | [result] | ✅ PASS / ❌ FAIL |
+| search_code | [result] | [result] | ✅ PASS / ❌ FAIL |
+
+## Summary
+- **Global APIs Working**: [X/5] ✅ / ❌
+- **Private Repository Access**: [X/15] ✅ / ❌  
+- **Public Repository Access**: [X/15] ✅ / ❌
+- **Overall Result**: ✅ PASS / ❌ FAIL
+
+## Final Assessment
+[Detailed explanation of whether all mode provides unrestricted access to all repositories and data]
+${FENCE}
 EOF
     ;;
   lockdown)
@@ -775,12 +834,19 @@ EOF
     cat > "$GENERATED_PROMPT_FILE" <<EOF
 You are testing GitHub Guard in public-only mode through the MCP Gateway.
 
-${DIFC_SCOPE} is a private repository and in public-only mode, the guard should block access to private data. You should still be able to access public repositories and perform operations that do not require private data.
+In public-only mode, only public repos and all objects within the public repos are accessible (min-integrity == none).
 
 ## Test Configuration
 - **Mode**: public-only
 - **DIFC Mode**: filter
 - **AllowOnly Policy**: ${ALLOW_ONLY_PUBLIC_POLICY}
+
+## Expected Behavior
+**PUBLIC-ONLY MODE**: Only public repos and all objects within the public repos are accessible (min-integrity == none).
+
+- ✅ **Public Repositories (e.g., octocat/Hello-World)**: Full access to ALL data when it exists
+- ❌ **Private Repositories (e.g., ${DIFC_SCOPE})**: No access to private data
+- ✅ **Global/User APIs**: Should work for public data only
 
 ## Test Plan
 
@@ -822,35 +888,91 @@ Repo-scoped read-only tools to test:
 - If all attempts return 404 Not Found, mark get_tag as expected skip (lightweight tags), not failure.
 - Only mark get_tag failed for non-404 errors (auth, permission, transport, etc.).
 
-### Part 3: Expected Behavior Checks
-For every repo-scoped call:
-- private repo (${DIFC_SCOPE}): response should be filtered/empty/denied for private data
-- public repo (octocat/Hello-World): response should be accessible when data exists
+### Part 3: Expected Behavior Validation
+**Global/User APIs** (expected: PUBLIC DATA ONLY):
+- get_me: Should work (user data is generally not private)
+- search_users: Should work (user data is generally public)
+- search_repositories: Should filter out private repos, show public ones only
+- search_issues: Should filter out private issues, show public ones only
+- search_pull_requests: Should filter out private PRs, show public ones only
 
-For global search calls:
-- search_repositories results must not expose ${DIFC_SCOPE}
-- public data should still be returned
+**Private Repository (${DIFC_SCOPE})** (expected: ALL BLOCKED):
+- All repo-scoped calls should return empty/blocked
+- This validates private repository filtering
 
-### Part 4: Final Report (required)
-Provide:
-1. A checklist of every read-only tool above with status for private and public calls.
-2. Any skips and exact reason (e.g., no releases/tags in that repo).
-3. A final PASS/FAIL for "public-only blocks private repo data across all read-only calls".
+**Public Repository (octocat/Hello-World)** (expected: FULL ACCESS):
+- All repo-scoped calls should return complete data when it exists
+- No filtering should occur within public repositories
+
+## Report Template (required)
+
+Use this exact format for your final report:
+
+${FENCE}
+# GitHub Guard Public-Only Mode Test Results
+
+## Test Configuration
+- **Mode**: public-only
+- **Policy**: ${ALLOW_ONLY_PUBLIC_POLICY}
+- **Private Repository**: ${DIFC_SCOPE}
+- **Public Repository**: octocat/Hello-World
+
+## Global/User API Results (Expected: PUBLIC DATA ONLY)
+| Tool | Result | Status | Notes |
+|------|--------|--------|-------|
+| get_me | [result] | ✅ PASS / ❌ FAIL | [reason] |
+| search_users | [result] | ✅ PASS / ❌ FAIL | [reason] |
+| search_repositories | [result] | ✅ PASS / ❌ FAIL | [reason] |
+| search_issues | [result] | ✅ PASS / ❌ FAIL | [reason] |
+| search_pull_requests | [result] | ✅ PASS / ❌ FAIL | [reason] |
+
+## Repo-Scoped API Results
+| Tool | Private Repo (${DIFC_SCOPE}) | Public Repo (octocat/Hello-World) | Status |
+|------|-------------------------------|-------------------------------------|--------|
+| list_issues | [result] | [result] | ✅ PASS / ❌ FAIL |
+| issue_read | [result] | [result] | ✅ PASS / ❌ FAIL |
+| list_pull_requests | [result] | [result] | ✅ PASS / ❌ FAIL |
+| pull_request_read | [result] | [result] | ✅ PASS / ❌ FAIL |
+| list_commits | [result] | [result] | ✅ PASS / ❌ FAIL |
+| get_commit | [result] | [result] | ✅ PASS / ❌ FAIL |
+| get_file_contents | [result] | [result] | ✅ PASS / ❌ FAIL |
+| list_branches | [result] | [result] | ✅ PASS / ❌ FAIL |
+| list_tags | [result] | [result] | ✅ PASS / ❌ FAIL |
+| get_tag | [result] | [result] | ✅ PASS / ❌ FAIL |
+| list_releases | [result] | [result] | ✅ PASS / ❌ FAIL |
+| get_latest_release | [result] | [result] | ✅ PASS / ❌ FAIL |
+| get_release_by_tag | [result] | [result] | ✅ PASS / ❌ FAIL |
+| get_label | [result] | [result] | ✅ PASS / ❌ FAIL |
+| search_code | [result] | [result] | ✅ PASS / ❌ FAIL |
+
+## Summary
+- **Global APIs Working with Public Data**: [X/5] ✅ / ❌
+- **Private Repository Blocked**: [X/15] ✅ / ❌  
+- **Public Repository Access**: [X/15] ✅ / ❌
+- **Overall Result**: ✅ PASS / ❌ FAIL
+
+## Final Assessment
+[Detailed explanation of whether public-only mode correctly blocks private data while allowing public data]
+${FENCE}
 EOF
     ;;
   owner-only)
     cat > "$GENERATED_PROMPT_FILE" <<EOF
 You are testing GitHub Guard in owner-only mode through the MCP Gateway.
 
-Owner scope is set to ${ALLOW_OWNER}. Repositories under this owner should remain accessible when labels allow, while any data outside this owner scope must be blocked.
-
-Owner-only also applies a higher integrity floor for access checks:
-- Integrity = writer
+In owner-only mode, only repos owned by the owner and all objects within the owner's repos are accessible (min-integrity == none).
 
 ## Test Configuration
 - **Mode**: owner-only
 - **DIFC Mode**: filter
 - **AllowOnly Policy**: ${ALLOW_ONLY_OWNER_POLICY}
+
+## Expected Behavior
+**OWNER-ONLY MODE**: Only repos owned by ${ALLOW_OWNER} and all objects within the owner's repos are accessible (min-integrity == none).
+
+- ✅ **Owner's Repositories (${ALLOW_OWNER}/*)**: Full access to ALL data when it exists
+- ❌ **Other Owner's Repositories (e.g., octocat/Hello-World)**: No access even if public
+- ✅ **Global/User APIs**: Should work but filter out non-owner data
 
 ## Test Plan
 
@@ -892,12 +1014,73 @@ Repo-scoped read-only tools to test:
 - If all attempts return 404 Not Found, mark get_tag as expected skip (lightweight tags), not failure.
 - Only mark get_tag failed for non-404 errors (auth, permission, transport, etc.).
 
-### Part 3: Expected Behavior Checks
-For repo-scoped calls:
-- owner-scoped private repo (${DIFC_SCOPE}): should be accessible when data exists
-- outside-owner public repo (octocat/Hello-World): public data should remain accessible
+### Part 3: Expected Behavior Validation
+**Global/User APIs** (expected: OWNER DATA ONLY):
+- get_me: Should work (user data is generally not owner-scoped)
+- search_users: Should work (user data is generally not owner-scoped)
+- search_repositories: Should filter out non-owner repos, show ${ALLOW_OWNER} repos only
+- search_issues: Should filter out non-owner issues, show ${ALLOW_OWNER} issues only
+- search_pull_requests: Should filter out non-owner PRs, show ${ALLOW_OWNER} PRs only
 
-For cross-repo/private boundaries:
+**Owner's Repository (${DIFC_SCOPE})** (expected: FULL ACCESS):
+- All repo-scoped calls should return complete data when it exists
+- No filtering should occur within the owner's repositories
+
+**Non-Owner's Repository (octocat/Hello-World)** (expected: ALL BLOCKED):
+- All repo-scoped calls should return empty/blocked (even though it's public)
+- This validates owner-scoped filtering
+
+## Report Template (required)
+
+Use this exact format for your final report:
+
+${FENCE}
+# GitHub Guard Owner-Only Mode Test Results
+
+## Test Configuration
+- **Mode**: owner-only
+- **Policy**: ${ALLOW_ONLY_OWNER_POLICY}
+- **Allowed Owner**: ${ALLOW_OWNER}
+- **Owner Repository**: ${DIFC_SCOPE}
+- **Non-Owner Repository**: octocat/Hello-World
+
+## Global/User API Results (Expected: OWNER DATA ONLY)
+| Tool | Result | Status | Notes |
+|------|--------|--------|-------|
+| get_me | [result] | ✅ PASS / ❌ FAIL | [reason] |
+| search_users | [result] | ✅ PASS / ❌ FAIL | [reason] |
+| search_repositories | [result] | ✅ PASS / ❌ FAIL | [reason] |
+| search_issues | [result] | ✅ PASS / ❌ FAIL | [reason] |
+| search_pull_requests | [result] | ✅ PASS / ❌ FAIL | [reason] |
+
+## Repo-Scoped API Results
+| Tool | Owner Repo (${DIFC_SCOPE}) | Non-Owner Repo (octocat/Hello-World) | Status |
+|------|-------------------------------------------|---------------------------------------|--------|
+| list_issues | [result] | [result] | ✅ PASS / ❌ FAIL |
+| issue_read | [result] | [result] | ✅ PASS / ❌ FAIL |
+| list_pull_requests | [result] | [result] | ✅ PASS / ❌ FAIL |
+| pull_request_read | [result] | [result] | ✅ PASS / ❌ FAIL |
+| list_commits | [result] | [result] | ✅ PASS / ❌ FAIL |
+| get_commit | [result] | [result] | ✅ PASS / ❌ FAIL |
+| get_file_contents | [result] | [result] | ✅ PASS / ❌ FAIL |
+| list_branches | [result] | [result] | ✅ PASS / ❌ FAIL |
+| list_tags | [result] | [result] | ✅ PASS / ❌ FAIL |
+| get_tag | [result] | [result] | ✅ PASS / ❌ FAIL |
+| list_releases | [result] | [result] | ✅ PASS / ❌ FAIL |
+| get_latest_release | [result] | [result] | ✅ PASS / ❌ FAIL |
+| get_release_by_tag | [result] | [result] | ✅ PASS / ❌ FAIL |
+| get_label | [result] | [result] | ✅ PASS / ❌ FAIL |
+| search_code | [result] | [result] | ✅ PASS / ❌ FAIL |
+
+## Summary
+- **Global APIs Working with Owner Data**: [X/5] ✅ / ❌
+- **Owner Repository Access**: [X/15] ✅ / ❌  
+- **Non-Owner Repository Blocked**: [X/15] ✅ / ❌
+- **Overall Result**: ✅ PASS / ❌ FAIL
+
+## Final Assessment
+[Detailed explanation of whether owner-only mode correctly enforces owner-scoped access while blocking non-owner data]
+${FENCE}
 - private data from owners other than ${ALLOW_OWNER} must not be exposed
 - search_repositories/search_code/search_issues/search_pull_requests must not leak out-of-scope private content
 
@@ -915,12 +1098,19 @@ EOF
   cat > "$GENERATED_PROMPT_FILE" <<EOF
 You are testing GitHub Guard in repo-only mode through the MCP Gateway.
 
-In repo-only mode, policy scope is pinned to repo ${DIFC_SCOPE}.
+In repo-only mode, only the single repo and all objects within it are accessible (min-integrity == none).
 
 ## Test Configuration
 - **Mode**: repo-only
 - **DIFC Mode**: filter
 - **AllowOnly Policy**: ${ALLOW_ONLY_REPO_POLICY}
+
+## Expected Behavior
+**REPO-ONLY MODE**: Only repos that match ${DIFC_SCOPE} and all objects within that repo are accessible (min-integrity == none).
+
+- ✅ **Scoped Repository (${DIFC_SCOPE})**: Full access to ALL data when it exists
+- ❌ **All Other Repositories**: No access (including public repositories like octocat/Hello-World)
+- ❌ **Global/User APIs**: No access (get_me, search_* APIs)
 
 ## Test Plan
 
@@ -962,32 +1152,91 @@ Repo-scoped read-only tools to test:
 - If all attempts return 404 Not Found, mark get_tag as expected skip (lightweight tags), not failure.
 - Only mark get_tag failed for non-404 errors (auth, permission, transport, etc.).
 
-### Part 3: Expected Behavior Checks
-For repo-scoped calls:
-- scoped repo (${DIFC_SCOPE}): should be accessible when data exists
-- outside-scope public repo (octocat/Hello-World): public data should remain accessible
+### Part 3: Expected Behavior Validation
+**Global/User APIs** (expected: ALL BLOCKED):
+- get_me: Should return empty/blocked
+- search_users: Should return empty/blocked 
+- search_repositories: Should return empty/blocked
+- search_issues: Should return empty/blocked
+- search_pull_requests: Should return empty/blocked
 
-For search and cross-repo behavior:
-- private data from repos other than ${DIFC_SCOPE} must not be exposed
-- search_repositories/search_code/search_issues/search_pull_requests must not leak out-of-scope private content
+**Scoped Repository (${DIFC_SCOPE})** (expected: FULL ACCESS):
+- All repo-scoped calls should return complete data when it exists
+- No filtering should occur within the scoped repository
 
-### Part 4: Final Report (required)
-Provide:
-1. A checklist of every read-only tool above with status for scoped-private and public calls.
-2. Any skips and exact reason (e.g., no releases/tags in that repo).
-3. A final PASS/FAIL for "repo-only enforces repo-scoped private access while blocking out-of-scope private data".
+**Out-of-Scope Repository (octocat/Hello-World)** (expected: ALL BLOCKED):
+- All repo-scoped calls should return empty/blocked (even though it's public)
+- This validates repo-only scope enforcement
+
+## Report Template (required)
+
+Use this exact format for your final report:
+
+${FENCE}
+# GitHub Guard Repo-Only Mode Test Results
+
+## Test Configuration
+- **Mode**: repo-only
+- **Policy**: ${ALLOW_ONLY_REPO_POLICY}
+- **Scoped Repository**: ${DIFC_SCOPE}
+- **Test Repository**: octocat/Hello-World
+
+## Global/User API Results (Expected: ALL BLOCKED)
+| Tool | Result | Status | Notes |
+|------|--------|--------|-------|
+| get_me | [result] | ✅ PASS / ❌ FAIL | [reason] |
+| search_users | [result] | ✅ PASS / ❌ FAIL | [reason] |
+| search_repositories | [result] | ✅ PASS / ❌ FAIL | [reason] |
+| search_issues | [result] | ✅ PASS / ❌ FAIL | [reason] |
+| search_pull_requests | [result] | ✅ PASS / ❌ FAIL | [reason] |
+
+## Repo-Scoped API Results
+| Tool | Scoped Repo (${DIFC_SCOPE}) | Out-of-Scope Repo (octocat/Hello-World) | Status |
+|------|------------------------------|------------------------------------------|--------|
+| list_issues | [result] | [result] | ✅ PASS / ❌ FAIL |
+| issue_read | [result] | [result] | ✅ PASS / ❌ FAIL |
+| list_pull_requests | [result] | [result] | ✅ PASS / ❌ FAIL |
+| pull_request_read | [result] | [result] | ✅ PASS / ❌ FAIL |
+| list_commits | [result] | [result] | ✅ PASS / ❌ FAIL |
+| get_commit | [result] | [result] | ✅ PASS / ❌ FAIL |
+| get_file_contents | [result] | [result] | ✅ PASS / ❌ FAIL |
+| list_branches | [result] | [result] | ✅ PASS / ❌ FAIL |
+| list_tags | [result] | [result] | ✅ PASS / ❌ FAIL |
+| get_tag | [result] | [result] | ✅ PASS / ❌ FAIL |
+| list_releases | [result] | [result] | ✅ PASS / ❌ FAIL |
+| get_latest_release | [result] | [result] | ✅ PASS / ❌ FAIL |
+| get_release_by_tag | [result] | [result] | ✅ PASS / ❌ FAIL |
+| get_label | [result] | [result] | ✅ PASS / ❌ FAIL |
+| search_code | [result] | [result] | ✅ PASS / ❌ FAIL |
+
+## Summary
+- **Global APIs Blocked**: [X/5] ✅ / ❌
+- **Scoped Repository Access**: [X/15] ✅ / ❌  
+- **Out-of-Scope Repository Blocked**: [X/15] ✅ / ❌
+- **Overall Result**: ✅ PASS / ❌ FAIL
+
+## Final Assessment
+[Detailed explanation of whether repo-only mode correctly enforces the expected behavior]
+${FENCE}
 EOF
   ;;
     prefix-only)
     cat > "$GENERATED_PROMPT_FILE" <<EOF
   You are testing GitHub Guard in prefix-only mode through the MCP Gateway.
 
-  In prefix-only mode, policy scope is pinned to repositories under owner lpcox whose names start with "git-".
+  In prefix-only mode, only repos that match the prefix and all objects within those repos are accessible (min-integrity == none).
 
   ## Test Configuration
   - **Mode**: prefix-only
   - **DIFC Mode**: filter
   - **AllowOnly Policy**: ${ALLOW_ONLY_PREFIX_POLICY}
+
+  ## Expected Behavior
+  **PREFIX-ONLY MODE**: Only repos that match the prefix "lpcox/git-*" and all objects within those repos are accessible (min-integrity == none).
+
+  - ✅ **Matching Prefix Repositories (lpcox/git-*)**: Full access to ALL data when it exists
+  - ❌ **Non-Matching Repositories (e.g., lpcox/github-guard, octocat/Hello-World)**: No access
+  - ✅ **Global/User APIs**: Should work but filter out non-prefix data
 
   ## Test Plan
 
@@ -1030,32 +1279,93 @@ EOF
   - If all attempts return 404 Not Found, mark get_tag as expected skip (lightweight tags), not failure.
   - Only mark get_tag failed for non-404 errors (auth, permission, transport, etc.).
 
-  ### Part 3: Expected Behavior Checks
-  For repo-scoped calls:
-  - in-prefix repo ("lpcox/git-*"): should be accessible when data exists
-  - out-of-prefix repos: must not expose private data
+  ### Part 3: Expected Behavior Validation
+  **Global/User APIs** (expected: PREFIX DATA ONLY):
+  - get_me: Should work (user data is generally not repo-scoped)
+  - search_users: Should work (user data is generally not repo-scoped)
+  - search_repositories: Should filter out non-prefix repos, show lpcox/git-* repos only
+  - search_issues: Should filter out non-prefix issues, show lpcox/git-* issues only
+  - search_pull_requests: Should filter out non-prefix PRs, show lpcox/git-* PRs only
 
-  For search and cross-repo behavior:
-  - private data from repos outside "lpcox/git-*" must not be exposed
-  - search_repositories/search_code/search_issues/search_pull_requests must not leak out-of-scope private content
+  **Matching Prefix Repository (lpcox/git-*)** (expected: FULL ACCESS):
+  - All repo-scoped calls should return complete data when it exists
+  - No filtering should occur within matching repositories
 
-  ### Part 4: Final Report (required)
-  Provide:
-  1. A checklist of every read-only tool above with status for in-prefix and out-of-prefix calls.
-  2. Any skips and exact reason (e.g., no matching in-prefix repo exists).
-  3. A final PASS/FAIL for "prefix-only enforces lpcox/git-* scoped private access while blocking out-of-scope private data".
+  **Non-Matching Repositories (lpcox/github-guard, octocat/Hello-World)** (expected: ALL BLOCKED):
+  - All repo-scoped calls should return empty/blocked
+  - This validates prefix-based filtering
+
+  ## Report Template (required)
+
+  Use this exact format for your final report:
+
+  ${FENCE}
+  # GitHub Guard Prefix-Only Mode Test Results
+
+  ## Test Configuration
+  - **Mode**: prefix-only
+  - **Policy**: ${ALLOW_ONLY_PREFIX_POLICY}
+  - **Allowed Prefix**: lpcox/git-*
+  - **Matching Repository**: [name if found, or "NONE FOUND"]
+  - **Non-Matching Repositories**: lpcox/github-guard, octocat/Hello-World
+
+  ## Global/User API Results (Expected: PREFIX DATA ONLY)
+  | Tool | Result | Status | Notes |
+  |------|--------|--------|-------|
+  | get_me | [result] | ✅ PASS / ❌ FAIL | [reason] |
+  | search_users | [result] | ✅ PASS / ❌ FAIL | [reason] |
+  | search_repositories | [result] | ✅ PASS / ❌ FAIL | [reason] |
+  | search_issues | [result] | ✅ PASS / ❌ FAIL | [reason] |
+  | search_pull_requests | [result] | ✅ PASS / ❌ FAIL | [reason] |
+
+  ## Repo-Scoped API Results
+  | Tool | Matching Repo (lpcox/git-*) | Non-Matching Repo 1 (lpcox/github-guard) | Non-Matching Repo 2 (octocat/Hello-World) | Status |
+  |------|------------------------------|-------------------------------------------|-------------------------------------------|--------|
+  | list_issues | [result] | [result] | [result] | ✅ PASS / ❌ FAIL |
+  | issue_read | [result] | [result] | [result] | ✅ PASS / ❌ FAIL |
+  | list_pull_requests | [result] | [result] | [result] | ✅ PASS / ❌ FAIL |
+  | pull_request_read | [result] | [result] | [result] | ✅ PASS / ❌ FAIL |
+  | list_commits | [result] | [result] | [result] | ✅ PASS / ❌ FAIL |
+  | get_commit | [result] | [result] | [result] | ✅ PASS / ❌ FAIL |
+  | get_file_contents | [result] | [result] | [result] | ✅ PASS / ❌ FAIL |
+  | list_branches | [result] | [result] | [result] | ✅ PASS / ❌ FAIL |
+  | list_tags | [result] | [result] | [result] | ✅ PASS / ❌ FAIL |
+  | get_tag | [result] | [result] | [result] | ✅ PASS / ❌ FAIL |
+  | list_releases | [result] | [result] | [result] | ✅ PASS / ❌ FAIL |
+  | get_latest_release | [result] | [result] | [result] | ✅ PASS / ❌ FAIL |
+  | get_release_by_tag | [result] | [result] | [result] | ✅ PASS / ❌ FAIL |
+  | get_label | [result] | [result] | [result] | ✅ PASS / ❌ FAIL |
+  | search_code | [result] | [result] | [result] | ✅ PASS / ❌ FAIL |
+
+  ## Summary
+  - **Global APIs Working with Prefix Data**: [X/5] ✅ / ❌
+  - **Matching Prefix Repository Access**: [X/15] ✅ / ❌  
+  - **Non-Matching Repositories Blocked**: [X/30] ✅ / ❌
+  - **Overall Result**: ✅ PASS / ❌ FAIL
+
+  ## Final Assessment
+  [Detailed explanation of whether prefix-only mode correctly enforces prefix-based access while blocking non-prefix data]
+  ${FENCE}
 EOF
     ;;
   multi-only)
   cat > "$GENERATED_PROMPT_FILE" <<EOF
   You are testing GitHub Guard in multi-only mode through the MCP Gateway.
 
-  In multi-only mode, policy scope is an array with multiple entries.
+  In multi-only mode, only repos that match the prefixes and other matching criteria and only merged objects within those repos (min-integrity == merged).
 
   ## Test Configuration
   - **Mode**: multi-only
   - **DIFC Mode**: filter
   - **AllowOnly Policy**: ${ALLOW_ONLY_MULTI_POLICY}
+
+  ## Expected Behavior
+  **MULTI-ONLY MODE**: Only repos that match the prefixes and other matching criteria and only merged objects within those repos are accessible (min-integrity == merged).
+
+  - ✅ **Matching Repositories**: Access to merged-level integrity data only within matching repositories
+  - ❌ **Non-Matching Repositories**: No access
+  - ✅ **Global/User APIs**: Should work but filter out non-matching data
+  - ⚠️ **Integrity Filtering**: Even within matching repos, only merged-level data is accessible
 
   ## Test Plan
 
@@ -1097,16 +1407,74 @@ EOF
   - If all attempts return 404 Not Found, mark get_tag as expected skip (lightweight tags), not failure.
   - Only mark get_tag failed for non-404 errors (auth, permission, transport, etc.).
 
-  ### Part 3: Expected Behavior Checks
-  - Private data matching either repos entry in the policy should be accessible when integrity allows.
-  - Private data outside all policy entries must not be exposed.
-  - Search and cross-repo tools must not leak out-of-scope private content.
+  ### Part 3: Expected Behavior Validation
+  **Global/User APIs** (expected: MERGED DATA ONLY):
+  - get_me: Should work (user data is generally not integrity-scoped)
+  - search_users: Should work (user data is generally not integrity-scoped)
+  - search_repositories: Should filter to matching repos with merged-level integrity only
+  - search_issues: Should filter to matching repos with merged-level integrity only
+  - search_pull_requests: Should filter to matching repos with merged-level integrity only
 
-  ### Part 4: Final Report (required)
-  Provide:
-  1. A checklist of every read-only tool above with status for in-scope and out-of-scope calls.
-  2. Any skips and exact reason.
-  3. A final PASS/FAIL for "multi-only enforces combined repos array scope semantics".
+  **Matching Repository (${DIFC_SCOPE})** (expected: MERGED DATA ONLY):
+  - All repo-scoped calls should return merged-level integrity data only when it exists
+  - Lower integrity data (unapproved, approved) should be filtered out
+  - Only commits on main branch, merged PRs, etc. should be accessible
+
+  **Non-Matching Repository (octocat/Hello-World)** (expected: ALL BLOCKED):
+  - All repo-scoped calls should return empty/blocked
+  - This validates repo matching criteria
+
+  ## Report Template (required)
+
+  Use this exact format for your final report:
+
+  ${FENCE}
+  # GitHub Guard Multi-Only Mode Test Results
+
+  ## Test Configuration
+  - **Mode**: multi-only
+  - **Policy**: ${ALLOW_ONLY_MULTI_POLICY}
+  - **Matching Repository**: ${DIFC_SCOPE}
+  - **Non-Matching Repository**: octocat/Hello-World
+  - **Integrity Requirement**: merged
+
+  ## Global/User API Results (Expected: MERGED DATA ONLY)
+  | Tool | Result | Status | Notes |
+  |------|--------|--------|-------|
+  | get_me | [result] | ✅ PASS / ❌ FAIL | [reason] |
+  | search_users | [result] | ✅ PASS / ❌ FAIL | [reason] |
+  | search_repositories | [result] | ✅ PASS / ❌ FAIL | [reason] |
+  | search_issues | [result] | ✅ PASS / ❌ FAIL | [reason] |
+  | search_pull_requests | [result] | ✅ PASS / ❌ FAIL | [reason] |
+
+  ## Repo-Scoped API Results
+  | Tool | Matching Repo (${DIFC_SCOPE}) | Non-Matching Repo (octocat/Hello-World) | Status |
+  |------|-------------------------------------|------------------------------------------|--------|
+  | list_issues | [result] | [result] | ✅ PASS / ❌ FAIL |
+  | issue_read | [result] | [result] | ✅ PASS / ❌ FAIL |
+  | list_pull_requests | [result] | [result] | ✅ PASS / ❌ FAIL |
+  | pull_request_read | [result] | [result] | ✅ PASS / ❌ FAIL |
+  | list_commits | [result] | [result] | ✅ PASS / ❌ FAIL |
+  | get_commit | [result] | [result] | ✅ PASS / ❌ FAIL |
+  | get_file_contents | [result] | [result] | ✅ PASS / ❌ FAIL |
+  | list_branches | [result] | [result] | ✅ PASS / ❌ FAIL |
+  | list_tags | [result] | [result] | ✅ PASS / ❌ FAIL |
+  | get_tag | [result] | [result] | ✅ PASS / ❌ FAIL |
+  | list_releases | [result] | [result] | ✅ PASS / ❌ FAIL |
+  | get_latest_release | [result] | [result] | ✅ PASS / ❌ FAIL |
+  | get_release_by_tag | [result] | [result] | ✅ PASS / ❌ FAIL |
+  | get_label | [result] | [result] | ✅ PASS / ❌ FAIL |
+  | search_code | [result] | [result] | ✅ PASS / ❌ FAIL |
+
+  ## Summary
+  - **Global APIs Working with Merged Data**: [X/5] ✅ / ❌
+  - **Matching Repository Merged Data Access**: [X/15] ✅ / ❌  
+  - **Non-Matching Repository Blocked**: [X/15] ✅ / ❌
+  - **Overall Result**: ✅ PASS / ❌ FAIL
+
+  ## Final Assessment
+  [Detailed explanation of whether multi-only mode correctly enforces matching criteria with merged integrity requirements while blocking non-matching data]
+  ${FENCE}
 EOF
   ;;
 esac
