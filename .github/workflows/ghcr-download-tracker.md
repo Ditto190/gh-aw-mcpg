@@ -22,7 +22,7 @@ safe-outputs:
     labels: [metrics, ghcr, automation]
     close-older-issues: true
     max: 1
-    expires: 8
+    expires: 8d
   noop:
 
 tools:
