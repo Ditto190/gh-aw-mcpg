@@ -470,23 +470,13 @@ fi
 
 # Build CLI args for the gateway.
 # The entrypoint script doesn't translate env vars to CLI flags, so we override it.
-USE_ROUTED_MODE="${USE_ROUTED_MODE:-auto}"
-if [ "$USE_ROUTED_MODE" = "auto" ]; then
-  if [[ "$GATEWAY_IMAGE" == local/gh-aw-mcpg* ]]; then
-    USE_ROUTED_MODE="0"
-  else
-    USE_ROUTED_MODE="1"
-  fi
-fi
+USE_ROUTED_MODE="${USE_ROUTED_MODE:-1}"
 
-GATEWAY_CLI_ARGS=(
-    --listen "0.0.0.0:$GATEWAY_PORT"
-    --config-stdin
-    --log-dir /tmp/gh-aw/mcp-logs
-)
+# Extra CLI args beyond what the entrypoint handles via env vars
+GATEWAY_CLI_ARGS=()
 
-if [ "$USE_ROUTED_MODE" = "1" ]; then
-  GATEWAY_CLI_ARGS=(--routed "${GATEWAY_CLI_ARGS[@]}")
+if [ "$USE_ROUTED_MODE" != "1" ]; then
+  DOCKER_ENV_ARGS+=(-e MCP_GATEWAY_MODE="--unified")
 fi
 
 GATEWAY_DIFC_MODE="disabled"
@@ -556,7 +546,7 @@ echo ""
     "${DOCKER_ENV_ARGS[@]}" \
   "${DOCKER_VOLUME_ARGS[@]}" \
   -p "$GATEWAY_PORT:$GATEWAY_PORT" \
-    "$GATEWAY_IMAGE" <<< "$GATEWAY_CONFIG"
+    "$GATEWAY_IMAGE" "${GATEWAY_CLI_ARGS[@]}" <<< "$GATEWAY_CONFIG"
 ) > "$COPILOT_WORK_DIR/gateway.log" 2>&1 &
 GATEWAY_PID=$!
 
