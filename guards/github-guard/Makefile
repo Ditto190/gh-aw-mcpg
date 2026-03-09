@@ -10,8 +10,9 @@ WASM_OUTPUT := github-guard-rust.wasm
 GATEWAY_SOURCES := $(shell find $(REPO_ROOT) -name '*.go' -not -path '*/vendor/*' 2>/dev/null)
 GATEWAY_SOURCES += $(REPO_ROOT)/go.mod $(REPO_ROOT)/go.sum
 GATEWAY_SOURCES += $(REPO_ROOT)/Dockerfile $(REPO_ROOT)/run_containerized.sh $(REPO_ROOT)/run.sh
-GATEWAY_SOURCES += $(wildcard rust-guard/src/*.rs) $(wildcard rust-guard/Cargo.toml)
-RUST_GUARD_SOURCES := $(wildcard rust-guard/src/*.rs) rust-guard/Cargo.toml rust-guard/Cargo.lock rust-guard/build.sh
+GATEWAY_SOURCES += $(shell find rust-guard/src -name '*.rs' 2>/dev/null)
+GATEWAY_SOURCES += $(wildcard rust-guard/Cargo.toml rust-guard/Cargo.lock)
+RUST_GUARD_SOURCES := $(shell find rust-guard/src -name '*.rs' 2>/dev/null) rust-guard/Cargo.toml rust-guard/Cargo.lock rust-guard/build.sh
 
 # Default target
 all: build test
