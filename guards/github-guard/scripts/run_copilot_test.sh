@@ -223,20 +223,6 @@ fi
 echo -e "${GREEN}✓${NC} GitHub token loaded from .env"
 echo ""
 
-# Check for WASM file
-GUARD_WASM="${GUARD_WASM:-github-guard-rust.wasm}"
-WASM_FILE="$PROJECT_ROOT/$GUARD_WASM"
-if [ ! -f "$WASM_FILE" ]; then
-    echo -e "${YELLOW}WASM file not found: $GUARD_WASM. Building...${NC}"
-    cd "$PROJECT_ROOT"
-    make build
-    if [ ! -f "$WASM_FILE" ]; then
-        echo -e "${RED}ERROR: Failed to build WASM file${NC}"
-        exit 1
-    fi
-fi
-
-echo -e "${GREEN}✓${NC} WASM file found: $WASM_FILE"
 echo ""
 
 # Check Docker is running

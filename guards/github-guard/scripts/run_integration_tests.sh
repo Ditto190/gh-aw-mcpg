@@ -91,21 +91,6 @@ echo -e "${GREEN}✓${NC} GitHub token loaded from .env"
 echo "  Token: ${GITHUB_TOKEN:0:4}...${GITHUB_TOKEN: -4}"
 echo ""
 
-# Check for WASM file
-WASM_FILE="$PROJECT_ROOT/github-guard-rust.wasm"
-if [ ! -f "$WASM_FILE" ]; then
-    echo -e "${YELLOW}WASM file not found. Building...${NC}"
-    cd "$PROJECT_ROOT"
-    make build
-    if [ ! -f "$WASM_FILE" ]; then
-        echo -e "${RED}ERROR: Failed to build WASM file${NC}"
-        exit 1
-    fi
-fi
-
-echo -e "${GREEN}✓${NC} WASM file found: $WASM_FILE"
-WASM_SIZE=$(ls -lh "$WASM_FILE" | awk '{print $5}')
-echo "  Size: $WASM_SIZE"
 echo ""
 
 # Check Docker is running
