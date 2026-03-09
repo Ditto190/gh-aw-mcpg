@@ -308,19 +308,17 @@ DOCKER_ENV_ARGS=(
     -v "/tmp:/tmp:rw"
   )
 
-  WASM_GUARDS_ROOT_HOST="$COPILOT_WORK_DIR/guards"
-  WASM_GUARDS_ROOT_CONTAINER="/guards"
+  # WASM guard is baked into the gateway image at /guards/github/00-github-guard.wasm
+  # The entrypoint auto-detects it when MCP_GATEWAY_WASM_GUARDS_DIR is set or /guards exists.
+  # For non-yolo/lockdown modes, explicitly enable guard discovery.
   if [ "$MODE" != "yolo" ] && [ "$MODE" != "lockdown" ]; then
-    WASM_GUARD_SERVER_DIR_HOST="$WASM_GUARDS_ROOT_HOST/github"
-    WASM_GUARD_DISCOVERED_FILE_HOST="$WASM_GUARD_SERVER_DIR_HOST/00-github-guard.wasm"
-    mkdir -p "$WASM_GUARD_SERVER_DIR_HOST"
-    cp "$WASM_FILE" "$WASM_GUARD_DISCOVERED_FILE_HOST"
-
     DOCKER_ENV_ARGS+=(
-      -e MCP_GATEWAY_WASM_GUARDS_DIR="$WASM_GUARDS_ROOT_CONTAINER"
+      -e MCP_GATEWAY_WASM_GUARDS_DIR="/guards"
     )
-    DOCKER_VOLUME_ARGS+=(
-      -v "$WASM_GUARDS_ROOT_HOST:$WASM_GUARDS_ROOT_CONTAINER:ro"
+  else
+    # In yolo/lockdown modes, suppress baked-in guard discovery
+    DOCKER_ENV_ARGS+=(
+      -e MCP_GATEWAY_WASM_GUARDS_DIR=""
     )
   fi
 

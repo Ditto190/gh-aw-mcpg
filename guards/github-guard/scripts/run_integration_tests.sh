@@ -165,7 +165,7 @@ docker rm -f "$CONTAINER_NAME" 2>/dev/null || true
 echo "Starting gateway container..."
 echo "  Image: $GATEWAY_IMAGE"
 echo "  Port: $GATEWAY_PORT"
-echo "  Guard: /guard/github-guard-rust.wasm"
+echo "  Guard: /guards/github/00-github-guard.wasm (baked into image)"
 echo ""
 
 GATEWAY_TEST_MODE="integration"
@@ -202,8 +202,8 @@ echo ""
     -e DOCKER_API_VERSION=1.44 \
     -e MCP_GATEWAY_ENABLE_DIFC=1 \
     -e MCP_GATEWAY_CONFIG_EXTENSIONS=1 \
+    -e MCP_GATEWAY_WASM_GUARDS_DIR="/guards" \
     -v /var/run/docker.sock:/var/run/docker.sock \
-    -v "$WASM_FILE:/guard/github-guard-rust.wasm:ro" \
     -v "/tmp:/tmp:rw" \
     -p "$GATEWAY_PORT:$GATEWAY_PORT" \
         "$GATEWAY_IMAGE" "${GATEWAY_CLI_ARGS[@]}" <<EOF
@@ -215,14 +215,7 @@ echo ""
       "env": {
         "GITHUB_PERSONAL_ACCESS_TOKEN": "$GITHUB_TOKEN"
       },
-      "guard": "github-guard",
       "guard-policies": $ALLOW_ONLY_INTEGRATION_POLICY
-    }
-  },
-  "guards": {
-    "github-guard": {
-      "type": "wasm",
-      "path": "/guard/github-guard-rust.wasm"
     }
   },
   "gateway": {

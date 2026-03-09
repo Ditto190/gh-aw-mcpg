@@ -318,6 +318,13 @@ build_command_args() {
 main() {
     log_info "Starting MCP Gateway in containerized mode..."
 
+    # Auto-detect baked-in WASM guards if env var not explicitly set.
+    # Setting MCP_GATEWAY_WASM_GUARDS_DIR="" explicitly disables auto-detection.
+    if [ -z "${MCP_GATEWAY_WASM_GUARDS_DIR+set}" ] && [ -d "/guards" ]; then
+        export MCP_GATEWAY_WASM_GUARDS_DIR="/guards"
+        log_info "Auto-detected baked-in WASM guards at /guards"
+    fi
+
     if [ -n "$MCP_GATEWAY_WASM_GUARDS_DIR" ]; then
         log_info "MCP_GATEWAY_WASM_GUARDS_DIR=$MCP_GATEWAY_WASM_GUARDS_DIR"
     else

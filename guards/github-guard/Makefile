@@ -13,7 +13,8 @@ build:
 	@cd rust-guard && ./build.sh
 
 # Build the MCP Gateway Docker image from the repo root Dockerfile
-build-gateway:
+# Depends on 'build' to ensure WASM is available for baking into the image
+build-gateway: build
 	@echo "Building gateway Docker image ($(GATEWAY_IMAGE))..."
 	@docker build -t "$(GATEWAY_IMAGE)" "$(REPO_ROOT)"
 	@echo "✓ Gateway image built: $(GATEWAY_IMAGE)"
