@@ -33,7 +33,7 @@ COPY run.sh .
 COPY run_containerized.sh .
 RUN chmod +x run.sh run_containerized.sh
 
-# Bake in WASM guards (if present at build time)
+# Copy pre-built WASM guard into the image (must exist before docker build)
 # The gateway discovers guards from /guards/{serverID}/*.wasm
 COPY guards/github-guard/github-guard-rust.wasm /guards/github/00-github-guard.wasm
 
