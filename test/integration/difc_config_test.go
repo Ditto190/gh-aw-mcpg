@@ -48,6 +48,19 @@ func getFreePort(t *testing.T) int {
 	return l.Addr().(*net.TCPAddr).Port
 }
 
+// waitForStderr polls buf until it contains substr or the deadline expires.
+// Returns true if the substring was found within the deadline.
+func waitForStderr(buf *bytes.Buffer, substr string, deadline time.Duration) bool {
+	end := time.Now().Add(deadline)
+	for time.Now().Before(end) {
+		if strings.Contains(buf.String(), substr) {
+			return true
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	return false
+}
+
 // TestDIFCEnvironmentVariables tests that all guards-related environment variables are recognized
 func TestDIFCEnvironmentVariables(t *testing.T) {
 	binary := binaryPath(t)
@@ -198,8 +211,8 @@ func TestDIFCConfigWithGuards(t *testing.T) {
 	err := cmd.Start()
 	require.NoError(t, err, "Failed to start gateway")
 
-	// Wait for startup
-	time.Sleep(1 * time.Second)
+	// Wait for startup — look for server name in logs
+	waitForStderr(&stderr, "playwright", 5*time.Second)
 
 	// Try health check
 	resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/health", port))
@@ -257,7 +270,7 @@ func TestDIFCModeFilterViaEnv(t *testing.T) {
 	err := cmd.Start()
 	require.NoError(t, err, "Failed to start gateway")
 
-	time.Sleep(1 * time.Second)
+	waitForStderr(&stderr, "Guards enforcement", 5*time.Second)
 
 	cmd.Process.Kill()
 	cmd.Wait()
@@ -307,7 +320,7 @@ func TestDIFCModePropagateViaEnv(t *testing.T) {
 	err := cmd.Start()
 	require.NoError(t, err, "Failed to start gateway")
 
-	time.Sleep(1 * time.Second)
+	waitForStderr(&stderr, "Guards enforcement", 5*time.Second)
 
 	cmd.Process.Kill()
 	cmd.Wait()
@@ -371,7 +384,7 @@ func TestFullDIFCConfigFromJSON(t *testing.T) {
 	err := cmd.Start()
 	require.NoError(t, err, "Failed to start gateway")
 
-	time.Sleep(1 * time.Second)
+	waitForStderr(&stderr, "Guards enforcement", 5*time.Second)
 
 	// Try health check
 	resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/health", port))
