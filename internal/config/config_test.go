@@ -206,7 +206,7 @@ func TestLoadFromStdin_DirectCommand(t *testing.T) {
 	cfg, err := LoadFromStdin()
 	os.Stdin = oldStdin
 
-	// Command field is no longer supported - should cause validation error
+	// Command field is no longer supported in stdin JSON format - schema validation rejects it
 	require.Error(t, err)
 
 	assert.Contains(t, err.Error(), "validation error", "Expected validation error")

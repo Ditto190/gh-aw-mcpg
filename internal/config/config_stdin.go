@@ -8,7 +8,6 @@ import (
 	"io"
 	"log"
 	"os"
-	"strings"
 
 	"github.com/github/gh-aw-mcpg/internal/logger"
 )
@@ -33,22 +32,12 @@ type StdinConfig struct {
 // StdinGatewayConfig represents gateway configuration in stdin JSON format.
 // Uses pointers for optional fields to distinguish between unset and zero values.
 type StdinGatewayConfig struct {
-	Port           *int                `json:"port,omitempty"`
-	APIKey         string              `json:"apiKey,omitempty"`
-	Domain         string              `json:"domain,omitempty"`
-	StartupTimeout *int                `json:"startupTimeout,omitempty"`
-	ToolTimeout    *int                `json:"toolTimeout,omitempty"`
-	PayloadDir     string              `json:"payloadDir,omitempty"`
-	Session        *StdinSessionConfig `json:"session,omitempty"`
-}
-
-// StdinSessionConfig represents session label configuration in stdin JSON format.
-type StdinSessionConfig struct {
-	// Secrecy is a list of initial secrecy labels for agent sessions
-	Secrecy []string `json:"secrecy,omitempty"`
-
-	// Integrity is a list of initial integrity labels for agent sessions
-	Integrity []string `json:"integrity,omitempty"`
+	Port           *int   `json:"port,omitempty"`
+	APIKey         string `json:"apiKey,omitempty"`
+	Domain         string `json:"domain,omitempty"`
+	StartupTimeout *int   `json:"startupTimeout,omitempty"`
+	ToolTimeout    *int   `json:"toolTimeout,omitempty"`
+	PayloadDir     string `json:"payloadDir,omitempty"`
 }
 
 // StdinGuardConfig represents a guard configuration in stdin JSON format.
@@ -162,13 +151,6 @@ func (s *StdinServerConfig) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// isConfigExtensionsEnabled checks if config extensions are enabled via environment variable.
-// When enabled, schema validation is relaxed to allow extension fields like "guards", "guard", and "session".
-func isConfigExtensionsEnabled() bool {
-	val := strings.ToLower(os.Getenv("MCP_GATEWAY_CONFIG_EXTENSIONS"))
-	return val == "true" || val == "1" || val == "yes" || val == "on"
-}
-
 // intPtrOrDefault returns the value of the int pointer if not nil, otherwise returns the default value.
 // This helper reduces code duplication when handling optional integer fields with defaults.
 func intPtrOrDefault(ptr *int, defaultValue int) int {
@@ -176,6 +158,39 @@ func intPtrOrDefault(ptr *int, defaultValue int) int {
 		return *ptr
 	}
 	return defaultValue
+}
+
+// stripExtensionFieldsForValidation returns a copy of the raw JSON with known gateway
+// extension fields removed, so the copy can be validated against the upstream MCP Gateway
+// schema. These fields are gateway-specific additions that are not part of the upstream
+// schema definition, so they must be removed before schema validation to prevent spurious
+// "additional properties" errors.
+//
+// Fields stripped:
+//   - Top-level "guards": gateway-specific guard configuration
+//   - Per-server "guard": reference to a named guard
+//
+// Note: "guard-policies" and "registry" are already injected into the upstream schema
+// by fetchAndFixSchema, so they do not need to be stripped here.
+func stripExtensionFieldsForValidation(data []byte) ([]byte, error) {
+	var config map[string]interface{}
+	if err := json.Unmarshal(data, &config); err != nil {
+		return nil, err
+	}
+
+	// Strip top-level "guards" extension field
+	delete(config, "guards")
+
+	// Strip per-server "guard" extension field
+	if servers, ok := config["mcpServers"].(map[string]interface{}); ok {
+		for _, server := range servers {
+			if serverMap, ok := server.(map[string]interface{}); ok {
+				delete(serverMap, "guard")
+			}
+		}
+	}
+
+	return json.Marshal(config)
 }
 
 // LoadFromStdin loads configuration from stdin JSON.
@@ -202,16 +217,16 @@ func LoadFromStdin() (*Config, error) {
 		return nil, err
 	}
 
-	// Validate against JSON schema (fail-fast, spec-compliant)
-	// Skip schema validation when config extensions are enabled, as extensions like
-	// "guards", "guard", and "session" are not in the official schema yet.
-	if isConfigExtensionsEnabled() {
-		logConfig.Print("Config extensions enabled - skipping strict JSON schema validation")
-		log.Println("Config extensions enabled - schema validation relaxed for extension fields")
-	} else {
-		if err := validateJSONSchema(data); err != nil {
-			return nil, err
-		}
+	// Validate against JSON schema (fail-fast, spec-compliant).
+	// Extension fields "guard" (per-server) and "guards" (top-level) are stripped from
+	// a copy of the data before validation because they are not in the upstream schema.
+	// "guard-policies" and "registry" are already injected into the schema by fetchAndFixSchema.
+	validationData, err := stripExtensionFieldsForValidation(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to prepare data for schema validation: %w", err)
+	}
+	if err := validateJSONSchema(validationData); err != nil {
+		return nil, err
 	}
 
 	var stdinCfg StdinConfig
@@ -264,13 +279,6 @@ func convertStdinConfig(stdinCfg *StdinConfig) (*Config, error) {
 		}
 		if stdinCfg.Gateway.PayloadDir != "" {
 			cfg.Gateway.PayloadDir = stdinCfg.Gateway.PayloadDir
-		}
-		// Convert session config
-		if stdinCfg.Gateway.Session != nil {
-			cfg.Gateway.Session = &SessionConfig{
-				Secrecy:   stdinCfg.Gateway.Session.Secrecy,
-				Integrity: stdinCfg.Gateway.Session.Integrity,
-			}
 		}
 	} else {
 		logStdin.Print("No gateway config in stdin, applying defaults")

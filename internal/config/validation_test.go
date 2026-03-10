@@ -638,7 +638,7 @@ func TestLoadFromStdin_ValidationErrors(t *testing.T) {
 				}
 			}`,
 			shouldErr: true,
-			errorMsg:  "validation error",
+			errorMsg:  "container",
 		},
 		{
 			name: "command field not supported",
@@ -692,6 +692,69 @@ func TestLoadFromStdin_ValidationErrors(t *testing.T) {
 			name: "empty mcpServers",
 			config: `{
 				"mcpServers": {},
+				"gateway": {
+					"port": 8080,
+					"domain": "localhost",
+					"apiKey": "test-key"
+				}
+			}`,
+			shouldErr: false,
+		},
+		{
+			name: "extension field guard accepted",
+			config: `{
+				"mcpServers": {
+					"test": {
+						"type": "stdio",
+						"container": "test:latest",
+						"guard": "github-guard"
+					}
+				},
+				"gateway": {
+					"port": 8080,
+					"domain": "localhost",
+					"apiKey": "test-key"
+				}
+			}`,
+			shouldErr: false,
+		},
+		{
+			name: "extension field guards accepted",
+			config: `{
+				"mcpServers": {
+					"test": {
+						"type": "stdio",
+						"container": "test:latest"
+					}
+				},
+				"gateway": {
+					"port": 8080,
+					"domain": "localhost",
+					"apiKey": "test-key"
+				},
+				"guards": {
+					"github-guard": {
+						"type": "wasm",
+						"path": "/path/to/guard.wasm"
+					}
+				}
+			}`,
+			shouldErr: false,
+		},
+		{
+			name: "extension field guard-policies accepted",
+			config: `{
+				"mcpServers": {
+					"test": {
+						"type": "stdio",
+						"container": "test:latest",
+						"guard-policies": {
+							"allow-only": {
+								"repos": "all"
+							}
+						}
+					}
+				},
 				"gateway": {
 					"port": 8080,
 					"domain": "localhost",
