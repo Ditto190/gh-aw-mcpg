@@ -190,6 +190,16 @@ func NewUnified(ctx context.Context, cfg *config.Config) (*UnifiedServer, error)
 		logUnified.Printf("Auto-enabled DIFC: non-noop guard, global policy, or per-server guard policies detected")
 	}
 
+	// When DIFC is enabled, upgrade noop guards to write-sink guards.
+	// A noop guard returns empty labels and OperationReadWrite, which causes
+	// DIFC violations when an agent that has been labeled by another guard
+	// (e.g., the GitHub WASM guard) tries to write to the noop-guarded server.
+	// The write-sink guard fixes this by mirroring the agent's secrecy tags
+	// onto the resource and classifying all operations as writes.
+	if us.enableDIFC {
+		us.guardRegistry.UpgradeNoopToWriteSink()
+	}
+
 	// Log guards status early (before backend launch which may take time)
 	if us.enableDIFC {
 		log.Printf("Guards enforcement enabled with mode: %s", cfg.DIFCMode)
@@ -1387,7 +1397,14 @@ func (us *UnifiedServer) ensureGuardInitialized(
 	agentID := guard.GetAgentIDFromContext(ctx)
 	secrecyTags := toDIFCTags(labelAgentResult.Agent.Secrecy)
 	integrityTags := toDIFCTags(labelAgentResult.Agent.Integrity)
-	us.agentRegistry.Register(agentID, secrecyTags, integrityTags)
+
+	// Merge labels into existing agent (union semantics).
+	// Multiple guards may contribute labels for the same agent; each guard's
+	// label_agent output is additive so that later guards do not overwrite
+	// labels set by earlier ones.
+	agentLabels := us.agentRegistry.GetOrCreate(agentID)
+	agentLabels.AddSecrecyTags(secrecyTags)
+	agentLabels.AddIntegrityTags(integrityTags)
 
 	us.sessionMu.Lock()
 	session = us.sessions[sessionID]

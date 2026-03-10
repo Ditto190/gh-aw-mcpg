@@ -73,6 +73,12 @@ type AgentTagsSnapshot struct {
 }
 
 func getAgentTagsSnapshotFromContext(ctx context.Context) (*AgentTagsSnapshot, bool) {
+	return GetAgentTagsSnapshotFromContext(ctx)
+}
+
+// GetAgentTagsSnapshotFromContext extracts the agent DIFC tag snapshot from the request context.
+// Used by guards (e.g., write-sink) that need the agent's current labels to mirror onto resources.
+func GetAgentTagsSnapshotFromContext(ctx context.Context) (*AgentTagsSnapshot, bool) {
 	if ctx == nil {
 		return nil, false
 	}

@@ -79,6 +79,20 @@ func (r *Registry) Remove(serverID string) {
 	log.Printf("[Guard] Removed guard for server '%s'", serverID)
 }
 
+// UpgradeNoopToWriteSink replaces all noop guards with write-sink guards.
+// Called when DIFC is enabled so that servers without a dedicated guard
+// can still accept writes from agents that carry secrecy/integrity tags.
+func (r *Registry) UpgradeNoopToWriteSink() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for serverID, g := range r.guards {
+		if g.Name() == "noop" {
+			r.guards[serverID] = NewWriteSinkGuard()
+			log.Printf("[Guard] Upgraded guard for server '%s' from 'noop' to 'write-sink' (DIFC enabled)", serverID)
+		}
+	}
+}
+
 // List returns all registered server IDs
 func (r *Registry) List() []string {
 	r.mu.RLock()

@@ -86,6 +86,16 @@ func (a *AgentLabels) AddSecrecyTags(tags []Tag) {
 	}
 }
 
+// AddIntegrityTags adds multiple integrity tags to the agent
+func (a *AgentLabels) AddIntegrityTags(tags []Tag) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.Integrity.Label.AddAll(tags)
+	if len(tags) > 0 {
+		log.Printf("[DIFC] Agent %s gained integrity tags: %v", a.AgentID, tags)
+	}
+}
+
 // ApplyPropagation applies label changes from a propagate-mode evaluation result
 // This adds missing secrecy tags and drops missing integrity tags
 // Returns true if any labels were changed
