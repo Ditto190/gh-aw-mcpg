@@ -212,7 +212,8 @@ func TestDIFCConfigWithGuards(t *testing.T) {
 	require.NoError(t, err, "Failed to start gateway")
 
 	// Wait for startup — look for server name in logs
-	waitForStderr(&stderr, "playwright", 5*time.Second)
+	ok := waitForStderr(&stderr, "playwright", 5*time.Second)
+	require.Truef(t, ok, "timeout waiting for gateway stderr to contain %q within %s; stderr:\n%s", "playwright", 5*time.Second, stderr.String())
 
 	// Try health check
 	resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/health", port))
