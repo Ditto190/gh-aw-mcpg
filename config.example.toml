@@ -87,7 +87,24 @@ GITHUB_PERSONAL_ACCESS_TOKEN = ""  # Pass through from host
 # repos = ["myorg/*", "partner/shared-repo"]     # Organization wildcard and specific repo
 # repos = ["myorg/api-*", "myorg/web-*"]        # Prefix matching with wildcards
 
-# Example 2: Memory MCP Server (stdio via Docker)
+# Example 2: Safe Outputs Server (write-sink for buffered updates)
+# [servers.safeoutputs]
+# command = "docker"
+# args = ["run", "--rm", "-i", "ghcr.io/github/safe-outputs:latest"]
+#
+# Optional: Write-sink guard policy for output servers
+# When the agent reads from a guarded server (e.g., GitHub with allow-only),
+# it acquires secrecy labels. The write-sink accepts writes from agents
+# whose secrecy labels match the configured accept patterns.
+# [servers.safeoutputs.guard_policies.write-sink]
+# Accept = ["private:myorg/api-*", "private:myorg/web-*"]
+#
+# Accept pattern format: "visibility:owner/repo-pattern"
+# Visibility prefixes: private, public, internal
+# Example: Accept writes from agents that accessed any private myorg repo:
+# Accept = ["private:myorg/*"]
+
+# Example 3: Memory MCP Server (stdio via Docker)
 [servers.memory]
 command = "docker"
 args = [
@@ -100,7 +117,7 @@ args = [
     "mcp/memory"
 ]
 
-# Example 3: Custom MCP Server with Volume Mounts
+# Example 4: Custom MCP Server with Volume Mounts
 [servers.custom]
 command = "docker"
 args = [
@@ -113,7 +130,7 @@ args = [
     "custom/mcp-server:latest"
 ]
 
-# Example 4: HTTP-based MCP Server
+# Example 5: HTTP-based MCP Server
 # [servers.http-example]
 # type = "http"
 # url = "https://example.com/mcp"

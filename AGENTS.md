@@ -28,7 +28,7 @@ Quick reference for AI agents working with MCP Gateway (Go-based MCP proxy serve
   - `validation_test.go` - 21 comprehensive validation tests
 - `internal/difc/` - Data Information Flow Control
 - `internal/envutil/` - Environment variable utilities
-- `internal/guard/` - Security guards (NoopGuard active)
+- `internal/guard/` - Security guards (AllowOnly, WriteSink, NoopGuard)
 - `internal/launcher/` - Backend process management
 - `internal/logger/` - Debug logging framework (micro logger)
 - `internal/mcp/` - MCP protocol types with enhanced error logging
