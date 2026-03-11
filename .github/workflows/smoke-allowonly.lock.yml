@@ -864,7 +864,7 @@ jobs:
                 "headers": {
                   "Authorization": "\${GH_AW_SAFE_OUTPUTS_API_KEY}"
                 },
-		"guard-policies": {
+                "guard-policies": {
                   "write-sink": {
                     "accept": [
                       "private:github/gh-aw*"
