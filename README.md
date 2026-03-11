@@ -137,6 +137,15 @@ For the complete JSON configuration specification with all validation rules, see
           "min-integrity": "unapproved"
         }
       }
+    },
+    "safeoutputs": {
+      "type": "stdio",
+      "container": "ghcr.io/github/safe-outputs:latest",
+      "guard-policies": {
+        "write-sink": {
+          "accept": ["private:github/gh-aw*"]
+        }
+      }
     }
   },
   "gateway": {
@@ -189,8 +198,13 @@ For the complete JSON configuration specification with all validation rules, see
 - **`url`** (required for http): HTTP endpoint URL for `type: "http"` servers
 
 - **`guard-policies`** (optional): Guard policies for access control at the MCP gateway level
-  - Uses the `"allow-only"` policy format to restrict which repositories a guard allows
-  - For **GitHub MCP server**, controls repository access with the following structure:
+  - **`allow-only`**: Restricts which repositories a guard allows (used for GitHub MCP server)
+  - **`write-sink`**: Marks a server as a write-only output channel that accepts writes from agents with matching secrecy labels (used for safe-outputs, buffered update servers)
+  - A server's guard-policies must contain **either** `allow-only` **or** `write-sink`, not both.
+
+  ##### allow-only (GitHub MCP server)
+
+  Controls repository access with the following structure:
     ```json
     "guard-policies": {
       "allow-only": {
@@ -220,6 +234,36 @@ For the complete JSON configuration specification with all validation rules, see
     - **Meaning**: Restricts the GitHub MCP server to only access specified repositories
     - Tools like `get_file_contents`, `search_code`, etc. will only work on allowed repositories
     - Attempts to access other repositories will be denied by the guard policy
+
+  ##### write-sink (output servers)
+
+  Marks a server as a write-only output channel. When an agent reads from a guarded server
+  (e.g., GitHub with `allow-only`), it acquires secrecy and integrity labels. Writing to an
+  unguarded server would fail DIFC checks. The write-sink guard solves this by accepting
+  writes from agents whose secrecy labels match the configured `accept` patterns.
+
+    ```json
+    "guard-policies": {
+      "write-sink": {
+        "accept": ["private:github/gh-aw*"]
+      }
+    }
+    ```
+    TOML equivalent:
+    ```toml
+    [servers.safeoutputs.guard_policies.write-sink]
+    Accept = ["private:github/gh-aw*"]
+    ```
+    - **`accept`**: Array of secrecy label patterns the sink accepts
+      - `"private:owner/repo*"` - Accept writes from agents that accessed private repos matching the pattern
+      - `"public:owner/repo*"` - Accept writes from agents that accessed public repos matching the pattern
+      - `"internal:owner/repo*"` - Accept writes from agents that accessed internal repos matching the pattern
+      - `"owner/repo*"` - Accept writes without visibility prefix (matches the repo scope pattern)
+    - **How it works**: The write-sink classifies all operations as writes. For DIFC write checks:
+      - Resource secrecy is set to the `accept` patterns → agent secrecy ⊆ resource secrecy passes
+      - Resource integrity is left empty → no integrity requirements for writes
+    - **When to use**: For servers like `safeoutputs` that buffer agent outputs for review, or any server that only receives data from the agent
+
   - For **other MCP servers** (Jira, WorkIQ, etc.), different policy schemas apply
   - JSON format uses `"guard-policies"` (with hyphen), TOML uses `guard_policies` (with underscore)
 
