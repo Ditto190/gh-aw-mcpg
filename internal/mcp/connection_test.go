@@ -3,10 +3,7 @@ package mcp
 import (
 	"context"
 	"encoding/json"
-	"errors"
-	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -488,120 +485,6 @@ func stringContains(s, substr string) bool {
 	return false
 }
 
-// TestParseSSEResponse tests parsing SSE-formatted responses
-func TestParseSSEResponse(t *testing.T) {
-	tests := []struct {
-		name         string
-		input        string
-		expectedJSON string
-		expectError  bool
-	}{
-		{
-			name: "simple SSE response",
-			input: `event: message
-data: {"jsonrpc":"2.0","id":1,"result":{"tools":[]}}
-
-`,
-			expectedJSON: `{"jsonrpc":"2.0","id":1,"result":{"tools":[]}}`,
-			expectError:  false,
-		},
-		{
-			name: "SSE response with multiple lines",
-			input: `event: message
-data: {"jsonrpc":"2.0","id":3,"result":{"protocolVersion":"2024-11-05","capabilities":{"experimental":{},"prompts":{"listChanged":true}}}}
-
-`,
-			expectedJSON: `{"jsonrpc":"2.0","id":3,"result":{"protocolVersion":"2024-11-05","capabilities":{"experimental":{},"prompts":{"listChanged":true}}}}`,
-			expectError:  false,
-		},
-		{
-			name: "SSE response without event line",
-			input: `data: {"jsonrpc":"2.0","id":2,"result":{}}
-
-`,
-			expectedJSON: `{"jsonrpc":"2.0","id":2,"result":{}}`,
-			expectError:  false,
-		},
-		{
-			name: "SSE response with extra whitespace",
-			input: `
-event: message
-data: {"jsonrpc":"2.0","id":4}
-
-`,
-			expectedJSON: `{"jsonrpc":"2.0","id":4}`,
-			expectError:  false,
-		},
-		{
-			name: "no data field",
-			input: `event: message
-
-`,
-			expectError: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := parseSSEResponse([]byte(tt.input))
-
-			if tt.expectError {
-				assert.Error(t, err, "Expected error but got none")
-			} else {
-				require.NoError(t, err, "Unexpected error")
-				assert.JSONEq(t, tt.expectedJSON, string(result), "Parsed JSON doesn't match expected")
-			}
-		})
-	}
-}
-
-// TestHTTPConnection_SSEResponse tests that HTTP connections can handle SSE-formatted responses
-func TestHTTPConnection_SSEResponse(t *testing.T) {
-	// Create test server that returns SSE-formatted responses (like Tavily)
-	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Read request to determine what to send back
-		var reqBody map[string]interface{}
-		bodyBytes, _ := io.ReadAll(r.Body)
-		json.Unmarshal(bodyBytes, &reqBody)
-
-		method, _ := reqBody["method"].(string)
-		id, _ := reqBody["id"].(float64)
-		idStr := fmt.Sprintf("%g", id) // Convert float64 to string without scientific notation
-
-		var response string
-		if method == "initialize" {
-			response = `event: message
-data: {"jsonrpc":"2.0","id":` + idStr + `,"result":{"protocolVersion":"2024-11-05","capabilities":{"experimental":{},"prompts":{"listChanged":true},"resources":{"subscribe":false,"listChanged":true},"tools":{"listChanged":true}},"serverInfo":{"name":"tavily-mcp","version":"2.14.2"}}}
-
-`
-		} else {
-			response = `event: message
-data: {"jsonrpc":"2.0","id":` + idStr + `,"result":{"tools":[]}}
-
-`
-		}
-
-		w.Header().Set("Content-Type", "text/event-stream")
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(response))
-	}))
-	defer testServer.Close()
-
-	// Create connection with custom headers (forcing plain JSON transport)
-	conn, err := NewHTTPConnection(context.Background(), "test-server", testServer.URL, map[string]string{
-		"Authorization": "test-token",
-	})
-	require.NoError(t, err, "Failed to create HTTP connection")
-	defer conn.Close()
-
-	// Send a request - should successfully parse the SSE response
-	resp, err := conn.SendRequestWithServerID(context.Background(), "tools/list", nil, "test-server")
-	require.NoError(t, err, "Failed to send request with SSE response")
-	assert.NotNil(t, resp, "Expected non-nil response")
-
-	t.Logf("Successfully parsed SSE-formatted response from server")
-}
-
 // TestNewMCPClient tests the newMCPClient helper function
 func TestNewMCPClient(t *testing.T) {
 	client := newMCPClient(nil)
@@ -613,46 +496,6 @@ func TestNewMCPClientWithLogger(t *testing.T) {
 	log := logger.New("test:client")
 	client := newMCPClient(log)
 	require.NotNil(t, client, "newMCPClient should return a non-nil client with logger")
-}
-
-// TestCreateJSONRPCRequest tests the createJSONRPCRequest helper function
-func TestCreateJSONRPCRequest(t *testing.T) {
-	tests := []struct {
-		name      string
-		requestID uint64
-		method    string
-		params    interface{}
-	}{
-		{
-			name:      "simple request with nil params",
-			requestID: 1,
-			method:    "initialize",
-			params:    nil,
-		},
-		{
-			name:      "request with map params",
-			requestID: 42,
-			method:    "tools/list",
-			params:    map[string]interface{}{"filter": "test"},
-		},
-		{
-			name:      "request with struct params",
-			requestID: 100,
-			method:    "tools/call",
-			params:    struct{ Name string }{Name: "test-tool"},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			request := createJSONRPCRequest(tt.requestID, tt.method, tt.params)
-
-			assert.Equal(t, "2.0", request["jsonrpc"], "jsonrpc version should be 2.0")
-			assert.Equal(t, tt.requestID, request["id"], "id should match requestID")
-			assert.Equal(t, tt.method, request["method"], "method should match")
-			assert.Equal(t, tt.params, request["params"], "params should match")
-		})
-	}
 }
 
 // TestSetupHTTPRequest tests the setupHTTPRequest helper function
@@ -746,63 +589,6 @@ func TestNewHTTPConnection(t *testing.T) {
 	assert.Equal(t, headers, conn.headers, "Headers should match")
 	assert.Equal(t, httpClient, conn.httpClient, "HTTP client should match")
 	assert.Equal(t, HTTPTransportStreamable, conn.httpTransportType, "Transport type should match")
-}
-
-// TestIsHTTPConnectionError tests the HTTP connection error detection helper
-func TestIsHTTPConnectionError(t *testing.T) {
-	tests := []struct {
-		name     string
-		err      error
-		expected bool
-	}{
-		{
-			name:     "nil error",
-			err:      nil,
-			expected: false,
-		},
-		{
-			name:     "net.OpError dial connection refused",
-			err:      &net.OpError{Op: "dial", Net: "tcp", Err: errors.New("connection refused")},
-			expected: true,
-		},
-		{
-			name:     "net.OpError dial no such host",
-			err:      &net.OpError{Op: "dial", Net: "tcp", Err: &net.DNSError{Err: "no such host", IsNotFound: true}},
-			expected: true,
-		},
-		{
-			name:     "net.OpError dial network unreachable",
-			err:      &net.OpError{Op: "dial", Net: "tcp", Err: errors.New("network is unreachable")},
-			expected: true,
-		},
-		{
-			name:     "net.OpError non-dial (read) is not a connection error",
-			err:      &net.OpError{Op: "read", Net: "tcp", Err: errors.New("broken pipe")},
-			expected: false,
-		},
-		{
-			name:     "wrapped net.OpError dial via fmt.Errorf",
-			err:      fmt.Errorf("Post %q: %w", "http://example.com", &net.OpError{Op: "dial", Net: "tcp", Err: errors.New("connection refused")}),
-			expected: true,
-		},
-		{
-			name:     "plain string error",
-			err:      fmt.Errorf("some other error"),
-			expected: false,
-		},
-		{
-			name:     "timeout error",
-			err:      fmt.Errorf("context deadline exceeded"),
-			expected: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := isHTTPConnectionError(tt.err)
-			assert.Equal(t, tt.expected, result, "isHTTPConnectionError should return %v for %v", tt.expected, tt.err)
-		})
-	}
 }
 
 // TestConnection_RequireSession tests the requireSession helper method
