@@ -380,3 +380,70 @@ func TestGuardPolicies_PreservesOtherServerConfig(t *testing.T) {
 	assert.True(t, hasDebug, "DEBUG env var should be present")
 	assert.True(t, hasToken, "GITHUB_PERSONAL_ACCESS_TOKEN should be present")
 }
+
+// TestGuardPolicies_WriteSink tests write-sink guard policy via JSON stdin
+func TestGuardPolicies_WriteSink(t *testing.T) {
+	jsonConfig := `{"mcpServers": {"safeoutputs": {"type": "stdio", "container": "ghcr.io/github/safe-outputs:latest", "guard-policies": {"write-sink": {"accept": ["private:github/gh-aw*"]}}}}, "gateway": {"port": 3000, "domain": "localhost", "apiKey": "test-key"}}`
+
+	r, w, _ := os.Pipe()
+	oldStdin := os.Stdin
+	os.Stdin = r
+	go func() {
+		w.Write([]byte(jsonConfig))
+		w.Close()
+	}()
+
+	cfg, err := LoadFromStdin()
+	os.Stdin = oldStdin
+
+	require.NoError(t, err, "LoadFromStdin() should succeed with write-sink policy")
+	require.NotNil(t, cfg, "Config should not be nil")
+
+	server := cfg.Servers["safeoutputs"]
+	require.NotNil(t, server.GuardPolicies, "GuardPolicies should not be nil")
+
+	writeSinkRaw, ok := server.GuardPolicies["write-sink"]
+	require.True(t, ok, "write-sink key should exist in guard-policies")
+	writeSinkMap := writeSinkRaw.(map[string]interface{})
+	acceptRaw := writeSinkMap["accept"].([]interface{})
+	assert.Len(t, acceptRaw, 1)
+	assert.Equal(t, "private:github/gh-aw*", acceptRaw[0])
+}
+
+// TestGuardPolicies_WriteSinkTOML tests write-sink guard policy via TOML file
+func TestGuardPolicies_WriteSinkTOML(t *testing.T) {
+	tomlContent := `
+[gateway]
+port = 3000
+api_key = "test-key"
+domain = "localhost"
+
+[servers.safeoutputs]
+type = "stdio"
+command = "docker"
+args = ["run", "--rm", "-i", "ghcr.io/github/safe-outputs:latest"]
+
+[servers.safeoutputs.guard_policies.write-sink]
+Accept = ["private:github/gh-aw*"]
+`
+
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.toml")
+	err := os.WriteFile(configPath, []byte(tomlContent), 0644)
+	require.NoError(t, err)
+
+	cfg, err := LoadFromFile(configPath)
+	require.NoError(t, err, "LoadFromFile() should succeed with write-sink TOML config")
+	require.NotNil(t, cfg)
+
+	server := cfg.Servers["safeoutputs"]
+	require.NotNil(t, server)
+	require.NotNil(t, server.GuardPolicies)
+
+	writeSinkRaw, ok := server.GuardPolicies["write-sink"]
+	require.True(t, ok, "write-sink key should exist in guard-policies")
+	writeSinkMap := writeSinkRaw.(map[string]interface{})
+	acceptRaw := writeSinkMap["Accept"].([]interface{})
+	assert.Len(t, acceptRaw, 1)
+	assert.Equal(t, "private:github/gh-aw*", acceptRaw[0])
+}

@@ -31,6 +31,13 @@ var validMinIntegrityValues = map[string]struct{}{
 // GuardPolicy represents the policy payload passed to guard label_agent.
 type GuardPolicy struct {
 	AllowOnly *AllowOnlyPolicy `toml:"AllowOnly" json:"allow-only,omitempty"`
+	WriteSink *WriteSinkPolicy `toml:"WriteSink" json:"write-sink,omitempty"`
+}
+
+// WriteSinkPolicy configures a write-sink guard that accepts writes from
+// agents carrying the listed secrecy labels.
+type WriteSinkPolicy struct {
+	Accept []string `toml:"Accept" json:"accept"`
 }
 
 // AllowOnlyPolicy configures scope and minimum required integrity.
@@ -53,30 +60,48 @@ func (p *GuardPolicy) UnmarshalJSON(data []byte) error {
 	}
 
 	var allowOnlyRaw json.RawMessage
+	var writeSinkRaw json.RawMessage
 	for key, value := range raw {
 		switch strings.ToLower(key) {
 		case "allow-only", "allowonly":
 			allowOnlyRaw = value
+		case "write-sink", "writesink":
+			writeSinkRaw = value
 		default:
 			return fmt.Errorf("policy contains unsupported field %q", key)
 		}
 	}
 
-	if len(allowOnlyRaw) == 0 {
-		return fmt.Errorf("policy must include allow-only")
+	if len(allowOnlyRaw) == 0 && len(writeSinkRaw) == 0 {
+		return fmt.Errorf("policy must include allow-only or write-sink")
+	}
+	if len(allowOnlyRaw) > 0 && len(writeSinkRaw) > 0 {
+		return fmt.Errorf("policy must include either allow-only or write-sink, not both")
 	}
 
-	var allowOnly AllowOnlyPolicy
-	if err := json.Unmarshal(allowOnlyRaw, &allowOnly); err != nil {
-		return err
+	if len(allowOnlyRaw) > 0 {
+		var allowOnly AllowOnlyPolicy
+		if err := json.Unmarshal(allowOnlyRaw, &allowOnly); err != nil {
+			return err
+		}
+		p.AllowOnly = &allowOnly
 	}
-	p.AllowOnly = &allowOnly
+
+	if len(writeSinkRaw) > 0 {
+		var writeSink WriteSinkPolicy
+		if err := json.Unmarshal(writeSinkRaw, &writeSink); err != nil {
+			return err
+		}
+		p.WriteSink = &writeSink
+	}
+
 	return nil
 }
 
 func (p GuardPolicy) MarshalJSON() ([]byte, error) {
 	type serializedPolicy struct {
 		AllowOnly *AllowOnlyPolicy `json:"allow-only,omitempty"`
+		WriteSink *WriteSinkPolicy `json:"write-sink,omitempty"`
 	}
 
 	return json.Marshal(serializedPolicy(p))
@@ -122,15 +147,76 @@ func (p AllowOnlyPolicy) MarshalJSON() ([]byte, error) {
 	return json.Marshal(serializedAllowOnly(p))
 }
 
-// ValidateGuardPolicy validates AllowOnly policy input.
+// ValidateGuardPolicy validates AllowOnly or WriteSink policy input.
 func ValidateGuardPolicy(policy *GuardPolicy) error {
+	if policy == nil {
+		return fmt.Errorf("policy must include allow-only or write-sink")
+	}
+	if policy.WriteSink != nil {
+		return ValidateWriteSinkPolicy(policy.WriteSink)
+	}
 	_, err := NormalizeGuardPolicy(policy)
 	return err
 }
 
-// NormalizeGuardPolicy validates and normalizes policy shape.
+// ValidateWriteSinkPolicy validates a write-sink policy.
+func ValidateWriteSinkPolicy(ws *WriteSinkPolicy) error {
+	if ws == nil {
+		return fmt.Errorf("write-sink policy must not be nil")
+	}
+	if len(ws.Accept) == 0 {
+		return fmt.Errorf("write-sink.accept must contain at least one entry")
+	}
+	seen := make(map[string]struct{})
+	for _, entry := range ws.Accept {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			return fmt.Errorf("write-sink.accept entries must not be empty")
+		}
+		if _, exists := seen[entry]; exists {
+			return fmt.Errorf("write-sink.accept must not contain duplicates")
+		}
+		seen[entry] = struct{}{}
+		if err := validateAcceptEntry(entry); err != nil {
+			return fmt.Errorf("write-sink.accept entry %q is invalid: %w", entry, err)
+		}
+	}
+	return nil
+}
+
+// validateAcceptEntry validates a single accept entry.
+// Format: "visibility:owner/repo-pattern" (e.g., "private:github/gh-aw*")
+// or just "owner/repo-pattern" (e.g., "github/gh-aw*").
+func validateAcceptEntry(entry string) error {
+	scope := entry
+	if idx := strings.Index(entry, ":"); idx > 0 {
+		visibility := entry[:idx]
+		scope = entry[idx+1:]
+		validVisibility := map[string]bool{
+			"private": true, "public": true, "internal": true,
+		}
+		if !validVisibility[visibility] {
+			return fmt.Errorf("visibility prefix must be private, public, or internal; got %q", visibility)
+		}
+	}
+	if !isValidRepoScope(scope) {
+		return fmt.Errorf("scope %q is invalid; expected owner/*, owner/repo, or owner/re*", scope)
+	}
+	return nil
+}
+
+// IsWriteSinkPolicy returns true if this policy configures a write-sink guard.
+func (p *GuardPolicy) IsWriteSinkPolicy() bool {
+	return p != nil && p.WriteSink != nil
+}
+
+// NormalizeGuardPolicy validates and normalizes an allow-only policy shape.
 func NormalizeGuardPolicy(policy *GuardPolicy) (*NormalizedGuardPolicy, error) {
-	if policy == nil || policy.AllowOnly == nil {
+	if policy == nil || (policy.AllowOnly == nil && policy.WriteSink == nil) {
+		return nil, fmt.Errorf("policy must include allow-only or write-sink")
+	}
+	if policy.AllowOnly == nil {
+		// Write-sink policies don't produce a NormalizedGuardPolicy
 		return nil, fmt.Errorf("policy must include allow-only")
 	}
 

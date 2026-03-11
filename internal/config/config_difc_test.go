@@ -489,3 +489,70 @@ func TestParseGuardPolicyJSON_UpdatedRepoRegex(t *testing.T) {
 func intPtrDIFC(i int) *int {
 	return &i
 }
+
+func TestParseGuardPolicyJSON_WriteSink(t *testing.T) {
+	t.Run("accepts write-sink with accept array", func(t *testing.T) {
+		policy, err := ParseGuardPolicyJSON(`{"write-sink":{"accept":["private:github/gh-aw*"]}}`)
+		require.NoError(t, err)
+		require.NotNil(t, policy)
+		require.NotNil(t, policy.WriteSink)
+		assert.Nil(t, policy.AllowOnly)
+		assert.Equal(t, []string{"private:github/gh-aw*"}, policy.WriteSink.Accept)
+	})
+
+	t.Run("accepts write-sink with multiple accept entries", func(t *testing.T) {
+		policy, err := ParseGuardPolicyJSON(`{"write-sink":{"accept":["private:github/gh-aw*","internal:github/copilot*"]}}`)
+		require.NoError(t, err)
+		require.NotNil(t, policy.WriteSink)
+		assert.Len(t, policy.WriteSink.Accept, 2)
+	})
+
+	t.Run("accepts write-sink with plain repo pattern (no visibility)", func(t *testing.T) {
+		policy, err := ParseGuardPolicyJSON(`{"write-sink":{"accept":["github/gh-aw*"]}}`)
+		require.NoError(t, err)
+		require.NotNil(t, policy.WriteSink)
+		assert.Equal(t, []string{"github/gh-aw*"}, policy.WriteSink.Accept)
+	})
+
+	t.Run("rejects write-sink with empty accept", func(t *testing.T) {
+		_, err := ParseGuardPolicyJSON(`{"write-sink":{"accept":[]}}`)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "write-sink.accept must contain at least one entry")
+	})
+
+	t.Run("rejects write-sink with invalid repo scope", func(t *testing.T) {
+		_, err := ParseGuardPolicyJSON(`{"write-sink":{"accept":["invalid-no-slash"]}}`)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid")
+	})
+
+	t.Run("rejects write-sink with invalid visibility prefix", func(t *testing.T) {
+		_, err := ParseGuardPolicyJSON(`{"write-sink":{"accept":["secret:github/gh-aw*"]}}`)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "visibility prefix")
+	})
+
+	t.Run("rejects write-sink with duplicate entries", func(t *testing.T) {
+		_, err := ParseGuardPolicyJSON(`{"write-sink":{"accept":["private:github/gh-aw*","private:github/gh-aw*"]}}`)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "duplicates")
+	})
+
+	t.Run("rejects both allow-only and write-sink", func(t *testing.T) {
+		_, err := ParseGuardPolicyJSON(`{"allow-only":{"repos":"all","min-integrity":"none"},"write-sink":{"accept":["private:github/gh-aw*"]}}`)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "either allow-only or write-sink, not both")
+	})
+
+	t.Run("IsWriteSinkPolicy returns true for write-sink", func(t *testing.T) {
+		policy, err := ParseGuardPolicyJSON(`{"write-sink":{"accept":["private:github/gh-aw*"]}}`)
+		require.NoError(t, err)
+		assert.True(t, policy.IsWriteSinkPolicy())
+	})
+
+	t.Run("IsWriteSinkPolicy returns false for allow-only", func(t *testing.T) {
+		policy, err := ParseGuardPolicyJSON(`{"allow-only":{"repos":"all","min-integrity":"none"}}`)
+		require.NoError(t, err)
+		assert.False(t, policy.IsWriteSinkPolicy())
+	})
+}

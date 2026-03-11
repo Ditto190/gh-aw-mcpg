@@ -5,7 +5,6 @@ import (
 
 	"github.com/github/gh-aw-mcpg/internal/difc"
 	"github.com/github/gh-aw-mcpg/internal/logger"
-	"github.com/github/gh-aw-mcpg/internal/mcp"
 )
 
 var logWriteSink = logger.New("guard:write-sink")
@@ -19,18 +18,34 @@ var logWriteSink = logger.New("guard:write-sink")
 //
 // The write-sink guard fixes this by:
 //   - Returning empty labels from LabelAgent (does not contribute agent labels)
-//   - Mirroring the agent's current secrecy/integrity tags onto the resource
+//   - Setting resource secrecy to the configured accept patterns
 //   - Classifying all operations as OperationWrite
 //
-// This ensures writes always succeed because:
+// This ensures writes succeed because:
 //   - Integrity: resource requires no tags (empty), agent has all zero required → OK
-//   - Secrecy: resource secrecy = agent secrecy, so agentSecrecy ⊆ resourceSecrecy → OK
-type WriteSinkGuard struct{}
+//   - Secrecy: resource secrecy includes the agent's secrecy patterns → agentSecrecy ⊆ resourceSecrecy → OK
+//
+// Configuration example:
+//
+//	"guard-policies": {
+//	  "write-sink": {
+//	    "accept": ["private:github/gh-aw*"]
+//	  }
+//	}
+type WriteSinkGuard struct {
+	acceptTags []difc.Tag
+}
 
-// NewWriteSinkGuard creates a new write-sink guard
-func NewWriteSinkGuard() *WriteSinkGuard {
-	logWriteSink.Print("Creating new write-sink guard")
-	return &WriteSinkGuard{}
+// NewWriteSinkGuard creates a new write-sink guard with the specified accept patterns.
+// Each pattern becomes a secrecy tag on the resource, allowing agents with
+// matching secrecy to write to this sink.
+func NewWriteSinkGuard(accept []string) *WriteSinkGuard {
+	tags := make([]difc.Tag, len(accept))
+	for i, a := range accept {
+		tags[i] = difc.Tag(a)
+	}
+	logWriteSink.Printf("Creating write-sink guard with %d accept patterns", len(tags))
+	return &WriteSinkGuard{acceptTags: tags}
 }
 
 // Name returns the identifier for this guard
@@ -51,34 +66,23 @@ func (g *WriteSinkGuard) LabelAgent(_ context.Context, _ interface{}, _ BackendC
 	}, nil
 }
 
-// LabelResource mirrors the agent's current secrecy tags onto the resource
+// LabelResource sets the resource's secrecy to the configured accept patterns
 // and classifies the operation as a write.
 //
 // For writes the DIFC evaluator checks:
 //   - agentSecrecy ⊆ resource.Secrecy     (no secret information leak)
 //   - resource.Integrity ⊆ agentIntegrity  (agent is trusted enough)
 //
-// By copying the agent's secrecy onto the resource, the first check trivially
-// passes. By leaving the resource integrity empty, the second check also passes
+// By setting the resource secrecy to the accept patterns from config, agents
+// whose secrecy tags are a subset of the accept set can write successfully.
+// By leaving the resource integrity empty, the second check also passes
 // because the agent has all zero of the (empty) required integrity tags.
-func (g *WriteSinkGuard) LabelResource(ctx context.Context, toolName string, _ interface{}, _ BackendCaller, _ *difc.Capabilities) (*difc.LabeledResource, difc.OperationType, error) {
-	logWriteSink.Printf("LabelResource: tool=%s, operation=write", toolName)
-
-	// Read the agent's current tags from the request context.
-	// These were placed there by callBackendTool before calling LabelResource.
-	var secrecyTags []difc.Tag
-	if snapshot, ok := mcp.GetAgentTagsSnapshotFromContext(ctx); ok {
-		for _, s := range snapshot.Secrecy {
-			secrecyTags = append(secrecyTags, difc.Tag(s))
-		}
-		logWriteSink.Printf("LabelResource: mirroring %d agent secrecy tags onto resource", len(secrecyTags))
-	} else {
-		logWriteSink.Print("LabelResource: no agent tags snapshot in context, using empty secrecy")
-	}
+func (g *WriteSinkGuard) LabelResource(_ context.Context, toolName string, _ interface{}, _ BackendCaller, _ *difc.Capabilities) (*difc.LabeledResource, difc.OperationType, error) {
+	logWriteSink.Printf("LabelResource: tool=%s, operation=write, accept_tags=%d", toolName, len(g.acceptTags))
 
 	resource := &difc.LabeledResource{
 		Description: "write-sink (" + toolName + ")",
-		Secrecy:     *difc.NewSecrecyLabelWithTags(secrecyTags),
+		Secrecy:     *difc.NewSecrecyLabelWithTags(g.acceptTags),
 		Integrity:   *difc.NewIntegrityLabel(), // empty: no integrity requirements
 	}
 

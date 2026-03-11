@@ -5,18 +5,17 @@ import (
 	"testing"
 
 	"github.com/github/gh-aw-mcpg/internal/difc"
-	"github.com/github/gh-aw-mcpg/internal/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestWriteSinkGuard_Name(t *testing.T) {
-	g := NewWriteSinkGuard()
+	g := NewWriteSinkGuard([]string{"private:github/gh-aw*"})
 	assert.Equal(t, "write-sink", g.Name())
 }
 
 func TestWriteSinkGuard_LabelAgent(t *testing.T) {
-	g := NewWriteSinkGuard()
+	g := NewWriteSinkGuard([]string{"private:github/gh-aw*"})
 	result, err := g.LabelAgent(context.Background(), nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -25,23 +24,18 @@ func TestWriteSinkGuard_LabelAgent(t *testing.T) {
 	assert.Equal(t, difc.ModeFilter, result.DIFCMode)
 }
 
-func TestWriteSinkGuard_LabelResource_MirrorsAgentSecrecy(t *testing.T) {
-	g := NewWriteSinkGuard()
+func TestWriteSinkGuard_LabelResource_UsesAcceptPatterns(t *testing.T) {
+	accept := []string{"private:github/gh-aw*"}
+	g := NewWriteSinkGuard(accept)
 
-	// Simulate agent with secrecy and integrity tags (set by GitHub guard)
-	ctx := context.WithValue(context.Background(), mcp.AgentTagsSnapshotContextKey, &mcp.AgentTagsSnapshot{
-		Secrecy:   []string{"private:github/gh-aw*"},
-		Integrity: []string{"none:github/gh-aw*", "unapproved:github/gh-aw*", "approved:github/gh-aw*"},
-	})
-
-	resource, operation, err := g.LabelResource(ctx, "create_issue", nil, nil, nil)
+	resource, operation, err := g.LabelResource(context.Background(), "create_issue", nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, resource)
 
 	// Operation must be Write
 	assert.Equal(t, difc.OperationWrite, operation)
 
-	// Secrecy must mirror agent's secrecy tags
+	// Secrecy must use the configured accept patterns
 	secrecyTags := resource.Secrecy.Label.GetTags()
 	assert.Len(t, secrecyTags, 1)
 	assert.Contains(t, secrecyTags, difc.Tag("private:github/gh-aw*"))
@@ -51,29 +45,45 @@ func TestWriteSinkGuard_LabelResource_MirrorsAgentSecrecy(t *testing.T) {
 	assert.Empty(t, integrityTags, "write-sink resource should have empty integrity")
 }
 
-func TestWriteSinkGuard_LabelResource_NoAgentContext(t *testing.T) {
-	g := NewWriteSinkGuard()
+func TestWriteSinkGuard_LabelResource_MultipleAcceptPatterns(t *testing.T) {
+	accept := []string{"private:github/gh-aw*", "internal:github/copilot*"}
+	g := NewWriteSinkGuard(accept)
 
-	// No agent tags in context (e.g., DIFC not active)
 	resource, operation, err := g.LabelResource(context.Background(), "noop", nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, resource)
 
 	assert.Equal(t, difc.OperationWrite, operation)
-	assert.Empty(t, resource.Secrecy.Label.GetTags(), "should be empty when no agent context")
+	secrecyTags := resource.Secrecy.Label.GetTags()
+	assert.Len(t, secrecyTags, 2)
+	assert.Contains(t, secrecyTags, difc.Tag("private:github/gh-aw*"))
+	assert.Contains(t, secrecyTags, difc.Tag("internal:github/copilot*"))
+}
+
+func TestWriteSinkGuard_LabelResource_EmptyAccept(t *testing.T) {
+	g := NewWriteSinkGuard([]string{})
+
+	resource, operation, err := g.LabelResource(context.Background(), "noop", nil, nil, nil)
+	require.NoError(t, err)
+	require.NotNil(t, resource)
+
+	assert.Equal(t, difc.OperationWrite, operation)
+	assert.Empty(t, resource.Secrecy.Label.GetTags(), "should be empty with no accept patterns")
 	assert.Empty(t, resource.Integrity.Label.GetTags())
 }
 
 func TestWriteSinkGuard_LabelResponse(t *testing.T) {
-	g := NewWriteSinkGuard()
+	g := NewWriteSinkGuard([]string{"private:github/gh-aw*"})
 	data, err := g.LabelResponse(context.Background(), "create_issue", nil, nil, nil)
 	assert.NoError(t, err)
 	assert.Nil(t, data, "write-sink should not label responses")
 }
 
 func TestWriteSinkGuard_WriteEvaluation_Passes(t *testing.T) {
-	// End-to-end: simulate the exact DIFC flow that was failing with noop guard
-	g := NewWriteSinkGuard()
+	// End-to-end: simulate the exact DIFC flow that was failing with noop guard.
+	// Agent has secrecy from reading a private repo; write-sink accepts it.
+	accept := []string{"private:github/gh-aw*"}
+	g := NewWriteSinkGuard(accept)
 
 	agentSecrecyTags := []difc.Tag{"private:github/gh-aw*"}
 	agentIntegrityTags := []difc.Tag{
@@ -85,14 +95,8 @@ func TestWriteSinkGuard_WriteEvaluation_Passes(t *testing.T) {
 	agentSecrecy := difc.NewSecrecyLabelWithTags(agentSecrecyTags)
 	agentIntegrity := difc.NewIntegrityLabelWithTags(agentIntegrityTags)
 
-	// Set up context with agent tags
-	ctx := context.WithValue(context.Background(), mcp.AgentTagsSnapshotContextKey, &mcp.AgentTagsSnapshot{
-		Secrecy:   []string{"private:github/gh-aw*"},
-		Integrity: []string{"none:github/gh-aw*", "unapproved:github/gh-aw*", "approved:github/gh-aw*"},
-	})
-
-	// Guard labels the resource
-	resource, operation, err := g.LabelResource(ctx, "create_issue", nil, nil, nil)
+	// Guard labels the resource using configured accept patterns
+	resource, operation, err := g.LabelResource(context.Background(), "create_issue", nil, nil, nil)
 	require.NoError(t, err)
 
 	// Evaluate with filter mode (same as production)
@@ -126,21 +130,21 @@ func TestWriteSinkGuard_NoopWouldFail(t *testing.T) {
 	assert.Contains(t, result.Reason, "integrity")
 }
 
-func TestRegistryUpgradeNoopToWriteSink(t *testing.T) {
-	r := NewRegistry()
-	r.Register("github", &mockGuard{id: "github-wasm"})
-	r.Register("safeoutputs", NewNoopGuard())
-	r.Register("agenticworkflows", NewNoopGuard())
+func TestWriteSinkGuard_SecrecyMismatchFails(t *testing.T) {
+	// If the agent has secrecy tags not covered by the accept patterns, write fails
+	accept := []string{"private:github/gh-aw*"}
+	g := NewWriteSinkGuard(accept)
 
-	// Before upgrade
-	assert.Equal(t, "mock-github-wasm", r.Get("github").Name())
-	assert.Equal(t, "noop", r.Get("safeoutputs").Name())
-	assert.Equal(t, "noop", r.Get("agenticworkflows").Name())
+	// Agent accessed a different private repo not in accept list
+	agentSecrecyTags := []difc.Tag{"private:github/gh-aw*", "private:github/secret-repo"}
+	agentSecrecy := difc.NewSecrecyLabelWithTags(agentSecrecyTags)
+	agentIntegrity := difc.NewIntegrityLabelWithTags(nil)
 
-	r.UpgradeNoopToWriteSink()
+	resource, operation, err := g.LabelResource(context.Background(), "create_issue", nil, nil, nil)
+	require.NoError(t, err)
 
-	// After upgrade: noop → write-sink, WASM unchanged
-	assert.Equal(t, "mock-github-wasm", r.Get("github").Name())
-	assert.Equal(t, "write-sink", r.Get("safeoutputs").Name())
-	assert.Equal(t, "write-sink", r.Get("agenticworkflows").Name())
+	evaluator := difc.NewEvaluatorWithMode(difc.EnforcementFilter)
+	result := evaluator.Evaluate(agentSecrecy, agentIntegrity, resource, operation)
+
+	assert.False(t, result.IsAllowed(), "write should fail: agent has secrecy tag not in accept list")
 }

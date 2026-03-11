@@ -190,16 +190,6 @@ func NewUnified(ctx context.Context, cfg *config.Config) (*UnifiedServer, error)
 		logUnified.Printf("Auto-enabled DIFC: non-noop guard, global policy, or per-server guard policies detected")
 	}
 
-	// When DIFC is enabled, upgrade noop guards to write-sink guards.
-	// A noop guard returns empty labels and OperationReadWrite, which causes
-	// DIFC violations when an agent that has been labeled by another guard
-	// (e.g., the GitHub WASM guard) tries to write to the noop-guarded server.
-	// The write-sink guard fixes this by mirroring the agent's secrecy tags
-	// onto the resource and classifying all operations as writes.
-	if us.enableDIFC {
-		us.guardRegistry.UpgradeNoopToWriteSink()
-	}
-
 	// Log guards status early (before backend launch which may take time)
 	if us.enableDIFC {
 		log.Printf("Guards enforcement enabled with mode: %s", cfg.DIFCMode)
@@ -627,6 +617,14 @@ func (us *UnifiedServer) registerGuard(serverID string) error {
 		} else {
 			log.Printf("[DIFC] Loaded discovered WASM guard for server '%s' from file: %s", serverID, filepath.Base(wasmPath))
 			g = loadedGuard
+		}
+	}
+
+	if g == nil {
+		// Check if server has a write-sink policy — create WriteSinkGuard directly
+		if ws := us.resolveWriteSinkPolicy(serverID); ws != nil {
+			g = guard.NewWriteSinkGuard(ws.Accept)
+			log.Printf("[DIFC] Created write-sink guard for server '%s' with %d accept patterns", serverID, len(ws.Accept))
 		}
 	}
 
@@ -1243,6 +1241,30 @@ func (us *UnifiedServer) resolveGuardPolicy(serverID string) (*config.GuardPolic
 	return guardCfg.Policy, "config", nil
 }
 
+// resolveWriteSinkPolicy checks if a server has a write-sink guard policy.
+func (us *UnifiedServer) resolveWriteSinkPolicy(serverID string) *config.WriteSinkPolicy {
+	// Check global override first
+	if us.cfg != nil && us.cfg.GuardPolicy != nil && us.cfg.GuardPolicy.WriteSink != nil {
+		return us.cfg.GuardPolicy.WriteSink
+	}
+
+	if us.cfg == nil {
+		return nil
+	}
+
+	serverCfg, ok := us.cfg.Servers[serverID]
+	if !ok || serverCfg == nil || len(serverCfg.GuardPolicies) == 0 {
+		return nil
+	}
+
+	policy, err := parseServerGuardPolicy(serverID, serverCfg.GuardPolicies)
+	if err != nil || policy == nil {
+		return nil
+	}
+
+	return policy.WriteSink
+}
+
 func parseServerGuardPolicy(serverID string, raw map[string]interface{}) (*config.GuardPolicy, error) {
 	if len(raw) == 0 {
 		return nil, nil
@@ -1294,7 +1316,15 @@ func parsePolicyMap(raw map[string]interface{}) (*config.GuardPolicy, error) {
 	} else if _, ok := raw["allowonly"]; ok { // Accept legacy "allowonly" form for backward compatibility
 		hasAllowOnly = true
 	}
-	if hasAllowOnly {
+
+	hasWriteSink := false
+	if _, ok := raw["write-sink"]; ok {
+		hasWriteSink = true
+	} else if _, ok := raw["writesink"]; ok {
+		hasWriteSink = true
+	}
+
+	if hasAllowOnly || hasWriteSink {
 		policyBytes, err := json.Marshal(raw)
 		if err != nil {
 			return nil, fmt.Errorf("failed to serialize server guard policy: %w", err)
