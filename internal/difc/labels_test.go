@@ -671,10 +671,10 @@ func TestCheckFlowHelper_Secrecy(t *testing.T) {
 		wantViolate []Tag
 	}{
 		{
-			name:    "nil source can flow to anything (secrecy)",
-			nilSrc:  true,
-			target:  []Tag{"any"},
-			wantOK:  true,
+			name:   "nil source can flow to anything (secrecy)",
+			nilSrc: true,
+			target: []Tag{"any"},
+			wantOK: true,
 		},
 		{
 			name:      "empty source can flow to nil target (secrecy)",
@@ -690,10 +690,10 @@ func TestCheckFlowHelper_Secrecy(t *testing.T) {
 			wantViolate: []Tag{"secret"},
 		},
 		{
-			name:    "source subset of target allowed (secrecy)",
-			src:     []Tag{"tag1"},
-			target:  []Tag{"tag1", "tag2"},
-			wantOK:  true,
+			name:   "source subset of target allowed (secrecy)",
+			src:    []Tag{"tag1"},
+			target: []Tag{"tag1", "tag2"},
+			wantOK: true,
 		},
 		{
 			name:        "source has extra tags denied (secrecy)",

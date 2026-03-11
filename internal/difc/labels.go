@@ -193,7 +193,7 @@ func (l *SecrecyLabel) CanFlowTo(target *SecrecyLabel) bool {
 //   - srcLabel: The source label (may be nil)
 //   - targetLabel: The target label (may be nil)
 //   - checkSubset: If true, checks source ⊆ target (secrecy semantics: source must be subset of target)
-//                  If false, checks source ⊇ target (integrity semantics: source must be superset of target)
+//     If false, checks source ⊇ target (integrity semantics: source must be superset of target)
 //   - labelType: The type of label being checked ("Secrecy" or "Integrity") for logging
 //
 // Returns:
