@@ -23,6 +23,39 @@ type closableLogger interface {
 	Close() error
 }
 
+// withGlobalLogger is a generic helper that encapsulates the common pattern for
+// accessing a global logger with proper RWMutex locking and nil-checking.
+//
+// This eliminates the repeated pattern of:
+//
+//	globalLoggerMu.RLock()
+//	defer globalLoggerMu.RUnlock()
+//	if globalLogger != nil {
+//	    globalLogger.DoSomething(args...)
+//	}
+//
+// Type parameters:
+//   - T: Any pointer type that satisfies closableLogger constraint
+//
+// Parameters:
+//   - mu: RWMutex to protect access to the global logger
+//   - logger: Pointer to the global logger instance
+//   - fn: Function to execute with the logger if it's not nil
+//
+// Example usage:
+//
+//	withGlobalLogger(&globalLoggerMu, &globalFileLogger, func(l *FileLogger) {
+//	    l.Log(level, category, format, args...)
+//	})
+func withGlobalLogger[T closableLogger](mu *sync.RWMutex, logger *T, fn func(T)) {
+	mu.RLock()
+	defer mu.RUnlock()
+
+	if *logger != nil {
+		fn(*logger)
+	}
+}
+
 // initGlobalLogger is a generic helper that encapsulates the common pattern for
 // initializing a global logger with proper mutex handling.
 //

@@ -59,7 +59,8 @@ type RPCMessageInfo struct {
 	Error       string              // Error message if any (for responses)
 }
 
-// logRPCMessageToAll is a helper that logs RPC messages to text, markdown, and JSONL logs
+// logRPCMessageToAll is a helper that logs RPC messages to text, markdown, and JSONL logs.
+// It uses the withGlobalLogger helper from global_helpers.go to handle mutex locking and nil-checking.
 func logRPCMessageToAll(direction RPCMessageDirection, messageType RPCMessageType, serverID, method string, payload []byte, err error, agentSecrecy, agentIntegrity []string) {
 	// Create info for text log (with larger payload preview)
 	infoText := &RPCMessageInfo{
@@ -92,13 +93,10 @@ func logRPCMessageToAll(direction RPCMessageDirection, messageType RPCMessageTyp
 		infoMarkdown.Error = err.Error()
 	}
 
-	// Log to markdown file
-	globalMarkdownMu.RLock()
-	defer globalMarkdownMu.RUnlock()
-
-	if globalMarkdownLogger != nil {
-		globalMarkdownLogger.Log(LogLevelDebug, "rpc", "%s", formatRPCMessageMarkdown(infoMarkdown))
-	}
+	// Log to markdown file using withGlobalLogger helper
+	withGlobalLogger(&globalMarkdownMu, &globalMarkdownLogger, func(logger *MarkdownLogger) {
+		logger.Log(LogLevelDebug, "rpc", "%s", formatRPCMessageMarkdown(infoMarkdown))
+	})
 
 	// Log to JSONL file (full payload, sanitized)
 	LogRPCMessageJSONLWithTags(direction, messageType, serverID, method, payload, err, agentSecrecy, agentIntegrity)
@@ -124,16 +122,14 @@ func LogRPCResponseWithAgentSnapshot(direction RPCMessageDirection, serverID str
 	logRPCMessageToAll(direction, RPCMessageResponse, serverID, "", payload, err, agentSecrecy, agentIntegrity)
 }
 
-// LogRPCMessage logs a generic RPC message with custom info
+// LogRPCMessage logs a generic RPC message with custom info.
+// It uses the withGlobalLogger helper from global_helpers.go to handle mutex locking and nil-checking.
 func LogRPCMessage(info *RPCMessageInfo) {
 	// Log to text file
 	LogDebug("rpc", "%s", formatRPCMessage(info))
 
-	// Log to markdown file
-	globalMarkdownMu.RLock()
-	defer globalMarkdownMu.RUnlock()
-
-	if globalMarkdownLogger != nil {
-		globalMarkdownLogger.Log(LogLevelDebug, "rpc", "%s", formatRPCMessageMarkdown(info))
-	}
+	// Log to markdown file using withGlobalLogger helper
+	withGlobalLogger(&globalMarkdownMu, &globalMarkdownLogger, func(logger *MarkdownLogger) {
+		logger.Log(LogLevelDebug, "rpc", "%s", formatRPCMessageMarkdown(info))
+	})
 }

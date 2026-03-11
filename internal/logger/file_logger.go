@@ -111,15 +111,13 @@ func (fl *FileLogger) GetWriter() io.Writer {
 // Global logging functions that use the global file logger
 
 // logWithLevel is a helper that reduces code duplication for logging at different levels.
-// It handles mutex locking and nil-checking in a single place, eliminating the need
-// for repeated mutex lock/unlock patterns across LogInfo, LogWarn, LogError, and LogDebug.
+// It uses the withGlobalLogger helper from global_helpers.go to handle mutex locking and
+// nil-checking, eliminating the need for repeated RWMutex lock/unlock patterns across
+// LogInfo, LogWarn, LogError, and LogDebug.
 func logWithLevel(level LogLevel, category, format string, args ...interface{}) {
-	globalLoggerMu.RLock()
-	defer globalLoggerMu.RUnlock()
-
-	if globalFileLogger != nil {
-		globalFileLogger.Log(level, category, format, args...)
-	}
+	withGlobalLogger(&globalLoggerMu, &globalFileLogger, func(logger *FileLogger) {
+		logger.Log(level, category, format, args...)
+	})
 }
 
 // LogInfo logs an informational message
