@@ -108,34 +108,30 @@ func LogRPCMessageJSONL(direction RPCMessageDirection, messageType RPCMessageTyp
 }
 
 // LogRPCMessageJSONLWithTags logs an RPC message to the global JSONL logger with optional agent tag snapshots.
+// It uses the withGlobalLogger helper from global_helpers.go to handle mutex locking and nil-checking.
 func LogRPCMessageJSONLWithTags(direction RPCMessageDirection, messageType RPCMessageType, serverID, method string, payloadBytes []byte, err error, agentSecrecy, agentIntegrity []string) {
-	globalJSONLMu.RLock()
-	defer globalJSONLMu.RUnlock()
+	withGlobalLogger(&globalJSONLMu, &globalJSONLLogger, func(logger *JSONLLogger) {
+		entry := &JSONLRPCMessage{
+			Timestamp: time.Now().UTC().Format(time.RFC3339Nano),
+			Direction: string(direction),
+			Type:      string(messageType),
+			ServerID:  serverID,
+			Method:    method,
+			Payload:   sanitize.SanitizeJSON(payloadBytes),
+		}
 
-	if globalJSONLLogger == nil {
-		return
-	}
+		if len(agentSecrecy) > 0 {
+			entry.AgentSecrecy = append([]string(nil), agentSecrecy...)
+		}
+		if len(agentIntegrity) > 0 {
+			entry.AgentIntegrity = append([]string(nil), agentIntegrity...)
+		}
 
-	entry := &JSONLRPCMessage{
-		Timestamp: time.Now().UTC().Format(time.RFC3339Nano),
-		Direction: string(direction),
-		Type:      string(messageType),
-		ServerID:  serverID,
-		Method:    method,
-		Payload:   sanitize.SanitizeJSON(payloadBytes),
-	}
+		if err != nil {
+			entry.Error = err.Error()
+		}
 
-	if len(agentSecrecy) > 0 {
-		entry.AgentSecrecy = append([]string(nil), agentSecrecy...)
-	}
-	if len(agentIntegrity) > 0 {
-		entry.AgentIntegrity = append([]string(nil), agentIntegrity...)
-	}
-
-	if err != nil {
-		entry.Error = err.Error()
-	}
-
-	// Best effort logging - don't fail if JSONL logging fails
-	_ = globalJSONLLogger.LogMessage(entry)
+		// Best effort logging - don't fail if JSONL logging fails
+		_ = logger.LogMessage(entry)
+	})
 }

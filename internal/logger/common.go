@@ -224,6 +224,44 @@ import (
 //  1. Add a new entry to the logFuncs map in file_logger.go.
 //  2. Add a new LogTrace wrapper to each of the three files above.
 
+// Global Logger RWMutex Access Pattern
+//
+// All access to global logger instances uses the withGlobalLogger helper function
+// (defined in global_helpers.go) to eliminate duplicated RWMutex locking patterns.
+//
+// Before refactoring (duplicated pattern):
+//
+//	globalLoggerMu.RLock()
+//	defer globalLoggerMu.RUnlock()
+//
+//	if globalLogger != nil {
+//	    globalLogger.DoSomething(args...)
+//	}
+//
+// After refactoring (unified pattern):
+//
+//	withGlobalLogger(&globalLoggerMu, &globalLogger, func(logger *Logger) {
+//	    logger.DoSomething(args...)
+//	})
+//
+// The withGlobalLogger helper is used in:
+//   - file_logger.go: logWithLevel (for FileLogger)
+//   - markdown_logger.go: logWithMarkdown (for MarkdownLogger)
+//   - jsonl_logger.go: LogRPCMessageJSONLWithTags (for JSONLLogger)
+//   - server_file_logger.go: logWithLevelAndServer (for ServerFileLogger)
+//   - tools_logger.go: LogToolsForServer (for ToolsLogger)
+//   - rpc_logger.go: logRPCMessageToAll and LogRPCMessage (for MarkdownLogger)
+//
+// Benefits:
+//   - Eliminates ~40 lines of duplicated mutex code
+//   - Provides a single point of control for the locking pattern
+//   - Type-safe through generics (enforces closableLogger constraint)
+//   - Easier to modify the locking strategy globally (e.g., add timeouts)
+//
+// When adding a new logger access point:
+//  1. Use withGlobalLogger instead of manual RLock/RUnlock
+//  2. Pass the appropriate mutex, logger pointer, and callback function
+
 // It syncs buffered data before closing and handles errors appropriately.
 // The mutex should already be held by the caller.
 //

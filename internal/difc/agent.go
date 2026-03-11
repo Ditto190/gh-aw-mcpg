@@ -39,31 +39,42 @@ func NewAgentLabelsWithTags(agentID string, secrecyTags []Tag, integrityTags []T
 	}
 }
 
-// AddSecrecyTag adds a secrecy tag to the agent
-func (a *AgentLabels) AddSecrecyTag(tag Tag) {
-	logAgent.Printf("Agent %s adding secrecy tag: %s", a.AgentID, tag)
+// modifyTag is a helper that encapsulates the common pattern for tag modification with locking and logging.
+// It handles the mutex lock, executes the modification action, and logs the operation.
+//
+// Parameters:
+//   - labelType: The type of label being modified ("secrecy" or "integrity")
+//   - action: The verb describing the action ("adding", "dropping", etc.)
+//   - pastTense: The past tense verb for the operational log ("gained", "dropped", etc.)
+//   - tag: The tag being modified
+//   - fn: The function that performs the actual label modification
+func (a *AgentLabels) modifyTag(labelType, action, pastTense string, tag Tag, fn func()) {
+	logAgent.Printf("Agent %s %s %s tag: %s", a.AgentID, action, labelType, tag)
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	a.Secrecy.Label.Add(tag)
-	log.Printf("[DIFC] Agent %s gained secrecy tag: %s", a.AgentID, tag)
+	fn()
+	log.Printf("[DIFC] Agent %s %s %s tag: %s", a.AgentID, pastTense, labelType, tag)
+}
+
+// AddSecrecyTag adds a secrecy tag to the agent
+func (a *AgentLabels) AddSecrecyTag(tag Tag) {
+	a.modifyTag("secrecy", "adding", "gained", tag, func() {
+		a.Secrecy.Label.Add(tag)
+	})
 }
 
 // AddIntegrityTag adds an integrity tag to the agent
 func (a *AgentLabels) AddIntegrityTag(tag Tag) {
-	logAgent.Printf("Agent %s adding integrity tag: %s", a.AgentID, tag)
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	a.Integrity.Label.Add(tag)
-	log.Printf("[DIFC] Agent %s gained integrity tag: %s", a.AgentID, tag)
+	a.modifyTag("integrity", "adding", "gained", tag, func() {
+		a.Integrity.Label.Add(tag)
+	})
 }
 
 // DropIntegrityTag removes an integrity tag from the agent
 func (a *AgentLabels) DropIntegrityTag(tag Tag) {
-	logAgent.Printf("Agent %s dropping integrity tag: %s", a.AgentID, tag)
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	a.Integrity.Label.Remove(tag)
-	log.Printf("[DIFC] Agent %s dropped integrity tag: %s", a.AgentID, tag)
+	a.modifyTag("integrity", "dropping", "dropped", tag, func() {
+		a.Integrity.Label.Remove(tag)
+	})
 }
 
 // DropIntegrityTags removes multiple integrity tags from the agent

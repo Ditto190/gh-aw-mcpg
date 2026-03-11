@@ -169,18 +169,17 @@ func (ml *MarkdownLogger) Log(level LogLevel, category, format string, args ...i
 
 // Global logging functions that also write to markdown logger
 
-// logWithMarkdown is a helper that logs to both regular and markdown loggers
+// logWithMarkdown is a helper that logs to both regular and markdown loggers.
+// It uses the withGlobalLogger helper from global_helpers.go to handle mutex locking
+// and nil-checking for the markdown logger access.
 func logWithMarkdown(level LogLevel, regularLogFunc func(string, string, ...interface{}), category, format string, args ...interface{}) {
 	// Log to regular logger
 	regularLogFunc(category, format, args...)
 
-	// Log to markdown logger
-	globalMarkdownMu.RLock()
-	defer globalMarkdownMu.RUnlock()
-
-	if globalMarkdownLogger != nil {
-		globalMarkdownLogger.Log(level, category, format, args...)
-	}
+	// Log to markdown logger using withGlobalLogger helper
+	withGlobalLogger(&globalMarkdownMu, &globalMarkdownLogger, func(logger *MarkdownLogger) {
+		logger.Log(level, category, format, args...)
+	})
 }
 
 // logWithMarkdownLevel is a helper that reduces code duplication for markdown logging at different levels.

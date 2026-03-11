@@ -131,17 +131,15 @@ func (tl *ToolsLogger) Close() error {
 
 // Global logging function that uses the global tools logger
 
-// LogToolsForServer logs the tools for a specific server
+// LogToolsForServer logs the tools for a specific server.
+// It uses the withGlobalLogger helper from global_helpers.go to handle mutex locking and nil-checking.
 func LogToolsForServer(serverID string, tools []ToolInfo) {
-	globalToolsMu.RLock()
-	defer globalToolsMu.RUnlock()
-
-	if globalToolsLogger != nil {
-		if err := globalToolsLogger.LogTools(serverID, tools); err != nil {
+	withGlobalLogger(&globalToolsMu, &globalToolsLogger, func(logger *ToolsLogger) {
+		if err := logger.LogTools(serverID, tools); err != nil {
 			// Log errors using the standard logger to avoid recursion
 			log.Printf("WARNING: Failed to log tools for server %s: %v", serverID, err)
 		}
-	}
+	})
 }
 
 // CloseToolsLogger closes the global tools logger
