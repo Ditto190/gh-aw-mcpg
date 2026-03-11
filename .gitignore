@@ -62,3 +62,6 @@ scripts/rebase-github-difc.sh
 # Runtime artifacts
 gateway.log
 *.pdf
+
+# WASM guard binaries (downloaded at runtime, not committed)
+*.wasm
