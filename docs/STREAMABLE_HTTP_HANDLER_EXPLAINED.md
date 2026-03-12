@@ -7,7 +7,7 @@
 > **Current Implementation Status:**
 > - ✅ Protocol state IS preserved across HTTP requests
 > - ✅ SDK Server instances are cached and reused per session
-> - ✅ Both stateless (GitHub) and stateful (Serena) backends work correctly
+> - ✅ Session-scoped SDK Server reuse supports both stateless and stateful backend interaction patterns
 >
 > This document is maintained for historical context to show the problem that was solved. For current architecture, see the implementation in `internal/server/routed.go` and `internal/server/transport.go`.
 
