@@ -2,7 +2,7 @@
 
 > **📝 IMPLEMENTATION NOTE:**
 >
-> This is the original proposal document. The actual implementation closely follows this proposal (~85-90% match) with strategic enhancements:
+> This is the original proposal document. The actual implementation largely aligns with this proposal, with the following key differences and enhancements:
 >
 > - **Interface changes**: Guard methods use `toolName string, args interface{}` for better WASM compatibility
 > - **New `LabelAgent()` method**: Enables policy-driven session initialization (not in proposal)
