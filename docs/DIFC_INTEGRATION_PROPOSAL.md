@@ -1,5 +1,20 @@
 # DIFC Integration Proposal for MCPG
 
+> **📝 IMPLEMENTATION NOTE:**
+>
+> This is the original proposal document. The actual implementation closely follows this proposal (~85-90% match) with strategic enhancements:
+>
+> - **Interface changes**: Guard methods use `toolName string, args interface{}` for better WASM compatibility
+> - **New `LabelAgent()` method**: Enables policy-driven session initialization (not in proposal)
+> - **Path-based labeling**: RFC 6901 JSON Pointer support for fine-grained filtering (major enhancement)
+> - **WASM guard support**: Dynamic guard loading from WASM modules
+> - **Auto-activation**: DIFC automatically enables when non-noop guards are configured
+>
+> For implementation details, see:
+> - Core implementation: `internal/difc/`, `internal/guard/`
+> - Server integration: `internal/server/unified.go` (lines 923-1110)
+> - Documentation: `docs/GUARD_RESPONSE_LABELING.md` (covers actual implementation)
+
 ## Overview
 
 This document proposes an approach to integrate Decentralized Information Flow Control (DIFC) checks and labeling into the Go implementation of MCPG, following the patterns established in the Rust implementation.

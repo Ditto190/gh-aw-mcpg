@@ -25,26 +25,27 @@ This caused HTTP backends that require the header to reject the request with:
 
 ## Solution
 
-The gateway now creates a context with a session ID for all HTTP backend calls, including initialization. The session ID follows this pattern:
+The gateway now creates a temporary session ID for HTTP backend initialization calls. The session ID patterns are:
 
-- **During initialization**: `gateway-init-{serverID}`
+- **During initialization**: `awmg-init-{requestID}` (temporary, replaced by server-issued session ID)
 - **During client requests**: The session ID from the client's Authorization header
 
 ## Implementation Details
 
 ### Code Changes
 
-1. **File**: `internal/server/unified.go`
-   - **Function**: `registerToolsFromBackend`
-   - **Change**: Creates a context with session ID before calling `SendRequestWithServerID`
+1. **File**: `internal/mcp/http_transport.go`
+   - **Function**: `initializeHTTPSession`
+   - **Change**: Creates temporary session ID using `awmg-init-{requestID}` pattern during initialization
 
 ```go
-// Create a context with session ID for HTTP backends
-// HTTP backends may require Mcp-Session-Id header even during initialization
-ctx := context.WithValue(context.Background(), SessionIDContextKey, fmt.Sprintf("gateway-init-%s", serverID))
+// Create temporary session ID for initialize call
+tempSessionID := fmt.Sprintf("awmg-init-%d", requestID)
+ctx := context.WithValue(parentCtx, SessionIDContextKey, tempSessionID)
 
-// List tools from backend
-result, err := conn.SendRequestWithServerID(ctx, "tools/list", nil, serverID)
+// Send initialize request
+// Server responds with actual session ID in Mcp-Session-Id header
+// This session ID is then stored and reused for subsequent requests
 ```
 
 2. **File**: `internal/mcp/connection.go`
@@ -66,11 +67,14 @@ if sessionID, ok := ctx.Value(SessionIDContextKey).(string); ok && sessionID != 
 1. Gateway starts up
 2. `NewUnified` creates the unified server
 3. `registerAllTools` is called
-4. For each backend, `registerToolsFromBackend` is called
-5. Context is created with session ID: `gateway-init-{serverID}`
-6. `SendRequestWithServerID(ctx, "tools/list", ...)` is called
-7. For HTTP backends, `sendHTTPRequest` adds `Mcp-Session-Id` header
-8. HTTP backend receives request with header and responds successfully
+4. For each HTTP backend, connection initialization occurs:
+   - `initializeHTTPSession` creates temporary session ID: `awmg-init-{requestID}`
+   - Initialize request sent with temporary session ID in `Mcp-Session-Id` header
+   - Server responds with actual session ID in response header
+   - Session ID is stored in connection for reuse
+5. For tool discovery, `registerToolsFromBackend` is called
+6. `SendRequestWithServerID(ctx, "tools/list", ...)` uses stored session ID
+7. HTTP backend receives request with established session ID
 
 ### Client Request Flow (Routed Mode)
 
@@ -92,7 +96,7 @@ Three comprehensive tests were added to verify the fix:
 
 1. **TestHTTPBackendInitialization**
    - Verifies that session ID is sent during initialization
-   - Checks that session ID follows `gateway-init-{serverID}` pattern
+   - Checks that session ID follows `awmg-init-{requestID}` pattern for temporary IDs
 
 2. **TestHTTPBackendInitializationWithSessionIDRequirement**
    - Simulates an HTTP backend that strictly requires the header
@@ -144,7 +148,8 @@ DEBUG=mcp:* ./awmg --config config.toml
 
 This will show log messages like:
 ```
-[mcp:connection] Added Mcp-Session-Id header: gateway-init-safeinputs
+[mcp:connection] Added Mcp-Session-Id header: awmg-init-12345
+[mcp:connection] Stored session ID from initialize response: session-abc123
 ```
 
 ## Related Files
