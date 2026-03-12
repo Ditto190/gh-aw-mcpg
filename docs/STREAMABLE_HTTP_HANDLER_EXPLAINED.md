@@ -1,5 +1,18 @@
 # StreamableHTTPHandler: How It Works
 
+> **⚠️ HISTORICAL DOCUMENT NOTE (March 2026):**
+>
+> This document describes architectural limitations that **have been solved** in the current implementation. The gateway now uses a `filteredServerCache` (see `internal/server/routed.go:33-74`) that preserves SDK protocol state across HTTP requests by caching server instances per (backend, session) pair.
+>
+> **Current Implementation Status:**
+> - ✅ Protocol state IS preserved across HTTP requests
+> - ✅ SDK Server instances are cached and reused per session
+> - ✅ Session-scoped SDK Server reuse supports both stateless and stateful backend interaction patterns
+>
+> This document is maintained for historical context to show the problem that was solved. For current architecture, see the implementation in `internal/server/routed.go` and `internal/server/transport.go`.
+
+---
+
 This document explains where the MCP SDK's `StreamableHTTPHandler` lives, what it does, and how it communicates with backend MCP servers.
 
 ## TL;DR

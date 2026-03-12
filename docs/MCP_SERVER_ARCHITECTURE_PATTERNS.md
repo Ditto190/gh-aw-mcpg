@@ -1,4 +1,4 @@
-# Understanding MCP Server Architecture: Stateless vs Stateful
+# MCP Server Architecture Patterns: Stateless vs Stateful
 
 ## TL;DR
 
