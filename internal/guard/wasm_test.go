@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
-	"strings"
 	"testing"
 	"time"
 
@@ -144,16 +143,33 @@ func TestWasmGuardContextPropagation(t *testing.T) {
 
 func TestWasmGuardStdinIsolation(t *testing.T) {
 	t.Run("stdin isolation prevents reading from host stdin", func(t *testing.T) {
-		// This test verifies that WithStdin(strings.NewReader("")) is applied
-		// WASM modules should not be able to read from the gateway's MCP protocol stdin
+		// This test verifies that the WASM guard is configured with an isolated,
+		// empty stdin rather than the host's MCP protocol stdin. If stdin were
+		// not isolated, guard instantiation or execution could block waiting for
+		// input from the host.
 
-		// Create a reader with some data
-		stdinReader := strings.NewReader("")
+		// Use a short-lived context to detect any unexpected blocking behavior
+		// that might occur if the WASM runtime attempted to read from host stdin.
+		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		defer cancel()
 
-		// Verify the reader is empty (isolated)
-		buf := make([]byte, 10)
-		n, _ := stdinReader.Read(buf)
-		assert.Equal(t, 0, n, "Isolated stdin should be empty")
+		backend := &mockBackendCaller{}
+
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			// Instantiating the guard should configure the WASM runtime/module
+			// with an isolated stdin (e.g., via WithStdin(strings.NewReader("")))
+			// so that no reads from host stdin occur here.
+			_, _ = NewWasmGuardFromBytes(ctx, "stdin-isolation-guard", minimalGuardWasm, backend)
+		}()
+
+		select {
+		case <-done:
+			// Guard creation completed without blocking on host stdin.
+		case <-ctx.Done():
+			t.Fatalf("WASM guard instantiation appears to be blocked, possibly waiting on host stdin instead of using isolated stdin")
+		}
 	})
 }
 
