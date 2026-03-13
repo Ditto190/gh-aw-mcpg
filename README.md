@@ -238,11 +238,17 @@ For the complete JSON configuration specification with all validation rules, see
 
   ##### write-sink (output servers)
 
-  Marks a server as a write-only output channel. When an agent reads from a guarded server
-  (e.g., GitHub with `allow-only`), it acquires secrecy and integrity labels. Writing to an
-  unguarded server would fail DIFC checks. The write-sink guard solves this by accepting
-  writes from agents whose secrecy labels match the configured `accept` patterns.
+  Marks a server as a write-only output channel. **Write-sink is required for ALL output
+  servers** (e.g., `safeoutputs`) when DIFC guards are enabled on any other server. Without
+  it, the output server gets a noop guard that classifies operations as reads with empty
+  labels, causing integrity violations when the agent has integrity tags from other guards.
 
+  When an agent reads from a guarded server (e.g., GitHub with `allow-only`), it acquires
+  secrecy and integrity labels. The write-sink guard solves this by classifying all
+  operations as writes and accepting writes from agents whose secrecy labels match the
+  configured `accept` patterns.
+
+    For scoped repos (`repos=["owner/repo"]`, `repos=["owner/*"]`, etc.):
     ```json
     "guard-policies": {
       "write-sink": {
@@ -250,12 +256,28 @@ For the complete JSON configuration specification with all validation rules, see
       }
     }
     ```
-    TOML equivalent:
+
+    For broad access (`repos="all"` or `repos="public"`):
+    ```json
+    "guard-policies": {
+      "write-sink": {
+        "accept": ["*"]
+      }
+    }
+    ```
+
+    TOML equivalents:
     ```toml
+    # Scoped repos
     [servers.safeoutputs.guard_policies.write-sink]
     Accept = ["private:github/gh-aw*"]
+
+    # Broad access (repos="all" or repos="public")
+    [servers.safeoutputs.guard_policies.write-sink]
+    Accept = ["*"]
     ```
     - **`accept`**: Array of secrecy label patterns the sink accepts
+      - `"*"` - **Wildcard**: Accept writes from agents with any secrecy (must be the sole entry). Use for `repos="all"` or `repos="public"`.
       - `"private:owner/repo"` - Accept writes from agents that accessed a specific private repo
       - `"private:owner/prefix*"` - Accept writes from agents that accessed private repos matching the prefix
       - `"private:owner"` - Accept writes from agents that accessed any repo in the owner's org (bare owner format)
@@ -264,7 +286,7 @@ For the complete JSON configuration specification with all validation rules, see
     - **How it works**: The write-sink classifies all operations as writes. For DIFC write checks:
       - Resource secrecy is set to the `accept` patterns → agent secrecy ⊆ resource secrecy passes
       - Resource integrity is left empty → no integrity requirements for writes
-    - **When to use**: For servers like `safeoutputs` that buffer agent outputs for review, or any server that only receives data from the agent
+    - **When to use**: Required for **all** output servers (`safeoutputs`, etc.) when DIFC guards are enabled on any server in the configuration
 
   ##### Mapping allow-only repos to write-sink accept
 
@@ -273,8 +295,8 @@ For the complete JSON configuration specification with all validation rules, see
 
   | `allow-only.repos` | Agent secrecy tags | `write-sink.accept` |
   |---|---|---|
-  | `"all"` | `[]` (none) | Not needed |
-  | `"public"` | `[]` (none) | Not needed |
+  | `"all"` | `[]` (none) | `["*"]` (wildcard) |
+  | `"public"` | `[]` (none) | `["*"]` (wildcard) |
   | `["owner/repo"]` | `["private:owner/repo"]` | `["private:owner/repo"]` |
   | `["owner/*"]` | `["private:owner"]` | `["private:owner"]` |
   | `["owner/prefix*"]` | `["private:owner/prefix*"]` | `["private:owner/prefix*"]` |
@@ -282,7 +304,9 @@ For the complete JSON configuration specification with all validation rules, see
   | `["O1/*", "O2/R"]` | `["private:O1", "private:O2/R"]` | `["private:O1", "private:O2/R"]` |
 
   **Key rules**:
-  - `repos="all"` or `repos="public"` → no secrecy tags → write-sink not required
+  - `repos="all"` or `repos="public"` → no secrecy tags → use `accept: ["*"]` (wildcard)
+  - Write-sink is **required for ALL output servers** when DIFC guards are enabled (prevents noop guard integrity violations)
+  - `accept: ["*"]` is a special wildcard that accepts writes from agents with any secrecy; it must be the sole entry
   - `repos=["owner/*"]` (owner wildcard) → bare owner tag `"private:owner"` (no `/*` suffix)
   - `repos=["owner/prefix*"]` (prefix wildcard) → `"private:owner/prefix*"` (suffix preserved)
   - `repos=["owner/repo"]` (exact) → `"private:owner/repo"`

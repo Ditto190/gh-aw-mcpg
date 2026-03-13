@@ -88,21 +88,35 @@ GITHUB_PERSONAL_ACCESS_TOKEN = ""  # Pass through from host
 # repos = ["myorg/api-*", "myorg/web-*"]        # Prefix matching with wildcards
 
 # Example 2: Safe Outputs Server (write-sink for buffered updates)
+# IMPORTANT: Write-sink is REQUIRED for ALL output servers when DIFC guards are
+# enabled on any other server. Without it, the output server gets a noop guard
+# that causes integrity violations when the agent has tags from other guards.
 # [servers.safeoutputs]
 # command = "docker"
 # args = ["run", "--rm", "-i", "ghcr.io/github/safe-outputs:latest"]
 #
-# Optional: Write-sink guard policy for output servers
-# When the agent reads from a guarded server (e.g., GitHub with allow-only),
-# it acquires secrecy labels. The write-sink accepts writes from agents
-# whose secrecy labels match the configured accept patterns.
+# Write-sink guard policy for output servers
+# The accept patterns must match the agent's secrecy tags, which depend on
+# the GitHub guard's allow-only.repos configuration.
+#
+# For repos="all" or repos="public" (agent has no secrecy tags):
+# [servers.safeoutputs.guard_policies.write-sink]
+# Accept = ["*"]
+#
+# For scoped repos (agent has secrecy tags matching the scope):
 # [servers.safeoutputs.guard_policies.write-sink]
 # Accept = ["private:myorg/api-*", "private:myorg/web-*"]
 #
 # Accept pattern format: "visibility:owner/repo-pattern"
 # Visibility prefixes: private, public, internal
-# Example: Accept writes from agents that accessed any private myorg repo:
-# Accept = ["private:myorg/*"]
+# Special value: "*" (wildcard) accepts writes from any agent (must be sole entry)
+#
+# Quick reference (see README for full table):
+#   repos = "all"           → Accept = ["*"]
+#   repos = "public"        → Accept = ["*"]
+#   repos = ["org/*"]       → Accept = ["private:org"]
+#   repos = ["org/repo"]    → Accept = ["private:org/repo"]
+#   repos = ["org/prefix*"] → Accept = ["private:org/prefix*"]
 
 # Example 3: Memory MCP Server (stdio via Docker)
 [servers.memory]
