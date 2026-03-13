@@ -5,7 +5,11 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/github/gh-aw-mcpg/internal/logger"
 )
+
+var logGuardPolicy = logger.New("config:guard_policy")
 
 const (
 	IntegrityNone       = "none"
@@ -264,6 +268,8 @@ func NormalizeGuardPolicy(policy *GuardPolicy) (*NormalizedGuardPolicy, error) {
 
 	normalized := &NormalizedGuardPolicy{MinIntegrity: integrity}
 
+	logGuardPolicy.Printf("Normalizing guard policy: integrity=%s, reposType=%T", integrity, policy.AllowOnly.Repos)
+
 	switch scope := policy.AllowOnly.Repos.(type) {
 	case string:
 		scopeValue := strings.ToLower(strings.TrimSpace(scope))
@@ -271,6 +277,7 @@ func NormalizeGuardPolicy(policy *GuardPolicy) (*NormalizedGuardPolicy, error) {
 			return nil, fmt.Errorf("allow-only.repos string must be 'all' or 'public'")
 		}
 		normalized.ScopeKind = scopeValue
+		logGuardPolicy.Printf("Guard policy normalized: scopeKind=%s, integrity=%s", normalized.ScopeKind, normalized.MinIntegrity)
 		return normalized, nil
 
 	case []interface{}:
@@ -280,6 +287,7 @@ func NormalizeGuardPolicy(policy *GuardPolicy) (*NormalizedGuardPolicy, error) {
 		}
 		normalized.ScopeKind = "scoped"
 		normalized.ScopeValues = scopes
+		logGuardPolicy.Printf("Guard policy normalized: scopeKind=scoped, scopeCount=%d, integrity=%s", len(scopes), normalized.MinIntegrity)
 		return normalized, nil
 
 	case []string:
@@ -293,6 +301,7 @@ func NormalizeGuardPolicy(policy *GuardPolicy) (*NormalizedGuardPolicy, error) {
 		}
 		normalized.ScopeKind = "scoped"
 		normalized.ScopeValues = scopes
+		logGuardPolicy.Printf("Guard policy normalized: scopeKind=scoped, scopeCount=%d, integrity=%s", len(scopes), normalized.MinIntegrity)
 		return normalized, nil
 
 	default:
@@ -417,6 +426,7 @@ func isScopeTokenChar(char byte) bool {
 
 // ParseGuardPolicyJSON parses policy JSON and validates it.
 func ParseGuardPolicyJSON(policyJSON string) (*GuardPolicy, error) {
+	logGuardPolicy.Printf("Parsing guard policy JSON: len=%d", len(policyJSON))
 	policy := &GuardPolicy{}
 	if err := json.Unmarshal([]byte(policyJSON), policy); err != nil {
 		return nil, fmt.Errorf("invalid guard policy JSON: %w", err)
@@ -428,6 +438,7 @@ func ParseGuardPolicyJSON(policyJSON string) (*GuardPolicy, error) {
 }
 
 func validateGuardPolicies(cfg *Config) error {
+	logGuardPolicy.Printf("Validating guard policies: count=%d", len(cfg.Guards))
 	for name, guardCfg := range cfg.Guards {
 		if guardCfg != nil && guardCfg.Policy != nil {
 			if err := ValidateGuardPolicy(guardCfg.Policy); err != nil {
