@@ -388,36 +388,26 @@ func isValidRepoScope(scope string) bool {
 	return true
 }
 
-func isValidRepoOwner(owner string) bool {
-	if len(owner) < 1 || len(owner) > 39 {
+// isValidTokenString returns true if s is a non-empty string of at most maxLen
+// lowercase-alphanumeric, underscore, or hyphen characters.
+func isValidTokenString(s string, maxLen int) bool {
+	if len(s) < 1 || len(s) > maxLen {
 		return false
 	}
-
-	for i := 0; i < len(owner); i++ {
-		char := owner[i]
-		if isScopeTokenChar(char) {
-			continue
+	for i := 0; i < len(s); i++ {
+		if !isScopeTokenChar(s[i]) {
+			return false
 		}
-		return false
 	}
-
 	return true
 }
 
+func isValidRepoOwner(owner string) bool {
+	return isValidTokenString(owner, 39)
+}
+
 func isValidRepoName(repo string) bool {
-	if len(repo) < 1 || len(repo) > 100 {
-		return false
-	}
-
-	for i := 0; i < len(repo); i++ {
-		char := repo[i]
-		if isScopeTokenChar(char) {
-			continue
-		}
-		return false
-	}
-
-	return true
+	return isValidTokenString(repo, 100)
 }
 
 func isScopeTokenChar(char byte) bool {
