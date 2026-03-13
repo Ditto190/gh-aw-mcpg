@@ -42,8 +42,10 @@ func getDefaultDIFCMode() string {
 	if envMode := os.Getenv("MCP_GATEWAY_GUARDS_MODE"); envMode != "" {
 		mode := strings.ToLower(envMode)
 		if isValidDIFCMode(mode) {
+			debugLog.Printf("Guards mode set from MCP_GATEWAY_GUARDS_MODE: %s", mode)
 			return mode
 		}
+		debugLog.Printf("MCP_GATEWAY_GUARDS_MODE value %q is invalid, falling back to default: %s", envMode, difc.ModeStrict)
 	}
 	return difc.ModeStrict
 }
@@ -83,6 +85,8 @@ func getDefaultAllowOnlyMinIntegrity() string {
 }
 
 func buildAllowOnlyPolicy(public bool, owner, repo, minIntegrity string) (*config.GuardPolicy, error) {
+	debugLog.Printf("Building AllowOnly policy: public=%v, owner=%q, repo=%q, minIntegrity=%q", public, owner, repo, minIntegrity)
+
 	owner = strings.TrimSpace(owner)
 	repo = strings.TrimSpace(repo)
 	integrityInput := strings.TrimSpace(minIntegrity)
@@ -108,6 +112,7 @@ func buildAllowOnlyPolicy(public bool, owner, repo, minIntegrity string) (*confi
 	}
 
 	if scopeCount == 0 && minIntegrity == "" {
+		debugLog.Print("No AllowOnly scope or integrity specified, returning nil policy")
 		return nil, nil
 	}
 	if scopeCount != 1 {
@@ -131,6 +136,8 @@ func buildAllowOnlyPolicy(public bool, owner, repo, minIntegrity string) (*confi
 		repos = []string{scope}
 	}
 
+	debugLog.Printf("AllowOnly policy scope resolved: repos=%v, minIntegrity=%s", repos, integrity)
+
 	policy := &config.GuardPolicy{
 		AllowOnly: &config.AllowOnlyPolicy{
 			Repos:        repos,
@@ -142,6 +149,7 @@ func buildAllowOnlyPolicy(public bool, owner, repo, minIntegrity string) (*confi
 		return nil, err
 	}
 
+	debugLog.Print("AllowOnly policy built and validated successfully")
 	return policy, nil
 }
 
@@ -158,6 +166,8 @@ func parseDIFCSinkServerIDs(input string) ([]string, error) {
 		return nil, nil
 	}
 
+	debugLog.Printf("Parsing DIFC sink server IDs: input=%q", input)
+
 	parts := strings.Split(input, ",")
 	result := make([]string, 0, len(parts))
 	seen := make(map[string]struct{}, len(parts))
@@ -171,11 +181,13 @@ func parseDIFCSinkServerIDs(input string) ([]string, error) {
 			return nil, fmt.Errorf("invalid guards sink server ID %q: whitespace is not allowed", value)
 		}
 		if _, exists := seen[value]; exists {
+			debugLog.Printf("Skipping duplicate sink server ID: %q", value)
 			continue
 		}
 		seen[value] = struct{}{}
 		result = append(result, value)
 	}
 
+	debugLog.Printf("Parsed %d unique DIFC sink server IDs: %v", len(result), result)
 	return result, nil
 }
