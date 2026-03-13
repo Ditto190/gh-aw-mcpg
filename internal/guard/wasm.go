@@ -715,17 +715,21 @@ func (g *WasmGuard) tryCallWasmFunction(ctx context.Context, fn api.Function, me
 	allocFn := g.module.ExportedFunction("alloc")
 	deallocFn := g.module.ExportedFunction("dealloc")
 	if allocFn != nil {
+		// Use a non-cancelable context for cleanup to avoid leaking WASM heap
+		// allocations if the request context is canceled or times out.
+		cleanupCtx := context.WithoutCancel(ctx)
+
 		inputPtr, err := g.wasmAlloc(ctx, allocFn, inputSize)
 		if err != nil {
 			return nil, 0, fmt.Errorf("failed to allocate WASM input buffer: %w", err)
 		}
-		defer g.wasmDealloc(ctx, deallocFn, inputPtr, inputSize)
+		defer g.wasmDealloc(cleanupCtx, deallocFn, inputPtr, inputSize)
 
 		outputPtr, err := g.wasmAlloc(ctx, allocFn, outputSize)
 		if err != nil {
 			return nil, 0, fmt.Errorf("failed to allocate WASM output buffer: %w", err)
 		}
-		defer g.wasmDealloc(ctx, deallocFn, outputPtr, outputSize)
+		defer g.wasmDealloc(cleanupCtx, deallocFn, outputPtr, outputSize)
 
 		if !mem.Write(inputPtr, inputJSON) {
 			return nil, 0, fmt.Errorf("failed to write input to WASM memory")
