@@ -398,21 +398,7 @@ func TestMockBackendCaller(t *testing.T) {
 }
 
 func TestBufferRetryLogic(t *testing.T) {
-	t.Run("buffer size constants are reasonable", func(t *testing.T) {
-		// Verify the buffer sizes match the issue description
-		initialSize := uint32(4 * 1024 * 1024) // 4MB
-		maxSize := uint32(16 * 1024 * 1024)    // 16MB
-		maxInput := uint32(8 * 1024 * 1024)    // 8MB
-
-		assert.Equal(t, uint32(4194304), initialSize)
-		assert.Equal(t, uint32(16777216), maxSize)
-		assert.Equal(t, uint32(8388608), maxInput)
-
-		// Max should be larger than initial
-		assert.Greater(t, maxSize, initialSize)
-		// Max input should be reasonable
-		assert.LessOrEqual(t, maxInput, maxSize)
-	})
+	t.Skip("TODO: implement buffer retry behavior test against callWasmFunction/tryCallWasmFunction")
 }
 
 func TestWasmMemoryLayout(t *testing.T) {
