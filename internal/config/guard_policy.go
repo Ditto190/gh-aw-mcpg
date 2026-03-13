@@ -18,18 +18,11 @@ const (
 	IntegrityMerged     = "merged"
 )
 
-const (
-	integrityNoneValue       = "none"
-	integrityUnapprovedValue = "unapproved"
-	integrityApprovedValue   = "approved"
-	integrityMergedValue     = "merged"
-)
-
 var validMinIntegrityValues = map[string]struct{}{
-	integrityNoneValue:       {},
-	integrityUnapprovedValue: {},
-	integrityApprovedValue:   {},
-	integrityMergedValue:     {},
+	IntegrityNone:       {},
+	IntegrityUnapproved: {},
+	IntegrityApproved:   {},
+	IntegrityMerged:     {},
 }
 
 // GuardPolicy represents the policy payload passed to guard label_agent.
