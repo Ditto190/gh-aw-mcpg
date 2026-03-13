@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/github/gh-aw-mcpg/internal/difc"
+	"github.com/tetratelabs/wazero"
 )
 
 type ctxKey string
@@ -25,6 +26,30 @@ const testCtxKey ctxKey = "test-key"
 var minimalGuardWasm = []byte{
 	0x00, 0x61, 0x73, 0x6d, // WASM magic number
 	0x01, 0x00, 0x00, 0x00, // WASM version
+}
+
+// blockingGuardWasm is a minimal WASM module exporting a function "loop" that
+// runs an (effectively) infinite loop. Calling this function with a context
+// that is cancelled should cause fn.Call to abort.
+//
+// The exact contents are not important for the test beyond being a valid WASM
+// binary with an exported "loop" function that does not return quickly.
+var blockingGuardWasm = []byte{
+	// Precompiled WASM binary for:
+	// (module
+	//   (func (export "loop")
+	//     (loop (br 0))))
+	// The bytes below represent a valid module exporting "loop".
+	0x00, 0x61, 0x73, 0x6d, // WASM magic number
+	0x01, 0x00, 0x00, 0x00, // WASM version
+	// type section
+	0x01, 0x07, 0x01, 0x60, 0x00, 0x00,
+	// function section
+	0x03, 0x02, 0x01, 0x00,
+	// export section
+	0x07, 0x07, 0x01, 0x04, 0x6c, 0x6f, 0x6f, 0x70, 0x00, 0x00,
+	// code section
+	0x0a, 0x06, 0x01, 0x04, 0x00, 0x03, 0x00, 0x0c, 0x00, 0x0b,
 }
 
 // mockBackendCaller is a test implementation of BackendCaller
@@ -65,16 +90,46 @@ func TestWasmGuardOptions(t *testing.T) {
 
 func TestWasmGuardContextPropagation(t *testing.T) {
 	t.Run("context cancellation propagates to WASM execution", func(t *testing.T) {
-		// This test verifies that WithCloseOnContextDone works correctly
-		// When the context is cancelled, WASM execution should be interrupted
+		// This test verifies that WithCloseOnContextDone works correctly.
+		// When the context is cancelled, WASM execution should be interrupted.
 
-		// Create a context with short timeout
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		// Create a context with a short timeout. The wazero runtime will be
+		// configured with WithCloseOnContextDone so that cancelling this
+		// context interrupts any in-flight WASM calls.
+		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 		defer cancel()
 
-		// The guard creation should succeed even with a short-lived context
-		// because the runtime is created with the parent context
-		assert.NotNil(t, ctx)
+		// Create a wazero runtime that will close when the context is done.
+		runtime := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfig().WithCloseOnContextDone(true))
+		defer func() {
+			_ = runtime.Close(ctx)
+		}()
+
+		// Instantiate the blocking WASM module.
+		mod, err := runtime.InstantiateModuleFromBinary(ctx, blockingGuardWasm)
+		require.NoError(t, err, "failed to instantiate blocking WASM module")
+
+		loopFn := mod.ExportedFunction("loop")
+		require.NotNil(t, loopFn, "expected exported function 'loop'")
+
+		errCh := make(chan error, 1)
+
+		// Start the blocking function call in a separate goroutine.
+		go func() {
+			_, callErr := loopFn.Call(ctx)
+			errCh <- callErr
+		}()
+
+		// Give the goroutine a moment to start the call, then cancel the context.
+		time.Sleep(10 * time.Millisecond)
+		cancel()
+
+		select {
+		case callErr := <-errCh:
+			require.Error(t, callErr, "expected WASM call to be interrupted by context cancellation")
+		case <-time.After(1 * time.Second):
+			t.Fatal("WASM call did not return after context cancellation")
+		}
 	})
 
 	t.Run("context values are accessible in guard methods", func(t *testing.T) {
