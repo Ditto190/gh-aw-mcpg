@@ -23,7 +23,7 @@
 #
 # Daily analyzer that reviews test files and suggests improvements for better testify usage, increased coverage, and cleaner tests
 #
-# gh-aw-metadata: {"schema_version":"v2","frontmatter_hash":"40ed343273f65391d6c290e30192b1eb03ee22dc1d009423fd270cd0cb6e4aca","compiler_version":"v0.58.2","strict":true}
+# gh-aw-metadata: {"schema_version":"v2","frontmatter_hash":"0833d2d7b149d259189860783fa2b3990bb7d107ce1766b674100822a7a0aee9","compiler_version":"v0.58.2","strict":true}
 
 name: "Test Improver"
 "on":
@@ -663,6 +663,14 @@ jobs:
                   "GITHUB_PERSONAL_ACCESS_TOKEN": "\${GITHUB_MCP_SERVER_TOKEN}",
                   "GITHUB_READ_ONLY": "1",
                   "GITHUB_TOOLSETS": "context,repos,issues,pull_requests"
+                },
+                "guard-policies": {
+                  "allow-only": {
+                    "min-integrity": "unapproved",
+                    "repos": [
+                      "github/gh-aw-mcpg"
+                    ]
+                  }
                 }
               },
               "safeoutputs": {
@@ -670,6 +678,13 @@ jobs:
                 "url": "http://host.docker.internal:$GH_AW_SAFE_OUTPUTS_PORT",
                 "headers": {
                   "Authorization": "\${GH_AW_SAFE_OUTPUTS_API_KEY}"
+                },
+                "guard-policies": {
+                  "write-sink": {
+                    "accept": [
+                      "private:github/gh-aw-mcpg"
+                    ]
+                  }
                 }
               },
               "serena": {

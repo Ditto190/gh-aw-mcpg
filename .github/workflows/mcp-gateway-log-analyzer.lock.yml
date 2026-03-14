@@ -23,7 +23,7 @@
 #
 # Daily analysis of MCP Gateway logs from gh-aw repository workflows to identify bugs and issues
 #
-# gh-aw-metadata: {"schema_version":"v2","frontmatter_hash":"a23ae12913c0b6d039449ac91d4d2cf9e3fbbe0a33699d94005fae293b315414","compiler_version":"v0.58.2","strict":true}
+# gh-aw-metadata: {"schema_version":"v2","frontmatter_hash":"6fe5837a27813adbe3075eb51630ffecbe36aa21f66ebea75efacb18a4138a11","compiler_version":"v0.58.2","strict":true}
 
 name: "MCP Gateway Log Analyzer"
 "on":
@@ -635,6 +635,14 @@ jobs:
                   "GITHUB_PERSONAL_ACCESS_TOKEN": "\${GITHUB_MCP_SERVER_TOKEN}",
                   "GITHUB_READ_ONLY": "1",
                   "GITHUB_TOOLSETS": "context,repos,issues,pull_requests,actions"
+                },
+                "guard-policies": {
+                  "allow-only": {
+                    "min-integrity": "unapproved",
+                    "repos": [
+                      "github/gh-aw-mcpg"
+                    ]
+                  }
                 }
               },
               "safeoutputs": {
@@ -642,6 +650,13 @@ jobs:
                 "url": "http://host.docker.internal:$GH_AW_SAFE_OUTPUTS_PORT",
                 "headers": {
                   "Authorization": "\${GH_AW_SAFE_OUTPUTS_API_KEY}"
+                },
+                "guard-policies": {
+                  "write-sink": {
+                    "accept": [
+                      "private:github/gh-aw-mcpg"
+                    ]
+                  }
                 }
               }
             },
