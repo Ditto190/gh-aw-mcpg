@@ -70,11 +70,11 @@ func TestPortRange(t *testing.T) {
 			err := PortRange(tt.port, tt.jsonPath)
 
 			if tt.shouldErr {
-				require.Error(t, err, "Expected error but got none")
+				require.NotNil(t, err, "Expected validation error but got none")
 				assert.Contains(t, err.Message, tt.errMsg, "Error message should contain expected text")
 				assert.Equal(t, tt.jsonPath, err.JSONPath, "JSONPath should match")
 			} else {
-				assert.Nil(t, err, "Unexpected error")
+				require.Nil(t, err, "Unexpected validation error")
 			}
 		})
 	}
@@ -133,12 +133,12 @@ func TestTimeoutPositive(t *testing.T) {
 			err := TimeoutPositive(tt.timeout, tt.fieldName, tt.jsonPath)
 
 			if tt.shouldErr {
-				require.Error(t, err, "Expected error but got none")
+				require.NotNil(t, err, "Expected validation error but got none")
 				assert.Contains(t, err.Message, tt.errMsg, "Error message should contain expected text")
 				assert.Equal(t, tt.jsonPath, err.JSONPath, "JSONPath should match")
 				assert.Equal(t, tt.fieldName, err.Field, "Field name should match")
 			} else {
-				assert.Nil(t, err, "Unexpected error")
+				require.Nil(t, err, "Unexpected validation error")
 			}
 		})
 	}
@@ -291,11 +291,11 @@ func TestMountFormat(t *testing.T) {
 			err := MountFormat(tt.mount, tt.jsonPath, tt.index)
 
 			if tt.shouldErr {
-				require.Error(t, err, "Expected error but got none")
+				require.NotNil(t, err, "Expected validation error but got none")
 				assert.Contains(t, err.Message, tt.errMsg, "Error message should contain expected text")
 				assert.Equal(t, fmt.Sprintf("%s.mounts[%d]", tt.jsonPath, tt.index), err.JSONPath, "JSONPath should match expected pattern")
 			} else {
-				assert.Nil(t, err, "Unexpected error")
+				require.Nil(t, err, "Unexpected validation error")
 			}
 		})
 	}
@@ -303,9 +303,10 @@ func TestMountFormat(t *testing.T) {
 
 func TestValidationError_Error(t *testing.T) {
 	tests := []struct {
-		name       string
-		valErr     *ValidationError
-		wantSubstr []string
+		name          string
+		valErr        *ValidationError
+		wantSubstr    []string
+		notWantSubstr []string
 	}{
 		{
 			name: "error with suggestion",
@@ -332,6 +333,8 @@ func TestValidationError_Error(t *testing.T) {
 				"Configuration error at gateway.startupTimeout",
 				"timeout must be positive",
 			},
+			// Verify suggestion section is completely absent when empty
+			notWantSubstr: []string{"Suggestion:"},
 		},
 	}
 
@@ -341,6 +344,9 @@ func TestValidationError_Error(t *testing.T) {
 
 			for _, substr := range tt.wantSubstr {
 				assert.Contains(t, errStr, substr, "Error string should contain expected substring")
+			}
+			for _, substr := range tt.notWantSubstr {
+				assert.NotContains(t, errStr, substr, "Error string should NOT contain %q when suggestion is empty", substr)
 			}
 		})
 	}
@@ -659,11 +665,11 @@ func TestNonEmptyString(t *testing.T) {
 			err := NonEmptyString(tt.value, tt.fieldName, tt.jsonPath)
 
 			if tt.shouldErr {
-				require.Error(t, err)
+				require.NotNil(t, err, "Expected validation error but got none")
 				assert.Contains(t, err.Error(), tt.errMsg)
 				assert.Contains(t, err.Error(), tt.jsonPath)
 			} else {
-				assert.Nil(t, err)
+				require.Nil(t, err, "Unexpected validation error")
 			}
 		})
 	}
@@ -769,6 +775,22 @@ func TestAbsolutePath(t *testing.T) {
 			errMsg:    "must be an absolute path",
 		},
 		{
+			name:      "invalid Windows path - drive letter and colon only (too short)",
+			value:     "C:",
+			fieldName: "payloadDir",
+			jsonPath:  "gateway.payloadDir",
+			shouldErr: true,
+			errMsg:    "must be an absolute path",
+		},
+		{
+			name:      "invalid single character",
+			value:     "C",
+			fieldName: "payloadDir",
+			jsonPath:  "gateway.payloadDir",
+			shouldErr: true,
+			errMsg:    "must be an absolute path",
+		},
+		{
 			name:      "empty string",
 			value:     "",
 			fieldName: "payloadDir",
@@ -783,11 +805,11 @@ func TestAbsolutePath(t *testing.T) {
 			err := AbsolutePath(tt.value, tt.fieldName, tt.jsonPath)
 
 			if tt.shouldErr {
-				require.Error(t, err)
+				require.NotNil(t, err, "Expected validation error but got none")
 				assert.Contains(t, err.Error(), tt.errMsg)
 				assert.Contains(t, err.Error(), tt.jsonPath)
 			} else {
-				assert.Nil(t, err)
+				require.Nil(t, err, "Unexpected validation error")
 			}
 		})
 	}
