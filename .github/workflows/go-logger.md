@@ -33,6 +33,8 @@ steps:
 tools:
   github:
     toolsets: [default]
+    repos: ["github/gh-aw-mcpg"]
+    min-integrity: unapproved
   edit:
   bash:
     - "find internal -name '*.go' -type f ! -name '*_test.go'"

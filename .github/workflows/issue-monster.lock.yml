@@ -23,7 +23,7 @@
 #
 # The Cookie Monster of issues - assigns issues to Copilot agents one at a time
 #
-# gh-aw-metadata: {"schema_version":"v2","frontmatter_hash":"d3cc810acf96ebc470704d815aa84c4c6eed52fcce79ddb2506727aa48a4f4b2","compiler_version":"v0.58.2","strict":true}
+# gh-aw-metadata: {"schema_version":"v2","frontmatter_hash":"95259803e02e3003f6fe2b4f6125755bdfa0dddca55460e7ce3a365410b33a6e","compiler_version":"v0.58.2","strict":true}
 
 name: "Issue Monster"
 "on":
@@ -691,6 +691,14 @@ jobs:
                   "GITHUB_PERSONAL_ACCESS_TOKEN": "\${GITHUB_MCP_SERVER_TOKEN}",
                   "GITHUB_READ_ONLY": "1",
                   "GITHUB_TOOLSETS": "context,repos,issues,pull_requests"
+                },
+                "guard-policies": {
+                  "allow-only": {
+                    "min-integrity": "unapproved",
+                    "repos": [
+                      "github/gh-aw-mcpg"
+                    ]
+                  }
                 }
               },
               "safeoutputs": {
@@ -698,6 +706,13 @@ jobs:
                 "url": "http://host.docker.internal:$GH_AW_SAFE_OUTPUTS_PORT",
                 "headers": {
                   "Authorization": "\${GH_AW_SAFE_OUTPUTS_API_KEY}"
+                },
+                "guard-policies": {
+                  "write-sink": {
+                    "accept": [
+                      "private:github/gh-aw-mcpg"
+                    ]
+                  }
                 }
               }
             },

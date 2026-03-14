@@ -36,6 +36,8 @@ tools:
   cache-memory: true
   github:
     toolsets: [repos, pull_requests]
+    repos: ["github/gh-aw-mcpg"]
+    min-integrity: unapproved
   playwright:
   edit:
   bash:

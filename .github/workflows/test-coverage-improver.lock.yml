@@ -23,7 +23,7 @@
 #
 # Daily analyzer that finds complex, under-tested functions and generates comprehensive tests
 #
-# gh-aw-metadata: {"schema_version":"v2","frontmatter_hash":"fd515a043ed747f692955dd7f04a1492628f2bfea3d15551eb3f9d0357806953","compiler_version":"v0.58.2","strict":true}
+# gh-aw-metadata: {"schema_version":"v2","frontmatter_hash":"00c5e4498cb6ec0ce613224e9135e632cf0e8347087568aff8032a7bda67d3e8","compiler_version":"v0.58.2","strict":true}
 
 name: "Test Coverage Improver"
 "on":
@@ -664,6 +664,14 @@ jobs:
                   "GITHUB_PERSONAL_ACCESS_TOKEN": "\${GITHUB_MCP_SERVER_TOKEN}",
                   "GITHUB_READ_ONLY": "1",
                   "GITHUB_TOOLSETS": "context,repos,issues,pull_requests"
+                },
+                "guard-policies": {
+                  "allow-only": {
+                    "min-integrity": "unapproved",
+                    "repos": [
+                      "github/gh-aw-mcpg"
+                    ]
+                  }
                 }
               },
               "safeoutputs": {
@@ -671,6 +679,13 @@ jobs:
                 "url": "http://host.docker.internal:$GH_AW_SAFE_OUTPUTS_PORT",
                 "headers": {
                   "Authorization": "\${GH_AW_SAFE_OUTPUTS_API_KEY}"
+                },
+                "guard-policies": {
+                  "write-sink": {
+                    "accept": [
+                      "private:github/gh-aw-mcpg"
+                    ]
+                  }
                 }
               },
               "serena": {

@@ -37,6 +37,8 @@ steps:
 tools:
   github:
     toolsets: [default]
+    repos: ["github/gh-aw-mcpg"]
+    min-integrity: unapproved
   cache-memory:
 
 timeout-minutes: 20

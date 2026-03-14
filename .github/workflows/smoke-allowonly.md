@@ -31,8 +31,8 @@ tools:
   cache-memory: true
   github:
     toolsets: [repos, issues, pull_requests, search]
-    repos: ["github/gh-aw*"]
-    min-integrity: approved
+    repos: ["github/gh-aw-mcpg"]
+    min-integrity: unapproved
   edit:
   bash:
     - "cat"

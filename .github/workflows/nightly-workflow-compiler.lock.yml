@@ -23,7 +23,7 @@
 #
 # Nightly workflow that upgrades all workflows to the latest agentic workflow release (agent files, codemods, and compilations)
 #
-# gh-aw-metadata: {"schema_version":"v2","frontmatter_hash":"8b2aa94b738b45eda8233a5352f625923e06b29c2108d1baf7a3ab6625cbb8e5","compiler_version":"v0.58.2","strict":true}
+# gh-aw-metadata: {"schema_version":"v2","frontmatter_hash":"355aefbf19bcc7394ebc91a559e0b1c228286fa26266df15325c68f52ba62d4a","compiler_version":"v0.58.2","strict":true}
 
 name: "Nightly Workflow Upgrader"
 "on":
@@ -639,6 +639,14 @@ jobs:
                   "GITHUB_PERSONAL_ACCESS_TOKEN": "\${GITHUB_MCP_SERVER_TOKEN}",
                   "GITHUB_READ_ONLY": "1",
                   "GITHUB_TOOLSETS": "context,repos,issues,pull_requests"
+                },
+                "guard-policies": {
+                  "allow-only": {
+                    "min-integrity": "unapproved",
+                    "repos": [
+                      "github/gh-aw-mcpg"
+                    ]
+                  }
                 }
               },
               "safeoutputs": {
@@ -646,6 +654,13 @@ jobs:
                 "url": "http://host.docker.internal:$GH_AW_SAFE_OUTPUTS_PORT",
                 "headers": {
                   "Authorization": "\${GH_AW_SAFE_OUTPUTS_API_KEY}"
+                },
+                "guard-policies": {
+                  "write-sink": {
+                    "accept": [
+                      "private:github/gh-aw-mcpg"
+                    ]
+                  }
                 }
               }
             },

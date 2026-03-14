@@ -23,7 +23,7 @@
 #
 # Daily automated checker that scans go.mod dependencies for GPL-licensed packages and creates issues to track their removal
 #
-# gh-aw-metadata: {"schema_version":"v2","frontmatter_hash":"d9808cb04188b787d1f3600327f5829377853e9d00149f6245875fbe05582b5d","compiler_version":"v0.58.2","strict":true}
+# gh-aw-metadata: {"schema_version":"v2","frontmatter_hash":"9ce78d41fdebc550c357bf4390aae27e71849854ed831f125047df3d22761e64","compiler_version":"v0.58.2","strict":true}
 
 name: "GPL Dependency Checker"
 "on":
@@ -717,6 +717,14 @@ jobs:
                   "GITHUB_PERSONAL_ACCESS_TOKEN": "\${GITHUB_MCP_SERVER_TOKEN}",
                   "GITHUB_READ_ONLY": "1",
                   "GITHUB_TOOLSETS": "context,repos,issues,pull_requests"
+                },
+                "guard-policies": {
+                  "allow-only": {
+                    "min-integrity": "unapproved",
+                    "repos": [
+                      "github/gh-aw-mcpg"
+                    ]
+                  }
                 }
               },
               "safeoutputs": {
@@ -724,6 +732,13 @@ jobs:
                 "url": "http://host.docker.internal:$GH_AW_SAFE_OUTPUTS_PORT",
                 "headers": {
                   "Authorization": "\${GH_AW_SAFE_OUTPUTS_API_KEY}"
+                },
+                "guard-policies": {
+                  "write-sink": {
+                    "accept": [
+                      "private:github/gh-aw-mcpg"
+                    ]
+                  }
                 }
               }
             },

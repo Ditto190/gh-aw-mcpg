@@ -21,6 +21,8 @@ network:
 tools:
   github:
     toolsets: [default]
+    repos: ["github/gh-aw-mcpg"]
+    min-integrity: unapproved
   bash: ["*"]
 
 mcp-servers:

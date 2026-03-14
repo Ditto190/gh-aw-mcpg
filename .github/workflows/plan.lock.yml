@@ -23,7 +23,7 @@
 #
 # Generates project plans and task breakdowns when invoked with /plan command in issues or PRs
 #
-# gh-aw-metadata: {"schema_version":"v2","frontmatter_hash":"69b768f0d7a536896ea11141075853785172533a05b0ed9a0e1a0ea788351834","compiler_version":"v0.58.2","strict":true}
+# gh-aw-metadata: {"schema_version":"v2","frontmatter_hash":"7b578d0cbaeda78de312f53c7ddeb7057519346ee7bc21ec141146ceb1bd9357","compiler_version":"v0.58.2","strict":true}
 
 name: "Plan Command"
 "on":
@@ -756,6 +756,14 @@ jobs:
                   "GITHUB_PERSONAL_ACCESS_TOKEN": "\${GITHUB_MCP_SERVER_TOKEN}",
                   "GITHUB_READ_ONLY": "1",
                   "GITHUB_TOOLSETS": "context,repos,issues,pull_requests,discussions"
+                },
+                "guard-policies": {
+                  "allow-only": {
+                    "min-integrity": "unapproved",
+                    "repos": [
+                      "github/gh-aw-mcpg"
+                    ]
+                  }
                 }
               },
               "safeoutputs": {
@@ -763,6 +771,13 @@ jobs:
                 "url": "http://host.docker.internal:$GH_AW_SAFE_OUTPUTS_PORT",
                 "headers": {
                   "Authorization": "\${GH_AW_SAFE_OUTPUTS_API_KEY}"
+                },
+                "guard-policies": {
+                  "write-sink": {
+                    "accept": [
+                      "private:github/gh-aw-mcpg"
+                    ]
+                  }
                 }
               }
             },

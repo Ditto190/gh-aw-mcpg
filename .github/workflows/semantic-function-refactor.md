@@ -31,6 +31,8 @@ safe-outputs:
 tools:
   github:
     toolsets: [default, issues]
+    repos: ["github/gh-aw-mcpg"]
+    min-integrity: unapproved
   edit:
   bash:
     - "*"

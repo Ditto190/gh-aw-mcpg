@@ -41,6 +41,8 @@ tools:
   cache-memory: true
   github:
     toolsets: [default]
+    repos: ["github/gh-aw-mcpg"]
+    min-integrity: unapproved
   edit:
   bash: ["*"]
 

@@ -23,7 +23,7 @@
 #
 # Test the MCP Gateway's ability to handle large payloads
 #
-# gh-aw-metadata: {"schema_version":"v2","frontmatter_hash":"cf442647b4959ace057efcc44dada1c1f0776805dba44175a1961638417277b4","compiler_version":"v0.58.2","strict":true}
+# gh-aw-metadata: {"schema_version":"v2","frontmatter_hash":"6bd651603e61b4fcf3a6f10e58801925a2378adb5ea2dc18da106800fa057f9a","compiler_version":"v0.58.2","strict":true}
 
 name: "Large Payload Tester"
 "on":
