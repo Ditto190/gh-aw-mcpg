@@ -1,0 +1,119 @@
+package mcp
+
+import (
+	"encoding/json"
+	"fmt"
+
+	"github.com/github/gh-aw-mcpg/internal/logger"
+	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
+)
+
+var logToolResult = logger.New("mcp:tool_result")
+
+// ConvertToCallToolResult converts backend result data to SDK CallToolResult format.
+// The backend returns a JSON object with a "content" field containing an array of content items.
+func ConvertToCallToolResult(data interface{}) (*sdk.CallToolResult, error) {
+	// Try to marshal and unmarshal to get the structure
+	dataBytes, err := json.Marshal(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal backend result: %w", err)
+	}
+
+	// First, try to detect if the response is an array (some backends return arrays directly)
+	var rawArray []json.RawMessage
+	if err := json.Unmarshal(dataBytes, &rawArray); err == nil {
+		// It's an array - wrap it as a single text content item
+		logToolResult.Printf("Backend returned array with %d items, wrapping as text", len(rawArray))
+		return &sdk.CallToolResult{
+			Content: []sdk.Content{
+				&sdk.TextContent{
+					Text: string(dataBytes),
+				},
+			},
+			IsError: false,
+		}, nil
+	}
+
+	// Check if response is an object with a "content" field (standard MCP format)
+	// We need to distinguish between:
+	// 1. {"content": []} - empty array, should preserve as 0 content items
+	// 2. {"content": [...]} - has items, process normally
+	// 3. {"some": "other"} - no content field, wrap as text
+	var hasContentField struct {
+		Content *json.RawMessage `json:"content"`
+		IsError bool             `json:"isError,omitempty"`
+	}
+
+	if err := json.Unmarshal(dataBytes, &hasContentField); err != nil || hasContentField.Content == nil {
+		// No "content" field or parse error - wrap raw response as text
+		logToolResult.Printf("No content field found, wrapping raw response as text")
+		return &sdk.CallToolResult{
+			Content: []sdk.Content{
+				&sdk.TextContent{
+					Text: string(dataBytes),
+				},
+			},
+			IsError: false,
+		}, nil
+	}
+
+	// Parse the backend result structure (standard MCP CallToolResult format)
+	var backendResult struct {
+		Content []struct {
+			Type string `json:"type"`
+			Text string `json:"text,omitempty"`
+		} `json:"content"`
+		IsError bool `json:"isError,omitempty"`
+	}
+
+	if err := json.Unmarshal(dataBytes, &backendResult); err != nil {
+		// If parsing fails, wrap the raw response as text content
+		logToolResult.Printf("Failed to parse as CallToolResult, wrapping raw response: %v", err)
+		return &sdk.CallToolResult{
+			Content: []sdk.Content{
+				&sdk.TextContent{
+					Text: string(dataBytes),
+				},
+			},
+			IsError: false,
+		}, nil
+	}
+
+	// Convert content items to SDK Content format
+	// Note: Empty content array is valid and should be preserved (0 items)
+	content := make([]sdk.Content, 0, len(backendResult.Content))
+	for _, item := range backendResult.Content {
+		switch item.Type {
+		case "text":
+			content = append(content, &sdk.TextContent{
+				Text: item.Text,
+			})
+		default:
+			// For unknown types, try to preserve as text
+			logToolResult.Printf("Unknown content type '%s', treating as text", item.Type)
+			content = append(content, &sdk.TextContent{
+				Text: item.Text,
+			})
+		}
+	}
+
+	return &sdk.CallToolResult{
+		Content: content,
+		IsError: backendResult.IsError,
+	}, nil
+}
+
+// ParseToolArguments extracts and unmarshals tool arguments from a CallToolRequest.
+// Returns the parsed arguments as a map, or an error if parsing fails.
+func ParseToolArguments(req *sdk.CallToolRequest) (map[string]interface{}, error) {
+	var toolArgs map[string]interface{}
+	if req.Params.Arguments != nil {
+		if err := json.Unmarshal(req.Params.Arguments, &toolArgs); err != nil {
+			return nil, fmt.Errorf("failed to parse arguments: %w", err)
+		}
+	} else {
+		// No arguments provided, use empty map
+		toolArgs = make(map[string]interface{})
+	}
+	return toolArgs, nil
+}

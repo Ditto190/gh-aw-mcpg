@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/github/gh-aw-mcpg/internal/mcp"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -98,7 +99,7 @@ func TestConvertToCallToolResult_VariousFormats(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := convertToCallToolResult(tt.input)
+			result, err := mcp.ConvertToCallToolResult(tt.input)
 
 			if tt.expectError {
 				assert.Error(t, err)
@@ -138,7 +139,7 @@ func TestConvertToCallToolResult_NilCheck(t *testing.T) {
 		},
 	}
 
-	result, err := convertToCallToolResult(backendResponse)
+	result, err := mcp.ConvertToCallToolResult(backendResponse)
 
 	require.NoError(t, err, "Conversion should not error")
 

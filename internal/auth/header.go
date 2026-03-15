@@ -40,6 +40,7 @@ import (
 
 	"github.com/github/gh-aw-mcpg/internal/logger"
 	"github.com/github/gh-aw-mcpg/internal/logger/sanitize"
+	"github.com/github/gh-aw-mcpg/internal/strutil"
 )
 
 var log = logger.New("auth:header")
@@ -173,8 +174,5 @@ func TruncateSessionID(sessionID string) string {
 	if sessionID == "" {
 		return "(none)"
 	}
-	if len(sessionID) <= 8 {
-		return sessionID
-	}
-	return sessionID[:8] + "..."
+	return strutil.Truncate(sessionID, 8)
 }
