@@ -163,466 +163,71 @@ For the complete JSON configuration specification with all validation rules, see
 }
 ```
 
-#### Server Configuration Fields
+For complete field-by-field reference, see **[docs/CONFIGURATION.md](docs/CONFIGURATION.md)**.
 
-- **`type`** (optional): Server transport type
-  - `"stdio"` - Standard input/output transport (default)
-  - `"http"` - HTTP transport (fully supported)
-  - `"local"` - Alias for `"stdio"` (backward compatibility)
+Key server fields: `type` (stdio/http), `container` (Docker image), `env` (environment variables with `${VAR}` expansion), `url` (HTTP endpoint), `tools` (tool filter list), `guard` (DIFC guard name), `guard-policies` (access control).
 
-- **`container`** (required for stdio in JSON format): Docker container image (e.g., `"ghcr.io/github/github-mcp-server:latest"`)
-  - Automatically wraps as `docker run --rm -i <container>`
-  - **Note**: The `command` field is NOT supported in JSON stdin format (stdio servers must use `container` instead)
-  - **TOML format uses `command` and `args` fields - `command` must be `"docker"` for stdio servers**
+##### guard-policies
 
-- **`entrypoint`** (optional): Custom entrypoint for the container
-  - Overrides the default container entrypoint
-  - Applied as `--entrypoint` flag to Docker
+- **`allow-only`**: Restricts repository access for GitHub MCP servers — configures `repos` (scope) and `min-integrity` (none/unapproved/approved/merged)
+- **`write-sink`**: Required for ALL output servers when DIFC guards are enabled — configures `accept` patterns matching agent secrecy tags
 
-- **`entrypointArgs`** (optional): Arguments passed to container entrypoint
-  - Array of strings passed after the container image
-
-- **`args`** (optional): Additional Docker runtime arguments inserted before the container image name
-  - Array of strings passed to `docker run` before the container image
-  - Example: `["--network", "host", "--privileged"]`
-  - Useful for advanced Docker configurations
-
-- **`mounts`** (optional): Volume mounts for the container
-  - Array of strings in format `"source:dest:mode"`
-  - `source` - Host path to mount (can use environment variables with `${VAR}` syntax)
-  - `dest` - Container path where the volume is mounted
-  - `mode` - Either `"ro"` (read-only) or `"rw"` (read-write)
-  - Example: `["/host/config:/app/config:ro", "/host/data:/app/data:rw"]`
-
-- **`env`** (optional): Environment variables
-  - Set to `""` (empty string) for passthrough from host environment
-  - Set to `"value"` for explicit value
-  - Use `"${VAR_NAME}"` for environment variable expansion (fails if undefined)
-
-- **`url`** (required for http): HTTP endpoint URL for `type: "http"` servers
-
-- **`headers`** (optional): HTTP headers to include in requests (for `type: "http"` servers)
-  - Map of header name to value (e.g., `{"Authorization": "Bearer token"}`)
-
-- **`tools`** (optional): List of tool names to expose from this server
-  - If omitted or empty, all tools are exposed
-  - Example: `["get_file_contents", "search_code"]`
-
-- **`registry`** (optional): Informational URI to the server's entry in an MCP registry
-  - Used for documentation and discoverability purposes only; not used at runtime
-
-- **`guard`** (optional): Name of the guard to use for this server (DIFC)
-  - References a guard defined in the top-level `[guards]` section
-  - Enables per-server DIFC guard assignment independent of `guard-policies`
-  - Example: `guard = "github"` (uses the guard named `github` from `[guards.github]`)
-
-- **`working_directory`** (optional, TOML format only): Working directory for the server process
-  - **Note**: This field is parsed and stored but not yet implemented in the launcher; it has no runtime effect currently
-
-- **`guard-policies`** (optional): Guard policies for access control at the MCP gateway level
-  - **`allow-only`**: Restricts which repositories a guard allows (used for GitHub MCP server)
-  - **`write-sink`**: Marks a server as a write-only output channel that accepts writes from agents with matching secrecy labels (used for safe-outputs, buffered update servers)
-  - A server's guard-policies must contain **either** `allow-only` **or** `write-sink`, not both.
-
-  ##### allow-only (GitHub MCP server)
-
-  Controls repository access with the following structure:
-    ```json
-    "guard-policies": {
-      "allow-only": {
-        "repos": ["github/gh-aw-mcpg", "github/gh-aw"],
-        "min-integrity": "unapproved"
-      }
-    }
-    ```
-    TOML equivalent:
-    ```toml
-    [servers.github.guard_policies.allow-only]
-    repos = ["github/gh-aw-mcpg", "github/gh-aw"]
-    min-integrity = "unapproved"
-    ```
-    - **`repos`**: Repository access scope
-      - `"all"` - All repositories accessible by the token
-      - `"public"` - Public repositories only
-      - Array of patterns:
-        - `"owner/repo"` - Exact repository match
-        - `"owner/*"` - All repositories under owner
-        - `"owner/prefix*"` - Repositories with name prefix under owner
-    - **`min-integrity`**: Minimum integrity level required. Integrity levels are determined by the GitHub MCP server based on the `author_association` field of GitHub objects and whether the object is reachable from the main branch:
-      - `"none"` - No integrity requirements (includes objects with author_association: FIRST_TIME_CONTRIBUTOR, FIRST_TIMER, NONE)
-      - `"unapproved"` - Unapproved contributor level (includes objects with author_association: CONTRIBUTOR, FIRST_TIME_CONTRIBUTOR)
-      - `"approved"` - Approved contributor level (includes objects with author_association: OWNER, MEMBER, COLLABORATOR)
-      - `"merged"` - Merged to main branch (any object reachable from the main branch, regardless of authorship)
-    - **Meaning**: Restricts the GitHub MCP server to only access specified repositories
-    - Tools like `get_file_contents`, `search_code`, etc. will only work on allowed repositories
-    - Attempts to access other repositories will be denied by the guard policy
-
-  ##### write-sink (output servers)
-
-  Marks a server as a write-only output channel. **Write-sink is required for ALL output
-  servers** (e.g., `safeoutputs`) when DIFC guards are enabled on any other server. Without
-  it, the output server gets a noop guard that classifies operations as reads with empty
-  labels, causing integrity violations when the agent has integrity tags from other guards.
-
-  When an agent reads from a guarded server (e.g., GitHub with `allow-only`), it acquires
-  secrecy and integrity labels. The write-sink guard solves this by classifying all
-  operations as writes and accepting writes from agents whose secrecy labels match the
-  configured `accept` patterns.
-
-    For exact repos (`repos=["owner/repo1", "owner/repo2"]`):
-    ```json
-    "guard-policies": {
-      "write-sink": {
-        "accept": ["private:owner/repo1", "private:owner/repo2"]
-      }
-    }
-    ```
-
-    For prefix wildcard repos (`repos=["owner/prefix*"]`):
-    ```json
-    "guard-policies": {
-      "write-sink": {
-        "accept": ["private:owner/prefix*"]
-      }
-    }
-    ```
-
-    For broad access (`repos="all"` or `repos="public"`):
-    ```json
-    "guard-policies": {
-      "write-sink": {
-        "accept": ["*"]
-      }
-    }
-    ```
-
-    TOML equivalents:
-    ```toml
-    # Exact repos
-    [servers.safeoutputs.guard_policies.write-sink]
-    Accept = ["private:owner/repo1", "private:owner/repo2"]
-
-    # Prefix wildcard repos
-    [servers.safeoutputs.guard_policies.write-sink]
-    Accept = ["private:owner/prefix*"]
-
-    # Broad access (repos="all" or repos="public")
-    [servers.safeoutputs.guard_policies.write-sink]
-    Accept = ["*"]
-    ```
-    - **`accept`**: Array of secrecy tags the sink accepts (exact string match against agent secrecy tags — not glob patterns)
-      - `"*"` - **Wildcard**: Accept writes from agents with any secrecy (must be the sole entry). Use for `repos="all"` or `repos="public"`.
-      - `"private:owner/repo"` - Matches agent secrecy tag from `repos=["owner/repo"]` (exact repo)
-      - `"private:owner/prefix*"` - Matches agent secrecy tag from `repos=["owner/prefix*"]` (prefix wildcard — the `*` is a literal character in the tag)
-      - `"private:owner"` - Matches agent secrecy tag from `repos=["owner/*"]` (owner wildcard — bare owner, no `/*` suffix)
-      - `"public:owner/repo*"` - Matches agent secrecy tag for public repos matching a prefix
-      - `"internal:owner/repo*"` - Matches agent secrecy tag for internal repos matching a prefix
-    - **How it works**: The write-sink classifies all operations as writes. For DIFC write checks:
-      - Resource secrecy is set to the `accept` patterns → agent secrecy ⊆ resource secrecy passes
-      - Resource integrity is left empty → no integrity requirements for writes
-    - **When to use**: Required for **all** output servers (`safeoutputs`, etc.) when DIFC guards are enabled on any server in the configuration
-
-  ##### Mapping allow-only repos to write-sink accept
-
-  The write-sink `accept` entries must match the secrecy tags the GitHub guard assigns
-  to the agent via `label_agent`. The mapping depends on the `repos` configuration:
-
-  | `allow-only.repos` | Agent secrecy tags | `write-sink.accept` |
-  |---|---|---|
-  | `"all"` | `[]` (none) | `["*"]` (wildcard) |
-  | `"public"` | `[]` (none) | `["*"]` (wildcard) |
-  | `["owner/repo"]` | `["private:owner/repo"]` | `["private:owner/repo"]` |
-  | `["owner/*"]` | `["private:owner"]` | `["private:owner"]` |
-  | `["owner/prefix*"]` | `["private:owner/prefix*"]` | `["private:owner/prefix*"]` |
-  | `["O/R1", "O/R2"]` | `["private:O/R1", "private:O/R2"]` | `["private:O/R1", "private:O/R2"]` |
-  | `["O1/*", "O2/R"]` | `["private:O1", "private:O2/R"]` | `["private:O1", "private:O2/R"]` |
-
-  **Key rules**:
-  - `repos="all"` or `repos="public"` → no secrecy tags → use `accept: ["*"]` (wildcard)
-  - Write-sink is **required for ALL output servers** when DIFC guards are enabled (prevents noop guard integrity violations)
-  - `accept: ["*"]` is a special wildcard that accepts writes from agents with any secrecy; it must be the sole entry
-  - `repos=["owner/*"]` (owner wildcard) → bare owner tag `"private:owner"` (no `/*` suffix)
-  - `repos=["owner/prefix*"]` (prefix wildcard) → `"private:owner/prefix*"` (suffix preserved)
-  - `repos=["owner/repo"]` (exact) → `"private:owner/repo"`
-  - Multi-entry repos produce one tag per entry; `accept` must include all of them
-  - `accept` can be a superset of the agent's secrecy (extra entries are harmless)
-  - `min-integrity` does not affect these rules (it only changes integrity labels)
-
-  - For **other MCP servers** (Jira, WorkIQ, etc.), different policy schemas apply
-  - JSON format uses `"guard-policies"` (with hyphen), TOML uses `guard_policies` (with underscore)
+See **[docs/CONFIGURATION.md](docs/CONFIGURATION.md)** for guard-policy details including the allow-only → write-sink accept mapping table.
 
 #### Custom Schemas (`customSchemas`)
 
-The `customSchemas` top-level field allows you to define custom server types beyond the built-in `"stdio"` and `"http"` types. Each custom type maps to an HTTPS schema URL that describes its configuration format.
-
-```json
-{
-  "customSchemas": {
-    "myCustomType": "https://example.com/schemas/my-custom-type.json"
-  },
-  "mcpServers": {
-    "myServer": {
-      "type": "myCustomType"
-    }
-  }
-}
-```
-
-**Validation Rules for `customSchemas`:**
-- Custom type names must not conflict with reserved types (`stdio`, `http`)
-- Schema URLs must use `https://` (HTTP URLs are not permitted)
-- If a server's `type` references a custom type not listed in `customSchemas`, validation fails with a helpful error message
-
-**Validation Rules:**
-
-- **JSON stdin format**:
-  - **Stdio servers** must specify `container` (required)
-  - **HTTP servers** must specify `url` (required)
-  - **The `command` field is not supported** - stdio servers must use `container`
-- **TOML format**:
-  - Uses `command` and `args` fields directly (e.g., `command = "docker"`)
-- **Common rules** (both formats):
-  - Empty/"local" type automatically normalized to "stdio"
-  - Variable expansion with `${VAR_NAME}` fails fast on undefined variables
-  - All validation errors include JSONPath and helpful suggestions
-  - **Mount specifications** must follow `"source:dest:mode"` format
-    - `source` must be an absolute path (e.g., `/host/data`)
-    - `dest` must be an absolute path (e.g., `/app/data`)
-    - `mode` must be either `"ro"` or `"rw"`
-    - Both source and destination paths are required (cannot be empty)
-
-See **[Configuration Specification](https://github.com/github/gh-aw/blob/main/docs/src/content/docs/reference/mcp-gateway.md)** for complete validation rules.
+Define custom server types beyond `"stdio"` and `"http"` by mapping type names to HTTPS schema URLs. See **[docs/CONFIGURATION.md](docs/CONFIGURATION.md)** for details.
 
 #### Gateway Configuration Fields (Reserved)
 
-- **`port`** (optional): Gateway HTTP port (default: from `--listen` flag)
-  - Valid range: 1-65535
-- **`apiKey`** (optional): API key for authentication
-- **`domain`** (optional): Domain name for the gateway
-  - Allowed values: `"localhost"`, `"host.docker.internal"`, or a variable expression (e.g., `"${MCP_GATEWAY_DOMAIN}"`)
-  - **Note**: Only **uppercase** variable names are accepted in variable expressions (e.g., `"${MY_VAR}"` is valid, `"${my_var}"` is not)
-- **`startupTimeout`** (optional): Seconds to wait for backend startup (default: 60)
-  - Must be positive integer
-- **`toolTimeout`** (optional): Seconds to wait for tool execution (default: 120)
-  - Must be positive integer
-- **`payloadDir`** (optional): Directory for storing large payload files (default: `/tmp/jq-payloads`)
-  - Payloads are organized by session: `{payloadDir}/{sessionID}/{queryID}/payload.json`
+| Field | Description | Default |
+|-------|-------------|---------|
+| `port` | HTTP port (1-65535) | From `--listen` flag |
+| `apiKey` | API key for authentication | (disabled) |
+| `domain` | Gateway domain | `localhost` |
+| `startupTimeout` | Backend startup timeout (seconds) | `60` |
+| `toolTimeout` | Tool execution timeout (seconds) | `120` |
+| `payloadDir` | Large payload storage directory | `/tmp/jq-payloads` |
 
-**Note**: Gateway configuration fields are validated and parsed but not yet fully implemented.
+See **[docs/CONFIGURATION.md](docs/CONFIGURATION.md)** for TOML-only/CLI-only options and variable expansion features.
 
-**Configuration Alternatives**:
-- **`payloadSizeThreshold`** is not supported in JSON stdin format. Use:
-  - CLI flag: `--payload-size-threshold <bytes>` (default: 524288)
-  - Environment variable: `MCP_GATEWAY_PAYLOAD_SIZE_THRESHOLD=<bytes>`
-  - TOML config file: `payload_size_threshold = <bytes>` in `[gateway]` section
-  - Payloads **larger** than this threshold are stored to disk and return metadata
-  - Payloads **smaller than or equal** to this threshold are returned inline
-- **`payloadPathPrefix`** is not supported in JSON stdin format. Use:
-  - CLI flag: `--payload-path-prefix <path>` (default: empty - use actual filesystem path)
-  - Environment variable: `MCP_GATEWAY_PAYLOAD_PATH_PREFIX=<path>`
-  - TOML config file: `payload_path_prefix = "<path>"` in `[gateway]` section
-  - When set, the `payloadPath` returned to clients uses this prefix instead of the actual filesystem path
-  - Example: Gateway saves to `/tmp/jq-payloads/session/query/payload.json`, but returns `/workspace/payloads/session/query/payload.json` to clients if `payload_path_prefix = "/workspace/payloads"`
-  - This allows agents running in containers to access payload files via mounted volumes
-- **`sequential_launch`** is only supported in TOML config and CLI. Use:
-  - CLI flag: `--sequential-launch` (default: parallel launch)
-  - TOML config file: `sequential_launch = true` at the **top level** (outside of any `[section]`)
-  - When enabled, MCP servers are started one-by-one instead of in parallel; useful when servers have ordering dependencies or for debugging startup issues
-  - Example (top-level TOML placement):
-    ```toml
-    sequential_launch = true
+### Configuration Validation
 
-    [gateway]
-    port = 3000
-
-    [servers.github]
-    command = "docker"
-    # ...
-    ```
-- **`guards_mode`** is only supported in TOML config and CLI. Use:
-  - CLI flag: `--guards-mode <mode>` (default: `strict`)
-  - Environment variable: `MCP_GATEWAY_GUARDS_MODE=<mode>`
-  - TOML config file: `guards_mode = "strict"` at the **top level** (outside of any `[section]`)
-  - Valid values: `strict` (deny violations), `filter` (silently remove denied tools/resources), `propagate` (auto-adjust agent labels on reads to allow access)
-  - Example (top-level TOML placement):
-    ```toml
-    guards_mode = "filter"
-
-    [gateway]
-    port = 3000
-    ```
-
-**Environment Variable Features**:
-- **Passthrough**: Set value to empty string (`""`) to pass through from host
-- **Expansion**: Use `${VAR_NAME}` syntax for dynamic substitution (fails if undefined)
-
-### Configuration Validation and Error Handling
-
-MCP Gateway provides detailed error messages and validation to help catch configuration issues early:
-
-#### Parse Errors with Precise Location
-
-When there's a syntax error in your TOML configuration, the gateway reports the exact line and column:
-
-```bash
-$ awmg --config config.toml
-Error: failed to parse TOML at line 2, column 6: expected '.' or '=', but got '3' instead
-```
-
-This helps you quickly identify and fix syntax issues.
-
-#### Unknown Key Detection (Typo Detection)
-
-The gateway detects and warns about unknown configuration keys, helping catch typos and deprecated options:
-
-```toml
-[gateway]
-prot = 3000              # Typo: should be 'port'
-startup_timout = 30      # Typo: should be 'startup_timeout'
-```
-
-When you run the gateway with these typos, you'll see warnings in the log file:
-
-```
-[2026-02-07T17:46:51Z] [WARN] [config] Unknown configuration key 'gateway.prot' - check for typos or deprecated options
-[2026-02-07T17:46:51Z] [WARN] [config] Unknown configuration key 'gateway.startup_timout' - check for typos or deprecated options
-```
-
-The gateway will use default values for unrecognized keys, so it will still start, but the warnings help you identify and fix configuration issues.
-
-#### Memory-Efficient Parsing
-
-The gateway uses streaming parsing for configuration files, making it efficient even with large configuration files containing many servers.
-
-#### Best Practices
-
-1. **Check logs for warnings**: After starting the gateway, check the log file for any warnings about unknown keys
-2. **Use precise error messages**: When you see a parse error, the line and column numbers point exactly to the problem
-3. **Validate configuration**: Test your configuration changes by running the gateway and checking for warnings
-4. **Keep configuration clean**: Remove any deprecated or unused configuration options
+The gateway provides fail-fast validation with precise error locations (line/column for TOML parse errors), unknown key detection (catches typos like `prot` instead of `port`), and environment variable expansion validation. Check log files for warnings after startup.
 
 ## Usage
 
-```
-MCPG is a proxy server for Model Context Protocol (MCP) servers.
-It provides routing, aggregation, and management of multiple MCP backend servers.
+Run `./awmg --help` for full CLI options. Key flags:
 
-Usage:
-  awmg [flags]
-  awmg [command]
-
-Available Commands:
-  completion  Generate completion script
-  help        Help about any command
-
-Flags:
-      --allowonly-min-integrity string   AllowOnly integrity: none|unapproved|approved|merged
-      --allowonly-scope-owner string     AllowOnly owner scope value
-      --allowonly-scope-public           Use public AllowOnly scope
-      --allowonly-scope-repo string      AllowOnly repo name (requires owner)
-  -c, --config string                    Path to config file
-      --config-stdin                     Read MCP server configuration from stdin (JSON format). When enabled, overrides --config
-      --env string                       Path to .env file to load environment variables
-      --guard-policy-json string         Guard policy JSON (e.g. {"allow-only":{"repos":"public","min-integrity":"none"}})
-      --guards-mode string               Guards enforcement mode: strict (deny violations), filter (remove denied tools), or propagate (auto-adjust agent labels on reads) (default "strict")
-      --guards-sink-server-ids string    Comma-separated server IDs whose RPC JSONL logs should include agent secrecy/integrity tag snapshots
-  -h, --help                             help for awmg
-  -l, --listen string                    HTTP server listen address (default "127.0.0.1:3000")
-      --log-dir string                   Directory for log files (falls back to stdout if directory cannot be created) (default "/tmp/gh-aw/mcp-logs")
-      --payload-dir string               Directory for storing large payload files (segmented by session ID) (default "/tmp/jq-payloads")
-      --payload-path-prefix string       Path prefix to use when returning payloadPath to clients (allows remapping host paths to client/agent container paths)
-      --payload-size-threshold int       Size threshold (in bytes) for storing payloads to disk. Payloads larger than this are stored, smaller ones returned inline (default 524288)
-      --routed                           Run in routed mode (each backend at /mcp/<server>)
-      --sequential-launch                Launch MCP servers sequentially during startup (parallel launch is default)
-      --unified                          Run in unified mode (all backends at /mcp)
-      --validate-env                     Validate execution environment (Docker, env vars) before starting
-  -v, --verbose count                    Increase verbosity level (use -v for info, -vv for debug, -vvv for trace)
-      --version                          version for awmg
-
-Use "awmg [command] --help" for more information about a command.
+```bash
+./awmg --config config.toml                    # TOML config file
+./awmg --config-stdin < config.json            # JSON stdin
+./awmg --config config.toml --routed           # Routed mode (default)
+./awmg --config config.toml --unified          # Unified mode
+./awmg --config config.toml --log-dir /path    # Custom log directory
 ```
 
 ## Environment Variables
 
-The following environment variables are used by the MCP Gateway:
+For complete reference, see **[docs/ENVIRONMENT_VARIABLES.md](docs/ENVIRONMENT_VARIABLES.md)**.
 
-### Required for Production (Containerized Mode)
-
-When running in a container (`run_containerized.sh`), these variables **must** be set:
-
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `MCP_GATEWAY_PORT` | The port the gateway listens on (used for `--listen` address) | `8080` |
-| `MCP_GATEWAY_DOMAIN` | The domain name for the gateway | `localhost` |
-| `MCP_GATEWAY_API_KEY` | API key checked by `run_containerized.sh` as a deployment gate; must be referenced in your JSON config via `"${MCP_GATEWAY_API_KEY}"` to enable authentication | `your-secret-key` |
-
-### Optional (Non-Containerized Mode)
-
-When running locally (`run.sh`), these variables are optional (warnings shown if missing):
+Key variables:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `MCP_GATEWAY_PORT` | Gateway listening port | `8000` |
-| `MCP_GATEWAY_DOMAIN` | Gateway domain | `localhost` |
-| `MCP_GATEWAY_API_KEY` | Informational only — not read directly by the binary; must be referenced in your config via `"${MCP_GATEWAY_API_KEY}"` to enable authentication | (disabled) |
-| `MCP_GATEWAY_LOG_DIR` | Log file directory (sets default for `--log-dir` flag) | `/tmp/gh-aw/mcp-logs` |
-| `MCP_GATEWAY_PAYLOAD_DIR` | Large payload storage directory (sets default for `--payload-dir` flag) | `/tmp/jq-payloads` |
-| `MCP_GATEWAY_PAYLOAD_PATH_PREFIX` | Path prefix for remapping payloadPath returned to clients (sets default for `--payload-path-prefix` flag) | (empty - use actual filesystem path) |
-| `MCP_GATEWAY_PAYLOAD_SIZE_THRESHOLD` | Size threshold in bytes for payload storage (sets default for `--payload-size-threshold` flag) | `524288` |
-| `MCP_GATEWAY_WASM_GUARDS_DIR` | Root directory for per-server WASM guards (`<root>/<serverID>/*.wasm`, first match is loaded) | (disabled) |
-| `MCP_GATEWAY_GUARDS_MODE` | Guards enforcement mode: `strict` (deny violations), `filter` (remove denied tools), `propagate` (auto-adjust agent labels) (sets default for `--guards-mode`) | `strict` |
-| `MCP_GATEWAY_GUARDS_SINK_SERVER_IDS` | Comma-separated sink server IDs for JSONL guards tag enrichment (sets default for `--guards-sink-server-ids`) | (disabled) |
-| `DEBUG` | Enable debug logging with pattern matching (e.g., `*`, `server:*,launcher:*`) | (disabled) |
-| `DEBUG_COLORS` | Control colored debug output (0 to disable, auto-disabled when piping) | Auto-detect |
-| `RUNNING_IN_CONTAINER` | Manual override; set to `"true"` to force container detection when `/.dockerenv` and cgroup detection are unavailable | (unset) |
-
-**Note:** `PORT`, `HOST`, and `MODE` are not read by the `awmg` binary directly. However, `run.sh` does use `HOST` (default: `0.0.0.0`) and `MODE` (default: `--routed`) to set the bind address and routing mode. Use the `--listen` and `--routed`/`--unified` flags when running `awmg` directly.
-
-### Containerized Deployment Variables
-
-When using `run_containerized.sh`, these additional variables are available:
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `MCP_GATEWAY_HOST` | Bind address for the gateway | `0.0.0.0` |
-| `MCP_GATEWAY_MODE` | Routing mode flag passed to `awmg` (e.g., `--routed`, `--unified`) | `--routed` |
-
-### Docker Configuration
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `DOCKER_HOST` | Docker daemon socket path | `/var/run/docker.sock` |
-| `DOCKER_API_VERSION` | Docker API version (set by helper scripts, Docker client auto-negotiates) | Set by querying Docker daemon's current API version; falls back to `1.44` if detection fails |
-
-### DIFC / Guard Policy Configuration
-
-These environment variables configure guard policies (e.g., AllowOnly policies for restricting tool access to specific GitHub repositories):
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `MCP_GATEWAY_GUARD_POLICY_JSON` | Guard policy JSON (e.g., `{"allow-only":{"repos":"public","min-integrity":"none"}}`) (sets default for `--guard-policy-json`) | (disabled) |
-| `MCP_GATEWAY_ALLOWONLY_SCOPE_PUBLIC` | Use public AllowOnly scope (sets default for `--allowonly-scope-public`) | `false` |
-| `MCP_GATEWAY_ALLOWONLY_SCOPE_OWNER` | AllowOnly owner scope value (sets default for `--allowonly-scope-owner`) | (disabled) |
-| `MCP_GATEWAY_ALLOWONLY_SCOPE_REPO` | AllowOnly repo name (requires owner) (sets default for `--allowonly-scope-repo`) | (disabled) |
-| `MCP_GATEWAY_ALLOWONLY_MIN_INTEGRITY` | AllowOnly integrity level: `none`, `unapproved`, `approved`, `merged` (sets default for `--allowonly-min-integrity`) | (disabled) |
+| `MCP_GATEWAY_API_KEY` | API key (reference in config via `"${MCP_GATEWAY_API_KEY}"`) | (disabled) |
+| `MCP_GATEWAY_LOG_DIR` | Log file directory | `/tmp/gh-aw/mcp-logs` |
+| `MCP_GATEWAY_PAYLOAD_DIR` | Payload storage directory | `/tmp/jq-payloads` |
+| `MCP_GATEWAY_GUARDS_MODE` | DIFC mode: `strict`/`filter`/`propagate` | `strict` |
+| `MCP_GATEWAY_WASM_GUARDS_DIR` | WASM guard directory | (disabled) |
+| `DEBUG` | Debug logging pattern (e.g., `*`, `server:*`) | (disabled) |
 
 ## Containerized Mode
 
-### Running in Docker
-
-For production deployments in Docker containers, use `run_containerized.sh` which:
-
-1. **Validates the container environment** before starting
-2. **Requires** all essential environment variables
-3. **Requires** stdin input (`-i` flag) for JSON configuration
-4. **Validates** Docker socket accessibility
-5. **Validates** port mapping configuration
+For production deployments, use `run_containerized.sh` which validates the environment, requires essential env vars, and checks Docker socket access:
 
 ```bash
-# Correct way to run the gateway in a container:
-# Note: MCP_GATEWAY_API_KEY is checked by run_containerized.sh as a deployment gate.
-# For authentication to be active, your config.json must reference it via variable expansion:
-#   "gateway": { "apiKey": "${MCP_GATEWAY_API_KEY}" }
 docker run -i \
   -e MCP_GATEWAY_PORT=8080 \
   -e MCP_GATEWAY_DOMAIN=localhost \
@@ -633,145 +238,25 @@ docker run -i \
   ghcr.io/github/gh-aw-mcpg:latest < config.json
 ```
 
-**Important flags:**
-- `-i`: Required for passing configuration via stdin
-- `-v /var/run/docker.sock:/var/run/docker.sock`: Required for spawning backend MCP servers
-- `-v /path/to/logs:/tmp/gh-aw/mcp-logs`: Optional but recommended for persistent logs (path matches default or `MCP_GATEWAY_LOG_DIR`)
-- `-p <host>:<container>`: Port mapping must match `MCP_GATEWAY_PORT`
+Key flags: `-i` (required for stdin config), `-v .../docker.sock` (required for spawning backends), `-p` (must match `MCP_GATEWAY_PORT`).
 
-### Validation Checks
-
-The containerized startup script performs these validations:
-
-| Check | Description | Action on Failure |
-|-------|-------------|-------------------|
-| Docker Socket | Verifies Docker daemon is accessible | Exit with error |
-| Environment Variables | Checks required env vars are set | Exit with error |
-| Port Mapping | Verifies container port is mapped to host | Exit with error |
-| Stdin Interactive | Ensures `-i` flag was used | Exit with error |
-| Log Directory Mount | Verifies log directory is mounted to host | Warning (logs won't persist) |
-
-### Non-Containerized Mode
-
-For local development, use `run.sh` which:
-
-1. **Warns** about missing environment variables (but continues)
-2. **Provides** default configuration if no config file specified
-3. **Auto-detects** containerized environments and redirects to `run_containerized.sh`
-
-```bash
-# Run locally with defaults:
-./run.sh
-
-# Run with custom config:
-CONFIG=my-config.toml ./run.sh
-
-# Run with environment variables:
-MCP_GATEWAY_PORT=3000 ./run.sh
-```
+For local development, use `run.sh` which provides defaults and warns about missing env vars.
 
 ## Logging
 
-MCPG provides comprehensive logging of all gateway operations to help diagnose issues and monitor activity.
+The gateway creates log files in the configured log directory (default: `/tmp/gh-aw/mcp-logs`):
 
-### Log Files
+| File | Purpose |
+|------|---------|
+| `mcp-gateway.log` | Unified log with all messages |
+| `{serverID}.log` | Per-server logs (e.g., `github.log`) |
+| `gateway.md` | Markdown-formatted logs for workflow previews |
+| `rpc-messages.jsonl` | Machine-readable RPC messages |
+| `tools.json` | Available tools from all backends |
 
-The gateway creates multiple log files for different purposes:
+Configure log location with `--log-dir` flag or `MCP_GATEWAY_LOG_DIR` env var. Logs include timestamps, levels (INFO/WARN/ERROR/DEBUG), categories, and contextual details.
 
-1. **`mcp-gateway.log`** - Unified log with all gateway messages
-2. **`{serverID}.log`** - Per-server logs (e.g., `github.log`, `slack.log`) for easier troubleshooting of specific backend servers
-3. **`gateway.md`** - Markdown-formatted logs for GitHub workflow previews
-4. **`rpc-messages.jsonl`** - Machine-readable JSONL format for RPC message analysis
-5. **`tools.json`** - Available tools from all backend MCP servers (mapping server IDs to their tool names and descriptions)
-
-### Log File Location
-
-By default, logs are written to `/tmp/gh-aw/mcp-logs/`. This location can be configured using either:
-
-1. **`MCP_GATEWAY_LOG_DIR` environment variable** - Sets the default log directory
-2. **`--log-dir` flag** - Overrides the environment variable and default
-
-The precedence order is: `--log-dir` flag → `MCP_GATEWAY_LOG_DIR` env var → default (`/tmp/gh-aw/mcp-logs`)
-
-### Per-ServerID Logs
-
-Each backend MCP server gets its own log file (e.g., `github.log`, `slack.log`) in addition to the unified `mcp-gateway.log`. This makes it much easier to:
-
-- Debug issues with a specific backend server
-- View all activity for one server without filtering
-- Identify which server is causing problems
-- Troubleshoot server-specific configuration issues
-
-Example log directory structure:
-```
-/tmp/gh-aw/mcp-logs/
-├── mcp-gateway.log    # All messages
-├── github.log         # Only GitHub server logs
-├── slack.log          # Only Slack server logs
-├── notion.log         # Only Notion server logs
-├── gateway.md         # Markdown format
-├── rpc-messages.jsonl # RPC messages
-└── tools.json         # Available tools
-```
-
-**Using the environment variable:**
-```bash
-export MCP_GATEWAY_LOG_DIR=/var/log/mcp-gateway
-./awmg --config config.toml
-```
-
-**Using the command-line flag:**
-```bash
-./awmg --config config.toml --log-dir /var/log/mcp-gateway
-```
-
-**Important for containerized mode:** Mount the log directory to persist logs outside the container:
-```bash
-docker run -v /path/on/host:/tmp/gh-aw/mcp-logs ...
-```
-
-If the log directory cannot be created or accessed, MCPG automatically falls back to logging to stdout.
-
-### What Gets Logged
-
-MCPG logs all important gateway events including:
-
-- **Startup and Shutdown**: Gateway initialization, configuration loading, and graceful shutdown
-- **MCP Client Interactions**: Client connection events, request/response details, session management
-- **Backend Server Interactions**: Backend server launches, connection establishment, communication events
-- **Authentication Events**: Successful authentications and authentication failures (missing/invalid tokens)
-- **Connectivity Errors**: Connection failures, timeouts, protocol errors, and command execution issues
-- **Debug Information**: Optional detailed debugging via the `DEBUG` environment variable
-
-### Log Format
-
-Each log entry includes:
-- **Timestamp** (RFC3339 format)
-- **Log Level** (INFO, WARN, ERROR, DEBUG)
-- **Category** (startup, client, backend, auth, shutdown)
-- **Message** with contextual details
-
-Example log entries:
-```
-[2026-01-08T23:00:00Z] [INFO] [startup] Starting MCPG with config: config.toml, listen: 127.0.0.1:3000, log-dir: /tmp/gh-aw/mcp-logs
-[2026-01-08T23:00:01Z] [INFO] [backend] Launching MCP backend server: github, command=docker, args=[run --rm -i ghcr.io/github/github-mcp-server:latest]
-[2026-01-08T23:00:02Z] [INFO] [client] New MCP client connection, remote=127.0.0.1:54321, method=POST, path=/mcp/github, backend=github, session=abc123
-[2026-01-08T23:00:03Z] [ERROR] [auth] Authentication failed: invalid API key, remote=127.0.0.1:54322, path=/mcp/github
-```
-
-### Debug Logging
-
-For development and troubleshooting, enable debug logging using the `DEBUG` environment variable:
-
-```bash
-# Enable all debug logs
-DEBUG=* ./awmg --config config.toml
-
-# Enable specific categories
-DEBUG=server:*,launcher:* ./awmg --config config.toml
-```
-
-Debug logs are written to stderr and follow the same pattern-matching syntax as the file logger.
+For debug logging: `DEBUG=* ./awmg --config config.toml` (supports pattern matching: `DEBUG=server:*,launcher:*`)
 ## API Endpoints
 
 ### Routed Mode (default)
@@ -799,126 +284,45 @@ Supported JSON-RPC 2.0 methods:
 
 ### Authentication
 
-MCPG implements MCP specification 7.1 for API key authentication.
-
-**Authentication Header Format:**
-- Per MCP spec 7.1: Authorization header MUST contain the API key directly
-- Format: `Authorization: <api-key>` (plain API key, NOT Bearer scheme)
-- Example: `Authorization: my-secret-api-key-123`
-
-**Configuration:**
-- The binary reads the API key from the config (`[gateway] api_key` in TOML, or `"gateway": {"apiKey": "..."}` in JSON stdin)
-- To configure via environment variable, reference it in your JSON config using variable expansion:
-  ```json
-  {
-    "gateway": {
-      "apiKey": "${MCP_GATEWAY_API_KEY}"
-    }
-  }
-  ```
+Per MCP spec 7.1, the gateway uses plain API key authentication:
+- Header format: `Authorization: <api-key>` (NOT Bearer scheme)
+- Configure via `[gateway] api_key` in TOML, or `"gateway": {"apiKey": "${MCP_GATEWAY_API_KEY}"}` in JSON
 - When configured, all endpoints except `/health` require authentication
 - When not configured, authentication is disabled
 
-**Implementation:**
-- The `internal/auth` package provides centralized authentication logic
-- `auth.ParseAuthHeader()` - Parses Authorization headers per MCP spec 7.1
-- `auth.ValidateAPIKey()` - Validates provided API keys
-- Backward compatibility for Bearer tokens is maintained
-
-**Example Request:**
-```bash
-curl -X POST http://localhost:8000/mcp/github \
-  -H "Authorization: my-api-key" \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc": "2.0", "method": "tools/list", "id": 1}'
-```
-
 ### Enhanced Error Debugging
 
-Command failures now include extensive debugging information:
-
-- Full command, arguments, and environment variables
-- Context-specific troubleshooting suggestions:
-  - Docker daemon connectivity checks
-  - Container image availability
-  - Network connectivity issues
-  - MCP protocol compatibility checks
+Command failures include full command details, environment variables, and context-specific troubleshooting suggestions (Docker connectivity, image availability, network issues, MCP compatibility).
 
 ## Architecture
 
-This Go port focuses on core MCP proxy functionality with optional security features:
+Core MCP proxy with optional DIFC security:
 
-### Core Features (Enabled)
-
-- ✅ TOML and JSON stdin configuration with spec-compliant validation
-- ✅ Environment variable expansion (`${VAR_NAME}`) with fail-fast behavior
-- ✅ Stdio transport for backend servers (containerized execution only)
-- ✅ HTTP transport for backend servers (session state preserved across requests)
-- ✅ Docker container launching
-- ✅ Routed and unified modes
-- ✅ Basic request/response proxying
-- ✅ Enhanced error debugging and troubleshooting
+- TOML and JSON stdin configuration with spec-compliant validation
+- Environment variable expansion (`${VAR_NAME}`) with fail-fast behavior
+- Stdio transport (containerized) and HTTP transport (session state preserved)
+- Routed (`/mcp/{serverID}`) and unified (`/mcp`) modes
+- Docker container launching for backend servers
+- DIFC guard system with WASM-based guards
 
 ## MCP Server Compatibility
 
-**The gateway supports MCP servers via stdio transport using Docker containers.** All properly configured MCP servers work through direct stdio connections.
-
-### Test Results
-
-Both GitHub MCP and Serena MCP servers pass comprehensive test suites including gateway tests:
-
-| Server | Transport | Direct Tests | Gateway Tests | Status |
-|--------|-----------|--------------|---------------|--------|
-| **GitHub MCP** | Stdio (Docker) | ✅ All passed | ✅ All passed | Production ready |
-| **Serena MCP** | Stdio (Docker) | ✅ 68/68 passed (100%) | ✅ All passed | Production ready |
-
-**Configuration:**
-```bash
-# Both servers use stdio transport via Docker containers
-docker run -i ghcr.io/github/github-mcp-server          # GitHub MCP
-docker run -i ghcr.io/github/serena-mcp-server:latest   # Serena MCP
-```
-
-### Using MCP Servers with the Gateway
-
-**Direct Connection (Recommended):**
-Configure MCP servers to connect directly via stdio transport for optimal performance and full feature support:
+The gateway supports MCP servers via stdio transport using Docker containers. Tested with GitHub MCP and Serena MCP servers.
 
 ```json
 {
   "mcpServers": {
-    "serena": {
-      "type": "stdio",
-      "container": "ghcr.io/github/serena-mcp-server:latest"
-    },
     "github": {
       "type": "stdio",
       "container": "ghcr.io/github/github-mcp-server:latest"
+    },
+    "serena": {
+      "type": "stdio",
+      "container": "ghcr.io/github/serena-mcp-server:latest"
     }
   }
 }
 ```
-
-**Architecture Considerations:**
-- The gateway manages backend MCP servers using stdio transport via Docker containers
-- Session connection pooling ensures efficient resource usage
-- Backend processes are reused across multiple requests per session
-- All MCP protocol features are fully supported
-
-### Test Coverage
-
-**Serena MCP Server Testing:**
-- ✅ **Direct Connection Tests:** 68/68 tests passed (100%)
-- ✅ **Gateway Tests:** All tests passed via `make test-serena-gateway`
-- ✅ Multi-language support (Go, Java, JavaScript, Python)
-- ✅ File operations, symbol operations, memory management
-- ✅ Error handling and protocol compliance
-- ✅ Detailed results available via `make test-serena-gateway`
-
-**GitHub MCP Server Testing:**
-- ✅ Full test suite validation (direct and gateway)
-- ✅ Repository operations, issue management, search functionality
-- ✅ Production deployment validated
 
 ## Contributing
 
