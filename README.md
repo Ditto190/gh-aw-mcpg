@@ -147,7 +147,7 @@ For the complete JSON configuration specification with all validation rules, see
       "container": "ghcr.io/github/safe-outputs:latest",
       "guard-policies": {
         "write-sink": {
-          "accept": ["private:github/gh-aw*"]
+          "accept": ["private:github/gh-aw-mcpg", "private:github/gh-aw"]
         }
       }
     }
@@ -269,11 +269,20 @@ For the complete JSON configuration specification with all validation rules, see
   operations as writes and accepting writes from agents whose secrecy labels match the
   configured `accept` patterns.
 
-    For scoped repos (`repos=["owner/repo"]`, `repos=["owner/*"]`, etc.):
+    For exact repos (`repos=["owner/repo1", "owner/repo2"]`):
     ```json
     "guard-policies": {
       "write-sink": {
-        "accept": ["private:github/gh-aw*"]
+        "accept": ["private:owner/repo1", "private:owner/repo2"]
+      }
+    }
+    ```
+
+    For prefix wildcard repos (`repos=["owner/prefix*"]`):
+    ```json
+    "guard-policies": {
+      "write-sink": {
+        "accept": ["private:owner/prefix*"]
       }
     }
     ```
@@ -289,21 +298,25 @@ For the complete JSON configuration specification with all validation rules, see
 
     TOML equivalents:
     ```toml
-    # Scoped repos
+    # Exact repos
     [servers.safeoutputs.guard_policies.write-sink]
-    Accept = ["private:github/gh-aw*"]
+    Accept = ["private:owner/repo1", "private:owner/repo2"]
+
+    # Prefix wildcard repos
+    [servers.safeoutputs.guard_policies.write-sink]
+    Accept = ["private:owner/prefix*"]
 
     # Broad access (repos="all" or repos="public")
     [servers.safeoutputs.guard_policies.write-sink]
     Accept = ["*"]
     ```
-    - **`accept`**: Array of secrecy label patterns the sink accepts
+    - **`accept`**: Array of secrecy tags the sink accepts (exact string match against agent secrecy tags — not glob patterns)
       - `"*"` - **Wildcard**: Accept writes from agents with any secrecy (must be the sole entry). Use for `repos="all"` or `repos="public"`.
-      - `"private:owner/repo"` - Accept writes from agents that accessed a specific private repo
-      - `"private:owner/prefix*"` - Accept writes from agents that accessed private repos matching the prefix
-      - `"private:owner"` - Accept writes from agents that accessed any repo in the owner's org (bare owner format)
-      - `"public:owner/repo*"` - Accept writes from agents that accessed public repos matching the pattern
-      - `"internal:owner/repo*"` - Accept writes from agents that accessed internal repos matching the pattern
+      - `"private:owner/repo"` - Matches agent secrecy tag from `repos=["owner/repo"]` (exact repo)
+      - `"private:owner/prefix*"` - Matches agent secrecy tag from `repos=["owner/prefix*"]` (prefix wildcard — the `*` is a literal character in the tag)
+      - `"private:owner"` - Matches agent secrecy tag from `repos=["owner/*"]` (owner wildcard — bare owner, no `/*` suffix)
+      - `"public:owner/repo*"` - Matches agent secrecy tag for public repos matching a prefix
+      - `"internal:owner/repo*"` - Matches agent secrecy tag for internal repos matching a prefix
     - **How it works**: The write-sink classifies all operations as writes. For DIFC write checks:
       - Resource secrecy is set to the `accept` patterns → agent secrecy ⊆ resource secrecy passes
       - Resource integrity is left empty → no integrity requirements for writes
