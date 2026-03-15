@@ -483,6 +483,24 @@ func (c *Connection) callListMethod(call func() (interface{}, error)) (*Response
 	return marshalToResponse(result)
 }
 
+// callParamMethod is a generic helper for SDK operations that require typed parameters.
+// It handles the common pattern of: requireSession → unmarshalParams → fn(params) → marshalToResponse.
+// P is the type of the parameter struct to unmarshal into.
+func callParamMethod[P any](c *Connection, rawParams interface{}, fn func(P) (interface{}, error)) (*Response, error) {
+	if err := c.requireSession(); err != nil {
+		return nil, err
+	}
+	var params P
+	if err := unmarshalParams(rawParams, &params); err != nil {
+		return nil, err
+	}
+	result, err := fn(params)
+	if err != nil {
+		return nil, err
+	}
+	return marshalToResponse(result)
+}
+
 func (c *Connection) listTools() (*Response, error) {
 	logConn.Printf("listTools: requesting tool list from backend serverID=%s", c.serverID)
 	return c.callListMethod(func() (interface{}, error) {
@@ -495,31 +513,18 @@ func (c *Connection) listTools() (*Response, error) {
 }
 
 func (c *Connection) callTool(params interface{}) (*Response, error) {
-	if err := c.requireSession(); err != nil {
-		return nil, err
-	}
-	var callParams CallToolParams
-	if err := unmarshalParams(params, &callParams); err != nil {
-		return nil, err
-	}
-
-	// Ensure arguments is never nil - default to empty map
-	// This is required by the MCP protocol which expects arguments to always be present
-	if callParams.Arguments == nil {
-		callParams.Arguments = make(map[string]interface{})
-	}
-
-	logConn.Printf("callTool: parsed name=%s, arguments=%+v", callParams.Name, callParams.Arguments)
-
-	result, err := c.session.CallTool(c.ctx, &sdk.CallToolParams{
-		Name:      callParams.Name,
-		Arguments: callParams.Arguments,
+	return callParamMethod(c, params, func(p CallToolParams) (interface{}, error) {
+		// Ensure arguments is never nil - default to empty map
+		// This is required by the MCP protocol which expects arguments to always be present
+		if p.Arguments == nil {
+			p.Arguments = make(map[string]interface{})
+		}
+		logConn.Printf("callTool: parsed name=%s, arguments=%+v", p.Name, p.Arguments)
+		return c.session.CallTool(c.ctx, &sdk.CallToolParams{
+			Name:      p.Name,
+			Arguments: p.Arguments,
+		})
 	})
-	if err != nil {
-		return nil, err
-	}
-
-	return marshalToResponse(result)
 }
 
 func (c *Connection) listResources() (*Response, error) {
@@ -534,25 +539,15 @@ func (c *Connection) listResources() (*Response, error) {
 }
 
 func (c *Connection) readResource(params interface{}) (*Response, error) {
-	if err := c.requireSession(); err != nil {
-		return nil, err
-	}
-	var readParams struct {
+	type readResourceParams struct {
 		URI string `json:"uri"`
 	}
-	if err := unmarshalParams(params, &readParams); err != nil {
-		return nil, err
-	}
-
-	logConn.Printf("readResource: reading resource uri=%s from serverID=%s", readParams.URI, c.serverID)
-	result, err := c.session.ReadResource(c.ctx, &sdk.ReadResourceParams{
-		URI: readParams.URI,
+	return callParamMethod(c, params, func(p readResourceParams) (interface{}, error) {
+		logConn.Printf("readResource: reading resource uri=%s from serverID=%s", p.URI, c.serverID)
+		return c.session.ReadResource(c.ctx, &sdk.ReadResourceParams{
+			URI: p.URI,
+		})
 	})
-	if err != nil {
-		return nil, err
-	}
-
-	return marshalToResponse(result)
 }
 
 func (c *Connection) listPrompts() (*Response, error) {
@@ -567,27 +562,17 @@ func (c *Connection) listPrompts() (*Response, error) {
 }
 
 func (c *Connection) getPrompt(params interface{}) (*Response, error) {
-	if err := c.requireSession(); err != nil {
-		return nil, err
-	}
-	var getParams struct {
+	type getPromptParams struct {
 		Name      string            `json:"name"`
 		Arguments map[string]string `json:"arguments"`
 	}
-	if err := unmarshalParams(params, &getParams); err != nil {
-		return nil, err
-	}
-
-	logConn.Printf("getPrompt: getting prompt name=%s from serverID=%s", getParams.Name, c.serverID)
-	result, err := c.session.GetPrompt(c.ctx, &sdk.GetPromptParams{
-		Name:      getParams.Name,
-		Arguments: getParams.Arguments,
+	return callParamMethod(c, params, func(p getPromptParams) (interface{}, error) {
+		logConn.Printf("getPrompt: getting prompt name=%s from serverID=%s", p.Name, c.serverID)
+		return c.session.GetPrompt(c.ctx, &sdk.GetPromptParams{
+			Name:      p.Name,
+			Arguments: p.Arguments,
+		})
 	})
-	if err != nil {
-		return nil, err
-	}
-
-	return marshalToResponse(result)
 }
 
 // Close closes the connection
