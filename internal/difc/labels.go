@@ -171,30 +171,15 @@ func NewSecrecyLabelWithTags(tags []Tag) *SecrecyLabel {
 // Secrecy semantics: l ⊆ target (this has no tags that target doesn't have)
 // Data can only flow to contexts with equal or more secrecy tags
 func (l *SecrecyLabel) CanFlowTo(target *SecrecyLabel) bool {
-	if l == nil || l.Label == nil {
-		return true
+	var srcLabel, targetLabel *Label
+	if l != nil {
+		srcLabel = l.Label
 	}
-	if target == nil || target.Label == nil {
-		return l.Label.IsEmpty()
+	if target != nil {
+		targetLabel = target.Label
 	}
-
-	l.Label.mu.RLock()
-	defer l.Label.mu.RUnlock()
-	target.Label.mu.RLock()
-	defer target.Label.mu.RUnlock()
-
-	// Wildcard: if target contains "*", it accepts all secrecy tags
-	if _, ok := target.Label.tags[WildcardTag]; ok {
-		return true
-	}
-
-	// Check if all tags in l are in target
-	for tag := range l.Label.tags {
-		if _, ok := target.Label.tags[tag]; !ok {
-			return false
-		}
-	}
-	return true
+	ok, _ := checkFlowHelper(srcLabel, targetLabel, true, "Secrecy")
+	return ok
 }
 
 // checkFlowHelper is a generic helper that implements the common CheckFlow pattern.
@@ -328,30 +313,15 @@ func NewIntegrityLabelWithTags(tags []Tag) *IntegrityLabel {
 // For writes: agent must have >= integrity than endpoint
 // For reads: endpoint must have >= integrity than agent
 func (l *IntegrityLabel) CanFlowTo(target *IntegrityLabel) bool {
-	if l == nil || l.Label == nil {
-		return target == nil || target.Label == nil || target.Label.IsEmpty()
+	var srcLabel, targetLabel *Label
+	if l != nil {
+		srcLabel = l.Label
 	}
-	if target == nil || target.Label == nil {
-		return true
+	if target != nil {
+		targetLabel = target.Label
 	}
-
-	l.Label.mu.RLock()
-	defer l.Label.mu.RUnlock()
-	target.Label.mu.RLock()
-	defer target.Label.mu.RUnlock()
-
-	// Wildcard: if l (superset side) contains "*", it satisfies all target tags
-	if _, ok := l.Label.tags[WildcardTag]; ok {
-		return true
-	}
-
-	// Check if all tags in target are in l
-	for tag := range target.Label.tags {
-		if _, ok := l.Label.tags[tag]; !ok {
-			return false
-		}
-	}
-	return true
+	ok, _ := checkFlowHelper(srcLabel, targetLabel, false, "Integrity")
+	return ok
 }
 
 // CheckFlow checks if this integrity label can flow to target and returns violation details if not

@@ -1117,25 +1117,10 @@ func (us *UnifiedServer) resolveGuardPolicy(serverID string) (*config.GuardPolic
 
 // resolveWriteSinkPolicy checks if a server has a write-sink guard policy.
 func (us *UnifiedServer) resolveWriteSinkPolicy(serverID string) *config.WriteSinkPolicy {
-	// Check global override first
-	if us.cfg != nil && us.cfg.GuardPolicy != nil && us.cfg.GuardPolicy.WriteSink != nil {
-		return us.cfg.GuardPolicy.WriteSink
-	}
-
-	if us.cfg == nil {
-		return nil
-	}
-
-	serverCfg, ok := us.cfg.Servers[serverID]
-	if !ok || serverCfg == nil || len(serverCfg.GuardPolicies) == 0 {
-		return nil
-	}
-
-	policy, err := parseServerGuardPolicy(serverID, serverCfg.GuardPolicies)
+	policy, _, err := us.resolveGuardPolicy(serverID)
 	if err != nil || policy == nil {
 		return nil
 	}
-
 	return policy.WriteSink
 }
 
