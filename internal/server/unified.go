@@ -379,7 +379,7 @@ func (us *UnifiedServer) registerToolsFromBackend(serverID string) error {
 		// Create the handler function
 		handler := func(ctx context.Context, req *sdk.CallToolRequest, args interface{}) (*sdk.CallToolResult, interface{}, error) {
 			// Extract arguments from the request params (not the args parameter which is SDK internal state)
-			toolArgs, err := parseToolArguments(req)
+			toolArgs, err := mcp.ParseToolArguments(req)
 			if err != nil {
 				logger.LogError("client", "Failed to unmarshal tool arguments, tool=%s, error=%v", toolNameCopy, err)
 				return newErrorCallToolResult(err)
@@ -489,7 +489,7 @@ func (us *UnifiedServer) registerSysTools() error {
 	// Create sys_init handler
 	sysInitHandler := func(ctx context.Context, req *sdk.CallToolRequest, args interface{}) (*sdk.CallToolResult, interface{}, error) {
 		// Extract arguments from the request params
-		toolArgs, err := parseToolArguments(req)
+		toolArgs, err := mcp.ParseToolArguments(req)
 		if err != nil {
 			logger.LogError("client", "Failed to unmarshal sys_init arguments, error=%v", err)
 			return newErrorCallToolResult(err)
@@ -848,99 +848,6 @@ func (g *guardBackendCaller) CallTool(ctx context.Context, toolName string, args
 	return executeBackendToolCall(g.ctx, g.server.launcher, g.serverID, sessionID.(string), toolName, args)
 }
 
-// convertToCallToolResult converts backend result data to SDK CallToolResult format
-// The backend returns a JSON object with a "content" field containing an array of content items
-func convertToCallToolResult(data interface{}) (*sdk.CallToolResult, error) {
-	// Try to marshal and unmarshal to get the structure
-	dataBytes, err := json.Marshal(data)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal backend result: %w", err)
-	}
-
-	// First, try to detect if the response is an array (some backends return arrays directly)
-	var rawArray []json.RawMessage
-	if err := json.Unmarshal(dataBytes, &rawArray); err == nil {
-		// It's an array - wrap it as a single text content item
-		log.Printf("[convertToCallToolResult] Backend returned array with %d items, wrapping as text", len(rawArray))
-		return &sdk.CallToolResult{
-			Content: []sdk.Content{
-				&sdk.TextContent{
-					Text: string(dataBytes),
-				},
-			},
-			IsError: false,
-		}, nil
-	}
-
-	// Check if response is an object with a "content" field (standard MCP format)
-	// We need to distinguish between:
-	// 1. {"content": []} - empty array, should preserve as 0 content items
-	// 2. {"content": [...]} - has items, process normally
-	// 3. {"some": "other"} - no content field, wrap as text
-	var hasContentField struct {
-		Content *json.RawMessage `json:"content"`
-		IsError bool             `json:"isError,omitempty"`
-	}
-
-	if err := json.Unmarshal(dataBytes, &hasContentField); err != nil || hasContentField.Content == nil {
-		// No "content" field or parse error - wrap raw response as text
-		log.Printf("[convertToCallToolResult] No content field found, wrapping raw response as text")
-		return &sdk.CallToolResult{
-			Content: []sdk.Content{
-				&sdk.TextContent{
-					Text: string(dataBytes),
-				},
-			},
-			IsError: false,
-		}, nil
-	}
-
-	// Parse the backend result structure (standard MCP CallToolResult format)
-	var backendResult struct {
-		Content []struct {
-			Type string `json:"type"`
-			Text string `json:"text,omitempty"`
-		} `json:"content"`
-		IsError bool `json:"isError,omitempty"`
-	}
-
-	if err := json.Unmarshal(dataBytes, &backendResult); err != nil {
-		// If parsing fails, wrap the raw response as text content
-		log.Printf("[convertToCallToolResult] Failed to parse as CallToolResult, wrapping raw response: %v", err)
-		return &sdk.CallToolResult{
-			Content: []sdk.Content{
-				&sdk.TextContent{
-					Text: string(dataBytes),
-				},
-			},
-			IsError: false,
-		}, nil
-	}
-
-	// Convert content items to SDK Content format
-	// Note: Empty content array is valid and should be preserved (0 items)
-	content := make([]sdk.Content, 0, len(backendResult.Content))
-	for _, item := range backendResult.Content {
-		switch item.Type {
-		case "text":
-			content = append(content, &sdk.TextContent{
-				Text: item.Text,
-			})
-		default:
-			// For unknown types, try to preserve as text
-			log.Printf("Warning: Unknown content type '%s', treating as text", item.Type)
-			content = append(content, &sdk.TextContent{
-				Text: item.Text,
-			})
-		}
-	}
-
-	return &sdk.CallToolResult{
-		Content: content,
-		IsError: backendResult.IsError,
-	}, nil
-}
-
 // callBackendTool calls a tool on a backend server with DIFC enforcement
 func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName string, args interface{}) (*sdk.CallToolResult, interface{}, error) {
 	// Note: Session validation happens at the tool registration level via closures
@@ -974,8 +881,8 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 		agentID, agentLabels.GetSecrecyTags(), agentLabels.GetIntegrityTags())
 
 	ctx = context.WithValue(ctx, mcp.AgentTagsSnapshotContextKey, &mcp.AgentTagsSnapshot{
-		Secrecy:   tagsToStrings(agentLabels.GetSecrecyTags()),
-		Integrity: tagsToStrings(agentLabels.GetIntegrityTags()),
+		Secrecy:   difc.TagsToStrings(agentLabels.GetSecrecyTags()),
+		Integrity: difc.TagsToStrings(agentLabels.GetIntegrityTags()),
 	})
 
 	// Store request state for guards that need request context during response labeling.
@@ -1114,7 +1021,7 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 	}
 
 	// Convert finalResult to SDK CallToolResult format
-	callResult, err := convertToCallToolResult(finalResult)
+	callResult, err := mcp.ConvertToCallToolResult(finalResult)
 	if err != nil {
 		return newErrorCallToolResult(fmt.Errorf("failed to convert result: %w", err))
 	}
@@ -1135,21 +1042,6 @@ func newErrorCallToolResult(err error) (*sdk.CallToolResult, interface{}, error)
 	return &sdk.CallToolResult{IsError: true}, nil, err
 }
 
-// parseToolArguments extracts and unmarshals tool arguments from a CallToolRequest
-// Returns the parsed arguments as a map, or an error if parsing fails
-func parseToolArguments(req *sdk.CallToolRequest) (map[string]interface{}, error) {
-	var toolArgs map[string]interface{}
-	if req.Params.Arguments != nil {
-		if err := json.Unmarshal(req.Params.Arguments, &toolArgs); err != nil {
-			return nil, fmt.Errorf("failed to parse arguments: %w", err)
-		}
-	} else {
-		// No arguments provided, use empty map
-		toolArgs = make(map[string]interface{})
-	}
-	return toolArgs, nil
-}
-
 // getSessionID extracts the MCP session ID from the context
 func (us *UnifiedServer) getSessionID(ctx context.Context) string {
 	if sessionID, ok := ctx.Value(SessionIDContextKey).(string); ok && sessionID != "" {
@@ -1161,25 +1053,6 @@ func (us *UnifiedServer) getSessionID(ctx context.Context) string {
 	// In production multi-agent scenarios, the SDK will provide session IDs after initialize
 	log.Printf("No session ID in context, using 'default' (this is normal before SDK session is established)")
 	return "default"
-}
-
-func toDIFCTags(values []string) []difc.Tag {
-	tags := make([]difc.Tag, 0, len(values))
-	for _, value := range values {
-		trimmed := strings.TrimSpace(value)
-		if trimmed != "" {
-			tags = append(tags, difc.Tag(trimmed))
-		}
-	}
-	return tags
-}
-
-func tagsToStrings(tags []difc.Tag) []string {
-	values := make([]string, 0, len(tags))
-	for _, tag := range tags {
-		values = append(values, string(tag))
-	}
-	return values
 }
 
 func normalizeScopeKind(policy map[string]interface{}) map[string]interface{} {
@@ -1426,8 +1299,8 @@ func (us *UnifiedServer) ensureGuardInitialized(
 	}
 
 	agentID := guard.GetAgentIDFromContext(ctx)
-	secrecyTags := toDIFCTags(labelAgentResult.Agent.Secrecy)
-	integrityTags := toDIFCTags(labelAgentResult.Agent.Integrity)
+	secrecyTags := difc.StringsToTags(labelAgentResult.Agent.Secrecy)
+	integrityTags := difc.StringsToTags(labelAgentResult.Agent.Integrity)
 
 	// Merge labels into existing agent (union semantics).
 	// Multiple guards may contribute labels for the same agent; each guard's

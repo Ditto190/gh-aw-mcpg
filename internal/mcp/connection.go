@@ -15,7 +15,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/github/gh-aw-mcpg/internal/dockerutil"
 	"github.com/github/gh-aw-mcpg/internal/logger"
 	"github.com/github/gh-aw-mcpg/internal/logger/sanitize"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -131,7 +130,7 @@ func NewConnection(ctx context.Context, serverID, command string, args []string,
 
 	// Expand Docker -e flags that reference environment variables
 	// Docker's `-e VAR_NAME` expects VAR_NAME to be in the environment
-	expandedArgs := dockerutil.ExpandEnvArgs(args)
+	expandedArgs := ExpandEnvArgs(args)
 	logConn.Printf("Expanded args for Docker env: %v", sanitize.SanitizeArgs(expandedArgs))
 
 	// Create command transport
