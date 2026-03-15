@@ -13,3 +13,26 @@ import (
 func IsStderrTerminal() bool {
 	return term.IsTerminal(int(os.Stderr.Fd()))
 }
+
+// IsStdoutTerminal returns true if stdout is connected to a terminal.
+func IsStdoutTerminal() bool {
+	return term.IsTerminal(int(os.Stdout.Fd()))
+}
+
+// StderrTerminalWidth returns the width of the terminal connected to stderr
+// and true if successful. Returns 0 and false if stderr is not a terminal or
+// the width cannot be determined.
+func StderrTerminalWidth() (int, bool) {
+	width, _, err := term.GetSize(int(os.Stderr.Fd()))
+	if err != nil || width <= 0 {
+		return 0, false
+	}
+	return width, true
+}
+
+// IsInteractiveTerminal returns true if the process is running in an
+// interactive terminal context: stderr is a terminal and the process is not
+// running inside a container.
+func IsInteractiveTerminal() bool {
+	return IsStderrTerminal() && !IsRunningInContainer()
+}
