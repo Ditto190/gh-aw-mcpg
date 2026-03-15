@@ -217,7 +217,7 @@ func TestParseDIFCSinkServerIDs(t *testing.T) {
 
 func TestBuildAllowOnlyPolicy(t *testing.T) {
 	t.Run("public scope valid", func(t *testing.T) {
-		policy, err := buildAllowOnlyPolicy(true, "", "", "none")
+		policy, err := config.BuildAllowOnlyPolicy(true, "", "", "none")
 		require.NoError(t, err)
 		require.NotNil(t, policy)
 		require.NotNil(t, policy.AllowOnly)
@@ -226,7 +226,7 @@ func TestBuildAllowOnlyPolicy(t *testing.T) {
 	})
 
 	t.Run("owner and repo scope valid", func(t *testing.T) {
-		policy, err := buildAllowOnlyPolicy(false, "lpcox", "gh-aw-mcpg", "unapproved")
+		policy, err := config.BuildAllowOnlyPolicy(false, "lpcox", "gh-aw-mcpg", "unapproved")
 		require.NoError(t, err)
 		require.NotNil(t, policy)
 		repos, ok := policy.AllowOnly.Repos.([]string)
@@ -236,12 +236,12 @@ func TestBuildAllowOnlyPolicy(t *testing.T) {
 	})
 
 	t.Run("repo without owner invalid", func(t *testing.T) {
-		_, err := buildAllowOnlyPolicy(false, "", "repo", "unapproved")
+		_, err := config.BuildAllowOnlyPolicy(false, "", "repo", "unapproved")
 		require.Error(t, err)
 	})
 
 	t.Run("missing min integrity invalid", func(t *testing.T) {
-		_, err := buildAllowOnlyPolicy(true, "", "", "")
+		_, err := config.BuildAllowOnlyPolicy(true, "", "", "")
 		require.Error(t, err)
 	})
 }

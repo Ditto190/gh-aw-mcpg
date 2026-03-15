@@ -7,7 +7,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/github/gh-aw-mcpg/internal/config"
 	"github.com/github/gh-aw-mcpg/internal/difc"
 	"github.com/github/gh-aw-mcpg/internal/envutil"
 	"github.com/spf13/cobra"
@@ -82,75 +81,6 @@ func getDefaultAllowOnlyScopeRepo() string {
 
 func getDefaultAllowOnlyMinIntegrity() string {
 	return os.Getenv("MCP_GATEWAY_ALLOWONLY_MIN_INTEGRITY")
-}
-
-func buildAllowOnlyPolicy(public bool, owner, repo, minIntegrity string) (*config.GuardPolicy, error) {
-	debugLog.Printf("Building AllowOnly policy: public=%v, owner=%q, repo=%q, minIntegrity=%q", public, owner, repo, minIntegrity)
-
-	owner = strings.TrimSpace(owner)
-	repo = strings.TrimSpace(repo)
-	integrityInput := strings.TrimSpace(minIntegrity)
-	integrityKey := strings.ToLower(strings.ReplaceAll(integrityInput, "-", ""))
-
-	integrityByInput := map[string]string{
-		"none":       config.IntegrityNone,
-		"unapproved": config.IntegrityUnapproved,
-		"approved":   config.IntegrityApproved,
-		"merged":     config.IntegrityMerged,
-	}
-	integrity, hasIntegrity := integrityByInput[integrityKey]
-
-	scopeCount := 0
-	if public {
-		scopeCount++
-	}
-	if owner != "" {
-		scopeCount++
-	}
-	if repo != "" && owner == "" {
-		return nil, fmt.Errorf("allow-only scope repo requires allow-only scope owner")
-	}
-
-	if scopeCount == 0 && minIntegrity == "" {
-		debugLog.Print("No AllowOnly scope or integrity specified, returning nil policy")
-		return nil, nil
-	}
-	if scopeCount != 1 {
-		return nil, fmt.Errorf("exactly one AllowOnly scope variant must be set (public or owner[/repo])")
-	}
-	if integrityInput == "" {
-		return nil, fmt.Errorf("min-integrity is required")
-	}
-	if !hasIntegrity {
-		return nil, fmt.Errorf("min-integrity must be one of: none, unapproved, approved, merged")
-	}
-
-	var repos interface{}
-	if public {
-		repos = "public"
-	} else {
-		scope := owner + "/*"
-		if repo != "" {
-			scope = owner + "/" + repo
-		}
-		repos = []string{scope}
-	}
-
-	debugLog.Printf("AllowOnly policy scope resolved: repos=%v, minIntegrity=%s", repos, integrity)
-
-	policy := &config.GuardPolicy{
-		AllowOnly: &config.AllowOnlyPolicy{
-			Repos:        repos,
-			MinIntegrity: integrity,
-		},
-	}
-
-	if err := config.ValidateGuardPolicy(policy); err != nil {
-		return nil, err
-	}
-
-	debugLog.Print("AllowOnly policy built and validated successfully")
-	return policy, nil
 }
 
 // ValidateDIFCMode validates the guards mode flag value and returns an error if invalid

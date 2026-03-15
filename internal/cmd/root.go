@@ -16,8 +16,8 @@ import (
 	"time"
 
 	"github.com/github/gh-aw-mcpg/internal/config"
+	"github.com/github/gh-aw-mcpg/internal/difc"
 	"github.com/github/gh-aw-mcpg/internal/logger"
-	"github.com/github/gh-aw-mcpg/internal/mcp"
 	"github.com/github/gh-aw-mcpg/internal/server"
 	"github.com/github/gh-aw-mcpg/internal/version"
 	"github.com/spf13/cobra"
@@ -243,7 +243,7 @@ func run(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("invalid --guards-sink-server-ids value: %w", err)
 	}
-	mcp.SetDIFCSinkServerIDs(resolvedSinkServerIDs)
+	difc.SetSinkServerIDs(resolvedSinkServerIDs)
 	if len(resolvedSinkServerIDs) == 0 {
 		log.Println("Guards sink server ID logging enrichment disabled (no sink server IDs configured)")
 		logger.LogInfoMd("startup", "Guards sink server ID logging enrichment disabled")
@@ -379,7 +379,7 @@ func resolveGuardPolicyOverride(cmd *cobra.Command) (*config.GuardPolicy, string
 			return policy, "cli", nil
 		}
 
-		policy, err := buildAllowOnlyPolicy(allowOnlyPublic, allowOnlyOwner, allowOnlyRepo, allowOnlyMinInt)
+		policy, err := config.BuildAllowOnlyPolicy(allowOnlyPublic, allowOnlyOwner, allowOnlyRepo, allowOnlyMinInt)
 		if err != nil {
 			return nil, "", err
 		}
@@ -400,7 +400,7 @@ func resolveGuardPolicyOverride(cmd *cobra.Command) (*config.GuardPolicy, string
 	_, hasMinIntegrity := os.LookupEnv("MCP_GATEWAY_ALLOWONLY_MIN_INTEGRITY")
 
 	if hasScopePublic || hasScopeOwner || hasScopeRepo || hasMinIntegrity {
-		policy, err := buildAllowOnlyPolicy(
+		policy, err := config.BuildAllowOnlyPolicy(
 			getDefaultAllowOnlyScopePublic(),
 			getDefaultAllowOnlyScopeOwner(),
 			getDefaultAllowOnlyScopeRepo(),

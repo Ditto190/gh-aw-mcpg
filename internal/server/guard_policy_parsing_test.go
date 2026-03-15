@@ -18,7 +18,7 @@ func TestParseServerGuardPolicy_AllowOnly(t *testing.T) {
 		},
 	}
 
-	policy, err := parseServerGuardPolicy("github", guardPolicies)
+	policy, err := config.ParseServerGuardPolicy("github", guardPolicies)
 	require.NoError(t, err, "parseServerGuardPolicy should not return error")
 	require.NotNil(t, policy, "policy should not be nil")
 	require.NotNil(t, policy.AllowOnly, "policy.AllowOnly should not be nil")
