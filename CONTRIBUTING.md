@@ -221,7 +221,7 @@ awmg/
     ├── auth/                  # Authentication header parsing and middleware
     ├── cmd/                   # CLI commands (cobra)
     ├── config/                # Configuration loading (TOML/JSON)
-    ├── difc/                  # Data Information Flow Control
+    ├── difc/                  # Decentralized Information Flow Control
     ├── envutil/               # Environment variable utilities
     ├── guard/                 # Security guards (NoopGuard, WasmGuard, WriteSink)
     ├── launcher/              # Backend server management
@@ -241,7 +241,7 @@ awmg/
 - **`internal/auth/`** - Authentication header parsing and middleware
 - **`internal/cmd/`** - CLI implementation using Cobra framework
 - **`internal/config/`** - Configuration parsing for TOML and JSON formats
-- **`internal/difc/`** - Data Information Flow Control
+- **`internal/difc/`** - Decentralized Information Flow Control
 - **`internal/envutil/`** - Environment variable utilities
 - **`internal/guard/`** - Guard framework for resource labeling
 - **`internal/launcher/`** - Backend process management (Docker, stdio)

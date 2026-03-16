@@ -27,7 +27,7 @@ Quick reference for AI agents working with MCP Gateway (Go-based MCP proxy serve
 - `internal/config/` - Config parsing (TOML/JSON) with validation
   - `validation.go` - Variable expansion and fail-fast validation
   - `validation_test.go` - Comprehensive validation tests
-- `internal/difc/` - Data Information Flow Control
+- `internal/difc/` - Decentralized Information Flow Control
 - `internal/envutil/` - Environment variable utilities
 - `internal/guard/` - Security guards (AllowOnly, WriteSink, NoopGuard)
 - `internal/launcher/` - Backend process management
