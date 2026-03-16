@@ -92,9 +92,9 @@ pub(crate) fn extract_mcp_response(response: &Value) -> Value {
     // Log the top-level keys to understand the structure
     if let Some(obj) = response.as_object() {
         let keys: Vec<&str> = obj.keys().map(|s| s.as_str()).collect();
-        crate::log_info(&format!("extract_mcp_response: top-level keys={:?}", keys));
+        crate::log_debug(&format!("extract_mcp_response: top-level keys={:?}", keys));
     } else {
-        crate::log_info(&format!(
+        crate::log_debug(&format!(
             "extract_mcp_response: response is not an object, type={}",
             if response.is_array() {
                 "array"
@@ -110,34 +110,34 @@ pub(crate) fn extract_mcp_response(response: &Value) -> Value {
 
     // Try to extract content[0].text and parse it as JSON
     if let Some(content) = response.get("content").and_then(|v| v.as_array()) {
-        crate::log_info(&format!(
+        crate::log_debug(&format!(
             "extract_mcp_response: found content array with {} items",
             content.len()
         ));
         if let Some(first) = content.first() {
             if let Some(text) = first.get("text").and_then(|v| v.as_str()) {
-                crate::log_info(&format!(
+                crate::log_debug(&format!(
                     "extract_mcp_response: found text field, len={}",
                     text.len()
                 ));
                 // Try to parse the text as JSON
                 if let Ok(parsed) = serde_json::from_str::<Value>(text) {
-                    crate::log_info("extract_mcp_response: parsed content[0].text as JSON");
+                    crate::log_debug("extract_mcp_response: parsed content[0].text as JSON");
                     return parsed;
                 } else {
-                    crate::log_info("extract_mcp_response: failed to parse text as JSON");
+                    crate::log_debug("extract_mcp_response: failed to parse text as JSON");
                 }
             } else {
-                crate::log_info("extract_mcp_response: no text field in content[0]");
+                crate::log_debug("extract_mcp_response: no text field in content[0]");
             }
         }
     } else {
-        crate::log_info("extract_mcp_response: no content array found");
+        crate::log_debug("extract_mcp_response: no content array found");
     }
 
     // If we can't extract from MCP wrapper, return the original response
     // (it might already be unwrapped or in a different format)
-    crate::log_info("extract_mcp_response: using response as-is");
+    crate::log_debug("extract_mcp_response: using response as-is");
     response.clone()
 }
 
