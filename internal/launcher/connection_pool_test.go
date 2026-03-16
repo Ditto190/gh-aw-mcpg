@@ -384,6 +384,85 @@ func TestConnectionStateActive(t *testing.T) {
 	assert.Equal(t, ConnectionStateActive, metadata.State)
 }
 
+// TestCleanupIdleConnections_AlreadyClosedState covers the ConnectionStateClosed branch
+// in cleanupIdleConnections (connection_pool.go lines 146-149).
+// A connection manually placed into ConnectionStateClosed state (but not yet removed
+// from the map) should be cleaned up on the next cleanup pass, even if it was used
+// recently and has no errors.
+func TestCleanupIdleConnections_AlreadyClosedState(t *testing.T) {
+	ctx := context.Background()
+	config := PoolConfig{
+		IdleTimeout: 1 * time.Hour, // long — won't trigger idle cleanup
+		// Use a very long cleanup interval so the background ticker does not
+		// interfere with this deterministic test; we'll invoke cleanup manually.
+		CleanupInterval: 24 * time.Hour,
+		MaxErrorCount:   100, // high — won't trigger error cleanup
+	}
+	pool := NewSessionConnectionPoolWithConfig(ctx, config)
+	defer pool.Stop()
+
+	// Directly insert a connection in ConnectionStateClosed state.
+	// This simulates an internal scenario where a connection was closed but
+	// not yet removed, e.g. after an error path that marks state before cleanup.
+	key := ConnectionKey{BackendID: "backend1", SessionID: "session1"}
+	pool.mu.Lock()
+	pool.connections[key] = &ConnectionMetadata{
+		Connection: &mcp.Connection{},
+		CreatedAt:  time.Now(),
+		LastUsedAt: time.Now(), // recently used — idle timeout won't apply
+		ErrorCount: 0,          // no errors — error-count cleanup won't apply
+		State:      ConnectionStateClosed,
+	}
+	pool.mu.Unlock()
+
+	require.Equal(t, 1, pool.Size(), "connection should exist before cleanup")
+
+	// Manually invoke cleanup instead of relying on the background ticker.
+	pool.cleanupIdleConnections()
+
+	assert.Equal(t, 0, pool.Size(),
+		"ConnectionStateClosed connection should be removed by cleanup even if recently used")
+}
+
+// TestCleanupIdleConnections_ClosedConnectionSkipsDoubleClose covers the inner guard
+// (connection_pool.go lines 156-159) that prevents double-closing a connection whose
+// State is already ConnectionStateClosed when it is being cleaned up by other criteria
+// (e.g. idle timeout).
+func TestCleanupIdleConnections_ClosedConnectionSkipsDoubleClose(t *testing.T) {
+	ctx := context.Background()
+	config := PoolConfig{
+		IdleTimeout: 10 * time.Millisecond,
+		// Use a very long cleanup interval so the background ticker does not
+		// interfere with this deterministic test; we'll invoke cleanup manually.
+		CleanupInterval: 24 * time.Hour,
+		MaxErrorCount:   100,
+	}
+	pool := NewSessionConnectionPoolWithConfig(ctx, config)
+	defer pool.Stop()
+
+	// Insert a connection that is both idle AND already closed.
+	// The cleanup should remove it via the "already closed" path without
+	// attempting to close it again.
+	key := ConnectionKey{BackendID: "backend2", SessionID: "session2"}
+	pool.mu.Lock()
+	pool.connections[key] = &ConnectionMetadata{
+		Connection: &mcp.Connection{},
+		CreatedAt:  time.Now().Add(-1 * time.Hour),
+		LastUsedAt: time.Now().Add(-1 * time.Hour), // idle for a long time
+		ErrorCount: 0,
+		State:      ConnectionStateClosed,
+	}
+	pool.mu.Unlock()
+
+	require.Equal(t, 1, pool.Size())
+
+	// Manually invoke cleanup instead of relying on the background ticker.
+	pool.cleanupIdleConnections()
+
+	assert.Equal(t, 0, pool.Size(),
+		"idle+closed connection should be cleaned up exactly once")
+}
+
 func TestConnectionCleanupWithActivity(t *testing.T) {
 	ctx := context.Background()
 	config := PoolConfig{
