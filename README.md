@@ -50,7 +50,7 @@ The gateway starts in routed mode on `http://0.0.0.0:8000`, proxying MCP request
 
 ## Guard Policies
 
-Guard policies enforce **Data Information Flow Control (DIFC)** at the gateway level, restricting what data agents can access and where they can write. Each server can have either an `allow-only` or a `write-sink` policy.
+Guard policies enforce integrity filtering and private-data leaking at the gateway level, restricting what data agents can access and where they can write. Each server can have either an `allow-only` or a `write-sink` policy.
 
 ### allow-only (source servers)
 
@@ -85,7 +85,7 @@ Restricts which repositories a guard allows and at what integrity level:
 
 ### write-sink (output servers)
 
-**Required for ALL output servers** when DIFC guards are enabled. Marks a server as a write-only channel that accepts writes from agents with matching secrecy labels:
+**Required for ALL output servers** when guards are enabled. Marks a server as a write-only channel that accepts writes from agents with matching secrecy labels:
 
 ```json
 "safeoutputs": {
@@ -115,14 +115,14 @@ See **[docs/CONFIGURATION.md](docs/CONFIGURATION.md)** for the complete mapping 
 ```
                     ┌─────────────────────────────────────┐
                     │           MCP Gateway               │
-  Client ──────────▶  /mcp/{serverID}  (routed mode)     │
-  (JSON-RPC 2.0)   │  /mcp             (unified mode)    │
+  Client ──────────▶  /mcp/{serverID}  (routed mode)      │
+  (JSON-RPC 2.0)    │ /mcp             (unified mode)     │
                     │                                     │
                     │  ┌─────────────┐  ┌──────────────┐  │
-                    │  │ DIFC Guards │  │ Auth (7.1)   │  │
+                    │  │ Guards      │  │ Auth (7.1)   │  │
                     │  │ (WASM)      │  │ API Key      │  │
                     │  └──────┬──────┘  └──────────────┘  │
-                    │         │                            │
+                    │         │                           │
                     │  ┌──────▼──────┐  ┌──────────────┐  │
                     │  │ GitHub MCP  │  │ Safe Outputs │  │
                     │  │ (stdio/     │  │ (write-sink) │  │
@@ -152,7 +152,7 @@ Supported MCP methods: `tools/list`, `tools/call`, and any other method (forward
 | Topic | Link |
 |-------|------|
 | **Configuration Reference** | [docs/CONFIGURATION.md](docs/CONFIGURATION.md) — Server fields, TOML/JSON formats, guard-policy details, custom schemas, gateway fields, validation rules |
-| **Environment Variables** | [docs/ENVIRONMENT_VARIABLES.md](docs/ENVIRONMENT_VARIABLES.md) — All env vars for production, development, Docker, and DIFC configuration |
+| **Environment Variables** | [docs/ENVIRONMENT_VARIABLES.md](docs/ENVIRONMENT_VARIABLES.md) — All env vars for production, development, Docker, and guard configuration |
 | **Full Specification** | [MCP Gateway Configuration Reference](https://github.com/github/gh-aw/blob/main/docs/src/content/docs/reference/mcp-gateway.md) — Upstream spec with complete validation rules |
 | **Guard Response Labeling** | [docs/GUARD_RESPONSE_LABELING.md](docs/GUARD_RESPONSE_LABELING.md) — How guards label MCP responses with secrecy/integrity tags |
 | **HTTP Backend Sessions** | [docs/HTTP_BACKEND_SESSION_ID.md](docs/HTTP_BACKEND_SESSION_ID.md) — Session ID management for HTTP transport backends |
