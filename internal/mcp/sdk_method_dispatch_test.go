@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/github/gh-aw-mcpg/internal/difc"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -224,8 +225,8 @@ func TestSendRequestWithServerID_StdioPath_NilSession(t *testing.T) {
 // via the plain JSON-RPC HTTP path (exercises the LogRPCRequestWithAgentSnapshot /
 // LogRPCResponseWithAgentSnapshot branches).
 func TestSendRequestWithServerID_AgentTags_PlainJSONSuccess(t *testing.T) {
-	SetDIFCSinkServerIDs([]string{"sink-server"})
-	t.Cleanup(func() { SetDIFCSinkServerIDs(nil) })
+	difc.SetSinkServerIDs([]string{"sink-server"})
+	t.Cleanup(func() { difc.SetSinkServerIDs(nil) })
 
 	srv := newPlainJSONTestServer(t, func(w http.ResponseWriter, r *http.Request, method string, _ []byte) {
 		w.Header().Set("Content-Type", "application/json")
@@ -257,8 +258,8 @@ func TestSendRequestWithServerID_AgentTags_PlainJSONSuccess(t *testing.T) {
 // shouldAttachAgentTags = true branch within the stdio (non-HTTP) code path.
 // The call returns an error from callSDKMethod but the logging branches are hit.
 func TestSendRequestWithServerID_AgentTags_StdioUnsupportedMethod(t *testing.T) {
-	SetDIFCSinkServerIDs([]string{"sink-server"})
-	t.Cleanup(func() { SetDIFCSinkServerIDs(nil) })
+	difc.SetSinkServerIDs([]string{"sink-server"})
+	t.Cleanup(func() { difc.SetSinkServerIDs(nil) })
 
 	conn := newTestConnection(t)
 	// isHTTP is false – the stdio path is exercised.
@@ -278,8 +279,8 @@ func TestSendRequestWithServerID_AgentTags_StdioUnsupportedMethod(t *testing.T) 
 // server ID is not in the DIFC sink list, shouldAttachAgentTags is false even
 // if a snapshot is present in the context (exercises the non-sink path with snapshot).
 func TestSendRequestWithServerID_AgentTags_NotSinkServer(t *testing.T) {
-	SetDIFCSinkServerIDs([]string{"sink-server"})
-	t.Cleanup(func() { SetDIFCSinkServerIDs(nil) })
+	difc.SetSinkServerIDs([]string{"sink-server"})
+	t.Cleanup(func() { difc.SetSinkServerIDs(nil) })
 
 	conn := newTestConnection(t)
 
@@ -299,8 +300,8 @@ func TestSendRequestWithServerID_AgentTags_NotSinkServer(t *testing.T) {
 // shouldAttachAgentTags = true branch when the plain JSON HTTP request fails,
 // verifying the logging branches for error responses are reached.
 func TestSendRequestWithServerID_AgentTags_PlainJSONError(t *testing.T) {
-	SetDIFCSinkServerIDs([]string{"sink-server"})
-	t.Cleanup(func() { SetDIFCSinkServerIDs(nil) })
+	difc.SetSinkServerIDs([]string{"sink-server"})
+	t.Cleanup(func() { difc.SetSinkServerIDs(nil) })
 
 	srv := newPlainJSONTestServer(t, func(w http.ResponseWriter, r *http.Request, method string, _ []byte) {
 		w.WriteHeader(http.StatusInternalServerError)

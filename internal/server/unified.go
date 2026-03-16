@@ -1093,7 +1093,7 @@ func (us *UnifiedServer) resolveGuardPolicy(serverID string) (*config.GuardPolic
 		return nil, "legacy", nil
 	}
 
-	if policy, err := parseServerGuardPolicy(serverID, serverCfg.GuardPolicies); err != nil {
+	if policy, err := config.ParseServerGuardPolicy(serverID, serverCfg.GuardPolicies); err != nil {
 		return nil, "", err
 	} else if policy != nil {
 		return policy, "server", nil
@@ -1122,103 +1122,6 @@ func (us *UnifiedServer) resolveWriteSinkPolicy(serverID string) *config.WriteSi
 		return nil
 	}
 	return policy.WriteSink
-}
-
-func parseServerGuardPolicy(serverID string, raw map[string]interface{}) (*config.GuardPolicy, error) {
-	if len(raw) == 0 {
-		return nil, nil
-	}
-
-	if policy, err := parsePolicyMap(raw); err != nil {
-		return nil, err
-	} else if policy != nil {
-		return policy, nil
-	}
-
-	if nested, ok := raw[serverID]; ok {
-		nestedMap, ok := nested.(map[string]interface{})
-		if !ok {
-			return nil, fmt.Errorf("invalid guard policy for server '%s': expected object", serverID)
-		}
-		if policy, err := parsePolicyMap(nestedMap); err != nil {
-			return nil, err
-		} else if policy != nil {
-			return policy, nil
-		}
-	}
-
-	if len(raw) == 1 {
-		for _, value := range raw {
-			nestedMap, ok := value.(map[string]interface{})
-			if !ok {
-				continue
-			}
-			if policy, err := parsePolicyMap(nestedMap); err != nil {
-				return nil, err
-			} else if policy != nil {
-				return policy, nil
-			}
-		}
-	}
-
-	return nil, nil
-}
-
-func parsePolicyMap(raw map[string]interface{}) (*config.GuardPolicy, error) {
-	if len(raw) == 0 {
-		return nil, nil
-	}
-
-	hasAllowOnly := false
-	if _, ok := raw["allow-only"]; ok {
-		hasAllowOnly = true
-	} else if _, ok := raw["allowonly"]; ok { // Accept legacy "allowonly" form for backward compatibility
-		hasAllowOnly = true
-	}
-
-	hasWriteSink := false
-	if _, ok := raw["write-sink"]; ok {
-		hasWriteSink = true
-	} else if _, ok := raw["writesink"]; ok {
-		hasWriteSink = true
-	}
-
-	if hasAllowOnly || hasWriteSink {
-		policyBytes, err := json.Marshal(raw)
-		if err != nil {
-			return nil, fmt.Errorf("failed to serialize server guard policy: %w", err)
-		}
-		policy, err := config.ParseGuardPolicyJSON(string(policyBytes))
-		if err != nil {
-			return nil, fmt.Errorf("invalid server guard policy: %w", err)
-		}
-		return policy, nil
-	}
-
-	repos, hasRepos := raw["repos"]
-	if !hasRepos {
-		return nil, nil
-	}
-
-	integrityValue, hasIntegrity := raw["min-integrity"]
-	if !hasIntegrity {
-		integrityValue, hasIntegrity = raw["integrity"]
-	}
-	if !hasIntegrity {
-		return nil, fmt.Errorf("invalid server guard policy: repos specified without min-integrity")
-	}
-
-	policy := &config.GuardPolicy{
-		AllowOnly: &config.AllowOnlyPolicy{
-			Repos:        repos,
-			MinIntegrity: fmt.Sprintf("%v", integrityValue),
-		},
-	}
-	if err := config.ValidateGuardPolicy(policy); err != nil {
-		return nil, fmt.Errorf("invalid server guard policy: %w", err)
-	}
-
-	return policy, nil
 }
 
 func (us *UnifiedServer) ensureGuardInitialized(

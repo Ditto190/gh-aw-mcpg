@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/github/gh-aw-mcpg/internal/difc"
 	"github.com/github/gh-aw-mcpg/internal/logger"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -129,36 +130,36 @@ func TestHTTPRequest_ConfiguredHeaders(t *testing.T) {
 	assert.Equal(t, authToken, receivedAuth)
 	assert.Equal(t, sessionID, receivedSessionID)
 }
-func TestSetDIFCSinkServerIDs(t *testing.T) {
-	SetDIFCSinkServerIDs(nil)
+func TestSetSinkServerIDs(t *testing.T) {
+	difc.SetSinkServerIDs(nil)
 	t.Cleanup(func() {
-		SetDIFCSinkServerIDs(nil)
+		difc.SetSinkServerIDs(nil)
 	})
 
 	t.Run("empty by default", func(t *testing.T) {
-		assert.False(t, isDIFCSinkServerID("safeoutputs"))
+		assert.False(t, difc.IsSinkServerID("safeoutputs"))
 	})
 
 	t.Run("configured values are matched", func(t *testing.T) {
-		SetDIFCSinkServerIDs([]string{"safeoutputs", "github"})
-		assert.True(t, isDIFCSinkServerID("safeoutputs"))
-		assert.True(t, isDIFCSinkServerID("github"))
-		assert.False(t, isDIFCSinkServerID("unknown"))
+		difc.SetSinkServerIDs([]string{"safeoutputs", "github"})
+		assert.True(t, difc.IsSinkServerID("safeoutputs"))
+		assert.True(t, difc.IsSinkServerID("github"))
+		assert.False(t, difc.IsSinkServerID("unknown"))
 	})
 
 	t.Run("normalizes deduplicates and trims", func(t *testing.T) {
-		SetDIFCSinkServerIDs([]string{" safeoutputs ", "", "safeoutputs", "github"})
-		assert.True(t, isDIFCSinkServerID("safeoutputs"))
-		assert.True(t, isDIFCSinkServerID("github"))
-		assert.False(t, isDIFCSinkServerID(""))
+		difc.SetSinkServerIDs([]string{" safeoutputs ", "", "safeoutputs", "github"})
+		assert.True(t, difc.IsSinkServerID("safeoutputs"))
+		assert.True(t, difc.IsSinkServerID("github"))
+		assert.False(t, difc.IsSinkServerID(""))
 	})
 
 	t.Run("reset to empty disables matching", func(t *testing.T) {
-		SetDIFCSinkServerIDs([]string{"safeoutputs"})
-		assert.True(t, isDIFCSinkServerID("safeoutputs"))
+		difc.SetSinkServerIDs([]string{"safeoutputs"})
+		assert.True(t, difc.IsSinkServerID("safeoutputs"))
 
-		SetDIFCSinkServerIDs(nil)
-		assert.False(t, isDIFCSinkServerID("safeoutputs"))
+		difc.SetSinkServerIDs(nil)
+		assert.False(t, difc.IsSinkServerID("safeoutputs"))
 	})
 }
 
