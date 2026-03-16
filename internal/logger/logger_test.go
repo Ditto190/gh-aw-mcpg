@@ -4,12 +4,11 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"time"
 )
 
 // captureStderr captures stderr output during test execution
@@ -157,10 +156,8 @@ func TestNew(t *testing.T) {
 			t.Setenv("DEBUG", tt.debugEnv)
 
 			logger := New(tt.namespace)
-			if logger.Enabled() != tt.enabled {
-				t.Errorf("New(%q) with DEBUG=%q: enabled = %v, want %v",
-					tt.namespace, tt.debugEnv, logger.Enabled(), tt.enabled)
-			}
+			assert.Equal(t, tt.enabled, logger.Enabled(),
+				"New(%q) with DEBUG=%q: wrong enabled state", tt.namespace, tt.debugEnv)
 		})
 	}
 }
@@ -204,20 +201,13 @@ func TestLogger_Printf(t *testing.T) {
 			})
 
 			if tt.wantLog {
-				if output == "" {
-					t.Errorf("Printf() should have logged but got empty output")
-				}
-				if !strings.Contains(output, tt.namespace) {
-					t.Errorf("Printf() output should contain namespace %q, got %q", tt.namespace, output)
-				}
-				expectedMessage := "hello world"
-				if !strings.Contains(output, expectedMessage) {
-					t.Errorf("Printf() output should contain %q, got %q", expectedMessage, output)
-				}
+				assert.NotEmpty(t, output, "Printf() should have logged but got empty output")
+				assert.Contains(t, output, tt.namespace,
+					"Printf() output should contain namespace %q", tt.namespace)
+				assert.Contains(t, output, "hello world",
+					"Printf() output should contain message")
 			} else {
-				if output != "" {
-					t.Errorf("Printf() should not have logged but got %q", output)
-				}
+				assert.Empty(t, output, "Printf() should not have logged but got output")
 			}
 		})
 	}
@@ -233,16 +223,10 @@ func TestLogger_Print(t *testing.T) {
 		logger.Print("hello", " ", "world")
 	})
 
-	if !strings.Contains(output, "test:print") {
-		t.Errorf("Print() output should contain namespace, got %q", output)
-	}
-	if !strings.Contains(output, "hello world") {
-		t.Errorf("Print() output should contain message, got %q", output)
-	}
+	assert.Contains(t, output, "test:print", "Print() output should contain namespace")
+	assert.Contains(t, output, "hello world", "Print() output should contain message")
 	// Check that time diff is included
-	if !strings.Contains(output, "+") {
-		t.Errorf("Print() output should contain time diff, got %q", output)
-	}
+	assert.Contains(t, output, "+", "Print() output should contain time diff")
 }
 
 func TestLogger_TimeDiff(t *testing.T) {
@@ -265,41 +249,32 @@ func TestLogger_TimeDiff(t *testing.T) {
 	})
 
 	// Both should have time diff
-	if !strings.Contains(output1, "+") {
-		t.Errorf("First log should contain time diff, got %q", output1)
-	}
-	if !strings.Contains(output2, "+") {
-		t.Errorf("Second log should contain time diff, got %q", output2)
-	}
+	assert.Contains(t, output1, "+", "First log should contain time diff")
+	assert.Contains(t, output2, "+", "Second log should contain time diff")
 
-	// Second log should show at least 10ms diff
-	if !strings.Contains(output2, "ms") && !strings.Contains(output2, "µs") {
-		t.Errorf("Second log should show millisecond or microsecond time diff, got %q", output2)
-	}
+	// Second log should show time diff with a time unit
+	assert.Regexp(t, `\+\d+(\.\d+)?(ns|µs|ms|s|m|h)`, output2,
+		"Second log should show time diff with unit")
 }
 
 func TestColorSelection(t *testing.T) {
 	// Test that selectColor returns consistent colors for the same namespace
 	color1 := selectColor("test:namespace")
 	color2 := selectColor("test:namespace")
-	if color1 != color2 {
-		t.Errorf("selectColor should return same color for same namespace")
-	}
+	assert.Equal(t, color1, color2, "selectColor should return same color for same namespace")
 
 	// Test that different namespaces can get different colors
 	// (not guaranteed but likely with our hash function)
 	color3 := selectColor("other:namespace")
-	// Just verify it's a valid color from palette or empty
-	found := color3 == ""
+	// Verify it's a valid color from palette or empty
+	isValidColor := color3 == ""
 	for _, c := range colorPalette {
 		if color3 == c {
-			found = true
+			isValidColor = true
 			break
 		}
 	}
-	if !found {
-		t.Errorf("selectColor returned invalid color: %q", color3)
-	}
+	assert.True(t, isValidColor, "selectColor returned invalid color: %q", color3)
 }
 
 func TestColorDisabling(t *testing.T) {
@@ -315,25 +290,19 @@ func TestColorDisabling(t *testing.T) {
 	debugColors = false
 	isTTY = true
 	color := selectColor("test:namespace")
-	if color != "" {
-		t.Errorf("selectColor should return empty when debugColors=false, got %q", color)
-	}
+	assert.Empty(t, color, "selectColor should return empty when debugColors=false")
 
 	// Test with TTY disabled
 	debugColors = true
 	isTTY = false
 	color = selectColor("test:namespace")
-	if color != "" {
-		t.Errorf("selectColor should return empty when isTTY=false, got %q", color)
-	}
+	assert.Empty(t, color, "selectColor should return empty when isTTY=false")
 
 	// Test with both enabled
 	debugColors = true
 	isTTY = true
 	color = selectColor("test:namespace")
-	if color == "" {
-		t.Error("selectColor should return color when both enabled")
-	}
+	assert.NotEmpty(t, color, "selectColor should return color when both enabled")
 }
 
 func TestMatchPattern(t *testing.T) {
@@ -358,9 +327,7 @@ func TestMatchPattern(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := matchPattern(tt.namespace, tt.pattern)
-			if got != tt.want {
-				t.Errorf("matchPattern(%q, %q) = %v, want %v", tt.namespace, tt.pattern, got, tt.want)
-			}
+			assert.Equal(t, tt.want, got, "matchPattern(%q, %q)", tt.namespace, tt.pattern)
 		})
 	}
 }
@@ -388,10 +355,8 @@ func TestComputeEnabled(t *testing.T) {
 			// Use t.Setenv to set DEBUG for this test
 			t.Setenv("DEBUG", tt.debugEnv)
 			got := computeEnabled(tt.namespace)
-			if got != tt.want {
-				t.Errorf("computeEnabled(%q) with DEBUG=%q = %v, want %v",
-					tt.namespace, tt.debugEnv, got, tt.want)
-			}
+			assert.Equal(t, tt.want, got,
+				"computeEnabled(%q) with DEBUG=%q", tt.namespace, tt.debugEnv)
 		})
 	}
 }
@@ -420,12 +385,8 @@ func TestDebugLoggerWritesToFile(t *testing.T) {
 	})
 
 	// Verify stderr output contains the messages
-	if !strings.Contains(stderrOutput, "Test message 42") {
-		t.Errorf("Stderr should contain debug message, got: %s", stderrOutput)
-	}
-	if !strings.Contains(stderrOutput, "Another test message") {
-		t.Errorf("Stderr should contain debug message, got: %s", stderrOutput)
-	}
+	assert.Contains(t, stderrOutput, "Test message 42", "Stderr should contain debug message")
+	assert.Contains(t, stderrOutput, "Another test message", "Stderr should contain debug message")
 
 	// Close the file logger to flush all data
 	CloseGlobalLogger()
@@ -438,27 +399,17 @@ func TestDebugLoggerWritesToFile(t *testing.T) {
 	logContent := string(content)
 
 	// Verify the file logger contains the same messages (text-only, no colors)
-	if !strings.Contains(logContent, "Test message 42") {
-		t.Errorf("Log file should contain debug message, got: %s", logContent)
-	}
-	if !strings.Contains(logContent, "Another test message") {
-		t.Errorf("Log file should contain debug message, got: %s", logContent)
-	}
+	assert.Contains(t, logContent, "Test message 42", "Log file should contain debug message")
+	assert.Contains(t, logContent, "Another test message", "Log file should contain debug message")
 
 	// Verify the file logger has DEBUG level
-	if !strings.Contains(logContent, "[DEBUG]") {
-		t.Errorf("Log file should contain [DEBUG] level, got: %s", logContent)
-	}
+	assert.Contains(t, logContent, "[DEBUG]", "Log file should contain [DEBUG] level")
 
 	// Verify the file logger has the namespace as category
-	if !strings.Contains(logContent, "[test:debug]") {
-		t.Errorf("Log file should contain [test:debug] category, got: %s", logContent)
-	}
+	assert.Contains(t, logContent, "[test:debug]", "Log file should contain [test:debug] category")
 
 	// Verify no color codes in file output
-	if strings.Contains(logContent, "\033[") {
-		t.Errorf("Log file should not contain ANSI color codes, got: %s", logContent)
-	}
+	assert.NotContains(t, logContent, "\033[", "Log file should not contain ANSI color codes")
 }
 
 func TestDebugLoggerDisabledNoFileWrite(t *testing.T) {
@@ -479,9 +430,7 @@ func TestDebugLoggerDisabledNoFileWrite(t *testing.T) {
 	log := New("test:disabled")
 
 	// Verify logger is disabled
-	if log.Enabled() {
-		t.Fatal("Logger should be disabled when DEBUG is empty")
-	}
+	require.False(t, log.Enabled(), "Logger should be disabled when DEBUG is empty")
 
 	// Try to log (should not write anywhere)
 	log.Printf("This should not appear")
@@ -497,9 +446,8 @@ func TestDebugLoggerDisabledNoFileWrite(t *testing.T) {
 	logContent := string(content)
 
 	// Verify the message is NOT in the file (logger was disabled)
-	if strings.Contains(logContent, "This should not appear") {
-		t.Errorf("Disabled logger should not write to file, got: %s", logContent)
-	}
+	assert.NotContains(t, logContent, "This should not appear",
+		"Disabled logger should not write to file")
 }
 
 // TestNew_WithDebugEnv tests logger creation with various DEBUG environment patterns
@@ -560,10 +508,8 @@ func TestNew_WithDebugEnv(t *testing.T) {
 			t.Setenv("DEBUG", tt.debugEnv)
 
 			log := New(tt.namespace)
-			if log.Enabled() != tt.enabled {
-				t.Errorf("New(%q) with DEBUG=%q: enabled = %v, want %v",
-					tt.namespace, tt.debugEnv, log.Enabled(), tt.enabled)
-			}
+			assert.Equal(t, tt.enabled, log.Enabled(),
+				"New(%q) with DEBUG=%q: wrong enabled state", tt.namespace, tt.debugEnv)
 		})
 	}
 }
@@ -657,10 +603,58 @@ func TestDebugPatterns(t *testing.T) {
 			t.Setenv("DEBUG", tt.debugEnv)
 
 			log := New(tt.namespace)
-			if log.Enabled() != tt.enabled {
-				t.Errorf("New(%q) with DEBUG=%q: enabled = %v, want %v",
-					tt.namespace, tt.debugEnv, log.Enabled(), tt.enabled)
-			}
+			assert.Equal(t, tt.enabled, log.Enabled(),
+				"New(%q) with DEBUG=%q: wrong enabled state", tt.namespace, tt.debugEnv)
 		})
 	}
+}
+
+// TestLogger_Printf_WithColors verifies that Printf includes color codes when colors are enabled.
+func TestLogger_Printf_WithColors(t *testing.T) {
+	origDebugColors := debugColors
+	origIsTTY := isTTY
+	t.Cleanup(func() {
+		debugColors = origDebugColors
+		isTTY = origIsTTY
+	})
+
+	debugColors = true
+	isTTY = true
+
+	t.Setenv("DEBUG", "*")
+	log := New("test:colors")
+	require.NotEmpty(t, log.color, "Logger should have a color assigned when TTY and colors are enabled")
+
+	output := captureStderr(func() {
+		log.Printf("colored message")
+	})
+
+	assert.Contains(t, output, "colored message", "Printf() output should contain the message")
+	assert.Contains(t, output, "\033[", "Printf() output should contain ANSI color codes when colors enabled")
+	assert.Contains(t, output, colorReset, "Printf() output should contain color reset code")
+}
+
+// TestLogger_Print_WithColors verifies that Print includes color codes when colors are enabled.
+func TestLogger_Print_WithColors(t *testing.T) {
+	origDebugColors := debugColors
+	origIsTTY := isTTY
+	t.Cleanup(func() {
+		debugColors = origDebugColors
+		isTTY = origIsTTY
+	})
+
+	debugColors = true
+	isTTY = true
+
+	t.Setenv("DEBUG", "*")
+	log := New("test:colors-print")
+	require.NotEmpty(t, log.color, "Logger should have a color assigned when TTY and colors are enabled")
+
+	output := captureStderr(func() {
+		log.Print("colored", " ", "print")
+	})
+
+	assert.Contains(t, output, "colored print", "Print() output should contain the message")
+	assert.Contains(t, output, "\033[", "Print() output should contain ANSI color codes when colors enabled")
+	assert.Contains(t, output, colorReset, "Print() output should contain color reset code")
 }
