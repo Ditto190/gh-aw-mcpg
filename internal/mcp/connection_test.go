@@ -130,7 +130,7 @@ func TestHTTPRequest_ConfiguredHeaders(t *testing.T) {
 	assert.Equal(t, authToken, receivedAuth)
 	assert.Equal(t, sessionID, receivedSessionID)
 }
-func TestSetDIFCSinkServerIDs(t *testing.T) {
+func TestSetSinkServerIDs(t *testing.T) {
 	difc.SetSinkServerIDs(nil)
 	t.Cleanup(func() {
 		difc.SetSinkServerIDs(nil)
