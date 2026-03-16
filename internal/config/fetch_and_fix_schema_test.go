@@ -440,9 +440,9 @@ func TestFetchAndFixSchema_AllTransformationsApplied(t *testing.T) {
 	assert.True(t, hasHTTPGP, "guard-policies should be injected into httpServerConfig")
 }
 
-// TestFetchAndFixSchema_PreservesExistingRegistryField verifies that if a schema
-// already has a registry field in stdioServerConfig, the transformation overwrites it
-// (last-write wins on map assignment).
+// TestFetchAndFixSchema_PreservesSchemaIntegrity verifies that fetchAndFixSchema
+// preserves existing stdioServerConfig fields and structure while applying its
+// transformations (i.e., original properties and required entries remain intact).
 func TestFetchAndFixSchema_PreservesSchemaIntegrity(t *testing.T) {
 	schema := map[string]interface{}{
 		"$schema": "http://json-schema.org/draft-07/schema#",
