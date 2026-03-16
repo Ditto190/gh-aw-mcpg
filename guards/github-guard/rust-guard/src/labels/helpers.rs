@@ -288,7 +288,10 @@ pub(crate) fn repo_visibility_secrecy(
 
 /// Convenience wrapper: splits `repo_id` as "owner/repo" and delegates to
 /// [`repo_visibility_secrecy`].
-pub(crate) fn repo_visibility_secrecy_for_repo_id(repo_id: &str, ctx: &PolicyContext) -> Vec<String> {
+pub(crate) fn repo_visibility_secrecy_for_repo_id(
+    repo_id: &str,
+    ctx: &PolicyContext,
+) -> Vec<String> {
     if let Some((owner, repo)) = repo_id.split_once('/') {
         repo_visibility_secrecy(owner, repo, repo_id, ctx)
     } else {
