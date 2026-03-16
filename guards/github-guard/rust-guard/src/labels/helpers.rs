@@ -269,8 +269,9 @@ pub(crate) fn repo_visibility_secrecy(
     repo_id: &str,
     ctx: &PolicyContext,
 ) -> Vec<String> {
+    // If any identifier is missing, treat visibility as unknown and fail secure
     if owner.is_empty() || repo.is_empty() || repo_id.is_empty() {
-        return vec![];
+        return policy_private_scope_label(owner, repo, repo_id, ctx);
     }
     match super::backend::is_repo_private(owner, repo) {
         Some(true) => policy_private_scope_label(owner, repo, repo_id, ctx),
@@ -291,7 +292,8 @@ pub(crate) fn repo_visibility_secrecy_for_repo_id(repo_id: &str, ctx: &PolicyCon
     if let Some((owner, repo)) = repo_id.split_once('/') {
         repo_visibility_secrecy(owner, repo, repo_id, ctx)
     } else {
-        vec![]
+        // Malformed repo_id: treat as unknown visibility and fail secure
+        policy_private_scope_label("", "", repo_id, ctx)
     }
 }
 
