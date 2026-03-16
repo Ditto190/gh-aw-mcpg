@@ -167,7 +167,7 @@ func NewSecrecyLabelWithTags(tags []Tag) *SecrecyLabel {
 	return &SecrecyLabel{Label: newLabelWithTags(tags)}
 }
 
-// getLabel returns the underlying Label, or nil if the receiver is nil.
+// getLabel returns the underlying Label, or nil if the receiver or its underlying Label is nil.
 func (l *SecrecyLabel) getLabel() *Label {
 	if l == nil {
 		return nil
