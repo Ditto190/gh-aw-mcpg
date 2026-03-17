@@ -594,7 +594,8 @@ When the release workflow is triggered, it automatically:
 
 ### Core Features
 
-- TOML and JSON stdin configuration with `${VAR}` variable expansion
+- JSON stdin configuration with `${VAR}` variable expansion
+- TOML configuration loaded from file (no `${VAR}` variable expansion)
 - Stdio transport for backend servers (containerized via Docker)
 - Docker container launching
 - Routed mode: Each backend at `/mcp/{serverID}`
