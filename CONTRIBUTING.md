@@ -594,12 +594,19 @@ When the release workflow is triggered, it automatically:
 
 ### Core Features
 
-- TOML and JSON stdin configuration
-- Stdio transport for backend servers
+- TOML and JSON stdin configuration with `${VAR}` variable expansion
+- Stdio transport for backend servers (containerized via Docker)
 - Docker container launching
 - Routed mode: Each backend at `/mcp/{serverID}`
 - Unified mode: All backends at `/mcp`
 - Basic request/response proxying
+- WASM-based DIFC guards (`internal/guard/`) with `allow-only` and `write-sink` guard policies
+- Large payload handling with configurable size threshold and disk storage
+- Per-server and unified file logging (`.log`, `gateway.md`, `rpc-messages.jsonl`, `tools.json`)
+- Health endpoint at `GET /health` returning structured JSON
+- `--validate-env` flag for environment pre-validation
+
+See [README.md](README.md) for the full feature set and architecture overview.
 
 ## Questions or Issues?
 
