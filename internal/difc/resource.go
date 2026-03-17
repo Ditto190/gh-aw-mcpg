@@ -129,10 +129,16 @@ func (c *CollectionLabeledData) ToResult() (interface{}, error) {
 	return result, nil
 }
 
+// FilteredItemDetail pairs a filtered item with the reason it was denied
+type FilteredItemDetail struct {
+	Item   LabeledItem
+	Reason string // Human-readable denial reason from EvaluationResult
+}
+
 // FilteredCollectionLabeledData represents a collection with some items filtered out
 type FilteredCollectionLabeledData struct {
 	Accessible   []LabeledItem
-	Filtered     []LabeledItem
+	Filtered     []FilteredItemDetail
 	TotalCount   int
 	FilterReason string
 }
