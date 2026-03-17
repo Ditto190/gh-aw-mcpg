@@ -360,7 +360,7 @@ func (e *Evaluator) FilterCollection(
 
 	filtered := &FilteredCollectionLabeledData{
 		Accessible:   []LabeledItem{},
-		Filtered:     []LabeledItem{},
+		Filtered:     []FilteredItemDetail{},
 		TotalCount:   len(collection.Items),
 		FilterReason: "DIFC policy",
 	}
@@ -371,7 +371,10 @@ func (e *Evaluator) FilterCollection(
 		if result.IsAllowed() {
 			filtered.Accessible = append(filtered.Accessible, item)
 		} else {
-			filtered.Filtered = append(filtered.Filtered, item)
+			filtered.Filtered = append(filtered.Filtered, FilteredItemDetail{
+				Item:   item,
+				Reason: result.Reason,
+			})
 		}
 	}
 

@@ -984,6 +984,7 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 
 			if filtered.GetFilteredCount() > 0 {
 				log.Printf("[DIFC] Filtered out %d items due to DIFC policy", filtered.GetFilteredCount())
+				logFilteredItems(serverID, toolName, filtered)
 			}
 
 			// Convert filtered data to result
