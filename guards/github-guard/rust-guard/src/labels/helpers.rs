@@ -544,15 +544,15 @@ pub fn extract_number_as_string(tool_args: &Value, field: &str) -> Option<String
 // Integrity Scope Helpers
 // ============================================================================
 
-/// Determine the integrity scope for a repository
+/// Generate baseline (unapproved) integrity labels for a scope.
 ///
-/// For organization-owned repos, returns the org name (e.g., "github")
-/// For user-owned repos, returns the full repo path (e.g., "octocat/Hello-World")
+/// This helper normalizes the provided `scope` using the `PolicyContext`
+/// and returns integrity labels for:
+/// - a "none" integrity level for the scope
+/// - a "reader" integrity level for the scope
 ///
-/// This allows org-level trust relationships, which are more practical
-/// since we can't query individual collaborator permissions.
-///
-/// Generate unapproved-level integrity tags for a scope
+/// These labels represent the lowest integrity levels; higher levels
+/// (such as writer) build on top of them.
 pub fn reader_integrity(scope: &str, ctx: &PolicyContext) -> Vec<String> {
     let normalized_scope = normalize_scope(scope, ctx);
     vec![
