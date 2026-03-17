@@ -39,6 +39,18 @@ fn apply_repo_visibility_secrecy(
     }
 }
 
+fn private_writer_integrity(
+    repo_id: &str,
+    repo_private: Option<bool>,
+    ctx: &PolicyContext,
+) -> Vec<String> {
+    if repo_private == Some(true) {
+        writer_integrity(repo_id, ctx)
+    } else {
+        vec![]
+    }
+}
+
 // ============================================================================
 // Tool Label Application
 // ============================================================================
@@ -75,11 +87,7 @@ pub fn apply_tool_labels(
                 }
             }
             secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
-            integrity = if repo_private == Some(true) {
-                writer_integrity(repo_id, ctx)
-            } else {
-                vec![]
-            };
+            integrity = private_writer_integrity(repo_id, repo_private, ctx);
 
             if matches!(tool_name, "get_issue" | "issue_read") {
                 if let Some(issue_num) =
@@ -164,26 +172,14 @@ pub fn apply_tool_labels(
                             );
                         }
                     } else {
-                        integrity = if repo_private == Some(true) {
-                            writer_integrity(repo_id, ctx)
-                        } else {
-                            vec![]
-                        };
+                        integrity = private_writer_integrity(repo_id, repo_private, ctx);
                     }
                 } else {
-                    integrity = if repo_private == Some(true) {
-                        writer_integrity(repo_id, ctx)
-                    } else {
-                        vec![]
-                    };
+                    integrity = private_writer_integrity(repo_id, repo_private, ctx);
                 }
             } else {
                 // Collection/list calls are coarse; response labeling refines item-by-item.
-                integrity = if repo_private == Some(true) {
-                    writer_integrity(repo_id, ctx)
-                } else {
-                    vec![]
-                };
+                integrity = private_writer_integrity(repo_id, repo_private, ctx);
             }
         }
 

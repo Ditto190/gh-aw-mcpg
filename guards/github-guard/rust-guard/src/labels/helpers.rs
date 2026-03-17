@@ -552,23 +552,6 @@ pub fn extract_number_as_string(tool_args: &Value, field: &str) -> Option<String
 /// This allows org-level trust relationships, which are more practical
 /// since we can't query individual collaborator permissions.
 ///
-/// NOTE: Currently unused but kept for potential future use when we add
-/// organization-level integrity scope support. This would allow trust
-/// relationships across all repos in an organization.
-#[allow(dead_code)]
-pub fn get_integrity_scope(owner: &str, repo: &str, owner_type: Option<&str>) -> String {
-    // If we know it's an organization, use org-level scope
-    if owner_type == Some("Organization") {
-        owner.to_string()
-    } else if owner_type == Some("User") {
-        // User-owned repos use full repo path
-        format!("{}/{}", owner, repo)
-    } else {
-        // Default: assume user-owned (more restrictive)
-        format!("{}/{}", owner, repo)
-    }
-}
-
 /// Generate unapproved-level integrity tags for a scope
 pub fn reader_integrity(scope: &str, ctx: &PolicyContext) -> Vec<String> {
     let normalized_scope = normalize_scope(scope, ctx);
@@ -872,14 +855,7 @@ pub fn commit_integrity(
     ensure_integrity_baseline(repo_full_name, integrity, ctx)
 }
 
-/// Check if content author is the repository owner
-#[allow(dead_code)]
-pub fn is_owner(author: &str, owner: &str) -> bool {
-    !author.is_empty() && author.eq_ignore_ascii_case(owner)
-}
-
 /// Check if a user appears to be a bot
-#[allow(dead_code)]
 pub fn is_bot(username: &str) -> bool {
     let lower = username.to_lowercase();
     lower.ends_with("[bot]")
