@@ -143,7 +143,7 @@ See **[docs/CONFIGURATION.md](docs/CONFIGURATION.md)** for the complete mapping 
 
 - `POST /mcp/{serverID}` — Routed mode (default): JSON-RPC request to specific server
 - `POST /mcp` — Unified mode: JSON-RPC request routed to configured servers
-- `GET /health` — Health check; returns JSON `{"status":"healthy","specVersion":"...","gatewayVersion":"...","servers":{...}}`
+- `GET /health` — Health check; returns JSON `{"status":"healthy" | "unhealthy","specVersion":"...","gatewayVersion":"...","servers":{...}}`
 
 Supported MCP methods: `tools/list`, `tools/call`, and any other method (forwarded as-is).
 
