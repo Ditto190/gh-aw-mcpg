@@ -78,7 +78,7 @@ Restricts which repositories a guard allows and at what integrity level:
 - `["owner/prefix*"]` — Repos matching prefix
 
 **`min-integrity`** — Minimum integrity level based on `author_association`:
-- `"none"` — All objects (FIRST_TIME_CONTRIBUTOR, FIRST_TIMER, NONE)
+- `"none"` — All objects (FIRST_TIMER, NONE)
 - `"unapproved"` — Contributors (CONTRIBUTOR, FIRST_TIME_CONTRIBUTOR)
 - `"approved"` — Members (OWNER, MEMBER, COLLABORATOR)
 - `"merged"` — Objects reachable from main branch
