@@ -544,32 +544,15 @@ pub fn extract_number_as_string(tool_args: &Value, field: &str) -> Option<String
 // Integrity Scope Helpers
 // ============================================================================
 
-/// Determine the integrity scope for a repository
+/// Generate baseline (unapproved) integrity labels for a scope.
 ///
-/// For organization-owned repos, returns the org name (e.g., "github")
-/// For user-owned repos, returns the full repo path (e.g., "octocat/Hello-World")
+/// This helper normalizes the provided `scope` using the `PolicyContext`
+/// and returns integrity labels for:
+/// - a "none" integrity level for the scope
+/// - a "reader" integrity level for the scope
 ///
-/// This allows org-level trust relationships, which are more practical
-/// since we can't query individual collaborator permissions.
-///
-/// NOTE: Currently unused but kept for potential future use when we add
-/// organization-level integrity scope support. This would allow trust
-/// relationships across all repos in an organization.
-#[allow(dead_code)]
-pub fn get_integrity_scope(owner: &str, repo: &str, owner_type: Option<&str>) -> String {
-    // If we know it's an organization, use org-level scope
-    if owner_type == Some("Organization") {
-        owner.to_string()
-    } else if owner_type == Some("User") {
-        // User-owned repos use full repo path
-        format!("{}/{}", owner, repo)
-    } else {
-        // Default: assume user-owned (more restrictive)
-        format!("{}/{}", owner, repo)
-    }
-}
-
-/// Generate unapproved-level integrity tags for a scope
+/// These labels represent the lowest integrity levels; higher levels
+/// (such as writer) build on top of them.
 pub fn reader_integrity(scope: &str, ctx: &PolicyContext) -> Vec<String> {
     let normalized_scope = normalize_scope(scope, ctx);
     vec![
@@ -872,14 +855,7 @@ pub fn commit_integrity(
     ensure_integrity_baseline(repo_full_name, integrity, ctx)
 }
 
-/// Check if content author is the repository owner
-#[allow(dead_code)]
-pub fn is_owner(author: &str, owner: &str) -> bool {
-    !author.is_empty() && author.eq_ignore_ascii_case(owner)
-}
-
 /// Check if a user appears to be a bot
-#[allow(dead_code)]
 pub fn is_bot(username: &str) -> bool {
     let lower = username.to_lowercase();
     lower.ends_with("[bot]")
@@ -888,6 +864,12 @@ pub fn is_bot(username: &str) -> bool {
         || lower == "renovate"
         || lower == "github-actions"
         || lower == "copilot"
+}
+
+/// Check if a user is the repository owner (case-insensitive)
+#[allow(dead_code)]
+pub fn is_owner(username: &str, owner: &str) -> bool {
+    username.eq_ignore_ascii_case(owner)
 }
 
 /// Check if a user has verified contributor status
