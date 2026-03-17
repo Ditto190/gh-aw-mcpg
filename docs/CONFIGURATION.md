@@ -193,7 +193,7 @@ min-integrity = "unapproved"
     - `"owner/prefix*"` - Repositories with name prefix under owner
 
 - **`min-integrity`**: Minimum integrity level required. Integrity levels are determined by the GitHub MCP server based on the `author_association` field of GitHub objects and whether the object is reachable from the main branch:
-  - `"none"` - No integrity requirements (includes objects with author_association: FIRST_TIME_CONTRIBUTOR, FIRST_TIMER, NONE)
+  - `"none"` - No integrity requirements (includes objects with author_association: FIRST_TIMER, NONE)
   - `"unapproved"` - Unapproved contributor level (includes objects with author_association: CONTRIBUTOR, FIRST_TIME_CONTRIBUTOR)
   - `"approved"` - Approved contributor level (includes objects with author_association: OWNER, MEMBER, COLLABORATOR)
   - `"merged"` - Merged to main branch (any object reachable from the main branch, regardless of authorship)
