@@ -866,6 +866,12 @@ pub fn is_bot(username: &str) -> bool {
         || lower == "copilot"
 }
 
+/// Check if a user is the repository owner (case-insensitive)
+#[allow(dead_code)]
+pub fn is_owner(username: &str, owner: &str) -> bool {
+    username.eq_ignore_ascii_case(owner)
+}
+
 /// Check if a user has verified contributor status
 /// This is a placeholder that delegates to the backend module
 #[allow(dead_code)]
