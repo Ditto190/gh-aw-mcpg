@@ -111,15 +111,6 @@ fn repo_matches_scope(
     }
 }
 
-#[allow(dead_code)]
-pub fn repo_matches_policy_scope(owner: &str, repo: &str, ctx: &PolicyContext) -> bool {
-    ctx.scopes.iter().any(|scope| {
-        let scoped_owner = scope.scope_owner.as_deref().unwrap_or("");
-        let scoped_repo = scope.scope_repo.as_deref().unwrap_or("");
-        repo_matches_scope(scope.scope_kind, owner, repo, scoped_owner, scoped_repo)
-    })
-}
-
 fn first_matching_scope(owner: &str, repo: &str, ctx: &PolicyContext) -> Option<PolicyScopeEntry> {
     ctx.scopes
         .iter()
@@ -871,12 +862,4 @@ pub fn is_bot(username: &str) -> bool {
 #[allow(dead_code)]
 pub fn is_owner(username: &str, owner: &str) -> bool {
     username.eq_ignore_ascii_case(owner)
-}
-
-/// Check if a user has verified contributor status
-/// This is a placeholder that delegates to the backend module
-#[allow(dead_code)]
-pub fn is_verified_contributor(username: &str, owner: &str, repo: &str) -> bool {
-    // Import from backend to avoid circular dependency
-    super::backend::is_verified_contributor(username, owner, repo)
 }
