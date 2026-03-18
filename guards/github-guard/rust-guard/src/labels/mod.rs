@@ -934,7 +934,7 @@ mod tests {
             &ctx,
         );
 
-        // Baseline is none_integrity("github", ctx) → unscoped "none:github"
+        // Baseline is approved-level writer_integrity("github", &ctx) → "approved:github"
         // (normalize_scope falls through to the raw owner when no policy token)
         assert_eq!(integrity, writer_integrity("github", &ctx));
     }
