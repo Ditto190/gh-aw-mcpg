@@ -39,92 +39,6 @@ pub struct PullRequestFacts {
     pub is_forked: Option<bool>,
 }
 
-/// Check if a user has any merged pull requests in a repository.
-///
-/// This is used to determine contributor status for off-branch content
-/// like issues and comments. A user with merged PRs is considered a
-/// verified contributor.
-///
-/// Uses the search_pull_requests tool with query:
-/// `author:<username> repo:<owner>/<repo> is:merged`
-///
-/// # Arguments
-/// * `username` - The GitHub username to check
-/// * `owner` - Repository owner
-/// * `repo` - Repository name
-///
-/// # Returns
-/// * `Some(count)` - Number of merged PRs (0 if none)
-/// * `None` - If the backend call failed
-#[allow(dead_code)]
-pub fn count_merged_prs(username: &str, owner: &str, repo: &str) -> Option<u32> {
-    if username.is_empty() || owner.is_empty() || repo.is_empty() {
-        return Some(0);
-    }
-
-    // Build the search query
-    let query = format!("author:{} repo:{}/{} is:merged", username, owner, repo);
-    let args = serde_json::json!({
-        "query": query,
-        "perPage": 1  // We only need the count, not the actual PRs
-    });
-
-    let args_str = args.to_string();
-    let mut result_buffer = vec![0u8; SMALL_BUFFER_SIZE];
-
-    crate::log_debug(&format!(
-        "Checking merged PRs for {} in {}/{}",
-        username, owner, repo
-    ));
-
-    match crate::invoke_backend("search_pull_requests", &args_str, &mut result_buffer) {
-        Ok(len) => {
-            if len == 0 {
-                crate::log_debug("Empty response from search_pull_requests");
-                return None;
-            }
-
-            // Parse the response
-            let response_str = match std::str::from_utf8(&result_buffer[..len]) {
-                Ok(s) => s,
-                Err(_) => return None,
-            };
-
-            // Parse JSON and extract total_count
-            if let Ok(response) = serde_json::from_str::<Value>(response_str) {
-                if let Some(count) = response.get("total_count").and_then(|v| v.as_u64()) {
-                    crate::log_debug(&format!(
-                        "User {} has {} merged PRs in {}/{}",
-                        username, count, owner, repo
-                    ));
-                    return Some(count as u32);
-                }
-            }
-
-            None
-        }
-        Err(code) => {
-            crate::log_warn(&format!("Failed to check merged PRs: error code {}", code));
-            None
-        }
-    }
-}
-
-/// Check if a user is a verified contributor (has at least one merged PR)
-///
-/// # Arguments
-/// * `username` - The GitHub username to check
-/// * `owner` - Repository owner
-/// * `repo` - Repository name
-///
-/// # Returns
-/// * `true` if user has at least one merged PR
-/// * `false` if user has no merged PRs or check failed
-#[allow(dead_code)]
-pub fn is_verified_contributor(username: &str, owner: &str, repo: &str) -> bool {
-    count_merged_prs(username, owner, repo).unwrap_or(0) > 0
-}
-
 /// Check whether a repository is private using the backend MCP server.
 ///
 /// Returns:
@@ -470,12 +384,6 @@ pub fn get_pull_request_facts(
 
 pub fn get_issue_author_association(owner: &str, repo: &str, issue_number: &str) -> Option<String> {
     get_issue_author_association_with_callback(crate::invoke_backend, owner, repo, issue_number)
-}
-
-/// Determine whether a pull request is from a fork using the default backend callback.
-#[allow(dead_code)]
-pub fn is_forked_pull_request(owner: &str, repo: &str, pull_number: &str) -> Option<bool> {
-    is_forked_pull_request_with_callback(crate::invoke_backend, owner, repo, pull_number)
 }
 
 fn extract_repo_private_flag(response: &Value, repo_id: &str) -> Option<bool> {
