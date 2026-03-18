@@ -412,6 +412,21 @@ func isValidAllowOnlyRepos(repos interface{}) bool {
 	}
 }
 
+// checkBoolFailure returns a non-nil error if the given raw response map
+// contains field key set to false, extracting the "error" message if present.
+func checkBoolFailure(raw map[string]interface{}, resultJSON []byte, key string) error {
+	val, ok := raw[key].(bool)
+	if !ok || val {
+		return nil // field absent or true — not a failure
+	}
+	if message, msgOK := raw["error"].(string); msgOK && strings.TrimSpace(message) != "" {
+		logWasm.Printf("label_agent response indicated failure: error=%s, response=%s", message, string(resultJSON))
+		return fmt.Errorf("label_agent rejected policy: %s", message)
+	}
+	logWasm.Printf("label_agent response indicated non-success status: response=%s", string(resultJSON))
+	return fmt.Errorf("label_agent returned non-success status")
+}
+
 func parseLabelAgentResponse(resultJSON []byte) (*LabelAgentResult, error) {
 	var raw map[string]interface{}
 	if err := json.Unmarshal(resultJSON, &raw); err != nil {
@@ -419,21 +434,11 @@ func parseLabelAgentResponse(resultJSON []byte) (*LabelAgentResult, error) {
 		return nil, fmt.Errorf("failed to unmarshal label_agent response: %w", err)
 	}
 
-	if success, ok := raw["success"].(bool); ok && !success {
-		if message, msgOK := raw["error"].(string); msgOK && strings.TrimSpace(message) != "" {
-			logWasm.Printf("label_agent response indicated failure: error=%s, response=%s", message, string(resultJSON))
-			return nil, fmt.Errorf("label_agent rejected policy: %s", message)
-		}
-		logWasm.Printf("label_agent response indicated non-success status: response=%s", string(resultJSON))
-		return nil, fmt.Errorf("label_agent returned non-success status")
+	if err := checkBoolFailure(raw, resultJSON, "success"); err != nil {
+		return nil, err
 	}
-	if okValue, ok := raw["ok"].(bool); ok && !okValue {
-		if message, msgOK := raw["error"].(string); msgOK && strings.TrimSpace(message) != "" {
-			logWasm.Printf("label_agent response indicated failure: error=%s, response=%s", message, string(resultJSON))
-			return nil, fmt.Errorf("label_agent rejected policy: %s", message)
-		}
-		logWasm.Printf("label_agent response indicated non-success status: response=%s", string(resultJSON))
-		return nil, fmt.Errorf("label_agent returned non-success status")
+	if err := checkBoolFailure(raw, resultJSON, "ok"); err != nil {
+		return nil, err
 	}
 	if message, ok := raw["error"].(string); ok && strings.TrimSpace(message) != "" {
 		logWasm.Printf("label_agent response contained error field: error=%s, response=%s", message, string(resultJSON))
