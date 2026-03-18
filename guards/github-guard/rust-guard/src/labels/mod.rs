@@ -902,4 +902,257 @@ mod tests {
         let exact_limited = limit_items_with_log(&exact, "test_tool");
         assert_eq!(exact_limited.len(), 100);
     }
+
+    // -------------------------------------------------------------------------
+    // GitHub Projects tools — scope alignment (Bug 1) and integrity level (Bug 2)
+    // -------------------------------------------------------------------------
+
+    fn owner_scoped_ctx(owner: &str) -> PolicyContext {
+        PolicyContext {
+            scopes: vec![PolicyScopeEntry {
+                scope_kind: ScopeKind::Owner,
+                scope_owner: Some(owner.to_string()),
+                scope_repo: None,
+                scope_label: owner.to_string(),
+            }],
+        }
+    }
+
+    #[test]
+    fn test_apply_tool_labels_list_projects_unscoped_ctx() {
+        // With default (unscoped) context, owner is still used as scope token.
+        let ctx = default_ctx();
+        let tool_args = json!({ "owner": "github" });
+
+        let (_secrecy, integrity, _desc) = apply_tool_labels(
+            "list_projects",
+            &tool_args,
+            "",
+            vec![],
+            vec![],
+            String::new(),
+            &ctx,
+        );
+
+        // Baseline is none_integrity("github", ctx) → unscoped "none:github"
+        // (normalize_scope falls through to the raw owner when no policy token)
+        assert_eq!(integrity, writer_integrity("github", &ctx));
+    }
+
+    #[test]
+    fn test_apply_tool_labels_list_projects_owner_scoped_ctx() {
+        // With repos: ["github/*"] the scope token is "github".
+        // The resource must carry "none:github" not bare "none" (Bug 1 fix).
+        let ctx = owner_scoped_ctx("github");
+        let tool_args = json!({ "owner": "github" });
+
+        let (_secrecy, integrity, _desc) = apply_tool_labels(
+            "list_projects",
+            &tool_args,
+            "",
+            vec![],
+            vec![],
+            String::new(),
+            &ctx,
+        );
+
+        // All integrity labels should be scoped to "github"
+        assert!(
+            integrity.iter().all(|l| l.ends_with(":github") || l.contains("github")),
+            "Expected all labels scoped to 'github', got: {:?}",
+            integrity
+        );
+        // Approved level must be present (Bug 2 fix)
+        assert!(
+            integrity.contains(&"approved:github".to_string()),
+            "Expected 'approved:github' in {:?}",
+            integrity
+        );
+    }
+
+    #[test]
+    fn test_apply_tool_labels_get_project_integrity() {
+        let ctx = owner_scoped_ctx("myorg");
+        let tool_args = json!({ "owner": "myorg", "project_number": 1 });
+
+        let (_secrecy, integrity, _desc) = apply_tool_labels(
+            "get_project",
+            &tool_args,
+            "",
+            vec![],
+            vec![],
+            String::new(),
+            &ctx,
+        );
+
+        assert!(
+            integrity.contains(&"approved:myorg".to_string()),
+            "Expected 'approved:myorg' in {:?}",
+            integrity
+        );
+    }
+
+    #[test]
+    fn test_apply_tool_labels_list_project_fields_integrity() {
+        let ctx = owner_scoped_ctx("myorg");
+        let tool_args = json!({ "owner": "myorg", "project_number": 1 });
+
+        let (_secrecy, integrity, _desc) = apply_tool_labels(
+            "list_project_fields",
+            &tool_args,
+            "",
+            vec![],
+            vec![],
+            String::new(),
+            &ctx,
+        );
+
+        assert!(
+            integrity.contains(&"approved:myorg".to_string()),
+            "Expected 'approved:myorg' in {:?}",
+            integrity
+        );
+    }
+
+    #[test]
+    fn test_apply_tool_labels_list_project_items_integrity() {
+        let ctx = owner_scoped_ctx("github");
+        let tool_args = json!({ "owner": "github", "project_number": 42 });
+
+        let (_secrecy, integrity, _desc) = apply_tool_labels(
+            "list_project_items",
+            &tool_args,
+            "",
+            vec![],
+            vec![],
+            String::new(),
+            &ctx,
+        );
+
+        assert!(
+            integrity.contains(&"approved:github".to_string()),
+            "Expected 'approved:github' in {:?}",
+            integrity
+        );
+    }
+
+    #[test]
+    fn test_label_response_paths_list_project_items_issue() {
+        // ISSUE items: integrity comes from author_association, secrecy from repo visibility
+        let ctx = default_ctx();
+        let tool_args = json!({ "owner": "github", "project_number": 1 });
+        let response = json!({
+            "items": [
+                {
+                    "type": "ISSUE",
+                    "content": {
+                        "repository_url": "https://api.github.com/repos/github/copilot",
+                        "author_association": "MEMBER"
+                    }
+                }
+            ]
+        });
+
+        let result = label_response_paths("list_project_items", &tool_args, &response, &ctx)
+            .expect("list_project_items should produce path labels");
+
+        assert_eq!(result.labeled_paths.len(), 1);
+        let entry = &result.labeled_paths[0];
+        assert_eq!(entry.labels.description, "project-item:issue");
+        // MEMBER maps to writer integrity (approved)
+        assert!(
+            entry.labels.integrity.iter().any(|l| l.starts_with("approved:")),
+            "Expected approved level for MEMBER, got: {:?}",
+            entry.labels.integrity
+        );
+    }
+
+    #[test]
+    fn test_label_response_paths_list_project_items_pull_request() {
+        let ctx = default_ctx();
+        let tool_args = json!({ "owner": "github", "project_number": 1 });
+        let response = json!({
+            "items": [
+                {
+                    "type": "PULL_REQUEST",
+                    "content": {
+                        "repository_url": "https://api.github.com/repos/github/copilot",
+                        "author_association": "CONTRIBUTOR"
+                    }
+                }
+            ]
+        });
+
+        let result = label_response_paths("list_project_items", &tool_args, &response, &ctx)
+            .expect("list_project_items should produce path labels");
+
+        assert_eq!(result.labeled_paths.len(), 1);
+        let entry = &result.labeled_paths[0];
+        assert_eq!(entry.labels.description, "project-item:pull_request");
+        // CONTRIBUTOR maps to reader (unapproved) integrity
+        assert!(
+            entry.labels.integrity.iter().any(|l| l.starts_with("unapproved:")),
+            "Expected unapproved level for CONTRIBUTOR, got: {:?}",
+            entry.labels.integrity
+        );
+    }
+
+    #[test]
+    fn test_label_response_paths_list_project_items_draft_issue() {
+        // DRAFT_ISSUE: no repo context; org-scoped approved integrity
+        let ctx = owner_scoped_ctx("github");
+        let tool_args = json!({ "owner": "github", "project_number": 1 });
+        let response = json!({
+            "items": [
+                {
+                    "type": "DRAFT_ISSUE",
+                    "creator": { "login": "some-user" }
+                }
+            ]
+        });
+
+        let result = label_response_paths("list_project_items", &tool_args, &response, &ctx)
+            .expect("list_project_items should produce path labels");
+
+        assert_eq!(result.labeled_paths.len(), 1);
+        let entry = &result.labeled_paths[0];
+        assert_eq!(entry.labels.description, "project-item:draft_issue");
+        assert_eq!(entry.labels.secrecy, vec![] as Vec<String>);
+        assert!(
+            entry.labels.integrity.contains(&"approved:github".to_string()),
+            "Expected 'approved:github' for draft issue, got: {:?}",
+            entry.labels.integrity
+        );
+    }
+
+    #[test]
+    fn test_label_response_paths_list_project_items_mixed() {
+        // Mixed collection: ISSUE + DRAFT_ISSUE
+        let ctx = owner_scoped_ctx("github");
+        let tool_args = json!({ "owner": "github", "project_number": 1 });
+        let response = json!({
+            "items": [
+                {
+                    "type": "ISSUE",
+                    "content": {
+                        "repository_url": "https://api.github.com/repos/github/copilot",
+                        "author_association": "OWNER"
+                    }
+                },
+                {
+                    "type": "DRAFT_ISSUE",
+                    "creator": { "login": "admin" }
+                }
+            ]
+        });
+
+        let result = label_response_paths("list_project_items", &tool_args, &response, &ctx)
+            .expect("list_project_items should produce path labels");
+
+        assert_eq!(result.labeled_paths.len(), 2);
+        assert_eq!(result.labeled_paths[0].path, "/items/0");
+        assert_eq!(result.labeled_paths[1].path, "/items/1");
+        assert_eq!(result.labeled_paths[0].labels.description, "project-item:issue");
+        assert_eq!(result.labeled_paths[1].labels.description, "project-item:draft_issue");
+    }
 }
