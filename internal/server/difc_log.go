@@ -8,46 +8,19 @@ import (
 	"github.com/github/gh-aw-mcpg/internal/logger"
 )
 
-// FilteredItemLogEntry is a structured log entry for a DIFC-filtered item.
-// It captures enough context to identify the object, understand why it was
-// filtered, and link back to it in a post-processing report.
-type FilteredItemLogEntry struct {
-	ServerID          string   `json:"server_id"`
-	ToolName          string   `json:"tool_name"`
-	Description       string   `json:"description"`
-	Reason            string   `json:"reason"`
-	SecrecyTags       []string `json:"secrecy_tags"`
-	IntegrityTags     []string `json:"integrity_tags"`
-	AuthorAssociation string   `json:"author_association,omitempty"`
-	AuthorLogin       string   `json:"author_login,omitempty"`
-	HTMLURL           string   `json:"html_url,omitempty"`
-	Number            string   `json:"number,omitempty"`
-	SHA               string   `json:"sha,omitempty"`
-}
-
 // logFilteredItems logs structured details for every item removed by DIFC filtering.
-// Each item is logged individually to the file logger (always written) so that
-// post-processing tools can reconstruct exactly what was filtered and why.
+// Each item is written as a DIFC_FILTERED entry in the JSONL log alongside
+// the RPC request/response that triggered the filtering.
 func logFilteredItems(serverID, toolName string, filtered *difc.FilteredCollectionLabeledData) {
 	for _, detail := range filtered.Filtered {
-		entry := buildFilteredItemLogEntry(serverID, toolName, detail)
-
-		entryJSON, err := json.Marshal(entry)
-		if err != nil {
-			logger.LogWarnWithServer(serverID, "difc",
-				"[DIFC-FILTERED] %s | %s | description=%s | reason=%s (json marshal failed: %v)",
-				serverID, toolName, entry.Description, entry.Reason, err)
-			continue
-		}
-
-		logger.LogInfoWithServer(serverID, "difc",
-			"[DIFC-FILTERED] %s", string(entryJSON))
+		entry := buildFilteredLogEntry(serverID, toolName, detail)
+		logger.LogDifcFilteredItem(entry)
 	}
 }
 
-// buildFilteredItemLogEntry constructs a structured log entry from a filtered item.
-func buildFilteredItemLogEntry(serverID, toolName string, detail difc.FilteredItemDetail) FilteredItemLogEntry {
-	entry := FilteredItemLogEntry{
+// buildFilteredLogEntry constructs a structured log entry from a filtered item.
+func buildFilteredLogEntry(serverID, toolName string, detail difc.FilteredItemDetail) *logger.JSONLFilteredItem {
+	entry := &logger.JSONLFilteredItem{
 		ServerID: serverID,
 		ToolName: toolName,
 		Reason:   detail.Reason,
@@ -96,13 +69,11 @@ func getStringField(m map[string]interface{}, fields ...string) string {
 
 // extractAuthorLogin extracts the author login from nested user/author objects.
 func extractAuthorLogin(m map[string]interface{}) string {
-	// Try user.login (issues, PRs)
 	if user, ok := m["user"].(map[string]interface{}); ok {
 		if login, ok := user["login"].(string); ok {
 			return login
 		}
 	}
-	// Try author.login (commits)
 	if author, ok := m["author"].(map[string]interface{}); ok {
 		if login, ok := author["login"].(string); ok {
 			return login
@@ -112,7 +83,6 @@ func extractAuthorLogin(m map[string]interface{}) string {
 }
 
 // extractNumberField extracts the item number as a string.
-// GitHub API returns numbers as float64 from JSON parsing.
 func extractNumberField(m map[string]interface{}) string {
 	if n, ok := m["number"]; ok {
 		switch v := n.(type) {
