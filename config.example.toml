@@ -132,13 +132,15 @@ args = [
 ]
 
 # Example 4: Custom MCP Server with Volume Mounts
+# NOTE: TOML configuration does not support ${VAR} variable expansion.
+# Use absolute paths directly in args — shell variables like ${PWD} will NOT be expanded.
 [servers.custom]
 command = "docker"
 args = [
     "run",
     "--rm",
     "-i",
-    "-v", "${PWD}:/workspace:ro",                        # Mount current directory (read-only)
+    "-v", "/absolute/path/to/workspace:/workspace:ro",   # Use an absolute path (TOML does not expand ${PWD})
     "-e", "NO_COLOR=1",
     "-e", "TERM=dumb",
     "custom/mcp-server:latest"
@@ -179,7 +181,8 @@ args = [
 # - Always use --rm to clean up containers after exit
 # - Use -i for interactive mode (required for stdin/stdout communication)
 # - Set NO_COLOR=1 and TERM=dumb for better compatibility
-# - Use ${VAR_NAME} syntax to reference environment variables
+# - Use ${VAR_NAME} syntax to reference environment variables in JSON stdin format only
+# - TOML configuration does not support ${VAR_NAME} expansion; use absolute paths instead
 #
 # Environment Variables:
 # - Empty value ("") passes through from host environment
