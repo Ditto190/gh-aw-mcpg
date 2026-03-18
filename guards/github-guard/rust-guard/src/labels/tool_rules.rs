@@ -244,7 +244,7 @@ pub fn apply_tool_labels(
         // === GitHub Actions ===
         "actions_get" | "actions_list" => {
             // S(workflow/artifact) = inherits from repo secrecy
-            // I(workflow/artifact) = writer - maintained by repo team
+            // I(workflow/artifact) = approved - maintained by repo team
             secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
             integrity = writer_integrity(repo_id, ctx);
 
@@ -364,6 +364,18 @@ pub fn apply_tool_labels(
             // I = project:github - GitHub's data
             secrecy = vec![];
             integrity = project_github_label(ctx);
+        }
+
+        // === GitHub Projects (org-scoped) ===
+        "list_projects" | "get_project" | "list_project_fields" | "list_project_items" => {
+            // Projects are org-scoped; creating/managing projects requires org membership.
+            // I = approved:<owner> — equivalent to MEMBER author_association
+            // S = empty by default (public project); per-item secrecy for items is refined in
+            //     label_response_paths for list_project_items
+            if !owner.is_empty() {
+                baseline_scope = owner.clone();
+                integrity = writer_integrity(&baseline_scope, ctx);
+            }
         }
 
         _ => {

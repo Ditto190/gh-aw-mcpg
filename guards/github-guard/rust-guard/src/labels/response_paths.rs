@@ -516,6 +516,77 @@ pub fn label_response_paths(
             }
         }
 
+        // === GitHub Project Items - heterogeneous ISSUE / PULL_REQUEST / DRAFT_ISSUE ===
+        "list_project_items" => {
+            let (arg_owner, _, _) = extract_repo_info(tool_args);
+            let (items, items_path) = extract_items_array(&actual_response);
+
+            if let Some(items) = items {
+                let limited_items = limit_items_with_log(items, "list_project_items");
+                let mut labeled_paths = Vec::with_capacity(limited_items.len());
+
+                for (i, item) in limited_items.iter().enumerate() {
+                    let item_type = get_str_or(item, "type", "");
+
+                    let (secrecy, integrity) =
+                        if matches!(item_type, "ISSUE" | "PULL_REQUEST") {
+                            // Issues and PRs carry a `content` sub-object with
+                            // `repository_url` (for repo scope) and
+                            // `author_association` (for integrity level).
+                            let content = item.get("content").unwrap_or(item);
+                            let item_repo = extract_repo_from_item(content);
+                            let secrecy = if item_repo.is_empty() {
+                                // Fail secure: if we cannot determine the repo for this
+                                // item, treat it as private within the owner scope rather
+                                // than defaulting to public.
+                                policy_private_scope_label(&arg_owner, "", "", ctx)
+                            } else {
+                                repo_visibility_secrecy_for_repo_id(&item_repo, ctx)
+                            };
+                            let association =
+                                get_str_or(content, "author_association", "");
+                            let integrity_scope =
+                                if item_repo.is_empty() { &arg_owner } else { &item_repo };
+                            let integrity = author_association_floor_from_str(
+                                integrity_scope,
+                                Some(association),
+                                ctx,
+                            );
+                            (secrecy, integrity)
+                        } else {
+                            // DRAFT_ISSUE or unrecognised type: no underlying repo context.
+                            // Use org-scoped approved integrity (adding items to a project
+                            // requires org membership, regardless of the creator's identity).
+                            let integrity = writer_integrity(&arg_owner, ctx);
+                            (vec![], integrity)
+                        };
+
+                    labeled_paths.push(PathLabelEntry {
+                        path: make_item_path(items_path, i),
+                        labels: crate::ResourceLabels {
+                            description: format!("project-item:{}", item_type.to_lowercase()),
+                            secrecy,
+                            integrity,
+                        },
+                    });
+                }
+
+                return Some(PathLabelResult {
+                    labeled_paths,
+                    default_labels: Some(crate::ResourceLabels {
+                        description: "project-item".to_string(),
+                        secrecy: vec![],
+                        integrity: writer_integrity(&arg_owner, ctx),
+                    }),
+                    items_path: if items_path.is_empty() {
+                        None
+                    } else {
+                        Some(items_path.to_string())
+                    },
+                });
+            }
+        }
+
         _ => {}
     }
 
