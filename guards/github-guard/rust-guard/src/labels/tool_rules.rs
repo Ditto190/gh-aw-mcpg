@@ -370,8 +370,8 @@ pub fn apply_tool_labels(
         "list_projects" | "get_project" | "list_project_fields" | "list_project_items" => {
             // Projects are org-scoped; creating/managing projects requires org membership.
             // I = approved:<owner> — equivalent to MEMBER author_association
-            // S = empty by default (public project); per-item secrecy refined in
-            //     label_response_paths for list_project_items / list_projects
+            // S = empty by default (public project); per-item secrecy for items is refined in
+            //     label_response_paths for list_project_items
             if !owner.is_empty() {
                 baseline_scope = owner.clone();
                 integrity = writer_integrity(&baseline_scope, ctx);
