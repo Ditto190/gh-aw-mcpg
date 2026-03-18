@@ -575,7 +575,11 @@ pub fn label_response_paths(
                         secrecy: vec![],
                         integrity: writer_integrity(&arg_owner, ctx),
                     }),
-                    items_path: Some(items_path.to_string()),
+                    items_path: if items_path.is_empty() {
+                        None
+                    } else {
+                        Some(items_path.to_string())
+                    },
                 });
             }
         }
