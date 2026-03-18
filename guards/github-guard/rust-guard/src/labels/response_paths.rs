@@ -573,7 +573,7 @@ pub fn label_response_paths(
                     default_labels: Some(crate::ResourceLabels {
                         description: "project-item".to_string(),
                         secrecy: vec![],
-                        integrity: none_integrity(&arg_owner, ctx),
+                        integrity: writer_integrity(&arg_owner, ctx),
                     }),
                     items_path: Some(items_path.to_string()),
                 });
