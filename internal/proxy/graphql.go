@@ -1,0 +1,166 @@
+package proxy
+
+import (
+	"encoding/json"
+	"regexp"
+	"strings"
+
+	"github.com/github/gh-aw-mcpg/internal/logger"
+)
+
+var logGraphQL = logger.New("proxy:graphql")
+
+// GraphQLRequest represents a parsed GraphQL request body.
+type GraphQLRequest struct {
+	Query     string                 `json:"query"`
+	Variables map[string]interface{} `json:"variables,omitempty"`
+}
+
+// GraphQLRouteMatch contains the result of matching a GraphQL query to a guard tool name.
+type GraphQLRouteMatch struct {
+	ToolName string
+	Owner    string
+	Repo     string
+	Args     map[string]interface{}
+}
+
+// graphqlPattern maps operation name patterns to guard tool names.
+type graphqlPattern struct {
+	// namePattern matches the GraphQL operation name (case-insensitive)
+	namePattern *regexp.Regexp
+	// queryPattern matches content within the query string
+	queryPattern *regexp.Regexp
+	toolName     string
+}
+
+// graphqlPatterns is the ordered list of GraphQL operation → tool name mappings.
+var graphqlPatterns = []graphqlPattern{
+	// Issue operations (singular before plural — more specific first)
+	{queryPattern: regexp.MustCompile(`(?i)repository\s*\([^)]*\)\s*\{[^}]*\bissue\s*\(`), toolName: "issue_read"},
+	{queryPattern: regexp.MustCompile(`(?i)repository\s*\([^)]*\)\s*\{[^}]*\bissues\s*[\({]`), toolName: "list_issues"},
+
+	// PR operations (singular before plural)
+	{queryPattern: regexp.MustCompile(`(?i)repository\s*\([^)]*\)\s*\{[^}]*\bpullRequest\s*\(`), toolName: "pull_request_read"},
+	{queryPattern: regexp.MustCompile(`(?i)repository\s*\([^)]*\)\s*\{[^}]*\bpullRequests\s*[\({]`), toolName: "list_pull_requests"},
+
+	// Search operations
+	{queryPattern: regexp.MustCompile(`(?i)\bsearch\s*\(`), toolName: "search_issues"},
+
+	// Project operations
+	{queryPattern: regexp.MustCompile(`(?i)projectV2`), toolName: "list_projects"},
+
+	// Repository info
+	{queryPattern: regexp.MustCompile(`(?i)\brepository\s*\(`), toolName: "get_file_contents"},
+
+	// User/viewer
+	{queryPattern: regexp.MustCompile(`(?i)\bviewer\s*\{`), toolName: "get_me"},
+}
+
+// ownerRepoPattern extracts owner and repo from GraphQL variables or query text.
+var (
+	varOwnerPattern = regexp.MustCompile(`(?i)"owner"\s*:\s*"([^"]+)"`)
+	varRepoPattern  = regexp.MustCompile(`(?i)"(?:name|repo)"\s*:\s*"([^"]+)"`)
+	// Matches: repository(owner: "X", name: "Y") or repository(owner: $owner, name: $name)
+	queryRepoPattern = regexp.MustCompile(`(?i)repository\s*\(\s*owner\s*:\s*(?:"([^"]+)"|\$\w+)\s*,?\s*name\s*:\s*(?:"([^"]+)"|\$\w+)`)
+)
+
+// MatchGraphQL matches a GraphQL request body to a guard tool name.
+func MatchGraphQL(body []byte) *GraphQLRouteMatch {
+	var gql GraphQLRequest
+	if err := json.Unmarshal(body, &gql); err != nil {
+		logGraphQL.Printf("failed to parse GraphQL request: %v", err)
+		return nil
+	}
+
+	if gql.Query == "" {
+		logGraphQL.Printf("empty GraphQL query")
+		return nil
+	}
+
+	// Match the query against known patterns
+	var toolName string
+	for _, p := range graphqlPatterns {
+		if p.namePattern != nil {
+			// Not currently used but available for operation name matching
+			continue
+		}
+		if p.queryPattern != nil && p.queryPattern.MatchString(gql.Query) {
+			toolName = p.toolName
+			break
+		}
+	}
+
+	if toolName == "" {
+		logGraphQL.Printf("no GraphQL pattern match for query: %.100s", gql.Query)
+		return nil
+	}
+
+	// Extract owner/repo from variables
+	owner, repo := extractOwnerRepo(gql.Variables, gql.Query)
+
+	args := map[string]interface{}{}
+	if owner != "" {
+		args["owner"] = owner
+	}
+	if repo != "" {
+		args["repo"] = repo
+	}
+
+	logGraphQL.Printf("matched GraphQL → tool=%s owner=%s repo=%s", toolName, owner, repo)
+	return &GraphQLRouteMatch{
+		ToolName: toolName,
+		Owner:    owner,
+		Repo:     repo,
+		Args:     args,
+	}
+}
+
+// extractOwnerRepo extracts owner and repo from GraphQL variables and query text.
+func extractOwnerRepo(variables map[string]interface{}, query string) (string, string) {
+	var owner, repo string
+
+	// Try variables first
+	if variables != nil {
+		if v, ok := variables["owner"].(string); ok {
+			owner = v
+		}
+		if v, ok := variables["name"].(string); ok {
+			repo = v
+		}
+		if v, ok := variables["repo"].(string); ok && repo == "" {
+			repo = v
+		}
+	}
+
+	// Fall back to parsing the query string
+	if owner == "" || repo == "" {
+		if m := queryRepoPattern.FindStringSubmatch(query); m != nil {
+			if m[1] != "" && owner == "" {
+				owner = m[1]
+			}
+			if m[2] != "" && repo == "" {
+				repo = m[2]
+			}
+		}
+	}
+
+	// Try parsing raw variable JSON embedded in query (some gh commands inline variables)
+	if owner == "" {
+		if m := varOwnerPattern.FindStringSubmatch(query); m != nil {
+			owner = m[1]
+		}
+	}
+	if repo == "" {
+		if m := varRepoPattern.FindStringSubmatch(query); m != nil {
+			repo = m[1]
+		}
+	}
+
+	return owner, repo
+}
+
+// IsGraphQLPath returns true if the request path is the GraphQL endpoint.
+func IsGraphQLPath(path string) bool {
+	cleaned := strings.TrimSuffix(path, "/")
+	return cleaned == "/graphql" || cleaned == "/api/v3/graphql"
+}
