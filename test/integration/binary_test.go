@@ -589,15 +589,27 @@ func createMinimalMockMCPBackend(t *testing.T) *httptest.Server {
 	return httptest.NewServer(mux)
 }
 
-// findBinary locates the awmg binary
+// findBinary locates the awmg binary.
+// Supports AWMG_BINARY_PATH env var override for container/CI environments.
 func findBinary(t *testing.T) string {
 	t.Helper()
+
+	if p := os.Getenv("AWMG_BINARY_PATH"); p != "" {
+		absPath, err := filepath.Abs(p)
+		if err == nil {
+			if _, err := os.Stat(absPath); err == nil {
+				return absPath
+			}
+		}
+		t.Fatalf("AWMG_BINARY_PATH=%q does not exist", p)
+	}
 
 	// Look for binary in common locations
 	locations := []string{
 		"./awmg",        // Current directory
 		"../../awmg",    // From test/integration
 		"../../../awmg", // Alternative path
+		"/app/awmg",     // Container image path
 	}
 
 	// Also check in PATH

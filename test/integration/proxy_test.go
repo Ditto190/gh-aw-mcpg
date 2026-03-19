@@ -38,11 +38,19 @@ func skipIfNoGitHubToken(t *testing.T) string {
 }
 
 // findWasmGuard locates the GitHub guard WASM binary.
+// Supports AWMG_WASM_GUARD_PATH env var override for container/CI environments.
 func findWasmGuard(t *testing.T) string {
 	t.Helper()
+	if p := os.Getenv("AWMG_WASM_GUARD_PATH"); p != "" {
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+		t.Fatalf("AWMG_WASM_GUARD_PATH=%q does not exist", p)
+	}
 	locations := []string{
 		"../../guards/github-guard/rust-guard/target/wasm32-wasip1/release/github_guard.wasm",
 		"guards/github-guard/rust-guard/target/wasm32-wasip1/release/github_guard.wasm",
+		"/guards/github/00-github-guard.wasm", // container image path
 	}
 	for _, loc := range locations {
 		if _, err := os.Stat(loc); err == nil {
