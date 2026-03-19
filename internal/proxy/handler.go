@@ -21,12 +21,17 @@ type proxyHandler struct {
 
 func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Strip the /api/v3 prefix that GH_HOST adds
-	path := StripGHHostPrefix(r.URL.Path)
+	rawPath := StripGHHostPrefix(r.URL.Path)
+	// Preserve query string for upstream forwarding
+	fullPath := rawPath
+	if r.URL.RawQuery != "" {
+		fullPath = rawPath + "?" + r.URL.RawQuery
+	}
 
-	logHandler.Printf("incoming %s %s", r.Method, path)
+	logHandler.Printf("incoming %s %s", r.Method, rawPath)
 
 	// Health check endpoint
-	if path == "/health" || path == "/healthz" {
+	if rawPath == "/health" || rawPath == "/healthz" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
@@ -34,11 +39,11 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Only filter read operations (GET + GraphQL POST to /graphql)
-	isGraphQL := IsGraphQLPath(path)
+	isGraphQL := IsGraphQLPath(rawPath)
 	isRead := r.Method == http.MethodGet || (r.Method == http.MethodPost && isGraphQL)
 	if !isRead {
 		// Pass through write operations unmodified
-		h.passthrough(w, r, path)
+		h.passthrough(w, r, fullPath)
 		return
 	}
 
@@ -60,16 +65,16 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		match := MatchGraphQL(graphQLBody)
 		if match == nil {
 			// Unknown GraphQL query — pass through with conservative labeling
-			h.forwardGraphQL(w, r, path, graphQLBody)
+			h.forwardGraphQL(w, r, fullPath, graphQLBody)
 			return
 		}
 		toolName = match.ToolName
 		args = match.Args
 	} else {
-		match := MatchRoute(path)
+		match := MatchRoute(rawPath)
 		if match == nil {
 			// Unknown REST endpoint — pass through
-			h.passthrough(w, r, path)
+			h.passthrough(w, r, fullPath)
 			return
 		}
 		toolName = match.ToolName
@@ -77,7 +82,7 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Run the DIFC pipeline
-	h.handleWithDIFC(w, r, path, toolName, args, graphQLBody)
+	h.handleWithDIFC(w, r, fullPath, toolName, args, graphQLBody)
 }
 
 // handleWithDIFC runs the 6-phase DIFC pipeline on a request.
