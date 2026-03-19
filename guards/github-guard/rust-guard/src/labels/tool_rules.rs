@@ -9,8 +9,9 @@ use super::constants::{field_names, SENSITIVE_FILE_KEYWORDS, SENSITIVE_FILE_PATT
 use super::helpers::{
     author_association_floor_from_str, ensure_integrity_baseline, extract_number_as_string,
     extract_repo_info, extract_repo_info_from_search_query, is_default_branch_commit_context,
-    is_default_branch_ref, max_integrity, merged_integrity, policy_private_scope_label,
-    project_github_label, reader_integrity, secret_label, writer_integrity, PolicyContext,
+    is_default_branch_ref, is_trusted_first_party_bot, max_integrity, merged_integrity,
+    policy_private_scope_label, project_github_label, reader_integrity, secret_label,
+    writer_integrity, PolicyContext,
 };
 
 fn apply_repo_visibility_secrecy(
@@ -93,13 +94,27 @@ pub fn apply_tool_labels(
                 if let Some(issue_num) =
                     extract_number_as_string(tool_args, field_names::ISSUE_NUMBER)
                 {
-                    let floor = author_association_floor_from_str(
-                        repo_id,
-                        super::backend::get_issue_author_association(&owner, &repo, &issue_num)
-                            .as_deref(),
-                        ctx,
-                    );
-                    integrity = max_integrity(repo_id, integrity, floor, ctx);
+                    if let Some(info) =
+                        super::backend::get_issue_author_info(&owner, &repo, &issue_num)
+                    {
+                        let mut floor = author_association_floor_from_str(
+                            repo_id,
+                            info.author_association.as_deref(),
+                            ctx,
+                        );
+                        // Elevate trusted first-party bots to approved
+                        if let Some(ref login) = info.author_login {
+                            if is_trusted_first_party_bot(login) {
+                                floor = max_integrity(
+                                    repo_id,
+                                    floor,
+                                    writer_integrity(repo_id, ctx),
+                                    ctx,
+                                );
+                            }
+                        }
+                        integrity = max_integrity(repo_id, integrity, floor, ctx);
+                    }
                 }
             }
         }
@@ -133,6 +148,18 @@ pub fn apply_tool_labels(
                             facts.author_association.as_deref(),
                             ctx,
                         );
+
+                        // Elevate trusted first-party bots to approved
+                        if let Some(ref login) = facts.author_login {
+                            if is_trusted_first_party_bot(login) {
+                                integrity = max_integrity(
+                                    repo_id,
+                                    integrity,
+                                    writer_integrity(repo_id, ctx),
+                                    ctx,
+                                );
+                            }
+                        }
 
                         if repo_private == Some(true) {
                             integrity = max_integrity(

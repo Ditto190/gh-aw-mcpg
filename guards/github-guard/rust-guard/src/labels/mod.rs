@@ -826,6 +826,161 @@ mod tests {
     }
 
     #[test]
+    fn test_trusted_first_party_bot_detection() {
+        use super::helpers::is_trusted_first_party_bot;
+
+        // Trusted first-party bots
+        assert!(is_trusted_first_party_bot("dependabot[bot]"));
+        assert!(is_trusted_first_party_bot("github-actions[bot]"));
+        assert!(is_trusted_first_party_bot("github-merge-queue[bot]"));
+        assert!(is_trusted_first_party_bot("copilot"));
+
+        // Case-insensitive
+        assert!(is_trusted_first_party_bot("Dependabot[bot]"));
+        assert!(is_trusted_first_party_bot("GitHub-Actions[bot]"));
+        assert!(is_trusted_first_party_bot("Copilot"));
+
+        // Not trusted (third-party bots)
+        assert!(!is_trusted_first_party_bot("renovate[bot]"));
+        assert!(!is_trusted_first_party_bot("renovate-bot"));
+        assert!(!is_trusted_first_party_bot("codecov[bot]"));
+        assert!(!is_trusted_first_party_bot("snyk-bot"));
+
+        // Not bots
+        assert!(!is_trusted_first_party_bot("octocat"));
+        assert!(!is_trusted_first_party_bot("dependabot"));
+        assert!(!is_trusted_first_party_bot("github-actions"));
+        assert!(!is_trusted_first_party_bot(""));
+    }
+
+    #[test]
+    fn test_trusted_bot_issue_integrity_public_repo() {
+        let ctx = default_ctx();
+        let repo = "github/copilot";
+        let owner = "github";
+        let repo_name = "copilot";
+
+        // Trusted bot issue on public repo gets approved (writer) integrity
+        // even though author_association is NONE
+        let dependabot_issue = json!({
+            "user": {"login": "dependabot[bot]"},
+            "author_association": "NONE"
+        });
+        assert_eq!(
+            issue_integrity(&dependabot_issue, repo, owner, repo_name, false, &ctx),
+            writer_integrity(repo, &ctx)
+        );
+
+        let actions_issue = json!({
+            "user": {"login": "github-actions[bot]"},
+            "author_association": "NONE"
+        });
+        assert_eq!(
+            issue_integrity(&actions_issue, repo, owner, repo_name, false, &ctx),
+            writer_integrity(repo, &ctx)
+        );
+
+        let merge_queue_issue = json!({
+            "user": {"login": "github-merge-queue[bot]"}
+        });
+        assert_eq!(
+            issue_integrity(&merge_queue_issue, repo, owner, repo_name, false, &ctx),
+            writer_integrity(repo, &ctx)
+        );
+
+        let copilot_issue = json!({
+            "user": {"login": "copilot"},
+            "author_association": "NONE"
+        });
+        assert_eq!(
+            issue_integrity(&copilot_issue, repo, owner, repo_name, false, &ctx),
+            writer_integrity(repo, &ctx)
+        );
+
+        // Non-trusted bot still gets none integrity on public repo
+        let renovate_issue = json!({
+            "user": {"login": "renovate[bot]"},
+            "author_association": "NONE"
+        });
+        assert_eq!(
+            issue_integrity(&renovate_issue, repo, owner, repo_name, false, &ctx),
+            none_integrity(repo, &ctx)
+        );
+    }
+
+    #[test]
+    fn test_trusted_bot_pr_integrity_public_repo() {
+        let ctx = default_ctx();
+        let repo = "github/copilot";
+
+        // Trusted bot open PR on public repo gets approved (writer) integrity
+        let dependabot_pr = json!({
+            "user": {"login": "dependabot[bot]"},
+            "author_association": "NONE",
+            "merged": false
+        });
+        assert_eq!(
+            pr_integrity(&dependabot_pr, repo, false, Some(false), &ctx),
+            writer_integrity(repo, &ctx)
+        );
+
+        // Trusted bot forked PR still gets at least approved from bot status
+        let actions_forked_pr = json!({
+            "user": {"login": "github-actions[bot]"},
+            "author_association": "NONE",
+            "merged": false
+        });
+        assert_eq!(
+            pr_integrity(&actions_forked_pr, repo, false, Some(true), &ctx),
+            writer_integrity(repo, &ctx)
+        );
+
+        // Trusted bot merged PR gets merged integrity
+        let copilot_merged_pr = json!({
+            "user": {"login": "copilot"},
+            "author_association": "NONE",
+            "merged_at": "2024-01-15T10:00:00Z"
+        });
+        assert_eq!(
+            pr_integrity(&copilot_merged_pr, repo, false, Some(false), &ctx),
+            merged_integrity(repo, &ctx)
+        );
+
+        // Non-trusted bot open forked PR gets reader integrity only
+        let renovate_pr = json!({
+            "user": {"login": "renovate[bot]"},
+            "author_association": "NONE",
+            "merged": false
+        });
+        assert_eq!(
+            pr_integrity(&renovate_pr, repo, false, Some(true), &ctx),
+            reader_integrity(repo, &ctx)
+        );
+    }
+
+    #[test]
+    fn test_trusted_bot_commit_integrity() {
+        let ctx = default_ctx();
+        let repo = "github/copilot";
+
+        // Trusted bot commit on public non-default branch gets approved
+        let bot_commit = json!({
+            "author": {"login": "github-actions[bot]"},
+            "author_association": "NONE"
+        });
+        assert_eq!(
+            commit_integrity(&bot_commit, repo, false, false, &ctx),
+            writer_integrity(repo, &ctx)
+        );
+
+        // Trusted bot commit on default branch gets merged
+        assert_eq!(
+            commit_integrity(&bot_commit, repo, false, true, &ctx),
+            merged_integrity(repo, &ctx)
+        );
+    }
+
+    #[test]
     fn test_get_str_or() {
         let value = json!({"name": "Alice", "count": 42});
         assert_eq!(get_str_or(&value, "name", "default"), "Alice");
