@@ -958,6 +958,7 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 
 	// **Phase 5: Reference Monitor performs fine-grained filtering (if applicable)**
 	var finalResult interface{}
+	var difcFiltered *difc.FilteredCollectionLabeledData // tracks items removed in filter/propagate mode
 	if labeledData != nil {
 		// Guard provided fine-grained labels - check if it's a collection
 		if collection, ok := labeledData.(*difc.CollectionLabeledData); ok {
@@ -986,6 +987,7 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 			if filtered.GetFilteredCount() > 0 {
 				log.Printf("[DIFC] Filtered out %d items due to DIFC policy", filtered.GetFilteredCount())
 				logFilteredItems(serverID, toolName, filtered)
+				difcFiltered = filtered
 			}
 
 			// Convert filtered data to result
@@ -1026,6 +1028,16 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 	callResult, err := mcp.ConvertToCallToolResult(finalResult)
 	if err != nil {
 		return newErrorCallToolResult(fmt.Errorf("failed to convert result: %w", err))
+	}
+
+	// If items were filtered by DIFC policy in filter/propagate mode, append a notice so
+	// the agent knows items exist but were withheld.  Without this, an agent receiving an
+	// empty (or partial) list has no way to distinguish "no items" from "items filtered",
+	// which can cause targeted-dispatch workflows to silently fall back to scheduled mode.
+	if difcFiltered != nil {
+		if notice := buildDIFCFilteredNotice(difcFiltered); notice != "" {
+			callResult.Content = append(callResult.Content, &sdk.TextContent{Text: notice})
+		}
 	}
 
 	return callResult, finalResult, nil

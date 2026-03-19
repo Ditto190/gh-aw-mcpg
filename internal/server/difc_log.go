@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/github/gh-aw-mcpg/internal/difc"
 	"github.com/github/gh-aw-mcpg/internal/logger"
@@ -92,4 +93,60 @@ func extractNumberField(m map[string]interface{}) string {
 		}
 	}
 	return ""
+}
+
+// maxFilteredItemsInNotice is the maximum number of individual item descriptions
+// to include inline in the DIFC filtered notice surfaced to the agent.
+const maxFilteredItemsInNotice = 5
+
+// buildDIFCFilteredNotice builds a human-readable notice for the agent when items are
+// removed from a tool response by DIFC integrity policy in filter/propagate mode.
+//
+// The notice is surfaced as an additional text content block appended to the tool
+// response so that agents (and targeted-dispatch workflows) are aware that items exist
+// but were withheld, rather than concluding the result set is genuinely empty.
+//
+// For up to maxFilteredItemsInNotice items the description and reason for each item are
+// included. For larger sets only the count is reported to keep the message concise.
+func buildDIFCFilteredNotice(filtered *difc.FilteredCollectionLabeledData) string {
+	if filtered == nil {
+		return ""
+	}
+	n := filtered.GetFilteredCount()
+	if n == 0 {
+		return ""
+	}
+
+	// For a small number of filtered items, include per-item descriptions and reasons.
+	if n <= maxFilteredItemsInNotice {
+		parts := make([]string, 0, n)
+		for _, detail := range filtered.Filtered {
+			desc := ""
+			if detail.Item.Labels != nil {
+				desc = detail.Item.Labels.Description
+			}
+			// Skip items that carry no useful identifying information.
+			if desc == "" && detail.Reason == "" {
+				continue
+			}
+			if desc != "" && detail.Reason != "" {
+				parts = append(parts, fmt.Sprintf("%s (%s)", desc, detail.Reason))
+			} else if desc != "" {
+				parts = append(parts, desc)
+			} else {
+				parts = append(parts, detail.Reason)
+			}
+		}
+		if len(parts) > 0 {
+			return fmt.Sprintf(
+				"[DIFC] %d item(s) in this response were removed by integrity policy and are not shown: %s.",
+				n, strings.Join(parts, "; "),
+			)
+		}
+	}
+
+	return fmt.Sprintf(
+		"[DIFC] %d item(s) in this response were removed by integrity policy and are not shown.",
+		n,
+	)
 }
