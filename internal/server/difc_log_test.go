@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -273,4 +274,103 @@ func TestBuildFilteredItemLogEntry_NonMapData(t *testing.T) {
 		assert.Empty(t, entry.Number)
 		assert.Empty(t, entry.AuthorLogin)
 	})
+}
+
+// TestBuildDIFCFilteredNotice_NilInput verifies that a nil input returns an empty string
+// without panicking.
+func TestBuildDIFCFilteredNotice_NilInput(t *testing.T) {
+	assert.NotPanics(t, func() {
+		assert.Empty(t, buildDIFCFilteredNotice(nil))
+	})
+}
+
+// TestBuildDIFCFilteredNotice_EmptyFiltered verifies that no notice is returned when
+// there are no filtered items.
+func TestBuildDIFCFilteredNotice_EmptyFiltered(t *testing.T) {
+	f := &difc.FilteredCollectionLabeledData{
+		Filtered: []difc.FilteredItemDetail{},
+	}
+	assert.Empty(t, buildDIFCFilteredNotice(f))
+}
+
+// TestBuildDIFCFilteredNotice_SingleItem verifies the notice for a single filtered item
+// includes the item description and reason.
+func TestBuildDIFCFilteredNotice_SingleItem(t *testing.T) {
+	f := &difc.FilteredCollectionLabeledData{
+		Filtered: []difc.FilteredItemDetail{
+			newTestFilteredItem(nil, "issue:org/repo#14", "integrity too low for agent context", nil, nil),
+		},
+		TotalCount: 1,
+	}
+
+	notice := buildDIFCFilteredNotice(f)
+
+	assert.NotEmpty(t, notice)
+	assert.Contains(t, notice, "[DIFC]")
+	assert.Contains(t, notice, "1 item(s)")
+	assert.Contains(t, notice, "issue:org/repo#14")
+	assert.Contains(t, notice, "integrity too low for agent context")
+}
+
+// TestBuildDIFCFilteredNotice_MultipleItemsWithinLimit verifies that up to
+// maxFilteredItemsInNotice items are listed individually with their descriptions and reasons.
+func TestBuildDIFCFilteredNotice_MultipleItemsWithinLimit(t *testing.T) {
+	f := &difc.FilteredCollectionLabeledData{
+		Filtered: []difc.FilteredItemDetail{
+			newTestFilteredItem(nil, "issue:org/repo#1", "integrity too low", nil, nil),
+			newTestFilteredItem(nil, "issue:org/repo#2", "integrity too low", nil, nil),
+			newTestFilteredItem(nil, "issue:org/repo#3", "integrity too low", nil, nil),
+		},
+		TotalCount: 3,
+	}
+
+	notice := buildDIFCFilteredNotice(f)
+
+	assert.NotEmpty(t, notice)
+	assert.Contains(t, notice, "[DIFC]")
+	assert.Contains(t, notice, "3 item(s)")
+	assert.Contains(t, notice, "issue:org/repo#1")
+	assert.Contains(t, notice, "issue:org/repo#2")
+	assert.Contains(t, notice, "issue:org/repo#3")
+}
+
+// TestBuildDIFCFilteredNotice_ExceedsLimit verifies that when more than
+// maxFilteredItemsInNotice items are filtered, only the count is reported.
+func TestBuildDIFCFilteredNotice_ExceedsLimit(t *testing.T) {
+	items := make([]difc.FilteredItemDetail, maxFilteredItemsInNotice+1)
+	for i := range items {
+		items[i] = newTestFilteredItem(nil, fmt.Sprintf("issue:org/repo#%d", i+1), "integrity too low", nil, nil)
+	}
+	f := &difc.FilteredCollectionLabeledData{
+		Filtered:   items,
+		TotalCount: len(items),
+	}
+
+	notice := buildDIFCFilteredNotice(f)
+
+	assert.NotEmpty(t, notice)
+	assert.Contains(t, notice, "[DIFC]")
+	assert.Contains(t, notice, fmt.Sprintf("%d item(s)", len(items)))
+	// Individual descriptions should NOT appear when the count exceeds the limit.
+	assert.NotContains(t, notice, "issue:org/repo#1")
+}
+
+// TestBuildDIFCFilteredNotice_ItemWithNoDescription verifies that items without
+// a description still produce a valid count-only notice.
+func TestBuildDIFCFilteredNotice_ItemWithNoDescription(t *testing.T) {
+	f := &difc.FilteredCollectionLabeledData{
+		Filtered: []difc.FilteredItemDetail{
+			{
+				Item:   difc.LabeledItem{Data: "raw", Labels: difc.NewLabeledResource("")},
+				Reason: "",
+			},
+		},
+		TotalCount: 1,
+	}
+
+	notice := buildDIFCFilteredNotice(f)
+
+	assert.NotEmpty(t, notice)
+	assert.Contains(t, notice, "[DIFC]")
+	assert.Contains(t, notice, "1 item(s)")
 }
