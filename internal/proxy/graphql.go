@@ -52,8 +52,9 @@ var graphqlPatterns = []graphqlPattern{
 	// Repository info
 	{queryPattern: regexp.MustCompile(`(?i)\brepository\s*\(`), toolName: "get_file_contents"},
 
-	// User/viewer
-	{queryPattern: regexp.MustCompile(`(?i)\bviewer\s*\{`), toolName: "get_me"},
+	// viewer { ... } is intentionally not mapped — the guard does not recognize a tool name
+	// with equivalent semantics for user/account data, and it may include private fields.
+	// Unknown GraphQL queries are blocked by the handler.
 }
 
 // ownerRepoPattern extracts owner and repo from GraphQL variables or query text.

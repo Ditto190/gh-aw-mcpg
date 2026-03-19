@@ -31,14 +31,14 @@ func TestMatchRoute(t *testing.T) {
 		{
 			name:     "issue comments",
 			path:     "/repos/octocat/hello-world/issues/42/comments",
-			wantTool: "get_comments",
-			wantArgs: map[string]interface{}{"owner": "octocat", "repo": "hello-world", "issue_number": "42"},
+			wantTool: "issue_read",
+			wantArgs: map[string]interface{}{"owner": "octocat", "repo": "hello-world", "issue_number": "42", "method": "get_comments"},
 		},
 		{
 			name:     "issue labels",
 			path:     "/repos/octocat/hello-world/issues/42/labels",
-			wantTool: "get_labels",
-			wantArgs: map[string]interface{}{"owner": "octocat", "repo": "hello-world", "issue_number": "42"},
+			wantTool: "issue_read",
+			wantArgs: map[string]interface{}{"owner": "octocat", "repo": "hello-world", "issue_number": "42", "method": "get_labels"},
 		},
 
 		// Pull Requests
@@ -153,12 +153,11 @@ func TestMatchRoute(t *testing.T) {
 			wantArgs: map[string]interface{}{},
 		},
 
-		// User
+		// User — not mapped; unknown paths are blocked (fail closed)
 		{
-			name:     "get me",
-			path:     "/user",
-			wantTool: "get_me",
-			wantArgs: map[string]interface{}{},
+			name:    "get me",
+			path:    "/user",
+			wantNil: true,
 		},
 
 		// Query string stripping
@@ -236,9 +235,9 @@ func TestMatchGraphQL(t *testing.T) {
 			wantTool: "search_issues",
 		},
 		{
-			name:     "viewer query",
-			body:     `{"query":"query { viewer { login name email } }"}`,
-			wantTool: "get_me",
+			name:    "viewer query",
+			body:    `{"query":"query { viewer { login name email } }"}`,
+			wantNil: true,
 		},
 		{
 			name:    "empty query",

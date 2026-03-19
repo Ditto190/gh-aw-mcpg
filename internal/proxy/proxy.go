@@ -86,6 +86,9 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 	// Parse enforcement mode
 	difcMode, err := difc.ParseEnforcementMode(cfg.DIFCMode)
 	if err != nil {
+		if cfg.DIFCMode != "" {
+			log.Printf("[proxy] WARNING: invalid DIFC mode %q, defaulting to filter", cfg.DIFCMode)
+		}
 		difcMode = difc.EnforcementFilter // default to filter for proxy
 	}
 
@@ -96,12 +99,13 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 	}
 
 	s := &Server{
-		guard:         g,
-		evaluator:     difc.NewEvaluatorWithMode(difcMode),
-		agentRegistry: difc.NewAgentRegistryWithDefaults(nil, nil),
-		capabilities:  difc.NewCapabilities(),
-		githubToken:   cfg.GitHubToken,
-		githubAPIURL:  apiURL,
+		guard:           g,
+		evaluator:       difc.NewEvaluatorWithMode(difcMode),
+		agentRegistry:   difc.NewAgentRegistryWithDefaults(nil, nil),
+		capabilities:    difc.NewCapabilities(),
+		githubToken:     cfg.GitHubToken,
+		githubAPIURL:    apiURL,
+		enforcementMode: difcMode,
 		httpClient: &http.Client{
 			Timeout: 60 * time.Second,
 			Transport: &http.Transport{

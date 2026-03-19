@@ -64,8 +64,14 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		match := MatchGraphQL(graphQLBody)
 		if match == nil {
-			// Unknown GraphQL query — pass through with conservative labeling
-			h.forwardGraphQL(w, r, fullPath, graphQLBody)
+			// Unknown GraphQL query — fail closed: deny rather than risk leaking unfiltered data
+			logHandler.Printf("unknown GraphQL query, blocking request")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"errors": []map[string]string{{"message": "access denied: unrecognized GraphQL operation"}},
+				"data":   nil,
+			})
 			return
 		}
 		toolName = match.ToolName
@@ -73,8 +79,9 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	} else {
 		match := MatchRoute(rawPath)
 		if match == nil {
-			// Unknown REST endpoint — pass through
-			h.passthrough(w, r, fullPath)
+			// Unknown REST endpoint — fail closed: deny rather than risk leaking unfiltered data
+			logHandler.Printf("unknown REST endpoint %s, blocking request", rawPath)
+			http.Error(w, "access denied: unrecognized endpoint", http.StatusForbidden)
 			return
 		}
 		toolName = match.ToolName
@@ -92,12 +99,8 @@ func (h *proxyHandler) handleWithDIFC(w http.ResponseWriter, r *http.Request, pa
 	backend := &stubBackendCaller{}
 
 	if !s.guardInitialized {
-		log.Printf("[proxy] WARNING: guard not initialized, passing through")
-		if graphQLBody != nil {
-			h.forwardGraphQL(w, r, path, graphQLBody)
-		} else {
-			h.passthrough(w, r, path)
-		}
+		log.Printf("[proxy] WARNING: guard not initialized, blocking request")
+		http.Error(w, "proxy enforcement not configured", http.StatusServiceUnavailable)
 		return
 	}
 
@@ -110,12 +113,8 @@ func (h *proxyHandler) handleWithDIFC(w http.ResponseWriter, r *http.Request, pa
 	resource, operation, err := s.guard.LabelResource(ctx, toolName, args, backend, s.capabilities)
 	if err != nil {
 		logHandler.Printf("[DIFC] Phase 1 failed: %v", err)
-		// On labeling failure, pass through (fail-open for read operations)
-		if graphQLBody != nil {
-			h.forwardGraphQL(w, r, path, graphQLBody)
-		} else {
-			h.passthrough(w, r, path)
-		}
+		// On labeling failure, fail closed to prevent enforcement bypass
+		http.Error(w, "resource labeling failed", http.StatusBadGateway)
 		return
 	}
 
@@ -186,7 +185,7 @@ func (h *proxyHandler) handleWithDIFC(w http.ResponseWriter, r *http.Request, pa
 		if evalResult.IsAllowed() {
 			h.writeResponse(w, resp, respBody)
 		} else {
-			h.writeEmptyResponse(w, resp)
+			h.writeEmptyResponse(w, resp, responseData)
 		}
 		return
 	}
@@ -223,7 +222,7 @@ func (h *proxyHandler) handleWithDIFC(w http.ResponseWriter, r *http.Request, pa
 			finalData, err = filtered.ToResult()
 			if err != nil {
 				logHandler.Printf("[DIFC] Phase 5 ToResult failed: %v", err)
-				h.writeEmptyResponse(w, resp)
+				h.writeEmptyResponse(w, resp, responseData)
 				return
 			}
 		} else {
@@ -231,7 +230,7 @@ func (h *proxyHandler) handleWithDIFC(w http.ResponseWriter, r *http.Request, pa
 			finalData, err = labeledData.ToResult()
 			if err != nil {
 				logHandler.Printf("[DIFC] Phase 5 ToResult failed: %v", err)
-				h.writeEmptyResponse(w, resp)
+				h.writeEmptyResponse(w, resp, responseData)
 				return
 			}
 		}
@@ -240,7 +239,7 @@ func (h *proxyHandler) handleWithDIFC(w http.ResponseWriter, r *http.Request, pa
 		if evalResult.IsAllowed() {
 			finalData = responseData
 		} else {
-			h.writeEmptyResponse(w, resp)
+			h.writeEmptyResponse(w, resp, responseData)
 			return
 		}
 	}
@@ -317,12 +316,31 @@ func (h *proxyHandler) writeResponse(w http.ResponseWriter, resp *http.Response,
 	w.Write(body)
 }
 
-// writeEmptyResponse writes an empty JSON array or object response.
-func (h *proxyHandler) writeEmptyResponse(w http.ResponseWriter, resp *http.Response) {
+// writeEmptyResponse writes an empty JSON response matching the shape of the original data.
+// originalData should be the parsed upstream response; nil or unrecognized types fall back to "[]".
+// For JSON arrays it writes "[]", for GraphQL objects with a "data" key it writes {"data":null},
+// and for other JSON objects it writes "{}".
+func (h *proxyHandler) writeEmptyResponse(w http.ResponseWriter, resp *http.Response, originalData interface{}) {
 	copyResponseHeaders(w, resp)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(resp.StatusCode)
-	w.Write([]byte("[]"))
+
+	var empty string
+	switch originalData.(type) {
+	case []interface{}:
+		empty = "[]"
+	case map[string]interface{}:
+		obj := originalData.(map[string]interface{})
+		// GraphQL responses wrap their payload in a "data" key
+		if _, ok := obj["data"]; ok {
+			empty = `{"data":null}`
+		} else {
+			empty = "{}"
+		}
+	default:
+		empty = "[]" // safe default for nil or unknown types
+	}
+	w.Write([]byte(empty))
 }
 
 // copyResponseHeaders copies relevant headers from upstream to the client response.
