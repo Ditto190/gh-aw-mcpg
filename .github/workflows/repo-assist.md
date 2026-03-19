@@ -339,6 +339,21 @@ Maintain a single open issue titled `[Repo Assist] Monthly Activity {YYYY}-{MM}`
 
    *(If nothing pending, skip this section.)*
 
+   ## Guard Filtering Summary
+
+   {Summary of objects filtered by the guard policy during this run. Read the JSONL log (see step 6 below) and render a table of filtered resources grouped by type.}
+
+   | Type | Count | Resources |
+   |------|-------|-----------|
+   | Issues | <N> | #1, #2, ... |
+   | PRs | <N> | #1, #2, ... |
+   | Other | <N> | <resource descriptions> |
+
+   **Policy**: `repos: [<scope>], min-integrity: <level>`
+   **Total filtered**: <N> items across <M> tool calls
+
+   *(If no items were filtered, state "No objects were filtered by the guard policy." and skip the table.)*
+
    ## Run History
 
    ### <YYYY-MM-DD HH:MM UTC>  -  [Run](<https://github.com/<repo>/actions/runs/<run-id>>)
@@ -367,6 +382,32 @@ Maintain a single open issue titled `[Repo Assist] Monthly Activity {YYYY}-{MM}`
    - Any strategic suggestions (goals, priorities)
    Use repo memory and the activity log to compile this list. Include direct links for every item. Keep entries to one line each.
 5. Do not update the activity issue if nothing was done in the current run. However, if you conclude "nothing to do", first verify this by checking: (a) Are there any open issues without a Repo Assist comment? (b) Are there issues in your memory flagged for attention? (c) Are there any bugs that could be investigated or fixed? If any of these are true, go back and do that work instead of concluding with no action.
+6. **Guard filtering summary**: Before writing the activity issue, read the MCP Gateway's JSONL log to discover which objects were filtered by the guard policy. Run this bash command:
+   ```bash
+   cat /tmp/gh-aw/mcp-logs/rpc-messages.jsonl 2>/dev/null | python3 -c "
+   import json, sys
+   from collections import defaultdict
+   filtered = defaultdict(set)
+   total = 0
+   for line in sys.stdin:
+       entry = json.loads(line.strip())
+       if entry.get('type') != 'DIFC_FILTERED':
+           continue
+       total += 1
+       desc = entry.get('description', '')
+       tool = entry.get('tool_name', '')
+       if desc.startswith('issue:'):
+           num = desc.split('#')[-1] if '#' in desc else desc
+           filtered['Issues'].add(num)
+       elif desc.startswith('pr:'):
+           num = desc.split('#')[-1] if '#' in desc else desc
+           filtered['PRs'].add(num)
+       else:
+           filtered['Other'].add(desc or tool)
+   print(json.dumps({'total': total, 'groups': {k: sorted(v) for k, v in filtered.items()}}, indent=2))
+   " || echo '{"total":0,"groups":{}}'
+   ```
+   Use the output to populate the "Guard Filtering Summary" section. If `total` is 0, state that no objects were filtered. If the log file doesn't exist, skip the section entirely.
 
 ## Guidelines
 
