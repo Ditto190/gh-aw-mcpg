@@ -147,11 +147,14 @@ func (p AllowOnlyPolicy) MarshalJSON() ([]byte, error) {
 // ValidateGuardPolicy validates AllowOnly or WriteSink policy input.
 func ValidateGuardPolicy(policy *GuardPolicy) error {
 	if policy == nil {
+		logGuardPolicy.Print("ValidateGuardPolicy: policy is nil")
 		return fmt.Errorf("policy must include allow-only or write-sink")
 	}
 	if policy.WriteSink != nil {
+		logGuardPolicy.Printf("ValidateGuardPolicy: delegating to write-sink validation, acceptCount=%d", len(policy.WriteSink.Accept))
 		return ValidateWriteSinkPolicy(policy.WriteSink)
 	}
+	logGuardPolicy.Print("ValidateGuardPolicy: delegating to allow-only normalization")
 	_, err := NormalizeGuardPolicy(policy)
 	return err
 }
@@ -161,11 +164,13 @@ func ValidateWriteSinkPolicy(ws *WriteSinkPolicy) error {
 	if ws == nil {
 		return fmt.Errorf("write-sink policy must not be nil")
 	}
+	logGuardPolicy.Printf("ValidateWriteSinkPolicy: acceptCount=%d", len(ws.Accept))
 	if len(ws.Accept) == 0 {
 		return fmt.Errorf("write-sink.accept must contain at least one entry")
 	}
 	// Special case: ["*"] is a valid wildcard that accepts all writes
 	if len(ws.Accept) == 1 && strings.TrimSpace(ws.Accept[0]) == "*" {
+		logGuardPolicy.Print("ValidateWriteSinkPolicy: wildcard accept, policy is valid")
 		return nil
 	}
 	seen := make(map[string]struct{})
@@ -426,6 +431,7 @@ func isScopeTokenChar(char byte) bool {
 // It handles both the modern allow-only/write-sink format and the legacy repos/min-integrity format.
 // The serverID is used to look for a server-keyed nested policy map.
 func ParseServerGuardPolicy(serverID string, raw map[string]interface{}) (*GuardPolicy, error) {
+	logGuardPolicy.Printf("ParseServerGuardPolicy: serverID=%s, keyCount=%d", serverID, len(raw))
 	if len(raw) == 0 {
 		return nil, nil
 	}
@@ -485,6 +491,8 @@ func ParsePolicyMap(raw map[string]interface{}) (*GuardPolicy, error) {
 	} else if _, ok := raw["writesink"]; ok {
 		hasWriteSink = true
 	}
+
+	logGuardPolicy.Printf("ParsePolicyMap: hasAllowOnly=%v, hasWriteSink=%v, keyCount=%d", hasAllowOnly, hasWriteSink, len(raw))
 
 	if hasAllowOnly || hasWriteSink {
 		policyBytes, err := json.Marshal(raw)
