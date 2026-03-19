@@ -147,10 +147,25 @@ See **[docs/CONFIGURATION.md](docs/CONFIGURATION.md)** for the complete mapping 
 
 Supported MCP methods: `tools/list`, `tools/call`, and any other method (forwarded as-is).
 
+## Proxy Mode
+
+The gateway can also run as an HTTP forward proxy (`awmg proxy`) that intercepts GitHub API requests from tools like `gh` CLI and applies the same DIFC filtering:
+
+```bash
+awmg proxy \
+  --guard-wasm guards/github-guard/github_guard.wasm \
+  --policy '{"allow-only":{"repos":["org/repo"],"min-integrity":"approved"}}' \
+  --github-token "$GITHUB_TOKEN" \
+  --listen localhost:8080
+```
+
+This maps ~25 REST URL patterns and GraphQL queries to guard tool names, then runs the same 6-phase DIFC pipeline used by the MCP gateway. See [docs/PROXY_MODE.md](docs/PROXY_MODE.md) for full documentation.
+
 ## Further Reading
 
 | Topic | Link |
 |-------|------|
+| **Proxy Mode** | [docs/PROXY_MODE.md](docs/PROXY_MODE.md) — HTTP forward proxy for DIFC filtering of `gh` CLI and REST/GraphQL requests |
 | **Configuration Reference** | [docs/CONFIGURATION.md](docs/CONFIGURATION.md) — Server fields, TOML/JSON formats, guard-policy details, custom schemas, gateway fields, validation rules |
 | **Environment Variables** | [docs/ENVIRONMENT_VARIABLES.md](docs/ENVIRONMENT_VARIABLES.md) — All env vars for production, development, Docker, and guard configuration |
 | **Full Specification** | [MCP Gateway Configuration Reference](https://github.com/github/gh-aw/blob/main/docs/src/content/docs/reference/mcp-gateway.md) — Upstream spec with complete validation rules |
