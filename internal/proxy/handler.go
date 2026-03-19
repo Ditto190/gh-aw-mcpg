@@ -291,24 +291,6 @@ func (h *proxyHandler) passthrough(w http.ResponseWriter, r *http.Request, path 
 	h.writeResponse(w, resp, respBody)
 }
 
-// forwardGraphQL forwards a GraphQL request without DIFC filtering.
-func (h *proxyHandler) forwardGraphQL(w http.ResponseWriter, r *http.Request, _ string, body []byte) {
-	resp, err := h.server.forwardToGitHub(r.Context(), http.MethodPost, "/graphql", bytes.NewReader(body), "application/json")
-	if err != nil {
-		http.Error(w, "upstream request failed", http.StatusBadGateway)
-		return
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		http.Error(w, "failed to read upstream response", http.StatusBadGateway)
-		return
-	}
-
-	h.writeResponse(w, resp, respBody)
-}
-
 // writeResponse writes an upstream response to the client.
 func (h *proxyHandler) writeResponse(w http.ResponseWriter, resp *http.Response, body []byte) {
 	copyResponseHeaders(w, resp)
@@ -326,11 +308,10 @@ func (h *proxyHandler) writeEmptyResponse(w http.ResponseWriter, resp *http.Resp
 	w.WriteHeader(resp.StatusCode)
 
 	var empty string
-	switch originalData.(type) {
+	switch obj := originalData.(type) {
 	case []interface{}:
 		empty = "[]"
 	case map[string]interface{}:
-		obj := originalData.(map[string]interface{})
 		// GraphQL responses wrap their payload in a "data" key
 		if _, ok := obj["data"]; ok {
 			empty = `{"data":null}`
