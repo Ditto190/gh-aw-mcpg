@@ -729,15 +729,13 @@ mod tests {
     fn test_issue_integrity() {
         let ctx = default_ctx();
         let repo = "github/copilot";
-        let owner = "github";
-        let repo_name = "copilot";
 
         // Private repo issues get approved integrity
         let bot_issue = json!({
             "user": {"login": "dependabot[bot]"}
         });
         assert_eq!(
-            issue_integrity(&bot_issue, repo, owner, repo_name, true, &ctx),
+            issue_integrity(&bot_issue, repo, true, &ctx),
             writer_integrity(repo, &ctx)
         );
 
@@ -746,7 +744,7 @@ mod tests {
             "user": {"login": "github"}
         });
         assert_eq!(
-            issue_integrity(&owner_issue, repo, owner, repo_name, false, &ctx),
+            issue_integrity(&owner_issue, repo, false, &ctx),
             none_integrity(repo, &ctx)
         );
 
@@ -755,28 +753,21 @@ mod tests {
             "user": {"login": "someone"}
         });
         assert_eq!(
-            issue_integrity(&issue, "", "", "", false, &ctx),
+            issue_integrity(&issue, "", false, &ctx),
             none_integrity("", &ctx)
         );
 
         // Public issue with OWNER association retains approved floor
         let owner_assoc_issue = json!({"author_association": "OWNER"});
         assert_eq!(
-            issue_integrity(&owner_assoc_issue, repo, owner, repo_name, false, &ctx),
+            issue_integrity(&owner_assoc_issue, repo, false, &ctx),
             writer_integrity(repo, &ctx)
         );
 
         // Public issue with CONTRIBUTOR association gets unapproved floor
         let contributor_assoc_issue = json!({"author_association": "CONTRIBUTOR"});
         assert_eq!(
-            issue_integrity(
-                &contributor_assoc_issue,
-                repo,
-                owner,
-                repo_name,
-                false,
-                &ctx
-            ),
+            issue_integrity(&contributor_assoc_issue, repo, false, &ctx),
             reader_integrity(repo, &ctx)
         );
     }
@@ -857,8 +848,6 @@ mod tests {
     fn test_trusted_bot_issue_integrity_public_repo() {
         let ctx = default_ctx();
         let repo = "github/copilot";
-        let owner = "github";
-        let repo_name = "copilot";
 
         // Trusted bot issue on public repo gets approved (writer) integrity
         // even though author_association is NONE
@@ -867,7 +856,7 @@ mod tests {
             "author_association": "NONE"
         });
         assert_eq!(
-            issue_integrity(&dependabot_issue, repo, owner, repo_name, false, &ctx),
+            issue_integrity(&dependabot_issue, repo, false, &ctx),
             writer_integrity(repo, &ctx)
         );
 
@@ -876,7 +865,7 @@ mod tests {
             "author_association": "NONE"
         });
         assert_eq!(
-            issue_integrity(&actions_issue, repo, owner, repo_name, false, &ctx),
+            issue_integrity(&actions_issue, repo, false, &ctx),
             writer_integrity(repo, &ctx)
         );
 
@@ -884,7 +873,7 @@ mod tests {
             "user": {"login": "github-merge-queue[bot]"}
         });
         assert_eq!(
-            issue_integrity(&merge_queue_issue, repo, owner, repo_name, false, &ctx),
+            issue_integrity(&merge_queue_issue, repo, false, &ctx),
             writer_integrity(repo, &ctx)
         );
 
@@ -893,7 +882,7 @@ mod tests {
             "author_association": "NONE"
         });
         assert_eq!(
-            issue_integrity(&copilot_issue, repo, owner, repo_name, false, &ctx),
+            issue_integrity(&copilot_issue, repo, false, &ctx),
             writer_integrity(repo, &ctx)
         );
 
@@ -903,7 +892,7 @@ mod tests {
             "author_association": "NONE"
         });
         assert_eq!(
-            issue_integrity(&renovate_issue, repo, owner, repo_name, false, &ctx),
+            issue_integrity(&renovate_issue, repo, false, &ctx),
             none_integrity(repo, &ctx)
         );
     }

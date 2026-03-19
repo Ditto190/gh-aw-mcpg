@@ -812,8 +812,6 @@ pub fn pr_integrity(
 pub fn issue_integrity(
     item: &Value,
     repo_full_name: &str,
-    _owner: &str,
-    _repo: &str,
     repo_private: bool,
     ctx: &PolicyContext,
 ) -> Vec<String> {

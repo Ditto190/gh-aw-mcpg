@@ -277,8 +277,10 @@ pub fn apply_tool_labels(
 
             // Additional secrecy checks for workflow files
             if tool_name == "actions_get"
-                && tool_args.get("method")
-                    == Some(&Value::String("download_workflow_run_artifact".to_string()))
+                && tool_args
+                    .get("method")
+                    .and_then(|v| v.as_str())
+                    == Some("download_workflow_run_artifact")
             {
                 // Artifacts may contain secrets
                 secrecy = secret_label();

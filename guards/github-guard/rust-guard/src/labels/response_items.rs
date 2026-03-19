@@ -205,13 +205,10 @@ pub fn label_response_items(
 
                 let repo_private = repo_visibility_private_for_repo_id(&repo_full_name)
                     .unwrap_or(default_repo_private);
-                let repo_owner = repo_full_name.split('/').next().unwrap_or("");
                 let number = item.get("number").and_then(|v| v.as_i64()).unwrap_or(0);
                 let integrity = issue_integrity(
                     item,
                     &repo_full_name,
-                    repo_owner,
-                    &arg_repo,
                     repo_private,
                     ctx,
                 );

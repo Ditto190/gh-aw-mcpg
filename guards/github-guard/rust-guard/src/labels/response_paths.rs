@@ -221,8 +221,6 @@ pub fn label_response_paths(
                         &item_repo
                     };
 
-                    // Extract owner from repo for owner check
-                    let owner = repo_for_labels.split('/').next().unwrap_or("");
                     let item_repo_private = repo_visibility_private_for_repo_id(repo_for_labels)
                         .unwrap_or(default_repo_private);
 
@@ -230,8 +228,6 @@ pub fn label_response_paths(
                     let integrity = issue_integrity(
                         item,
                         repo_for_labels,
-                        owner,
-                        &arg_repo,
                         item_repo_private,
                         ctx,
                     );
