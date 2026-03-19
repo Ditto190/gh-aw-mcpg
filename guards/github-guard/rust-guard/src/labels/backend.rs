@@ -35,8 +35,16 @@ fn set_cached_repo_visibility(repo_id: &str, is_private: bool) {
 #[derive(Debug, Clone)]
 pub struct PullRequestFacts {
     pub author_association: Option<String>,
+    pub author_login: Option<String>,
     pub is_merged: bool,
     pub is_forked: Option<bool>,
+}
+
+/// Author information for an issue, including login and association.
+#[derive(Debug, Clone)]
+pub struct IssueAuthorInfo {
+    pub author_association: Option<String>,
+    pub author_login: Option<String>,
 }
 
 /// Check whether a repository is private using the backend MCP server.
@@ -332,14 +340,22 @@ pub fn get_pull_request_facts_with_callback(
         .and_then(|v| v.as_str())
         .map(String::from);
 
+    let author_login = pr
+        .get("user")
+        .and_then(|u| u.get("login"))
+        .and_then(|v| v.as_str())
+        .map(String::from);
+
     Some(PullRequestFacts {
         author_association,
+        author_login,
         is_merged,
         is_forked,
     })
 }
 
 /// Fetch issue author_association value for resource-level initialization.
+#[allow(dead_code)]
 pub fn get_issue_author_association_with_callback(
     callback: GithubMcpCallback,
     owner: &str,
@@ -383,8 +399,64 @@ pub fn get_pull_request_facts(
     get_pull_request_facts_with_callback(crate::invoke_backend, owner, repo, pull_number)
 }
 
+#[allow(dead_code)]
 pub fn get_issue_author_association(owner: &str, repo: &str, issue_number: &str) -> Option<String> {
     get_issue_author_association_with_callback(crate::invoke_backend, owner, repo, issue_number)
+}
+
+/// Fetch issue author info (association + login) for resource-level initialization.
+pub fn get_issue_author_info_with_callback(
+    callback: GithubMcpCallback,
+    owner: &str,
+    repo: &str,
+    issue_number: &str,
+) -> Option<IssueAuthorInfo> {
+    if owner.is_empty() || repo.is_empty() || issue_number.is_empty() {
+        return None;
+    }
+
+    let args = serde_json::json!({
+        "owner": owner,
+        "repo": repo,
+        "issue_number": issue_number,
+    });
+
+    let args_str = args.to_string();
+    let mut result_buffer = vec![0u8; SMALL_BUFFER_SIZE];
+
+    let len = match callback("issue_read", &args_str, &mut result_buffer) {
+        Ok(len) if len > 0 => len,
+        _ => return None,
+    };
+
+    let response_str = std::str::from_utf8(&result_buffer[..len]).ok()?;
+    let response = serde_json::from_str::<Value>(response_str).ok()?;
+    let issue = super::extract_mcp_response(&response);
+
+    let author_association = issue
+        .get("author_association")
+        .or_else(|| issue.get("authorAssociation"))
+        .and_then(|v| v.as_str())
+        .map(String::from);
+
+    let author_login = issue
+        .get("user")
+        .and_then(|u| u.get("login"))
+        .and_then(|v| v.as_str())
+        .map(String::from);
+
+    Some(IssueAuthorInfo {
+        author_association,
+        author_login,
+    })
+}
+
+pub fn get_issue_author_info(
+    owner: &str,
+    repo: &str,
+    issue_number: &str,
+) -> Option<IssueAuthorInfo> {
+    get_issue_author_info_with_callback(crate::invoke_backend, owner, repo, issue_number)
 }
 
 fn extract_repo_private_flag(response: &Value, repo_id: &str) -> Option<bool> {

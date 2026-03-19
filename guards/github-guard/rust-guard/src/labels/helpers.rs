@@ -693,8 +693,27 @@ pub fn author_association_floor_from_str(
     }
 }
 
+/// Extract the author login from an item, checking common GitHub API fields.
+/// Returns empty string if no login found.
+fn extract_author_login(item: &Value) -> &str {
+    // Issues and PRs use user.login
+    let login = get_nested_str(item, "user", "login");
+    if !login.is_empty() {
+        return login;
+    }
+    // Commits use author.login
+    get_nested_str(item, "author", "login")
+}
+
 /// Extract author_association from an item and return initial integrity floor.
+/// Trusted first-party GitHub bots are elevated to approved (writer) integrity
+/// regardless of their author_association value.
 pub fn author_association_floor(item: &Value, scope: &str, ctx: &PolicyContext) -> Vec<String> {
+    let author_login = extract_author_login(item);
+    if !author_login.is_empty() && is_trusted_first_party_bot(author_login) {
+        return writer_integrity(scope, ctx);
+    }
+
     let association = item
         .get("author_association")
         .and_then(|v| v.as_str())
@@ -846,7 +865,29 @@ pub fn commit_integrity(
     ensure_integrity_baseline(repo_full_name, integrity, ctx)
 }
 
-/// Check if a user appears to be a bot
+/// Check if a user is a trusted first-party GitHub bot.
+///
+/// These bots are platform services whose presence requires explicit admin
+/// configuration. Their authored objects receive approved (writer) integrity
+/// regardless of author_association.
+///
+/// Trusted bots:
+/// - dependabot[bot]: GitHub dependency updater
+/// - github-actions[bot]: GitHub Actions workflow actor (GITHUB_TOKEN)
+/// - github-merge-queue[bot]: GitHub merge queue automation
+/// - copilot: GitHub Copilot AI assistant
+pub fn is_trusted_first_party_bot(username: &str) -> bool {
+    let lower = username.to_lowercase();
+    lower == "dependabot[bot]"
+        || lower == "github-actions[bot]"
+        || lower == "github-merge-queue[bot]"
+        || lower == "copilot"
+}
+
+/// Check if a user appears to be a bot (broad detection).
+///
+/// This is a broader check that includes third-party bots.
+/// For integrity elevation, use is_trusted_first_party_bot() instead.
 #[allow(dead_code)]
 pub fn is_bot(username: &str) -> bool {
     let lower = username.to_lowercase();
