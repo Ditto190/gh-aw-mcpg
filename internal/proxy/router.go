@@ -39,16 +39,16 @@ var routes = []route{
 	// Issues
 	{
 		pattern:  regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/issues/(\d+)/comments$`),
-		toolName: "get_comments",
+		toolName: "issue_read",
 		extractArgs: func(m []string) map[string]interface{} {
-			return map[string]interface{}{"owner": m[1], "repo": m[2], "issue_number": m[3]}
+			return map[string]interface{}{"owner": m[1], "repo": m[2], "issue_number": m[3], "method": "get_comments"}
 		},
 	},
 	{
 		pattern:  regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/issues/(\d+)/labels$`),
-		toolName: "get_labels",
+		toolName: "issue_read",
 		extractArgs: func(m []string) map[string]interface{} {
-			return map[string]interface{}{"owner": m[1], "repo": m[2], "issue_number": m[3]}
+			return map[string]interface{}{"owner": m[1], "repo": m[2], "issue_number": m[3], "method": "get_labels"}
 		},
 	},
 	{
@@ -236,14 +236,9 @@ var routes = []route{
 		},
 	},
 
-	// User API
-	{
-		pattern:  regexp.MustCompile(`^/user$`),
-		toolName: "get_me",
-		extractArgs: func(_ []string) map[string]interface{} {
-			return map[string]interface{}{}
-		},
-	},
+	// User API (/user) is intentionally not mapped — it cannot be correctly labeled
+	// by the guard (no recognized tool name with equivalent semantics) and may contain
+	// private account data (e.g., email). Unknown paths are blocked by the handler.
 
 	// Generic repo-scoped fallback (must be last)
 	{
