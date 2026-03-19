@@ -107,7 +107,7 @@ func ConvertToCallToolResult(data interface{}) (*sdk.CallToolResult, error) {
 // Returns the parsed arguments as a map, or an error if parsing fails.
 func ParseToolArguments(req *sdk.CallToolRequest) (map[string]interface{}, error) {
 	var toolArgs map[string]interface{}
-	if req.Params.Arguments != nil {
+	if req.Params != nil && req.Params.Arguments != nil {
 		if err := json.Unmarshal(req.Params.Arguments, &toolArgs); err != nil {
 			return nil, fmt.Errorf("failed to parse arguments: %w", err)
 		}

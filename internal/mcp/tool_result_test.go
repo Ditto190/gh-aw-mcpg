@@ -141,8 +141,20 @@ func TestConvertToCallToolResult(t *testing.T) {
 
 // TestParseToolArguments tests extraction and unmarshaling of tool arguments.
 func TestParseToolArguments(t *testing.T) {
-	t.Run("nil arguments returns empty map", func(t *testing.T) {
+	t.Run("nil params returns empty map", func(t *testing.T) {
 		req := &sdk.CallToolRequest{}
+
+		args, err := ParseToolArguments(req)
+
+		require.NoError(t, err)
+		require.NotNil(t, args)
+		assert.Empty(t, args)
+	})
+
+	t.Run("nil arguments returns empty map", func(t *testing.T) {
+		req := &sdk.CallToolRequest{
+			Params: &sdk.CallToolParamsRaw{},
+		}
 
 		args, err := ParseToolArguments(req)
 
@@ -160,8 +172,11 @@ func TestParseToolArguments(t *testing.T) {
 		argsJSON, err := json.Marshal(params)
 		require.NoError(t, err)
 
-		req := &sdk.CallToolRequest{}
-		req.Params.Arguments = json.RawMessage(argsJSON)
+		req := &sdk.CallToolRequest{
+			Params: &sdk.CallToolParamsRaw{
+				Arguments: json.RawMessage(argsJSON),
+			},
+		}
 
 		args, err := ParseToolArguments(req)
 
@@ -175,8 +190,11 @@ func TestParseToolArguments(t *testing.T) {
 	t.Run("nested object arguments are parsed correctly", func(t *testing.T) {
 		argsJSON := `{"filter": {"type": "repo", "owner": "github"}, "page": 1}`
 
-		req := &sdk.CallToolRequest{}
-		req.Params.Arguments = json.RawMessage(argsJSON)
+		req := &sdk.CallToolRequest{
+			Params: &sdk.CallToolParamsRaw{
+				Arguments: json.RawMessage(argsJSON),
+			},
+		}
 
 		args, err := ParseToolArguments(req)
 
@@ -188,8 +206,11 @@ func TestParseToolArguments(t *testing.T) {
 	})
 
 	t.Run("invalid json returns error", func(t *testing.T) {
-		req := &sdk.CallToolRequest{}
-		req.Params.Arguments = json.RawMessage(`{not valid json}`)
+		req := &sdk.CallToolRequest{
+			Params: &sdk.CallToolParamsRaw{
+				Arguments: json.RawMessage(`{not valid json}`),
+			},
+		}
 
 		args, err := ParseToolArguments(req)
 
@@ -199,8 +220,11 @@ func TestParseToolArguments(t *testing.T) {
 	})
 
 	t.Run("empty json object returns empty map", func(t *testing.T) {
-		req := &sdk.CallToolRequest{}
-		req.Params.Arguments = json.RawMessage(`{}`)
+		req := &sdk.CallToolRequest{
+			Params: &sdk.CallToolParamsRaw{
+				Arguments: json.RawMessage(`{}`),
+			},
+		}
 
 		args, err := ParseToolArguments(req)
 
