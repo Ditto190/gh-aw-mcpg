@@ -3,6 +3,7 @@ package proxy
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -96,7 +97,7 @@ func TestGenerateSelfSignedTLS(t *testing.T) {
 		assert.Contains(t, err.Error(), "certificate")
 	})
 
-	t.Run("server cert covers localhost and 127.0.0.1", func(t *testing.T) {
+	t.Run("server cert covers localhost, 127.0.0.1, and ::1", func(t *testing.T) {
 		dir := t.TempDir()
 		tlsCfg, err := GenerateSelfSignedTLS(dir)
 		require.NoError(t, err)
@@ -106,14 +107,18 @@ func TestGenerateSelfSignedTLS(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Contains(t, leaf.DNSNames, "localhost")
-		foundLoopback := false
+		foundLoopback4 := false
+		foundLoopback6 := false
 		for _, ip := range leaf.IPAddresses {
-			if ip.Equal([]byte{127, 0, 0, 1}) || ip.String() == "127.0.0.1" {
-				foundLoopback = true
-				break
+			if ip.Equal(net.IPv4(127, 0, 0, 1)) {
+				foundLoopback4 = true
+			}
+			if ip.Equal(net.IPv6loopback) {
+				foundLoopback6 = true
 			}
 		}
-		assert.True(t, foundLoopback, "server cert should cover 127.0.0.1")
+		assert.True(t, foundLoopback4, "server cert should cover 127.0.0.1")
+		assert.True(t, foundLoopback6, "server cert should cover ::1")
 	})
 
 	t.Run("key files have restricted permissions", func(t *testing.T) {
