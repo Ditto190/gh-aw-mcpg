@@ -1701,6 +1701,7 @@ args = ["run", "--rm", "-i", "test/container:latest"]
 	_, err = LoadFromFile(tmpFile)
 	require.Error(t, err)
 }
+
 // TestLoadFromStdin_WithTrustedBots verifies JSON stdin parsing of trustedBots.
 // Covers spec §4.1.3.4 (Trusted Bot Identity Configuration).
 func TestLoadFromStdin_WithTrustedBots(t *testing.T) {
