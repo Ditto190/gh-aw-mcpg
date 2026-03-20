@@ -190,6 +190,24 @@ func fetchAndFixSchema(url string) ([]byte, error) {
 				props["guard-policies"] = guardPoliciesProperty
 			}
 		}
+
+		// Add trustedBots to gatewayConfig.
+		// Spec §4.1.3.4: optional array of additional trusted bot identity strings.
+		// This field is in the v1.9.0 spec (main) but not yet in the v0.62.2 released schema.
+		if gatewayConfig, ok := definitions["gatewayConfig"].(map[string]interface{}); ok {
+			if props, ok := gatewayConfig["properties"].(map[string]interface{}); ok {
+				props["trustedBots"] = map[string]interface{}{
+					"type":        "array",
+					"description": "Additional GitHub bot identity strings passed to the gateway and merged with its built-in trusted identity list. This field is additive — it extends the internal list but cannot remove built-in entries.",
+					"items": map[string]interface{}{
+						"type":      "string",
+						"minLength": 1,
+						"pattern":   ".*\\S.*",
+					},
+					"minItems": 1,
+				}
+			}
+		}
 	}
 
 	fixedBytes, err := json.Marshal(schema)
