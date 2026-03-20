@@ -62,7 +62,7 @@ Write operations (PUT, POST, DELETE, PATCH) pass through unmodified.
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--guard-wasm` | *(required)* | Path to the guard WASM module |
+| `--guard-wasm` | *(auto-detected in container)* | Path to the guard WASM module |
 | `--policy` | | Guard policy JSON (e.g., `{"allow-only":{"repos":["org/repo"]}}`) |
 | `--github-token` | `$GITHUB_TOKEN` | GitHub API token for upstream requests |
 | `--listen` / `-l` | `127.0.0.1:8080` | Proxy listen address |
@@ -130,23 +130,47 @@ Owner and repo are extracted from GraphQL variables (`$owner`, `$name`/`$repo`) 
 
 ## Container Usage
 
-The proxy is included in the same container image as the MCP gateway:
+The proxy is included in the same container image as the MCP gateway. The baked-in guard WASM module at `/guards/github/00-github-guard.wasm` is auto-detected, so `--guard-wasm` is not needed.
+
+### With TLS (for `gh` CLI)
 
 ```bash
-docker run --rm \
-  --entrypoint /app/awmg \
-  -p 8080:8080 \
+# Start the proxy — the entrypoint detects "proxy" and skips gateway checks
+docker run --rm -p 8443:8443 \
   -e GITHUB_TOKEN \
-  ghcr.io/github/gh-aw-mcpg:latest \
-  proxy \
-  --guard-wasm /guards/github/00-github-guard.wasm \
-  --policy '{"allow-only":{"repos":["org/repo"],"min-integrity":"none"}}' \
-  --github-token "$GITHUB_TOKEN" \
-  --listen 0.0.0.0:8080 \
-  --guards-mode filter
+  -v /tmp/proxy-logs:/tmp/gh-aw/mcp-logs \
+  ghcr.io/github/gh-aw-mcpg:latest proxy \
+  --policy '{"allow-only":{"repos":["org/repo"],"min-integrity":"approved"}}' \
+  --listen 0.0.0.0:8443 \
+  --tls
+
+# Trust the CA cert from the mounted log volume
+export GH_HOST=localhost:8443
+export NODE_EXTRA_CA_CERTS=/tmp/proxy-logs/proxy-tls/ca.crt
+gh issue list -R org/repo
 ```
 
-Note: The container entrypoint defaults to `run_containerized.sh` (MCP gateway mode). Use `--entrypoint /app/awmg` to run proxy mode directly.
+### Plain HTTP (for `curl` / testing)
+
+```bash
+docker run --rm -p 8080:8080 \
+  -e GITHUB_TOKEN \
+  -v /tmp/proxy-logs:/tmp/gh-aw/mcp-logs \
+  ghcr.io/github/gh-aw-mcpg:latest proxy \
+  --policy '{"allow-only":{"repos":["org/repo"],"min-integrity":"none"}}' \
+  --listen 0.0.0.0:8080
+
+curl -H "Authorization: token $GITHUB_TOKEN" \
+  http://localhost:8080/repos/org/repo/issues
+```
+
+### Container Notes
+
+- **Entrypoint routing**: The container entrypoint (`run_containerized.sh`) detects `proxy` as the first argument and skips gateway-specific checks (Docker socket, stdin config, `MCP_GATEWAY_PORT`/`DOMAIN`/`API_KEY`).
+- **Guard auto-detection**: `--guard-wasm` defaults to the baked-in `/guards/github/00-github-guard.wasm` inside the container.
+- **Log volume**: Mount a host directory to `/tmp/gh-aw/mcp-logs` to persist proxy logs and access the generated TLS CA certificate.
+- **Listen address**: Use `0.0.0.0` (not `127.0.0.1`) inside the container so the port mapping works.
+- **Token**: Pass `GITHUB_TOKEN` as an environment variable; the proxy resolves it automatically.
 
 ## Guards Mode
 

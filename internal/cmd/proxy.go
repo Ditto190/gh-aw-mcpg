@@ -33,36 +33,59 @@ func init() {
 	rootCmd.AddCommand(newProxyCmd())
 }
 
+// containerGuardWasmPath is the baked-in guard path in the container image.
+const containerGuardWasmPath = "/guards/github/00-github-guard.wasm"
+
+// detectGuardWasm returns the baked-in container guard path if it exists,
+// or empty string if not found (requiring the user to specify --guard-wasm).
+func detectGuardWasm() string {
+	if _, err := os.Stat(containerGuardWasmPath); err == nil {
+		return containerGuardWasmPath
+	}
+	return ""
+}
+
 func newProxyCmd() *cobra.Command {
+	defaultGuard := detectGuardWasm()
+
 	cmd := &cobra.Command{
 		Use:   "proxy",
 		Short: "Run as a GitHub API filtering proxy",
 		Long: `Run the gateway in proxy mode — an HTTP(S) forward proxy that intercepts
 gh CLI requests and applies DIFC filtering using the same guard WASM module.
 
-Usage with the gh CLI:
+Container usage (uses baked-in guard automatically):
 
-  # Start the proxy with self-signed TLS (required for gh CLI)
+  docker run --rm -p 8443:8443 \
+    -e GITHUB_TOKEN \
+    -v /tmp/proxy-logs:/tmp/gh-aw/mcp-logs \
+    ghcr.io/github/gh-aw-mcpg:latest proxy \
+    --policy '{"allow-only":{"repos":["org/repo"],"min-integrity":"approved"}}' \
+    --listen 0.0.0.0:8443 \
+    --tls
+
+  # Trust the CA cert from the mounted volume
+  export GH_HOST=localhost:8443
+  export NODE_EXTRA_CA_CERTS=/tmp/proxy-logs/proxy-tls/ca.crt
+  gh issue list -R org/repo
+
+Local usage:
+
   awmg proxy \
     --guard-wasm guards/github-guard/github_guard.wasm \
     --policy '{"allow-only":{"repos":["org/repo"],"min-integrity":"approved"}}' \
-    --github-token "$GITHUB_TOKEN" \
-    --listen localhost:8443 \
-    --tls
-
-  # Point gh at the proxy (inject the generated CA cert)
-  export GH_HOST=localhost:8443
-  export NODE_EXTRA_CA_CERTS=/tmp/gh-aw/proxy-tls/ca.crt
-  gh issue list -R org/repo
-
-  # Or use plain HTTP for curl/testing (no --tls flag)
-  awmg proxy --guard-wasm ... --listen localhost:8080
-  curl http://localhost:8080/repos/org/repo/issues`,
+    --listen localhost:8443 --tls`,
 		SilenceUsage: true,
 		RunE:         runProxy,
 	}
 
-	cmd.Flags().StringVar(&proxyGuardWasm, "guard-wasm", "", "Path to the guard WASM module (required)")
+	guardHelp := "Path to the guard WASM module"
+	if defaultGuard != "" {
+		guardHelp += " (auto-detected: " + defaultGuard + ")"
+	} else {
+		guardHelp += " (required)"
+	}
+	cmd.Flags().StringVar(&proxyGuardWasm, "guard-wasm", defaultGuard, guardHelp)
 	cmd.Flags().StringVar(&proxyPolicy, "policy", getDefaultGuardPolicyJSON(), "Guard policy JSON")
 	cmd.Flags().StringVar(&proxyToken, "github-token", os.Getenv("GITHUB_TOKEN"), "GitHub API token")
 	cmd.Flags().StringVarP(&proxyListen, "listen", "l", "127.0.0.1:8080", "Proxy listen address")
@@ -72,7 +95,10 @@ Usage with the gh CLI:
 	cmd.Flags().BoolVar(&proxyTLS, "tls", false, "Enable HTTPS with auto-generated self-signed certificates")
 	cmd.Flags().StringVar(&proxyTLSDir, "tls-dir", "", "Directory for TLS certificates (default: <log-dir>/proxy-tls)")
 
-	cmd.MarkFlagRequired("guard-wasm")
+	// Only require --guard-wasm when no baked-in guard is available
+	if defaultGuard == "" {
+		cmd.MarkFlagRequired("guard-wasm")
+	}
 
 	return cmd
 }
