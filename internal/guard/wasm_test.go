@@ -305,7 +305,7 @@ func TestBuildStrictLabelAgentPayloadExtended(t *testing.T) {
 
 		_, err := buildStrictLabelAgentPayload(policy)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "expected {\"allow-only\":{\"repos\"")
+		assert.Contains(t, err.Error(), "missing required fields repos and/or min-integrity")
 	})
 
 	t.Run("allow-only with missing integrity returns error", func(t *testing.T) {
@@ -317,7 +317,7 @@ func TestBuildStrictLabelAgentPayloadExtended(t *testing.T) {
 
 		_, err := buildStrictLabelAgentPayload(policy)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "expected {\"allow-only\":{\"repos\"")
+		assert.Contains(t, err.Error(), "missing required fields repos and/or min-integrity")
 	})
 
 	t.Run("allow-only with empty array repos returns error", func(t *testing.T) {

@@ -378,7 +378,7 @@ func buildStrictLabelAgentPayload(policy interface{}) (map[string]interface{}, e
 		integrityRaw, hasIntegrity = allowOnly["integrity"]
 	}
 	if !hasRepos || !hasIntegrity {
-		return nil, fmt.Errorf("invalid guard policy transport shape: expected {\"allow-only\":{\"repos\":...,\"min-integrity\":...}} with optional fields blocked-users, approval-labels")
+		return nil, fmt.Errorf("invalid guard policy transport shape: missing required fields repos and/or min-integrity in allow-only object")
 	}
 
 	// Validate that the allow-only object contains only known keys.

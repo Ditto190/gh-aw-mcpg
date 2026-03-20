@@ -213,11 +213,16 @@ fn extract_github_label_names<'a>(item: &'a Value) -> Vec<&'a str> {
 /// Check whether a content item carries at least one label from the configured
 /// `approval-labels` list (case-insensitive comparison).
 pub fn has_approval_label(item: &Value, ctx: &PolicyContext) -> bool {
+    first_matching_approval_label(item, ctx).is_some()
+}
+
+/// Return the first matching approval label name from an item, if any.
+fn first_matching_approval_label<'a>(item: &'a Value, ctx: &PolicyContext) -> Option<&'a str> {
     if ctx.approval_labels.is_empty() {
-        return false;
+        return None;
     }
     let label_names = extract_github_label_names(item);
-    label_names.iter().any(|name| {
+    label_names.into_iter().find(|name| {
         ctx.approval_labels
             .iter()
             .any(|al| al.eq_ignore_ascii_case(name))
@@ -844,6 +849,11 @@ pub fn pr_integrity(
     // Step 1: Check if author is in blocked_users — takes precedence over all other rules.
     let author_login = extract_author_login(item);
     if !author_login.is_empty() && is_blocked_user(author_login, ctx) {
+        let number = item.get("number").and_then(|v| v.as_u64()).unwrap_or(0);
+        crate::log_info(&format!(
+            "[integrity] pr:{}#{} → blocked (author '{}' in blocked-users)",
+            repo_full_name, number, author_login
+        ));
         return blocked_integrity(repo_full_name, ctx);
     }
 
@@ -893,7 +903,12 @@ pub fn pr_integrity(
     let integrity = ensure_integrity_baseline(repo_full_name, integrity, ctx);
 
     // Step 2: Apply approval-labels promotion — raise to at least approved.
-    if has_approval_label(item, ctx) {
+    if let Some(label) = first_matching_approval_label(item, ctx) {
+        let number = item.get("number").and_then(|v| v.as_u64()).unwrap_or(0);
+        crate::log_info(&format!(
+            "[integrity] pr:{}#{} promoted to approved (label '{}' in approval-labels)",
+            repo_full_name, number, label
+        ));
         max_integrity(
             repo_full_name,
             integrity,
@@ -920,6 +935,11 @@ pub fn issue_integrity(
     // Step 1: Check if author is in blocked_users — takes precedence over all other rules.
     let author_login = extract_author_login(item);
     if !author_login.is_empty() && is_blocked_user(author_login, ctx) {
+        let number = item.get("number").and_then(|v| v.as_u64()).unwrap_or(0);
+        crate::log_info(&format!(
+            "[integrity] issue:{}#{} → blocked (author '{}' in blocked-users)",
+            repo_full_name, number, author_login
+        ));
         return blocked_integrity(repo_full_name, ctx);
     }
 
@@ -935,7 +955,12 @@ pub fn issue_integrity(
     let integrity = ensure_integrity_baseline(repo_full_name, integrity, ctx);
 
     // Step 2: Apply approval-labels promotion — raise to at least approved.
-    if has_approval_label(item, ctx) {
+    if let Some(label) = first_matching_approval_label(item, ctx) {
+        let number = item.get("number").and_then(|v| v.as_u64()).unwrap_or(0);
+        crate::log_info(&format!(
+            "[integrity] issue:{}#{} promoted to approved (label '{}' in approval-labels)",
+            repo_full_name, number, label
+        ));
         max_integrity(
             repo_full_name,
             integrity,
@@ -954,6 +979,9 @@ pub fn issue_integrity(
 /// - Start from author_association floor
 /// - Private repo commits elevate to approved
 /// - Default-branch reachable commits elevate to merged
+///
+/// Note: approval-labels promotion does not apply to commits because GitHub
+/// commits do not carry issue/PR-style labels.
 pub fn commit_integrity(
     item: &Value,
     repo_full_name: &str,
@@ -964,6 +992,12 @@ pub fn commit_integrity(
     // Step 1: Check if author is in blocked_users — takes precedence over all other rules.
     let author_login = extract_author_login(item);
     if !author_login.is_empty() && is_blocked_user(author_login, ctx) {
+        let sha = item.get("sha").and_then(|v| v.as_str()).unwrap_or("unknown");
+        let short_sha = if sha.len() > 8 { &sha[..8] } else { sha };
+        crate::log_info(&format!(
+            "[integrity] commit:{}@{} → blocked (author '{}' in blocked-users)",
+            repo_full_name, short_sha, author_login
+        ));
         return blocked_integrity(repo_full_name, ctx);
     }
 

@@ -293,6 +293,7 @@ func NormalizeGuardPolicy(policy *GuardPolicy) (*NormalizedGuardPolicy, error) {
 	logGuardPolicy.Printf("Normalizing guard policy: integrity=%s, reposType=%T", integrity, policy.AllowOnly.Repos)
 
 	// Validate and normalize blocked-users.
+	// Dedup uses lowercased keys to match Rust guard's case-insensitive comparison.
 	if len(policy.AllowOnly.BlockedUsers) > 0 {
 		seen := make(map[string]struct{}, len(policy.AllowOnly.BlockedUsers))
 		for _, u := range policy.AllowOnly.BlockedUsers {
@@ -300,14 +301,16 @@ func NormalizeGuardPolicy(policy *GuardPolicy) (*NormalizedGuardPolicy, error) {
 			if u == "" {
 				return nil, fmt.Errorf("allow-only.blocked-users entries must not be empty")
 			}
-			if _, exists := seen[u]; !exists {
-				seen[u] = struct{}{}
+			key := strings.ToLower(u)
+			if _, exists := seen[key]; !exists {
+				seen[key] = struct{}{}
 				normalized.BlockedUsers = append(normalized.BlockedUsers, u)
 			}
 		}
 	}
 
 	// Validate and normalize approval-labels.
+	// Dedup uses lowercased keys to match Rust guard's case-insensitive comparison.
 	if len(policy.AllowOnly.ApprovalLabels) > 0 {
 		seen := make(map[string]struct{}, len(policy.AllowOnly.ApprovalLabels))
 		for _, l := range policy.AllowOnly.ApprovalLabels {
@@ -315,8 +318,9 @@ func NormalizeGuardPolicy(policy *GuardPolicy) (*NormalizedGuardPolicy, error) {
 			if l == "" {
 				return nil, fmt.Errorf("allow-only.approval-labels entries must not be empty")
 			}
-			if _, exists := seen[l]; !exists {
-				seen[l] = struct{}{}
+			key := strings.ToLower(l)
+			if _, exists := seen[key]; !exists {
+				seen[key] = struct{}{}
 				normalized.ApprovalLabels = append(normalized.ApprovalLabels, l)
 			}
 		}

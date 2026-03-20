@@ -207,6 +207,19 @@ func TestNormalizeGuardPolicyBlockedAndApproval(t *testing.T) {
 		assert.Contains(t, got.BlockedUsers, "bad-actor")
 	})
 
+	t.Run("blocked-users case-insensitive deduplication", func(t *testing.T) {
+		policy := &GuardPolicy{AllowOnly: &AllowOnlyPolicy{
+			Repos:        "public",
+			MinIntegrity: "none",
+			BlockedUsers: []string{"Evil-Bot", "evil-bot", "EVIL-BOT"},
+		}}
+
+		got, err := NormalizeGuardPolicy(policy)
+		require.NoError(t, err)
+		assert.Len(t, got.BlockedUsers, 1)
+		assert.Equal(t, "Evil-Bot", got.BlockedUsers[0]) // keeps first occurrence
+	})
+
 	t.Run("approval-labels deduplication", func(t *testing.T) {
 		policy := &GuardPolicy{AllowOnly: &AllowOnlyPolicy{
 			Repos:          "public",
@@ -217,6 +230,19 @@ func TestNormalizeGuardPolicyBlockedAndApproval(t *testing.T) {
 		got, err := NormalizeGuardPolicy(policy)
 		require.NoError(t, err)
 		assert.Len(t, got.ApprovalLabels, 2)
+	})
+
+	t.Run("approval-labels case-insensitive deduplication", func(t *testing.T) {
+		policy := &GuardPolicy{AllowOnly: &AllowOnlyPolicy{
+			Repos:          "public",
+			MinIntegrity:   "none",
+			ApprovalLabels: []string{"Approved", "approved", "APPROVED"},
+		}}
+
+		got, err := NormalizeGuardPolicy(policy)
+		require.NoError(t, err)
+		assert.Len(t, got.ApprovalLabels, 1)
+		assert.Equal(t, "Approved", got.ApprovalLabels[0]) // keeps first occurrence
 	})
 
 	t.Run("empty blocked-users string entry returns error", func(t *testing.T) {
