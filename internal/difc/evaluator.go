@@ -187,7 +187,7 @@ func formatIntegrityLevel(tags []Tag) string {
 }
 
 // formatSecrecyLevel converts a list of secrecy tags into a human-readable
-// secrecy scope description (e.g., "private" instead of "[private:org/repo]").
+// secrecy scope description (e.g., "private (org/repo)" instead of "[private:org/repo]").
 func formatSecrecyLevel(tags []Tag) string {
 	if len(tags) == 0 {
 		return "public"
