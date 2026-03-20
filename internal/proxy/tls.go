@@ -72,14 +72,17 @@ func GenerateSelfSignedTLS(dir string) (*TLSConfig, error) {
 		return nil, err
 	}
 
+	notBefore := time.Now().Add(-1 * time.Hour)
+	notAfter := notBefore.Add(24 * time.Hour)
+
 	caTemplate := &x509.Certificate{
 		SerialNumber: caSerial,
 		Subject: pkix.Name{
 			Organization: []string{"MCPG Proxy"},
 			CommonName:   "MCPG Proxy CA",
 		},
-		NotBefore:             time.Now().Add(-1 * time.Hour),
-		NotAfter:              time.Now().Add(24 * time.Hour),
+		NotBefore:             notBefore,
+		NotAfter:              notAfter,
 		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
 		BasicConstraintsValid: true,
 		IsCA:                  true,
