@@ -199,7 +199,7 @@ func runProxy(cmd *cobra.Command, args []string) error {
 		if tlsCfg != nil {
 			fmt.Fprintf(os.Stderr, "  CA cert:   %s\n", tlsCfg.CACertPath)
 			fmt.Fprintf(os.Stderr, "\nConnect with:\n")
-			fmt.Fprintf(os.Stderr, "  export GH_HOST=%s\n", actualAddr)
+			fmt.Fprintf(os.Stderr, "  export GH_HOST=%s\n", clientAddr(actualAddr))
 			fmt.Fprintf(os.Stderr, "  export NODE_EXTRA_CA_CERTS=%s\n", tlsCfg.CACertPath)
 			fmt.Fprintf(os.Stderr, "  gh issue list -R org/repo\n\n")
 		} else {
@@ -219,4 +219,19 @@ func runProxy(cmd *cobra.Command, args []string) error {
 	logger.LogInfo("shutdown", "Proxy shutting down")
 
 	return httpServer.Close()
+}
+
+// clientAddr returns a client-friendly address from a listener address.
+// When the host is a wildcard (0.0.0.0, ::, or empty), it substitutes
+// "localhost" so the printed GH_HOST value is usable from a client.
+func clientAddr(addr string) string {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return addr
+	}
+	switch host {
+	case "", "0.0.0.0", "::", "[::]":
+		return net.JoinHostPort("localhost", port)
+	}
+	return addr
 }

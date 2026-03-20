@@ -57,7 +57,7 @@ type TLSConfig struct {
 func GenerateSelfSignedTLS(dir string) (*TLSConfig, error) {
 	logTLS.Print("generating self-signed TLS certificates for localhost")
 
-	if err := os.MkdirAll(dir, 0700); err != nil {
+	if err := os.MkdirAll(dir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create TLS directory %s: %w", dir, err)
 	}
 
@@ -134,10 +134,10 @@ func GenerateSelfSignedTLS(dir string) (*TLSConfig, error) {
 	certPath := filepath.Join(dir, "server.crt")
 	keyPath := filepath.Join(dir, "server.key")
 
-	if err := writePEM(caCertPath, "CERTIFICATE", caCertDER); err != nil {
+	if err := writePEM(caCertPath, "CERTIFICATE", caCertDER, 0644); err != nil {
 		return nil, fmt.Errorf("failed to write CA cert: %w", err)
 	}
-	if err := writePEM(certPath, "CERTIFICATE", serverCertDER); err != nil {
+	if err := writePEM(certPath, "CERTIFICATE", serverCertDER, 0644); err != nil {
 		return nil, fmt.Errorf("failed to write server cert: %w", err)
 	}
 
@@ -145,7 +145,7 @@ func GenerateSelfSignedTLS(dir string) (*TLSConfig, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal server key: %w", err)
 	}
-	if err := writePEM(keyPath, "EC PRIVATE KEY", serverKeyDER); err != nil {
+	if err := writePEM(keyPath, "EC PRIVATE KEY", serverKeyDER, 0600); err != nil {
 		return nil, fmt.Errorf("failed to write server key: %w", err)
 	}
 
@@ -181,8 +181,8 @@ func randomSerial() (*big.Int, error) {
 	return serial, nil
 }
 
-func writePEM(path, blockType string, derBytes []byte) error {
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+func writePEM(path, blockType string, derBytes []byte, perm os.FileMode) error {
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, perm)
 	if err != nil {
 		return err
 	}

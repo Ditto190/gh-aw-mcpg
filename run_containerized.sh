@@ -325,7 +325,7 @@ run_proxy_mode() {
     local args=("$@")
     local has_log_dir=false
     for arg in "$@"; do
-        if [ "$arg" = "--log-dir" ]; then
+        if [ "$arg" = "--log-dir" ] || [[ "$arg" == --log-dir=* ]]; then
             has_log_dir=true
             break
         fi
