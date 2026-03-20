@@ -396,11 +396,15 @@ func buildStrictLabelAgentPayload(policy interface{}) (map[string]interface{}, e
 		return nil, fmt.Errorf("invalid integrity value: expected one of none|unapproved|approved|merged")
 	}
 
-	// Validate trusted-bots if present
+	// Validate trusted-bots if present.
+	// Per spec §4.1.3.4: trustedBots MUST be a non-empty array of strings when present.
 	if trustedBotsRaw, hasTrustedBots := payload["trusted-bots"]; hasTrustedBots {
 		trustedBots, ok := trustedBotsRaw.([]interface{})
 		if !ok {
-			return nil, fmt.Errorf("invalid trusted-bots value: expected array of strings")
+			return nil, fmt.Errorf("invalid trusted-bots value: expected non-empty array of strings")
+		}
+		if len(trustedBots) == 0 {
+			return nil, fmt.Errorf("invalid trusted-bots value: must be a non-empty array when present")
 		}
 		for _, entry := range trustedBots {
 			if s, ok := entry.(string); !ok || strings.TrimSpace(s) == "" {

@@ -471,7 +471,36 @@ func TestBuildStrictLabelAgentPayloadExtended(t *testing.T) {
 
 		_, err := buildStrictLabelAgentPayload(policy)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "expected array")
+		assert.Contains(t, err.Error(), "expected non-empty array")
+	})
+
+	t.Run("trusted-bots empty array returns error per spec", func(t *testing.T) {
+		// Spec §4.1.3.4: trustedBots MUST be a non-empty array of strings when present
+		policy := map[string]interface{}{
+			"allow-only": map[string]interface{}{
+				"repos":         "public",
+				"min-integrity": "none",
+			},
+			"trusted-bots": []interface{}{},
+		}
+
+		_, err := buildStrictLabelAgentPayload(policy)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "non-empty array")
+	})
+
+	t.Run("trusted-bots with whitespace-only entry returns error", func(t *testing.T) {
+		policy := map[string]interface{}{
+			"allow-only": map[string]interface{}{
+				"repos":         "public",
+				"min-integrity": "none",
+			},
+			"trusted-bots": []interface{}{"valid-bot", "   "},
+		}
+
+		_, err := buildStrictLabelAgentPayload(policy)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "non-empty string")
 	})
 }
 
@@ -532,6 +561,42 @@ func TestBuildLabelAgentPayload(t *testing.T) {
 
 		_, err := buildStrictLabelAgentPayload(payload)
 		assert.NoError(t, err)
+	})
+
+	t.Run("does not modify original policy", func(t *testing.T) {
+		policy := map[string]interface{}{
+			"allow-only": map[string]interface{}{
+				"repos":         "public",
+				"min-integrity": "none",
+			},
+		}
+		bots := []string{"my-bot[bot]"}
+		_ = BuildLabelAgentPayload(policy, bots)
+
+		// Original policy should NOT contain trusted-bots
+		_, hasTrustedBots := policy["trusted-bots"]
+		assert.False(t, hasTrustedBots, "BuildLabelAgentPayload should not mutate the original policy")
+	})
+
+	t.Run("preserves all trusted bot entries", func(t *testing.T) {
+		policy := map[string]interface{}{
+			"allow-only": map[string]interface{}{
+				"repos":         []interface{}{"org/repo"},
+				"min-integrity": "approved",
+			},
+		}
+		bots := []string{"bot-a[bot]", "bot-b[bot]", "bot-c"}
+		result := BuildLabelAgentPayload(policy, bots)
+
+		resultMap, ok := result.(map[string]interface{})
+		require.True(t, ok)
+
+		trustedBots, ok := resultMap["trusted-bots"].([]interface{})
+		require.True(t, ok)
+		assert.Len(t, trustedBots, 3)
+		assert.Equal(t, "bot-a[bot]", trustedBots[0])
+		assert.Equal(t, "bot-b[bot]", trustedBots[1])
+		assert.Equal(t, "bot-c", trustedBots[2])
 	})
 }
 

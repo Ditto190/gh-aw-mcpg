@@ -563,3 +563,49 @@ func TestUnifiedServer_EnsureSessionDirectory(t *testing.T) {
 	_, err = os.Stat(nestedPath)
 	require.NoError(t, err, "Nested session directory should exist")
 }
+
+// TestUnifiedServer_GetTrustedBots verifies the getTrustedBots accessor
+// returns configured bots or nil when not configured.
+func TestUnifiedServer_GetTrustedBots(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("returns trusted bots when configured", func(t *testing.T) {
+		cfg := &config.Config{
+			Servers: map[string]*config.ServerConfig{},
+			Gateway: &config.GatewayConfig{
+				TrustedBots: []string{"copilot-swe-agent[bot]", "my-org-bot"},
+			},
+		}
+		us, err := NewUnified(ctx, cfg)
+		require.NoError(t, err)
+		defer us.Close()
+
+		bots := us.getTrustedBots()
+		assert.Equal(t, []string{"copilot-swe-agent[bot]", "my-org-bot"}, bots)
+	})
+
+	t.Run("returns nil when no trusted bots configured", func(t *testing.T) {
+		cfg := &config.Config{
+			Servers: map[string]*config.ServerConfig{},
+			Gateway: &config.GatewayConfig{},
+		}
+		us, err := NewUnified(ctx, cfg)
+		require.NoError(t, err)
+		defer us.Close()
+
+		bots := us.getTrustedBots()
+		assert.Nil(t, bots)
+	})
+
+	t.Run("returns nil when gateway config is nil", func(t *testing.T) {
+		cfg := &config.Config{
+			Servers: map[string]*config.ServerConfig{},
+		}
+		us, err := NewUnified(ctx, cfg)
+		require.NoError(t, err)
+		defer us.Close()
+
+		bots := us.getTrustedBots()
+		assert.Nil(t, bots)
+	})
+}

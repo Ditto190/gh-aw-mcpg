@@ -1038,6 +1038,73 @@ mod tests {
     }
 
     #[test]
+    fn test_configured_trusted_bot_pr_integrity() {
+        let repo = "github/copilot";
+
+        let ctx_with_bots = PolicyContext {
+            trusted_bots: vec!["copilot-swe-agent[bot]".to_string()],
+            ..Default::default()
+        };
+
+        // A configured trusted bot PR gets approved (writer) integrity even with NONE association
+        let configured_bot_pr = json!({
+            "user": {"login": "copilot-swe-agent[bot]"},
+            "author_association": "NONE"
+        });
+        assert_eq!(
+            pr_integrity(&configured_bot_pr, repo, false, None, &ctx_with_bots),
+            writer_integrity(repo, &ctx_with_bots)
+        );
+
+        // Without trusted_bots, the same bot gets none integrity
+        let ctx_without_bots = default_ctx();
+        assert_eq!(
+            pr_integrity(&configured_bot_pr, repo, false, None, &ctx_without_bots),
+            none_integrity(repo, &ctx_without_bots)
+        );
+    }
+
+    #[test]
+    fn test_configured_trusted_bot_combined_with_builtin() {
+        let repo = "github/copilot";
+
+        let ctx_with_bots = PolicyContext {
+            trusted_bots: vec!["my-custom-bot[bot]".to_string()],
+            ..Default::default()
+        };
+
+        // Built-in bot (dependabot) still gets writer integrity
+        let builtin_bot_issue = json!({
+            "user": {"login": "dependabot[bot]"},
+            "author_association": "NONE"
+        });
+        assert_eq!(
+            issue_integrity(&builtin_bot_issue, repo, false, &ctx_with_bots),
+            writer_integrity(repo, &ctx_with_bots)
+        );
+
+        // Configured bot also gets writer integrity
+        let configured_bot_issue = json!({
+            "user": {"login": "my-custom-bot[bot]"},
+            "author_association": "NONE"
+        });
+        assert_eq!(
+            issue_integrity(&configured_bot_issue, repo, false, &ctx_with_bots),
+            writer_integrity(repo, &ctx_with_bots)
+        );
+
+        // Unknown bot still gets none integrity
+        let unknown_bot_issue = json!({
+            "user": {"login": "unknown-bot[bot]"},
+            "author_association": "NONE"
+        });
+        assert_eq!(
+            issue_integrity(&unknown_bot_issue, repo, false, &ctx_with_bots),
+            none_integrity(repo, &ctx_with_bots)
+        );
+    }
+
+    #[test]
     fn test_get_str_or() {
         let value = json!({"name": "Alice", "count": 42});
         assert_eq!(get_str_or(&value, "name", "default"), "Alice");
