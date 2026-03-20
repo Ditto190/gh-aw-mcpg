@@ -373,7 +373,7 @@ func (e *ViolationError) Error() string {
 	if e.Type == SecrecyViolation {
 		msg = fmt.Sprintf("Secrecy violation for resource '%s': ", e.Resource)
 		if len(e.ExtraTags) > 0 {
-			msg += fmt.Sprintf("the agent is not authorized to access %s-scoped data.", formatSecrecyLevel(e.ExtraTags))
+			msg += fmt.Sprintf("the agent is not authorized to access data with secrecy level %s.", formatSecrecyLevel(e.ExtraTags))
 		}
 	} else {
 		if e.IsWrite {
