@@ -1,6 +1,6 @@
 # Proxy Mode
 
-Proxy mode (`awmg proxy`) is an HTTP forward proxy that intercepts GitHub API requests and applies DIFC (Data Information Flow Control) filtering using the same guard WASM module as the MCP gateway.
+Proxy mode (`awmg proxy`) is an HTTP(S) forward proxy that intercepts GitHub API requests and applies DIFC (Data Information Flow Control) filtering using the same guard WASM module as the MCP gateway.
 
 ## Motivation
 
@@ -8,18 +8,34 @@ The MCP gateway enforces DIFC on MCP tool calls, but tools that call the GitHub 
 
 ## Quick Start
 
+### With `gh` CLI (TLS mode)
+
 ```bash
-# Start the proxy
+# Start the proxy with self-signed TLS
+awmg proxy \
+  --guard-wasm guards/github-guard/github_guard.wasm \
+  --policy '{"allow-only":{"repos":["org/repo"],"min-integrity":"approved"}}' \
+  --github-token "$GITHUB_TOKEN" \
+  --listen localhost:8443 \
+  --tls
+
+# Trust the generated CA and point gh at the proxy
+export GH_HOST=localhost:8443
+export NODE_EXTRA_CA_CERTS=/tmp/gh-aw/mcp-logs/proxy-tls/ca.crt
+gh issue list -R org/repo
+```
+
+### With `curl` (plain HTTP)
+
+```bash
+# Start the proxy without TLS
 awmg proxy \
   --guard-wasm guards/github-guard/github_guard.wasm \
   --policy '{"allow-only":{"repos":["org/repo"],"min-integrity":"approved"}}' \
   --github-token "$GITHUB_TOKEN" \
   --listen localhost:8080
 
-# Point gh CLI at the proxy
-GH_HOST=localhost:8080 GH_TOKEN="$GITHUB_TOKEN" gh issue list -R org/repo
-
-# Or use curl directly
+# Use curl directly
 curl -H "Authorization: token $GITHUB_TOKEN" \
   http://localhost:8080/api/v3/repos/org/repo/issues
 ```
@@ -27,10 +43,10 @@ curl -H "Authorization: token $GITHUB_TOKEN" \
 ## How It Works
 
 ```
-HTTP client  →  awmg proxy (localhost:8080)  →  api.github.com
-                       ↓
-               6-phase DIFC pipeline
-               (same guard WASM module)
+gh CLI  →  awmg proxy (localhost:8443, TLS)  →  api.github.com
+                     ↓
+             6-phase DIFC pipeline
+             (same guard WASM module)
 ```
 
 1. The proxy receives an HTTP request (REST GET or GraphQL POST)
@@ -46,13 +62,15 @@ Write operations (PUT, POST, DELETE, PATCH) pass through unmodified.
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--guard-wasm` | *(required)* | Path to the guard WASM module |
+| `--guard-wasm` | *(auto-detected in container)* | Path to the guard WASM module |
 | `--policy` | | Guard policy JSON (e.g., `{"allow-only":{"repos":["org/repo"]}}`) |
-| `--github-token` | `$GITHUB_TOKEN` | GitHub API token for upstream requests |
-| `--listen` / `-l` | `127.0.0.1:8080` | HTTP listen address |
+| `--github-token` | *(forwards client auth)* | Fallback GitHub API token for requests without Authorization header |
+| `--listen` / `-l` | `127.0.0.1:8080` | Proxy listen address |
 | `--log-dir` | `/tmp/gh-aw/mcp-logs` | Log file directory |
 | `--guards-mode` | `filter` | DIFC mode: `strict`, `filter`, or `propagate` |
 | `--github-api-url` | `https://api.github.com` | Upstream GitHub API URL |
+| `--tls` | `false` | Enable HTTPS with auto-generated self-signed certificates |
+| `--tls-dir` | `<log-dir>/proxy-tls` | Directory for generated TLS certificate files |
 
 ## DIFC Pipeline
 
@@ -112,23 +130,47 @@ Owner and repo are extracted from GraphQL variables (`$owner`, `$name`/`$repo`) 
 
 ## Container Usage
 
-The proxy is included in the same container image as the MCP gateway:
+The proxy is included in the same container image as the MCP gateway. The baked-in guard WASM module at `/guards/github/00-github-guard.wasm` is auto-detected, so `--guard-wasm` is not needed.
+
+### With TLS (for `gh` CLI)
 
 ```bash
-docker run --rm \
-  --entrypoint /app/awmg \
-  -p 8080:8080 \
+# Start the proxy — the entrypoint detects "proxy" and skips gateway checks
+docker run --rm -p 8443:8443 \
   -e GITHUB_TOKEN \
-  ghcr.io/github/gh-aw-mcpg:latest \
-  proxy \
-  --guard-wasm /guards/github/00-github-guard.wasm \
-  --policy '{"allow-only":{"repos":["org/repo"],"min-integrity":"none"}}' \
-  --github-token "$GITHUB_TOKEN" \
-  --listen 0.0.0.0:8080 \
-  --guards-mode filter
+  -v /tmp/proxy-logs:/tmp/gh-aw/mcp-logs \
+  ghcr.io/github/gh-aw-mcpg:latest proxy \
+  --policy '{"allow-only":{"repos":["org/repo"],"min-integrity":"approved"}}' \
+  --listen 0.0.0.0:8443 \
+  --tls
+
+# Trust the CA cert from the mounted log volume
+export GH_HOST=localhost:8443
+export NODE_EXTRA_CA_CERTS=/tmp/proxy-logs/proxy-tls/ca.crt
+gh issue list -R org/repo
 ```
 
-Note: The container entrypoint defaults to `run_containerized.sh` (MCP gateway mode). Use `--entrypoint /app/awmg` to run proxy mode directly.
+### Plain HTTP (for `curl` / testing)
+
+```bash
+docker run --rm -p 8080:8080 \
+  -e GITHUB_TOKEN \
+  -v /tmp/proxy-logs:/tmp/gh-aw/mcp-logs \
+  ghcr.io/github/gh-aw-mcpg:latest proxy \
+  --policy '{"allow-only":{"repos":["org/repo"],"min-integrity":"none"}}' \
+  --listen 0.0.0.0:8080
+
+curl -H "Authorization: token $GITHUB_TOKEN" \
+  http://localhost:8080/repos/org/repo/issues
+```
+
+### Container Notes
+
+- **Entrypoint routing**: The container entrypoint (`run_containerized.sh`) detects `proxy` as the first argument and skips gateway-specific checks (Docker socket, stdin config, `MCP_GATEWAY_PORT`/`DOMAIN`/`API_KEY`).
+- **Guard auto-detection**: `--guard-wasm` defaults to the baked-in `/guards/github/00-github-guard.wasm` inside the container.
+- **Log volume**: Mount a host directory to `/tmp/gh-aw/mcp-logs` to persist proxy logs and access the generated TLS CA certificate.
+- **Listen address**: Use `0.0.0.0` (not `127.0.0.1`) inside the container so the port mapping works.
+- **Token**: Pass `GITHUB_TOKEN` as an environment variable; the proxy resolves it automatically.
 
 ## Guards Mode
 
@@ -138,8 +180,39 @@ Note: The container entrypoint defaults to `run_containerized.sh` (MCP gateway m
 | `filter` | Removes filtered items, returns remaining (default) |
 | `propagate` | Labels accumulate on the agent; no filtering |
 
+## TLS Support
+
+The `gh` CLI forces HTTPS when connecting to a custom `GH_HOST`. The `--tls` flag generates a short-lived (24h) self-signed CA and server certificate at startup, enabling direct `gh` CLI integration without an external TLS terminator.
+
+### Generated Files
+
+When `--tls` is enabled, the proxy writes to `--tls-dir` (default: `<log-dir>/proxy-tls/`):
+
+| File | Purpose |
+|------|---------|
+| `ca.crt` | CA certificate — add to client trust store |
+| `server.crt` | Server certificate (localhost, 127.0.0.1, ::1) |
+| `server.key` | Server private key (0600 permissions) |
+
+### Trusting the CA
+
+**gh CLI / Node.js**:
+```bash
+export NODE_EXTRA_CA_CERTS=/tmp/gh-aw/mcp-logs/proxy-tls/ca.crt
+```
+
+**System-wide (Ubuntu)**:
+```bash
+cp /tmp/gh-aw/mcp-logs/proxy-tls/ca.crt /usr/local/share/ca-certificates/mcpg-proxy.crt
+update-ca-certificates
+```
+
+**curl**:
+```bash
+curl --cacert /tmp/gh-aw/mcp-logs/proxy-tls/ca.crt https://localhost:8443/health
+```
+
 ## Known Limitations
 
-- **gh CLI HTTPS requirement**: `gh` forces HTTPS when connecting to `GH_HOST`. The proxy serves plain HTTP, so direct `gh` CLI interception requires a TLS-terminating reverse proxy in front. Use `curl` or `gh api --hostname` with HTTP for testing.
 - **GraphQL nested filtering**: Deeply nested GraphQL response structures depend on guard support for item-level labeling.
 - **Read-only filtering**: Only GET requests and GraphQL POST queries are filtered. Write operations pass through unmodified.

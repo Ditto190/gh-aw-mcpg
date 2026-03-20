@@ -314,9 +314,40 @@ build_command_args() {
     echo "$flags"
 }
 
+# Run proxy mode — lightweight path that skips gateway-specific checks
+# (no Docker socket, no stdin config, no MCP_GATEWAY_PORT/DOMAIN/API_KEY needed)
+run_proxy_mode() {
+    log_info "Starting MCP Gateway in proxy mode..."
+
+    local log_dir="${MCP_GATEWAY_LOG_DIR:-/tmp/gh-aw/mcp-logs}"
+
+    # Build args: insert --log-dir default if not already specified
+    local args=("$@")
+    local has_log_dir=false
+    for arg in "$@"; do
+        if [ "$arg" = "--log-dir" ] || [[ "$arg" == --log-dir=* ]]; then
+            has_log_dir=true
+            break
+        fi
+    done
+    if [ "$has_log_dir" = false ]; then
+        args+=("--log-dir" "$log_dir")
+    fi
+
+    log_info "Command: ./awmg ${args[*]}"
+    exec ./awmg "${args[@]}"
+}
+
 # Main execution
 main() {
     log_info "Starting MCP Gateway in containerized mode..."
+
+    # If first argument is "proxy", use the lightweight proxy path.
+    # Proxy mode doesn't need Docker socket, stdin config, or gateway env vars.
+    if [ "$1" = "proxy" ]; then
+        run_proxy_mode "$@"
+        return
+    fi
 
     # Auto-detect baked-in WASM guards if env var not explicitly set.
     # Setting MCP_GATEWAY_WASM_GUARDS_DIR="" explicitly disables auto-detection.

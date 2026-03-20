@@ -58,7 +58,8 @@ type Config struct {
 	// Policy is the guard policy JSON (e.g. {"allow-only":{...}}).
 	Policy string
 
-	// GitHubToken is the token forwarded to the upstream GitHub API.
+	// GitHubToken is a fallback token for upstream GitHub API requests.
+	// When empty, the proxy forwards the client's Authorization header instead.
 	GitHubToken string
 
 	// GitHubAPIURL overrides the upstream API base URL (default: https://api.github.com).
@@ -72,9 +73,6 @@ type Config struct {
 func New(ctx context.Context, cfg Config) (*Server, error) {
 	if cfg.WasmPath == "" {
 		return nil, fmt.Errorf("guard WASM path is required")
-	}
-	if cfg.GitHubToken == "" {
-		return nil, fmt.Errorf("GitHub token is required")
 	}
 
 	apiURL := cfg.GitHubAPIURL
@@ -195,8 +193,10 @@ func (s *stubBackendCaller) CallTool(_ context.Context, toolName string, _ inter
 	return nil, fmt.Errorf("CallTool not supported in proxy mode")
 }
 
-// forwardToGitHub sends a request to the upstream GitHub API and returns the response body.
-func (s *Server) forwardToGitHub(ctx context.Context, method, path string, body io.Reader, contentType string) (*http.Response, error) {
+// forwardToGitHub sends a request to the upstream GitHub API.
+// clientAuth is the Authorization header from the inbound client request;
+// if non-empty it is forwarded as-is, otherwise the configured fallback token is used.
+func (s *Server) forwardToGitHub(ctx context.Context, method, path string, body io.Reader, contentType string, clientAuth string) (*http.Response, error) {
 	url := s.githubAPIURL + path
 	logProxy.Printf("forwarding %s %s → %s", method, path, url)
 
@@ -205,7 +205,12 @@ func (s *Server) forwardToGitHub(ctx context.Context, method, path string, body 
 		return nil, fmt.Errorf("failed to create upstream request: %w", err)
 	}
 
-	req.Header.Set("Authorization", "token "+s.githubToken)
+	// Prefer the client's own Authorization header; fall back to configured token.
+	if clientAuth != "" {
+		req.Header.Set("Authorization", clientAuth)
+	} else if s.githubToken != "" {
+		req.Header.Set("Authorization", "token "+s.githubToken)
+	}
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("User-Agent", "awmg-proxy/1.0")
 	if contentType != "" {

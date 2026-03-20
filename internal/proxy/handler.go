@@ -142,11 +142,12 @@ func (h *proxyHandler) handleWithDIFC(w http.ResponseWriter, r *http.Request, pa
 	}
 
 	// **Phase 3: Forward to upstream GitHub API**
+	clientAuth := r.Header.Get("Authorization")
 	var resp *http.Response
 	if graphQLBody != nil {
-		resp, err = s.forwardToGitHub(ctx, http.MethodPost, "/graphql", bytes.NewReader(graphQLBody), "application/json")
+		resp, err = s.forwardToGitHub(ctx, http.MethodPost, "/graphql", bytes.NewReader(graphQLBody), "application/json", clientAuth)
 	} else {
-		resp, err = s.forwardToGitHub(ctx, r.Method, path, nil, "")
+		resp, err = s.forwardToGitHub(ctx, r.Method, path, nil, "", clientAuth)
 	}
 	if err != nil {
 		logHandler.Printf("[DIFC] Phase 3 failed: %v", err)
@@ -275,7 +276,7 @@ func (h *proxyHandler) passthrough(w http.ResponseWriter, r *http.Request, path 
 		defer r.Body.Close()
 	}
 
-	resp, err := h.server.forwardToGitHub(r.Context(), r.Method, path, body, r.Header.Get("Content-Type"))
+	resp, err := h.server.forwardToGitHub(r.Context(), r.Method, path, body, r.Header.Get("Content-Type"), r.Header.Get("Authorization"))
 	if err != nil {
 		http.Error(w, "upstream request failed", http.StatusBadGateway)
 		return
