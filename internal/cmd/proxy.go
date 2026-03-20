@@ -87,7 +87,7 @@ Local usage:
 	}
 	cmd.Flags().StringVar(&proxyGuardWasm, "guard-wasm", defaultGuard, guardHelp)
 	cmd.Flags().StringVar(&proxyPolicy, "policy", getDefaultGuardPolicyJSON(), "Guard policy JSON")
-	cmd.Flags().StringVar(&proxyToken, "github-token", os.Getenv("GITHUB_TOKEN"), "GitHub API token")
+	cmd.Flags().StringVar(&proxyToken, "github-token", "", "Fallback GitHub API token (default: forwards client Authorization header)")
 	cmd.Flags().StringVarP(&proxyListen, "listen", "l", "127.0.0.1:8080", "Proxy listen address")
 	cmd.Flags().StringVar(&proxyLogDir, "log-dir", getDefaultLogDir(), "Log file directory")
 	cmd.Flags().StringVar(&proxyDIFCMode, "guards-mode", "filter", "DIFC enforcement mode: strict, filter, propagate")
@@ -117,13 +117,21 @@ func runProxy(cmd *cobra.Command, args []string) error {
 
 	logger.LogInfo("startup", "MCPG Proxy starting: listen=%s, guard=%s, mode=%s, tls=%v", proxyListen, proxyGuardWasm, proxyDIFCMode, proxyTLS)
 
-	// Resolve GitHub token
+	// Resolve GitHub token (optional — proxy forwards client auth by default)
 	token := proxyToken
 	if token == "" {
 		token = os.Getenv("GH_TOKEN")
 	}
 	if token == "" {
+		token = os.Getenv("GITHUB_TOKEN")
+	}
+	if token == "" {
 		token = os.Getenv("GITHUB_PERSONAL_ACCESS_TOKEN")
+	}
+	if token != "" {
+		logger.LogInfo("startup", "Fallback GitHub token configured from flag/env")
+	} else {
+		logger.LogInfo("startup", "No fallback token — proxy will forward client Authorization headers")
 	}
 
 	// Create the proxy server

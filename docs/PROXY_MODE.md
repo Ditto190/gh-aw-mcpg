@@ -64,7 +64,7 @@ Write operations (PUT, POST, DELETE, PATCH) pass through unmodified.
 |------|---------|-------------|
 | `--guard-wasm` | *(auto-detected in container)* | Path to the guard WASM module |
 | `--policy` | | Guard policy JSON (e.g., `{"allow-only":{"repos":["org/repo"]}}`) |
-| `--github-token` | `$GITHUB_TOKEN` | GitHub API token for upstream requests |
+| `--github-token` | *(forwards client auth)* | Fallback GitHub API token for requests without Authorization header |
 | `--listen` / `-l` | `127.0.0.1:8080` | Proxy listen address |
 | `--log-dir` | `/tmp/gh-aw/mcp-logs` | Log file directory |
 | `--guards-mode` | `filter` | DIFC mode: `strict`, `filter`, or `propagate` |
