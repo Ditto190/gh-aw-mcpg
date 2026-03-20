@@ -1680,6 +1680,27 @@ args = ["run", "--rm", "-i", "test/container:latest"]
 	assert.Nil(t, cfg.Gateway.TrustedBots)
 }
 
+func TestLoadFromFile_WithEmptyTrustedBotsToml(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "config.toml")
+
+	tomlContent := `
+[gateway]
+port = 8080
+api_key = "test-key-123"
+trusted_bots = []
+
+[servers.test]
+command = "docker"
+args = ["run", "--rm", "-i", "test/container:latest"]
+`
+
+	err := os.WriteFile(tmpFile, []byte(tomlContent), 0644)
+	require.NoError(t, err)
+
+	_, err = LoadFromFile(tmpFile)
+	require.Error(t, err)
+}
 // TestLoadFromStdin_WithTrustedBots verifies JSON stdin parsing of trustedBots.
 // Covers spec §4.1.3.4 (Trusted Bot Identity Configuration).
 func TestLoadFromStdin_WithTrustedBots(t *testing.T) {
