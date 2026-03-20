@@ -377,8 +377,18 @@ func buildStrictLabelAgentPayload(policy interface{}) (map[string]interface{}, e
 	if !hasIntegrity {
 		integrityRaw, hasIntegrity = allowOnly["integrity"]
 	}
-	if !hasRepos || !hasIntegrity || len(allowOnly) != 2 {
-		return nil, fmt.Errorf("invalid guard policy transport shape: expected {\"allow-only\":{\"repos\":...,\"min-integrity\":...}}")
+	if !hasRepos || !hasIntegrity {
+		return nil, fmt.Errorf("invalid guard policy transport shape: expected {\"allow-only\":{\"repos\":...,\"min-integrity\":...}} with optional fields blocked-users, approval-labels")
+	}
+
+	// Validate that the allow-only object contains only known keys.
+	for k := range allowOnly {
+		switch k {
+		case "repos", "min-integrity", "integrity", "blocked-users", "approval-labels":
+			// valid allow-only keys
+		default:
+			return nil, fmt.Errorf("invalid guard policy transport shape: unexpected allow-only key %q", k)
+		}
 	}
 
 	if !isValidAllowOnlyRepos(reposRaw) {
@@ -394,6 +404,32 @@ func buildStrictLabelAgentPayload(policy interface{}) (map[string]interface{}, e
 	case "none", "unapproved", "approved", "merged":
 	default:
 		return nil, fmt.Errorf("invalid integrity value: expected one of none|unapproved|approved|merged")
+	}
+
+	// Validate blocked-users if present: must be a non-empty array of non-empty strings.
+	if blockedUsersRaw, ok := allowOnly["blocked-users"]; ok {
+		arr, ok := blockedUsersRaw.([]interface{})
+		if !ok {
+			return nil, fmt.Errorf("invalid blocked-users value: expected array of strings")
+		}
+		for _, entry := range arr {
+			if s, ok := entry.(string); !ok || strings.TrimSpace(s) == "" {
+				return nil, fmt.Errorf("invalid blocked-users value: each entry must be a non-empty string")
+			}
+		}
+	}
+
+	// Validate approval-labels if present: must be a non-empty array of non-empty strings.
+	if approvalLabelsRaw, ok := allowOnly["approval-labels"]; ok {
+		arr, ok := approvalLabelsRaw.([]interface{})
+		if !ok {
+			return nil, fmt.Errorf("invalid approval-labels value: expected array of strings")
+		}
+		for _, entry := range arr {
+			if s, ok := entry.(string); !ok || strings.TrimSpace(s) == "" {
+				return nil, fmt.Errorf("invalid approval-labels value: each entry must be a non-empty string")
+			}
+		}
 	}
 
 	// Validate trusted-bots if present.

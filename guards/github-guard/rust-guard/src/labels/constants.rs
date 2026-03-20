@@ -11,6 +11,8 @@ pub mod label_constants {
     pub const WRITER_PREFIX: &str = "approved:";
     pub const MERGED_PREFIX: &str = "merged:";
     pub const NONE_PREFIX: &str = "none:";
+    pub const BLOCKED_PREFIX: &str = "blocked:";
+    pub const BLOCKED_BASE: &str = "blocked";
     pub const READER_BASE: &str = "unapproved";
     pub const WRITER_BASE: &str = "approved";
     pub const MERGED_BASE: &str = "merged";

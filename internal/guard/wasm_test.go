@@ -502,6 +502,114 @@ func TestBuildStrictLabelAgentPayloadExtended(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "non-empty string")
 	})
+
+	t.Run("valid blocked-users in allow-only succeeds", func(t *testing.T) {
+		policy := map[string]interface{}{
+			"allow-only": map[string]interface{}{
+				"repos":         "public",
+				"min-integrity": "none",
+				"blocked-users": []interface{}{"evil-bot", "untrusted-fork"},
+			},
+		}
+
+		result, err := buildStrictLabelAgentPayload(policy)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		allowOnly := result["allow-only"].(map[string]interface{})
+		assert.Contains(t, allowOnly, "blocked-users")
+	})
+
+	t.Run("valid approval-labels in allow-only succeeds", func(t *testing.T) {
+		policy := map[string]interface{}{
+			"allow-only": map[string]interface{}{
+				"repos":           "public",
+				"min-integrity":   "none",
+				"approval-labels": []interface{}{"approved", "human-reviewed"},
+			},
+		}
+
+		result, err := buildStrictLabelAgentPayload(policy)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		allowOnly := result["allow-only"].(map[string]interface{})
+		assert.Contains(t, allowOnly, "approval-labels")
+	})
+
+	t.Run("blocked-users and approval-labels together with trusted-bots succeeds", func(t *testing.T) {
+		policy := map[string]interface{}{
+			"allow-only": map[string]interface{}{
+				"repos":           "public",
+				"min-integrity":   "approved",
+				"blocked-users":   []interface{}{"bad-actor"},
+				"approval-labels": []interface{}{"approved"},
+			},
+			"trusted-bots": []interface{}{"my-org-bot"},
+		}
+
+		result, err := buildStrictLabelAgentPayload(policy)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Contains(t, result, "allow-only")
+		assert.Contains(t, result, "trusted-bots")
+	})
+
+	t.Run("blocked-users with non-string entry returns error", func(t *testing.T) {
+		policy := map[string]interface{}{
+			"allow-only": map[string]interface{}{
+				"repos":         "public",
+				"min-integrity": "none",
+				"blocked-users": []interface{}{"valid", 42},
+			},
+		}
+
+		_, err := buildStrictLabelAgentPayload(policy)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "blocked-users")
+		assert.Contains(t, err.Error(), "non-empty string")
+	})
+
+	t.Run("blocked-users with empty string entry returns error", func(t *testing.T) {
+		policy := map[string]interface{}{
+			"allow-only": map[string]interface{}{
+				"repos":         "public",
+				"min-integrity": "none",
+				"blocked-users": []interface{}{"valid", ""},
+			},
+		}
+
+		_, err := buildStrictLabelAgentPayload(policy)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "blocked-users")
+	})
+
+	t.Run("approval-labels with non-string entry returns error", func(t *testing.T) {
+		policy := map[string]interface{}{
+			"allow-only": map[string]interface{}{
+				"repos":           "public",
+				"min-integrity":   "none",
+				"approval-labels": []interface{}{"approved", 99},
+			},
+		}
+
+		_, err := buildStrictLabelAgentPayload(policy)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "approval-labels")
+		assert.Contains(t, err.Error(), "non-empty string")
+	})
+
+	t.Run("unknown allow-only key returns error", func(t *testing.T) {
+		policy := map[string]interface{}{
+			"allow-only": map[string]interface{}{
+				"repos":         "public",
+				"min-integrity": "none",
+				"unknown-field": "value",
+			},
+		}
+
+		_, err := buildStrictLabelAgentPayload(policy)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "unexpected allow-only key")
+	})
 }
 
 func TestBuildLabelAgentPayload(t *testing.T) {

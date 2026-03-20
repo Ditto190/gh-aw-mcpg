@@ -39,15 +39,19 @@ type WriteSinkPolicy struct {
 
 // AllowOnlyPolicy configures scope and minimum required integrity.
 type AllowOnlyPolicy struct {
-	Repos        interface{} `toml:"Repos" json:"repos"`
-	MinIntegrity string      `toml:"MinIntegrity" json:"min-integrity"`
+	Repos          interface{} `toml:"Repos" json:"repos"`
+	MinIntegrity   string      `toml:"MinIntegrity" json:"min-integrity"`
+	BlockedUsers   []string    `toml:"BlockedUsers" json:"blocked-users,omitempty"`
+	ApprovalLabels []string    `toml:"ApprovalLabels" json:"approval-labels,omitempty"`
 }
 
 // NormalizedGuardPolicy is a canonical policy representation for caching and observability.
 type NormalizedGuardPolicy struct {
-	ScopeKind    string   `json:"scope_kind"`
-	ScopeValues  []string `json:"scope_values,omitempty"`
-	MinIntegrity string   `json:"min-integrity"`
+	ScopeKind      string   `json:"scope_kind"`
+	ScopeValues    []string `json:"scope_values,omitempty"`
+	MinIntegrity   string   `json:"min-integrity"`
+	BlockedUsers   []string `json:"blocked-users,omitempty"`
+	ApprovalLabels []string `json:"approval-labels,omitempty"`
 }
 
 func (p *GuardPolicy) UnmarshalJSON(data []byte) error {
@@ -120,6 +124,14 @@ func (p *AllowOnlyPolicy) UnmarshalJSON(data []byte) error {
 			if err := json.Unmarshal(value, &p.MinIntegrity); err != nil {
 				return fmt.Errorf("invalid allow-only.min-integrity: %w", err)
 			}
+		case "blocked-users":
+			if err := json.Unmarshal(value, &p.BlockedUsers); err != nil {
+				return fmt.Errorf("invalid allow-only.blocked-users: %w", err)
+			}
+		case "approval-labels":
+			if err := json.Unmarshal(value, &p.ApprovalLabels); err != nil {
+				return fmt.Errorf("invalid allow-only.approval-labels: %w", err)
+			}
 		default:
 			return fmt.Errorf("allow-only contains unsupported field %q", key)
 		}
@@ -137,8 +149,10 @@ func (p *AllowOnlyPolicy) UnmarshalJSON(data []byte) error {
 
 func (p AllowOnlyPolicy) MarshalJSON() ([]byte, error) {
 	type serializedAllowOnly struct {
-		Repos        interface{} `json:"repos"`
-		MinIntegrity string      `json:"min-integrity"`
+		Repos          interface{} `json:"repos"`
+		MinIntegrity   string      `json:"min-integrity"`
+		BlockedUsers   []string    `json:"blocked-users,omitempty"`
+		ApprovalLabels []string    `json:"approval-labels,omitempty"`
 	}
 
 	return json.Marshal(serializedAllowOnly(p))
@@ -277,6 +291,36 @@ func NormalizeGuardPolicy(policy *GuardPolicy) (*NormalizedGuardPolicy, error) {
 	normalized := &NormalizedGuardPolicy{MinIntegrity: integrity}
 
 	logGuardPolicy.Printf("Normalizing guard policy: integrity=%s, reposType=%T", integrity, policy.AllowOnly.Repos)
+
+	// Validate and normalize blocked-users.
+	if len(policy.AllowOnly.BlockedUsers) > 0 {
+		seen := make(map[string]struct{}, len(policy.AllowOnly.BlockedUsers))
+		for _, u := range policy.AllowOnly.BlockedUsers {
+			u = strings.TrimSpace(u)
+			if u == "" {
+				return nil, fmt.Errorf("allow-only.blocked-users entries must not be empty")
+			}
+			if _, exists := seen[u]; !exists {
+				seen[u] = struct{}{}
+				normalized.BlockedUsers = append(normalized.BlockedUsers, u)
+			}
+		}
+	}
+
+	// Validate and normalize approval-labels.
+	if len(policy.AllowOnly.ApprovalLabels) > 0 {
+		seen := make(map[string]struct{}, len(policy.AllowOnly.ApprovalLabels))
+		for _, l := range policy.AllowOnly.ApprovalLabels {
+			l = strings.TrimSpace(l)
+			if l == "" {
+				return nil, fmt.Errorf("allow-only.approval-labels entries must not be empty")
+			}
+			if _, exists := seen[l]; !exists {
+				seen[l] = struct{}{}
+				normalized.ApprovalLabels = append(normalized.ApprovalLabels, l)
+			}
+		}
+	}
 
 	switch scope := policy.AllowOnly.Repos.(type) {
 	case string:
