@@ -29,6 +29,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 	"github.com/github/gh-aw-mcpg/internal/logger"
@@ -263,6 +264,11 @@ func LoadFromFile(path string) (*Config, error) {
 		cfg.Gateway = &GatewayConfig{}
 	}
 
+	// Validate trusted_bots per spec §4.1.3.4: must be non-empty array when present
+	if err := validateTrustedBots(cfg.Gateway.TrustedBots); err != nil {
+		return nil, err
+	}
+
 	// Apply core gateway defaults
 	applyGatewayDefaults(cfg.Gateway)
 
@@ -275,6 +281,23 @@ func LoadFromFile(path string) (*Config, error) {
 
 	logConfig.Printf("Successfully loaded %d servers from TOML file", len(cfg.Servers))
 	return &cfg, nil
+}
+
+// validateTrustedBots checks that the trusted_bots list conforms to spec §4.1.3.4:
+// when present, it must be a non-empty array of non-empty strings.
+func validateTrustedBots(bots []string) error {
+	if bots == nil {
+		return nil
+	}
+	if len(bots) == 0 {
+		return fmt.Errorf("trusted_bots must be a non-empty array when present (spec §4.1.3.4)")
+	}
+	for i, bot := range bots {
+		if strings.TrimSpace(bot) == "" {
+			return fmt.Errorf("trusted_bots[%d] must be a non-empty string", i)
+		}
+	}
+	return nil
 }
 
 // logger for config package
