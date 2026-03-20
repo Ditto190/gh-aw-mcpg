@@ -202,6 +202,7 @@ func fetchAndFixSchema(url string) ([]byte, error) {
 					"items": map[string]interface{}{
 						"type":      "string",
 						"minLength": 1,
+						"pattern":   ".*\\S.*",
 					},
 					"minItems": 1,
 				}
