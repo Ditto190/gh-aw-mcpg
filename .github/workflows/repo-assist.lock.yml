@@ -398,6 +398,45 @@ jobs:
           persist-credentials: false
       - name: Create gh-aw temp directory
         run: bash ${RUNNER_TEMP}/gh-aw/actions/create_gh_aw_tmp_dir.sh
+      - name: Start DIFC proxy for pre-agent gh calls
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PROXY_LOG_DIR=/tmp/gh-aw/proxy-logs
+          mkdir -p "$PROXY_LOG_DIR"
+
+          POLICY='{"allow-only":{"repos":["github/*"],"min-integrity":"merged"}}'
+
+          docker run -d --name awmg-proxy --network host \
+            -e GH_TOKEN \
+            -v "$PROXY_LOG_DIR:$PROXY_LOG_DIR" \
+            ghcr.io/github/gh-aw-mcpg:v0.1.19 proxy \
+              --policy "$POLICY" \
+              --listen 0.0.0.0:18443 \
+              --log-dir "$PROXY_LOG_DIR" \
+              --tls --tls-dir "$PROXY_LOG_DIR/proxy-tls" \
+              --guards-mode filter
+
+          # Wait for proxy to be ready (TLS cert generated and port listening)
+          for i in $(seq 1 30); do
+            if [ -f "$PROXY_LOG_DIR/proxy-tls/ca.crt" ]; then
+              # Add proxy CA to system trust store so gh CLI (Go) trusts it
+              sudo cp "$PROXY_LOG_DIR/proxy-tls/ca.crt" /usr/local/share/ca-certificates/awmg-proxy.crt
+              sudo update-ca-certificates
+              if curl -sf "https://localhost:18443/api/v3/zen" -o /dev/null 2>/dev/null; then
+                echo "DIFC proxy ready on port 18443"
+                # Route all subsequent gh CLI calls through the proxy
+                echo "GH_HOST=localhost:18443" >> "$GITHUB_ENV"
+                break
+              fi
+            fi
+            sleep 1
+          done
+
+          if [ ! -f "$PROXY_LOG_DIR/proxy-tls/ca.crt" ]; then
+            echo "::warning::DIFC proxy failed to start, falling back to direct API access"
+            docker rm -f awmg-proxy 2>/dev/null || true
+          fi
       - name: Configure gh CLI for GitHub Enterprise
         run: bash ${RUNNER_TEMP}/gh-aw/actions/configure_gh_for_ghe.sh
         env:
@@ -850,6 +889,12 @@ jobs:
         with:
           name: activation
           path: /tmp/gh-aw
+      - name: Stop DIFC proxy
+        run: |
+          docker rm -f awmg-proxy 2>/dev/null || true
+          # Clear GH_HOST so the agent and awf container use direct API access
+          echo "GH_HOST=" >> "$GITHUB_ENV"
+          echo "DIFC proxy stopped"
       - name: Clean git credentials
         continue-on-error: true
         run: bash ${RUNNER_TEMP}/gh-aw/actions/clean_git_credentials.sh
