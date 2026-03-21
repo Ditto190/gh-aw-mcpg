@@ -612,6 +612,236 @@ func TestDocumentationURLConstants(t *testing.T) {
 	assert.True(t, strings.HasPrefix(SchemaURL, "https://"), "SchemaURL should start with https://")
 }
 
+func TestInvalidPattern(t *testing.T) {
+	tests := []struct {
+		name       string
+		fieldName  string
+		value      string
+		jsonPath   string
+		suggestion string
+		wantSubstr []string
+	}{
+		{
+			name:       "container field does not match pattern",
+			fieldName:  "container",
+			value:      "invalid image",
+			jsonPath:   "mcpServers.github",
+			suggestion: "Use a valid container image reference (e.g., 'ghcr.io/owner/image:tag')",
+			wantSubstr: []string{
+				"container",
+				"'invalid image' does not match required pattern",
+				"mcpServers.github",
+			},
+		},
+		{
+			name:       "url field does not match pattern",
+			fieldName:  "url",
+			value:      "not-a-url",
+			jsonPath:   "mcpServers.http-server",
+			suggestion: "Use a valid URL starting with http:// or https://",
+			wantSubstr: []string{
+				"url",
+				"'not-a-url' does not match required pattern",
+				"mcpServers.http-server",
+			},
+		},
+		{
+			name:       "mounts field does not match pattern",
+			fieldName:  "mounts",
+			value:      "bad:mount",
+			jsonPath:   "mcpServers.myserver.mounts[0]",
+			suggestion: "Use format 'source:dest:mode'",
+			wantSubstr: []string{
+				"mounts",
+				"'bad:mount' does not match required pattern",
+				"mcpServers.myserver.mounts[0]",
+			},
+		},
+		{
+			name:       "empty value does not match pattern",
+			fieldName:  "container",
+			value:      "",
+			jsonPath:   "mcpServers.empty",
+			suggestion: "Provide a non-empty container image",
+			wantSubstr: []string{
+				"container",
+				"'' does not match required pattern",
+				"mcpServers.empty",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := InvalidPattern(tt.fieldName, tt.value, tt.jsonPath, tt.suggestion)
+
+			require.NotNil(t, err, "Expected validation error but got none")
+			assert.Equal(t, tt.fieldName, err.Field, "Field should match")
+			assert.Contains(t, err.Message, tt.fieldName, "Message should contain field name")
+			assert.Contains(t, err.Message, tt.value, "Message should contain the invalid value")
+			assert.Equal(t, tt.jsonPath, err.JSONPath, "JSONPath should match")
+			assert.Equal(t, tt.suggestion, err.Suggestion, "Suggestion should match")
+
+			errStr := err.Error()
+			for _, substr := range tt.wantSubstr {
+				assert.Contains(t, errStr, substr, "Error string should contain expected substring")
+			}
+		})
+	}
+}
+
+func TestInvalidValue(t *testing.T) {
+	tests := []struct {
+		name       string
+		fieldName  string
+		message    string
+		jsonPath   string
+		suggestion string
+		wantSubstr []string
+	}{
+		{
+			name:       "entrypoint cannot be empty or whitespace",
+			fieldName:  "entrypoint",
+			message:    "entrypoint cannot be empty or whitespace only",
+			jsonPath:   "mcpServers.github",
+			suggestion: "Provide a non-empty entrypoint command",
+			wantSubstr: []string{
+				"entrypoint",
+				"entrypoint cannot be empty or whitespace only",
+				"mcpServers.github",
+			},
+		},
+		{
+			name:       "domain contains invalid characters",
+			fieldName:  "domain",
+			message:    "domain 'my domain' contains spaces which are not allowed",
+			jsonPath:   "gateway.domain",
+			suggestion: "Use a valid hostname without spaces",
+			wantSubstr: []string{
+				"domain",
+				"contains spaces",
+				"gateway.domain",
+			},
+		},
+		{
+			name:       "customSchemas type constraint",
+			fieldName:  "customSchemas.mytype",
+			message:    "type 'mytype' must not shadow built-in types",
+			jsonPath:   "customSchemas.mytype",
+			suggestion: "Use a different type name that does not conflict with built-in types",
+			wantSubstr: []string{
+				"customSchemas.mytype",
+				"must not shadow",
+				"customSchemas.mytype",
+			},
+		},
+		{
+			name:       "empty message",
+			fieldName:  "field",
+			message:    "",
+			jsonPath:   "gateway.field",
+			suggestion: "",
+			wantSubstr: []string{
+				"gateway.field",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := InvalidValue(tt.fieldName, tt.message, tt.jsonPath, tt.suggestion)
+
+			require.NotNil(t, err, "Expected validation error but got none")
+			assert.Equal(t, tt.fieldName, err.Field, "Field should match")
+			assert.Equal(t, tt.message, err.Message, "Message should match exactly")
+			assert.Equal(t, tt.jsonPath, err.JSONPath, "JSONPath should match")
+			assert.Equal(t, tt.suggestion, err.Suggestion, "Suggestion should match")
+
+			errStr := err.Error()
+			for _, substr := range tt.wantSubstr {
+				assert.Contains(t, errStr, substr, "Error string should contain expected substring")
+			}
+		})
+	}
+}
+
+func TestSchemaValidationError(t *testing.T) {
+	tests := []struct {
+		name       string
+		serverType string
+		message    string
+		jsonPath   string
+		suggestion string
+		wantSubstr []string
+	}{
+		{
+			name:       "schema fetch failure for stdio type",
+			serverType: "stdio",
+			message:    "failed to fetch custom schema",
+			jsonPath:   "mcpServers.github",
+			suggestion: "Check network connectivity or specify a local schema",
+			wantSubstr: []string{
+				"failed to fetch custom schema",
+				"for server type 'stdio'",
+				"mcpServers.github",
+			},
+		},
+		{
+			name:       "schema parse failure for http type",
+			serverType: "http",
+			message:    "failed to parse JSON schema",
+			jsonPath:   "mcpServers.api-server",
+			suggestion: "Ensure the schema is valid JSON Schema",
+			wantSubstr: []string{
+				"failed to parse JSON schema",
+				"for server type 'http'",
+				"mcpServers.api-server",
+			},
+		},
+		{
+			name:       "schema validation failure",
+			serverType: "local",
+			message:    "server configuration does not match schema",
+			jsonPath:   "mcpServers.local-server",
+			suggestion: "Review the server configuration against the schema",
+			wantSubstr: []string{
+				"does not match schema",
+				"for server type 'local'",
+				"mcpServers.local-server",
+			},
+		},
+		{
+			name:       "field is always type",
+			serverType: "stdio",
+			message:    "schema mismatch",
+			jsonPath:   "mcpServers.test",
+			suggestion: "",
+			wantSubstr: []string{
+				"schema mismatch for server type 'stdio'",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := SchemaValidationError(tt.serverType, tt.message, tt.jsonPath, tt.suggestion)
+
+			require.NotNil(t, err, "Expected validation error but got none")
+			// SchemaValidationError always sets Field to "type"
+			assert.Equal(t, "type", err.Field, "Field should always be 'type'")
+			assert.Contains(t, err.Message, tt.message, "Message should contain the provided message")
+			assert.Contains(t, err.Message, tt.serverType, "Message should contain the server type")
+			assert.Equal(t, tt.jsonPath, err.JSONPath, "JSONPath should match")
+			assert.Equal(t, tt.suggestion, err.Suggestion, "Suggestion should match")
+
+			errStr := err.Error()
+			for _, substr := range tt.wantSubstr {
+				assert.Contains(t, errStr, substr, "Error string should contain expected substring")
+			}
+		})
+	}
+}
+
 func TestNonEmptyString(t *testing.T) {
 	tests := []struct {
 		name      string
