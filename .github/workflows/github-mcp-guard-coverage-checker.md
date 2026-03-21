@@ -8,7 +8,6 @@ on:
 permissions:
   contents: read
   issues: read
-  pull-requests: read
 
 engine: copilot
 
@@ -37,7 +36,7 @@ tools:
   bash:
     - "*"
 
-timeout-minutes: 20
+timeout-minutes: 30
 strict: true
 ---
 
@@ -57,6 +56,7 @@ You are an AI security auditor that verifies the GitHub guard implementation cov
 Use cache-memory to check:
 - `last_run_date`: ISO date of the last coverage check
 - `known_gaps`: Array of tool/command names already reported as gaps (to avoid duplicate issues)
+- `last_all_gaps`: Array of ALL gap tool/command names found in the previous run (to detect regressions — gaps that were fixed then reappeared)
 - `last_upstream_tools_hash`: A short hash or count of the MCP tool list from the last run (to detect when new tools are added)
 - `last_cli_commands_hash`: A short hash or count of the CLI write-command list from the last run (to detect when new CLI commands are added)
 
@@ -216,9 +216,15 @@ For CLI-only gaps, the fix is to add a new entry to `WRITE_OPERATIONS` (or `READ
 
 Check if any entries in `WRITE_OPERATIONS` or `READ_WRITE_OPERATIONS` are **no longer in the upstream MCP tool list** and also have no equivalent in the CLI write-operations list. These are stale guard entries that should be removed.
 
-### 5.5 Filter known gaps
+### 5.5 Filter known gaps and detect regressions
 
-Remove any gaps that are already in `known_gaps` from the cache (previously reported). Only report **new** gaps discovered since the last run.
+Compare the full set of gaps discovered this run against `known_gaps` from cache:
+
+- **New gaps**: gaps found this run that are NOT in `known_gaps` → these are reportable
+- **Regressions**: gaps that were previously in `known_gaps`, were later fixed (absent in a prior run), but have now reappeared → also reportable. To detect regressions, compare against `last_all_gaps` (the complete gap list from the previous run, stored in cache). Any gap in `known_gaps` but NOT in `last_all_gaps` that reappears this run is a regression.
+- **Persisting gaps**: gaps in both this run and `known_gaps` that were also in `last_all_gaps` → already reported, skip
+
+Only report new gaps and regressions.
 
 ## Step 6: Determine Output
 
@@ -329,6 +335,7 @@ These tools are in `WRITE_OPERATIONS` or `READ_WRITE_OPERATIONS` but no longer a
 After creating the issue (or calling noop), update cache-memory:
 - `last_run_date`: today's ISO date
 - `known_gaps`: add the newly-reported tool/command names to the existing list
+- `last_all_gaps`: the complete list of ALL gaps found this run (not just new ones — this enables regression detection next run)
 - `last_upstream_tools_hash`: total count of upstream MCP tools (as string)
 - `last_cli_commands_hash`: total count of CLI write commands scanned (as string)
 
