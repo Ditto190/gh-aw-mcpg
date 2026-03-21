@@ -417,24 +417,31 @@ jobs:
               --tls --tls-dir "$PROXY_LOG_DIR/proxy-tls" \
               --guards-mode filter
 
-          # Wait for proxy to be ready (TLS cert generated and port listening)
+          # Wait for TLS cert to be generated
+          CA_INSTALLED=false
+          PROXY_READY=false
           for i in $(seq 1 30); do
             if [ -f "$PROXY_LOG_DIR/proxy-tls/ca.crt" ]; then
-              # Add proxy CA to system trust store so gh CLI (Go) trusts it
-              sudo cp "$PROXY_LOG_DIR/proxy-tls/ca.crt" /usr/local/share/ca-certificates/awmg-proxy.crt
-              sudo update-ca-certificates
-              if curl -sf "https://localhost:18443/api/v3/zen" -o /dev/null 2>/dev/null; then
+              # Add proxy CA to system trust store once so gh CLI (Go) trusts it
+              if [ "$CA_INSTALLED" = "false" ]; then
+                sudo cp "$PROXY_LOG_DIR/proxy-tls/ca.crt" /usr/local/share/ca-certificates/awmg-proxy.crt
+                sudo update-ca-certificates
+                CA_INSTALLED=true
+              fi
+              # Health check against proxy's /health endpoint (/api/v3/health after prefix strip)
+              if curl -sf "https://localhost:18443/api/v3/health" -o /dev/null 2>/dev/null; then
                 echo "DIFC proxy ready on port 18443"
-                # Route all subsequent gh CLI calls through the proxy
                 echo "GH_HOST=localhost:18443" >> "$GITHUB_ENV"
+                PROXY_READY=true
                 break
               fi
             fi
             sleep 1
           done
 
-          if [ ! -f "$PROXY_LOG_DIR/proxy-tls/ca.crt" ]; then
+          if [ "$PROXY_READY" = "false" ]; then
             echo "::warning::DIFC proxy failed to start, falling back to direct API access"
+            docker logs awmg-proxy 2>&1 | tail -20 || true
             docker rm -f awmg-proxy 2>/dev/null || true
           fi
       - name: Configure gh CLI for GitHub Enterprise
