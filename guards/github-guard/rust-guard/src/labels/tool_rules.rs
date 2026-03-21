@@ -422,17 +422,17 @@ pub fn apply_tool_labels(
         "list_discussions" | "get_discussion" => {
             // Discussions are user-submitted content, similar to issues.
             // S = inherits from repo visibility
-            // I = private repos get approved; public repos deferred to response labeling
+            // I = approved — treat discussion content as approved at the resource level
             secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
-            integrity = private_writer_integrity(repo_id, repo_private, ctx);
+            integrity = writer_integrity(repo_id, ctx);
         }
 
         "get_discussion_comments" => {
             // Discussion comments are user-submitted, lowest-trust user content.
             // S = inherits from repo visibility
-            // I = private repos get approved; public repos deferred to response labeling
+            // I = approved — treat discussion comments as approved at the resource level
             secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
-            integrity = private_writer_integrity(repo_id, repo_private, ctx);
+            integrity = writer_integrity(repo_id, ctx);
         }
 
         "list_discussion_categories" => {
@@ -450,6 +450,7 @@ pub fn apply_tool_labels(
             // S = private:user (conservative — some gists may be secret)
             // I = reader (user content, no repo-level trust signal)
             secrecy = private_user_label();
+            baseline_scope = "user".to_string();
             integrity = reader_integrity("user", ctx);
         }
 
@@ -469,6 +470,7 @@ pub fn apply_tool_labels(
             // S = private:user
             // I = project:github (GitHub-controlled metadata)
             secrecy = private_user_label();
+            baseline_scope = "github".to_string();
             integrity = project_github_label(ctx);
         }
 
@@ -477,6 +479,7 @@ pub fn apply_tool_labels(
             // S = private:user (org membership is sensitive)
             // I = project:github (GitHub-controlled metadata)
             secrecy = private_user_label();
+            baseline_scope = "github".to_string();
             integrity = project_github_label(ctx);
         }
 
@@ -504,6 +507,7 @@ pub fn apply_tool_labels(
             // S = private:user (personal data)
             // I = project:github (GitHub-controlled metadata)
             secrecy = private_user_label();
+            baseline_scope = "github".to_string();
             integrity = project_github_label(ctx);
         }
 
@@ -513,6 +517,7 @@ pub fn apply_tool_labels(
             // S = public (empty)
             // I = project:github (GitHub-controlled metadata)
             secrecy = vec![];
+            baseline_scope = "github".to_string();
             integrity = project_github_label(ctx);
         }
 
@@ -522,6 +527,7 @@ pub fn apply_tool_labels(
             // S = public (empty) — these are published advisories
             // I = project:github — curated by GitHub security team
             secrecy = vec![];
+            baseline_scope = "github".to_string();
             integrity = project_github_label(ctx);
         }
 

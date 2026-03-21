@@ -1742,11 +1742,10 @@ mod tests {
         let ctx = default_ctx();
         let tool_args = json!({});
 
-        // Pass repo_id = "github" so the baseline scope aligns with project_github_label's "github" scope
         let (secrecy, integrity, _desc) = apply_tool_labels(
             "get_me",
             &tool_args,
-            "github",
+            "",
             vec![],
             vec![],
             String::new(),
@@ -1769,7 +1768,7 @@ mod tests {
         let (secrecy, integrity, _desc) = apply_tool_labels(
             "get_teams",
             &tool_args,
-            "github",
+            "",
             vec![],
             vec![],
             String::new(),
@@ -1792,7 +1791,7 @@ mod tests {
         let (secrecy, integrity, _desc) = apply_tool_labels(
             "get_team_members",
             &tool_args,
-            "github",
+            "",
             vec![],
             vec![],
             String::new(),
@@ -1824,8 +1823,8 @@ mod tests {
 
         // In test mode backend returns None → secrecy stays [] (public assumption)
         assert_eq!(secrecy, vec![] as Vec<String>, "list_discussions secrecy inherits repo visibility");
-        // repo_private = None in tests → private_writer_integrity = [] → ensure_integrity_baseline returns none level
-        assert_eq!(integrity, none_integrity("github/copilot", &ctx), "list_discussions integrity is none-baseline when repo visibility unknown in tests");
+        // writer_integrity is used regardless of repo visibility — approved at resource level
+        assert_eq!(integrity, writer_integrity("github/copilot", &ctx), "list_discussions integrity is approved at resource level");
     }
 
     // -------------------------------------------------------------------------
@@ -1852,7 +1851,7 @@ mod tests {
         );
 
         assert_eq!(secrecy, vec![] as Vec<String>);
-        assert_eq!(integrity, none_integrity("github/copilot", &ctx));
+        assert_eq!(integrity, writer_integrity("github/copilot", &ctx));
     }
 
     // -------------------------------------------------------------------------
@@ -1879,7 +1878,7 @@ mod tests {
         );
 
         assert_eq!(secrecy, vec![] as Vec<String>);
-        assert_eq!(integrity, none_integrity("github/copilot", &ctx));
+        assert_eq!(integrity, writer_integrity("github/copilot", &ctx));
     }
 
     // -------------------------------------------------------------------------
@@ -1914,11 +1913,10 @@ mod tests {
         let ctx = default_ctx();
         let tool_args = json!({ "username": "octocat" });
 
-        // repo_id = "user" aligns with the "user" scope used by reader_integrity("user", ctx)
         let (secrecy, integrity, _desc) = apply_tool_labels(
             "list_gists",
             &tool_args,
-            "user",
+            "",
             vec![],
             vec![],
             String::new(),
@@ -1941,7 +1939,7 @@ mod tests {
         let (secrecy, integrity, _desc) = apply_tool_labels(
             "get_gist",
             &tool_args,
-            "user",
+            "",
             vec![],
             vec![],
             String::new(),
@@ -2132,7 +2130,7 @@ mod tests {
         let (secrecy, integrity, _desc) = apply_tool_labels(
             "list_starred_repositories",
             &tool_args,
-            "github",
+            "",
             vec![],
             vec![],
             String::new(),
@@ -2155,7 +2153,7 @@ mod tests {
         let (secrecy, integrity, _desc) = apply_tool_labels(
             "search_orgs",
             &tool_args,
-            "github",
+            "",
             vec![],
             vec![],
             String::new(),
@@ -2178,7 +2176,7 @@ mod tests {
         let (secrecy, integrity, _desc) = apply_tool_labels(
             "list_global_security_advisories",
             &tool_args,
-            "github",
+            "",
             vec![],
             vec![],
             String::new(),
@@ -2201,7 +2199,7 @@ mod tests {
         let (secrecy, integrity, _desc) = apply_tool_labels(
             "get_global_security_advisory",
             &tool_args,
-            "github",
+            "",
             vec![],
             vec![],
             String::new(),
