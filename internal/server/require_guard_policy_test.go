@@ -131,3 +131,111 @@ func TestRequireGuardPolicyIfGuardEnabled_WithEmptyPolicies(t *testing.T) {
 	// The guard should be downgraded to noop because policies are empty
 	assert.Equal(t, "noop", resultGuard.Name(), "should fallback to noop guard")
 }
+
+// TestRequireGuardPolicyIfGuardEnabled_NilGuard tests the early-return path when
+// the guard itself is nil. No policy lookup occurs; nil is returned immediately.
+func TestRequireGuardPolicyIfGuardEnabled_NilGuard(t *testing.T) {
+	cfg := &config.Config{
+		Servers: map[string]*config.ServerConfig{
+			"github": {Type: "stdio"},
+		},
+	}
+
+	us := &UnifiedServer{cfg: cfg}
+
+	resultGuard, err := us.requireGuardPolicyIfGuardEnabled("github", nil)
+
+	require.NoError(t, err, "nil guard should not produce an error")
+	assert.Nil(t, resultGuard, "nil guard should be returned as-is")
+}
+
+// TestRequireGuardPolicyIfGuardEnabled_NoopGuard tests the early-return path when
+// the guard is already a noop guard. No policy lookup occurs; the noop guard is
+// returned immediately without modification.
+func TestRequireGuardPolicyIfGuardEnabled_NoopGuard(t *testing.T) {
+	cfg := &config.Config{
+		Servers: map[string]*config.ServerConfig{
+			"github": {Type: "stdio"},
+		},
+	}
+
+	us := &UnifiedServer{cfg: cfg}
+	noopG := guard.NewNoopGuard()
+
+	resultGuard, err := us.requireGuardPolicyIfGuardEnabled("github", noopG)
+
+	require.NoError(t, err, "noop guard should not produce an error")
+	require.NotNil(t, resultGuard, "should return a guard")
+	assert.Equal(t, "noop", resultGuard.Name(), "noop guard should be returned as-is")
+}
+
+// TestRequireGuardPolicyIfGuardEnabled_WithValidGlobalPolicy tests that a non-noop
+// guard is kept when a valid global GuardPolicy is configured (policy != nil path).
+func TestRequireGuardPolicyIfGuardEnabled_WithValidGlobalPolicy(t *testing.T) {
+	cfg := &config.Config{
+		Servers: map[string]*config.ServerConfig{
+			"github": {Type: "stdio"},
+		},
+		GuardPolicy: &config.GuardPolicy{
+			AllowOnly: &config.AllowOnlyPolicy{
+				MinIntegrity: "none",
+				Repos:        "public",
+			},
+		},
+	}
+
+	us := &UnifiedServer{cfg: cfg}
+	mockG := &mockGuard{name: "mock-guard"}
+
+	resultGuard, err := us.requireGuardPolicyIfGuardEnabled("github", mockG)
+
+	require.NoError(t, err, "valid global policy should not produce an error")
+	require.NotNil(t, resultGuard, "should return a guard")
+	assert.Equal(t, "mock-guard", resultGuard.Name(), "non-noop guard should be kept when valid policy is present")
+}
+
+// TestRequireGuardPolicyIfGuardEnabled_WithInvalidGlobalPolicy tests that an error
+// is returned when the global GuardPolicy fails validation (error propagation path).
+func TestRequireGuardPolicyIfGuardEnabled_WithInvalidGlobalPolicy(t *testing.T) {
+	cfg := &config.Config{
+		Servers: map[string]*config.ServerConfig{
+			"github": {Type: "stdio"},
+		},
+		GuardPolicy: &config.GuardPolicy{
+			AllowOnly: &config.AllowOnlyPolicy{
+				MinIntegrity: "not-a-valid-level", // fails validation
+				Repos:        "public",
+			},
+		},
+	}
+
+	us := &UnifiedServer{cfg: cfg}
+	mockG := &mockGuard{name: "mock-guard"}
+
+	resultGuard, err := us.requireGuardPolicyIfGuardEnabled("github", mockG)
+
+	require.Error(t, err, "invalid policy should propagate an error")
+	assert.Nil(t, resultGuard, "guard should be nil when policy validation fails")
+	assert.Contains(t, err.Error(), "min-integrity", "error should mention the invalid field")
+}
+
+// TestRequireGuardPolicyIfGuardEnabled_UnknownServerID tests that a non-noop guard
+// is downgraded to noop when the serverID is not present in cfg.Servers
+// (resolveGuardPolicy returns nil policy and the server lookup inside the nil-policy
+// branch also finds no guard-policies entry).
+func TestRequireGuardPolicyIfGuardEnabled_UnknownServerID(t *testing.T) {
+	cfg := &config.Config{
+		Servers: map[string]*config.ServerConfig{
+			"known-server": {Type: "stdio"},
+		},
+	}
+
+	us := &UnifiedServer{cfg: cfg}
+	mockG := &mockGuard{name: "mock-guard"}
+
+	resultGuard, err := us.requireGuardPolicyIfGuardEnabled("unknown-server", mockG)
+
+	require.NoError(t, err, "unknown server should not produce an error")
+	require.NotNil(t, resultGuard, "should return a guard")
+	assert.Equal(t, "noop", resultGuard.Name(), "should fallback to noop for an unknown server ID")
+}
