@@ -1,6 +1,9 @@
 package proxy
 
 import (
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -139,6 +142,52 @@ func TestMatchRoute(t *testing.T) {
 			wantArgs: map[string]interface{}{"owner": "org", "repo": "repo", "name": "bug"},
 		},
 
+		// PR review comments (distinct from PR reviews)
+		{
+			name:     "PR review comments",
+			path:     "/repos/github/gh-aw/pulls/123/comments",
+			wantTool: "pull_request_read",
+			wantArgs: map[string]interface{}{"owner": "github", "repo": "gh-aw", "pullNumber": "123", "method": "get_review_comments"},
+		},
+
+		// Tags via git ref
+		{
+			name:     "get tag via git ref",
+			path:     "/repos/org/repo/git/ref/tags/v1.0.0",
+			wantTool: "get_tag",
+			wantArgs: map[string]interface{}{"owner": "org", "repo": "repo", "tag": "v1.0.0"},
+		},
+
+		// Git trees (file contents)
+		{
+			name:     "git tree contents",
+			path:     "/repos/org/repo/git/trees/main",
+			wantTool: "get_file_contents",
+			wantArgs: map[string]interface{}{"owner": "org", "repo": "repo", "path": "main"},
+		},
+
+		// Labels — list (distinct from the per-label get_label route)
+		{
+			name:     "list labels",
+			path:     "/repos/org/repo/labels",
+			wantTool: "list_labels",
+			wantArgs: map[string]interface{}{"owner": "org", "repo": "repo"},
+		},
+
+		// Actions
+		{
+			name:     "list workflows",
+			path:     "/repos/org/repo/actions/workflows",
+			wantTool: "actions_list",
+			wantArgs: map[string]interface{}{"owner": "org", "repo": "repo", "method": "list_workflows"},
+		},
+		{
+			name:     "list workflow runs",
+			path:     "/repos/org/repo/actions/runs",
+			wantTool: "actions_list",
+			wantArgs: map[string]interface{}{"owner": "org", "repo": "repo", "method": "list_workflow_runs"},
+		},
+
 		// Search
 		{
 			name:     "search code",
@@ -151,6 +200,20 @@ func TestMatchRoute(t *testing.T) {
 			path:     "/search/issues",
 			wantTool: "search_issues",
 			wantArgs: map[string]interface{}{},
+		},
+		{
+			name:     "search repositories",
+			path:     "/search/repositories",
+			wantTool: "search_repositories",
+			wantArgs: map[string]interface{}{},
+		},
+
+		// Generic repo-scoped fallback for unmapped paths
+		{
+			name:     "generic repo fallback",
+			path:     "/repos/org/repo/unknown-endpoint",
+			wantTool: "get_file_contents",
+			wantArgs: map[string]interface{}{"owner": "org", "repo": "repo"},
 		},
 
 		// User — not mapped; unknown paths are blocked (fail closed)
@@ -235,6 +298,16 @@ func TestMatchGraphQL(t *testing.T) {
 			wantTool: "search_issues",
 		},
 		{
+			name:     "projectV2 query",
+			body:     `{"query":"query { organization(login: \"github\") { projectV2(number: 1) { title items { nodes { content { ... on Issue { title } } } } } } }"}`,
+			wantTool: "list_projects",
+		},
+		{
+			name:     "generic repository info query",
+			body:     `{"query":"query { repository(owner: \"org\", name: \"repo\") { description stargazerCount defaultBranchRef { name } } }"}`,
+			wantTool: "get_file_contents",
+		},
+		{
 			name:    "viewer query",
 			body:    `{"query":"query { viewer { login name email } }"}`,
 			wantNil: true,
@@ -308,4 +381,128 @@ func TestIsGraphQLPath(t *testing.T) {
 	assert.True(t, IsGraphQLPath("/api/v3/graphql/"))
 	assert.False(t, IsGraphQLPath("/repos/org/repo"))
 	assert.False(t, IsGraphQLPath("/user"))
+}
+
+// TestWriteEmptyResponse verifies that writeEmptyResponse writes the
+// correct empty sentinel value for each response shape (array, GraphQL
+// object, plain object, and nil/unknown).
+func TestWriteEmptyResponse(t *testing.T) {
+	h := &proxyHandler{server: nil}
+
+	tests := []struct {
+		name         string
+		originalData interface{}
+		wantBody     string
+		wantStatus   int
+	}{
+		{
+			name:         "array data returns empty array",
+			originalData: []interface{}{"a", "b", "c"},
+			wantBody:     "[]",
+			wantStatus:   http.StatusOK,
+		},
+		{
+			name:         "empty array returns empty array",
+			originalData: []interface{}{},
+			wantBody:     "[]",
+			wantStatus:   http.StatusOK,
+		},
+		{
+			name:         "graphql object with data key returns data:null",
+			originalData: map[string]interface{}{"data": map[string]interface{}{"repository": nil}},
+			wantBody:     `{"data":null}`,
+			wantStatus:   http.StatusOK,
+		},
+		{
+			name:         "plain object without data key returns empty object",
+			originalData: map[string]interface{}{"id": 123, "name": "test"},
+			wantBody:     "{}",
+			wantStatus:   http.StatusOK,
+		},
+		{
+			name:         "nil data falls back to empty array",
+			originalData: nil,
+			wantBody:     "[]",
+			wantStatus:   http.StatusOK,
+		},
+		{
+			name:         "preserves upstream status code",
+			originalData: []interface{}{},
+			wantBody:     "[]",
+			wantStatus:   http.StatusPartialContent,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			resp := &http.Response{
+				StatusCode: tt.wantStatus,
+				Header:     make(http.Header),
+			}
+			h.writeEmptyResponse(w, resp, tt.originalData)
+
+			result := w.Result()
+			body, err := io.ReadAll(result.Body)
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantStatus, result.StatusCode)
+			assert.Equal(t, tt.wantBody, string(body))
+			assert.Equal(t, "application/json", result.Header.Get("Content-Type"))
+		})
+	}
+}
+
+// TestCopyResponseHeaders verifies that copyResponseHeaders copies the
+// expected GitHub API rate-limit and pagination headers, and does NOT
+// copy unrelated headers.
+func TestCopyResponseHeaders(t *testing.T) {
+	t.Run("copies rate limit headers", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		resp := &http.Response{Header: http.Header{
+			"X-Ratelimit-Limit":     []string{"60"},
+			"X-Ratelimit-Remaining": []string{"58"},
+			"X-Ratelimit-Reset":     []string{"1609459200"},
+			"X-Ratelimit-Resource":  []string{"core"},
+			"X-Ratelimit-Used":      []string{"2"},
+		}}
+		copyResponseHeaders(w, resp)
+		assert.Equal(t, "60", w.Header().Get("X-Ratelimit-Limit"))
+		assert.Equal(t, "58", w.Header().Get("X-Ratelimit-Remaining"))
+		assert.Equal(t, "1609459200", w.Header().Get("X-Ratelimit-Reset"))
+		assert.Equal(t, "core", w.Header().Get("X-Ratelimit-Resource"))
+		assert.Equal(t, "2", w.Header().Get("X-Ratelimit-Used"))
+	})
+
+	t.Run("copies pagination and request ID headers", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		resp := &http.Response{Header: http.Header{
+			"Link":                 []string{`<https://api.github.com/repos/o/r/issues?page=2>; rel="next"`},
+			"X-Github-Request-Id": []string{"abc-123"},
+		}}
+		copyResponseHeaders(w, resp)
+		assert.Equal(t, `<https://api.github.com/repos/o/r/issues?page=2>; rel="next"`, w.Header().Get("Link"))
+		assert.Equal(t, "abc-123", w.Header().Get("X-Github-Request-Id"))
+	})
+
+	t.Run("absent headers are not written", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		resp := &http.Response{Header: make(http.Header)}
+		copyResponseHeaders(w, resp)
+		assert.Empty(t, w.Header().Get("X-Ratelimit-Limit"))
+		assert.Empty(t, w.Header().Get("Link"))
+		assert.Empty(t, w.Header().Get("X-Github-Request-Id"))
+	})
+
+	t.Run("unrelated headers are not copied", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		resp := &http.Response{Header: http.Header{
+			"Content-Type":    []string{"application/json"},
+			"X-Custom-Header": []string{"secret"},
+			"Authorization":   []string{"token abc"},
+		}}
+		copyResponseHeaders(w, resp)
+		assert.Empty(t, w.Header().Get("Content-Type"))
+		assert.Empty(t, w.Header().Get("X-Custom-Header"))
+		assert.Empty(t, w.Header().Get("Authorization"))
+	})
 }
