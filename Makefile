@@ -301,6 +301,7 @@ help:
 	@echo "  test-all        - Run all tests (unit + integration)"
 	@echo "  test-serena     - Run Serena MCP Server tests (direct connection)"
 	@echo "  test-serena-gateway - Run Serena MCP Server tests (via MCP Gateway)"
+	@echo "  test-container-proxy - Run container proxy integration tests (requires Docker)"
 	@echo "  coverage        - Run unit tests with coverage report"
 	@echo "  test-ci         - Run unit tests with coverage and JSON output for CI"
 	@echo "  format          - Format Go code using gofmt"
