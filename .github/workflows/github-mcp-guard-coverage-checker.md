@@ -1,6 +1,6 @@
 ---
-name: GitHub MCP Guard Coverage Checker
-description: Daily check that compares tools exposed by the official GitHub MCP server and GitHub CLI operations against the guard implementation and creates issues for any coverage gaps.
+name: GitHub Guard Coverage Checker (MCP + CLI)
+description: Daily check that audits the GitHub guard implementation against both the official GitHub MCP server tool list and the GitHub CLI write-command surface, creating issues for any unclassified or unguarded operations.
 on:
   schedule: daily
   workflow_dispatch:
