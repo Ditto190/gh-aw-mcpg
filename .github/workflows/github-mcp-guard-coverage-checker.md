@@ -88,13 +88,13 @@ Or look for tool registration files:
 Use github get_file_contents with owner=github, repo=github-mcp-server, path=pkg/github/tools.go, ref=main
 ```
 
-If those paths don't exist, search the repository structure:
+If those paths don't exist, use `search_code` to locate tool registration patterns directly:
 
 ```
-Use github get_file_contents with owner=github, repo=github-mcp-server, path=., ref=main
+Use github search_code with query=AddTool repo:github/github-mcp-server
 ```
 
-Then read the relevant source files to extract tool function names. In Go MCP servers, tools are typically registered with names like `server.AddTool("tool_name", ...)` or similar patterns.
+This finds all files that contain `AddTool(` calls, which is the standard Go MCP SDK pattern for registering a named tool (e.g. `s.AddTool(mcp.NewTool("tool_name", ...)`). Read the matched files to extract all registered tool names.
 
 ### 2.3 Build the canonical tool list
 
