@@ -55,6 +55,12 @@ pub struct PolicyContext {
     /// of their author_association, just like the built-in trusted first-party bots.
     /// This list is additive and cannot override the built-in trusted bot list.
     pub trusted_bots: Vec<String>,
+    /// Usernames whose content items are always blocked (effective integrity = blocked).
+    /// Blocked items are unconditionally denied regardless of approval labels or min-integrity.
+    pub blocked_users: Vec<String>,
+    /// GitHub label names that promote a content item's effective integrity to "approved"
+    /// when present on the item. Does not override blocked_users.
+    pub approval_labels: Vec<String>,
 }
 
 fn normalize_scope(scope: &str, ctx: &PolicyContext) -> String {
@@ -165,6 +171,62 @@ pub fn none_integrity(scope: &str, ctx: &PolicyContext) -> Vec<String> {
         &normalized_scope,
         label_constants::NONE,
     )]
+}
+
+/// Generate blocked-level integrity tags for a scope.
+///
+/// Items with blocked integrity are unconditionally denied by the DIFC filter
+/// because no agent is ever assigned a "blocked:" tag. This represents the
+/// integrity level for items authored by users in the `blocked-users` list.
+pub fn blocked_integrity(scope: &str, ctx: &PolicyContext) -> Vec<String> {
+    let normalized_scope = normalize_scope(scope, ctx);
+    vec![format_integrity_label(
+        label_constants::BLOCKED_PREFIX,
+        &normalized_scope,
+        label_constants::BLOCKED_BASE,
+    )]
+}
+
+/// Check if a username appears in the configured blocked-users list (case-insensitive).
+pub fn is_blocked_user(username: &str, ctx: &PolicyContext) -> bool {
+    if ctx.blocked_users.is_empty() {
+        return false;
+    }
+    let lower = username.to_lowercase();
+    ctx.blocked_users.iter().any(|u| u.to_lowercase() == lower)
+}
+
+/// Extract GitHub label names from a content item's `labels` array.
+///
+/// Returns the `name` field from each element of the item's `labels` array.
+fn extract_github_label_names<'a>(item: &'a Value) -> Vec<&'a str> {
+    item.get("labels")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|label| label.get("name").and_then(|v| v.as_str()))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Check whether a content item carries at least one label from the configured
+/// `approval-labels` list (case-insensitive comparison).
+pub fn has_approval_label(item: &Value, ctx: &PolicyContext) -> bool {
+    first_matching_approval_label(item, ctx).is_some()
+}
+
+/// Return the first matching approval label name from an item, if any.
+fn first_matching_approval_label<'a>(item: &'a Value, ctx: &PolicyContext) -> Option<&'a str> {
+    if ctx.approval_labels.is_empty() {
+        return None;
+    }
+    let label_names = extract_github_label_names(item);
+    label_names.into_iter().find(|name| {
+        ctx.approval_labels
+            .iter()
+            .any(|al| al.eq_ignore_ascii_case(name))
+    })
 }
 
 pub fn ensure_integrity_baseline(
@@ -771,10 +833,12 @@ pub fn is_default_branch_commit_context(tool_name: &str, sha_or_ref: &str) -> bo
 
 /// Determine integrity level for a pull request
 /// Rules:
+/// - PR authored by a blocked user => blocked-level (unconditional denial)
 /// - merged PR => merged-level
 /// - private repo PR => approved
 /// - public forked PR => unapproved
 /// - public direct PR => approved
+/// - PR with an approval label => at least approved
 pub fn pr_integrity(
     item: &Value,
     repo_full_name: &str,
@@ -782,6 +846,17 @@ pub fn pr_integrity(
     is_forked: Option<bool>,
     ctx: &PolicyContext,
 ) -> Vec<String> {
+    // Step 1: Check if author is in blocked_users — takes precedence over all other rules.
+    let author_login = extract_author_login(item);
+    if !author_login.is_empty() && is_blocked_user(author_login, ctx) {
+        let number = item.get("number").and_then(|v| v.as_u64()).unwrap_or(0);
+        crate::log_info(&format!(
+            "[integrity] pr:{}#{} → blocked (author '{}' in blocked-users)",
+            repo_full_name, number, author_login
+        ));
+        return blocked_integrity(repo_full_name, ctx);
+    }
+
     let mut integrity = author_association_floor(item, repo_full_name, ctx);
 
     // Check if PR is merged (either merged_at field exists or merged boolean is true)
@@ -825,19 +900,49 @@ pub fn pr_integrity(
         );
     }
 
-    ensure_integrity_baseline(repo_full_name, integrity, ctx)
+    let integrity = ensure_integrity_baseline(repo_full_name, integrity, ctx);
+
+    // Step 2: Apply approval-labels promotion — raise to at least approved.
+    if let Some(label) = first_matching_approval_label(item, ctx) {
+        let number = item.get("number").and_then(|v| v.as_u64()).unwrap_or(0);
+        crate::log_info(&format!(
+            "[integrity] pr:{}#{} promoted to approved (label '{}' in approval-labels)",
+            repo_full_name, number, label
+        ));
+        max_integrity(
+            repo_full_name,
+            integrity,
+            writer_integrity(repo_full_name, ctx),
+            ctx,
+        )
+    } else {
+        integrity
+    }
 }
 
 /// Determine integrity level for an issue
 /// Rules:
+/// - Issue authored by a blocked user => blocked-level (unconditional denial)
 /// - private repo issues => approved
 /// - public repo issues => no integrity
+/// - Issue with an approval label => at least approved
 pub fn issue_integrity(
     item: &Value,
     repo_full_name: &str,
     repo_private: bool,
     ctx: &PolicyContext,
 ) -> Vec<String> {
+    // Step 1: Check if author is in blocked_users — takes precedence over all other rules.
+    let author_login = extract_author_login(item);
+    if !author_login.is_empty() && is_blocked_user(author_login, ctx) {
+        let number = item.get("number").and_then(|v| v.as_u64()).unwrap_or(0);
+        crate::log_info(&format!(
+            "[integrity] issue:{}#{} → blocked (author '{}' in blocked-users)",
+            repo_full_name, number, author_login
+        ));
+        return blocked_integrity(repo_full_name, ctx);
+    }
+
     let mut integrity = author_association_floor(item, repo_full_name, ctx);
     if repo_private {
         integrity = max_integrity(
@@ -847,15 +952,36 @@ pub fn issue_integrity(
             ctx,
         );
     }
-    ensure_integrity_baseline(repo_full_name, integrity, ctx)
+    let integrity = ensure_integrity_baseline(repo_full_name, integrity, ctx);
+
+    // Step 2: Apply approval-labels promotion — raise to at least approved.
+    if let Some(label) = first_matching_approval_label(item, ctx) {
+        let number = item.get("number").and_then(|v| v.as_u64()).unwrap_or(0);
+        crate::log_info(&format!(
+            "[integrity] issue:{}#{} promoted to approved (label '{}' in approval-labels)",
+            repo_full_name, number, label
+        ));
+        max_integrity(
+            repo_full_name,
+            integrity,
+            writer_integrity(repo_full_name, ctx),
+            ctx,
+        )
+    } else {
+        integrity
+    }
 }
 
 /// Determine integrity level for a commit.
 ///
 /// Rules:
+/// - Commit authored by a blocked user => blocked-level (unconditional denial)
 /// - Start from author_association floor
 /// - Private repo commits elevate to approved
 /// - Default-branch reachable commits elevate to merged
+///
+/// Note: approval-labels promotion does not apply to commits because GitHub
+/// commits do not carry issue/PR-style labels.
 pub fn commit_integrity(
     item: &Value,
     repo_full_name: &str,
@@ -863,6 +989,18 @@ pub fn commit_integrity(
     is_default_branch: bool,
     ctx: &PolicyContext,
 ) -> Vec<String> {
+    // Step 1: Check if author is in blocked_users — takes precedence over all other rules.
+    let author_login = extract_author_login(item);
+    if !author_login.is_empty() && is_blocked_user(author_login, ctx) {
+        let sha = item.get("sha").and_then(|v| v.as_str()).unwrap_or("unknown");
+        let short_sha = if sha.len() > 8 { &sha[..8] } else { sha };
+        crate::log_info(&format!(
+            "[integrity] commit:{}@{} → blocked (author '{}' in blocked-users)",
+            repo_full_name, short_sha, author_login
+        ));
+        return blocked_integrity(repo_full_name, ctx);
+    }
+
     let mut integrity = author_association_floor(item, repo_full_name, ctx);
 
     if repo_private {

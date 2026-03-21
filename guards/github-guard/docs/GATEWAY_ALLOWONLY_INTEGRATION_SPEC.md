@@ -6,8 +6,10 @@ This document defines the gateway changes required to support:
 
 - Policy-driven DIFC input filtering via `AllowOnly`
 - New required policy field `Integrity`
-- New integrity hierarchy with baseline `none`
+- New integrity hierarchy with baseline `none` and `blocked` level below `none`
 - Guard-side policy initialization via a new `label_agent` interface
+- Blocked-user enforcement via `blocked-users`
+- Label-based integrity promotion via `approval-labels`
 
 It is written as an implementation checklist for gateway and guard integration.
 
@@ -28,6 +30,19 @@ Gateway must accept and pass this policy shape:
 }
 ```
 
+With optional integrity-level management fields:
+
+```json
+{
+  "AllowOnly": {
+    "Repos": "Public",
+    "min-integrity": "approved",
+    "blocked-users": ["external-bot"],
+    "approval-labels": ["approved", "human-reviewed"]
+  }
+}
+```
+
 `AllowOnly.Repos` supports:
 - `"Public"`
 - `{ "owner": "<owner>" }`
@@ -39,9 +54,21 @@ Gateway must accept and pass this policy shape:
 - `Approved`
 - `Merged`
 
+`AllowOnly.blocked-users` (optional, array of strings):
+- GitHub usernames unconditionally blocked regardless of labels or min-integrity.
+- Items from blocked users have effective integrity `blocked` (below `none`) and are always denied.
+- Cannot be overridden by `approval-labels`.
+
+`AllowOnly.approval-labels` (optional, array of strings):
+- GitHub label names that promote an item's effective integrity to at least `approved`.
+- Promotion uses `max(base_integrity, approved)` — never lowers integrity.
+- Does not override `blocked-users`.
+
 ### Integrity order
 
-`Merged > Approveduted > Unapproveduted > none`
+```
+blocked (below none) < none < unapproved < approved < merged
+```
 
 For resource/response labels, `none` is always the baseline:
 - public scope: `none`

@@ -8,8 +8,10 @@ Provide a small, explicit policy surface in workflow frontmatter that can expres
 
 - **Scope filtering** (what repository visibility/scope is allowed)
 - **Integrity floor** (minimum trust level for input content)
+- **Blocked-user enforcement** (unconditionally block content from specific authors)
+- **Label-based promotion** (trust labels applied by reviewers to promote content integrity)
 
-Both controls are used to filter inputs before the agent consumes content.
+All controls are used to filter inputs before the agent consumes content.
 
 ---
 
@@ -20,6 +22,19 @@ Both controls are used to filter inputs before the agent consumes content.
   "AllowOnly": {
     "Repos": "Public",
     "min-integrity": "none"
+  }
+}
+```
+
+With optional integrity-level management fields:
+
+```json
+{
+  "AllowOnly": {
+    "Repos": "Public",
+    "min-integrity": "approved",
+    "blocked-users": ["external-bot", "untrusted-fork"],
+    "approval-labels": ["approved", "human-reviewed"]
   }
 }
 ```
@@ -36,6 +51,36 @@ Both controls are used to filter inputs before the agent consumes content.
   - `Unapproved`
   - `Approved`
   - `Merged`
+
+- `AllowOnly.blocked-users` (optional, array of strings)
+  - GitHub usernames whose content items are **unconditionally blocked**, regardless of labels or min-integrity.
+  - Items from blocked users receive an effective integrity of `blocked` (below `none`), which is always denied by the DIFC filter.
+  - `approval-labels` cannot override a blocked-user exclusion.
+  - An empty array is equivalent to omitting the field.
+
+- `AllowOnly.approval-labels` (optional, array of strings)
+  - GitHub label names that **promote a content item's effective integrity to `approved`** when present on the item.
+  - If the item's computed integrity is already higher than `approved` (e.g. `merged`), it remains unchanged.
+  - Does not override `blocked-users`: blocked authors remain blocked even if they have an approval label.
+  - An empty array is equivalent to omitting the field.
+
+### Integrity Level Hierarchy
+
+```
+blocked (below none) < none < unapproved < approved < merged
+```
+
+### Effective Integrity Computation
+
+```
+1. Start with the item's base integrity level (from GitHub metadata).
+2. IF the item's author is in blocked-users:
+     effective_integrity ← blocked  (item is always denied)
+3. ELSE IF any label on the item is in approval-labels:
+     effective_integrity ← max(base_integrity, approved)
+4. ELSE:
+     effective_integrity ← base_integrity
+```
 
 Rules:
 - `Integrity` is required for all policies.

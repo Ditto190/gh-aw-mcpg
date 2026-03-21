@@ -167,7 +167,121 @@ func TestNormalizeGuardPolicy(t *testing.T) {
 	}
 }
 
-// TestIsValidRepoScope tests all branch paths in isValidRepoScope.
+// TestNormalizeGuardPolicyBlockedAndApproval tests NormalizeGuardPolicy with blocked-users and approval-labels.
+func TestNormalizeGuardPolicyBlockedAndApproval(t *testing.T) {
+	t.Run("blocked-users propagated to normalized policy", func(t *testing.T) {
+		policy := &GuardPolicy{AllowOnly: &AllowOnlyPolicy{
+			Repos:        "public",
+			MinIntegrity: "none",
+			BlockedUsers: []string{"evil-bot", "bad-actor"},
+		}}
+
+		got, err := NormalizeGuardPolicy(policy)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"evil-bot", "bad-actor"}, got.BlockedUsers)
+	})
+
+	t.Run("approval-labels propagated to normalized policy", func(t *testing.T) {
+		policy := &GuardPolicy{AllowOnly: &AllowOnlyPolicy{
+			Repos:          "public",
+			MinIntegrity:   "none",
+			ApprovalLabels: []string{"approved", "human-reviewed"},
+		}}
+
+		got, err := NormalizeGuardPolicy(policy)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"approved", "human-reviewed"}, got.ApprovalLabels)
+	})
+
+	t.Run("blocked-users deduplication", func(t *testing.T) {
+		policy := &GuardPolicy{AllowOnly: &AllowOnlyPolicy{
+			Repos:        "public",
+			MinIntegrity: "none",
+			BlockedUsers: []string{"evil-bot", "evil-bot", "bad-actor"},
+		}}
+
+		got, err := NormalizeGuardPolicy(policy)
+		require.NoError(t, err)
+		assert.Len(t, got.BlockedUsers, 2)
+		assert.Contains(t, got.BlockedUsers, "evil-bot")
+		assert.Contains(t, got.BlockedUsers, "bad-actor")
+	})
+
+	t.Run("blocked-users case-insensitive deduplication", func(t *testing.T) {
+		policy := &GuardPolicy{AllowOnly: &AllowOnlyPolicy{
+			Repos:        "public",
+			MinIntegrity: "none",
+			BlockedUsers: []string{"Evil-Bot", "evil-bot", "EVIL-BOT"},
+		}}
+
+		got, err := NormalizeGuardPolicy(policy)
+		require.NoError(t, err)
+		assert.Len(t, got.BlockedUsers, 1)
+		assert.Equal(t, "Evil-Bot", got.BlockedUsers[0]) // keeps first occurrence
+	})
+
+	t.Run("approval-labels deduplication", func(t *testing.T) {
+		policy := &GuardPolicy{AllowOnly: &AllowOnlyPolicy{
+			Repos:          "public",
+			MinIntegrity:   "none",
+			ApprovalLabels: []string{"approved", "approved", "human-reviewed"},
+		}}
+
+		got, err := NormalizeGuardPolicy(policy)
+		require.NoError(t, err)
+		assert.Len(t, got.ApprovalLabels, 2)
+	})
+
+	t.Run("approval-labels case-insensitive deduplication", func(t *testing.T) {
+		policy := &GuardPolicy{AllowOnly: &AllowOnlyPolicy{
+			Repos:          "public",
+			MinIntegrity:   "none",
+			ApprovalLabels: []string{"Approved", "approved", "APPROVED"},
+		}}
+
+		got, err := NormalizeGuardPolicy(policy)
+		require.NoError(t, err)
+		assert.Len(t, got.ApprovalLabels, 1)
+		assert.Equal(t, "Approved", got.ApprovalLabels[0]) // keeps first occurrence
+	})
+
+	t.Run("empty blocked-users string entry returns error", func(t *testing.T) {
+		policy := &GuardPolicy{AllowOnly: &AllowOnlyPolicy{
+			Repos:        "public",
+			MinIntegrity: "none",
+			BlockedUsers: []string{"valid-bot", ""},
+		}}
+
+		_, err := NormalizeGuardPolicy(policy)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "blocked-users entries must not be empty")
+	})
+
+	t.Run("empty approval-labels string entry returns error", func(t *testing.T) {
+		policy := &GuardPolicy{AllowOnly: &AllowOnlyPolicy{
+			Repos:          "public",
+			MinIntegrity:   "none",
+			ApprovalLabels: []string{"approved", ""},
+		}}
+
+		_, err := NormalizeGuardPolicy(policy)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "approval-labels entries must not be empty")
+	})
+
+	t.Run("empty blocked-users slice results in nil normalized list", func(t *testing.T) {
+		policy := &GuardPolicy{AllowOnly: &AllowOnlyPolicy{
+			Repos:        "public",
+			MinIntegrity: "none",
+			BlockedUsers: []string{},
+		}}
+
+		got, err := NormalizeGuardPolicy(policy)
+		require.NoError(t, err)
+		assert.Empty(t, got.BlockedUsers)
+	})
+}
+
 func TestIsValidRepoScope(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -481,6 +595,43 @@ func TestAllowOnlyPolicyUnmarshalJSON(t *testing.T) {
 				assert.Len(t, repos, 2)
 			},
 		},
+		{
+			name: "blocked-users parsed correctly",
+			json: `{"repos":"public","min-integrity":"none","blocked-users":["evil-bot","bad-actor"]}`,
+			check: func(t *testing.T, p *AllowOnlyPolicy) {
+				assert.Equal(t, []string{"evil-bot", "bad-actor"}, p.BlockedUsers)
+			},
+		},
+		{
+			name: "approval-labels parsed correctly",
+			json: `{"repos":"public","min-integrity":"none","approval-labels":["approved","human-reviewed"]}`,
+			check: func(t *testing.T, p *AllowOnlyPolicy) {
+				assert.Equal(t, []string{"approved", "human-reviewed"}, p.ApprovalLabels)
+			},
+		},
+		{
+			name: "empty blocked-users array is valid",
+			json: `{"repos":"public","min-integrity":"none","blocked-users":[]}`,
+			check: func(t *testing.T, p *AllowOnlyPolicy) {
+				assert.Empty(t, p.BlockedUsers)
+			},
+		},
+		{
+			name: "empty approval-labels array is valid",
+			json: `{"repos":"public","min-integrity":"none","approval-labels":[]}`,
+			check: func(t *testing.T, p *AllowOnlyPolicy) {
+				assert.Empty(t, p.ApprovalLabels)
+			},
+		},
+		{
+			name: "all fields together parse correctly",
+			json: `{"repos":"public","min-integrity":"approved","blocked-users":["bad"],"approval-labels":["ok"]}`,
+			check: func(t *testing.T, p *AllowOnlyPolicy) {
+				assert.Equal(t, "approved", p.MinIntegrity)
+				assert.Equal(t, []string{"bad"}, p.BlockedUsers)
+				assert.Equal(t, []string{"ok"}, p.ApprovalLabels)
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -541,19 +692,54 @@ func TestGuardPolicyMarshalJSON(t *testing.T) {
 
 // TestAllowOnlyPolicyMarshalJSON tests AllowOnlyPolicy serializes with canonical keys.
 func TestAllowOnlyPolicyMarshalJSON(t *testing.T) {
-	policy := AllowOnlyPolicy{
-		Repos:        []interface{}{"myorg/*", "myorg/repo"},
-		MinIntegrity: "approved",
-	}
+	t.Run("basic fields", func(t *testing.T) {
+		policy := AllowOnlyPolicy{
+			Repos:        []interface{}{"myorg/*", "myorg/repo"},
+			MinIntegrity: "approved",
+		}
 
-	data, err := json.Marshal(policy)
-	require.NoError(t, err)
+		data, err := json.Marshal(policy)
+		require.NoError(t, err)
 
-	jsonStr := string(data)
-	assert.Contains(t, jsonStr, `"min-integrity"`)
-	assert.Contains(t, jsonStr, `"approved"`)
-	// Should NOT use legacy "integrity" key
-	assert.NotContains(t, jsonStr, `"integrity":`)
+		jsonStr := string(data)
+		assert.Contains(t, jsonStr, `"min-integrity"`)
+		assert.Contains(t, jsonStr, `"approved"`)
+		// Should NOT use legacy "integrity" key
+		assert.NotContains(t, jsonStr, `"integrity":`)
+	})
+
+	t.Run("blocked-users and approval-labels are included when set", func(t *testing.T) {
+		policy := AllowOnlyPolicy{
+			Repos:          "public",
+			MinIntegrity:   "none",
+			BlockedUsers:   []string{"evil-bot"},
+			ApprovalLabels: []string{"approved", "human-reviewed"},
+		}
+
+		data, err := json.Marshal(policy)
+		require.NoError(t, err)
+
+		jsonStr := string(data)
+		assert.Contains(t, jsonStr, `"blocked-users"`)
+		assert.Contains(t, jsonStr, `"evil-bot"`)
+		assert.Contains(t, jsonStr, `"approval-labels"`)
+		assert.Contains(t, jsonStr, `"approved"`)
+		assert.Contains(t, jsonStr, `"human-reviewed"`)
+	})
+
+	t.Run("nil blocked-users and approval-labels are omitted", func(t *testing.T) {
+		policy := AllowOnlyPolicy{
+			Repos:        "public",
+			MinIntegrity: "none",
+		}
+
+		data, err := json.Marshal(policy)
+		require.NoError(t, err)
+
+		jsonStr := string(data)
+		assert.NotContains(t, jsonStr, `"blocked-users"`)
+		assert.NotContains(t, jsonStr, `"approval-labels"`)
+	})
 }
 
 // TestParseGuardPolicyJSONComprehensive tests ParseGuardPolicyJSON edge cases.

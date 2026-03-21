@@ -42,12 +42,13 @@ pub use constants::MEDIUM_BUFFER_SIZE;
 // re-exported for external modules and tests, not used within mod.rs itself
 #[allow(unused_imports)]
 pub use helpers::{
-    commit_integrity, ensure_integrity_baseline, extract_items_array, extract_number_as_string,
-    extract_repo_from_item, extract_repo_info, extract_repo_info_from_search_query, get_bool_or,
-    get_nested_str, get_str_or, is_bot, issue_integrity, limit_items_with_log, make_item_path,
-    merged_integrity, none_integrity, pr_integrity, private_scope_label, private_user_label,
-    project_github_label, reader_integrity, secret_label, writer_integrity, MinIntegrity,
-    PolicyContext, PolicyScopeEntry, ScopeKind,
+    blocked_integrity, commit_integrity, ensure_integrity_baseline, extract_items_array,
+    extract_number_as_string, extract_repo_from_item, extract_repo_info,
+    extract_repo_info_from_search_query, get_bool_or, get_nested_str, get_str_or, has_approval_label,
+    is_blocked_user, is_bot, issue_integrity, limit_items_with_log, make_item_path, merged_integrity,
+    none_integrity, pr_integrity, private_scope_label, private_user_label, project_github_label,
+    reader_integrity, secret_label, writer_integrity, MinIntegrity, PolicyContext, PolicyScopeEntry,
+    ScopeKind,
 };
 
 // Re-export response labeling functions (wrappers that pass PolicyContext)
@@ -1434,5 +1435,261 @@ mod tests {
         assert_eq!(result.labeled_paths[1].path, "/items/1");
         assert_eq!(result.labeled_paths[0].labels.description, "project-item:issue");
         assert_eq!(result.labeled_paths[1].labels.description, "project-item:draft_issue");
+    }
+
+    // =========================================================================
+    // blocked-users tests
+    // =========================================================================
+
+    fn ctx_with_blocked_users(blocked: Vec<&str>) -> PolicyContext {
+        PolicyContext {
+            blocked_users: blocked.into_iter().map(|s| s.to_string()).collect(),
+            ..Default::default()
+        }
+    }
+
+    fn ctx_with_approval_labels(labels: Vec<&str>) -> PolicyContext {
+        PolicyContext {
+            approval_labels: labels.into_iter().map(|s| s.to_string()).collect(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_is_blocked_user_empty_ctx() {
+        let ctx = default_ctx();
+        assert!(!is_blocked_user("evil-bot", &ctx));
+        assert!(!is_blocked_user("", &ctx));
+    }
+
+    #[test]
+    fn test_is_blocked_user_case_insensitive() {
+        let ctx = ctx_with_blocked_users(vec!["evil-bot", "untrusted-fork"]);
+        assert!(is_blocked_user("evil-bot", &ctx));
+        assert!(is_blocked_user("Evil-Bot", &ctx));
+        assert!(is_blocked_user("EVIL-BOT", &ctx));
+        assert!(is_blocked_user("untrusted-fork", &ctx));
+        assert!(!is_blocked_user("trusted-user", &ctx));
+    }
+
+    #[test]
+    fn test_blocked_integrity_returns_blocked_tag() {
+        let ctx = default_ctx();
+        let scope = "github/copilot";
+        let labels = blocked_integrity(scope, &ctx);
+        assert_eq!(labels.len(), 1);
+        assert_eq!(labels[0], format!("{}{}",
+            label_constants::BLOCKED_PREFIX, scope));
+    }
+
+    #[test]
+    fn test_pr_integrity_blocked_user_overrides_everything() {
+        let repo = "github/copilot";
+        let ctx = ctx_with_blocked_users(vec!["evil-bot"]);
+
+        // Blocked user PR — even if it has trusted association, it's blocked
+        let pr = json!({
+            "user": {"login": "evil-bot"},
+            "author_association": "OWNER",
+            "merged_at": "2024-01-15T10:00:00Z"
+        });
+        assert_eq!(
+            pr_integrity(&pr, repo, false, Some(false), &ctx),
+            blocked_integrity(repo, &ctx)
+        );
+
+        // Non-blocked user PR still works normally
+        let normal_pr = json!({
+            "user": {"login": "trusted-user"},
+            "author_association": "OWNER",
+            "merged": false
+        });
+        assert_eq!(
+            pr_integrity(&normal_pr, repo, false, Some(false), &ctx),
+            writer_integrity(repo, &ctx)
+        );
+    }
+
+    #[test]
+    fn test_issue_integrity_blocked_user() {
+        let repo = "github/copilot";
+        let ctx = ctx_with_blocked_users(vec!["bad-actor"]);
+
+        let issue = json!({
+            "user": {"login": "bad-actor"},
+            "author_association": "OWNER"
+        });
+        assert_eq!(
+            issue_integrity(&issue, repo, false, &ctx),
+            blocked_integrity(repo, &ctx)
+        );
+
+        // Private repo also blocked if user is in blocked list
+        assert_eq!(
+            issue_integrity(&issue, repo, true, &ctx),
+            blocked_integrity(repo, &ctx)
+        );
+    }
+
+    #[test]
+    fn test_commit_integrity_blocked_user() {
+        let repo = "github/copilot";
+        let ctx = ctx_with_blocked_users(vec!["bad-actor"]);
+
+        // Commit via author.login
+        let commit = json!({
+            "author": {"login": "bad-actor"},
+            "author_association": "OWNER"
+        });
+        assert_eq!(
+            commit_integrity(&commit, repo, false, false, &ctx),
+            blocked_integrity(repo, &ctx)
+        );
+
+        // Even default branch commits from blocked users are blocked
+        assert_eq!(
+            commit_integrity(&commit, repo, false, true, &ctx),
+            blocked_integrity(repo, &ctx)
+        );
+    }
+
+    #[test]
+    fn test_blocked_user_not_promoted_by_approval_label() {
+        let repo = "github/copilot";
+        let ctx = PolicyContext {
+            blocked_users: vec!["evil-bot".to_string()],
+            approval_labels: vec!["approved".to_string()],
+            ..Default::default()
+        };
+
+        // Even with an approval label, a blocked user's PR remains blocked
+        let pr = json!({
+            "user": {"login": "evil-bot"},
+            "author_association": "NONE",
+            "merged": false,
+            "labels": [{"name": "approved"}]
+        });
+        assert_eq!(
+            pr_integrity(&pr, repo, false, Some(false), &ctx),
+            blocked_integrity(repo, &ctx)
+        );
+    }
+
+    // =========================================================================
+    // approval-labels tests
+    // =========================================================================
+
+    #[test]
+    fn test_has_approval_label_empty_ctx() {
+        let ctx = default_ctx();
+        let item = json!({"labels": [{"name": "approved"}]});
+        assert!(!has_approval_label(&item, &ctx));
+    }
+
+    #[test]
+    fn test_has_approval_label_no_match() {
+        let ctx = ctx_with_approval_labels(vec!["human-reviewed"]);
+        let item = json!({"labels": [{"name": "needs-work"}]});
+        assert!(!has_approval_label(&item, &ctx));
+    }
+
+    #[test]
+    fn test_has_approval_label_matching() {
+        let ctx = ctx_with_approval_labels(vec!["approved", "human-reviewed"]);
+
+        let item_approved = json!({"labels": [{"name": "approved"}]});
+        assert!(has_approval_label(&item_approved, &ctx));
+
+        let item_reviewed = json!({"labels": [{"name": "human-reviewed"}, {"name": "bug"}]});
+        assert!(has_approval_label(&item_reviewed, &ctx));
+    }
+
+    #[test]
+    fn test_has_approval_label_case_insensitive() {
+        let ctx = ctx_with_approval_labels(vec!["Approved"]);
+        let item = json!({"labels": [{"name": "approved"}]});
+        assert!(has_approval_label(&item, &ctx));
+
+        let item2 = json!({"labels": [{"name": "APPROVED"}]});
+        assert!(has_approval_label(&item2, &ctx));
+    }
+
+    #[test]
+    fn test_has_approval_label_missing_labels_field() {
+        let ctx = ctx_with_approval_labels(vec!["approved"]);
+        let item = json!({"title": "some issue"});
+        assert!(!has_approval_label(&item, &ctx));
+    }
+
+    #[test]
+    fn test_pr_integrity_approval_label_promotes_to_approved() {
+        let repo = "github/copilot";
+        let ctx = ctx_with_approval_labels(vec!["approved"]);
+
+        // Public forked PR normally gets unapproved (reader) integrity
+        let forked_pr = json!({
+            "user": {"login": "external"},
+            "author_association": "NONE",
+            "merged": false,
+            "labels": [{"name": "approved"}]
+        });
+        // With approval label, should be promoted to at least writer (approved)
+        assert_eq!(
+            pr_integrity(&forked_pr, repo, false, Some(true), &ctx),
+            writer_integrity(repo, &ctx)
+        );
+    }
+
+    #[test]
+    fn test_pr_integrity_approval_label_does_not_downgrade_merged() {
+        let repo = "github/copilot";
+        let ctx = ctx_with_approval_labels(vec!["approved"]);
+
+        // Merged PR already at merged-level — approval label should not downgrade it
+        let merged_pr = json!({
+            "user": {"login": "external"},
+            "author_association": "NONE",
+            "merged_at": "2024-01-15T10:00:00Z",
+            "labels": [{"name": "approved"}]
+        });
+        assert_eq!(
+            pr_integrity(&merged_pr, repo, false, Some(false), &ctx),
+            merged_integrity(repo, &ctx)
+        );
+    }
+
+    #[test]
+    fn test_issue_integrity_approval_label_promotes() {
+        let repo = "github/copilot";
+        let ctx = ctx_with_approval_labels(vec!["safe-to-process"]);
+
+        // Public repo issue normally gets none integrity
+        let issue = json!({
+            "user": {"login": "external"},
+            "author_association": "NONE",
+            "labels": [{"name": "safe-to-process"}]
+        });
+        assert_eq!(
+            issue_integrity(&issue, repo, false, &ctx),
+            writer_integrity(repo, &ctx)
+        );
+    }
+
+    #[test]
+    fn test_issue_integrity_already_at_writer_not_affected_by_label() {
+        let repo = "github/copilot";
+        let ctx = ctx_with_approval_labels(vec!["approved"]);
+
+        // Private repo issue already gets writer integrity — approval label does not change it
+        let issue = json!({
+            "user": {"login": "member"},
+            "author_association": "MEMBER",
+            "labels": [{"name": "approved"}]
+        });
+        // Private repo → writer_integrity; approval label → max(writer, writer) = writer
+        assert_eq!(
+            issue_integrity(&issue, repo, true, &ctx),
+            writer_integrity(repo, &ctx)
+        );
     }
 }
