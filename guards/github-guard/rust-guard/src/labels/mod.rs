@@ -20,7 +20,7 @@
 //!
 //! Labels:
 //! - `merged:<repo>` - Reachable from default branch / merged to project history
-//! - `approved:<repo>` - Trusted repository contributor/writer level
+//! - `approved:<repo>` - Trusted repository contributor level
 //! - `unapproved:<repo>` - Lower trust external contribution level
 //! - (none) - Untrusted/external content
 
@@ -42,12 +42,13 @@ pub use constants::MEDIUM_BUFFER_SIZE;
 // re-exported for external modules and tests, not used within mod.rs itself
 #[allow(unused_imports)]
 pub use helpers::{
-    commit_integrity, ensure_integrity_baseline, extract_items_array, extract_number_as_string,
-    extract_repo_from_item, extract_repo_info, extract_repo_info_from_search_query, get_bool_or,
-    get_nested_str, get_str_or, is_bot, issue_integrity, limit_items_with_log, make_item_path,
-    merged_integrity, none_integrity, pr_integrity, private_scope_label, private_user_label,
-    project_github_label, reader_integrity, secret_label, writer_integrity, MinIntegrity,
-    PolicyContext, PolicyScopeEntry, ScopeKind,
+    blocked_integrity, commit_integrity, ensure_integrity_baseline, extract_items_array,
+    extract_number_as_string, extract_repo_from_item, extract_repo_info,
+    extract_repo_info_from_search_query, get_bool_or, get_nested_str, get_str_or, has_approval_label,
+    is_blocked_user, is_bot, issue_integrity, limit_items_with_log, make_item_path, merged_integrity,
+    none_integrity, pr_integrity, private_scope_label, private_user_label, project_github_label,
+    reader_integrity, secret_label, writer_integrity, MinIntegrity, PolicyContext, PolicyScopeEntry,
+    ScopeKind,
 };
 
 // Re-export response labeling functions (wrappers that pass PolicyContext)
@@ -249,6 +250,7 @@ mod tests {
                 scope_repo: Some("github-".to_string()),
                 scope_label: "lpcox/github-*".to_string(),
             }],
+            ..Default::default()
         };
 
         let in_scope = writer_integrity("lpcox/github-guard", &ctx);
@@ -281,6 +283,7 @@ mod tests {
                 scope_repo: Some("github-".to_string()),
                 scope_label: "lpcox/github-*".to_string(),
             }],
+            ..Default::default()
         };
 
         assert_eq!(
@@ -316,6 +319,7 @@ mod tests {
                     scope_label: "lpcox/git*".to_string(),
                 },
             ],
+            ..Default::default()
         };
 
         assert_eq!(
@@ -344,6 +348,7 @@ mod tests {
                 scope_repo: None,
                 scope_label: "public".to_string(),
             }],
+            ..Default::default()
         };
 
         assert_eq!(
@@ -729,15 +734,13 @@ mod tests {
     fn test_issue_integrity() {
         let ctx = default_ctx();
         let repo = "github/copilot";
-        let owner = "github";
-        let repo_name = "copilot";
 
         // Private repo issues get approved integrity
         let bot_issue = json!({
             "user": {"login": "dependabot[bot]"}
         });
         assert_eq!(
-            issue_integrity(&bot_issue, repo, owner, repo_name, true, &ctx),
+            issue_integrity(&bot_issue, repo, true, &ctx),
             writer_integrity(repo, &ctx)
         );
 
@@ -746,7 +749,7 @@ mod tests {
             "user": {"login": "github"}
         });
         assert_eq!(
-            issue_integrity(&owner_issue, repo, owner, repo_name, false, &ctx),
+            issue_integrity(&owner_issue, repo, false, &ctx),
             none_integrity(repo, &ctx)
         );
 
@@ -755,28 +758,21 @@ mod tests {
             "user": {"login": "someone"}
         });
         assert_eq!(
-            issue_integrity(&issue, "", "", "", false, &ctx),
+            issue_integrity(&issue, "", false, &ctx),
             none_integrity("", &ctx)
         );
 
         // Public issue with OWNER association retains approved floor
         let owner_assoc_issue = json!({"author_association": "OWNER"});
         assert_eq!(
-            issue_integrity(&owner_assoc_issue, repo, owner, repo_name, false, &ctx),
+            issue_integrity(&owner_assoc_issue, repo, false, &ctx),
             writer_integrity(repo, &ctx)
         );
 
         // Public issue with CONTRIBUTOR association gets unapproved floor
         let contributor_assoc_issue = json!({"author_association": "CONTRIBUTOR"});
         assert_eq!(
-            issue_integrity(
-                &contributor_assoc_issue,
-                repo,
-                owner,
-                repo_name,
-                false,
-                &ctx
-            ),
+            issue_integrity(&contributor_assoc_issue, repo, false, &ctx),
             reader_integrity(repo, &ctx)
         );
     }
@@ -822,6 +818,290 @@ mod tests {
         assert_eq!(
             commit_integrity(&unknown_commit, repo, true, false, &ctx),
             writer_integrity(repo, &ctx)
+        );
+    }
+
+    #[test]
+    fn test_trusted_first_party_bot_detection() {
+        use super::helpers::is_trusted_first_party_bot;
+
+        // Trusted first-party bots
+        assert!(is_trusted_first_party_bot("dependabot[bot]"));
+        assert!(is_trusted_first_party_bot("github-actions[bot]"));
+        assert!(is_trusted_first_party_bot("github-merge-queue[bot]"));
+        assert!(is_trusted_first_party_bot("copilot"));
+
+        // Case-insensitive
+        assert!(is_trusted_first_party_bot("Dependabot[bot]"));
+        assert!(is_trusted_first_party_bot("GitHub-Actions[bot]"));
+        assert!(is_trusted_first_party_bot("Copilot"));
+
+        // Not trusted (third-party bots)
+        assert!(!is_trusted_first_party_bot("renovate[bot]"));
+        assert!(!is_trusted_first_party_bot("renovate-bot"));
+        assert!(!is_trusted_first_party_bot("codecov[bot]"));
+        assert!(!is_trusted_first_party_bot("snyk-bot"));
+
+        // Not bots
+        assert!(!is_trusted_first_party_bot("octocat"));
+        assert!(!is_trusted_first_party_bot("dependabot"));
+        assert!(!is_trusted_first_party_bot("github-actions"));
+        assert!(!is_trusted_first_party_bot(""));
+    }
+
+    #[test]
+    fn test_trusted_bot_issue_integrity_public_repo() {
+        let ctx = default_ctx();
+        let repo = "github/copilot";
+
+        // Trusted bot issue on public repo gets approved (writer) integrity
+        // even though author_association is NONE
+        let dependabot_issue = json!({
+            "user": {"login": "dependabot[bot]"},
+            "author_association": "NONE"
+        });
+        assert_eq!(
+            issue_integrity(&dependabot_issue, repo, false, &ctx),
+            writer_integrity(repo, &ctx)
+        );
+
+        let actions_issue = json!({
+            "user": {"login": "github-actions[bot]"},
+            "author_association": "NONE"
+        });
+        assert_eq!(
+            issue_integrity(&actions_issue, repo, false, &ctx),
+            writer_integrity(repo, &ctx)
+        );
+
+        let merge_queue_issue = json!({
+            "user": {"login": "github-merge-queue[bot]"}
+        });
+        assert_eq!(
+            issue_integrity(&merge_queue_issue, repo, false, &ctx),
+            writer_integrity(repo, &ctx)
+        );
+
+        let copilot_issue = json!({
+            "user": {"login": "copilot"},
+            "author_association": "NONE"
+        });
+        assert_eq!(
+            issue_integrity(&copilot_issue, repo, false, &ctx),
+            writer_integrity(repo, &ctx)
+        );
+
+        // Non-trusted bot still gets none integrity on public repo
+        let renovate_issue = json!({
+            "user": {"login": "renovate[bot]"},
+            "author_association": "NONE"
+        });
+        assert_eq!(
+            issue_integrity(&renovate_issue, repo, false, &ctx),
+            none_integrity(repo, &ctx)
+        );
+    }
+
+    #[test]
+    fn test_trusted_bot_pr_integrity_public_repo() {
+        let ctx = default_ctx();
+        let repo = "github/copilot";
+
+        // Trusted bot open PR on public repo gets approved (writer) integrity
+        let dependabot_pr = json!({
+            "user": {"login": "dependabot[bot]"},
+            "author_association": "NONE",
+            "merged": false
+        });
+        assert_eq!(
+            pr_integrity(&dependabot_pr, repo, false, Some(false), &ctx),
+            writer_integrity(repo, &ctx)
+        );
+
+        // Trusted bot forked PR still gets at least approved from bot status
+        let actions_forked_pr = json!({
+            "user": {"login": "github-actions[bot]"},
+            "author_association": "NONE",
+            "merged": false
+        });
+        assert_eq!(
+            pr_integrity(&actions_forked_pr, repo, false, Some(true), &ctx),
+            writer_integrity(repo, &ctx)
+        );
+
+        // Trusted bot merged PR gets merged integrity
+        let copilot_merged_pr = json!({
+            "user": {"login": "copilot"},
+            "author_association": "NONE",
+            "merged_at": "2024-01-15T10:00:00Z"
+        });
+        assert_eq!(
+            pr_integrity(&copilot_merged_pr, repo, false, Some(false), &ctx),
+            merged_integrity(repo, &ctx)
+        );
+
+        // Non-trusted bot open forked PR gets reader integrity only
+        let renovate_pr = json!({
+            "user": {"login": "renovate[bot]"},
+            "author_association": "NONE",
+            "merged": false
+        });
+        assert_eq!(
+            pr_integrity(&renovate_pr, repo, false, Some(true), &ctx),
+            reader_integrity(repo, &ctx)
+        );
+    }
+
+    #[test]
+    fn test_trusted_bot_commit_integrity() {
+        let ctx = default_ctx();
+        let repo = "github/copilot";
+
+        // Trusted bot commit on public non-default branch gets approved
+        let bot_commit = json!({
+            "author": {"login": "github-actions[bot]"},
+            "author_association": "NONE"
+        });
+        assert_eq!(
+            commit_integrity(&bot_commit, repo, false, false, &ctx),
+            writer_integrity(repo, &ctx)
+        );
+
+        // Trusted bot commit on default branch gets merged
+        assert_eq!(
+            commit_integrity(&bot_commit, repo, false, true, &ctx),
+            merged_integrity(repo, &ctx)
+        );
+    }
+
+    #[test]
+    fn test_configured_trusted_bot_detection() {
+        use super::helpers::is_configured_trusted_bot;
+
+        let ctx_with_bots = PolicyContext {
+            trusted_bots: vec!["copilot-swe-agent[bot]".to_string(), "my-org-bot".to_string()],
+            ..Default::default()
+        };
+
+        // Configured bots are detected
+        assert!(is_configured_trusted_bot("copilot-swe-agent[bot]", &ctx_with_bots));
+        assert!(is_configured_trusted_bot("my-org-bot", &ctx_with_bots));
+
+        // Case-insensitive
+        assert!(is_configured_trusted_bot("Copilot-SWE-Agent[bot]", &ctx_with_bots));
+        assert!(is_configured_trusted_bot("MY-ORG-BOT", &ctx_with_bots));
+
+        // Bots not in the list are not detected
+        assert!(!is_configured_trusted_bot("other-bot[bot]", &ctx_with_bots));
+        assert!(!is_configured_trusted_bot("dependabot[bot]", &ctx_with_bots));
+
+        // Empty context has no configured trusted bots
+        let empty_ctx = default_ctx();
+        assert!(!is_configured_trusted_bot("copilot-swe-agent[bot]", &empty_ctx));
+        assert!(!is_configured_trusted_bot("", &empty_ctx));
+    }
+
+    #[test]
+    fn test_configured_trusted_bot_issue_integrity() {
+        let repo = "github/copilot";
+
+        let ctx_with_bots = PolicyContext {
+            trusted_bots: vec!["copilot-swe-agent[bot]".to_string()],
+            ..Default::default()
+        };
+
+        // A configured trusted bot issue gets approved (writer) integrity even with NONE association
+        let configured_bot_issue = json!({
+            "user": {"login": "copilot-swe-agent[bot]"},
+            "author_association": "NONE"
+        });
+        assert_eq!(
+            issue_integrity(&configured_bot_issue, repo, false, &ctx_with_bots),
+            writer_integrity(repo, &ctx_with_bots)
+        );
+
+        // Case-insensitive match
+        let upper_bot_issue = json!({
+            "user": {"login": "COPILOT-SWE-AGENT[BOT]"},
+            "author_association": "NONE"
+        });
+        assert_eq!(
+            issue_integrity(&upper_bot_issue, repo, false, &ctx_with_bots),
+            writer_integrity(repo, &ctx_with_bots)
+        );
+
+        // Without trusted_bots in context, the same bot gets none integrity
+        let ctx_without_bots = default_ctx();
+        assert_eq!(
+            issue_integrity(&configured_bot_issue, repo, false, &ctx_without_bots),
+            none_integrity(repo, &ctx_without_bots)
+        );
+    }
+
+    #[test]
+    fn test_configured_trusted_bot_pr_integrity() {
+        let repo = "github/copilot";
+
+        let ctx_with_bots = PolicyContext {
+            trusted_bots: vec!["copilot-swe-agent[bot]".to_string()],
+            ..Default::default()
+        };
+
+        // A configured trusted bot PR gets approved (writer) integrity even with NONE association
+        let configured_bot_pr = json!({
+            "user": {"login": "copilot-swe-agent[bot]"},
+            "author_association": "NONE"
+        });
+        assert_eq!(
+            pr_integrity(&configured_bot_pr, repo, false, None, &ctx_with_bots),
+            writer_integrity(repo, &ctx_with_bots)
+        );
+
+        // Without trusted_bots, the same bot gets none integrity
+        let ctx_without_bots = default_ctx();
+        assert_eq!(
+            pr_integrity(&configured_bot_pr, repo, false, None, &ctx_without_bots),
+            none_integrity(repo, &ctx_without_bots)
+        );
+    }
+
+    #[test]
+    fn test_configured_trusted_bot_combined_with_builtin() {
+        let repo = "github/copilot";
+
+        let ctx_with_bots = PolicyContext {
+            trusted_bots: vec!["my-custom-bot[bot]".to_string()],
+            ..Default::default()
+        };
+
+        // Built-in bot (dependabot) still gets writer integrity
+        let builtin_bot_issue = json!({
+            "user": {"login": "dependabot[bot]"},
+            "author_association": "NONE"
+        });
+        assert_eq!(
+            issue_integrity(&builtin_bot_issue, repo, false, &ctx_with_bots),
+            writer_integrity(repo, &ctx_with_bots)
+        );
+
+        // Configured bot also gets writer integrity
+        let configured_bot_issue = json!({
+            "user": {"login": "my-custom-bot[bot]"},
+            "author_association": "NONE"
+        });
+        assert_eq!(
+            issue_integrity(&configured_bot_issue, repo, false, &ctx_with_bots),
+            writer_integrity(repo, &ctx_with_bots)
+        );
+
+        // Unknown bot still gets none integrity
+        let unknown_bot_issue = json!({
+            "user": {"login": "unknown-bot[bot]"},
+            "author_association": "NONE"
+        });
+        assert_eq!(
+            issue_integrity(&unknown_bot_issue, repo, false, &ctx_with_bots),
+            none_integrity(repo, &ctx_with_bots)
         );
     }
 
@@ -901,5 +1181,515 @@ mod tests {
         let exact: Vec<i32> = (0..100).collect();
         let exact_limited = limit_items_with_log(&exact, "test_tool");
         assert_eq!(exact_limited.len(), 100);
+    }
+
+    // -------------------------------------------------------------------------
+    // GitHub Projects tools — scope alignment (Bug 1) and integrity level (Bug 2)
+    // -------------------------------------------------------------------------
+
+    fn owner_scoped_ctx(owner: &str) -> PolicyContext {
+        PolicyContext {
+            scopes: vec![PolicyScopeEntry {
+                scope_kind: ScopeKind::Owner,
+                scope_owner: Some(owner.to_string()),
+                scope_repo: None,
+                scope_label: owner.to_string(),
+            }],
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_apply_tool_labels_list_projects_unscoped_ctx() {
+        // With default (unscoped) context, owner is still used as scope token.
+        let ctx = default_ctx();
+        let tool_args = json!({ "owner": "github" });
+
+        let (_secrecy, integrity, _desc) = apply_tool_labels(
+            "list_projects",
+            &tool_args,
+            "",
+            vec![],
+            vec![],
+            String::new(),
+            &ctx,
+        );
+
+        // Baseline is approved-level writer_integrity("github", &ctx) → "approved:github"
+        // (normalize_scope falls through to the raw owner when no policy token)
+        assert_eq!(integrity, writer_integrity("github", &ctx));
+    }
+
+    #[test]
+    fn test_apply_tool_labels_list_projects_owner_scoped_ctx() {
+        // With repos: ["github/*"] the scope token is "github".
+        // The resource must carry "none:github" not bare "none" (Bug 1 fix).
+        let ctx = owner_scoped_ctx("github");
+        let tool_args = json!({ "owner": "github" });
+
+        let (_secrecy, integrity, _desc) = apply_tool_labels(
+            "list_projects",
+            &tool_args,
+            "",
+            vec![],
+            vec![],
+            String::new(),
+            &ctx,
+        );
+
+        // All integrity labels should be scoped to "github"
+        assert!(
+            integrity.iter().all(|l| l.ends_with(":github") || l.contains("github")),
+            "Expected all labels scoped to 'github', got: {:?}",
+            integrity
+        );
+        // Approved level must be present (Bug 2 fix)
+        assert!(
+            integrity.contains(&"approved:github".to_string()),
+            "Expected 'approved:github' in {:?}",
+            integrity
+        );
+    }
+
+    #[test]
+    fn test_apply_tool_labels_get_project_integrity() {
+        let ctx = owner_scoped_ctx("myorg");
+        let tool_args = json!({ "owner": "myorg", "project_number": 1 });
+
+        let (_secrecy, integrity, _desc) = apply_tool_labels(
+            "get_project",
+            &tool_args,
+            "",
+            vec![],
+            vec![],
+            String::new(),
+            &ctx,
+        );
+
+        assert!(
+            integrity.contains(&"approved:myorg".to_string()),
+            "Expected 'approved:myorg' in {:?}",
+            integrity
+        );
+    }
+
+    #[test]
+    fn test_apply_tool_labels_list_project_fields_integrity() {
+        let ctx = owner_scoped_ctx("myorg");
+        let tool_args = json!({ "owner": "myorg", "project_number": 1 });
+
+        let (_secrecy, integrity, _desc) = apply_tool_labels(
+            "list_project_fields",
+            &tool_args,
+            "",
+            vec![],
+            vec![],
+            String::new(),
+            &ctx,
+        );
+
+        assert!(
+            integrity.contains(&"approved:myorg".to_string()),
+            "Expected 'approved:myorg' in {:?}",
+            integrity
+        );
+    }
+
+    #[test]
+    fn test_apply_tool_labels_list_project_items_integrity() {
+        let ctx = owner_scoped_ctx("github");
+        let tool_args = json!({ "owner": "github", "project_number": 42 });
+
+        let (_secrecy, integrity, _desc) = apply_tool_labels(
+            "list_project_items",
+            &tool_args,
+            "",
+            vec![],
+            vec![],
+            String::new(),
+            &ctx,
+        );
+
+        assert!(
+            integrity.contains(&"approved:github".to_string()),
+            "Expected 'approved:github' in {:?}",
+            integrity
+        );
+    }
+
+    #[test]
+    fn test_label_response_paths_list_project_items_issue() {
+        // ISSUE items: integrity comes from author_association, secrecy from repo visibility
+        let ctx = default_ctx();
+        let tool_args = json!({ "owner": "github", "project_number": 1 });
+        let response = json!({
+            "items": [
+                {
+                    "type": "ISSUE",
+                    "content": {
+                        "repository_url": "https://api.github.com/repos/github/copilot",
+                        "author_association": "MEMBER"
+                    }
+                }
+            ]
+        });
+
+        let result = label_response_paths("list_project_items", &tool_args, &response, &ctx)
+            .expect("list_project_items should produce path labels");
+
+        assert_eq!(result.labeled_paths.len(), 1);
+        let entry = &result.labeled_paths[0];
+        assert_eq!(entry.labels.description, "project-item:issue");
+        // MEMBER maps to approved integrity
+        assert!(
+            entry.labels.integrity.iter().any(|l| l.starts_with("approved:")),
+            "Expected approved level for MEMBER, got: {:?}",
+            entry.labels.integrity
+        );
+    }
+
+    #[test]
+    fn test_label_response_paths_list_project_items_pull_request() {
+        let ctx = default_ctx();
+        let tool_args = json!({ "owner": "github", "project_number": 1 });
+        let response = json!({
+            "items": [
+                {
+                    "type": "PULL_REQUEST",
+                    "content": {
+                        "repository_url": "https://api.github.com/repos/github/copilot",
+                        "author_association": "CONTRIBUTOR"
+                    }
+                }
+            ]
+        });
+
+        let result = label_response_paths("list_project_items", &tool_args, &response, &ctx)
+            .expect("list_project_items should produce path labels");
+
+        assert_eq!(result.labeled_paths.len(), 1);
+        let entry = &result.labeled_paths[0];
+        assert_eq!(entry.labels.description, "project-item:pull_request");
+        // CONTRIBUTOR maps to unapproved integrity
+        assert!(
+            entry.labels.integrity.iter().any(|l| l.starts_with("unapproved:")),
+            "Expected unapproved level for CONTRIBUTOR, got: {:?}",
+            entry.labels.integrity
+        );
+    }
+
+    #[test]
+    fn test_label_response_paths_list_project_items_draft_issue() {
+        // DRAFT_ISSUE: no repo context; org-scoped approved integrity
+        let ctx = owner_scoped_ctx("github");
+        let tool_args = json!({ "owner": "github", "project_number": 1 });
+        let response = json!({
+            "items": [
+                {
+                    "type": "DRAFT_ISSUE",
+                    "creator": { "login": "some-user" }
+                }
+            ]
+        });
+
+        let result = label_response_paths("list_project_items", &tool_args, &response, &ctx)
+            .expect("list_project_items should produce path labels");
+
+        assert_eq!(result.labeled_paths.len(), 1);
+        let entry = &result.labeled_paths[0];
+        assert_eq!(entry.labels.description, "project-item:draft_issue");
+        assert_eq!(entry.labels.secrecy, vec![] as Vec<String>);
+        assert!(
+            entry.labels.integrity.contains(&"approved:github".to_string()),
+            "Expected 'approved:github' for draft issue, got: {:?}",
+            entry.labels.integrity
+        );
+    }
+
+    #[test]
+    fn test_label_response_paths_list_project_items_mixed() {
+        // Mixed collection: ISSUE + DRAFT_ISSUE
+        let ctx = owner_scoped_ctx("github");
+        let tool_args = json!({ "owner": "github", "project_number": 1 });
+        let response = json!({
+            "items": [
+                {
+                    "type": "ISSUE",
+                    "content": {
+                        "repository_url": "https://api.github.com/repos/github/copilot",
+                        "author_association": "OWNER"
+                    }
+                },
+                {
+                    "type": "DRAFT_ISSUE",
+                    "creator": { "login": "admin" }
+                }
+            ]
+        });
+
+        let result = label_response_paths("list_project_items", &tool_args, &response, &ctx)
+            .expect("list_project_items should produce path labels");
+
+        assert_eq!(result.labeled_paths.len(), 2);
+        assert_eq!(result.labeled_paths[0].path, "/items/0");
+        assert_eq!(result.labeled_paths[1].path, "/items/1");
+        assert_eq!(result.labeled_paths[0].labels.description, "project-item:issue");
+        assert_eq!(result.labeled_paths[1].labels.description, "project-item:draft_issue");
+    }
+
+    // =========================================================================
+    // blocked-users tests
+    // =========================================================================
+
+    fn ctx_with_blocked_users(blocked: Vec<&str>) -> PolicyContext {
+        PolicyContext {
+            blocked_users: blocked.into_iter().map(|s| s.to_string()).collect(),
+            ..Default::default()
+        }
+    }
+
+    fn ctx_with_approval_labels(labels: Vec<&str>) -> PolicyContext {
+        PolicyContext {
+            approval_labels: labels.into_iter().map(|s| s.to_string()).collect(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_is_blocked_user_empty_ctx() {
+        let ctx = default_ctx();
+        assert!(!is_blocked_user("evil-bot", &ctx));
+        assert!(!is_blocked_user("", &ctx));
+    }
+
+    #[test]
+    fn test_is_blocked_user_case_insensitive() {
+        let ctx = ctx_with_blocked_users(vec!["evil-bot", "untrusted-fork"]);
+        assert!(is_blocked_user("evil-bot", &ctx));
+        assert!(is_blocked_user("Evil-Bot", &ctx));
+        assert!(is_blocked_user("EVIL-BOT", &ctx));
+        assert!(is_blocked_user("untrusted-fork", &ctx));
+        assert!(!is_blocked_user("trusted-user", &ctx));
+    }
+
+    #[test]
+    fn test_blocked_integrity_returns_blocked_tag() {
+        let ctx = default_ctx();
+        let scope = "github/copilot";
+        let labels = blocked_integrity(scope, &ctx);
+        assert_eq!(labels.len(), 1);
+        assert_eq!(labels[0], format!("{}{}",
+            label_constants::BLOCKED_PREFIX, scope));
+    }
+
+    #[test]
+    fn test_pr_integrity_blocked_user_overrides_everything() {
+        let repo = "github/copilot";
+        let ctx = ctx_with_blocked_users(vec!["evil-bot"]);
+
+        // Blocked user PR — even if it has trusted association, it's blocked
+        let pr = json!({
+            "user": {"login": "evil-bot"},
+            "author_association": "OWNER",
+            "merged_at": "2024-01-15T10:00:00Z"
+        });
+        assert_eq!(
+            pr_integrity(&pr, repo, false, Some(false), &ctx),
+            blocked_integrity(repo, &ctx)
+        );
+
+        // Non-blocked user PR still works normally
+        let normal_pr = json!({
+            "user": {"login": "trusted-user"},
+            "author_association": "OWNER",
+            "merged": false
+        });
+        assert_eq!(
+            pr_integrity(&normal_pr, repo, false, Some(false), &ctx),
+            writer_integrity(repo, &ctx)
+        );
+    }
+
+    #[test]
+    fn test_issue_integrity_blocked_user() {
+        let repo = "github/copilot";
+        let ctx = ctx_with_blocked_users(vec!["bad-actor"]);
+
+        let issue = json!({
+            "user": {"login": "bad-actor"},
+            "author_association": "OWNER"
+        });
+        assert_eq!(
+            issue_integrity(&issue, repo, false, &ctx),
+            blocked_integrity(repo, &ctx)
+        );
+
+        // Private repo also blocked if user is in blocked list
+        assert_eq!(
+            issue_integrity(&issue, repo, true, &ctx),
+            blocked_integrity(repo, &ctx)
+        );
+    }
+
+    #[test]
+    fn test_commit_integrity_blocked_user() {
+        let repo = "github/copilot";
+        let ctx = ctx_with_blocked_users(vec!["bad-actor"]);
+
+        // Commit via author.login
+        let commit = json!({
+            "author": {"login": "bad-actor"},
+            "author_association": "OWNER"
+        });
+        assert_eq!(
+            commit_integrity(&commit, repo, false, false, &ctx),
+            blocked_integrity(repo, &ctx)
+        );
+
+        // Even default branch commits from blocked users are blocked
+        assert_eq!(
+            commit_integrity(&commit, repo, false, true, &ctx),
+            blocked_integrity(repo, &ctx)
+        );
+    }
+
+    #[test]
+    fn test_blocked_user_not_promoted_by_approval_label() {
+        let repo = "github/copilot";
+        let ctx = PolicyContext {
+            blocked_users: vec!["evil-bot".to_string()],
+            approval_labels: vec!["approved".to_string()],
+            ..Default::default()
+        };
+
+        // Even with an approval label, a blocked user's PR remains blocked
+        let pr = json!({
+            "user": {"login": "evil-bot"},
+            "author_association": "NONE",
+            "merged": false,
+            "labels": [{"name": "approved"}]
+        });
+        assert_eq!(
+            pr_integrity(&pr, repo, false, Some(false), &ctx),
+            blocked_integrity(repo, &ctx)
+        );
+    }
+
+    // =========================================================================
+    // approval-labels tests
+    // =========================================================================
+
+    #[test]
+    fn test_has_approval_label_empty_ctx() {
+        let ctx = default_ctx();
+        let item = json!({"labels": [{"name": "approved"}]});
+        assert!(!has_approval_label(&item, &ctx));
+    }
+
+    #[test]
+    fn test_has_approval_label_no_match() {
+        let ctx = ctx_with_approval_labels(vec!["human-reviewed"]);
+        let item = json!({"labels": [{"name": "needs-work"}]});
+        assert!(!has_approval_label(&item, &ctx));
+    }
+
+    #[test]
+    fn test_has_approval_label_matching() {
+        let ctx = ctx_with_approval_labels(vec!["approved", "human-reviewed"]);
+
+        let item_approved = json!({"labels": [{"name": "approved"}]});
+        assert!(has_approval_label(&item_approved, &ctx));
+
+        let item_reviewed = json!({"labels": [{"name": "human-reviewed"}, {"name": "bug"}]});
+        assert!(has_approval_label(&item_reviewed, &ctx));
+    }
+
+    #[test]
+    fn test_has_approval_label_case_insensitive() {
+        let ctx = ctx_with_approval_labels(vec!["Approved"]);
+        let item = json!({"labels": [{"name": "approved"}]});
+        assert!(has_approval_label(&item, &ctx));
+
+        let item2 = json!({"labels": [{"name": "APPROVED"}]});
+        assert!(has_approval_label(&item2, &ctx));
+    }
+
+    #[test]
+    fn test_has_approval_label_missing_labels_field() {
+        let ctx = ctx_with_approval_labels(vec!["approved"]);
+        let item = json!({"title": "some issue"});
+        assert!(!has_approval_label(&item, &ctx));
+    }
+
+    #[test]
+    fn test_pr_integrity_approval_label_promotes_to_approved() {
+        let repo = "github/copilot";
+        let ctx = ctx_with_approval_labels(vec!["approved"]);
+
+        // Public forked PR normally gets unapproved (reader) integrity
+        let forked_pr = json!({
+            "user": {"login": "external"},
+            "author_association": "NONE",
+            "merged": false,
+            "labels": [{"name": "approved"}]
+        });
+        // With approval label, should be promoted to at least writer (approved)
+        assert_eq!(
+            pr_integrity(&forked_pr, repo, false, Some(true), &ctx),
+            writer_integrity(repo, &ctx)
+        );
+    }
+
+    #[test]
+    fn test_pr_integrity_approval_label_does_not_downgrade_merged() {
+        let repo = "github/copilot";
+        let ctx = ctx_with_approval_labels(vec!["approved"]);
+
+        // Merged PR already at merged-level — approval label should not downgrade it
+        let merged_pr = json!({
+            "user": {"login": "external"},
+            "author_association": "NONE",
+            "merged_at": "2024-01-15T10:00:00Z",
+            "labels": [{"name": "approved"}]
+        });
+        assert_eq!(
+            pr_integrity(&merged_pr, repo, false, Some(false), &ctx),
+            merged_integrity(repo, &ctx)
+        );
+    }
+
+    #[test]
+    fn test_issue_integrity_approval_label_promotes() {
+        let repo = "github/copilot";
+        let ctx = ctx_with_approval_labels(vec!["safe-to-process"]);
+
+        // Public repo issue normally gets none integrity
+        let issue = json!({
+            "user": {"login": "external"},
+            "author_association": "NONE",
+            "labels": [{"name": "safe-to-process"}]
+        });
+        assert_eq!(
+            issue_integrity(&issue, repo, false, &ctx),
+            writer_integrity(repo, &ctx)
+        );
+    }
+
+    #[test]
+    fn test_issue_integrity_already_at_writer_not_affected_by_label() {
+        let repo = "github/copilot";
+        let ctx = ctx_with_approval_labels(vec!["approved"]);
+
+        // Private repo issue already gets writer integrity — approval label does not change it
+        let issue = json!({
+            "user": {"login": "member"},
+            "author_association": "MEMBER",
+            "labels": [{"name": "approved"}]
+        });
+        // Private repo → writer_integrity; approval label → max(writer, writer) = writer
+        assert_eq!(
+            issue_integrity(&issue, repo, true, &ctx),
+            writer_integrity(repo, &ctx)
+        );
     }
 }

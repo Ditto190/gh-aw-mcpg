@@ -48,8 +48,25 @@
           ]
         },
         "min-integrity": {
+          "description": "Minimum integrity level required for a content item to be accessible. Items with effective integrity below this level are blocked.",
           "type": "string",
           "enum": ["none", "unapproved", "approved", "merged"]
+        },
+        "blocked-users": {
+          "description": "GitHub usernames whose content items are unconditionally blocked (effective integrity = blocked, below none). Approval labels cannot override this.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "approval-labels": {
+          "description": "GitHub label names that promote a content item's effective integrity to 'approved' when present. Does not override blocked-users.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
         }
       }
     }

@@ -356,8 +356,15 @@ func buildStrictLabelAgentPayload(policy interface{}) (map[string]interface{}, e
 		return nil, fmt.Errorf("label_agent policy must use top-level allow-only object (received policy.allow-only)")
 	}
 
-	if len(payload) != 1 {
-		return nil, fmt.Errorf("invalid guard policy transport shape: expected {\"allow-only\":{\"repos\":...,\"min-integrity\":...}}")
+	// Validate that the only allowed top-level keys are "allow-only" (or legacy "allowonly")
+	// and the optional "trusted-bots" key.
+	for k := range payload {
+		switch k {
+		case "allow-only", "allowonly", "trusted-bots":
+			// valid top-level keys
+		default:
+			return nil, fmt.Errorf("invalid guard policy transport shape: unexpected key %q", k)
+		}
 	}
 
 	allowOnly, ok := allowOnlyRaw.(map[string]interface{})
@@ -370,8 +377,18 @@ func buildStrictLabelAgentPayload(policy interface{}) (map[string]interface{}, e
 	if !hasIntegrity {
 		integrityRaw, hasIntegrity = allowOnly["integrity"]
 	}
-	if !hasRepos || !hasIntegrity || len(allowOnly) != 2 {
-		return nil, fmt.Errorf("invalid guard policy transport shape: expected {\"allow-only\":{\"repos\":...,\"min-integrity\":...}}")
+	if !hasRepos || !hasIntegrity {
+		return nil, fmt.Errorf("invalid guard policy transport shape: missing required fields repos and/or min-integrity in allow-only object")
+	}
+
+	// Validate that the allow-only object contains only known keys.
+	for k := range allowOnly {
+		switch k {
+		case "repos", "min-integrity", "integrity", "blocked-users", "approval-labels":
+			// valid allow-only keys
+		default:
+			return nil, fmt.Errorf("invalid guard policy transport shape: unexpected allow-only key %q", k)
+		}
 	}
 
 	if !isValidAllowOnlyRepos(reposRaw) {
@@ -389,7 +406,82 @@ func buildStrictLabelAgentPayload(policy interface{}) (map[string]interface{}, e
 		return nil, fmt.Errorf("invalid integrity value: expected one of none|unapproved|approved|merged")
 	}
 
+	// Validate blocked-users if present: must be a non-empty array of non-empty strings.
+	if blockedUsersRaw, ok := allowOnly["blocked-users"]; ok {
+		arr, ok := blockedUsersRaw.([]interface{})
+		if !ok {
+			return nil, fmt.Errorf("invalid blocked-users value: expected array of strings")
+		}
+		for _, entry := range arr {
+			if s, ok := entry.(string); !ok || strings.TrimSpace(s) == "" {
+				return nil, fmt.Errorf("invalid blocked-users value: each entry must be a non-empty string")
+			}
+		}
+	}
+
+	// Validate approval-labels if present: must be a non-empty array of non-empty strings.
+	if approvalLabelsRaw, ok := allowOnly["approval-labels"]; ok {
+		arr, ok := approvalLabelsRaw.([]interface{})
+		if !ok {
+			return nil, fmt.Errorf("invalid approval-labels value: expected array of strings")
+		}
+		for _, entry := range arr {
+			if s, ok := entry.(string); !ok || strings.TrimSpace(s) == "" {
+				return nil, fmt.Errorf("invalid approval-labels value: each entry must be a non-empty string")
+			}
+		}
+	}
+
+	// Validate trusted-bots if present.
+	// Per spec §4.1.3.4: trustedBots MUST be a non-empty array of strings when present.
+	if trustedBotsRaw, hasTrustedBots := payload["trusted-bots"]; hasTrustedBots {
+		trustedBots, ok := trustedBotsRaw.([]interface{})
+		if !ok {
+			return nil, fmt.Errorf("invalid trusted-bots value: expected non-empty array of strings")
+		}
+		if len(trustedBots) == 0 {
+			return nil, fmt.Errorf("invalid trusted-bots value: must be a non-empty array when present")
+		}
+		for _, entry := range trustedBots {
+			if s, ok := entry.(string); !ok || strings.TrimSpace(s) == "" {
+				return nil, fmt.Errorf("invalid trusted-bots value: each entry must be a non-empty string")
+			}
+		}
+	}
+
 	return payload, nil
+}
+
+// BuildLabelAgentPayload constructs the label_agent input payload from the given guard policy
+// and an optional list of additional trusted bot usernames. The trusted bots are merged with
+// the guard's built-in list and cannot remove any built-in entries. If trustedBots is nil or
+// empty, the returned payload contains only the allow-only policy.
+func BuildLabelAgentPayload(policy interface{}, trustedBots []string) interface{} {
+	if len(trustedBots) == 0 {
+		return policy
+	}
+
+	// Marshal the policy to a generic map so we can inject the trusted-bots key
+	// alongside the allow-only policy without altering the policy itself.
+	policyJSON, err := json.Marshal(policy)
+	if err != nil {
+		// If we can't marshal the policy, return it as-is; buildStrictLabelAgentPayload
+		// will surface the error later.
+		return policy
+	}
+
+	var payload map[string]interface{}
+	if err := json.Unmarshal(policyJSON, &payload); err != nil {
+		return policy
+	}
+
+	// Convert []string to []interface{} for JSON compatibility
+	bots := make([]interface{}, len(trustedBots))
+	for i, b := range trustedBots {
+		bots[i] = b
+	}
+	payload["trusted-bots"] = bots
+	return payload
 }
 
 func isValidAllowOnlyRepos(repos interface{}) bool {
@@ -412,6 +504,21 @@ func isValidAllowOnlyRepos(repos interface{}) bool {
 	}
 }
 
+// checkBoolFailure returns a non-nil error if the given raw response map
+// contains field key set to false, extracting the "error" message if present.
+func checkBoolFailure(raw map[string]interface{}, resultJSON []byte, key string) error {
+	val, ok := raw[key].(bool)
+	if !ok || val {
+		return nil // field absent or true — not a failure
+	}
+	if message, msgOK := raw["error"].(string); msgOK && strings.TrimSpace(message) != "" {
+		logWasm.Printf("label_agent response indicated failure: error=%s, response=%s", message, string(resultJSON))
+		return fmt.Errorf("label_agent rejected policy: %s", message)
+	}
+	logWasm.Printf("label_agent response indicated non-success status: response=%s", string(resultJSON))
+	return fmt.Errorf("label_agent returned non-success status")
+}
+
 func parseLabelAgentResponse(resultJSON []byte) (*LabelAgentResult, error) {
 	var raw map[string]interface{}
 	if err := json.Unmarshal(resultJSON, &raw); err != nil {
@@ -419,21 +526,11 @@ func parseLabelAgentResponse(resultJSON []byte) (*LabelAgentResult, error) {
 		return nil, fmt.Errorf("failed to unmarshal label_agent response: %w", err)
 	}
 
-	if success, ok := raw["success"].(bool); ok && !success {
-		if message, msgOK := raw["error"].(string); msgOK && strings.TrimSpace(message) != "" {
-			logWasm.Printf("label_agent response indicated failure: error=%s, response=%s", message, string(resultJSON))
-			return nil, fmt.Errorf("label_agent rejected policy: %s", message)
-		}
-		logWasm.Printf("label_agent response indicated non-success status: response=%s", string(resultJSON))
-		return nil, fmt.Errorf("label_agent returned non-success status")
+	if err := checkBoolFailure(raw, resultJSON, "success"); err != nil {
+		return nil, err
 	}
-	if okValue, ok := raw["ok"].(bool); ok && !okValue {
-		if message, msgOK := raw["error"].(string); msgOK && strings.TrimSpace(message) != "" {
-			logWasm.Printf("label_agent response indicated failure: error=%s, response=%s", message, string(resultJSON))
-			return nil, fmt.Errorf("label_agent rejected policy: %s", message)
-		}
-		logWasm.Printf("label_agent response indicated non-success status: response=%s", string(resultJSON))
-		return nil, fmt.Errorf("label_agent returned non-success status")
+	if err := checkBoolFailure(raw, resultJSON, "ok"); err != nil {
+		return nil, err
 	}
 	if message, ok := raw["error"].(string); ok && strings.TrimSpace(message) != "" {
 		logWasm.Printf("label_agent response contained error field: error=%s, response=%s", message, string(resultJSON))

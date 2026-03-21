@@ -92,11 +92,10 @@ pub fn label_response_items(
 
         // === Pull Requests - label by merged state ===
         "list_pull_requests" | "search_pull_requests" => {
-            let pr_response = extract_mcp_response(response);
             // Handle both array response and {items: [...]} response
-            let items = pr_response
+            let items = actual_response
                 .as_array()
-                .or_else(|| pr_response.get("items").and_then(|v| v.as_array()));
+                .or_else(|| actual_response.get("items").and_then(|v| v.as_array()));
 
             if let Some(items) = items {
                 // Limit items to prevent WASM memory exhaustion
@@ -114,7 +113,7 @@ pub fn label_response_items(
                 };
 
                 for item in items_to_process.iter() {
-                    let number = item.get("number").and_then(|v| v.as_i64()).unwrap_or(0);
+                    let number = extract_resource_number(item, "pr", &arg_repo_full);
 
                     // Get repo info from the PR's base or head
                     let repo_full_name = item
@@ -166,17 +165,16 @@ pub fn label_response_items(
 
         // === Issues - label by author status ===
         "list_issues" | "search_issues" | "get_issue" => {
-            let issue_response = extract_mcp_response(response);
             // Handle single issue or array of issues
-            let all_items: Vec<&Value> = if issue_response.is_array() {
-                issue_response
+            let all_items: Vec<&Value> = if actual_response.is_array() {
+                actual_response
                     .as_array()
                     .map(|arr| arr.iter().collect())
                     .unwrap_or_default()
-            } else if let Some(items_arr) = issue_response.get("items").and_then(|v| v.as_array()) {
+            } else if let Some(items_arr) = actual_response.get("items").and_then(|v| v.as_array()) {
                 items_arr.iter().collect()
-            } else if issue_response.is_object() {
-                vec![&issue_response]
+            } else if actual_response.is_object() {
+                vec![&actual_response]
             } else {
                 Vec::new()
             };
@@ -207,13 +205,10 @@ pub fn label_response_items(
 
                 let repo_private = repo_visibility_private_for_repo_id(&repo_full_name)
                     .unwrap_or(default_repo_private);
-                let repo_owner = repo_full_name.split('/').next().unwrap_or("");
-                let number = item.get("number").and_then(|v| v.as_i64()).unwrap_or(0);
+                let number = extract_resource_number(item, "issue", &repo_full_name);
                 let integrity = issue_integrity(
                     item,
                     &repo_full_name,
-                    repo_owner,
-                    &arg_repo,
                     repo_private,
                     ctx,
                 );
@@ -235,14 +230,13 @@ pub fn label_response_items(
 
         // === File Contents - repo-scoped secrecy ===
         "get_file_contents" => {
-            let file_response = extract_mcp_response(response);
-            let all_items: Vec<&Value> = if file_response.is_array() {
-                file_response
+            let all_items: Vec<&Value> = if actual_response.is_array() {
+                actual_response
                     .as_array()
                     .map(|arr| arr.iter().collect())
                     .unwrap_or_default()
-            } else if file_response.is_object() {
-                vec![&file_response]
+            } else if actual_response.is_object() {
+                vec![&actual_response]
             } else {
                 vec![]
             };
@@ -271,14 +265,13 @@ pub fn label_response_items(
 
         // === Commits - label by branch (default branch = merged) ===
         "list_commits" | "get_commit" => {
-            let commit_response = extract_mcp_response(response);
-            let all_items: Vec<Value> = if commit_response.is_array() {
-                commit_response
+            let all_items: Vec<&Value> = if actual_response.is_array() {
+                actual_response
                     .as_array()
-                    .map(|arr| arr.to_vec())
+                    .map(|arr| arr.iter().collect())
                     .unwrap_or_default()
-            } else if commit_response.is_object() {
-                vec![commit_response]
+            } else if actual_response.is_object() {
+                vec![&actual_response]
             } else {
                 vec![]
             };
@@ -304,7 +297,7 @@ pub fn label_response_items(
             // list_commits-derived SHAs.
             let is_default_branch = is_default_branch_commit_context(tool_name, arg_branch);
 
-            for item in items_limited {
+            for item in items_limited.iter().copied() {
                 let sha = item.get("sha").and_then(|v| v.as_str()).unwrap_or("");
                 let short_sha = if sha.len() > 8 { &sha[..8] } else { sha };
 
@@ -324,14 +317,13 @@ pub fn label_response_items(
 
         // === Gists - label by visibility ===
         "list_gists" | "get_gist" => {
-            let gist_response = extract_mcp_response(response);
-            let all_items: Vec<&Value> = if gist_response.is_array() {
-                gist_response
+            let all_items: Vec<&Value> = if actual_response.is_array() {
+                actual_response
                     .as_array()
                     .map(|arr| arr.iter().collect())
                     .unwrap_or_default()
-            } else if gist_response.is_object() {
-                vec![&gist_response]
+            } else if actual_response.is_object() {
+                vec![&actual_response]
             } else {
                 vec![]
             };
@@ -363,8 +355,7 @@ pub fn label_response_items(
 
         // === Notifications - all are private ===
         "list_notifications" | "get_notification_details" => {
-            let notif_response = extract_mcp_response(response);
-            let items = notif_response.as_array().or_else(|| response.as_array());
+            let items = actual_response.as_array().or_else(|| response.as_array());
 
             if let Some(items) = items {
                 for item in items.iter() {
@@ -383,14 +374,13 @@ pub fn label_response_items(
 
         // === Releases - merged-level integrity (endorsed) ===
         "list_releases" | "get_latest_release" | "get_release_by_tag" => {
-            let release_response = extract_mcp_response(response);
-            let all_items: Vec<&Value> = if release_response.is_array() {
-                release_response
+            let all_items: Vec<&Value> = if actual_response.is_array() {
+                actual_response
                     .as_array()
                     .map(|arr| arr.iter().collect())
                     .unwrap_or_default()
-            } else if release_response.is_object() {
-                vec![&release_response]
+            } else if actual_response.is_object() {
+                vec![&actual_response]
             } else {
                 vec![]
             };

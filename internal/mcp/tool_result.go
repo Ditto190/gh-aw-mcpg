@@ -110,7 +110,7 @@ func ConvertToCallToolResult(data interface{}) (*sdk.CallToolResult, error) {
 func ParseToolArguments(req *sdk.CallToolRequest) (map[string]interface{}, error) {
 	logToolResult.Printf("Parsing arguments for tool: %s", req.Params.Name)
 	var toolArgs map[string]interface{}
-	if req.Params.Arguments != nil {
+	if req.Params != nil && req.Params.Arguments != nil {
 		if err := json.Unmarshal(req.Params.Arguments, &toolArgs); err != nil {
 			return nil, fmt.Errorf("failed to parse arguments: %w", err)
 		}

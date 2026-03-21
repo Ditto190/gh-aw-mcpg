@@ -265,14 +265,17 @@ func TestCollectionLabeledData_ToResult(t *testing.T) {
 func TestFilteredCollectionLabeledData_Overall_EmptyAccessible(t *testing.T) {
 	f := &FilteredCollectionLabeledData{
 		Accessible: []LabeledItem{},
-		Filtered: []LabeledItem{
+		Filtered: []FilteredItemDetail{
 			{
-				Data: "filtered-item",
-				Labels: &LabeledResource{
-					Description: "filtered",
-					Secrecy:     *NewSecrecyLabelWithTags([]Tag{"secret"}),
-					Integrity:   *NewIntegrityLabel(),
+				Item: LabeledItem{
+					Data: "filtered-item",
+					Labels: &LabeledResource{
+						Description: "filtered",
+						Secrecy:     *NewSecrecyLabelWithTags([]Tag{"secret"}),
+						Integrity:   *NewIntegrityLabel(),
+					},
 				},
+				Reason: "test",
 			},
 		},
 		TotalCount:   1,
@@ -292,7 +295,7 @@ func TestFilteredCollectionLabeledData_Overall_WithAccessibleItems(t *testing.T)
 	tests := []struct {
 		name            string
 		accessible      []LabeledItem
-		filtered        []LabeledItem
+		filtered        []FilteredItemDetail
 		expectSecrecy   []Tag
 		expectIntegrity []Tag
 	}{
@@ -308,14 +311,17 @@ func TestFilteredCollectionLabeledData_Overall_WithAccessibleItems(t *testing.T)
 					},
 				},
 			},
-			filtered: []LabeledItem{
+			filtered: []FilteredItemDetail{
 				{
-					Data: "filtered",
-					Labels: &LabeledResource{
-						Description: "filtered-item",
-						Secrecy:     *NewSecrecyLabelWithTags([]Tag{"ultra-secret"}),
-						Integrity:   *NewIntegrityLabelWithTags([]Tag{"high-trust"}),
+					Item: LabeledItem{
+						Data: "filtered",
+						Labels: &LabeledResource{
+							Description: "filtered-item",
+							Secrecy:     *NewSecrecyLabelWithTags([]Tag{"ultra-secret"}),
+							Integrity:   *NewIntegrityLabelWithTags([]Tag{"high-trust"}),
+						},
 					},
+					Reason: "test",
 				},
 			},
 			expectSecrecy:   []Tag{"public"},
@@ -341,7 +347,7 @@ func TestFilteredCollectionLabeledData_Overall_WithAccessibleItems(t *testing.T)
 					},
 				},
 			},
-			filtered:        []LabeledItem{},
+			filtered:        []FilteredItemDetail{},
 			expectSecrecy:   []Tag{"tag-a", "tag-b"},
 			expectIntegrity: []Tag{"int-x"},
 		},
@@ -358,7 +364,7 @@ func TestFilteredCollectionLabeledData_Overall_WithAccessibleItems(t *testing.T)
 					},
 				},
 			},
-			filtered:        []LabeledItem{},
+			filtered:        []FilteredItemDetail{},
 			expectSecrecy:   []Tag{"conf"},
 			expectIntegrity: []Tag{},
 		},
@@ -394,14 +400,14 @@ func TestFilteredCollectionLabeledData_ToResult(t *testing.T) {
 	tests := []struct {
 		name       string
 		accessible []LabeledItem
-		filtered   []LabeledItem
+		filtered   []FilteredItemDetail
 		wantData   []interface{}
 	}{
 		{
 			name:       "empty accessible returns empty slice",
 			accessible: []LabeledItem{},
-			filtered: []LabeledItem{
-				{Data: "filtered", Labels: NewLabeledResource("f")},
+			filtered: []FilteredItemDetail{
+				{Item: LabeledItem{Data: "filtered", Labels: NewLabeledResource("f")}, Reason: "test"},
 			},
 			wantData: []interface{}{},
 		},
@@ -411,8 +417,8 @@ func TestFilteredCollectionLabeledData_ToResult(t *testing.T) {
 				{Data: "visible-1", Labels: NewLabeledResource("a")},
 				{Data: "visible-2", Labels: NewLabeledResource("b")},
 			},
-			filtered: []LabeledItem{
-				{Data: "hidden", Labels: NewLabeledResource("c")},
+			filtered: []FilteredItemDetail{
+				{Item: LabeledItem{Data: "hidden", Labels: NewLabeledResource("c")}, Reason: "test"},
 			},
 			wantData: []interface{}{"visible-1", "visible-2"},
 		},
@@ -423,7 +429,7 @@ func TestFilteredCollectionLabeledData_ToResult(t *testing.T) {
 				{Data: "item-2", Labels: NewLabeledResource("b")},
 				{Data: "item-3", Labels: NewLabeledResource("c")},
 			},
-			filtered: []LabeledItem{},
+			filtered: []FilteredItemDetail{},
 			wantData: []interface{}{"item-1", "item-2", "item-3"},
 		},
 	}
@@ -476,7 +482,7 @@ func TestFilteredCollectionLabeledData_GetAccessibleCount(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			f := &FilteredCollectionLabeledData{
 				Accessible: tt.accessible,
-				Filtered:   []LabeledItem{},
+				Filtered:   []FilteredItemDetail{},
 			}
 			assert.Equal(t, tt.expectedCount, f.GetAccessibleCount())
 		})
@@ -486,20 +492,20 @@ func TestFilteredCollectionLabeledData_GetAccessibleCount(t *testing.T) {
 func TestFilteredCollectionLabeledData_GetFilteredCount(t *testing.T) {
 	tests := []struct {
 		name          string
-		filtered      []LabeledItem
+		filtered      []FilteredItemDetail
 		expectedCount int
 	}{
-		{name: "zero filtered items", filtered: []LabeledItem{}, expectedCount: 0},
+		{name: "zero filtered items", filtered: []FilteredItemDetail{}, expectedCount: 0},
 		{
 			name:          "one filtered item",
-			filtered:      []LabeledItem{{Data: "f", Labels: NewLabeledResource("f")}},
+			filtered:      []FilteredItemDetail{{Item: LabeledItem{Data: "f", Labels: NewLabeledResource("f")}, Reason: "test"}},
 			expectedCount: 1,
 		},
 		{
 			name: "multiple filtered items",
-			filtered: []LabeledItem{
-				{Data: "f1", Labels: NewLabeledResource("f1")},
-				{Data: "f2", Labels: NewLabeledResource("f2")},
+			filtered: []FilteredItemDetail{
+				{Item: LabeledItem{Data: "f1", Labels: NewLabeledResource("f1")}, Reason: "test"},
+				{Item: LabeledItem{Data: "f2", Labels: NewLabeledResource("f2")}, Reason: "test"},
 			},
 			expectedCount: 2,
 		},
@@ -531,22 +537,28 @@ func TestFilteredCollectionLabeledData_Integration(t *testing.T) {
 			},
 		},
 	}
-	filtered := []LabeledItem{
+	filtered := []FilteredItemDetail{
 		{
-			Data: map[string]string{"name": "private-item"},
-			Labels: &LabeledResource{
-				Description: "private",
-				Secrecy:     *NewSecrecyLabelWithTags([]Tag{"private"}),
-				Integrity:   *NewIntegrityLabel(),
+			Item: LabeledItem{
+				Data: map[string]string{"name": "private-item"},
+				Labels: &LabeledResource{
+					Description: "private",
+					Secrecy:     *NewSecrecyLabelWithTags([]Tag{"private"}),
+					Integrity:   *NewIntegrityLabel(),
+				},
 			},
+			Reason: "test",
 		},
 		{
-			Data: map[string]string{"name": "secret-item"},
-			Labels: &LabeledResource{
-				Description: "secret",
-				Secrecy:     *NewSecrecyLabelWithTags([]Tag{"secret"}),
-				Integrity:   *NewIntegrityLabel(),
+			Item: LabeledItem{
+				Data: map[string]string{"name": "secret-item"},
+				Labels: &LabeledResource{
+					Description: "secret",
+					Secrecy:     *NewSecrecyLabelWithTags([]Tag{"secret"}),
+					Integrity:   *NewIntegrityLabel(),
+				},
 			},
+			Reason: "test",
 		},
 	}
 

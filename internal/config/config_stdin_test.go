@@ -969,3 +969,58 @@ func TestIntPtrOrDefault_DefaultIsZero(t *testing.T) {
 	result := intPtrOrDefault(nil, 0)
 	assert.Equal(t, 0, result)
 }
+
+// TestConvertStdinConfig_TrustedBots verifies that trusted bot configuration
+// is correctly parsed from JSON stdin format and propagated to the internal config.
+// Covers spec §4.1.3.4 (Trusted Bot Identity Configuration).
+func TestConvertStdinConfig_TrustedBots(t *testing.T) {
+	t.Run("trustedBots parsed from JSON gateway config", func(t *testing.T) {
+		stdinCfg := &StdinConfig{
+			MCPServers: map[string]*StdinServerConfig{},
+			Gateway: &StdinGatewayConfig{
+				TrustedBots: []string{"copilot-swe-agent[bot]", "my-org-bot"},
+			},
+		}
+
+		cfg, err := convertStdinConfig(stdinCfg)
+		require.NoError(t, err)
+		require.NotNil(t, cfg.Gateway)
+		assert.Equal(t, []string{"copilot-swe-agent[bot]", "my-org-bot"}, cfg.Gateway.TrustedBots)
+	})
+
+	t.Run("empty trustedBots rejected per spec §4.1.3.4", func(t *testing.T) {
+		stdinCfg := &StdinConfig{
+			MCPServers: map[string]*StdinServerConfig{},
+			Gateway: &StdinGatewayConfig{
+				TrustedBots: []string{},
+			},
+		}
+
+		_, err := convertStdinConfig(stdinCfg)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "trusted_bots must be a non-empty array when present")
+	})
+
+	t.Run("nil trustedBots not propagated", func(t *testing.T) {
+		stdinCfg := &StdinConfig{
+			MCPServers: map[string]*StdinServerConfig{},
+			Gateway:    &StdinGatewayConfig{},
+		}
+
+		cfg, err := convertStdinConfig(stdinCfg)
+		require.NoError(t, err)
+		require.NotNil(t, cfg.Gateway)
+		assert.Nil(t, cfg.Gateway.TrustedBots)
+	})
+
+	t.Run("no gateway config leaves trustedBots nil", func(t *testing.T) {
+		stdinCfg := &StdinConfig{
+			MCPServers: map[string]*StdinServerConfig{},
+		}
+
+		cfg, err := convertStdinConfig(stdinCfg)
+		require.NoError(t, err)
+		require.NotNil(t, cfg.Gateway)
+		assert.Nil(t, cfg.Gateway.TrustedBots)
+	})
+}

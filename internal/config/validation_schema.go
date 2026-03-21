@@ -41,7 +41,7 @@ var (
 	// Current schema version: v0.50.7
 	//
 	// Alternative: Embed the schema using go:embed directive for zero network dependency.
-	schemaURL = "https://raw.githubusercontent.com/github/gh-aw/v0.58.2/docs/public/schemas/mcp-gateway-config.schema.json"
+	schemaURL = "https://raw.githubusercontent.com/github/gh-aw/v0.62.2/docs/public/schemas/mcp-gateway-config.schema.json"
 
 	// Schema caching to avoid recompiling the JSON schema on every validation
 	// This improves performance by compiling the schema once and reusing it
@@ -188,6 +188,24 @@ func fetchAndFixSchema(url string) ([]byte, error) {
 			if props, ok := httpConfig["properties"].(map[string]interface{}); ok {
 				props["registry"] = registryProperty
 				props["guard-policies"] = guardPoliciesProperty
+			}
+		}
+
+		// Add trustedBots to gatewayConfig.
+		// Spec §4.1.3.4: optional array of additional trusted bot identity strings.
+		// This field is in the v1.9.0 spec (main) but not yet in the v0.62.2 released schema.
+		if gatewayConfig, ok := definitions["gatewayConfig"].(map[string]interface{}); ok {
+			if props, ok := gatewayConfig["properties"].(map[string]interface{}); ok {
+				props["trustedBots"] = map[string]interface{}{
+					"type":        "array",
+					"description": "Additional GitHub bot identity strings passed to the gateway and merged with its built-in trusted identity list. This field is additive — it extends the internal list but cannot remove built-in entries.",
+					"items": map[string]interface{}{
+						"type":      "string",
+						"minLength": 1,
+						"pattern":   ".*\\S.*",
+					},
+					"minItems": 1,
+				}
 			}
 		}
 	}

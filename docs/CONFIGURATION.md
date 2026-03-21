@@ -142,8 +142,8 @@ Run `./awmg --help` for full CLI options. Key flags:
 - **`headers`** (optional): HTTP headers to include in requests (for `type: "http"` servers)
   - Map of header name to value (e.g., `{"Authorization": "Bearer token"}`)
 
-- **`tools`** (optional): List of tool names to expose from this server
-  - If omitted or empty, all tools are exposed
+- **`tools`** (optional): List of tool names intended to be exposed from this server
+  - **Note**: This field is stored but not currently enforced at runtime; all tools from the backend are always exposed regardless of this value
   - Example: `["get_file_contents", "search_code"]`
 
 - **`registry`** (optional): Informational URI to the server's entry in an MCP registry
@@ -193,7 +193,7 @@ min-integrity = "unapproved"
     - `"owner/prefix*"` - Repositories with name prefix under owner
 
 - **`min-integrity`**: Minimum integrity level required. Integrity levels are determined by the GitHub MCP server based on the `author_association` field of GitHub objects and whether the object is reachable from the main branch:
-  - `"none"` - No integrity requirements (includes objects with author_association: FIRST_TIME_CONTRIBUTOR, FIRST_TIMER, NONE)
+  - `"none"` - No integrity requirements (includes objects with author_association: FIRST_TIMER, NONE)
   - `"unapproved"` - Unapproved contributor level (includes objects with author_association: CONTRIBUTOR, FIRST_TIME_CONTRIBUTOR)
   - `"approved"` - Approved contributor level (includes objects with author_association: OWNER, MEMBER, COLLABORATOR)
   - `"merged"` - Merged to main branch (any object reachable from the main branch, regardless of authorship)

@@ -7,6 +7,21 @@ use serde_json::Value;
 
 use super::constants::{field_names, label_constants};
 
+/// Extract a resource number from a JSON item, returning the number as a string.
+/// Returns "unknown" (with a log warning) if the number field is missing or invalid.
+pub(crate) fn extract_resource_number(item: &Value, resource_type: &str, repo: &str) -> String {
+    match item.get("number").and_then(|v| v.as_u64()) {
+        Some(n) => n.to_string(),
+        None => {
+            crate::log_warn(&format!(
+                "{}:{} — missing or invalid 'number' field, using 'unknown'",
+                resource_type, repo
+            ));
+            "unknown".to_string()
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ScopeKind {
     All,
@@ -35,6 +50,17 @@ pub enum MinIntegrity {
 #[derive(Debug, Clone, Default)]
 pub struct PolicyContext {
     pub scopes: Vec<PolicyScopeEntry>,
+    /// Additional trusted bot usernames configured at the gateway level.
+    /// Objects authored by these bots receive approved (writer) integrity regardless
+    /// of their author_association, just like the built-in trusted first-party bots.
+    /// This list is additive and cannot override the built-in trusted bot list.
+    pub trusted_bots: Vec<String>,
+    /// Usernames whose content items are always blocked (effective integrity = blocked).
+    /// Blocked items are unconditionally denied regardless of approval labels or min-integrity.
+    pub blocked_users: Vec<String>,
+    /// GitHub label names that promote a content item's effective integrity to "approved"
+    /// when present on the item. Does not override blocked_users.
+    pub approval_labels: Vec<String>,
 }
 
 fn normalize_scope(scope: &str, ctx: &PolicyContext) -> String {
@@ -111,15 +137,6 @@ fn repo_matches_scope(
     }
 }
 
-#[allow(dead_code)]
-pub fn repo_matches_policy_scope(owner: &str, repo: &str, ctx: &PolicyContext) -> bool {
-    ctx.scopes.iter().any(|scope| {
-        let scoped_owner = scope.scope_owner.as_deref().unwrap_or("");
-        let scoped_repo = scope.scope_repo.as_deref().unwrap_or("");
-        repo_matches_scope(scope.scope_kind, owner, repo, scoped_owner, scoped_repo)
-    })
-}
-
 fn first_matching_scope(owner: &str, repo: &str, ctx: &PolicyContext) -> Option<PolicyScopeEntry> {
     ctx.scopes
         .iter()
@@ -154,6 +171,62 @@ pub fn none_integrity(scope: &str, ctx: &PolicyContext) -> Vec<String> {
         &normalized_scope,
         label_constants::NONE,
     )]
+}
+
+/// Generate blocked-level integrity tags for a scope.
+///
+/// Items with blocked integrity are unconditionally denied by the DIFC filter
+/// because no agent is ever assigned a "blocked:" tag. This represents the
+/// integrity level for items authored by users in the `blocked-users` list.
+pub fn blocked_integrity(scope: &str, ctx: &PolicyContext) -> Vec<String> {
+    let normalized_scope = normalize_scope(scope, ctx);
+    vec![format_integrity_label(
+        label_constants::BLOCKED_PREFIX,
+        &normalized_scope,
+        label_constants::BLOCKED_BASE,
+    )]
+}
+
+/// Check if a username appears in the configured blocked-users list (case-insensitive).
+pub fn is_blocked_user(username: &str, ctx: &PolicyContext) -> bool {
+    if ctx.blocked_users.is_empty() {
+        return false;
+    }
+    let lower = username.to_lowercase();
+    ctx.blocked_users.iter().any(|u| u.to_lowercase() == lower)
+}
+
+/// Extract GitHub label names from a content item's `labels` array.
+///
+/// Returns the `name` field from each element of the item's `labels` array.
+fn extract_github_label_names<'a>(item: &'a Value) -> Vec<&'a str> {
+    item.get("labels")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|label| label.get("name").and_then(|v| v.as_str()))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Check whether a content item carries at least one label from the configured
+/// `approval-labels` list (case-insensitive comparison).
+pub fn has_approval_label(item: &Value, ctx: &PolicyContext) -> bool {
+    first_matching_approval_label(item, ctx).is_some()
+}
+
+/// Return the first matching approval label name from an item, if any.
+fn first_matching_approval_label<'a>(item: &'a Value, ctx: &PolicyContext) -> Option<&'a str> {
+    if ctx.approval_labels.is_empty() {
+        return None;
+    }
+    let label_names = extract_github_label_names(item);
+    label_names.into_iter().find(|name| {
+        ctx.approval_labels
+            .iter()
+            .any(|al| al.eq_ignore_ascii_case(name))
+    })
 }
 
 pub fn ensure_integrity_baseline(
@@ -544,32 +617,15 @@ pub fn extract_number_as_string(tool_args: &Value, field: &str) -> Option<String
 // Integrity Scope Helpers
 // ============================================================================
 
-/// Determine the integrity scope for a repository
+/// Generate unapproved-level integrity tags for a scope.
 ///
-/// For organization-owned repos, returns the org name (e.g., "github")
-/// For user-owned repos, returns the full repo path (e.g., "octocat/Hello-World")
+/// This helper normalizes the provided `scope` using the `PolicyContext`
+/// and returns integrity labels for:
+/// - a "none" integrity level for the scope
+/// - an "unapproved" integrity level for the scope
 ///
-/// This allows org-level trust relationships, which are more practical
-/// since we can't query individual collaborator permissions.
-///
-/// NOTE: Currently unused but kept for potential future use when we add
-/// organization-level integrity scope support. This would allow trust
-/// relationships across all repos in an organization.
-#[allow(dead_code)]
-pub fn get_integrity_scope(owner: &str, repo: &str, owner_type: Option<&str>) -> String {
-    // If we know it's an organization, use org-level scope
-    if owner_type == Some("Organization") {
-        owner.to_string()
-    } else if owner_type == Some("User") {
-        // User-owned repos use full repo path
-        format!("{}/{}", owner, repo)
-    } else {
-        // Default: assume user-owned (more restrictive)
-        format!("{}/{}", owner, repo)
-    }
-}
-
-/// Generate unapproved-level integrity tags for a scope
+/// These labels represent the lowest integrity levels; higher levels
+/// (such as approved) build on top of them.
 pub fn reader_integrity(scope: &str, ctx: &PolicyContext) -> Vec<String> {
     let normalized_scope = normalize_scope(scope, ctx);
     vec![
@@ -586,8 +642,8 @@ pub fn reader_integrity(scope: &str, ctx: &PolicyContext) -> Vec<String> {
     ]
 }
 
-/// Generate approved-level integrity tags for a scope
-/// Includes unapproved level (hierarchical: writer > reader)
+/// Generate approved-level integrity tags for a scope.
+/// Includes unapproved level (hierarchical: approved > unapproved)
 pub fn writer_integrity(scope: &str, ctx: &PolicyContext) -> Vec<String> {
     let normalized_scope = normalize_scope(scope, ctx);
     vec![
@@ -609,8 +665,8 @@ pub fn writer_integrity(scope: &str, ctx: &PolicyContext) -> Vec<String> {
     ]
 }
 
-/// Generate merged-level integrity tags for a scope
-/// Includes approved and unapproved (hierarchical: merged > writer > reader)
+/// Generate merged-level integrity tags for a scope.
+/// Includes approved and unapproved (hierarchical: merged > approved > unapproved)
 pub fn merged_integrity(scope: &str, ctx: &PolicyContext) -> Vec<String> {
     let normalized_scope = normalize_scope(scope, ctx);
     vec![
@@ -719,8 +775,30 @@ pub fn author_association_floor_from_str(
     }
 }
 
+/// Extract the author login from an item, checking common GitHub API fields.
+/// Returns empty string if no login found.
+fn extract_author_login(item: &Value) -> &str {
+    // Issues and PRs use user.login
+    let login = get_nested_str(item, "user", "login");
+    if !login.is_empty() {
+        return login;
+    }
+    // Commits use author.login
+    get_nested_str(item, "author", "login")
+}
+
 /// Extract author_association from an item and return initial integrity floor.
+/// Trusted first-party GitHub bots and any gateway-configured trusted bots are
+/// elevated to approved (writer) integrity regardless of their author_association value.
 pub fn author_association_floor(item: &Value, scope: &str, ctx: &PolicyContext) -> Vec<String> {
+    let author_login = extract_author_login(item);
+    if !author_login.is_empty()
+        && (is_trusted_first_party_bot(author_login)
+            || is_configured_trusted_bot(author_login, ctx))
+    {
+        return writer_integrity(scope, ctx);
+    }
+
     let association = item
         .get("author_association")
         .and_then(|v| v.as_str())
@@ -755,10 +833,12 @@ pub fn is_default_branch_commit_context(tool_name: &str, sha_or_ref: &str) -> bo
 
 /// Determine integrity level for a pull request
 /// Rules:
+/// - PR authored by a blocked user => blocked-level (unconditional denial)
 /// - merged PR => merged-level
 /// - private repo PR => approved
 /// - public forked PR => unapproved
 /// - public direct PR => approved
+/// - PR with an approval label => at least approved
 pub fn pr_integrity(
     item: &Value,
     repo_full_name: &str,
@@ -766,6 +846,17 @@ pub fn pr_integrity(
     is_forked: Option<bool>,
     ctx: &PolicyContext,
 ) -> Vec<String> {
+    // Step 1: Check if author is in blocked_users — takes precedence over all other rules.
+    let author_login = extract_author_login(item);
+    if !author_login.is_empty() && is_blocked_user(author_login, ctx) {
+        let number = item.get("number").and_then(|v| v.as_u64()).unwrap_or(0);
+        crate::log_info(&format!(
+            "[integrity] pr:{}#{} → blocked (author '{}' in blocked-users)",
+            repo_full_name, number, author_login
+        ));
+        return blocked_integrity(repo_full_name, ctx);
+    }
+
     let mut integrity = author_association_floor(item, repo_full_name, ctx);
 
     // Check if PR is merged (either merged_at field exists or merged boolean is true)
@@ -809,21 +900,49 @@ pub fn pr_integrity(
         );
     }
 
-    ensure_integrity_baseline(repo_full_name, integrity, ctx)
+    let integrity = ensure_integrity_baseline(repo_full_name, integrity, ctx);
+
+    // Step 2: Apply approval-labels promotion — raise to at least approved.
+    if let Some(label) = first_matching_approval_label(item, ctx) {
+        let number = item.get("number").and_then(|v| v.as_u64()).unwrap_or(0);
+        crate::log_info(&format!(
+            "[integrity] pr:{}#{} promoted to approved (label '{}' in approval-labels)",
+            repo_full_name, number, label
+        ));
+        max_integrity(
+            repo_full_name,
+            integrity,
+            writer_integrity(repo_full_name, ctx),
+            ctx,
+        )
+    } else {
+        integrity
+    }
 }
 
 /// Determine integrity level for an issue
 /// Rules:
+/// - Issue authored by a blocked user => blocked-level (unconditional denial)
 /// - private repo issues => approved
 /// - public repo issues => no integrity
+/// - Issue with an approval label => at least approved
 pub fn issue_integrity(
     item: &Value,
     repo_full_name: &str,
-    _owner: &str,
-    _repo: &str,
     repo_private: bool,
     ctx: &PolicyContext,
 ) -> Vec<String> {
+    // Step 1: Check if author is in blocked_users — takes precedence over all other rules.
+    let author_login = extract_author_login(item);
+    if !author_login.is_empty() && is_blocked_user(author_login, ctx) {
+        let number = item.get("number").and_then(|v| v.as_u64()).unwrap_or(0);
+        crate::log_info(&format!(
+            "[integrity] issue:{}#{} → blocked (author '{}' in blocked-users)",
+            repo_full_name, number, author_login
+        ));
+        return blocked_integrity(repo_full_name, ctx);
+    }
+
     let mut integrity = author_association_floor(item, repo_full_name, ctx);
     if repo_private {
         integrity = max_integrity(
@@ -833,15 +952,36 @@ pub fn issue_integrity(
             ctx,
         );
     }
-    ensure_integrity_baseline(repo_full_name, integrity, ctx)
+    let integrity = ensure_integrity_baseline(repo_full_name, integrity, ctx);
+
+    // Step 2: Apply approval-labels promotion — raise to at least approved.
+    if let Some(label) = first_matching_approval_label(item, ctx) {
+        let number = item.get("number").and_then(|v| v.as_u64()).unwrap_or(0);
+        crate::log_info(&format!(
+            "[integrity] issue:{}#{} promoted to approved (label '{}' in approval-labels)",
+            repo_full_name, number, label
+        ));
+        max_integrity(
+            repo_full_name,
+            integrity,
+            writer_integrity(repo_full_name, ctx),
+            ctx,
+        )
+    } else {
+        integrity
+    }
 }
 
 /// Determine integrity level for a commit.
 ///
 /// Rules:
+/// - Commit authored by a blocked user => blocked-level (unconditional denial)
 /// - Start from author_association floor
 /// - Private repo commits elevate to approved
 /// - Default-branch reachable commits elevate to merged
+///
+/// Note: approval-labels promotion does not apply to commits because GitHub
+/// commits do not carry issue/PR-style labels.
 pub fn commit_integrity(
     item: &Value,
     repo_full_name: &str,
@@ -849,6 +989,18 @@ pub fn commit_integrity(
     is_default_branch: bool,
     ctx: &PolicyContext,
 ) -> Vec<String> {
+    // Step 1: Check if author is in blocked_users — takes precedence over all other rules.
+    let author_login = extract_author_login(item);
+    if !author_login.is_empty() && is_blocked_user(author_login, ctx) {
+        let sha = item.get("sha").and_then(|v| v.as_str()).unwrap_or("unknown");
+        let short_sha = if sha.len() > 8 { &sha[..8] } else { sha };
+        crate::log_info(&format!(
+            "[integrity] commit:{}@{} → blocked (author '{}' in blocked-users)",
+            repo_full_name, short_sha, author_login
+        ));
+        return blocked_integrity(repo_full_name, ctx);
+    }
+
     let mut integrity = author_association_floor(item, repo_full_name, ctx);
 
     if repo_private {
@@ -872,13 +1024,42 @@ pub fn commit_integrity(
     ensure_integrity_baseline(repo_full_name, integrity, ctx)
 }
 
-/// Check if content author is the repository owner
-#[allow(dead_code)]
-pub fn is_owner(author: &str, owner: &str) -> bool {
-    !author.is_empty() && author.eq_ignore_ascii_case(owner)
+/// Check if a user is a trusted first-party GitHub bot.
+///
+/// These bots are platform services whose presence requires explicit admin
+/// configuration. Their authored objects receive approved (writer) integrity
+/// regardless of author_association.
+///
+/// Trusted bots:
+/// - dependabot[bot]: GitHub dependency updater
+/// - github-actions[bot]: GitHub Actions workflow actor (GITHUB_TOKEN)
+/// - github-merge-queue[bot]: GitHub merge queue automation
+/// - copilot: GitHub Copilot AI assistant
+pub fn is_trusted_first_party_bot(username: &str) -> bool {
+    let lower = username.to_lowercase();
+    lower == "dependabot[bot]"
+        || lower == "github-actions[bot]"
+        || lower == "github-merge-queue[bot]"
+        || lower == "copilot"
 }
 
-/// Check if a user appears to be a bot
+/// Check if a user is in the gateway-configured trusted bot list.
+///
+/// This checks the `trusted_bots` list in `PolicyContext`, which is populated from
+/// the gateway configuration's `trustedBots` field. Comparison is case-insensitive.
+/// This list is additive and cannot remove entries from the built-in trusted bot list.
+pub fn is_configured_trusted_bot(username: &str, ctx: &PolicyContext) -> bool {
+    if ctx.trusted_bots.is_empty() {
+        return false;
+    }
+    let lower = username.to_lowercase();
+    ctx.trusted_bots.iter().any(|b| b.to_lowercase() == lower)
+}
+
+/// Check if a user appears to be a bot (broad detection).
+///
+/// This is a broader check that includes third-party bots.
+/// For integrity elevation, use is_trusted_first_party_bot() instead.
 #[allow(dead_code)]
 pub fn is_bot(username: &str) -> bool {
     let lower = username.to_lowercase();
@@ -890,10 +1071,8 @@ pub fn is_bot(username: &str) -> bool {
         || lower == "copilot"
 }
 
-/// Check if a user has verified contributor status
-/// This is a placeholder that delegates to the backend module
+/// Check if a user is the repository owner (case-insensitive)
 #[allow(dead_code)]
-pub fn is_verified_contributor(username: &str, owner: &str, repo: &str) -> bool {
-    // Import from backend to avoid circular dependency
-    super::backend::is_verified_contributor(username, owner, repo)
+pub fn is_owner(username: &str, owner: &str) -> bool {
+    username.eq_ignore_ascii_case(owner)
 }

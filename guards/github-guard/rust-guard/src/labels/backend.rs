@@ -35,94 +35,16 @@ fn set_cached_repo_visibility(repo_id: &str, is_private: bool) {
 #[derive(Debug, Clone)]
 pub struct PullRequestFacts {
     pub author_association: Option<String>,
+    pub author_login: Option<String>,
     pub is_merged: bool,
     pub is_forked: Option<bool>,
 }
 
-/// Check if a user has any merged pull requests in a repository.
-///
-/// This is used to determine contributor status for off-branch content
-/// like issues and comments. A user with merged PRs is considered a
-/// verified contributor.
-///
-/// Uses the search_pull_requests tool with query:
-/// `author:<username> repo:<owner>/<repo> is:merged`
-///
-/// # Arguments
-/// * `username` - The GitHub username to check
-/// * `owner` - Repository owner
-/// * `repo` - Repository name
-///
-/// # Returns
-/// * `Some(count)` - Number of merged PRs (0 if none)
-/// * `None` - If the backend call failed
-#[allow(dead_code)]
-pub fn count_merged_prs(username: &str, owner: &str, repo: &str) -> Option<u32> {
-    if username.is_empty() || owner.is_empty() || repo.is_empty() {
-        return Some(0);
-    }
-
-    // Build the search query
-    let query = format!("author:{} repo:{}/{} is:merged", username, owner, repo);
-    let args = serde_json::json!({
-        "query": query,
-        "perPage": 1  // We only need the count, not the actual PRs
-    });
-
-    let args_str = args.to_string();
-    let mut result_buffer = vec![0u8; SMALL_BUFFER_SIZE];
-
-    crate::log_debug(&format!(
-        "Checking merged PRs for {} in {}/{}",
-        username, owner, repo
-    ));
-
-    match crate::invoke_backend("search_pull_requests", &args_str, &mut result_buffer) {
-        Ok(len) => {
-            if len == 0 {
-                crate::log_debug("Empty response from search_pull_requests");
-                return None;
-            }
-
-            // Parse the response
-            let response_str = match std::str::from_utf8(&result_buffer[..len]) {
-                Ok(s) => s,
-                Err(_) => return None,
-            };
-
-            // Parse JSON and extract total_count
-            if let Ok(response) = serde_json::from_str::<Value>(response_str) {
-                if let Some(count) = response.get("total_count").and_then(|v| v.as_u64()) {
-                    crate::log_debug(&format!(
-                        "User {} has {} merged PRs in {}/{}",
-                        username, count, owner, repo
-                    ));
-                    return Some(count as u32);
-                }
-            }
-
-            None
-        }
-        Err(code) => {
-            crate::log_warn(&format!("Failed to check merged PRs: error code {}", code));
-            None
-        }
-    }
-}
-
-/// Check if a user is a verified contributor (has at least one merged PR)
-///
-/// # Arguments
-/// * `username` - The GitHub username to check
-/// * `owner` - Repository owner
-/// * `repo` - Repository name
-///
-/// # Returns
-/// * `true` if user has at least one merged PR
-/// * `false` if user has no merged PRs or check failed
-#[allow(dead_code)]
-pub fn is_verified_contributor(username: &str, owner: &str, repo: &str) -> bool {
-    count_merged_prs(username, owner, repo).unwrap_or(0) > 0
+/// Author information for an issue, including login and association.
+#[derive(Debug, Clone)]
+pub struct IssueAuthorInfo {
+    pub author_association: Option<String>,
+    pub author_login: Option<String>,
 }
 
 /// Check whether a repository is private using the backend MCP server.
@@ -297,6 +219,7 @@ pub fn is_repo_private_with_callback(
 /// - `Some(true)` if the PR is from a fork (head repo differs from base repo)
 /// - `Some(false)` if the PR is direct (same repository)
 /// - `None` if the result cannot be determined
+#[allow(dead_code)]
 pub fn is_forked_pull_request_with_callback(
     callback: GithubMcpCallback,
     owner: &str,
@@ -417,14 +340,22 @@ pub fn get_pull_request_facts_with_callback(
         .and_then(|v| v.as_str())
         .map(String::from);
 
+    let author_login = pr
+        .get("user")
+        .and_then(|u| u.get("login"))
+        .and_then(|v| v.as_str())
+        .map(String::from);
+
     Some(PullRequestFacts {
         author_association,
+        author_login,
         is_merged,
         is_forked,
     })
 }
 
 /// Fetch issue author_association value for resource-level initialization.
+#[allow(dead_code)]
 pub fn get_issue_author_association_with_callback(
     callback: GithubMcpCallback,
     owner: &str,
@@ -468,14 +399,64 @@ pub fn get_pull_request_facts(
     get_pull_request_facts_with_callback(crate::invoke_backend, owner, repo, pull_number)
 }
 
+#[allow(dead_code)]
 pub fn get_issue_author_association(owner: &str, repo: &str, issue_number: &str) -> Option<String> {
     get_issue_author_association_with_callback(crate::invoke_backend, owner, repo, issue_number)
 }
 
-/// Determine whether a pull request is from a fork using the default backend callback.
-#[allow(dead_code)]
-pub fn is_forked_pull_request(owner: &str, repo: &str, pull_number: &str) -> Option<bool> {
-    is_forked_pull_request_with_callback(crate::invoke_backend, owner, repo, pull_number)
+/// Fetch issue author info (association + login) for resource-level initialization.
+pub fn get_issue_author_info_with_callback(
+    callback: GithubMcpCallback,
+    owner: &str,
+    repo: &str,
+    issue_number: &str,
+) -> Option<IssueAuthorInfo> {
+    if owner.is_empty() || repo.is_empty() || issue_number.is_empty() {
+        return None;
+    }
+
+    let args = serde_json::json!({
+        "owner": owner,
+        "repo": repo,
+        "issue_number": issue_number,
+    });
+
+    let args_str = args.to_string();
+    let mut result_buffer = vec![0u8; SMALL_BUFFER_SIZE];
+
+    let len = match callback("issue_read", &args_str, &mut result_buffer) {
+        Ok(len) if len > 0 => len,
+        _ => return None,
+    };
+
+    let response_str = std::str::from_utf8(&result_buffer[..len]).ok()?;
+    let response = serde_json::from_str::<Value>(response_str).ok()?;
+    let issue = super::extract_mcp_response(&response);
+
+    let author_association = issue
+        .get("author_association")
+        .or_else(|| issue.get("authorAssociation"))
+        .and_then(|v| v.as_str())
+        .map(String::from);
+
+    let author_login = issue
+        .get("user")
+        .and_then(|u| u.get("login"))
+        .and_then(|v| v.as_str())
+        .map(String::from);
+
+    Some(IssueAuthorInfo {
+        author_association,
+        author_login,
+    })
+}
+
+pub fn get_issue_author_info(
+    owner: &str,
+    repo: &str,
+    issue_number: &str,
+) -> Option<IssueAuthorInfo> {
+    get_issue_author_info_with_callback(crate::invoke_backend, owner, repo, issue_number)
 }
 
 fn extract_repo_private_flag(response: &Value, repo_id: &str) -> Option<bool> {

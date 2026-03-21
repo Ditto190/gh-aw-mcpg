@@ -101,6 +101,13 @@ type GatewayConfig struct {
 	// Payloads larger than this threshold are stored to disk, smaller ones are returned inline.
 	// Default: 524288 bytes (512KB)
 	PayloadSizeThreshold int `toml:"payload_size_threshold" json:"payload_size_threshold,omitempty"`
+
+	// TrustedBots is an optional list of additional bot usernames that should be treated
+	// as trusted. Objects authored by these bots receive "approved" integrity regardless
+	// of their author_association. This list is merged with the guard's built-in trusted
+	// bot list and is purely additive (it cannot remove built-in trusted bots).
+	// Example values: "copilot-swe-agent[bot]", "my-org-bot[bot]"
+	TrustedBots []string `toml:"trusted_bots" json:"trusted_bots,omitempty"`
 }
 
 // GetAPIKey returns the gateway API key, handling a nil Gateway safely.
@@ -254,6 +261,11 @@ func LoadFromFile(path string) (*Config, error) {
 	// Initialize gateway if not present
 	if cfg.Gateway == nil {
 		cfg.Gateway = &GatewayConfig{}
+	}
+
+	// Validate trusted_bots per spec §4.1.3.4: must be non-empty array when present
+	if err := validateTrustedBots(cfg.Gateway.TrustedBots); err != nil {
+		return nil, err
 	}
 
 	// Apply core gateway defaults

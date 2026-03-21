@@ -9,8 +9,9 @@ use super::constants::{field_names, SENSITIVE_FILE_KEYWORDS, SENSITIVE_FILE_PATT
 use super::helpers::{
     author_association_floor_from_str, ensure_integrity_baseline, extract_number_as_string,
     extract_repo_info, extract_repo_info_from_search_query, is_default_branch_commit_context,
-    is_default_branch_ref, max_integrity, merged_integrity, policy_private_scope_label,
-    project_github_label, reader_integrity, secret_label, writer_integrity, PolicyContext,
+    is_default_branch_ref, is_trusted_first_party_bot, max_integrity, merged_integrity,
+    policy_private_scope_label, project_github_label, reader_integrity, secret_label,
+    writer_integrity, PolicyContext,
 };
 
 fn apply_repo_visibility_secrecy(
@@ -36,6 +37,18 @@ fn apply_repo_visibility_secrecy(
                 policy_private_scope_label(owner, repo, repo_id, ctx)
             }
         }
+    }
+}
+
+fn private_writer_integrity(
+    repo_id: &str,
+    repo_private: Option<bool>,
+    ctx: &PolicyContext,
+) -> Vec<String> {
+    if repo_private == Some(true) {
+        writer_integrity(repo_id, ctx)
+    } else {
+        vec![]
     }
 }
 
@@ -75,23 +88,33 @@ pub fn apply_tool_labels(
                 }
             }
             secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
-            integrity = if repo_private == Some(true) {
-                writer_integrity(repo_id, ctx)
-            } else {
-                vec![]
-            };
+            integrity = private_writer_integrity(repo_id, repo_private, ctx);
 
             if matches!(tool_name, "get_issue" | "issue_read") {
                 if let Some(issue_num) =
                     extract_number_as_string(tool_args, field_names::ISSUE_NUMBER)
                 {
-                    let floor = author_association_floor_from_str(
-                        repo_id,
-                        super::backend::get_issue_author_association(&owner, &repo, &issue_num)
-                            .as_deref(),
-                        ctx,
-                    );
-                    integrity = max_integrity(repo_id, integrity, floor, ctx);
+                    if let Some(info) =
+                        super::backend::get_issue_author_info(&owner, &repo, &issue_num)
+                    {
+                        let mut floor = author_association_floor_from_str(
+                            repo_id,
+                            info.author_association.as_deref(),
+                            ctx,
+                        );
+                        // Elevate trusted first-party bots to approved
+                        if let Some(ref login) = info.author_login {
+                            if is_trusted_first_party_bot(login) {
+                                floor = max_integrity(
+                                    repo_id,
+                                    floor,
+                                    writer_integrity(repo_id, ctx),
+                                    ctx,
+                                );
+                            }
+                        }
+                        integrity = max_integrity(repo_id, integrity, floor, ctx);
+                    }
                 }
             }
         }
@@ -125,6 +148,18 @@ pub fn apply_tool_labels(
                             facts.author_association.as_deref(),
                             ctx,
                         );
+
+                        // Elevate trusted first-party bots to approved
+                        if let Some(ref login) = facts.author_login {
+                            if is_trusted_first_party_bot(login) {
+                                integrity = max_integrity(
+                                    repo_id,
+                                    integrity,
+                                    writer_integrity(repo_id, ctx),
+                                    ctx,
+                                );
+                            }
+                        }
 
                         if repo_private == Some(true) {
                             integrity = max_integrity(
@@ -164,26 +199,14 @@ pub fn apply_tool_labels(
                             );
                         }
                     } else {
-                        integrity = if repo_private == Some(true) {
-                            writer_integrity(repo_id, ctx)
-                        } else {
-                            vec![]
-                        };
+                        integrity = private_writer_integrity(repo_id, repo_private, ctx);
                     }
                 } else {
-                    integrity = if repo_private == Some(true) {
-                        writer_integrity(repo_id, ctx)
-                    } else {
-                        vec![]
-                    };
+                    integrity = private_writer_integrity(repo_id, repo_private, ctx);
                 }
             } else {
                 // Collection/list calls are coarse; response labeling refines item-by-item.
-                integrity = if repo_private == Some(true) {
-                    writer_integrity(repo_id, ctx)
-                } else {
-                    vec![]
-                };
+                integrity = private_writer_integrity(repo_id, repo_private, ctx);
             }
         }
 
@@ -248,14 +271,16 @@ pub fn apply_tool_labels(
         // === GitHub Actions ===
         "actions_get" | "actions_list" => {
             // S(workflow/artifact) = inherits from repo secrecy
-            // I(workflow/artifact) = writer - maintained by repo team
+            // I(workflow/artifact) = approved - maintained by repo team
             secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
             integrity = writer_integrity(repo_id, ctx);
 
             // Additional secrecy checks for workflow files
             if tool_name == "actions_get"
-                && tool_args.get("method")
-                    == Some(&Value::String("download_workflow_run_artifact".to_string()))
+                && tool_args
+                    .get("method")
+                    .and_then(|v| v.as_str())
+                    == Some("download_workflow_run_artifact")
             {
                 // Artifacts may contain secrets
                 secrecy = secret_label();
@@ -368,6 +393,18 @@ pub fn apply_tool_labels(
             // I = project:github - GitHub's data
             secrecy = vec![];
             integrity = project_github_label(ctx);
+        }
+
+        // === GitHub Projects (org-scoped) ===
+        "list_projects" | "get_project" | "list_project_fields" | "list_project_items" => {
+            // Projects are org-scoped; creating/managing projects requires org membership.
+            // I = approved:<owner> — equivalent to MEMBER author_association
+            // S = empty by default (public project); per-item secrecy for items is refined in
+            //     label_response_paths for list_project_items
+            if !owner.is_empty() {
+                baseline_scope = owner.clone();
+                integrity = writer_integrity(&baseline_scope, ctx);
+            }
         }
 
         _ => {

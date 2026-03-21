@@ -20,6 +20,7 @@ import (
 	"github.com/github/gh-aw-mcpg/internal/mcp"
 	"github.com/github/gh-aw-mcpg/internal/middleware"
 	"github.com/github/gh-aw-mcpg/internal/sys"
+	"github.com/github/gh-aw-mcpg/internal/version"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -168,7 +169,7 @@ func NewUnified(ctx context.Context, cfg *config.Config) (*UnifiedServer, error)
 	// Create MCP server with logger
 	server := sdk.NewServer(&sdk.Implementation{
 		Name:    "awmg-unified",
-		Version: "1.0.0",
+		Version: version.Get(),
 	}, &sdk.ServerOptions{
 		Logger: logger.NewSlogLoggerWithHandler(logUnified),
 	})
@@ -957,6 +958,7 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 
 	// **Phase 5: Reference Monitor performs fine-grained filtering (if applicable)**
 	var finalResult interface{}
+	var difcFiltered *difc.FilteredCollectionLabeledData // tracks items removed in filter/propagate mode
 	if labeledData != nil {
 		// Guard provided fine-grained labels - check if it's a collection
 		if collection, ok := labeledData.(*difc.CollectionLabeledData); ok {
@@ -984,6 +986,8 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 
 			if filtered.GetFilteredCount() > 0 {
 				log.Printf("[DIFC] Filtered out %d items due to DIFC policy", filtered.GetFilteredCount())
+				logFilteredItems(serverID, toolName, filtered)
+				difcFiltered = filtered
 			}
 
 			// Convert filtered data to result
@@ -1024,6 +1028,16 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 	callResult, err := mcp.ConvertToCallToolResult(finalResult)
 	if err != nil {
 		return newErrorCallToolResult(fmt.Errorf("failed to convert result: %w", err))
+	}
+
+	// If items were filtered by DIFC policy in filter/propagate mode, append a notice so
+	// the agent knows items exist but were withheld.  Without this, an agent receiving an
+	// empty (or partial) list has no way to distinguish "no items" from "items filtered",
+	// which can cause targeted-dispatch workflows to silently fall back to scheduled mode.
+	if difcFiltered != nil {
+		if notice := buildDIFCFilteredNotice(difcFiltered); notice != "" {
+			callResult.Content = append(callResult.Content, &sdk.TextContent{Text: notice})
+		}
 	}
 
 	return callResult, finalResult, nil
@@ -1146,7 +1160,17 @@ func (us *UnifiedServer) ensureGuardInitialized(
 	if err != nil {
 		return defaultMode, fmt.Errorf("failed to serialize guard policy: %w", err)
 	}
-	policyHash := string(policyJSON)
+
+	// Build the label_agent payload, merging in any configured trusted bots.
+	// The policyHash covers both the policy and trusted bots so that any change
+	// to either field invalidates the cached guard session state.
+	trustedBots := us.getTrustedBots()
+	labelAgentPayload := guard.BuildLabelAgentPayload(policy, trustedBots)
+	payloadJSON, err := json.Marshal(labelAgentPayload)
+	if err != nil {
+		return defaultMode, fmt.Errorf("failed to serialize label_agent payload: %w", err)
+	}
+	policyHash := string(payloadJSON)
 
 	us.sessionMu.RLock()
 	session := us.sessions[sessionID]
@@ -1161,7 +1185,7 @@ func (us *UnifiedServer) ensureGuardInitialized(
 
 	log.Printf("[DIFC] Initializing guard session state: server=%s, session=%s, policy_source=%s", serverID, sessionID, source)
 	log.Printf("[DIFC] Calling label_agent: server=%s, session=%s, guard=%s, policy=%s", serverID, sessionID, g.Name(), string(policyJSON))
-	labelAgentResult, err := g.LabelAgent(ctx, policy, backendCaller, us.capabilities)
+	labelAgentResult, err := g.LabelAgent(ctx, labelAgentPayload, backendCaller, us.capabilities)
 	if err != nil {
 		log.Printf("[DIFC] label_agent failed: server=%s, session=%s, guard=%s, error=%v", serverID, sessionID, g.Name(), err)
 		return defaultMode, fmt.Errorf("label_agent failed: %w", err)
@@ -1228,6 +1252,15 @@ func (us *UnifiedServer) ensureGuardInitialized(
 // This getter allows other modules to access the threshold configuration.
 func (us *UnifiedServer) GetPayloadSizeThreshold() int {
 	return us.payloadSizeThreshold
+}
+
+// getTrustedBots returns the configured list of additional trusted bot usernames,
+// or nil if none are configured.
+func (us *UnifiedServer) getTrustedBots() []string {
+	if us.cfg == nil || us.cfg.Gateway == nil {
+		return nil
+	}
+	return us.cfg.Gateway.TrustedBots
 }
 
 // ensureSessionDirectory creates the session subdirectory in the payload directory if it doesn't exist
