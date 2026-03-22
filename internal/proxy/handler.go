@@ -239,6 +239,13 @@ func (h *proxyHandler) handleWithDIFC(w http.ResponseWriter, r *http.Request, pa
 			// to preserve the exact response format (ToResult transforms the structure)
 			if graphQLBody != nil && filtered.GetFilteredCount() == 0 {
 				useOriginalBody = true
+			} else if graphQLBody != nil {
+				// GraphQL with filtered items: return valid empty GraphQL response
+				// (ToResult returns an array which breaks gh CLI's GraphQL parser)
+				logHandler.Printf("[DIFC] GraphQL response: %d/%d items filtered, returning empty GraphQL response",
+					filtered.GetFilteredCount(), filtered.TotalCount)
+				h.writeEmptyResponse(w, resp, responseData)
+				return
 			} else {
 				finalData, err = filtered.ToResult()
 				if err != nil {
