@@ -26,6 +26,13 @@ pub fn label_response_items(
 ) -> Vec<LabeledItem> {
     let mut labeled_items = vec![];
 
+    // Skip labeling for error responses (e.g. 404 Not Found).
+    // Resource-level labels from tool_rules handle these cases.
+    if response.get("isError").and_then(|v| v.as_bool()) == Some(true) {
+        crate::log_info("label_response_items: skipping error response (isError=true)");
+        return labeled_items;
+    }
+
     // MCP responses are wrapped in {"content":[{"type":"text","text":"..."}]}
     // Extract the actual response from content[0].text if needed
     let actual_response = extract_mcp_response(response);
