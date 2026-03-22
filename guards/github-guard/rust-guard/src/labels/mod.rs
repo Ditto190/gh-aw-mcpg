@@ -46,10 +46,10 @@ pub use helpers::{
     extract_graphql_single_object, extract_items_array,
     extract_number_as_string, extract_repo_from_item, extract_repo_info,
     extract_repo_info_from_search_query, get_bool_or, get_nested_str, get_str_or,
-    is_blocked_user, is_bot, is_graphql_wrapper, issue_integrity, limit_items_with_log, make_item_path, merged_integrity,
-    none_integrity, pr_integrity, private_scope_label, private_user_label, project_github_label,
-    reader_integrity, secret_label, writer_integrity, MinIntegrity, PolicyContext, PolicyScopeEntry,
-    ScopeKind,
+    has_author_association, is_blocked_user, is_bot, is_graphql_wrapper, issue_integrity,
+    limit_items_with_log, make_item_path, merged_integrity, none_integrity, pr_integrity,
+    private_scope_label, private_user_label, project_github_label, reader_integrity, secret_label,
+    writer_integrity, MinIntegrity, PolicyContext, PolicyScopeEntry, ScopeKind,
 };
 #[cfg(test)]
 pub use helpers::has_approval_label;
@@ -1704,6 +1704,60 @@ mod tests {
         assert_eq!(
             issue_integrity(&issue, repo, true, &ctx),
             writer_integrity(repo, &ctx)
+        );
+    }
+
+    // =========================================================================
+    // Tests for has_author_association helper
+    // =========================================================================
+
+    #[test]
+    fn test_has_author_association_rest_field() {
+        let item = json!({"author_association": "MEMBER", "number": 1});
+        assert!(has_author_association(&item));
+    }
+
+    #[test]
+    fn test_has_author_association_graphql_field() {
+        let item = json!({"authorAssociation": "OWNER", "number": 1});
+        assert!(has_author_association(&item));
+    }
+
+    #[test]
+    fn test_has_author_association_missing() {
+        let item = json!({"user": {"login": "lpcox"}, "number": 2093});
+        assert!(!has_author_association(&item));
+    }
+
+    #[test]
+    fn test_has_author_association_null_value() {
+        let item = json!({"author_association": null});
+        assert!(!has_author_association(&item));
+    }
+
+    #[test]
+    fn test_issue_integrity_with_missing_author_association_private_repo() {
+        // Private repos don't need enrichment — they get writer integrity regardless
+        let ctx = default_ctx();
+        let item = json!({"user": {"login": "lpcox"}, "number": 2093});
+        assert_eq!(
+            issue_integrity(&item, "github/gh-aw-mcpg", true, &ctx),
+            writer_integrity("github/gh-aw-mcpg", &ctx)
+        );
+    }
+
+    #[test]
+    fn test_issue_integrity_with_author_association_present_public_repo() {
+        // When author_association is present, no enrichment needed
+        let ctx = default_ctx();
+        let item = json!({
+            "user": {"login": "lpcox"},
+            "number": 2093,
+            "author_association": "MEMBER"
+        });
+        assert_eq!(
+            issue_integrity(&item, "github/gh-aw-mcpg", false, &ctx),
+            writer_integrity("github/gh-aw-mcpg", &ctx)
         );
     }
 

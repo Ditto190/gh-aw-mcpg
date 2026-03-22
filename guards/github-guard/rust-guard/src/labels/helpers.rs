@@ -872,6 +872,17 @@ fn extract_author_login(item: &Value) -> &str {
     get_nested_str(item, "author", "login")
 }
 
+/// Check whether an item contains an `author_association` (or `authorAssociation`) field.
+pub fn has_author_association(item: &Value) -> bool {
+    item.get("author_association")
+        .and_then(|v| v.as_str())
+        .is_some()
+        || item
+            .get("authorAssociation")
+            .and_then(|v| v.as_str())
+            .is_some()
+}
+
 /// Extract author_association from an item and return initial integrity floor.
 /// Trusted first-party GitHub bots and any gateway-configured trusted bots are
 /// elevated to approved (writer) integrity regardless of their author_association value.
@@ -924,6 +935,8 @@ pub fn is_default_branch_commit_context(tool_name: &str, sha_or_ref: &str) -> bo
 /// - public forked PR => unapproved
 /// - public direct PR => approved
 /// - PR with an approval label => at least approved
+/// - Backend enrichment: when `author_association` is missing from the item,
+///   fetch the individual PR via REST to get the correct association and fork status.
 pub fn pr_integrity(
     item: &Value,
     repo_full_name: &str,
@@ -945,11 +958,71 @@ pub fn pr_integrity(
     let mut integrity = author_association_floor(item, repo_full_name, ctx);
 
     // Check if PR is merged (either merged_at field exists or merged boolean is true)
-    let is_merged = item
+    let mut is_merged = item
         .get(field_names::MERGED_AT)
         .map(|v| !v.is_null())
         .or_else(|| item.get(field_names::MERGED).and_then(|v| v.as_bool()))
         .unwrap_or(false);
+
+    // Track whether fork status was enriched from the backend
+    let mut effective_is_forked = is_forked;
+
+    // Backend enrichment: when author_association is absent from the response
+    // (e.g. GitHub MCP Server omits it from MinimalPullRequest), fetch the
+    // individual PR via REST to obtain the correct association, fork status,
+    // and merge status.
+    if integrity.is_empty() && !has_author_association(item) && !repo_private {
+        if let Some(number) = item.get("number").and_then(|v| v.as_u64()) {
+            let (owner, repo) = repo_full_name.split_once('/').unwrap_or(("", ""));
+            if !owner.is_empty() && !repo.is_empty() {
+                let number_str = number.to_string();
+                if let Some(facts) =
+                    super::backend::get_pull_request_facts(owner, repo, &number_str)
+                {
+                    crate::log_debug(&format!(
+                        "[integrity] pr:{}#{} enriched: author_association={:?}, is_forked={:?}, is_merged={}",
+                        repo_full_name, number, facts.author_association, facts.is_forked, facts.is_merged
+                    ));
+                    let enriched_floor = author_association_floor_from_str(
+                        repo_full_name,
+                        facts.author_association.as_deref(),
+                        ctx,
+                    );
+                    // Elevate trusted bots
+                    let enriched_floor = if let Some(ref login) = facts.author_login {
+                        if is_trusted_first_party_bot(login)
+                            || is_configured_trusted_bot(login, ctx)
+                        {
+                            max_integrity(
+                                repo_full_name,
+                                enriched_floor,
+                                writer_integrity(repo_full_name, ctx),
+                                ctx,
+                            )
+                        } else {
+                            enriched_floor
+                        }
+                    } else {
+                        enriched_floor
+                    };
+                    integrity =
+                        max_integrity(repo_full_name, integrity, enriched_floor, ctx);
+                    // Use enriched fork/merge status if missing from item
+                    if effective_is_forked.is_none() {
+                        effective_is_forked = facts.is_forked;
+                    }
+                    if !is_merged && facts.is_merged {
+                        is_merged = true;
+                    }
+                } else {
+                    crate::log_debug(&format!(
+                        "[integrity] pr:{}#{} enrichment failed (backend returned None)",
+                        repo_full_name, number
+                    ));
+                }
+            }
+        }
+    }
 
     if repo_private {
         integrity = max_integrity(
@@ -959,7 +1032,7 @@ pub fn pr_integrity(
             ctx,
         );
     } else {
-        integrity = match is_forked {
+        integrity = match effective_is_forked {
             Some(true) => max_integrity(
                 repo_full_name,
                 integrity,
@@ -1011,6 +1084,9 @@ pub fn pr_integrity(
 /// - private repo issues => approved
 /// - public repo issues => no integrity
 /// - Issue with an approval label => at least approved
+/// - Backend enrichment: when `author_association` is missing from the item
+///   (e.g. GitHub MCP Server GraphQL path omits it), fetch the individual issue
+///   via REST to get the correct association value.
 pub fn issue_integrity(
     item: &Value,
     repo_full_name: &str,
@@ -1029,6 +1105,38 @@ pub fn issue_integrity(
     }
 
     let mut integrity = author_association_floor(item, repo_full_name, ctx);
+
+    // Backend enrichment: when author_association is absent from the response
+    // (e.g. GitHub MCP Server's list_issues GraphQL path omits it), fetch the
+    // individual issue via REST to obtain the correct value. This avoids
+    // incorrectly assigning "none" integrity to members/collaborators.
+    if integrity.is_empty() && !has_author_association(item) && !repo_private {
+        if let Some(number) = item.get("number").and_then(|v| v.as_u64()) {
+            let (owner, repo) = repo_full_name.split_once('/').unwrap_or(("", ""));
+            if !owner.is_empty() && !repo.is_empty() {
+                let number_str = number.to_string();
+                if let Some(association) =
+                    super::backend::get_issue_author_association(owner, repo, &number_str)
+                {
+                    crate::log_debug(&format!(
+                        "[integrity] issue:{}#{} enriched author_association='{}'",
+                        repo_full_name, number, association
+                    ));
+                    // Re-check trusted bot status with enriched login
+                    let enriched_floor =
+                        author_association_floor_from_str(repo_full_name, Some(&association), ctx);
+                    integrity =
+                        max_integrity(repo_full_name, integrity, enriched_floor, ctx);
+                } else {
+                    crate::log_debug(&format!(
+                        "[integrity] issue:{}#{} enrichment failed (backend returned None)",
+                        repo_full_name, number
+                    ));
+                }
+            }
+        }
+    }
+
     if repo_private {
         integrity = max_integrity(
             repo_full_name,
