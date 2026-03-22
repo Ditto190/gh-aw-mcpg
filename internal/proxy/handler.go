@@ -207,6 +207,7 @@ func (h *proxyHandler) handleWithDIFC(w http.ResponseWriter, r *http.Request, pa
 
 	// **Phase 5: Fine-grained filtering**
 	var finalData interface{}
+	var useOriginalBody bool // GraphQL responses need original format preserved
 	if labeledData != nil {
 		if collection, ok := labeledData.(*difc.CollectionLabeledData); ok {
 			filtered := s.evaluator.FilterCollection(
@@ -234,19 +235,29 @@ func (h *proxyHandler) handleWithDIFC(w http.ResponseWriter, r *http.Request, pa
 				return
 			}
 
-			finalData, err = filtered.ToResult()
-			if err != nil {
-				logHandler.Printf("[DIFC] Phase 5 ToResult failed: %v", err)
-				h.writeEmptyResponse(w, resp, responseData)
-				return
+			// For GraphQL: if nothing was filtered, return original response body
+			// to preserve the exact response format (ToResult transforms the structure)
+			if graphQLBody != nil && filtered.GetFilteredCount() == 0 {
+				useOriginalBody = true
+			} else {
+				finalData, err = filtered.ToResult()
+				if err != nil {
+					logHandler.Printf("[DIFC] Phase 5 ToResult failed: %v", err)
+					h.writeEmptyResponse(w, resp, responseData)
+					return
+				}
 			}
 		} else {
 			// Simple labeled data — already passed coarse check
-			finalData, err = labeledData.ToResult()
-			if err != nil {
-				logHandler.Printf("[DIFC] Phase 5 ToResult failed: %v", err)
-				h.writeEmptyResponse(w, resp, responseData)
-				return
+			if graphQLBody != nil {
+				useOriginalBody = true
+			} else {
+				finalData, err = labeledData.ToResult()
+				if err != nil {
+					logHandler.Printf("[DIFC] Phase 5 ToResult failed: %v", err)
+					h.writeEmptyResponse(w, resp, responseData)
+					return
+				}
 			}
 		}
 	} else {
@@ -267,17 +278,21 @@ func (h *proxyHandler) handleWithDIFC(w http.ResponseWriter, r *http.Request, pa
 	}
 
 	// Write the filtered response
-	filteredJSON, err := json.Marshal(finalData)
-	if err != nil {
-		http.Error(w, "failed to serialize filtered response", http.StatusInternalServerError)
-		return
+	if useOriginalBody {
+		// GraphQL: return original upstream response to preserve exact format
+		logHandler.Printf("[DIFC] returning original response body (GraphQL, no items filtered)")
+		h.writeResponse(w, resp, respBody)
+	} else {
+		filteredJSON, err := json.Marshal(finalData)
+		if err != nil {
+			http.Error(w, "failed to serialize filtered response", http.StatusInternalServerError)
+			return
+		}
+		copyResponseHeaders(w, resp)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(resp.StatusCode)
+		w.Write(filteredJSON)
 	}
-
-	// Copy response headers
-	copyResponseHeaders(w, resp)
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(resp.StatusCode)
-	w.Write(filteredJSON)
 }
 
 // passthrough forwards a request to the upstream GitHub API without DIFC filtering.
