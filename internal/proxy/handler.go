@@ -9,6 +9,7 @@ import (
 	"net/http"
 
 	"github.com/github/gh-aw-mcpg/internal/difc"
+	"github.com/github/gh-aw-mcpg/internal/guard"
 	"github.com/github/gh-aw-mcpg/internal/logger"
 )
 
@@ -193,6 +194,10 @@ func (h *proxyHandler) handleWithDIFC(w http.ResponseWriter, r *http.Request, pa
 	}
 
 	// **Phase 4: Guard labels the response**
+	// Store tool_args in context so LabelResponse can pass them to the WASM guard
+	ctx = guard.SetRequestStateInContext(ctx, map[string]interface{}{
+		"tool_args": args,
+	})
 	labeledData, err := s.guard.LabelResponse(ctx, toolName, responseData, backend, s.capabilities)
 	if err != nil {
 		logHandler.Printf("[DIFC] Phase 4 failed: %v", err)
