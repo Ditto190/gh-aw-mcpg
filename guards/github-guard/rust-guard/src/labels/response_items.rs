@@ -91,28 +91,37 @@ pub fn label_response_items(
         }
 
         // === Pull Requests - label by merged state ===
-        "list_pull_requests" | "search_pull_requests" => {
-            // Handle both array response and {items: [...]} response
-            let items = actual_response
-                .as_array()
-                .or_else(|| actual_response.get("items").and_then(|v| v.as_array()));
+        "list_pull_requests" | "search_pull_requests" | "pull_request_read" | "get_pull_request" => {
+            // Handle array, {items: [...]}, or single object response
+            let all_items: Vec<&Value> = if actual_response.is_array() {
+                actual_response
+                    .as_array()
+                    .map(|arr| arr.iter().collect())
+                    .unwrap_or_default()
+            } else if let Some(items_arr) = actual_response.get("items").and_then(|v| v.as_array()) {
+                items_arr.iter().collect()
+            } else if actual_response.is_object() {
+                vec![&actual_response]
+            } else {
+                Vec::new()
+            };
 
-            if let Some(items) = items {
+            if !all_items.is_empty() {
                 // Limit items to prevent WASM memory exhaustion
-                let items_to_process = limit_items_with_log(items, "list_pull_requests");
+                let items_to_process = limit_items_with_log(all_items.as_slice(), "list_pull_requests");
                 let (arg_owner, arg_repo, arg_repo_full) = extract_repo_info(tool_args);
                 let default_repo_private = if !arg_owner.is_empty() && !arg_repo.is_empty() {
                     super::backend::is_repo_private(&arg_owner, &arg_repo).unwrap_or(false)
                 } else {
                     false
                 };
-                let secrecy = if tool_name == "list_pull_requests" {
+                let secrecy = if tool_name == "list_pull_requests" || tool_name == "pull_request_read" || tool_name == "get_pull_request" {
                     repo_visibility_secrecy(&arg_owner, &arg_repo, &arg_repo_full, ctx)
                 } else {
                     vec![]
                 };
 
-                for item in items_to_process.iter() {
+                for item in items_to_process.iter().copied() {
                     let number = extract_resource_number(item, "pr", &arg_repo_full);
 
                     // Get repo info from the PR's base or head
@@ -164,7 +173,7 @@ pub fn label_response_items(
         }
 
         // === Issues - label by author status ===
-        "list_issues" | "search_issues" | "get_issue" => {
+        "list_issues" | "search_issues" | "get_issue" | "issue_read" => {
             // Handle single issue or array of issues
             let all_items: Vec<&Value> = if actual_response.is_array() {
                 actual_response
@@ -189,7 +198,7 @@ pub fn label_response_items(
             } else {
                 false
             };
-            let secrecy = if tool_name == "list_issues" || tool_name == "get_issue" {
+            let secrecy = if tool_name == "list_issues" || tool_name == "get_issue" || tool_name == "issue_read" {
                 repo_visibility_secrecy(&arg_owner, &arg_repo, &default_repo_full_name, ctx)
             } else {
                 vec![]
