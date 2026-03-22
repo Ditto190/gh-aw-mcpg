@@ -110,7 +110,7 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (h *proxyHandler) handleWithDIFC(w http.ResponseWriter, r *http.Request, path, toolName string, args map[string]interface{}, graphQLBody []byte) {
 	ctx := r.Context()
 	s := h.server
-	backend := &stubBackendCaller{}
+	backend := &restBackendCaller{server: s, clientAuth: r.Header.Get("Authorization")}
 
 	if !s.guardInitialized {
 		log.Printf("[proxy] WARNING: guard not initialized, blocking request")
