@@ -1034,12 +1034,16 @@ pub fn commit_integrity(
 /// Trusted bots:
 /// - dependabot[bot]: GitHub dependency updater
 /// - github-actions[bot]: GitHub Actions workflow actor (GITHUB_TOKEN)
+/// - github-actions: GitHub Actions workflow actor (without [bot] suffix, as returned by some APIs)
+/// - app/github-actions: GitHub Actions workflow actor (with app/ prefix, as returned by gh CLI)
 /// - github-merge-queue[bot]: GitHub merge queue automation
 /// - copilot: GitHub Copilot AI assistant
 pub fn is_trusted_first_party_bot(username: &str) -> bool {
     let lower = username.to_lowercase();
     lower == "dependabot[bot]"
         || lower == "github-actions[bot]"
+        || lower == "github-actions"
+        || lower == "app/github-actions"
         || lower == "github-merge-queue[bot]"
         || lower == "copilot"
 }
