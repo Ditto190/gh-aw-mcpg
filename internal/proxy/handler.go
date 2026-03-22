@@ -74,6 +74,20 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			})
 			return
 		}
+		// Schema introspection (__type, __schema) is safe metadata — passthrough without DIFC
+		if match.ToolName == "graphql_introspection" {
+			logHandler.Printf("GraphQL introspection query, passing through")
+			clientAuth := r.Header.Get("Authorization")
+			resp, err := h.server.forwardToGitHub(r.Context(), http.MethodPost, "/graphql", bytes.NewReader(graphQLBody), "application/json", clientAuth)
+			if err != nil {
+				http.Error(w, "upstream request failed", http.StatusBadGateway)
+				return
+			}
+			defer resp.Body.Close()
+			respBody, _ := io.ReadAll(resp.Body)
+			h.writeResponse(w, resp, respBody)
+			return
+		}
 		toolName = match.ToolName
 		args = match.Args
 	} else {
@@ -341,8 +355,8 @@ func copyResponseHeaders(w http.ResponseWriter, resp *http.Response) {
 }
 
 func truncateForLog(s string, maxLen int) string {
-if len(s) <= maxLen {
-return s
-}
-return s[:maxLen] + "..."
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
 }

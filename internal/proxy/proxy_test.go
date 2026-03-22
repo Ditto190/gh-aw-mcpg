@@ -435,6 +435,16 @@ func TestMatchGraphQL(t *testing.T) {
 			body:    `not json`,
 			wantNil: true,
 		},
+		{
+			name:     "__type introspection query",
+			body:     `{"query":"query Issue_fields{Issue: __type(name: \"Issue\"){fields(includeDeprecated: true){name}}}"}`,
+			wantTool: "graphql_introspection",
+		},
+		{
+			name:     "__schema introspection query",
+			body:     `{"query":"query { __schema { types { name } } }"}`,
+			wantTool: "graphql_introspection",
+		},
 	}
 
 	for _, tt := range tests {
