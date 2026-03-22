@@ -847,7 +847,7 @@ mod tests {
         // Not bots
         assert!(!is_trusted_first_party_bot("octocat"));
         assert!(!is_trusted_first_party_bot("dependabot"));
-        assert!(!is_trusted_first_party_bot("github-actions"));
+        assert!(is_trusted_first_party_bot("github-actions"));
         assert!(!is_trusted_first_party_bot(""));
     }
 
@@ -890,6 +890,16 @@ mod tests {
         });
         assert_eq!(
             issue_integrity(&copilot_issue, repo, false, &ctx),
+            writer_integrity(repo, &ctx)
+        );
+
+        // github-actions without [bot] suffix (as returned by some APIs)
+        let actions_no_bot_issue = json!({
+            "user": {"login": "github-actions"},
+            "author_association": "NONE"
+        });
+        assert_eq!(
+            issue_integrity(&actions_no_bot_issue, repo, false, &ctx),
             writer_integrity(repo, &ctx)
         );
 
