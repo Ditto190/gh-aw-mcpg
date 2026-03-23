@@ -668,6 +668,28 @@ pub fn is_graphql_wrapper(response: &Value) -> bool {
     response.get("data").is_some()
 }
 
+/// Returns true if the response is a search result wrapper (has "total_count").
+/// Used to prevent treating `{"total_count":0,"incomplete_results":false}` as a
+/// single data item when the search returned zero results.
+pub fn is_search_result_wrapper(response: &Value) -> bool {
+    response.get("total_count").is_some()
+}
+
+/// Returns true if the response is an MCP content wrapper where the text was not
+/// parseable as JSON. These are `{"content":[{"type":"text","text":"..."}]}` objects
+/// that `extract_mcp_response` left unwrapped because the text field was not valid
+/// JSON (e.g. plain-text error messages or human-readable summaries).
+pub fn is_mcp_text_wrapper(response: &Value) -> bool {
+    response
+        .get("content")
+        .and_then(|v| v.as_array())
+        .and_then(|arr| arr.first())
+        .and_then(|item| item.get("type"))
+        .and_then(|t| t.as_str())
+        .map(|t| t == "text")
+        .unwrap_or(false)
+}
+
 /// Extract a single object from a GraphQL response for singular queries.
 /// Traverses data.repository.<field> for fields like "issue", "pullRequest".
 pub fn extract_graphql_single_object(response: &Value) -> Option<&Value> {
