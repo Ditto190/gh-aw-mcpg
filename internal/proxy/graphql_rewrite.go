@@ -6,22 +6,46 @@ import (
 	"strings"
 )
 
-// guardRequiredFields lists the GraphQL selection fields the DIFC guard needs
-// for accurate integrity labeling. author{login} enables trusted-bot detection;
-// authorAssociation provides the integrity level directly (MEMBER, CONTRIBUTOR,
-// etc.) so the guard doesn't need extra enrichment REST round-trips.
-var guardRequiredFields = []struct {
+// guardFieldSet defines the GraphQL fields the DIFC guard needs for a
+// specific class of GitHub objects.
+type guardFieldSet struct {
 	field   string         // field text to inject
 	present *regexp.Regexp // pattern that indicates the field is already selected
-}{
+}
+
+// issueAndPRFields are required for Issue and PullRequest types.
+// author{login} enables trusted-bot detection; authorAssociation provides the
+// integrity level directly so the guard doesn't need enrichment REST round-trips.
+var issueAndPRFields = []guardFieldSet{
 	{"author{login}", regexp.MustCompile(`\bauthor\s*\{[^}]*\blogin\b`)},
 	{"authorAssociation", regexp.MustCompile(`\bauthorAssociation\b`)},
 }
 
-// allGuardFieldsPresent returns true if the query already contains every
-// required guard field.
-func allGuardFieldsPresent(query string) bool {
-	for _, f := range guardRequiredFields {
+// commitFields are required for Commit types.
+// author{user{login}} enables trusted-bot detection. Commits don't have an
+// authorAssociation field in the GraphQL schema.
+var commitFields = []guardFieldSet{
+	{"author{user{login}}", regexp.MustCompile(`\bauthor\s*\{[^}]*\buser\s*\{[^}]*\blogin\b`)},
+}
+
+// fieldsForTool returns the guard fields applicable to the given tool name,
+// or nil if no injection is needed.
+func fieldsForTool(toolName string) []guardFieldSet {
+	switch toolName {
+	case "list_issues", "list_pull_requests", "issue_read", "pull_request_read",
+		"search_issues":
+		return issueAndPRFields
+	case "list_commits":
+		return commitFields
+	default:
+		return nil
+	}
+}
+
+// allFieldsPresent returns true if the query already contains every
+// required guard field from the given set.
+func allFieldsPresent(query string, fields []guardFieldSet) bool {
+	for _, f := range fields {
 		if !f.present.MatchString(query) {
 			return false
 		}
@@ -29,10 +53,10 @@ func allGuardFieldsPresent(query string) bool {
 	return true
 }
 
-// missingGuardFields returns the field strings not yet present in the query.
-func missingGuardFields(query string) []string {
+// missingFields returns the field strings from the set not yet present in the query.
+func missingFields(query string, fields []guardFieldSet) []string {
 	var missing []string
-	for _, f := range guardRequiredFields {
+	for _, f := range fields {
 		if !f.present.MatchString(query) {
 			missing = append(missing, f.field)
 		}
@@ -45,11 +69,8 @@ func missingGuardFields(query string) []string {
 // Returns the (possibly modified) body. If injection is not needed or fails,
 // the original body is returned unchanged.
 func InjectGuardFields(body []byte, toolName string) []byte {
-	// Only rewrite for tools that need author info
-	switch toolName {
-	case "list_issues", "list_pull_requests", "issue_read", "pull_request_read",
-		"search_issues":
-	default:
+	fields := fieldsForTool(toolName)
+	if fields == nil {
 		return body
 	}
 
@@ -58,11 +79,11 @@ func InjectGuardFields(body []byte, toolName string) []byte {
 		return body
 	}
 
-	if gql.Query == "" || allGuardFieldsPresent(gql.Query) {
+	if gql.Query == "" || allFieldsPresent(gql.Query, fields) {
 		return body
 	}
 
-	missing := missingGuardFields(gql.Query)
+	missing := missingFields(gql.Query, fields)
 	modified := injectFieldsIntoQuery(gql.Query, missing)
 	if modified == gql.Query {
 		return body
