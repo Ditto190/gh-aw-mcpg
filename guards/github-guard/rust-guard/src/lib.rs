@@ -251,7 +251,7 @@ fn infer_scope_for_baseline(tool_name: &str, tool_args: &Value, repo_id: &str) -
     }
 
     match tool_name {
-        "search_code" => {
+        "search_code" | "search_issues" | "search_pull_requests" => {
             let query = tool_args
                 .get("query")
                 .and_then(|v| v.as_str())
@@ -845,39 +845,74 @@ pub extern "C" fn label_response(
     // If no items were generated, wrap entire response as single item with computed labels
     // This ensures single-item responses (like get_file_contents) are properly labeled
     if labeled_items.is_empty() {
-        log_info("    no fine-grained items, creating fallback single-item label");
-
         // Extract repo info from tool args (same logic as label_resource)
         let (_, _, repo_id) = extract_repo_info(&input.tool_args);
-
-        // Use apply_tool_labels to get proper labels for this tool
-        let desc = format!("resource:{}", input.tool_name);
-        let (secrecy, integrity, final_desc) = labels::apply_tool_labels(
-            &input.tool_name,
-            &input.tool_args,
-            &repo_id,
-            vec![], // default secrecy
-            vec![], // default integrity
-            desc,
-            &ctx,
-        );
-
         let baseline_scope = infer_scope_for_baseline(&input.tool_name, &input.tool_args, &repo_id);
-        let integrity = labels::ensure_integrity_baseline(&baseline_scope, integrity, &ctx);
 
-        log_info(&format!(
-            "    fallback labels: secrecy={:?}, integrity={:?}",
-            secrecy, integrity
-        ));
+        // Server-generated metadata (pagination errors, empty search results) contains
+        // no repository data — pass through with approved integrity so the agent can
+        // see instructional messages and empty-result confirmations.
+        let actual_response = labels::extract_mcp_response(&input.tool_result);
+        let is_server_metadata = labels::is_mcp_text_wrapper(&actual_response)
+            || (labels::is_search_result_wrapper(&actual_response)
+                && actual_response
+                    .get("total_count")
+                    .and_then(|v| v.as_u64())
+                    == Some(0));
 
-        labeled_items.push(LabeledItem {
-            data: input.tool_result.clone(),
-            labels: ResourceLabels {
-                description: final_desc,
-                secrecy,
-                integrity,
-            },
-        });
+        if is_server_metadata {
+            let scope = if baseline_scope.is_empty() {
+                "github".to_string()
+            } else {
+                baseline_scope
+            };
+            let integrity = vec![format!("approved:{}", scope)];
+            let desc = format!("metadata:{}", input.tool_name);
+
+            log_info(&format!(
+                "    server metadata (text message or empty search), integrity={:?}",
+                integrity
+            ));
+
+            labeled_items.push(LabeledItem {
+                data: input.tool_result.clone(),
+                labels: ResourceLabels {
+                    description: desc,
+                    secrecy: vec![],
+                    integrity,
+                },
+            });
+        } else {
+            log_info("    no fine-grained items, creating fallback single-item label");
+
+            // Use apply_tool_labels to get proper labels for this tool
+            let desc = format!("resource:{}", input.tool_name);
+            let (secrecy, integrity, final_desc) = labels::apply_tool_labels(
+                &input.tool_name,
+                &input.tool_args,
+                &repo_id,
+                vec![], // default secrecy
+                vec![], // default integrity
+                desc,
+                &ctx,
+            );
+
+            let integrity = labels::ensure_integrity_baseline(&baseline_scope, integrity, &ctx);
+
+            log_info(&format!(
+                "    fallback labels: secrecy={:?}, integrity={:?}",
+                secrecy, integrity
+            ));
+
+            labeled_items.push(LabeledItem {
+                data: input.tool_result.clone(),
+                labels: ResourceLabels {
+                    description: final_desc,
+                    secrecy,
+                    integrity,
+                },
+            });
+        }
     }
 
     log_info(&format!(
@@ -1085,5 +1120,19 @@ mod tests {
                 "approved:lpcox/git*".to_string(),
             ]
         );
+    }
+
+    #[test]
+    fn infer_scope_for_baseline_uses_search_issues_query_repo() {
+        let tool_args = json!({"query": "repo:github/gh-aw-mcpg is:open bug"});
+        let inferred = infer_scope_for_baseline("search_issues", &tool_args, "");
+        assert_eq!(inferred, "github/gh-aw-mcpg");
+    }
+
+    #[test]
+    fn infer_scope_for_baseline_uses_search_pull_requests_query_repo() {
+        let tool_args = json!({"query": "repo:github/gh-aw-mcpg is:pr is:open"});
+        let inferred = infer_scope_for_baseline("search_pull_requests", &tool_args, "");
+        assert_eq!(inferred, "github/gh-aw-mcpg");
     }
 }
