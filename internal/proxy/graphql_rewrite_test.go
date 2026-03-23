@@ -21,6 +21,13 @@ func TestInjectGuardFields_SkipsWhenFieldsPresent(t *testing.T) {
 	assert.Equal(t, body, result)
 }
 
+func TestInjectGuardFields_SkipsWhenCommitFieldsPresent(t *testing.T) {
+	query := `query { repository(owner:"o", name:"r") { defaultBranchRef { target { ... on Commit { history(first:10) { nodes { oid author{user{login}} } } } } } } }`
+	body, _ := json.Marshal(GraphQLRequest{Query: query})
+	result := InjectGuardFields(body, "list_commits")
+	assert.Equal(t, body, result)
+}
+
 func TestInjectGuardFields_InjectsIntoNodes(t *testing.T) {
 	query := `query { repository(owner:"o", name:"r") { pullRequests(first:10) { nodes { number title } } } }`
 	body, _ := json.Marshal(GraphQLRequest{Query: query})
@@ -145,6 +152,43 @@ query { repository(owner:"o",name:"r") { pullRequests(first:1) { nodes { ...pr }
 	result := injectIntoFragment(query, "pr", "author{login},authorAssociation")
 	assert.Contains(t, result, "labels{nodes{name}}")
 	assert.Contains(t, result, "author{login},authorAssociation}")
+}
+
+func TestInjectGuardFields_CommitInjectsAuthorUser(t *testing.T) {
+	query := `query { repository(owner:"o", name:"r") { defaultBranchRef { target { ... on Commit { history(first:10) { nodes { oid messageHeadline } } } } } } }`
+	body, _ := json.Marshal(GraphQLRequest{Query: query})
+
+	result := InjectGuardFields(body, "list_commits")
+
+	var gql GraphQLRequest
+	require.NoError(t, json.Unmarshal(result, &gql))
+	assert.Contains(t, gql.Query, "author{user{login}}")
+	// Should NOT inject issue/PR fields
+	assert.NotContains(t, gql.Query, "authorAssociation")
+	// Original fields still present
+	assert.Contains(t, gql.Query, "oid")
+	assert.Contains(t, gql.Query, "messageHeadline")
+}
+
+func TestInjectGuardFields_CommitFragment(t *testing.T) {
+	query := `fragment c on Commit{oid,messageHeadline}
+query { repository(owner:"o", name:"r") { defaultBranchRef { target { ... on Commit { history(first:10) { nodes { ...c } } } } } } }`
+	body, _ := json.Marshal(GraphQLRequest{Query: query})
+
+	result := InjectGuardFields(body, "list_commits")
+
+	var gql GraphQLRequest
+	require.NoError(t, json.Unmarshal(result, &gql))
+	assert.Contains(t, gql.Query, "author{user{login}}")
+	assert.Contains(t, gql.Query, "fragment c on Commit{oid,messageHeadline,author{user{login}}}")
+}
+
+func TestInjectGuardFields_CommitSkipsWhenAuthorUserPresent(t *testing.T) {
+	// Has author{user{login}} already — should be a no-op
+	query := `query { repository(owner:"o", name:"r") { defaultBranchRef { target { ... on Commit { history(first:10) { nodes { oid author { user { login } } } } } } } } }`
+	body, _ := json.Marshal(GraphQLRequest{Query: query})
+	result := InjectGuardFields(body, "list_commits")
+	assert.Equal(t, body, result)
 }
 
 func countOccurrences(s, substr string) int {

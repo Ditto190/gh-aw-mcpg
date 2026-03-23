@@ -833,11 +833,15 @@ mod tests {
         assert!(is_trusted_first_party_bot("github-actions[bot]"));
         assert!(is_trusted_first_party_bot("github-merge-queue[bot]"));
         assert!(is_trusted_first_party_bot("copilot"));
+        assert!(is_trusted_first_party_bot("copilot-swe-agent[bot]"));
+        assert!(is_trusted_first_party_bot("copilot-swe-agent"));
+        assert!(is_trusted_first_party_bot("app/copilot-swe-agent"));
 
         // Case-insensitive
         assert!(is_trusted_first_party_bot("Dependabot[bot]"));
         assert!(is_trusted_first_party_bot("GitHub-Actions[bot]"));
         assert!(is_trusted_first_party_bot("Copilot"));
+        assert!(is_trusted_first_party_bot("Copilot-Swe-Agent[bot]"));
 
         // Not trusted (third-party bots)
         assert!(!is_trusted_first_party_bot("renovate[bot]"));
@@ -1020,13 +1024,13 @@ mod tests {
         let repo = "github/copilot";
 
         let ctx_with_bots = PolicyContext {
-            trusted_bots: vec!["copilot-swe-agent[bot]".to_string()],
+            trusted_bots: vec!["my-deploy-bot[bot]".to_string()],
             ..Default::default()
         };
 
         // A configured trusted bot issue gets approved (writer) integrity even with NONE association
         let configured_bot_issue = json!({
-            "user": {"login": "copilot-swe-agent[bot]"},
+            "user": {"login": "my-deploy-bot[bot]"},
             "author_association": "NONE"
         });
         assert_eq!(
@@ -1036,7 +1040,7 @@ mod tests {
 
         // Case-insensitive match
         let upper_bot_issue = json!({
-            "user": {"login": "COPILOT-SWE-AGENT[BOT]"},
+            "user": {"login": "MY-DEPLOY-BOT[BOT]"},
             "author_association": "NONE"
         });
         assert_eq!(
@@ -1057,13 +1061,13 @@ mod tests {
         let repo = "github/copilot";
 
         let ctx_with_bots = PolicyContext {
-            trusted_bots: vec!["copilot-swe-agent[bot]".to_string()],
+            trusted_bots: vec!["my-deploy-bot[bot]".to_string()],
             ..Default::default()
         };
 
         // A configured trusted bot PR gets approved (writer) integrity even with NONE association
         let configured_bot_pr = json!({
-            "user": {"login": "copilot-swe-agent[bot]"},
+            "user": {"login": "my-deploy-bot[bot]"},
             "author_association": "NONE"
         });
         assert_eq!(
