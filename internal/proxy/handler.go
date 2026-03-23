@@ -91,6 +91,10 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		toolName = match.ToolName
 		args = match.Args
+
+		// Inject guard-required fields (author{login}, authorAssociation) into
+		// the GraphQL query so the guard can label items without enrichment.
+		graphQLBody = InjectGuardFields(graphQLBody, toolName)
 	} else {
 		match := MatchRoute(rawPath)
 		if match == nil {
