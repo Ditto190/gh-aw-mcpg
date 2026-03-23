@@ -862,11 +862,13 @@ pub extern "C" fn label_response(
 
         if is_server_metadata {
             let scope = if baseline_scope.is_empty() {
-                "github".to_string()
+                "github"
             } else {
-                baseline_scope
+                &baseline_scope
             };
-            let integrity = vec![format!("approved:{}", scope)];
+            // Use writer_integrity which goes through normalize_scope to match
+            // the policy scope token (e.g., "github" for owner-scoped policies).
+            let integrity = labels::writer_integrity(scope, &ctx);
             let desc = format!("metadata:{}", input.tool_name);
 
             log_info(&format!(
