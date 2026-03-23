@@ -67,6 +67,12 @@ type Config struct {
 
 	// DIFCMode is the enforcement mode (strict, filter, propagate).
 	DIFCMode string
+
+	// TrustedBots is an optional list of additional trusted bot usernames.
+	// These are passed to the guard alongside the policy during LabelAgent
+	// initialization, extending the guard's built-in trusted bot list
+	// (e.g. dependabot[bot], github-actions[bot]).
+	TrustedBots []string
 }
 
 // New creates a new proxy Server from the given Config.
@@ -122,7 +128,7 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 	// Initialize guard policy (LabelAgent)
 	if cfg.Policy != "" {
 		logProxy.Printf("Initializing guard policy from config")
-		if err := s.initGuardPolicy(ctx, cfg.Policy); err != nil {
+		if err := s.initGuardPolicy(ctx, cfg.Policy, cfg.TrustedBots); err != nil {
 			return nil, fmt.Errorf("failed to initialize guard policy: %w", err)
 		}
 	} else {
@@ -133,9 +139,9 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 	return s, nil
 }
 
-// initGuardPolicy calls LabelAgent with the provided policy JSON.
-func (s *Server) initGuardPolicy(ctx context.Context, policyJSON string) error {
-	logProxy.Printf("Initializing guard policy: policyJSON_len=%d", len(policyJSON))
+// initGuardPolicy calls LabelAgent with the provided policy JSON and optional trusted bots.
+func (s *Server) initGuardPolicy(ctx context.Context, policyJSON string, trustedBots []string) error {
+	logProxy.Printf("Initializing guard policy: policyJSON_len=%d, trustedBots=%d", len(policyJSON), len(trustedBots))
 
 	var policy interface{}
 	if err := json.Unmarshal([]byte(policyJSON), &policy); err != nil {
@@ -161,9 +167,12 @@ func (s *Server) initGuardPolicy(ctx context.Context, policyJSON string) error {
 		return fmt.Errorf("policy validation failed: %w", err)
 	}
 
+	// Build payload with optional trusted bots
+	payload := guard.BuildLabelAgentPayload(policy, trustedBots)
+
 	logProxy.Printf("Calling LabelAgent to initialize agent labels from guard")
 	backend := &restBackendCaller{server: s}
-	result, err := s.guard.LabelAgent(ctx, policy, backend, s.capabilities)
+	result, err := s.guard.LabelAgent(ctx, payload, backend, s.capabilities)
 	if err != nil {
 		return fmt.Errorf("LabelAgent failed: %w", err)
 	}
