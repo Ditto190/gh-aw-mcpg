@@ -67,6 +67,12 @@ type Config struct {
 
 	// DIFCMode is the enforcement mode (strict, filter, propagate).
 	DIFCMode string
+
+	// TrustedBots is an optional list of additional trusted bot usernames.
+	// These are passed to the guard alongside the policy during LabelAgent
+	// initialization, extending the guard's built-in trusted bot list
+	// (e.g. dependabot[bot], github-actions[bot]).
+	TrustedBots []string
 }
 
 // New creates a new proxy Server from the given Config.
@@ -122,7 +128,7 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 	// Initialize guard policy (LabelAgent)
 	if cfg.Policy != "" {
 		logProxy.Printf("Initializing guard policy from config")
-		if err := s.initGuardPolicy(ctx, cfg.Policy); err != nil {
+		if err := s.initGuardPolicy(ctx, cfg.Policy, cfg.TrustedBots); err != nil {
 			return nil, fmt.Errorf("failed to initialize guard policy: %w", err)
 		}
 	} else {
@@ -133,9 +139,9 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 	return s, nil
 }
 
-// initGuardPolicy calls LabelAgent with the provided policy JSON.
-func (s *Server) initGuardPolicy(ctx context.Context, policyJSON string) error {
-	logProxy.Printf("Initializing guard policy: policyJSON_len=%d", len(policyJSON))
+// initGuardPolicy calls LabelAgent with the provided policy JSON and optional trusted bots.
+func (s *Server) initGuardPolicy(ctx context.Context, policyJSON string, trustedBots []string) error {
+	logProxy.Printf("Initializing guard policy: policyJSON_len=%d, trustedBots=%d", len(policyJSON), len(trustedBots))
 
 	var policy interface{}
 	if err := json.Unmarshal([]byte(policyJSON), &policy); err != nil {
@@ -161,9 +167,12 @@ func (s *Server) initGuardPolicy(ctx context.Context, policyJSON string) error {
 		return fmt.Errorf("policy validation failed: %w", err)
 	}
 
+	// Build payload with optional trusted bots
+	payload := guard.BuildLabelAgentPayload(policy, trustedBots)
+
 	logProxy.Printf("Calling LabelAgent to initialize agent labels from guard")
-	backend := &stubBackendCaller{}
-	result, err := s.guard.LabelAgent(ctx, policy, backend, s.capabilities)
+	backend := &restBackendCaller{server: s}
+	result, err := s.guard.LabelAgent(ctx, payload, backend, s.capabilities)
 	if err != nil {
 		return fmt.Errorf("LabelAgent failed: %w", err)
 	}
@@ -200,14 +209,100 @@ func (s *Server) Handler() http.Handler {
 	return &proxyHandler{server: s}
 }
 
-// stubBackendCaller is a no-op BackendCaller for the proxy.
-// The guard receives the full API response in LabelResponse, so it
-// does not need to make recursive backend calls.
-type stubBackendCaller struct{}
+// restBackendCaller translates guard CallTool requests into GitHub REST API
+// calls, enabling backend enrichment (author_association, repo visibility, etc.)
+// that the WASM guard needs for accurate integrity labeling.
+type restBackendCaller struct {
+	server     *Server
+	clientAuth string
+}
 
-func (s *stubBackendCaller) CallTool(_ context.Context, toolName string, _ interface{}) (interface{}, error) {
-	logProxy.Printf("stub BackendCaller: ignoring CallTool(%s) — proxy provides full responses", toolName)
-	return nil, fmt.Errorf("CallTool not supported in proxy mode")
+func (r *restBackendCaller) CallTool(ctx context.Context, toolName string, args interface{}) (interface{}, error) {
+	argsMap, ok := args.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("unexpected args type: %T", args)
+	}
+
+	var apiPath string
+	switch toolName {
+	case "pull_request_read":
+		owner, _ := argsMap["owner"].(string)
+		repo, _ := argsMap["repo"].(string)
+		number, _ := argsMap["pullNumber"].(string)
+		if number == "" {
+			if n, ok := argsMap["pullNumber"].(float64); ok {
+				number = fmt.Sprintf("%d", int(n))
+			}
+		}
+		if owner == "" || repo == "" || number == "" {
+			return nil, fmt.Errorf("pull_request_read: missing owner/repo/pullNumber")
+		}
+		apiPath = fmt.Sprintf("/repos/%s/%s/pulls/%s", owner, repo, number)
+
+	case "issue_read":
+		owner, _ := argsMap["owner"].(string)
+		repo, _ := argsMap["repo"].(string)
+		number, _ := argsMap["issue_number"].(string)
+		if number == "" {
+			if n, ok := argsMap["issue_number"].(float64); ok {
+				number = fmt.Sprintf("%d", int(n))
+			}
+		}
+		if owner == "" || repo == "" || number == "" {
+			return nil, fmt.Errorf("issue_read: missing owner/repo/issue_number")
+		}
+		apiPath = fmt.Sprintf("/repos/%s/%s/issues/%s", owner, repo, number)
+
+	case "search_repositories":
+		query, _ := argsMap["query"].(string)
+		if query == "" {
+			return nil, fmt.Errorf("search_repositories: missing query")
+		}
+		perPage := "10"
+		if pp, ok := argsMap["perPage"].(float64); ok {
+			perPage = fmt.Sprintf("%d", int(pp))
+		}
+		apiPath = fmt.Sprintf("/search/repositories?q=%s&per_page=%s", query, perPage)
+
+	default:
+		logProxy.Printf("restBackendCaller: unsupported tool %s", toolName)
+		return nil, fmt.Errorf("unsupported tool: %s", toolName)
+	}
+
+	logProxy.Printf("restBackendCaller: %s → GET %s", toolName, apiPath)
+
+	// Use the server's configured token for enrichment calls rather than the
+	// client's auth header. Enrichment needs org-level visibility (e.g. to get
+	// correct author_association) which the client's GITHUB_TOKEN may lack.
+	enrichmentAuth := ""
+	if r.server.githubToken != "" {
+		enrichmentAuth = "token " + r.server.githubToken
+	} else if r.clientAuth != "" {
+		enrichmentAuth = r.clientAuth
+	}
+	resp, err := r.server.forwardToGitHub(ctx, "GET", apiPath, nil, "", enrichmentAuth)
+	if err != nil {
+		return nil, fmt.Errorf("REST call failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	if resp.StatusCode >= 400 {
+		logProxy.Printf("restBackendCaller: %s returned %d", toolName, resp.StatusCode)
+		return nil, fmt.Errorf("GitHub API returned %d", resp.StatusCode)
+	}
+
+	// Wrap in MCP response format: {content: [{type: "text", text: "..."}]}
+	mcpResp := map[string]interface{}{
+		"content": []map[string]interface{}{
+			{"type": "text", "text": string(body)},
+		},
+	}
+	return mcpResp, nil
 }
 
 // forwardToGitHub sends a request to the upstream GitHub API.

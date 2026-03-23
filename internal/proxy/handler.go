@@ -9,6 +9,7 @@ import (
 	"net/http"
 
 	"github.com/github/gh-aw-mcpg/internal/difc"
+	"github.com/github/gh-aw-mcpg/internal/guard"
 	"github.com/github/gh-aw-mcpg/internal/logger"
 )
 
@@ -90,6 +91,10 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		toolName = match.ToolName
 		args = match.Args
+
+		// Inject guard-required fields (author{login}, authorAssociation) into
+		// the GraphQL query so the guard can label items without enrichment.
+		graphQLBody = InjectGuardFields(graphQLBody, toolName)
 	} else {
 		match := MatchRoute(rawPath)
 		if match == nil {
@@ -110,7 +115,7 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (h *proxyHandler) handleWithDIFC(w http.ResponseWriter, r *http.Request, path, toolName string, args map[string]interface{}, graphQLBody []byte) {
 	ctx := r.Context()
 	s := h.server
-	backend := &stubBackendCaller{}
+	backend := &restBackendCaller{server: s, clientAuth: r.Header.Get("Authorization")}
 
 	if !s.guardInitialized {
 		log.Printf("[proxy] WARNING: guard not initialized, blocking request")
@@ -193,6 +198,10 @@ func (h *proxyHandler) handleWithDIFC(w http.ResponseWriter, r *http.Request, pa
 	}
 
 	// **Phase 4: Guard labels the response**
+	// Store tool_args in context so LabelResponse can pass them to the WASM guard
+	ctx = guard.SetRequestStateInContext(ctx, map[string]interface{}{
+		"tool_args": args,
+	})
 	labeledData, err := s.guard.LabelResponse(ctx, toolName, responseData, backend, s.capabilities)
 	if err != nil {
 		logHandler.Printf("[DIFC] Phase 4 failed: %v", err)
