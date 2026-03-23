@@ -1229,7 +1229,10 @@ pub fn commit_integrity(
 /// - github-actions: GitHub Actions workflow actor (without [bot] suffix, as returned by some APIs)
 /// - app/github-actions: GitHub Actions workflow actor (with app/ prefix, as returned by gh CLI)
 /// - github-merge-queue[bot]: GitHub merge queue automation
-/// - copilot: GitHub Copilot AI assistant
+/// - copilot: GitHub Copilot coding agent (app login)
+/// - copilot-swe-agent[bot]: GitHub Copilot SWE agent (bot user login from REST API)
+/// - copilot-swe-agent: GitHub Copilot SWE agent (without [bot] suffix)
+/// - app/copilot-swe-agent: GitHub Copilot SWE agent (with app/ prefix, as returned by gh CLI)
 pub fn is_trusted_first_party_bot(username: &str) -> bool {
     let lower = username.to_lowercase();
     lower == "dependabot[bot]"
@@ -1238,6 +1241,9 @@ pub fn is_trusted_first_party_bot(username: &str) -> bool {
         || lower == "app/github-actions"
         || lower == "github-merge-queue[bot]"
         || lower == "copilot"
+        || lower == "copilot-swe-agent[bot]"
+        || lower == "copilot-swe-agent"
+        || lower == "app/copilot-swe-agent"
 }
 
 /// Check if a user is in the gateway-configured trusted bot list.
