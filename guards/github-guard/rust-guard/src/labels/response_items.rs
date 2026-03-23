@@ -317,7 +317,7 @@ pub fn label_response_items(
                     .as_array()
                     .map(|arr| arr.iter().collect())
                     .unwrap_or_default()
-            } else if actual_response.is_object() {
+            } else if actual_response.is_object() && !is_search_result_wrapper(&actual_response) && !is_mcp_text_wrapper(&actual_response) {
                 vec![&actual_response]
             } else {
                 vec![]
@@ -352,7 +352,7 @@ pub fn label_response_items(
                     .as_array()
                     .map(|arr| arr.iter().collect())
                     .unwrap_or_default()
-            } else if actual_response.is_object() {
+            } else if actual_response.is_object() && !is_search_result_wrapper(&actual_response) && !is_mcp_text_wrapper(&actual_response) {
                 vec![&actual_response]
             } else {
                 vec![]
@@ -404,7 +404,7 @@ pub fn label_response_items(
                     .as_array()
                     .map(|arr| arr.iter().collect())
                     .unwrap_or_default()
-            } else if actual_response.is_object() {
+            } else if actual_response.is_object() && !is_search_result_wrapper(&actual_response) && !is_mcp_text_wrapper(&actual_response) {
                 vec![&actual_response]
             } else {
                 vec![]
@@ -461,7 +461,7 @@ pub fn label_response_items(
                     .as_array()
                     .map(|arr| arr.iter().collect())
                     .unwrap_or_default()
-            } else if actual_response.is_object() {
+            } else if actual_response.is_object() && !is_search_result_wrapper(&actual_response) && !is_mcp_text_wrapper(&actual_response) {
                 vec![&actual_response]
             } else {
                 vec![]
