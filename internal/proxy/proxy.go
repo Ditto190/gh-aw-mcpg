@@ -271,7 +271,16 @@ func (r *restBackendCaller) CallTool(ctx context.Context, toolName string, args 
 
 	logProxy.Printf("restBackendCaller: %s → GET %s", toolName, apiPath)
 
-	resp, err := r.server.forwardToGitHub(ctx, "GET", apiPath, nil, "", r.clientAuth)
+	// Use the server's configured token for enrichment calls rather than the
+	// client's auth header. Enrichment needs org-level visibility (e.g. to get
+	// correct author_association) which the client's GITHUB_TOKEN may lack.
+	enrichmentAuth := ""
+	if r.server.githubToken != "" {
+		enrichmentAuth = "token " + r.server.githubToken
+	} else if r.clientAuth != "" {
+		enrichmentAuth = r.clientAuth
+	}
+	resp, err := r.server.forwardToGitHub(ctx, "GET", apiPath, nil, "", enrichmentAuth)
 	if err != nil {
 		return nil, fmt.Errorf("REST call failed: %w", err)
 	}
