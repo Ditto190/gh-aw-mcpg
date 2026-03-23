@@ -124,7 +124,7 @@ pub fn label_response_items(
             } else if let Some(obj) = extract_graphql_single_object(&actual_response) {
                 graphql_single_buf = [obj.clone()];
                 &graphql_single_buf
-            } else if actual_response.is_object() && !is_graphql_wrapper(&actual_response) {
+            } else if actual_response.is_object() && !is_graphql_wrapper(&actual_response) && !is_search_result_wrapper(&actual_response) && !is_mcp_text_wrapper(&actual_response) {
                 single_item_buf = [actual_response.clone()];
                 &single_item_buf
             } else {
@@ -133,7 +133,17 @@ pub fn label_response_items(
 
             if !items.is_empty() {
                 let items_to_process = limit_items_with_log(items, "list_pull_requests");
-                let (arg_owner, arg_repo, arg_repo_full) = extract_repo_info(tool_args);
+                let (mut arg_owner, mut arg_repo, mut arg_repo_full) = extract_repo_info(tool_args);
+                // For search operations, extract repo from query when tool_args lacks owner/repo
+                if arg_owner.is_empty() || arg_repo.is_empty() {
+                    let query = tool_args.get("query").and_then(|v| v.as_str()).unwrap_or("");
+                    let (q_owner, q_repo, q_repo_id) = extract_repo_info_from_search_query(query);
+                    if !q_repo_id.is_empty() {
+                        arg_owner = q_owner;
+                        arg_repo = q_repo;
+                        arg_repo_full = q_repo_id;
+                    }
+                }
                 let default_repo_private = if !arg_owner.is_empty() && !arg_repo.is_empty() {
                     super::backend::is_repo_private(&arg_owner, &arg_repo).unwrap_or(false)
                 } else {
@@ -148,8 +158,9 @@ pub fn label_response_items(
                 for item in items_to_process.iter() {
                     let number = extract_resource_number(item, "pr", &arg_repo_full);
 
-                    // Get repo info from the PR's base or head
-                    let repo_full_name = item
+                    // Get repo info from the PR's base or head, with fallback to
+                    // extract_repo_from_item (parses repository_url, html_url, etc.)
+                    let base_head_repo = item
                         .get("base")
                         .and_then(|b| b.get("repo"))
                         .and_then(|r| r.get("full_name"))
@@ -161,6 +172,18 @@ pub fn label_response_items(
                                 .and_then(|v| v.as_str())
                         })
                         .unwrap_or("");
+                    let item_repo_fallback = if base_head_repo.is_empty() {
+                        extract_repo_from_item(item)
+                    } else {
+                        String::new()
+                    };
+                    let repo_full_name = if !base_head_repo.is_empty() {
+                        base_head_repo
+                    } else if !item_repo_fallback.is_empty() {
+                        &item_repo_fallback
+                    } else {
+                        &arg_repo_full
+                    };
                     let repo_private = repo_visibility_private_for_repo_id(repo_full_name)
                         .unwrap_or(default_repo_private);
 
@@ -221,7 +244,7 @@ pub fn label_response_items(
                 nodes.iter().collect()
             } else if let Some(obj) = extract_graphql_single_object(&actual_response) {
                 vec![obj]
-            } else if actual_response.is_object() && !is_graphql_wrapper(&actual_response) {
+            } else if actual_response.is_object() && !is_graphql_wrapper(&actual_response) && !is_search_result_wrapper(&actual_response) && !is_mcp_text_wrapper(&actual_response) {
                 vec![&actual_response]
             } else {
                 Vec::new()
@@ -231,7 +254,17 @@ pub fn label_response_items(
             let items_limited = limit_items_with_log(all_items.as_slice(), "list_issues");
 
             // Get owner/repo from tool_args for contributor verification
-            let (arg_owner, arg_repo, default_repo_full_name) = extract_repo_info(tool_args);
+            let (mut arg_owner, mut arg_repo, mut default_repo_full_name) = extract_repo_info(tool_args);
+            // For search operations, extract repo from query when tool_args lacks owner/repo
+            if arg_owner.is_empty() || arg_repo.is_empty() {
+                let query = tool_args.get("query").and_then(|v| v.as_str()).unwrap_or("");
+                let (q_owner, q_repo, q_repo_id) = extract_repo_info_from_search_query(query);
+                if !q_repo_id.is_empty() {
+                    arg_owner = q_owner;
+                    arg_repo = q_repo;
+                    default_repo_full_name = q_repo_id;
+                }
+            }
             let default_repo_private = if !arg_owner.is_empty() && !arg_repo.is_empty() {
                 super::backend::is_repo_private(&arg_owner, &arg_repo).unwrap_or(false)
             } else {
@@ -284,7 +317,7 @@ pub fn label_response_items(
                     .as_array()
                     .map(|arr| arr.iter().collect())
                     .unwrap_or_default()
-            } else if actual_response.is_object() {
+            } else if actual_response.is_object() && !is_search_result_wrapper(&actual_response) && !is_mcp_text_wrapper(&actual_response) {
                 vec![&actual_response]
             } else {
                 vec![]
@@ -319,7 +352,7 @@ pub fn label_response_items(
                     .as_array()
                     .map(|arr| arr.iter().collect())
                     .unwrap_or_default()
-            } else if actual_response.is_object() {
+            } else if actual_response.is_object() && !is_search_result_wrapper(&actual_response) && !is_mcp_text_wrapper(&actual_response) {
                 vec![&actual_response]
             } else {
                 vec![]
@@ -371,7 +404,7 @@ pub fn label_response_items(
                     .as_array()
                     .map(|arr| arr.iter().collect())
                     .unwrap_or_default()
-            } else if actual_response.is_object() {
+            } else if actual_response.is_object() && !is_search_result_wrapper(&actual_response) && !is_mcp_text_wrapper(&actual_response) {
                 vec![&actual_response]
             } else {
                 vec![]
@@ -428,7 +461,7 @@ pub fn label_response_items(
                     .as_array()
                     .map(|arr| arr.iter().collect())
                     .unwrap_or_default()
-            } else if actual_response.is_object() {
+            } else if actual_response.is_object() && !is_search_result_wrapper(&actual_response) && !is_mcp_text_wrapper(&actual_response) {
                 vec![&actual_response]
             } else {
                 vec![]

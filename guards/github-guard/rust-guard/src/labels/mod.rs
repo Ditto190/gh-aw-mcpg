@@ -46,10 +46,11 @@ pub use helpers::{
     extract_graphql_single_object, extract_items_array,
     extract_number_as_string, extract_repo_from_item, extract_repo_info,
     extract_repo_info_from_search_query, get_bool_or, get_nested_str, get_str_or,
-    has_author_association, is_blocked_user, is_bot, is_graphql_wrapper, issue_integrity,
-    limit_items_with_log, make_item_path, merged_integrity, none_integrity, pr_integrity,
-    private_scope_label, private_user_label, project_github_label, reader_integrity, secret_label,
-    writer_integrity, MinIntegrity, PolicyContext, PolicyScopeEntry, ScopeKind,
+    has_author_association, is_blocked_user, is_bot, is_graphql_wrapper, is_mcp_text_wrapper,
+    is_search_result_wrapper, issue_integrity, limit_items_with_log, make_item_path,
+    merged_integrity, none_integrity, pr_integrity, private_scope_label, private_user_label,
+    project_github_label, reader_integrity, secret_label, writer_integrity, MinIntegrity,
+    PolicyContext, PolicyScopeEntry, ScopeKind,
 };
 #[cfg(test)]
 pub use helpers::has_approval_label;
@@ -2973,5 +2974,279 @@ mod tests {
 
         let items = label_response_items("list_issues", &tool_args, &response, &ctx);
         assert_eq!(items.len(), 0, "GraphQL wrapper should not be treated as a single issue");
+    }
+
+    // -------------------------------------------------------------------------
+    // URL-based number extraction fallback
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_extract_resource_number_direct() {
+        use super::helpers::extract_resource_number;
+        let item = json!({"number": 42});
+        assert_eq!(extract_resource_number(&item, "issue", "org/repo"), "42");
+    }
+
+    #[test]
+    fn test_extract_resource_number_from_html_url() {
+        use super::helpers::extract_resource_number;
+        let item = json!({
+            "html_url": "https://github.com/github/gh-aw-mcpg/issues/2093"
+        });
+        assert_eq!(
+            extract_resource_number(&item, "issue", "github/gh-aw-mcpg"),
+            "2093"
+        );
+    }
+
+    #[test]
+    fn test_extract_resource_number_from_api_url() {
+        use super::helpers::extract_resource_number;
+        let item = json!({
+            "url": "https://api.github.com/repos/github/gh-aw-mcpg/pulls/456"
+        });
+        assert_eq!(
+            extract_resource_number(&item, "pr", "github/gh-aw-mcpg"),
+            "456"
+        );
+    }
+
+    #[test]
+    fn test_extract_resource_number_prefers_number_field() {
+        use super::helpers::extract_resource_number;
+        let item = json!({
+            "number": 100,
+            "html_url": "https://github.com/org/repo/issues/999"
+        });
+        assert_eq!(extract_resource_number(&item, "issue", "org/repo"), "100");
+    }
+
+    #[test]
+    fn test_extract_resource_number_unknown_when_no_data() {
+        use super::helpers::extract_resource_number;
+        let item = json!({"title": "No number or URL"});
+        assert_eq!(
+            extract_resource_number(&item, "issue", "org/repo"),
+            "unknown"
+        );
+    }
+
+    // -------------------------------------------------------------------------
+    // PR search result with repository_url fallback (response_items)
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_search_pull_requests_items_repository_url_fallback() {
+        let ctx = default_ctx();
+        let tool_args = json!({});
+        // Simulates a search PR result without base/head but with repository_url and html_url
+        let response = json!([{
+            "html_url": "https://github.com/github/gh-aw-mcpg/pull/2388",
+            "repository_url": "https://api.github.com/repos/github/gh-aw-mcpg",
+            "user": {"login": "lpcox"},
+            "author_association": "MEMBER"
+        }]);
+
+        let items =
+            label_response_items("search_pull_requests", &tool_args, &response, &ctx);
+        assert_eq!(items.len(), 1, "Should find 1 PR in search results");
+        assert_eq!(
+            items[0].labels.description,
+            "pr:github/gh-aw-mcpg#2388",
+            "Should extract repo from repository_url and number from html_url"
+        );
+        assert!(
+            items[0]
+                .labels
+                .integrity
+                .iter()
+                .any(|t| t.starts_with("approved")),
+            "MEMBER should get approved integrity, got: {:?}",
+            items[0].labels.integrity
+        );
+    }
+
+    #[test]
+    fn test_search_pull_requests_paths_repository_url_fallback() {
+        let ctx = default_ctx();
+        let tool_args = json!({});
+        let response = json!({
+            "items": [{
+                "html_url": "https://github.com/github/gh-aw-mcpg/pull/2388",
+                "repository_url": "https://api.github.com/repos/github/gh-aw-mcpg",
+                "user": {"login": "lpcox"},
+                "author_association": "MEMBER"
+            }]
+        });
+
+        let labeled = label_response_paths("search_pull_requests", &tool_args, &response, &ctx)
+            .expect("search_pull_requests should produce path labels");
+
+        assert_eq!(labeled.labeled_paths.len(), 1);
+        assert_eq!(
+            labeled.labeled_paths[0].labels.description,
+            "pr:github/gh-aw-mcpg#2388",
+            "Should extract repo from repository_url and number from html_url"
+        );
+    }
+
+    #[test]
+    fn test_search_issues_url_number_fallback() {
+        let ctx = default_ctx();
+        let tool_args = json!({});
+        // Issue without 'number' field but with html_url containing the number
+        let response = json!({
+            "items": [{
+                "html_url": "https://github.com/github/gh-aw-mcpg/issues/2093",
+                "repository_url": "https://api.github.com/repos/github/gh-aw-mcpg",
+                "user": {"login": "testuser"},
+                "author_association": "COLLABORATOR"
+            }]
+        });
+
+        let labeled = label_response_paths("search_issues", &tool_args, &response, &ctx)
+            .expect("search_issues should produce path labels");
+
+        assert_eq!(labeled.labeled_paths.len(), 1);
+        assert_eq!(
+            labeled.labeled_paths[0].labels.description,
+            "issue:github/gh-aw-mcpg#2093",
+            "Should extract number from html_url when number field is missing"
+        );
+        assert!(
+            labeled.labeled_paths[0]
+                .labels
+                .integrity
+                .iter()
+                .any(|t| t.starts_with("approved")),
+            "COLLABORATOR should get approved integrity, got: {:?}",
+            labeled.labeled_paths[0].labels.integrity
+        );
+    }
+
+    #[test]
+    fn test_empty_search_result_not_treated_as_single_item() {
+        // When search returns {"total_count":0,"incomplete_results":false} with no items,
+        // it should NOT be treated as a single data item.
+        let ctx = default_ctx();
+        let tool_args = serde_json::json!({
+            "query": "repo:github/gh-aw-mcpg is:pr is:closed title:[Repo Assist]",
+            "perPage": 10
+        });
+
+        // MCP wrapper around an empty search result
+        let response = serde_json::json!({
+            "content": [{
+                "type": "text",
+                "text": "{\"total_count\":0,\"incomplete_results\":false}"
+            }]
+        });
+
+        // Item-based labeling should produce zero items
+        let labeled = label_response_items(
+            "search_pull_requests",
+            &tool_args,
+            &response,
+            &ctx,
+        );
+        assert!(
+            labeled.is_empty(),
+            "Empty search result should produce zero labeled items, got: {}",
+            labeled.len()
+        );
+
+        // Path-based labeling should return None (no items to label)
+        let labeled = label_response_paths(
+            "search_pull_requests",
+            &tool_args,
+            &response,
+            &ctx,
+        );
+        assert!(
+            labeled.is_none() || labeled.as_ref().unwrap().labeled_paths.is_empty(),
+            "Empty search result should produce no labeled paths"
+        );
+
+        // Also test for search_issues
+        let tool_args = serde_json::json!({
+            "query": "repo:github/gh-aw-mcpg is:closed number:2086"
+        });
+        let labeled = label_response_items(
+            "search_issues",
+            &tool_args,
+            &response,
+            &ctx,
+        );
+        assert!(
+            labeled.is_empty(),
+            "Empty search_issues result should produce zero labeled items, got: {}",
+            labeled.len()
+        );
+    }
+
+    #[test]
+    fn test_mcp_text_error_not_treated_as_single_item() {
+        // When MCP server returns a plain-text error message (not JSON),
+        // extract_mcp_response returns the MCP wrapper unchanged.
+        // The wrapper should NOT be treated as a single data item.
+        let ctx = default_ctx();
+        let tool_args = serde_json::json!({
+            "owner": "github",
+            "repo": "gh-aw-mcpg",
+            "page": 2
+        });
+
+        // MCP wrapper around a plain-text error (not JSON)
+        let response = serde_json::json!({
+            "content": [{
+                "type": "text",
+                "text": "This tool uses cursor-based pagination. Use the 'after' parameter with the 'endCursor' value from the previous response instead of 'page'."
+            }]
+        });
+
+        // Item-based labeling should produce zero items
+        let labeled = label_response_items(
+            "list_issues",
+            &tool_args,
+            &response,
+            &ctx,
+        );
+        assert!(
+            labeled.is_empty(),
+            "MCP text error should produce zero labeled items, got: {}",
+            labeled.len()
+        );
+
+        // Path-based labeling should return None
+        let labeled = label_response_paths(
+            "list_issues",
+            &tool_args,
+            &response,
+            &ctx,
+        );
+        assert!(
+            labeled.is_none() || labeled.as_ref().unwrap().labeled_paths.is_empty(),
+            "MCP text error should produce no labeled paths"
+        );
+    }
+
+    #[test]
+    fn test_helpers_is_search_result_wrapper() {
+        use helpers::is_search_result_wrapper;
+
+        assert!(is_search_result_wrapper(&serde_json::json!({"total_count": 0, "incomplete_results": false})));
+        assert!(is_search_result_wrapper(&serde_json::json!({"total_count": 5, "items": []})));
+        assert!(!is_search_result_wrapper(&serde_json::json!({"number": 42, "title": "issue"})));
+        assert!(!is_search_result_wrapper(&serde_json::json!({})));
+    }
+
+    #[test]
+    fn test_helpers_is_mcp_text_wrapper() {
+        use helpers::is_mcp_text_wrapper;
+
+        assert!(is_mcp_text_wrapper(&serde_json::json!({"content": [{"type": "text", "text": "some error"}]})));
+        assert!(!is_mcp_text_wrapper(&serde_json::json!({"content": [{"type": "image", "data": "..."}]})));
+        assert!(!is_mcp_text_wrapper(&serde_json::json!({"number": 42})));
+        assert!(!is_mcp_text_wrapper(&serde_json::json!({})));
     }
 }
