@@ -24,7 +24,7 @@ network:
 tools:
   github:
     toolsets: [default, pull_requests]
-    repos: ["github/gh-aw-mcpg"]
+    allowed-repos: ["github/gh-aw-mcpg"]
     min-integrity: unapproved
 
 if: needs.search_issues.outputs.has_issues == 'true'

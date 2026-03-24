@@ -31,7 +31,7 @@ tools:
   cache-memory: true
   github:
     toolsets: [default]
-    repos: ["github/gh-aw-mcpg", "github/github-mcp-server", "cli/cli"]
+    allowed-repos: ["github/gh-aw-mcpg", "github/github-mcp-server", "cli/cli"]
     min-integrity: unapproved
   bash:
     - "*"
