@@ -3710,4 +3710,73 @@ mod tests {
             integrity
         );
     }
+
+    /// search_repositories with `repositories` key (GraphQL-style) must use
+    /// `/repositories/{i}` paths, not `/items/{i}`.
+    #[test]
+    fn test_search_repositories_repositories_key_uses_correct_paths() {
+        let ctx = default_ctx();
+        let tool_args = json!({});
+        let response = json!({
+            "totalCount": 2,
+            "repositories": [
+                {
+                    "full_name": "owner/public-repo",
+                    "private": false
+                },
+                {
+                    "full_name": "owner/private-repo",
+                    "private": true
+                }
+            ]
+        });
+
+        let result = label_response_paths("search_repositories", &tool_args, &response, &ctx)
+            .expect("search_repositories with repositories key should produce path labels");
+
+        assert_eq!(result.labeled_paths.len(), 2, "both items must be labeled");
+        assert_eq!(
+            result.items_path,
+            Some("/repositories".to_string()),
+            "items_path must reflect the actual key used"
+        );
+        assert_eq!(
+            result.labeled_paths[0].path, "/repositories/0",
+            "first item path must use /repositories/ prefix"
+        );
+        assert_eq!(
+            result.labeled_paths[1].path, "/repositories/1",
+            "second item path must use /repositories/ prefix"
+        );
+    }
+
+    /// search_repositories with `items` key (REST format) must use `/items/{i}` paths.
+    #[test]
+    fn test_search_repositories_items_key_uses_correct_paths() {
+        let ctx = default_ctx();
+        let tool_args = json!({});
+        let response = json!({
+            "total_count": 1,
+            "items": [
+                {
+                    "full_name": "owner/public-repo",
+                    "private": false
+                }
+            ]
+        });
+
+        let result = label_response_paths("search_repositories", &tool_args, &response, &ctx)
+            .expect("search_repositories with items key should produce path labels");
+
+        assert_eq!(result.labeled_paths.len(), 1);
+        assert_eq!(
+            result.items_path,
+            Some("/items".to_string()),
+            "items_path must be /items for REST format"
+        );
+        assert_eq!(
+            result.labeled_paths[0].path, "/items/0",
+            "item path must use /items/ prefix for REST format"
+        );
+    }
 }
