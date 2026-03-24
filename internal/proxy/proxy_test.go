@@ -712,3 +712,65 @@ func TestDeepCloneJSON(t *testing.T) {
 	assert.Equal(t, float64(1), cloned.(map[string]interface{})["a"].([]interface{})[0])
 	assert.Equal(t, "d", cloned.(map[string]interface{})["b"].(map[string]interface{})["c"])
 }
+
+func TestUnwrapSingleObject(t *testing.T) {
+	tests := []struct {
+		name     string
+		original interface{}
+		filtered interface{}
+		expected interface{}
+	}{
+		{
+			name:     "single object unwrapped from 1-element array",
+			original: map[string]interface{}{"name": "README.md", "path": "README.md"},
+			filtered: []interface{}{map[string]interface{}{"name": "README.md", "path": "README.md"}},
+			expected: map[string]interface{}{"name": "README.md", "path": "README.md"},
+		},
+		{
+			name:     "array original stays as array",
+			original: []interface{}{map[string]interface{}{"id": float64(1)}},
+			filtered: []interface{}{map[string]interface{}{"id": float64(1)}},
+			expected: []interface{}{map[string]interface{}{"id": float64(1)}},
+		},
+		{
+			name: "search envelope not unwrapped",
+			original: map[string]interface{}{
+				"total_count": float64(1),
+				"items":       []interface{}{map[string]interface{}{"id": float64(1)}},
+			},
+			filtered: map[string]interface{}{
+				"total_count": float64(1),
+				"items":       []interface{}{map[string]interface{}{"id": float64(1)}},
+			},
+			expected: map[string]interface{}{
+				"total_count": float64(1),
+				"items":       []interface{}{map[string]interface{}{"id": float64(1)}},
+			},
+		},
+		{
+			name:     "GraphQL response not unwrapped",
+			original: map[string]interface{}{"data": map[string]interface{}{"repository": nil}},
+			filtered: map[string]interface{}{"data": map[string]interface{}{"repository": nil}},
+			expected: map[string]interface{}{"data": map[string]interface{}{"repository": nil}},
+		},
+		{
+			name:     "multi-element array not unwrapped even if original was object",
+			original: map[string]interface{}{"name": "dir"},
+			filtered: []interface{}{map[string]interface{}{"a": "1"}, map[string]interface{}{"b": "2"}},
+			expected: []interface{}{map[string]interface{}{"a": "1"}, map[string]interface{}{"b": "2"}},
+		},
+		{
+			name:     "empty array stays as-is",
+			original: map[string]interface{}{"name": "file.txt"},
+			filtered: []interface{}{},
+			expected: []interface{}{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := unwrapSingleObject(tt.original, tt.filtered)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
