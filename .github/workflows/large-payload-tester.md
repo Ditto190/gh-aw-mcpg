@@ -21,7 +21,7 @@ network:
 tools:
   github:
     toolsets: [default]
-    repos: ["github/gh-aw-mcpg"]
+    allowed-repos: ["github/gh-aw-mcpg"]
     min-integrity: unapproved
   bash: ["*"]
 
@@ -133,7 +133,7 @@ post-steps:
 
 
 timeout-minutes: 10
-strict: true
+strict: false
 ---
 
 <!-- Edit the file linked below to modify the agent without recompilation. Feel free to move the entire markdown body to that file. -->

@@ -25,7 +25,7 @@ steps:
 tools:
   github:
     toolsets: [default]
-    repos: ["github/gh-aw-mcpg"]
+    allowed-repos: ["github/gh-aw-mcpg"]
     min-integrity: unapproved
   bash: ["*"]
   edit:
