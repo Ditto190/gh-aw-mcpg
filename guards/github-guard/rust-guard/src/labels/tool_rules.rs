@@ -315,21 +315,11 @@ pub fn apply_tool_labels(
 
         // === GitHub Actions ===
         "actions_get" | "actions_list" => {
-            // S(workflow/artifact) = inherits from repo secrecy
+            // S(workflow/artifact) = inherits from repo visibility
+            // Public repos: artifacts are public. Private repos: artifacts are private-scoped.
             // I(workflow/artifact) = approved - maintained by repo team
             secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
             integrity = writer_integrity(repo_id, ctx);
-
-            // Additional secrecy checks for workflow files
-            if tool_name == "actions_get"
-                && tool_args
-                    .get("method")
-                    .and_then(|v| v.as_str())
-                    == Some("download_workflow_run_artifact")
-            {
-                // Artifacts may contain secrets
-                secrecy = secret_label();
-            }
         }
 
         // === Content Access ===
@@ -456,10 +446,9 @@ pub fn apply_tool_labels(
 
         // === Job Logs (Actions) ===
         "get_job_logs" => {
-            // Job logs may contain secrets (environment variables, tokens leaked in output).
-            // S = secret (conservative — logs can leak any secret)
+            // S = inherits from repo visibility (public repo logs are public)
             // I = approved — CI output is system-generated, not user-controlled
-            secrecy = secret_label();
+            secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
             integrity = writer_integrity(repo_id, ctx);
         }
 
