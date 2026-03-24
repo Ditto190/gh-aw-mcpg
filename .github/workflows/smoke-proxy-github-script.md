@@ -23,6 +23,7 @@ network:
     - defaults
     - github
     - github.com
+    - rust
 tools:
   agentic-workflows:
   cache-memory: true
@@ -44,9 +45,23 @@ sandbox:
   mcp:
     container: "ghcr.io/github/gh-aw-mcpg"
 steps:
-  # ── Pull the gateway container image ───────────────────────────────
-  - name: Pull MCP Gateway image
-    run: docker pull ghcr.io/github/gh-aw-mcpg:v0.2.2
+  # ── Build the gateway container image from source ──────────────────
+  - name: Build MCP Gateway image
+    run: |
+      # Install Rust and WASM target if not present
+      if ! command -v rustup &>/dev/null; then
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+        source "$HOME/.cargo/env"
+      fi
+      rustup target add wasm32-wasip1
+
+      # Build the Rust WASM guard (required by Dockerfile)
+      cd guards/github-guard/rust-guard
+      bash build.sh
+      cd ../../..
+
+      # Build Docker image
+      docker build -t awmg-local:latest .
 
   # ── Start the DIFC proxy ──────────────────────────────────────────
   - name: Start DIFC proxy
@@ -60,34 +75,26 @@ steps:
 
       POLICY='{"allow-only":{"repos":["github/gh-aw-mcpg"],"min-integrity":"approved"}}'
 
+      # Plain HTTP — avoids TLS cert trust issues with undici/Node.js
       docker run -d --name awmg-proxy --network host \
         -e GH_TOKEN \
         -e DEBUG='*' \
         -v "$PROXY_LOG_DIR:$PROXY_LOG_DIR" \
         -v "$MCP_LOG_DIR:$MCP_LOG_DIR" \
-        ghcr.io/github/gh-aw-mcpg:v0.2.2 proxy \
+        awmg-local:latest proxy \
           --policy "$POLICY" \
           --listen 0.0.0.0:18443 \
           --log-dir "$MCP_LOG_DIR" \
-          --tls --tls-dir "$PROXY_LOG_DIR/proxy-tls" \
           --guards-mode filter \
           --trusted-bots github-actions[bot],dependabot[bot],copilot
 
-      # Wait for proxy TLS cert and health check
-      CA_INSTALLED=false
+      # Wait for proxy health check
       PROXY_READY=false
       for i in $(seq 1 30); do
-        if [ -f "$PROXY_LOG_DIR/proxy-tls/ca.crt" ]; then
-          if [ "$CA_INSTALLED" = "false" ]; then
-            sudo cp "$PROXY_LOG_DIR/proxy-tls/ca.crt" /usr/local/share/ca-certificates/awmg-proxy.crt
-            sudo update-ca-certificates
-            CA_INSTALLED=true
-          fi
-          if curl -sf "https://localhost:18443/api/v3/health" -o /dev/null 2>/dev/null; then
-            echo "DIFC proxy ready on port 18443"
-            PROXY_READY=true
-            break
-          fi
+        if curl -sf "http://localhost:18443/health" -o /dev/null 2>/dev/null; then
+          echo "DIFC proxy ready on port 18443"
+          PROXY_READY=true
+          break
         fi
         sleep 1
       done
@@ -98,17 +105,13 @@ steps:
         exit 1
       fi
 
-      # Export paths for subsequent steps
-      echo "PROXY_CA_CERT=$PROXY_LOG_DIR/proxy-tls/ca.crt" >> "$GITHUB_ENV"
       echo "RESULTS_DIR=$RESULTS_DIR" >> "$GITHUB_ENV"
 
   # ── Test 1: In-scope repo — list issues (REST) ────────────────────
   - name: "Test 1: In-scope list issues (REST)"
     uses: actions/github-script@v8
-    env:
-      GITHUB_API_URL: "https://localhost:18443"
-      NODE_EXTRA_CA_CERTS: ${{ env.PROXY_CA_CERT }}
     with:
+      base-url: "http://localhost:18443"
       script: |
         const fs = require('fs');
         const dir = process.env.RESULTS_DIR;
@@ -141,10 +144,8 @@ steps:
   # ── Test 2: Out-of-scope repo — list issues (REST) ────────────────
   - name: "Test 2: Out-of-scope list issues (REST)"
     uses: actions/github-script@v8
-    env:
-      GITHUB_API_URL: "https://localhost:18443"
-      NODE_EXTRA_CA_CERTS: ${{ env.PROXY_CA_CERT }}
     with:
+      base-url: "http://localhost:18443"
       script: |
         const fs = require('fs');
         const dir = process.env.RESULTS_DIR;
@@ -175,10 +176,8 @@ steps:
   # ── Test 3: In-scope repo — GraphQL query ──────────────────────────
   - name: "Test 3: In-scope GraphQL query"
     uses: actions/github-script@v8
-    env:
-      GITHUB_API_URL: "https://localhost:18443"
-      NODE_EXTRA_CA_CERTS: ${{ env.PROXY_CA_CERT }}
     with:
+      base-url: "http://localhost:18443"
       script: |
         const fs = require('fs');
         const dir = process.env.RESULTS_DIR;
@@ -221,10 +220,8 @@ steps:
   # ── Test 4: Out-of-scope repo — GraphQL query ─────────────────────
   - name: "Test 4: Out-of-scope GraphQL query"
     uses: actions/github-script@v8
-    env:
-      GITHUB_API_URL: "https://localhost:18443"
-      NODE_EXTRA_CA_CERTS: ${{ env.PROXY_CA_CERT }}
     with:
+      base-url: "http://localhost:18443"
       script: |
         const fs = require('fs');
         const dir = process.env.RESULTS_DIR;
@@ -260,10 +257,8 @@ steps:
   # ── Test 5: In-scope search (REST) ─────────────────────────────────
   - name: "Test 5: In-scope search code (REST)"
     uses: actions/github-script@v8
-    env:
-      GITHUB_API_URL: "https://localhost:18443"
-      NODE_EXTRA_CA_CERTS: ${{ env.PROXY_CA_CERT }}
     with:
+      base-url: "http://localhost:18443"
       script: |
         const fs = require('fs');
         const dir = process.env.RESULTS_DIR;
@@ -293,10 +288,8 @@ steps:
   # ── Test 6: Integrity filtering — bot-authored issues ──────────────
   - name: "Test 6: Integrity filtering of bot-authored content"
     uses: actions/github-script@v8
-    env:
-      GITHUB_API_URL: "https://localhost:18443"
-      NODE_EXTRA_CA_CERTS: ${{ env.PROXY_CA_CERT }}
     with:
+      base-url: "http://localhost:18443"
       script: |
         const fs = require('fs');
         const dir = process.env.RESULTS_DIR;
@@ -415,7 +408,7 @@ Pre-agent steps ran 6 tests through `actions/github-script@v8` with
 ## Proxy + github-script Smoke Test Results
 
 **Policy**: repos=["github/gh-aw-mcpg"], min-integrity=approved
-**Proxy**: ghcr.io/github/gh-aw-mcpg:v0.2.2, port 18443, TLS, filter mode
+**Proxy**: awmg-local:latest (built from source), port 18443, HTTP, filter mode
 **Run**: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
 ### REST API Tests
