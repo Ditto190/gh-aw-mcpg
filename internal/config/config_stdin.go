@@ -307,8 +307,10 @@ func convertStdinConfig(stdinCfg *StdinConfig) (*Config, error) {
 
 	// Convert guards
 	if len(stdinCfg.Guards) > 0 {
+		logStdin.Printf("Converting %d guard configuration(s)", len(stdinCfg.Guards))
 		cfg.Guards = make(map[string]*GuardConfig)
 		for name, guard := range stdinCfg.Guards {
+			logStdin.Printf("Registering guard: name=%s, type=%s", name, guard.Type)
 			cfg.Guards[name] = &GuardConfig{
 				Type:   guard.Type,
 				Path:   guard.Path,
@@ -337,6 +339,7 @@ func convertStdinServerConfig(name string, server *StdinServerConfig, customSche
 
 	// Expand variable expressions in env vars (fail-fast on undefined vars)
 	if len(server.Env) > 0 {
+		logStdin.Printf("Server %q: expanding %d environment variable(s)", name, len(server.Env))
 		expandedEnv, err := expandEnvVariables(server.Env, name)
 		if err != nil {
 			return nil, err
@@ -346,6 +349,7 @@ func convertStdinServerConfig(name string, server *StdinServerConfig, customSche
 
 	// Expand variable expressions in HTTP headers (fail-fast on undefined vars)
 	if len(server.Headers) > 0 {
+		logStdin.Printf("Server %q: expanding %d HTTP header(s)", name, len(server.Headers))
 		expandedHeaders, err := expandEnvVariables(server.Headers, name)
 		if err != nil {
 			return nil, err
@@ -406,6 +410,9 @@ func buildStdioServerConfig(name string, server *StdinServerConfig) *ServerConfi
 	for _, mount := range server.Mounts {
 		args = append(args, "-v", mount)
 	}
+	if len(server.Mounts) > 0 {
+		logStdin.Printf("Server %q: added %d volume mount(s)", name, len(server.Mounts))
+	}
 
 	// Add user-specified environment variables
 	// Empty string "" means passthrough from host (just -e KEY)
@@ -431,6 +438,7 @@ func buildStdioServerConfig(name string, server *StdinServerConfig) *ServerConfi
 	// Add entrypoint args
 	args = append(args, server.EntrypointArgs...)
 
+	logStdin.Printf("Server %q: configured stdio container=%s, env_vars=%d, mounts=%d", name, server.Container, len(server.Env), len(server.Mounts))
 	logConfig.Printf("Configured stdio MCP server: name=%s, container=%s", name, server.Container)
 
 	return &ServerConfig{
