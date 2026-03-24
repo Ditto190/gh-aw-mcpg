@@ -933,13 +933,21 @@ func TestDeriveGitHubAPIURL(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Save and clear relevant env vars
-			savedAPI := os.Getenv("GITHUB_API_URL")
-			savedServer := os.Getenv("GITHUB_SERVER_URL")
+			savedAPI, hadAPI := os.LookupEnv("GITHUB_API_URL")
+			savedServer, hadServer := os.LookupEnv("GITHUB_SERVER_URL")
 			os.Unsetenv("GITHUB_API_URL")
 			os.Unsetenv("GITHUB_SERVER_URL")
 			defer func() {
-				os.Setenv("GITHUB_API_URL", savedAPI)
-				os.Setenv("GITHUB_SERVER_URL", savedServer)
+				if hadAPI {
+					_ = os.Setenv("GITHUB_API_URL", savedAPI)
+				} else {
+					_ = os.Unsetenv("GITHUB_API_URL")
+				}
+				if hadServer {
+					_ = os.Setenv("GITHUB_SERVER_URL", savedServer)
+				} else {
+					_ = os.Unsetenv("GITHUB_SERVER_URL")
+				}
 			}()
 
 			for k, v := range tt.envVars {
