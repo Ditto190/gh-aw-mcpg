@@ -49,8 +49,8 @@ pub use helpers::{
     has_author_association, is_blocked_user, is_bot, is_graphql_wrapper, is_mcp_text_wrapper,
     is_search_result_wrapper, issue_integrity, limit_items_with_log, make_item_path,
     merged_integrity, none_integrity, pr_integrity, private_scope_label, private_user_label,
-    project_github_label, reader_integrity, secret_label, writer_integrity, MinIntegrity,
-    PolicyContext, PolicyScopeEntry, ScopeKind,
+    project_github_label, reader_integrity, search_result_total_count, secret_label,
+    writer_integrity, MinIntegrity, PolicyContext, PolicyScopeEntry, ScopeKind,
 };
 #[cfg(test)]
 pub use helpers::has_approval_label;
@@ -3234,10 +3234,104 @@ mod tests {
     fn test_helpers_is_search_result_wrapper() {
         use helpers::is_search_result_wrapper;
 
+        // REST format
         assert!(is_search_result_wrapper(&serde_json::json!({"total_count": 0, "incomplete_results": false})));
         assert!(is_search_result_wrapper(&serde_json::json!({"total_count": 5, "items": []})));
+        // GraphQL format (MCP server v0.32.0+)
+        assert!(is_search_result_wrapper(&serde_json::json!({"totalCount": 0, "issues": [], "pageInfo": {}})));
+        assert!(is_search_result_wrapper(&serde_json::json!({"totalCount": 3, "issues": [{}]})));
+        // Non-search
         assert!(!is_search_result_wrapper(&serde_json::json!({"number": 42, "title": "issue"})));
         assert!(!is_search_result_wrapper(&serde_json::json!({})));
+    }
+
+    #[test]
+    fn test_helpers_search_result_total_count() {
+        use helpers::search_result_total_count;
+
+        // REST format
+        assert_eq!(search_result_total_count(&json!({"total_count": 0})), Some(0));
+        assert_eq!(search_result_total_count(&json!({"total_count": 42})), Some(42));
+        // GraphQL format
+        assert_eq!(search_result_total_count(&json!({"totalCount": 0})), Some(0));
+        assert_eq!(search_result_total_count(&json!({"totalCount": 7})), Some(7));
+        // REST takes precedence when both present
+        assert_eq!(search_result_total_count(&json!({"total_count": 1, "totalCount": 2})), Some(1));
+        // Neither present
+        assert_eq!(search_result_total_count(&json!({"number": 42})), None);
+    }
+
+    #[test]
+    fn test_bot_authored_issue_gets_writer_integrity() {
+        // Verify that github-actions[bot] authored issues get writer integrity
+        // regardless of author_association value. This is the core test for
+        // issue github/gh-aw#22533.
+        let ctx = default_ctx();
+        let repo = "github/gh-aw-mcpg";
+
+        // REST format: user.login present
+        let rest_item = json!({
+            "number": 2320,
+            "title": "[Repo Assist] Monthly Activity",
+            "user": {"login": "github-actions[bot]", "id": 41898282},
+            "author_association": "CONTRIBUTOR",
+            "repository_url": "https://api.github.com/repos/github/gh-aw-mcpg"
+        });
+        let integrity = issue_integrity(&rest_item, repo, false, &ctx);
+        assert!(
+            integrity.iter().any(|t| t.contains("approved")),
+            "Bot-authored issue (REST) should have at least approved integrity, got: {:?}",
+            integrity
+        );
+
+        // GraphQL format: author.login present, no user field
+        let graphql_item = json!({
+            "number": 2320,
+            "title": "[Repo Assist] Monthly Activity",
+            "author": {"login": "github-actions[bot]"},
+            "authorAssociation": "CONTRIBUTOR"
+        });
+        let integrity = issue_integrity(&graphql_item, repo, false, &ctx);
+        assert!(
+            integrity.iter().any(|t| t.contains("approved")),
+            "Bot-authored issue (GraphQL) should have at least approved integrity, got: {:?}",
+            integrity
+        );
+    }
+
+    #[test]
+    fn test_bot_authored_pr_gets_writer_integrity() {
+        let ctx = default_ctx();
+        let repo = "github/gh-aw-mcpg";
+
+        // REST format: user.login present
+        let rest_item = json!({
+            "number": 2320,
+            "title": "Auto-merge PR",
+            "user": {"login": "dependabot[bot]", "id": 49699333},
+            "author_association": "CONTRIBUTOR",
+            "repository_url": "https://api.github.com/repos/github/gh-aw-mcpg"
+        });
+        let integrity = pr_integrity(&rest_item, repo, false, None, &ctx);
+        assert!(
+            integrity.iter().any(|t| t.contains("approved")),
+            "Bot-authored PR (REST) should have at least approved integrity, got: {:?}",
+            integrity
+        );
+
+        // GraphQL format: author.login present
+        let graphql_item = json!({
+            "number": 2320,
+            "title": "Auto-merge PR",
+            "author": {"login": "dependabot[bot]"},
+            "authorAssociation": "CONTRIBUTOR"
+        });
+        let integrity = pr_integrity(&graphql_item, repo, false, None, &ctx);
+        assert!(
+            integrity.iter().any(|t| t.contains("approved")),
+            "Bot-authored PR (GraphQL) should have at least approved integrity, got: {:?}",
+            integrity
+        );
     }
 
     #[test]

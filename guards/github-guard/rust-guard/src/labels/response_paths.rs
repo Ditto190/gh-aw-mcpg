@@ -48,7 +48,13 @@ pub fn label_response_paths(
     match tool_name {
         // === Repository Search - label by private/public ===
         "search_repositories" => {
-            if let Some(items) = actual_response.get("items").and_then(|v| v.as_array()) {
+            let items_opt = actual_response.get("items").and_then(|v| v.as_array())
+                .or_else(|| actual_response.get("repositories").and_then(|v| v.as_array()));
+            if let Some(items) = items_opt {
+                // Empty search results are server metadata — let lib.rs fallback handle
+                if items.is_empty() && is_search_result_wrapper(&actual_response) {
+                    return None;
+                }
                 crate::log_info(&format!(
                     "label_response_paths: search_repositories found {} items",
                     items.len()
@@ -109,6 +115,11 @@ pub fn label_response_paths(
             let (items, items_path) = extract_items_array(&actual_response);
 
             if let Some(items) = items {
+                // Empty search results are server metadata — let lib.rs handle
+                // them with properly-scoped writer_integrity via the metadata fallback.
+                if items.is_empty() && is_search_result_wrapper(&actual_response) {
+                    return None;
+                }
                 // Try tool_args first, fall back to extracting from first item
                 let (mut arg_owner, mut arg_repo, arg_repo_full) = extract_repo_info(tool_args);
                 // For search operations, extract repo from query when tool_args lacks owner/repo
@@ -198,7 +209,7 @@ pub fn label_response_paths(
                         integrity: if default_repo_private {
                             writer_integrity(&default_repo, ctx)
                         } else {
-                            none_integrity("", ctx)
+                            none_integrity(&default_repo, ctx)
                         },
                     }),
                     items_path: if items_path.is_empty() {
@@ -225,6 +236,11 @@ pub fn label_response_paths(
             let (items, items_path) = extract_items_array(&actual_response);
 
             if let Some(items) = items {
+                // Empty search results are server metadata — let lib.rs handle
+                // them with properly-scoped writer_integrity via the metadata fallback.
+                if items.is_empty() && is_search_result_wrapper(&actual_response) {
+                    return None;
+                }
                 // Try tool_args first, fall back to extracting from first item
                 let (mut arg_owner, mut arg_repo, arg_repo_full) = extract_repo_info(tool_args);
                 // For search operations, extract repo from query when tool_args lacks owner/repo
@@ -300,7 +316,7 @@ pub fn label_response_paths(
                         integrity: if default_repo_private {
                             writer_integrity(&default_repo, ctx)
                         } else {
-                            none_integrity("", ctx)
+                            none_integrity(&default_repo, ctx)
                         },
                     }),
                     items_path: if items_path.is_empty() {
