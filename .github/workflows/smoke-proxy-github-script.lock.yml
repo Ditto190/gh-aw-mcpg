@@ -26,7 +26,7 @@
 #   Imports:
 #     - shared/reporting.md
 #
-# gh-aw-metadata: {"schema_version":"v3","frontmatter_hash":"554a3420e685736052102df7359062c71b746c62003e406cd9a18778fc4a2512","compiler_version":"v0.63.0","agent_id":"copilot"}
+# gh-aw-metadata: {"schema_version":"v3","frontmatter_hash":"a95d76cc1ca31269a4c18f78e4ba8c49f555dd08ef0bf2c73c937c1ccaf2db9a","compiler_version":"v0.63.0","agent_id":"copilot"}
 
 name: "Smoke: Proxy + github-script"
 "on":
@@ -342,48 +342,36 @@ jobs:
       - env:
           GH_TOKEN: ${{ secrets.GH_AW_GITHUB_MCP_SERVER_TOKEN || secrets.GH_AW_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
         name: Start DIFC proxy
-        run: "PROXY_LOG_DIR=/tmp/gh-aw/proxy-logs\nMCP_LOG_DIR=/tmp/gh-aw/mcp-logs\nRESULTS_DIR=/tmp/gh-aw/github-script-results\nmkdir -p \"$PROXY_LOG_DIR\" \"$MCP_LOG_DIR\" \"$RESULTS_DIR\"\n\nPOLICY='{\"allow-only\":{\"repos\":[\"github/gh-aw-mcpg\"],\"min-integrity\":\"approved\"}}'\n\ndocker run -d --name awmg-proxy --network host \\\n  -e GH_TOKEN \\\n  -e DEBUG='*' \\\n  -v \"$PROXY_LOG_DIR:$PROXY_LOG_DIR\" \\\n  -v \"$MCP_LOG_DIR:$MCP_LOG_DIR\" \\\n  ghcr.io/github/gh-aw-mcpg:v0.2.2 proxy \\\n    --policy \"$POLICY\" \\\n    --listen 0.0.0.0:18443 \\\n    --log-dir \"$MCP_LOG_DIR\" \\\n    --tls --tls-dir \"$PROXY_LOG_DIR/proxy-tls\" \\\n    --guards-mode filter \\\n    --trusted-bots github-actions[bot],dependabot[bot],copilot\n\n# Wait for proxy TLS cert and health check\nCA_INSTALLED=false\nPROXY_READY=false\nfor i in $(seq 1 30); do\n  if [ -f \"$PROXY_LOG_DIR/proxy-tls/ca.crt\" ]; then\n    if [ \"$CA_INSTALLED\" = \"false\" ]; then\n      sudo cp \"$PROXY_LOG_DIR/proxy-tls/ca.crt\" /usr/local/share/ca-certificates/awmg-proxy.crt\n      sudo update-ca-certificates\n      CA_INSTALLED=true\n    fi\n    if curl -sf \"https://localhost:18443/api/v3/health\" -o /dev/null 2>/dev/null; then\n      echo \"DIFC proxy ready on port 18443\"\n      PROXY_READY=true\n      break\n    fi\n  fi\n  sleep 1\ndone\n\nif [ \"$PROXY_READY\" = \"false\" ]; then\n  echo \"::error::DIFC proxy failed to start\"\n  docker logs awmg-proxy 2>&1 | tail -30 || true\n  exit 1\nfi\n\n# Export paths for subsequent steps\necho \"PROXY_CA_CERT=$PROXY_LOG_DIR/proxy-tls/ca.crt\" >> \"$GITHUB_ENV\"\necho \"RESULTS_DIR=$RESULTS_DIR\" >> \"$GITHUB_ENV\"\n"
-      - env:
-          GITHUB_API_URL: https://localhost:18443
-          NODE_EXTRA_CA_CERTS: ${{ env.PROXY_CA_CERT }}
-        name: "Test 1: In-scope list issues (REST)"
+        run: "PROXY_LOG_DIR=/tmp/gh-aw/proxy-logs\nMCP_LOG_DIR=/tmp/gh-aw/mcp-logs\nRESULTS_DIR=/tmp/gh-aw/github-script-results\nmkdir -p \"$PROXY_LOG_DIR\" \"$MCP_LOG_DIR\" \"$RESULTS_DIR\"\n\nPOLICY='{\"allow-only\":{\"repos\":[\"github/gh-aw-mcpg\"],\"min-integrity\":\"approved\"}}'\n\n# Plain HTTP — avoids TLS cert trust issues with undici/Node.js\ndocker run -d --name awmg-proxy --network host \\\n  -e GH_TOKEN \\\n  -e DEBUG='*' \\\n  -v \"$PROXY_LOG_DIR:$PROXY_LOG_DIR\" \\\n  -v \"$MCP_LOG_DIR:$MCP_LOG_DIR\" \\\n  ghcr.io/github/gh-aw-mcpg:v0.2.2 proxy \\\n    --policy \"$POLICY\" \\\n    --listen 0.0.0.0:18443 \\\n    --log-dir \"$MCP_LOG_DIR\" \\\n    --guards-mode filter \\\n    --trusted-bots github-actions[bot],dependabot[bot],copilot\n\n# Wait for proxy health check\nPROXY_READY=false\nfor i in $(seq 1 30); do\n  if curl -sf \"http://localhost:18443/health\" -o /dev/null 2>/dev/null; then\n    echo \"DIFC proxy ready on port 18443\"\n    PROXY_READY=true\n    break\n  fi\n  sleep 1\ndone\n\nif [ \"$PROXY_READY\" = \"false\" ]; then\n  echo \"::error::DIFC proxy failed to start\"\n  docker logs awmg-proxy 2>&1 | tail -30 || true\n  exit 1\nfi\n\necho \"RESULTS_DIR=$RESULTS_DIR\" >> \"$GITHUB_ENV\"\n"
+      - name: "Test 1: In-scope list issues (REST)"
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         with:
+          base-url: http://localhost:18443
           script: "const fs = require('fs');\nconst dir = process.env.RESULTS_DIR;\ntry {\n  const result = await github.rest.issues.listForRepo({\n    owner: 'github',\n    repo: 'gh-aw-mcpg',\n    per_page: 5,\n    state: 'open'\n  });\n  const summary = {\n    test: 'in-scope-list-issues',\n    status_code: result.status,\n    item_count: result.data.length,\n    items: result.data.map(i => ({\n      number: i.number,\n      title: i.title.substring(0, 60),\n      author: i.user?.login || 'unknown',\n      author_association: i.author_association || 'N/A'\n    }))\n  };\n  fs.writeFileSync(`${dir}/test1-in-scope-issues.json`, JSON.stringify(summary, null, 2));\n  console.log(`✅ In-scope list_issues: ${result.data.length} items returned`);\n} catch (err) {\n  const summary = { test: 'in-scope-list-issues', error: err.message, status: err.status };\n  fs.writeFileSync(`${dir}/test1-in-scope-issues.json`, JSON.stringify(summary, null, 2));\n  console.log(`❌ In-scope list_issues failed: ${err.message}`);\n}\n"
-      - env:
-          GITHUB_API_URL: https://localhost:18443
-          NODE_EXTRA_CA_CERTS: ${{ env.PROXY_CA_CERT }}
-        name: "Test 2: Out-of-scope list issues (REST)"
+      - name: "Test 2: Out-of-scope list issues (REST)"
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         with:
+          base-url: http://localhost:18443
           script: "const fs = require('fs');\nconst dir = process.env.RESULTS_DIR;\ntry {\n  const result = await github.rest.issues.listForRepo({\n    owner: 'octocat',\n    repo: 'Hello-World',\n    per_page: 5\n  });\n  const summary = {\n    test: 'out-of-scope-list-issues',\n    status_code: result.status,\n    item_count: result.data.length,\n    items: result.data.map(i => ({\n      number: i.number,\n      title: i.title.substring(0, 60),\n      author: i.user?.login || 'unknown'\n    }))\n  };\n  fs.writeFileSync(`${dir}/test2-out-of-scope-issues.json`, JSON.stringify(summary, null, 2));\n  console.log(`Out-of-scope list_issues: ${result.data.length} items (expected: 0 or blocked)`);\n} catch (err) {\n  const summary = { test: 'out-of-scope-list-issues', error: err.message, status: err.status };\n  fs.writeFileSync(`${dir}/test2-out-of-scope-issues.json`, JSON.stringify(summary, null, 2));\n  console.log(`Out-of-scope list_issues error (may be expected): ${err.message}`);\n}\n"
-      - env:
-          GITHUB_API_URL: https://localhost:18443
-          NODE_EXTRA_CA_CERTS: ${{ env.PROXY_CA_CERT }}
-        name: "Test 3: In-scope GraphQL query"
+      - name: "Test 3: In-scope GraphQL query"
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         with:
+          base-url: http://localhost:18443
           script: "const fs = require('fs');\nconst dir = process.env.RESULTS_DIR;\ntry {\n  const result = await github.graphql(`\n    query($owner: String!, $repo: String!, $count: Int!) {\n      repository(owner: $owner, name: $repo) {\n        issues(first: $count, states: OPEN, orderBy: {field: CREATED_AT, direction: DESC}) {\n          totalCount\n          nodes {\n            number\n            title\n            author { login }\n            authorAssociation\n          }\n        }\n      }\n    }\n  `, { owner: 'github', repo: 'gh-aw-mcpg', count: 5 });\n  const issues = result.repository.issues;\n  const summary = {\n    test: 'in-scope-graphql-issues',\n    total_count: issues.totalCount,\n    item_count: issues.nodes.length,\n    items: issues.nodes.map(i => ({\n      number: i.number,\n      title: i.title.substring(0, 60),\n      author: i.author?.login || 'unknown',\n      author_association: i.authorAssociation || 'N/A'\n    }))\n  };\n  fs.writeFileSync(`${dir}/test3-in-scope-graphql.json`, JSON.stringify(summary, null, 2));\n  console.log(`✅ In-scope GraphQL issues: ${issues.nodes.length} items`);\n} catch (err) {\n  const summary = { test: 'in-scope-graphql-issues', error: err.message };\n  fs.writeFileSync(`${dir}/test3-in-scope-graphql.json`, JSON.stringify(summary, null, 2));\n  console.log(`❌ In-scope GraphQL failed: ${err.message}`);\n}\n"
-      - env:
-          GITHUB_API_URL: https://localhost:18443
-          NODE_EXTRA_CA_CERTS: ${{ env.PROXY_CA_CERT }}
-        name: "Test 4: Out-of-scope GraphQL query"
+      - name: "Test 4: Out-of-scope GraphQL query"
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         with:
+          base-url: http://localhost:18443
           script: "const fs = require('fs');\nconst dir = process.env.RESULTS_DIR;\ntry {\n  const result = await github.graphql(`\n    query($owner: String!, $repo: String!, $count: Int!) {\n      repository(owner: $owner, name: $repo) {\n        issues(first: $count, states: OPEN) {\n          totalCount\n          nodes { number title author { login } }\n        }\n      }\n    }\n  `, { owner: 'octocat', repo: 'Hello-World', count: 5 });\n  const issues = result.repository.issues;\n  const summary = {\n    test: 'out-of-scope-graphql-issues',\n    total_count: issues.totalCount,\n    item_count: issues.nodes.length,\n    items: issues.nodes.slice(0, 3).map(i => ({\n      number: i.number,\n      author: i.author?.login || 'unknown'\n    }))\n  };\n  fs.writeFileSync(`${dir}/test4-out-of-scope-graphql.json`, JSON.stringify(summary, null, 2));\n  console.log(`Out-of-scope GraphQL issues: ${issues.nodes.length} items (expected: 0 or blocked)`);\n} catch (err) {\n  const summary = { test: 'out-of-scope-graphql-issues', error: err.message };\n  fs.writeFileSync(`${dir}/test4-out-of-scope-graphql.json`, JSON.stringify(summary, null, 2));\n  console.log(`Out-of-scope GraphQL error (may be expected): ${err.message}`);\n}\n"
-      - env:
-          GITHUB_API_URL: https://localhost:18443
-          NODE_EXTRA_CA_CERTS: ${{ env.PROXY_CA_CERT }}
-        name: "Test 5: In-scope search code (REST)"
+      - name: "Test 5: In-scope search code (REST)"
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         with:
+          base-url: http://localhost:18443
           script: "const fs = require('fs');\nconst dir = process.env.RESULTS_DIR;\ntry {\n  const result = await github.rest.search.code({\n    q: 'repo:github/gh-aw-mcpg filename:README',\n    per_page: 3\n  });\n  const summary = {\n    test: 'in-scope-search-code',\n    total_count: result.data.total_count,\n    item_count: result.data.items.length,\n    items: result.data.items.map(i => ({\n      name: i.name,\n      path: i.path,\n      repo: i.repository?.full_name\n    }))\n  };\n  fs.writeFileSync(`${dir}/test5-in-scope-search.json`, JSON.stringify(summary, null, 2));\n  console.log(`✅ In-scope search_code: ${result.data.items.length} items`);\n} catch (err) {\n  const summary = { test: 'in-scope-search-code', error: err.message, status: err.status };\n  fs.writeFileSync(`${dir}/test5-in-scope-search.json`, JSON.stringify(summary, null, 2));\n  console.log(`❌ In-scope search failed: ${err.message}`);\n}\n"
-      - env:
-          GITHUB_API_URL: https://localhost:18443
-          NODE_EXTRA_CA_CERTS: ${{ env.PROXY_CA_CERT }}
-        name: "Test 6: Integrity filtering of bot-authored content"
+      - name: "Test 6: Integrity filtering of bot-authored content"
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         with:
+          base-url: http://localhost:18443
           script: "const fs = require('fs');\nconst dir = process.env.RESULTS_DIR;\ntry {\n  // Search for issues authored by github-actions[bot] — these should pass\n  // because trusted bots get writer (approved) integrity\n  const result = await github.rest.issues.listForRepo({\n    owner: 'github',\n    repo: 'gh-aw-mcpg',\n    per_page: 20,\n    state: 'all',\n    creator: 'github-actions[bot]'\n  });\n  const summary = {\n    test: 'integrity-bot-authored',\n    status_code: result.status,\n    bot_issue_count: result.data.length,\n    items: result.data.slice(0, 5).map(i => ({\n      number: i.number,\n      title: i.title.substring(0, 60),\n      author: i.user?.login || 'unknown',\n      author_association: i.author_association || 'N/A'\n    })),\n    note: 'Bot-authored issues should pass integrity filter (trusted bot = approved)'\n  };\n  fs.writeFileSync(`${dir}/test6-bot-integrity.json`, JSON.stringify(summary, null, 2));\n  console.log(`Bot-authored issues visible: ${result.data.length}`);\n} catch (err) {\n  const summary = { test: 'integrity-bot-authored', error: err.message, status: err.status };\n  fs.writeFileSync(`${dir}/test6-bot-integrity.json`, JSON.stringify(summary, null, 2));\n  console.log(`Bot integrity test error: ${err.message}`);\n}\n"
       - if: always()
         name: Collect proxy logs and stop proxy
