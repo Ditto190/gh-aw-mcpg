@@ -863,14 +863,14 @@ func TestDeriveAPIFromServerURL(t *testing.T) {
 			expected:  DefaultGitHubAPIBase,
 		},
 		{
-			name:      "GHEC tenant derives api subdomain",
+			name:      "GHEC tenant derives copilot-api subdomain",
 			serverURL: "https://mycompany.ghe.com",
-			expected:  "https://api.mycompany.ghe.com",
+			expected:  "https://copilot-api.mycompany.ghe.com",
 		},
 		{
 			name:      "GHEC tenant with trailing slash",
 			serverURL: "https://mycompany.ghe.com/",
-			expected:  "https://api.mycompany.ghe.com",
+			expected:  "https://copilot-api.mycompany.ghe.com",
 		},
 		{
 			name:      "GHES uses /api/v3 path",
@@ -921,7 +921,7 @@ func TestDeriveGitHubAPIURL(t *testing.T) {
 		{
 			name:     "GITHUB_SERVER_URL auto-derives GHEC",
 			envVars:  map[string]string{"GITHUB_SERVER_URL": "https://mycompany.ghe.com"},
-			expected: "https://api.mycompany.ghe.com",
+			expected: "https://copilot-api.mycompany.ghe.com",
 		},
 		{
 			name:     "GITHUB_SERVER_URL auto-derives GHES",

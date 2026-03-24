@@ -35,9 +35,9 @@ const (
 
 // DeriveGitHubAPIURL resolves the upstream GitHub API URL from environment
 // variables. Priority order:
-//  1. GITHUB_API_URL — explicit API endpoint (e.g. https://api.mycompany.ghe.com)
+//  1. GITHUB_API_URL — explicit API endpoint (e.g. https://copilot-api.mycompany.ghe.com)
 //  2. GITHUB_SERVER_URL — auto-derive API endpoint from server URL:
-//     - https://mycompany.ghe.com  → https://api.mycompany.ghe.com
+//     - https://mycompany.ghe.com  → https://copilot-api.mycompany.ghe.com
 //     - https://github.mycompany.com → https://github.mycompany.com/api/v3
 //     - https://github.com → https://api.github.com
 //  3. Returns empty string if no env vars are set (caller uses DefaultGitHubAPIBase)
@@ -57,7 +57,7 @@ func DeriveGitHubAPIURL() string {
 }
 
 // deriveAPIFromServerURL converts a GITHUB_SERVER_URL to the corresponding API endpoint.
-// GHEC tenants (*.ghe.com): https://tenant.ghe.com → https://api.tenant.ghe.com
+// GHEC tenants (*.ghe.com): https://tenant.ghe.com → https://copilot-api.tenant.ghe.com
 // GitHub.com: https://github.com → https://api.github.com
 // GHES (all others): https://github.example.com → https://github.example.com/api/v3
 func deriveAPIFromServerURL(serverURL string) string {
@@ -72,8 +72,8 @@ func deriveAPIFromServerURL(serverURL string) string {
 	case host == "github.com" || host == "www.github.com":
 		return DefaultGitHubAPIBase
 	case strings.HasSuffix(host, ".ghe.com"):
-		// GHEC tenant: api.<subdomain>.ghe.com
-		return fmt.Sprintf("%s://api.%s", parsed.Scheme, parsed.Host)
+		// GHEC tenant: copilot-api.<subdomain>.ghe.com
+		return fmt.Sprintf("%s://copilot-api.%s", parsed.Scheme, parsed.Host)
 	default:
 		// GHES: <host>/api/v3
 		return fmt.Sprintf("%s://%s/api/v3", parsed.Scheme, parsed.Host)
