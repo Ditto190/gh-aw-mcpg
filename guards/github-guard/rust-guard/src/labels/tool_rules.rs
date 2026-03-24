@@ -52,6 +52,29 @@ fn private_writer_integrity(
     }
 }
 
+/// Resolve the effective (owner, repo, repo_id) for a search tool call.
+///
+/// Extracts the repo scope from the search query first; if the query lacks a
+/// `repo:` qualifier, falls back to the `owner`/`repo` fields in `tool_args`.
+fn resolve_search_scope(
+    tool_args: &Value,
+    owner: &str,
+    repo: &str,
+) -> (String, String, String) {
+    let query = tool_args
+        .get("query")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let (q_owner, q_repo, q_repo_id) = extract_repo_info_from_search_query(query);
+    if !q_repo_id.is_empty() {
+        (q_owner, q_repo, q_repo_id)
+    } else if !owner.is_empty() && !repo.is_empty() {
+        (owner.to_string(), repo.to_string(), format_repo_id(owner, repo))
+    } else {
+        (String::new(), String::new(), String::new())
+    }
+}
+
 // ============================================================================
 // Tool Label Application
 // ============================================================================
@@ -121,19 +144,7 @@ pub fn apply_tool_labels(
 
         // Search issues: extract repo scope from query or tool_args when available
         "search_issues" => {
-            let query = tool_args
-                .get("query")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
-            let (q_owner, q_repo, q_repo_id) = extract_repo_info_from_search_query(query);
-            // Fall back to owner/repo from tool_args if query extraction fails
-            let (s_owner, s_repo, s_repo_id) = if !q_repo_id.is_empty() {
-                (q_owner, q_repo, q_repo_id)
-            } else if !owner.is_empty() && !repo.is_empty() {
-                (owner.clone(), repo.clone(), format_repo_id(&owner, &repo))
-            } else {
-                (String::new(), String::new(), String::new())
-            };
+            let (s_owner, s_repo, s_repo_id) = resolve_search_scope(tool_args, &owner, &repo);
             if !s_repo_id.is_empty() {
                 desc = format!("search_issues:{}", s_repo_id);
                 secrecy =
@@ -235,19 +246,7 @@ pub fn apply_tool_labels(
 
         // Search pull requests: extract repo scope from query or tool_args when available
         "search_pull_requests" => {
-            let query = tool_args
-                .get("query")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
-            let (q_owner, q_repo, q_repo_id) = extract_repo_info_from_search_query(query);
-            // Fall back to owner/repo from tool_args if query extraction fails
-            let (s_owner, s_repo, s_repo_id) = if !q_repo_id.is_empty() {
-                (q_owner, q_repo, q_repo_id)
-            } else if !owner.is_empty() && !repo.is_empty() {
-                (owner.clone(), repo.clone(), format_repo_id(&owner, &repo))
-            } else {
-                (String::new(), String::new(), String::new())
-            };
+            let (s_owner, s_repo, s_repo_id) = resolve_search_scope(tool_args, &owner, &repo);
             if !s_repo_id.is_empty() {
                 desc = format!("search_pull_requests:{}", s_repo_id);
                 secrecy =
