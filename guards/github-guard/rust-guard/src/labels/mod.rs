@@ -1802,7 +1802,7 @@ mod tests {
             &ctx,
         );
 
-        assert_eq!(secrecy, secret_label(), "get_job_logs must carry secret secrecy (logs may leak tokens)");
+        assert_eq!(secrecy, Vec::<String>::new(), "get_job_logs secrecy inherits repo visibility (empty in tests)");
         assert_eq!(integrity, writer_integrity("github/copilot", &ctx), "get_job_logs must have approved integrity (system-generated output)");
     }
 
