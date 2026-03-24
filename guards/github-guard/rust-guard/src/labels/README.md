@@ -29,7 +29,7 @@ Common utility functions including:
 - Label generation helpers (secret_label, writer_integrity, etc.)
 - JSON extraction functions (get_string_field, extract_repo_info, etc.)
 - Integrity determination (pr_integrity, issue_integrity)
-- User classification (is_bot, is_owner)
+- User classification (is_bot)
 
 ### backend.rs (92 lines)
 Backend API calls for verifying user status:

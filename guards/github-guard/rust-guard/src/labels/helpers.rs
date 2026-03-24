@@ -416,7 +416,6 @@ pub fn get_str_or<'a>(value: &'a Value, field: &str, default: &'a str) -> &'a st
 
 /// Extract a nested string field (e.g., user.login) from a JSON value
 #[inline]
-#[allow(dead_code)]
 pub fn get_nested_str<'a>(value: &'a Value, outer: &str, inner: &str) -> &'a str {
     value
         .get(outer)
@@ -1336,10 +1335,4 @@ pub fn is_bot(username: &str) -> bool {
         || lower == "renovate"
         || lower == "github-actions"
         || lower == "copilot"
-}
-
-/// Check if a user is the repository owner (case-insensitive)
-#[allow(dead_code)]
-pub fn is_owner(username: &str, owner: &str) -> bool {
-    username.eq_ignore_ascii_case(owner)
 }
