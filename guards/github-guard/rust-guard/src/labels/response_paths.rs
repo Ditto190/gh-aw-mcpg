@@ -48,8 +48,14 @@ pub fn label_response_paths(
     match tool_name {
         // === Repository Search - label by private/public ===
         "search_repositories" => {
-            let items_opt = actual_response.get("items").and_then(|v| v.as_array())
-                .or_else(|| actual_response.get("repositories").and_then(|v| v.as_array()));
+            let (items_opt, items_key) =
+                if let Some(arr) = actual_response.get("items").and_then(|v| v.as_array()) {
+                    (Some(arr), "items")
+                } else if let Some(arr) = actual_response.get("repositories").and_then(|v| v.as_array()) {
+                    (Some(arr), "repositories")
+                } else {
+                    (None, "items")
+                };
             if let Some(items) = items_opt {
                 // Empty search results are server metadata — let lib.rs fallback handle
                 if items.is_empty() && is_search_result_wrapper(&actual_response) {
@@ -79,7 +85,7 @@ pub fn label_response_paths(
                     };
 
                     labeled_paths.push(PathLabelEntry {
-                        path: format!("/items/{}", i),
+                        path: format!("/{}/{}", items_key, i),
                         labels: crate::ResourceLabels {
                             description: format!("repo:{}", full_name),
                             secrecy,
@@ -95,7 +101,7 @@ pub fn label_response_paths(
                         secrecy: vec![],
                         integrity: none_integrity("", ctx),
                     }),
-                    items_path: Some("/items".to_string()),
+                    items_path: Some(format!("/{}", items_key)),
                 });
             }
         }
