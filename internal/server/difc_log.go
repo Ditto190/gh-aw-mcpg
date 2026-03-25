@@ -154,14 +154,14 @@ func buildDIFCFilteredNotice(filtered *difc.FilteredCollectionLabeledData) strin
 		}
 		if len(parts) > 0 {
 			return fmt.Sprintf(
-				"[DIFC] %d item(s) in this response were removed by %s and are not shown: %s.",
+				"[Filtered] %d item(s) in this response were removed by %s and are not shown: %s.",
 				n, policyLabel, strings.Join(parts, "; "),
 			)
 		}
 	}
 
 	return fmt.Sprintf(
-		"[DIFC] %d item(s) in this response were removed by %s and are not shown.",
+		"[Filtered] %d item(s) in this response were removed by %s and are not shown.",
 		n, policyLabel,
 	)
 }
@@ -183,6 +183,6 @@ func difcPolicyLabel(items []difc.FilteredItemDetail) string {
 	case integrityCount > 0 && secrecyCount == 0:
 		return "integrity policy"
 	default:
-		return "DIFC policy"
+		return "access policy"
 	}
 }

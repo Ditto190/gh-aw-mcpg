@@ -326,7 +326,7 @@ func TestBuildDIFCFilteredNotice_SingleItem(t *testing.T) {
 	notice := buildDIFCFilteredNotice(f)
 
 	assert.NotEmpty(t, notice)
-	assert.Contains(t, notice, "[DIFC]")
+	assert.Contains(t, notice, "[Filtered]")
 	assert.Contains(t, notice, "1 item(s)")
 	assert.Contains(t, notice, "issue:org/repo#14")
 	assert.Contains(t, notice, "integrity too low for agent context")
@@ -347,7 +347,7 @@ func TestBuildDIFCFilteredNotice_MultipleItemsWithinLimit(t *testing.T) {
 	notice := buildDIFCFilteredNotice(f)
 
 	assert.NotEmpty(t, notice)
-	assert.Contains(t, notice, "[DIFC]")
+	assert.Contains(t, notice, "[Filtered]")
 	assert.Contains(t, notice, "3 item(s)")
 	assert.Contains(t, notice, "issue:org/repo#1")
 	assert.Contains(t, notice, "issue:org/repo#2")
@@ -369,7 +369,7 @@ func TestBuildDIFCFilteredNotice_ExceedsLimit(t *testing.T) {
 	notice := buildDIFCFilteredNotice(f)
 
 	assert.NotEmpty(t, notice)
-	assert.Contains(t, notice, "[DIFC]")
+	assert.Contains(t, notice, "[Filtered]")
 	assert.Contains(t, notice, fmt.Sprintf("%d item(s)", len(items)))
 	// Individual descriptions should NOT appear when the count exceeds the limit.
 	assert.NotContains(t, notice, "issue:org/repo#1")
@@ -391,7 +391,7 @@ func TestBuildDIFCFilteredNotice_ItemWithNoDescription(t *testing.T) {
 	notice := buildDIFCFilteredNotice(f)
 
 	assert.NotEmpty(t, notice)
-	assert.Contains(t, notice, "[DIFC]")
+	assert.Contains(t, notice, "[Filtered]")
 	assert.Contains(t, notice, "1 item(s)")
 }
 
@@ -408,7 +408,7 @@ func TestBuildDIFCFilteredNotice_SecrecyViolation(t *testing.T) {
 	notice := buildDIFCFilteredNotice(f)
 
 	assert.NotEmpty(t, notice)
-	assert.Contains(t, notice, "[DIFC]")
+	assert.Contains(t, notice, "[Filtered]")
 	assert.Contains(t, notice, "1 item(s)")
 	assert.Contains(t, notice, "secrecy policy")
 	assert.NotContains(t, notice, "integrity policy")
@@ -432,7 +432,7 @@ func TestBuildDIFCFilteredNotice_IntegrityViolation(t *testing.T) {
 }
 
 // TestBuildDIFCFilteredNotice_MixedViolations verifies that a mix of secrecy and
-// integrity blocks produces a notice that says "DIFC policy".
+// integrity blocks produces a notice that says "access policy".
 func TestBuildDIFCFilteredNotice_MixedViolations(t *testing.T) {
 	f := &difc.FilteredCollectionLabeledData{
 		Filtered: []difc.FilteredItemDetail{
@@ -444,9 +444,9 @@ func TestBuildDIFCFilteredNotice_MixedViolations(t *testing.T) {
 
 	notice := buildDIFCFilteredNotice(f)
 
-	assert.Contains(t, notice, "[DIFC]")
+	assert.Contains(t, notice, "[Filtered]")
 	assert.Contains(t, notice, "2 item(s)")
-	assert.Contains(t, notice, "DIFC policy")
+	assert.Contains(t, notice, "access policy")
 	assert.NotContains(t, notice, "integrity policy")
 	assert.NotContains(t, notice, "secrecy policy")
 }
@@ -471,12 +471,12 @@ func TestDifcPolicyLabel(t *testing.T) {
 		{
 			name:     "mixed violations",
 			items:    []difc.FilteredItemDetail{{IsSecrecyViolation: true}, {IsSecrecyViolation: false}},
-			expected: "DIFC policy",
+			expected: "access policy",
 		},
 		{
-			name:     "empty items defaults to DIFC policy",
+			name:     "empty items defaults to access policy",
 			items:    []difc.FilteredItemDetail{},
-			expected: "DIFC policy",
+			expected: "access policy",
 		},
 	}
 	for _, tc := range tests {
