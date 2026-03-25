@@ -978,6 +978,7 @@ func TestNewEmptyEvaluationResult(t *testing.T) {
 // GetFilteredCount and GetAccessibleCount remain consistent with TotalCount.
 func TestEvaluator_FilterCollection_DetectionFailureRate(t *testing.T) {
 	eval := NewEvaluator()
+	assert.Equal(t, EnforcementStrict, eval.GetMode(), "evaluator must use strict mode for detection-failure tests")
 
 	t.Run("8 of 30 items blocked mirrors 26.7% detection failure rate", func(t *testing.T) {
 		// Agent has public clearance only — cannot access private-scoped items.

@@ -1158,10 +1158,13 @@ func TestAgentLabels_AddIntegrityTags_IsIndependentOfSecrecy(t *testing.T) {
 // An agentic workflow reads from multiple sources, accumulating secrecy tags
 // from each.  When the agent subsequently tries to write to a safe_outputs
 // sink whose accept patterns do not cover all accumulated secrecy tags, the
-// DIFC evaluator blocks the write — mirroring the 8 detection failures where
-// safe_outputs was skipped.
+// DIFC evaluator rejects the write in strict mode — mirroring the 8 detection
+// failures where safe_outputs was skipped because the agent carried secrecy
+// tags outside the sink's accept scope.
 func TestAgentLabels_AccumulateFromMultipleReads_WriteEvaluation(t *testing.T) {
-	eval := NewEvaluatorWithMode(EnforcementFilter)
+	// Writes are blocked by DIFC in all enforcement modes (strict, filter, propagate).
+	// We use strict mode here to make the intent explicit.
+	eval := NewEvaluatorWithMode(EnforcementStrict)
 
 	t.Run("agent reads from two repos — write blocked when one repo not in accept", func(t *testing.T) {
 		agent := NewAgentLabels("workflow-agent")
