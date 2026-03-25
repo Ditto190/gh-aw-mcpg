@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+
+	"github.com/github/gh-aw-mcpg/internal/syncutil"
 )
 
 // ServerFileLogger manages per-serverID log files
@@ -53,44 +55,26 @@ func InitServerFileLogger(logDir string) error {
 
 // getOrCreateLogger returns a logger for the given serverID, creating it if necessary
 func (sfl *ServerFileLogger) getOrCreateLogger(serverID string) (*log.Logger, error) {
-	// Fast path: check if logger already exists (read lock)
-	sfl.mu.RLock()
-	if logger, exists := sfl.loggers[serverID]; exists {
-		sfl.mu.RUnlock()
+	return syncutil.GetOrCreate(&sfl.mu, sfl.loggers, serverID, func() (*log.Logger, error) {
+		// If in fallback mode, return nil to indicate no per-server logging
+		if sfl.useFallback {
+			return nil, fmt.Errorf("server file logger in fallback mode")
+		}
+
+		// Create log file for this serverID
+		fileName := fmt.Sprintf("%s.log", serverID)
+		logPath := filepath.Join(sfl.logDir, fileName)
+		file, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open log file for server %s: %w", serverID, err)
+		}
+
+		// Create logger and record the file handle (write lock is held by GetOrCreate)
+		logger := log.New(file, "", 0)
+		sfl.files[serverID] = file
+
 		return logger, nil
-	}
-	sfl.mu.RUnlock()
-
-	// Slow path: create new logger (write lock)
-	sfl.mu.Lock()
-	defer sfl.mu.Unlock()
-
-	// Double-check in case another goroutine created it while we waited for the lock
-	if logger, exists := sfl.loggers[serverID]; exists {
-		return logger, nil
-	}
-
-	// If in fallback mode, return nil to indicate no per-server logging
-	if sfl.useFallback {
-		return nil, fmt.Errorf("server file logger in fallback mode")
-	}
-
-	// Create log file for this serverID
-	fileName := fmt.Sprintf("%s.log", serverID)
-	logPath := filepath.Join(sfl.logDir, fileName)
-	file, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open log file for server %s: %w", serverID, err)
-	}
-
-	// Create logger
-	logger := log.New(file, "", 0)
-
-	// Store in maps
-	sfl.loggers[serverID] = logger
-	sfl.files[serverID] = file
-
-	return logger, nil
+	})
 }
 
 // Log writes a log message to the server-specific log file
