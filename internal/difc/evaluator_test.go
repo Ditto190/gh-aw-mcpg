@@ -971,6 +971,170 @@ func TestNewEmptyEvaluationResult(t *testing.T) {
 	})
 }
 
+// TestEvaluator_FilterCollection_DetectionFailureRate tests that FilterCollection
+// accurately tracks items blocked by DIFC policy at realistic detection-failure
+// rates.  The audit found ~26.7 % of workflow runs had detection failures (8 of
+// 30 runs); this test uses equivalent proportions to confirm that
+// GetFilteredCount and GetAccessibleCount remain consistent with TotalCount.
+func TestEvaluator_FilterCollection_DetectionFailureRate(t *testing.T) {
+	eval := NewEvaluator()
+	assert.Equal(t, EnforcementStrict, eval.GetMode(), "evaluator must use strict mode for detection-failure tests")
+
+	t.Run("8 of 30 items blocked mirrors 26.7% detection failure rate", func(t *testing.T) {
+		// Agent has public clearance only — cannot access private-scoped items.
+		agentSecrecy := NewSecrecyLabelWithTags([]Tag{"public"})
+		agentIntegrity := NewIntegrityLabel()
+
+		items := make([]LabeledItem, 30)
+		for i := range items {
+			secrecy := NewSecrecyLabel()
+			if i < 22 {
+				secrecy.Label.Add("public") // accessible
+			} else {
+				secrecy.Label.Add("private:restricted") // inaccessible (detection failure)
+			}
+			items[i] = LabeledItem{
+				Data: i,
+				Labels: &LabeledResource{
+					Description: "workflow-run",
+					Secrecy:     *secrecy,
+					Integrity:   *NewIntegrityLabel(),
+				},
+			}
+		}
+
+		collection := &CollectionLabeledData{Items: items}
+		filtered := eval.FilterCollection(agentSecrecy, agentIntegrity, collection, OperationRead)
+
+		assert.Equal(t, 30, filtered.TotalCount, "TotalCount must reflect all items before filtering")
+		assert.Equal(t, 22, filtered.GetAccessibleCount(), "22 items should be accessible")
+		assert.Equal(t, 8, filtered.GetFilteredCount(), "8 items (26.7%) should be filtered")
+		assert.Equal(t, filtered.TotalCount,
+			filtered.GetAccessibleCount()+filtered.GetFilteredCount(),
+			"accessible + filtered must equal total")
+	})
+
+	t.Run("accessible+filtered always equals total for any filter rate", func(t *testing.T) {
+		// Verify invariant holds across several different filter rates.
+		rates := []struct{ total, blocked int }{
+			{10, 0},
+			{10, 5},
+			{10, 10},
+			{30, 8},
+			{100, 27},
+		}
+		for _, r := range rates {
+			agentSecrecy := NewSecrecyLabel()
+			agentIntegrity := NewIntegrityLabel()
+
+			items := make([]LabeledItem, r.total)
+			for i := range items {
+				secrecy := NewSecrecyLabel()
+				if i < r.total-r.blocked {
+					// accessible: resource has no secrecy restrictions
+				} else {
+					secrecy.Label.Add("private:blocked")
+				}
+				items[i] = LabeledItem{
+					Data: i,
+					Labels: &LabeledResource{
+						Description: "item",
+						Secrecy:     *secrecy,
+						Integrity:   *NewIntegrityLabel(),
+					},
+				}
+			}
+
+			collection := &CollectionLabeledData{Items: items}
+			filtered := eval.FilterCollection(agentSecrecy, agentIntegrity, collection, OperationRead)
+
+			assert.Equal(t, r.total, filtered.TotalCount)
+			assert.Equal(t, filtered.TotalCount,
+				filtered.GetAccessibleCount()+filtered.GetFilteredCount(),
+				"invariant violated for total=%d blocked=%d", r.total, r.blocked)
+		}
+	})
+}
+
+// TestEvaluator_FilterCollection_FilteredItemsHaveReasons verifies that every item
+// removed by DIFC enforcement carries a non-empty denial reason.  Audit trail
+// continuity (recommendation #5 from the integrity audit) requires that audit
+// agents can determine *why* each item was withheld.
+func TestEvaluator_FilterCollection_FilteredItemsHaveReasons(t *testing.T) {
+	eval := NewEvaluator()
+
+	t.Run("secrecy violation reason is non-empty", func(t *testing.T) {
+		agentSecrecy := NewSecrecyLabel() // no clearance
+		agentIntegrity := NewIntegrityLabel()
+
+		collection := &CollectionLabeledData{
+			Items: []LabeledItem{
+				{
+					Data: "private-issue",
+					Labels: &LabeledResource{
+						Description: "issue in private repo",
+						Secrecy:     *NewSecrecyLabelWithTags([]Tag{"private:org/repo"}),
+						Integrity:   *NewIntegrityLabel(),
+					},
+				},
+			},
+		}
+
+		filtered := eval.FilterCollection(agentSecrecy, agentIntegrity, collection, OperationRead)
+
+		require.Equal(t, 1, filtered.GetFilteredCount(), "item should be filtered")
+		assert.NotEmpty(t, filtered.Filtered[0].Reason,
+			"filtered item must carry a denial reason for the audit trail")
+	})
+
+	t.Run("integrity violation reason is non-empty", func(t *testing.T) {
+		// Agent has integrity "approved"; resource has no integrity → resource ⊄ agent
+		// so the read is denied in strict mode.
+		agentSecrecy := NewSecrecyLabel()
+		agentIntegrity := NewIntegrityLabelWithTags([]Tag{"approved"})
+
+		collection := &CollectionLabeledData{
+			Items: []LabeledItem{
+				{
+					Data: "untrusted-item",
+					Labels: &LabeledResource{
+						Description: "item with no integrity tags",
+						Secrecy:     *NewSecrecyLabel(),
+						Integrity:   *NewIntegrityLabel(), // empty → below agent's threshold
+					},
+				},
+			},
+		}
+
+		filtered := eval.FilterCollection(agentSecrecy, agentIntegrity, collection, OperationRead)
+
+		require.Equal(t, 1, filtered.GetFilteredCount(), "item should be filtered")
+		assert.NotEmpty(t, filtered.Filtered[0].Reason,
+			"filtered item must carry a denial reason for the audit trail")
+	})
+
+	t.Run("every filtered item in a mixed collection has a reason", func(t *testing.T) {
+		agentSecrecy := NewSecrecyLabel()
+		agentIntegrity := NewIntegrityLabel()
+
+		collection := &CollectionLabeledData{
+			Items: []LabeledItem{
+				{Data: "accessible", Labels: &LabeledResource{Description: "open", Secrecy: *NewSecrecyLabel(), Integrity: *NewIntegrityLabel()}},
+				{Data: "blocked-1", Labels: &LabeledResource{Description: "secret-1", Secrecy: *NewSecrecyLabelWithTags([]Tag{"private:a/b"}), Integrity: *NewIntegrityLabel()}},
+				{Data: "blocked-2", Labels: &LabeledResource{Description: "secret-2", Secrecy: *NewSecrecyLabelWithTags([]Tag{"private:c/d"}), Integrity: *NewIntegrityLabel()}},
+			},
+		}
+
+		filtered := eval.FilterCollection(agentSecrecy, agentIntegrity, collection, OperationRead)
+
+		assert.Equal(t, 2, filtered.GetFilteredCount())
+		for i, detail := range filtered.Filtered {
+			assert.NotEmpty(t, detail.Reason,
+				"filtered item[%d] must have a non-empty denial reason", i)
+		}
+	})
+}
+
 // TestEvaluator_StrictMode_Read_Unchanged verifies strict mode still denies reads
 func TestEvaluator_StrictMode_Read_Unchanged(t *testing.T) {
 	eval := NewEvaluator() // Default is strict mode

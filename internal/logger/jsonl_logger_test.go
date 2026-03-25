@@ -510,3 +510,114 @@ func TestLogRPCMessageJSONLWithNilError(t *testing.T) {
 	// Error field should be empty when nil error is passed
 	assert.Empty(entry.Error, "Error field should be empty when no error")
 }
+
+// TestLogDifcFilteredItem_NilEntryDoesNotPanic verifies that calling
+// LogDifcFilteredItem with a nil entry is safe.  The DIFC audit log path
+// must never crash the gateway even when passed unexpected input.
+func TestLogDifcFilteredItem_NilEntryDoesNotPanic(t *testing.T) {
+	assert.NotPanics(t, func() {
+		LogDifcFilteredItem(nil)
+	}, "LogDifcFilteredItem(nil) must not panic")
+}
+
+// TestLogDifcFilteredItem_WritesAuditEntryToJSONL verifies that
+// LogDifcFilteredItem correctly writes a DIFC_FILTERED entry to the JSONL
+// audit log.  Audit trail continuity requires every filtered item to appear
+// in rpc-messages.jsonl so privileged audit agents can inspect them.
+func TestLogDifcFilteredItem_WritesAuditEntryToJSONL(t *testing.T) {
+	require := require.New(t)
+	assert := assert.New(t)
+
+	tmpDir := t.TempDir()
+	logDir := filepath.Join(tmpDir, "logs")
+
+	err := InitJSONLLogger(logDir, "rpc-messages.jsonl")
+	require.NoError(err, "InitJSONLLogger failed")
+	defer CloseJSONLLogger()
+
+	entry := &JSONLFilteredItem{
+		FilteredItemLogEntry: FilteredItemLogEntry{
+			ServerID:          "github",
+			ToolName:          "list_issues",
+			Description:       "issue:org/repo#42",
+			Reason:            "agent lacks secrecy clearance for private:org/repo",
+			SecrecyTags:       []string{"private:org/repo"},
+			IntegrityTags:     []string{"approved:org/repo"},
+			AuthorLogin:       "octocat",
+			AuthorAssociation: "CONTRIBUTOR",
+			HTMLURL:           "https://github.com/org/repo/issues/42",
+			Number:            "42",
+		},
+	}
+	LogDifcFilteredItem(entry)
+
+	CloseJSONLLogger()
+
+	logPath := filepath.Join(logDir, "rpc-messages.jsonl")
+	content, err := os.ReadFile(logPath)
+	require.NoError(err, "log file must exist after LogDifcFilteredItem")
+
+	var logged JSONLFilteredItem
+	err = json.Unmarshal(content, &logged)
+	require.NoError(err, "JSONL entry must be valid JSON")
+
+	assert.Equal("DIFC_FILTERED", logged.Type, "Type must be DIFC_FILTERED")
+	assert.NotEmpty(logged.Timestamp, "Timestamp must be set for audit trail")
+	assert.Equal("github", logged.ServerID)
+	assert.Equal("list_issues", logged.ToolName)
+	assert.Equal("issue:org/repo#42", logged.Description)
+	assert.Equal("agent lacks secrecy clearance for private:org/repo", logged.Reason)
+	assert.Equal([]string{"private:org/repo"}, logged.SecrecyTags)
+	assert.Equal([]string{"approved:org/repo"}, logged.IntegrityTags)
+	assert.Equal("octocat", logged.AuthorLogin)
+	assert.Equal("42", logged.Number)
+}
+
+// TestLogDifcFilteredItem_MultipleEntriesAuditTrail verifies that multiple
+// filtered items all appear in the JSONL audit log in order, without loss.
+// This exercises the audit trail continuity recommendation from the integrity
+// audit: every filtered item must be retained for retrospective analysis.
+func TestLogDifcFilteredItem_MultipleEntriesAuditTrail(t *testing.T) {
+	require := require.New(t)
+	assert := assert.New(t)
+
+	tmpDir := t.TempDir()
+	logDir := filepath.Join(tmpDir, "logs")
+
+	err := InitJSONLLogger(logDir, "rpc-messages.jsonl")
+	require.NoError(err)
+	defer CloseJSONLLogger()
+
+	entries := []*JSONLFilteredItem{
+		{FilteredItemLogEntry: FilteredItemLogEntry{ServerID: "github", ToolName: "list_issues", Number: "1", Reason: "secrecy mismatch"}},
+		{FilteredItemLogEntry: FilteredItemLogEntry{ServerID: "github", ToolName: "list_prs", Number: "2", Reason: "integrity too low"}},
+		{FilteredItemLogEntry: FilteredItemLogEntry{ServerID: "github", ToolName: "list_commits", SHA: "abc123", Reason: "secrecy mismatch"}},
+	}
+
+	for _, e := range entries {
+		LogDifcFilteredItem(e)
+	}
+	CloseJSONLLogger()
+
+	logPath := filepath.Join(logDir, "rpc-messages.jsonl")
+	file, err := os.Open(logPath)
+	require.NoError(err)
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	var lines []JSONLFilteredItem
+	for scanner.Scan() {
+		var item JSONLFilteredItem
+		err := json.Unmarshal([]byte(scanner.Text()), &item)
+		require.NoError(err, "each line must be valid JSON")
+		lines = append(lines, item)
+	}
+	require.NoError(scanner.Err())
+
+	assert.Len(lines, 3, "all 3 filtered items must appear in the audit log")
+	for i, line := range lines {
+		assert.Equal("DIFC_FILTERED", line.Type, "entry[%d] must have Type=DIFC_FILTERED", i)
+		assert.NotEmpty(line.Timestamp, "entry[%d] must have Timestamp", i)
+		assert.NotEmpty(line.Reason, "entry[%d] must have Reason", i)
+	}
+}
