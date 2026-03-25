@@ -1151,3 +1151,87 @@ func TestAgentLabels_AddIntegrityTags_IsIndependentOfSecrecy(t *testing.T) {
 	// Secrecy should be unchanged
 	assert.ElementsMatch(t, []Tag{"confidential"}, agent.GetSecrecyTags())
 }
+
+// TestAgentLabels_AccumulateFromMultipleReads_WriteEvaluation models the
+// "detection failure → safe_outputs skipped" scenario from the integrity audit.
+//
+// An agentic workflow reads from multiple sources, accumulating secrecy tags
+// from each.  When the agent subsequently tries to write to a safe_outputs
+// sink whose accept patterns do not cover all accumulated secrecy tags, the
+// DIFC evaluator blocks the write — mirroring the 8 detection failures where
+// safe_outputs was skipped.
+func TestAgentLabels_AccumulateFromMultipleReads_WriteEvaluation(t *testing.T) {
+	eval := NewEvaluatorWithMode(EnforcementFilter)
+
+	t.Run("agent reads from two repos — write blocked when one repo not in accept", func(t *testing.T) {
+		agent := NewAgentLabels("workflow-agent")
+
+		// First read: primary workflow repo (private).
+		primaryRepo := NewLabeledResource("github/gh-aw issues")
+		primaryRepo.Secrecy.Label.Add("private:github/gh-aw")
+		primaryRepo.Integrity.Label.Add("approved:github/gh-aw")
+		agent.AccumulateFromRead(primaryRepo)
+
+		// Second read: restricted internal repo (private).
+		secondaryRepo := NewLabeledResource("github/internal-restricted records")
+		secondaryRepo.Secrecy.Label.Add("private:github/internal-restricted")
+		secondaryRepo.Integrity.Label.Add("approved:github/internal-restricted")
+		agent.AccumulateFromRead(secondaryRepo)
+
+		// Agent now carries secrecy from both repos.
+		secrecyTags := agent.GetSecrecyTags()
+		assert.Contains(t, secrecyTags, Tag("private:github/gh-aw"),
+			"Agent should have secrecy from first read")
+		assert.Contains(t, secrecyTags, Tag("private:github/internal-restricted"),
+			"Agent should have secrecy from second read")
+
+		// Safe-outputs write-sink only accepts gh-aw scoped data.
+		safeOutputsResource := NewLabeledResource("safe-outputs sink")
+		safeOutputsResource.Secrecy.Label.Add("private:github/gh-aw")
+
+		writeResult := eval.Evaluate(agent.Secrecy, agent.Integrity, safeOutputsResource, OperationWrite)
+
+		assert.False(t, writeResult.IsAllowed(),
+			"Write must be blocked: agent carries secrecy from internal-restricted not accepted by safe-outputs")
+		assert.NotEmpty(t, writeResult.SecrecyToAdd,
+			"Violation details must identify the unaccepted secrecy tag")
+	})
+
+	t.Run("agent reads only from accepted repo — write allowed", func(t *testing.T) {
+		agent := NewAgentLabels("safe-workflow-agent")
+
+		// Single read from the repo covered by accept patterns.
+		repo := NewLabeledResource("github/gh-aw issues")
+		repo.Secrecy.Label.Add("private:github/gh-aw")
+		repo.Integrity.Label.Add("approved:github/gh-aw")
+		agent.AccumulateFromRead(repo)
+
+		safeOutputsResource := NewLabeledResource("safe-outputs sink")
+		safeOutputsResource.Secrecy.Label.Add("private:github/gh-aw")
+
+		writeResult := eval.Evaluate(agent.Secrecy, agent.Integrity, safeOutputsResource, OperationWrite)
+
+		assert.True(t, writeResult.IsAllowed(),
+			"Write should succeed when agent secrecy is fully covered by accept patterns")
+	})
+
+	t.Run("agent reads from wildcard-accepted sink — write always allowed", func(t *testing.T) {
+		agent := NewAgentLabels("wildcard-agent")
+
+		// Agent accumulates secrecy from several private repos.
+		for _, repo := range []string{"private:org1/repo-a", "private:org2/repo-b", "private:org3/repo-c"} {
+			r := NewLabeledResource(repo)
+			r.Secrecy.Label.Add(Tag(repo))
+			agent.AccumulateFromRead(r)
+		}
+
+		// Write-sink uses wildcard accept ("*") to accommodate any secrecy.
+		safeOutputsResource := NewLabeledResource("wildcard safe-outputs sink")
+		safeOutputsResource.Secrecy.Label.Add(WildcardTag)
+
+		writeResult := eval.Evaluate(agent.Secrecy, agent.Integrity, safeOutputsResource, OperationWrite)
+
+		assert.True(t, writeResult.IsAllowed(),
+			"Wildcard accept patterns must allow writes regardless of accumulated secrecy")
+	})
+}
