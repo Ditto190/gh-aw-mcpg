@@ -41,7 +41,7 @@ func init() {
 func getDefaultDIFCMode() string {
 	if envMode := os.Getenv("MCP_GATEWAY_GUARDS_MODE"); envMode != "" {
 		mode := strings.ToLower(envMode)
-		if isValidDIFCMode(mode) {
+		if _, err := difc.ParseEnforcementMode(mode); err == nil {
 			debugLog.Printf("Guards mode set from MCP_GATEWAY_GUARDS_MODE: %s", mode)
 			return mode
 		}
@@ -50,26 +50,14 @@ func getDefaultDIFCMode() string {
 	return difc.ModeStrict
 }
 
-// isValidDIFCMode checks if the given mode string is a valid DIFC mode
-func isValidDIFCMode(mode string) bool {
-	for _, valid := range difc.ValidModes {
-		if mode == valid {
-			return true
-		}
-	}
-	return false
-}
-
 func getDefaultAllowOnlyScopePublic() bool {
 	return envutil.GetEnvBool("MCP_GATEWAY_ALLOWONLY_SCOPE_PUBLIC", false)
 }
 
 // ValidateDIFCMode validates the guards mode flag value and returns an error if invalid
 func ValidateDIFCMode(mode string) error {
-	if !isValidDIFCMode(strings.ToLower(mode)) {
-		return fmt.Errorf("invalid guards mode %q: must be one of: %s, %s, %s", mode, difc.ModeStrict, difc.ModeFilter, difc.ModePropagate)
-	}
-	return nil
+	_, err := difc.ParseEnforcementMode(mode)
+	return err
 }
 
 func parseDIFCSinkServerIDs(input string) ([]string, error) {

@@ -47,9 +47,9 @@ func TestValidateDIFCMode(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:    "empty mode",
+			name:    "empty mode defaults to strict",
 			mode:    "",
-			wantErr: true,
+			wantErr: false,
 		},
 		{
 			name:    "partial match should fail",
@@ -63,7 +63,6 @@ func TestValidateDIFCMode(t *testing.T) {
 			err := ValidateDIFCMode(tt.mode)
 			if tt.wantErr {
 				assert.Error(t, err, "expected error for mode %q", tt.mode)
-				assert.Contains(t, err.Error(), "invalid guards mode")
 			} else {
 				assert.NoError(t, err, "unexpected error for mode %q", tt.mode)
 			}
@@ -136,10 +135,10 @@ func TestGetDefaultDIFCMode(t *testing.T) {
 func TestValidDIFCModes(t *testing.T) {
 	require := require.New(t)
 
-	// Verify all expected modes are valid using isValidDIFCMode
-	require.True(isValidDIFCMode(difc.ModeStrict), "strict should be valid")
-	require.True(isValidDIFCMode(difc.ModeFilter), "filter should be valid")
-	require.True(isValidDIFCMode(difc.ModePropagate), "propagate should be valid")
+	// Verify all expected modes are valid using ValidateDIFCMode
+	require.NoError(ValidateDIFCMode(difc.ModeStrict), "strict should be valid")
+	require.NoError(ValidateDIFCMode(difc.ModeFilter), "filter should be valid")
+	require.NoError(ValidateDIFCMode(difc.ModePropagate), "propagate should be valid")
 
 	// Verify ValidModes slice has 3 entries
 	require.Len(difc.ValidModes, 3, "should only have 3 valid modes")
