@@ -15,7 +15,8 @@ import (
 )
 
 // newTestFilteredItem builds a FilteredItemDetail with the given map data, secrecy tags,
-// integrity tags, description, and denial reason.
+// integrity tags, description, and denial reason.  IsSecrecyViolation is inferred from
+// whether secrecyTags is non-empty (matching how FilterCollection sets the field).
 func newTestFilteredItem(data map[string]interface{}, description, reason string, secrecyTags, integrityTags []string) difc.FilteredItemDetail {
 	labels := difc.NewLabeledResource(description)
 	if len(secrecyTags) > 0 {
@@ -29,7 +30,26 @@ func newTestFilteredItem(data map[string]interface{}, description, reason string
 			Data:   data,
 			Labels: labels,
 		},
-		Reason: reason,
+		Reason:             reason,
+		IsSecrecyViolation: len(secrecyTags) > 0,
+	}
+}
+
+// newSecrecyFilteredItem builds a FilteredItemDetail explicitly marked as a secrecy violation.
+func newSecrecyFilteredItem(description, reason string) difc.FilteredItemDetail {
+	return difc.FilteredItemDetail{
+		Item:               difc.LabeledItem{Labels: difc.NewLabeledResource(description)},
+		Reason:             reason,
+		IsSecrecyViolation: true,
+	}
+}
+
+// newIntegrityFilteredItem builds a FilteredItemDetail explicitly marked as an integrity violation.
+func newIntegrityFilteredItem(description, reason string) difc.FilteredItemDetail {
+	return difc.FilteredItemDetail{
+		Item:               difc.LabeledItem{Labels: difc.NewLabeledResource(description)},
+		Reason:             reason,
+		IsSecrecyViolation: false,
 	}
 }
 
@@ -373,4 +393,95 @@ func TestBuildDIFCFilteredNotice_ItemWithNoDescription(t *testing.T) {
 	assert.NotEmpty(t, notice)
 	assert.Contains(t, notice, "[DIFC]")
 	assert.Contains(t, notice, "1 item(s)")
+}
+
+// TestBuildDIFCFilteredNotice_SecrecyViolation verifies that secrecy-blocked items
+// produce a notice that says "secrecy policy", not "integrity policy".
+func TestBuildDIFCFilteredNotice_SecrecyViolation(t *testing.T) {
+	f := &difc.FilteredCollectionLabeledData{
+		Filtered: []difc.FilteredItemDetail{
+			newSecrecyFilteredItem("resource:actions_get", "has secrecy requirements that agent doesn't meet"),
+		},
+		TotalCount: 1,
+	}
+
+	notice := buildDIFCFilteredNotice(f)
+
+	assert.NotEmpty(t, notice)
+	assert.Contains(t, notice, "[DIFC]")
+	assert.Contains(t, notice, "1 item(s)")
+	assert.Contains(t, notice, "secrecy policy")
+	assert.NotContains(t, notice, "integrity policy")
+	assert.Contains(t, notice, "resource:actions_get")
+}
+
+// TestBuildDIFCFilteredNotice_IntegrityViolation verifies that integrity-blocked items
+// produce a notice that says "integrity policy".
+func TestBuildDIFCFilteredNotice_IntegrityViolation(t *testing.T) {
+	f := &difc.FilteredCollectionLabeledData{
+		Filtered: []difc.FilteredItemDetail{
+			newIntegrityFilteredItem("issue:org/repo#14", "integrity too low for agent context"),
+		},
+		TotalCount: 1,
+	}
+
+	notice := buildDIFCFilteredNotice(f)
+
+	assert.Contains(t, notice, "integrity policy")
+	assert.NotContains(t, notice, "secrecy policy")
+}
+
+// TestBuildDIFCFilteredNotice_MixedViolations verifies that a mix of secrecy and
+// integrity blocks produces a notice that says "DIFC policy".
+func TestBuildDIFCFilteredNotice_MixedViolations(t *testing.T) {
+	f := &difc.FilteredCollectionLabeledData{
+		Filtered: []difc.FilteredItemDetail{
+			newSecrecyFilteredItem("resource:actions_get", "secrecy mismatch"),
+			newIntegrityFilteredItem("issue:org/repo#1", "integrity too low"),
+		},
+		TotalCount: 2,
+	}
+
+	notice := buildDIFCFilteredNotice(f)
+
+	assert.Contains(t, notice, "[DIFC]")
+	assert.Contains(t, notice, "2 item(s)")
+	assert.Contains(t, notice, "DIFC policy")
+	assert.NotContains(t, notice, "integrity policy")
+	assert.NotContains(t, notice, "secrecy policy")
+}
+
+// TestDifcPolicyLabel verifies the policy label selection logic.
+func TestDifcPolicyLabel(t *testing.T) {
+	tests := []struct {
+		name     string
+		items    []difc.FilteredItemDetail
+		expected string
+	}{
+		{
+			name:     "all secrecy violations",
+			items:    []difc.FilteredItemDetail{{IsSecrecyViolation: true}, {IsSecrecyViolation: true}},
+			expected: "secrecy policy",
+		},
+		{
+			name:     "all integrity violations",
+			items:    []difc.FilteredItemDetail{{IsSecrecyViolation: false}, {IsSecrecyViolation: false}},
+			expected: "integrity policy",
+		},
+		{
+			name:     "mixed violations",
+			items:    []difc.FilteredItemDetail{{IsSecrecyViolation: true}, {IsSecrecyViolation: false}},
+			expected: "DIFC policy",
+		},
+		{
+			name:     "empty items defaults to DIFC policy",
+			items:    []difc.FilteredItemDetail{},
+			expected: "DIFC policy",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, difcPolicyLabel(tc.items))
+		})
+	}
 }
