@@ -72,8 +72,9 @@ type Connection struct {
 	httpClient        *http.Client
 	httpSessionID     string            // Session ID returned by the HTTP backend
 	httpTransportType HTTPTransportType // Type of HTTP transport in use
-	// sessionMu protects mutable session state: httpSessionID, session, and client.
-	// Readers take RLock; the reconnect functions take the full Lock.
+	// sessionMu protects the mutable session fields: httpSessionID, session, and client.
+	// Always use getHTTPSessionID() or getSDKSession() to read these fields; the
+	// reconnect functions (reconnectPlainJSON, reconnectSDKTransport) hold the full Lock.
 	sessionMu sync.RWMutex
 }
 
