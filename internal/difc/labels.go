@@ -150,6 +150,15 @@ func (l *Label) IsEmpty() bool {
 	return len(l.tags) == 0
 }
 
+// cloneLabelOrNew clones inner if it is non-nil, otherwise returns a new empty Label.
+// This helper centralizes the nil-guard logic shared by SecrecyLabel.Clone and IntegrityLabel.Clone.
+func cloneLabelOrNew(inner *Label) *Label {
+	if inner == nil {
+		return NewLabel()
+	}
+	return inner.Clone()
+}
+
 // SecrecyLabel wraps Label with secrecy-specific flow semantics
 // Secrecy flow: data can only flow to contexts with equal or more secrecy tags
 // l ⊆ target (this has no tags that target doesn't have)
@@ -279,10 +288,7 @@ func (l *SecrecyLabel) CheckFlow(target *SecrecyLabel) (bool, []Tag) {
 
 // Clone creates a copy of the secrecy label
 func (l *SecrecyLabel) Clone() *SecrecyLabel {
-	if l.getLabel() == nil {
-		return NewSecrecyLabel()
-	}
-	return &SecrecyLabel{Label: l.Label.Clone()}
+	return &SecrecyLabel{Label: cloneLabelOrNew(l.getLabel())}
 }
 
 // IntegrityLabel wraps Label with integrity-specific flow semantics
@@ -326,10 +332,7 @@ func (l *IntegrityLabel) CheckFlow(target *IntegrityLabel) (bool, []Tag) {
 
 // Clone creates a copy of the integrity label
 func (l *IntegrityLabel) Clone() *IntegrityLabel {
-	if l.getLabel() == nil {
-		return NewIntegrityLabel()
-	}
-	return &IntegrityLabel{Label: l.Label.Clone()}
+	return &IntegrityLabel{Label: cloneLabelOrNew(l.getLabel())}
 }
 
 // ViolationType indicates what kind of DIFC violation occurred
