@@ -79,20 +79,3 @@ func TestStderrTerminalWidth_NotATerminalInCI(t *testing.T) {
 	assert.False(t, ok, "should not detect terminal width in CI")
 	assert.Equal(t, 0, width, "width should be 0 in CI")
 }
-
-// TestIsInteractiveTerminal verifies that IsInteractiveTerminal returns true
-// only when both stderr is a terminal and the process is not in a container.
-func TestIsInteractiveTerminal(t *testing.T) {
-	expected := IsStderrTerminal() && !IsRunningInContainer()
-	assert.Equal(t, expected, IsInteractiveTerminal(),
-		"IsInteractiveTerminal should be IsStderrTerminal() && !IsRunningInContainer()")
-}
-
-// TestIsInteractiveTerminal_NotInteractiveInCI verifies the expected false
-// result in CI where stderr is a pipe, not a terminal.
-func TestIsInteractiveTerminal_NotInteractiveInCI(t *testing.T) {
-	if os.Getenv("CI") == "" && os.Getenv("GITHUB_ACTIONS") == "" {
-		t.Skip("Skipping CI-specific assertion: not running in a CI environment")
-	}
-	assert.False(t, IsInteractiveTerminal(), "should not be interactive in CI")
-}

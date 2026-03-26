@@ -1,4 +1,4 @@
-package sys
+package server
 
 import (
 	"encoding/json"
@@ -7,7 +7,7 @@ import (
 	"github.com/github/gh-aw-mcpg/internal/logger"
 )
 
-var log = logger.New("sys:sys")
+var logSys = logger.New("server:system_tools")
 
 // SysServer implements the MCPG system tools
 type SysServer struct {
@@ -16,7 +16,7 @@ type SysServer struct {
 
 // NewSysServer creates a new system server
 func NewSysServer(serverIDs []string) *SysServer {
-	log.Printf("Creating new SysServer with %d servers: %v", len(serverIDs), serverIDs)
+	logSys.Printf("Creating new SysServer with %d servers: %v", len(serverIDs), serverIDs)
 	return &SysServer{
 		serverIDs: serverIDs,
 	}
@@ -24,7 +24,7 @@ func NewSysServer(serverIDs []string) *SysServer {
 
 // HandleRequest processes MCP requests for system tools
 func (s *SysServer) HandleRequest(method string, params json.RawMessage) (interface{}, error) {
-	log.Printf("Handling request: method=%s", method)
+	logSys.Printf("Handling request: method=%s", method)
 
 	switch method {
 	case "tools/list":
@@ -35,17 +35,17 @@ func (s *SysServer) HandleRequest(method string, params json.RawMessage) (interf
 			Arguments map[string]interface{} `json:"arguments"`
 		}
 		if err := json.Unmarshal(params, &callParams); err != nil {
-			log.Printf("Failed to unmarshal tool call params: %v", err)
+			logSys.Printf("Failed to unmarshal tool call params: %v", err)
 			return nil, fmt.Errorf("invalid params: %w", err)
 		}
 		if callParams.Name == "" {
-			log.Printf("Tool call missing name field")
+			logSys.Printf("Tool call missing name field")
 			return nil, fmt.Errorf("invalid params: missing tool name")
 		}
-		log.Printf("Calling tool: name=%s", callParams.Name)
+		logSys.Printf("Calling tool: name=%s", callParams.Name)
 		return s.callTool(callParams.Name, callParams.Arguments)
 	default:
-		log.Printf("Unsupported method requested: %s", method)
+		logSys.Printf("Unsupported method requested: %s", method)
 		return nil, fmt.Errorf("unsupported method: %s", method)
 	}
 }
@@ -74,7 +74,7 @@ func (s *SysServer) listTools() (interface{}, error) {
 }
 
 func (s *SysServer) callTool(name string, args map[string]interface{}) (interface{}, error) {
-	log.Printf("Executing tool: name=%s", name)
+	logSys.Printf("Executing tool: name=%s", name)
 
 	switch name {
 	case "sys_init":
@@ -82,13 +82,13 @@ func (s *SysServer) callTool(name string, args map[string]interface{}) (interfac
 	case "sys_list_servers":
 		return s.listServers()
 	default:
-		log.Printf("Unknown tool requested: %s", name)
+		logSys.Printf("Unknown tool requested: %s", name)
 		return nil, fmt.Errorf("unknown tool: %s", name)
 	}
 }
 
 func (s *SysServer) sysInit() (interface{}, error) {
-	log.Printf("Initializing MCPG system with %d servers", len(s.serverIDs))
+	logSys.Printf("Initializing MCPG system with %d servers", len(s.serverIDs))
 	return map[string]interface{}{
 		"content": []map[string]interface{}{
 			{

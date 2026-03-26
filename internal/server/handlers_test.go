@@ -10,7 +10,7 @@ import (
 
 	"github.com/github/gh-aw-mcpg/internal/config"
 	"github.com/github/gh-aw-mcpg/internal/launcher"
-	"github.com/github/gh-aw-mcpg/internal/sys"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -69,7 +69,7 @@ func TestHandleClose_MethodValidation(t *testing.T) {
 
 	unifiedServer := &UnifiedServer{
 		launcher:  mockLauncher,
-		sysServer: sys.NewSysServer([]string{}),
+		sysServer: NewSysServer([]string{}),
 		ctx:       ctx,
 		testMode:  true, // Prevent os.Exit in tests
 	}
@@ -131,7 +131,7 @@ func TestHandleClose_SuccessfulShutdown(t *testing.T) {
 
 	unifiedServer := &UnifiedServer{
 		launcher:  mockLauncher,
-		sysServer: sys.NewSysServer([]string{}),
+		sysServer: NewSysServer([]string{}),
 		ctx:       ctx,
 		testMode:  true, // Prevent os.Exit in tests
 	}
@@ -171,7 +171,7 @@ func TestHandleClose_Idempotency(t *testing.T) {
 
 	unifiedServer := &UnifiedServer{
 		launcher:  mockLauncher,
-		sysServer: sys.NewSysServer([]string{}),
+		sysServer: NewSysServer([]string{}),
 		ctx:       ctx,
 		testMode:  true,
 	}
@@ -212,7 +212,7 @@ func TestHandleClose_MultipleRequests(t *testing.T) {
 
 	unifiedServer := &UnifiedServer{
 		launcher:  mockLauncher,
-		sysServer: sys.NewSysServer([]string{}),
+		sysServer: NewSysServer([]string{}),
 		ctx:       ctx,
 		testMode:  true,
 	}
@@ -270,7 +270,7 @@ func TestHandleClose_ResponseFormat(t *testing.T) {
 
 	unifiedServer := &UnifiedServer{
 		launcher:  mockLauncher,
-		sysServer: sys.NewSysServer([]string{}),
+		sysServer: NewSysServer([]string{}),
 		ctx:       ctx,
 		testMode:  true,
 	}
@@ -307,7 +307,7 @@ func TestHandleClose_RemoteAddress(t *testing.T) {
 
 	unifiedServer := &UnifiedServer{
 		launcher:  mockLauncher,
-		sysServer: sys.NewSysServer([]string{}),
+		sysServer: NewSysServer([]string{}),
 		ctx:       ctx,
 		testMode:  true,
 	}
@@ -333,7 +333,7 @@ func TestHandleClose_EmptyBody(t *testing.T) {
 
 	unifiedServer := &UnifiedServer{
 		launcher:  mockLauncher,
-		sysServer: sys.NewSysServer([]string{}),
+		sysServer: NewSysServer([]string{}),
 		ctx:       ctx,
 		testMode:  true,
 	}
@@ -358,7 +358,7 @@ func TestHandleClose_WithRequestBody(t *testing.T) {
 
 	unifiedServer := &UnifiedServer{
 		launcher:  mockLauncher,
-		sysServer: sys.NewSysServer([]string{}),
+		sysServer: NewSysServer([]string{}),
 		ctx:       ctx,
 		testMode:  true,
 	}
@@ -417,7 +417,7 @@ func TestHandleClose_ShouldExitFlag(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			unifiedServer := &UnifiedServer{
 				launcher:  mockLauncher,
-				sysServer: sys.NewSysServer([]string{}),
+				sysServer: NewSysServer([]string{}),
 				ctx:       ctx,
 				testMode:  tt.testMode,
 			}

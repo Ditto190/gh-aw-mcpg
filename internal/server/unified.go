@@ -14,7 +14,6 @@ import (
 	"github.com/github/gh-aw-mcpg/internal/launcher"
 	"github.com/github/gh-aw-mcpg/internal/logger"
 	"github.com/github/gh-aw-mcpg/internal/mcp"
-	"github.com/github/gh-aw-mcpg/internal/sys"
 	"github.com/github/gh-aw-mcpg/internal/version"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -68,7 +67,7 @@ type ToolInfo struct {
 // UnifiedServer implements a unified MCP server that aggregates multiple backend servers
 type UnifiedServer struct {
 	launcher             *launcher.Launcher
-	sysServer            *sys.SysServer
+	sysServer            *SysServer
 	ctx                  context.Context
 	server               *sdk.Server
 	sessions             map[string]*Session // mcp-session-id -> Session
@@ -134,7 +133,7 @@ func NewUnified(ctx context.Context, cfg *config.Config) (*UnifiedServer, error)
 
 	us := &UnifiedServer{
 		launcher:             l,
-		sysServer:            sys.NewSysServer(l.ServerIDs()),
+		sysServer:            NewSysServer(l.ServerIDs()),
 		ctx:                  ctx,
 		sessions:             make(map[string]*Session),
 		tools:                make(map[string]*ToolInfo),
