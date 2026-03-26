@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/github/gh-aw-mcpg/internal/difc"
@@ -71,6 +72,9 @@ type Connection struct {
 	httpClient        *http.Client
 	httpSessionID     string            // Session ID returned by the HTTP backend
 	httpTransportType HTTPTransportType // Type of HTTP transport in use
+	// reconnectMu serialises session-reconnect operations so that only one
+	// goroutine performs the reconnect while others wait for it to finish.
+	reconnectMu sync.Mutex
 }
 
 // NewConnection creates a new MCP connection using the official SDK
@@ -255,6 +259,91 @@ func (c *Connection) GetHTTPHeaders() map[string]string {
 	return c.headers
 }
 
+// reconnectPlainJSON re-initialises the plain JSON-RPC session with the HTTP backend.
+// It is safe for concurrent callers: only one reconnect runs at a time, and the updated
+// session ID is available to all callers once the mutex is released.
+func (c *Connection) reconnectPlainJSON() error {
+	c.reconnectMu.Lock()
+	defer c.reconnectMu.Unlock()
+
+	logConn.Printf("Session expired, reconnecting plain JSON-RPC for serverID=%s", c.serverID)
+	logger.LogWarn("backend", "MCP session expired for %s, attempting to reconnect...", c.serverID)
+
+	sessionID, err := c.initializeHTTPSession()
+	if err != nil {
+		logger.LogError("backend", "Session reconnect failed for %s: %v", c.serverID, err)
+		return fmt.Errorf("session reconnect failed: %w", err)
+	}
+
+	c.httpSessionID = sessionID
+	logConn.Printf("Reconnected plain JSON-RPC session for serverID=%s, new sessionID=%s", c.serverID, sessionID)
+	logger.LogInfo("backend", "Session successfully reconnected for %s", c.serverID)
+	return nil
+}
+
+// reconnectSDKTransport re-establishes the SDK session for streamable or SSE transports.
+// It is safe for concurrent callers: only one reconnect runs at a time.
+func (c *Connection) reconnectSDKTransport() error {
+	c.reconnectMu.Lock()
+	defer c.reconnectMu.Unlock()
+
+	logConn.Printf("Session expired, reconnecting SDK transport for serverID=%s, type=%s", c.serverID, c.httpTransportType)
+	logger.LogWarn("backend", "MCP session expired for %s, attempting to reconnect...", c.serverID)
+
+	// Close the existing session gracefully (ignore error – it's already dead).
+	if c.session != nil {
+		_ = c.session.Close()
+	}
+
+	// Build the appropriate transport.
+	client := newMCPClient(logConn)
+	var transport sdk.Transport
+	switch c.httpTransportType {
+	case HTTPTransportStreamable:
+		transport = &sdk.StreamableClientTransport{
+			Endpoint:   c.httpURL,
+			HTTPClient: c.httpClient,
+			MaxRetries: 0,
+		}
+	case HTTPTransportSSE:
+		transport = &sdk.SSEClientTransport{
+			Endpoint:   c.httpURL,
+			HTTPClient: c.httpClient,
+		}
+	default:
+		return fmt.Errorf("cannot reconnect: unsupported transport type %s", c.httpTransportType)
+	}
+
+	connectCtx, cancel := context.WithTimeout(c.ctx, 10*time.Second)
+	defer cancel()
+
+	session, err := client.Connect(connectCtx, transport, nil)
+	if err != nil {
+		logger.LogError("backend", "Session reconnect failed for %s: %v", c.serverID, err)
+		return fmt.Errorf("session reconnect failed: %w", err)
+	}
+
+	c.client = client
+	c.session = session
+
+	logConn.Printf("Reconnected SDK session for serverID=%s", c.serverID)
+	logger.LogInfo("backend", "Session successfully reconnected for %s", c.serverID)
+	return nil
+}
+
+// callSDKMethodWithReconnect calls the SDK method and, if the session has expired,
+// reconnects and retries exactly once before propagating the error.
+func (c *Connection) callSDKMethodWithReconnect(method string, params interface{}) (*Response, error) {
+	result, err := c.callSDKMethod(method, params)
+	if err != nil && isSessionNotFoundError(err) {
+		logConn.Printf("Session not found error from SDK (serverID=%s), attempting reconnect", c.serverID)
+		if reconnErr := c.reconnectSDKTransport(); reconnErr == nil {
+			result, err = c.callSDKMethod(method, params)
+		}
+	}
+	return result, err
+}
+
 // SendRequest sends a JSON-RPC request and waits for the response
 // The serverID parameter is used for logging to associate the request with a backend server
 func (c *Connection) SendRequest(method string, params interface{}) (*Response, error) {
@@ -301,7 +390,7 @@ func (c *Connection) SendRequestWithServerID(ctx context.Context, method string,
 		}
 
 		// For streamable and SSE transports, use SDK session methods
-		result, err = c.callSDKMethod(method, params)
+		result, err = c.callSDKMethodWithReconnect(method, params)
 		// Log the response from backend server
 		var responsePayload []byte
 		if result != nil {

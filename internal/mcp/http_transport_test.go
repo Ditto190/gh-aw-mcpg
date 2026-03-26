@@ -856,3 +856,228 @@ func TestSendHTTPRequest_NonToolsCallMethodDoesNotAddArguments(t *testing.T) {
 		assert.False(t, hasArgs, "arguments should NOT be added for non tools/call methods")
 	}
 }
+
+// =============================================================================
+// isSessionNotFoundError tests
+// =============================================================================
+
+func TestIsSessionNotFoundError(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{name: "nil error returns false", err: nil, want: false},
+		{name: "unrelated error returns false", err: fmt.Errorf("internal server error"), want: false},
+		{name: "exact match returns true", err: fmt.Errorf("session not found"), want: true},
+		{name: "uppercase returns true", err: fmt.Errorf("Session Not Found"), want: true},
+		{name: "embedded in longer message returns true", err: fmt.Errorf("Streamable HTTP error: Error POSTing to endpoint: session not found"), want: true},
+		{name: "session expired message returns false", err: fmt.Errorf("session expired"), want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, isSessionNotFoundError(tt.err))
+		})
+	}
+}
+
+// =============================================================================
+// isSessionNotFoundHTTPResponse tests
+// =============================================================================
+
+func TestIsSessionNotFoundHTTPResponse(t *testing.T) {
+	tests := []struct {
+		name       string
+		statusCode int
+		body       []byte
+		want       bool
+	}{
+		{name: "200 OK returns false", statusCode: http.StatusOK, body: []byte("session not found"), want: false},
+		{name: "500 returns false", statusCode: http.StatusInternalServerError, body: []byte("session not found"), want: false},
+		{name: "404 with unrelated body returns false", statusCode: http.StatusNotFound, body: []byte("resource not found"), want: false},
+		{name: "404 with session not found body returns true", statusCode: http.StatusNotFound, body: []byte("session not found"), want: true},
+		{name: "404 with uppercase body returns true", statusCode: http.StatusNotFound, body: []byte("Session Not Found"), want: true},
+		{name: "404 with session not found embedded in JSON returns true", statusCode: http.StatusNotFound, body: []byte(`{"error":"session not found"}`), want: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, isSessionNotFoundHTTPResponse(tt.statusCode, tt.body))
+		})
+	}
+}
+
+// =============================================================================
+// Session reconnect tests (plain JSON-RPC)
+// =============================================================================
+
+// TestSendHTTPRequest_ReconnectsOnSessionNotFound verifies that when the backend returns
+// a 404 "session not found" response, sendHTTPRequest reconnects and retries the request.
+func TestSendHTTPRequest_ReconnectsOnSessionNotFound(t *testing.T) {
+	requestCount := 0
+	var receivedSessionIDs []string
+
+	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]interface{}
+		json.NewDecoder(r.Body).Decode(&body) //nolint:errcheck
+		method, _ := body["method"].(string)
+
+		switch method {
+		case "initialize":
+			requestCount++
+			sessionID := fmt.Sprintf("session-%d", requestCount)
+			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Mcp-Session-Id", sessionID)
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(map[string]interface{}{ //nolint:errcheck
+				"jsonrpc": "2.0",
+				"id":      body["id"],
+				"result": map[string]interface{}{
+					"protocolVersion": "2024-11-05",
+					"serverInfo":      map[string]interface{}{"name": "test"},
+				},
+			})
+
+		case "tools/list":
+			sessionID := r.Header.Get("Mcp-Session-Id")
+			receivedSessionIDs = append(receivedSessionIDs, sessionID)
+
+			// Simulate first tool call failing with session-not-found (session-1 expired)
+			if sessionID == "session-1" {
+				w.Header().Set("Content-Type", "text/plain")
+				w.WriteHeader(http.StatusNotFound)
+				fmt.Fprint(w, "session not found")
+				return
+			}
+
+			// Subsequent calls with the new session succeed
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(map[string]interface{}{ //nolint:errcheck
+				"jsonrpc": "2.0",
+				"id":      body["id"],
+				"result":  map[string]interface{}{"tools": []interface{}{}},
+			})
+		}
+	}))
+	defer testServer.Close()
+
+	conn, err := NewHTTPConnection(context.Background(), "test-server", testServer.URL, map[string]string{
+		"Authorization": "test-token",
+	})
+	require.NoError(t, err)
+	require.NotNil(t, conn)
+	defer conn.Close()
+
+	// The initial session is "session-1". The first tools/list call should trigger a
+	// reconnect (because the server returns 404 session-not-found for session-1),
+	// get a new "session-2", and then succeed on retry.
+	resp, err := conn.sendHTTPRequest(context.Background(), "tools/list", nil)
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	require.Nil(t, resp.Error, "response should not contain an error after reconnect")
+
+	// Verify the reconnect happened: session-1 failed, session-2 succeeded.
+	require.Len(t, receivedSessionIDs, 2, "expected two tool calls: initial (failed) + retry (succeeded)")
+	assert.Equal(t, "session-1", receivedSessionIDs[0], "first attempt should use the initial session")
+	assert.Equal(t, "session-2", receivedSessionIDs[1], "retry should use the reconnected session")
+	assert.Equal(t, "session-2", conn.httpSessionID, "connection should store the new session ID")
+}
+
+// TestSendHTTPRequest_ReconnectFailure verifies that when reconnection itself fails,
+// the original session-not-found response is returned to the caller.
+func TestSendHTTPRequest_ReconnectFailure(t *testing.T) {
+	firstInitDone := false
+
+	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]interface{}
+		json.NewDecoder(r.Body).Decode(&body) //nolint:errcheck
+		method, _ := body["method"].(string)
+
+		switch method {
+		case "initialize":
+			if !firstInitDone {
+				firstInitDone = true
+				w.Header().Set("Content-Type", "application/json")
+				w.Header().Set("Mcp-Session-Id", "session-original")
+				w.WriteHeader(http.StatusOK)
+				json.NewEncoder(w).Encode(map[string]interface{}{ //nolint:errcheck
+					"jsonrpc": "2.0",
+					"id":      body["id"],
+					"result": map[string]interface{}{
+						"protocolVersion": "2024-11-05",
+						"serverInfo":      map[string]interface{}{"name": "test"},
+					},
+				})
+			} else {
+				// Reconnect attempt also fails
+				w.WriteHeader(http.StatusInternalServerError)
+			}
+
+		case "tools/list":
+			// Always return session not found
+			w.Header().Set("Content-Type", "text/plain")
+			w.WriteHeader(http.StatusNotFound)
+			fmt.Fprint(w, "session not found")
+		}
+	}))
+	defer testServer.Close()
+
+	conn, err := NewHTTPConnection(context.Background(), "test-server", testServer.URL, map[string]string{
+		"Authorization": "test-token",
+	})
+	require.NoError(t, err)
+	require.NotNil(t, conn)
+	defer conn.Close()
+
+	// The tools/list call gets session-not-found, reconnect fails (500 on initialize),
+	// so the original session-not-found response is passed through.
+	resp, err := conn.sendHTTPRequest(context.Background(), "tools/list", nil)
+	require.NoError(t, err, "should not return a Go error, but a JSON-RPC error response")
+	require.NotNil(t, resp)
+	require.NotNil(t, resp.Error, "response should contain an error when session-not-found and reconnect failed")
+}
+
+// TestSendHTTPRequest_NoReconnectOnOtherErrors verifies that non-session errors
+// (e.g. 500 internal server error) do not trigger a reconnect attempt.
+func TestSendHTTPRequest_NoReconnectOnOtherErrors(t *testing.T) {
+	initCount := 0
+
+	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]interface{}
+		json.NewDecoder(r.Body).Decode(&body) //nolint:errcheck
+		method, _ := body["method"].(string)
+
+		if method == "initialize" {
+			initCount++
+			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Mcp-Session-Id", "session-1")
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(map[string]interface{}{ //nolint:errcheck
+				"jsonrpc": "2.0",
+				"id":      body["id"],
+				"result": map[string]interface{}{
+					"protocolVersion": "2024-11-05",
+					"serverInfo":      map[string]interface{}{"name": "test"},
+				},
+			})
+			return
+		}
+
+		// Return 500 – should not trigger reconnect
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprint(w, "internal server error")
+	}))
+	defer testServer.Close()
+
+	conn, err := NewHTTPConnection(context.Background(), "test-server", testServer.URL, map[string]string{
+		"Authorization": "test-token",
+	})
+	require.NoError(t, err)
+	defer conn.Close()
+
+	_, err = conn.sendHTTPRequest(context.Background(), "tools/list", nil)
+	require.NoError(t, err)
+
+	// initCount should be 1 (initial only) – no reconnect was attempted.
+	assert.Equal(t, 1, initCount, "should not reconnect on non-session-not-found errors")
+}

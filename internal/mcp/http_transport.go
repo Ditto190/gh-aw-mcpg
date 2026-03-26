@@ -62,6 +62,24 @@ func isHTTPConnectionError(err error) bool {
 	return false
 }
 
+// isSessionNotFoundError checks if an error message indicates a backend MCP session has expired
+// or is not found. This is used to detect when automatic reconnection to the backend is needed.
+func isSessionNotFoundError(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(strings.ToLower(err.Error()), "session not found")
+}
+
+// isSessionNotFoundHTTPResponse checks if an HTTP response indicates the backend session was not found.
+// MCP backends return HTTP 404 with a "session not found" body when a session has expired.
+func isSessionNotFoundHTTPResponse(statusCode int, body []byte) bool {
+	if statusCode != http.StatusNotFound {
+		return false
+	}
+	return strings.Contains(strings.ToLower(string(body)), "session not found")
+}
+
 // parseSSEResponse extracts JSON data from SSE-formatted response
 // SSE format: "event: message\ndata: {json}\n\n"
 func parseSSEResponse(body []byte) ([]byte, error) {
@@ -436,58 +454,45 @@ func (c *Connection) initializeHTTPSession() (string, error) {
 	return sessionID, nil
 }
 
-// sendHTTPRequest sends a JSON-RPC request to an HTTP MCP server
-// The ctx parameter is used to extract session ID for the Mcp-Session-Id header
-func (c *Connection) sendHTTPRequest(ctx context.Context, method string, params interface{}) (*Response, error) {
-	// Generate unique request ID using atomic counter
-	requestID := atomic.AddUint64(&requestIDCounter, 1)
-
-	// For tools/call, ensure arguments field always exists (MCP protocol requirement)
-	if method == "tools/call" {
-		params = ensureToolCallArguments(params)
-	}
-
-	logConn.Printf("Sending HTTP request to %s: method=%s, id=%d", c.httpURL, method, requestID)
-
-	// Execute HTTP request with custom header modification for session ID
-	result, err := c.executeHTTPRequest(ctx, method, params, requestID, func(httpReq *http.Request) {
-		// Add Mcp-Session-Id header with priority:
-		// 1) Context session ID (if explicitly provided for this request)
-		// 2) Stored httpSessionID from initialization
+// buildSessionHeaderModifier returns a header modifier function that adds the Mcp-Session-Id header.
+// Priority: context session ID > stored connection session ID.
+// The returned function reads c.httpSessionID at call time, so it picks up any reconnected session.
+func (c *Connection) buildSessionHeaderModifier(ctx context.Context) func(*http.Request) {
+	// Capture any context-provided session ID once (it never changes for this request).
+	ctxSessionID, _ := ctx.Value(SessionIDContextKey).(string)
+	return func(httpReq *http.Request) {
 		var sessionID string
-		if ctxSessionID, ok := ctx.Value(SessionIDContextKey).(string); ok && ctxSessionID != "" {
+		if ctxSessionID != "" {
 			sessionID = ctxSessionID
 			logConn.Printf("Using session ID from context: %s", sessionID)
 		} else if c.httpSessionID != "" {
 			sessionID = c.httpSessionID
 			logConn.Printf("Using stored session ID from initialization: %s", sessionID)
 		}
-
 		if sessionID != "" {
 			httpReq.Header.Set("Mcp-Session-Id", sessionID)
 		} else {
 			logConn.Printf("No session ID available (backend may not require session management)")
 		}
-	})
-	if err != nil {
-		return nil, err
 	}
+}
 
-	logConn.Printf("Received HTTP response: status=%d, body_len=%d", result.StatusCode, len(result.ResponseBody))
-
-	// Parse JSON-RPC response
-	// The response might be in SSE format (event: message\ndata: {...})
+// parseHTTPResult converts a raw httpRequestResult into a JSON-RPC Response, handling non-OK
+// HTTP status codes by synthesising a JSON-RPC error when the server did not provide one.
+func parseHTTPResult(result *httpRequestResult) (*Response, error) {
+	// Parse JSON-RPC response.
+	// The response might be in SSE format (event: message\ndata: {...}).
 	rpcResponse, err := parseJSONRPCResponseWithSSE(result.ResponseBody, result.StatusCode, "JSON-RPC response")
 	if err != nil {
 		return nil, err
 	}
 
-	// Check for HTTP errors after parsing
+	// Check for HTTP errors after parsing.
 	// If we have a non-OK status but successfully parsed a JSON-RPC response,
-	// pass it through (it may already contain an error field)
+	// pass it through (it may already contain an error field).
 	if result.StatusCode != http.StatusOK {
 		logConn.Printf("HTTP error status=%d with valid JSON-RPC response, passing through", result.StatusCode)
-		// If the response doesn't already have an error, construct one
+		// If the response doesn't already have an error, construct one.
 		if rpcResponse.Error == nil {
 			rpcResponse.Error = &ResponseError{
 				Code:    -32603, // Internal error
@@ -498,4 +503,45 @@ func (c *Connection) sendHTTPRequest(ctx context.Context, method string, params 
 	}
 
 	return rpcResponse, nil
+}
+
+// sendHTTPRequest sends a JSON-RPC request to an HTTP MCP server.
+// The ctx parameter is used to extract session ID for the Mcp-Session-Id header.
+// If the backend returns a "session not found" (HTTP 404) response, it attempts a one-time
+// session reconnect and retries the request transparently.
+func (c *Connection) sendHTTPRequest(ctx context.Context, method string, params interface{}) (*Response, error) {
+	// For tools/call, ensure arguments field always exists (MCP protocol requirement)
+	if method == "tools/call" {
+		params = ensureToolCallArguments(params)
+	}
+
+	headerModifier := c.buildSessionHeaderModifier(ctx)
+
+	requestID := atomic.AddUint64(&requestIDCounter, 1)
+	logConn.Printf("Sending HTTP request to %s: method=%s, id=%d", c.httpURL, method, requestID)
+
+	result, err := c.executeHTTPRequest(ctx, method, params, requestID, headerModifier)
+	if err != nil {
+		return nil, err
+	}
+
+	logConn.Printf("Received HTTP response: status=%d, body_len=%d", result.StatusCode, len(result.ResponseBody))
+
+	// If the backend reported that the session has expired, reconnect and retry once.
+	if isSessionNotFoundHTTPResponse(result.StatusCode, result.ResponseBody) {
+		logConn.Printf("Session not found from %s (serverID=%s), attempting reconnect", c.httpURL, c.serverID)
+		if reconnErr := c.reconnectPlainJSON(); reconnErr == nil {
+			requestID = atomic.AddUint64(&requestIDCounter, 1)
+			logConn.Printf("Retrying HTTP request after reconnect: method=%s, id=%d", method, requestID)
+			result, err = c.executeHTTPRequest(ctx, method, params, requestID, headerModifier)
+			if err != nil {
+				return nil, err
+			}
+			logConn.Printf("Retry HTTP response: status=%d, body_len=%d", result.StatusCode, len(result.ResponseBody))
+		} else {
+			logConn.Printf("Session reconnect failed (%v), returning original session-not-found error", reconnErr)
+		}
+	}
+
+	return parseHTTPResult(result)
 }
