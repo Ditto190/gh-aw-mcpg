@@ -232,8 +232,8 @@ func TestCallBackendTool_Phase2_WriteOperationBlocked(t *testing.T) {
 	assert.True(result.IsError, "write should be blocked — result should be an error")
 	assert.Nil(data, "no data should be returned when write is blocked")
 	require.Error(err)
-	assert.Contains(err.Error(), "DIFC policy violation",
-		"error should mention DIFC policy violation")
+	assert.Contains(err.Error(), "DIFC Violation:",
+		"error should mention DIFC Violation")
 }
 
 // TestCallBackendTool_Phase2_ReadOperationNotBlocked verifies that read operations
@@ -491,7 +491,7 @@ func TestCallBackendTool_Phase5_FilterMode_PartialCollection(t *testing.T) {
 	var foundNotice bool
 	for _, c := range result.Content {
 		if tc, ok := c.(*sdk.TextContent); ok {
-			if strings.Contains(tc.Text, "DIFC") || strings.Contains(tc.Text, "filtered") {
+			if strings.Contains(tc.Text, "Filtered") || strings.Contains(tc.Text, "DIFC") || strings.Contains(tc.Text, "filtered") {
 				foundNotice = true
 				break
 			}
