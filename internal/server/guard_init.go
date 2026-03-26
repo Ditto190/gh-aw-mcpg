@@ -326,6 +326,9 @@ func (us *UnifiedServer) ensureGuardInitialized(
 	}
 
 	// Build the label_agent payload, merging in any configured trusted bots.
+	// trusted-users is not injected here as a separate list because in gateway mode
+	// it is specified directly inside the allow-only policy JSON (not as a standalone
+	// gateway config field). The policy object already carries trusted-users when set.
 	// The policyHash covers both the policy and trusted bots so that any change
 	// to either field invalidates the cached guard session state.
 	trustedBots := us.getTrustedBots()

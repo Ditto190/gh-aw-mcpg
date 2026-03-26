@@ -503,6 +503,8 @@ func BuildLabelAgentPayload(policy interface{}, trustedBots []string, trustedUse
 	if len(trustedUsers) > 0 {
 		// trusted-users is injected inside the allow-only object.
 		// Convert []string to []interface{} for JSON compatibility.
+		// If allow-only is absent, the injection is skipped and buildStrictLabelAgentPayload
+		// will reject the payload when called with the missing allow-only key.
 		users := make([]interface{}, len(trustedUsers))
 		for i, u := range trustedUsers {
 			users[i] = u
