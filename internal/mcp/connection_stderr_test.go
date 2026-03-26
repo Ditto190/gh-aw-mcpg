@@ -1,38 +1,79 @@
 package mcp
 
 import (
+	"context"
+	"encoding/json"
+	"net/http"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-// TestConnection_MultipleServersStderrLogging documents the expected behavior for serverID in stderr logs
-func TestConnection_MultipleServersStderrLogging(t *testing.T) {
-	// This test documents the expected behavior of stderr logging with serverID.
-	//
-	// Before this change, stderr from parallel backend servers was interleaved without attribution:
-	//
-	// mcp:connection [stderr] ✗ failed to run status command: exit status 1 +357ms
-	// mcp:connection [stderr] Output: unknown command "aw" for "gh" +779µs
-	// mcp:connection [stderr] Did you mean this? +697µs
-	// mcp:connection [stderr] co +982µs
-	// mcp:connection [stderr] pr +1ms
-	//
-	// After this change, stderr logs include the serverID for clear attribution:
-	//
-	// mcp:connection [server1 stderr] ✗ failed to run status command: exit status 1 +357ms
-	// mcp:connection [server2 stderr] Output: unknown command "aw" for "gh" +779µs
-	// mcp:connection [server1 stderr] Did you mean this? +697µs
-	// mcp:connection [server2 stderr] co +982µs
-	// mcp:connection [server1 stderr] pr +1ms
-	//
-	// This makes it clear which server each log line is from when multiple backend servers
-	// run in parallel.
-	//
-	// The serverID is passed through:
-	// 1. Launcher has serverID when calling NewConnection or NewHTTPConnection
-	// 2. Connection struct stores serverID field
-	// 3. Stderr streaming goroutine includes serverID: logConn.Printf("[%s stderr] %s", serverID, line)
+// TestConnection_SendRequest verifies that SendRequest delegates to SendRequestWithServerID
+// using "unknown" as the serverID and context.Background() as the context.
+// This tests the simplified API surface used by callers that don't need to specify a serverID.
+func TestConnection_SendRequest(t *testing.T) {
+	var receivedMethod string
 
-	t.Log("This test documents the expected behavior for multiple servers")
-	t.Log("With the serverID in stderr logs, parallel server logs are now distinguishable")
-	t.Log("See internal/mcp/connection.go:202 for the implementation")
+	srv := newPlainJSONTestServer(t, func(w http.ResponseWriter, r *http.Request, method string, _ []byte) {
+		receivedMethod = method
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"jsonrpc": "2.0",
+			"id":      1,
+			"result": map[string]interface{}{
+				"tools": []interface{}{},
+			},
+		})
+	})
+	defer srv.Close()
+
+	conn, err := NewHTTPConnection(context.Background(), "test-server", srv.URL, map[string]string{
+		"Authorization": "test-token",
+	})
+	require.NoError(t, err)
+	defer conn.Close()
+
+	resp, err := conn.SendRequest("tools/list", nil)
+	require.NoError(t, err)
+	assert.NotNil(t, resp)
+	assert.Equal(t, "2.0", resp.JSONRPC)
+	assert.Equal(t, "tools/list", receivedMethod)
+}
+
+// TestConnection_SendRequest_UnsupportedMethod verifies that SendRequest surfaces errors
+// from the underlying transport (e.g., unsupported method on a nil-session stdio connection).
+func TestConnection_SendRequest_UnsupportedMethod(t *testing.T) {
+	conn := newTestConnection(t)
+
+	result, err := conn.SendRequest("unsupported/method", nil)
+	require.Error(t, err)
+	assert.Nil(t, result)
+	assert.Contains(t, err.Error(), "unsupported method")
+}
+
+// TestConnection_Close_NilSession verifies that Close does not panic and returns nil
+// when the connection has no active SDK session (e.g., plain JSON-RPC or test connections).
+func TestConnection_Close_NilSession(t *testing.T) {
+	conn := newTestConnection(t)
+	assert.Nil(t, conn.session, "test connection should have no session")
+	err := conn.Close()
+	assert.NoError(t, err)
+}
+
+// TestConnection_Close_CancelsContext verifies that Close cancels the connection context,
+// making it unusable for further requests.
+func TestConnection_Close_CancelsContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	conn := &Connection{
+		ctx:    ctx,
+		cancel: cancel,
+	}
+	require.NoError(t, ctx.Err(), "context should be valid before Close")
+
+	err := conn.Close()
+	assert.NoError(t, err)
+	assert.ErrorIs(t, ctx.Err(), context.Canceled, "context should be cancelled after Close")
 }
