@@ -29,10 +29,3 @@ func StderrTerminalWidth() (int, bool) {
 	}
 	return width, true
 }
-
-// IsInteractiveTerminal returns true if the process is running in an
-// interactive terminal context: stderr is a terminal and the process is not
-// running inside a container.
-func IsInteractiveTerminal() bool {
-	return IsStderrTerminal() && !IsRunningInContainer()
-}

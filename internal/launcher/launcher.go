@@ -12,7 +12,7 @@ import (
 	"github.com/github/gh-aw-mcpg/internal/logger/sanitize"
 	"github.com/github/gh-aw-mcpg/internal/mcp"
 	"github.com/github/gh-aw-mcpg/internal/syncutil"
-	"github.com/github/gh-aw-mcpg/internal/tty"
+	"github.com/github/gh-aw-mcpg/internal/sys"
 )
 
 var logLauncher = logger.New("launcher:launcher")
@@ -38,7 +38,7 @@ type Launcher struct {
 func New(ctx context.Context, cfg *config.Config) *Launcher {
 	logLauncher.Printf("Creating new launcher with %d configured servers", len(cfg.Servers))
 
-	inContainer := tty.IsRunningInContainer()
+	inContainer := sys.IsRunningInContainer()
 	if inContainer {
 		log.Println("[LAUNCHER] Detected running inside a container")
 	}

@@ -1,4 +1,4 @@
-package tty
+package sys
 
 import (
 	"os"
@@ -6,8 +6,6 @@ import (
 )
 
 // IsRunningInContainer detects if the current process is running inside a container.
-// Note: This package cannot use the logger package to avoid import cycles,
-// since logger imports tty for terminal detection.
 func IsRunningInContainer() bool {
 	// Method 1: Check for /.dockerenv file (Docker-specific)
 	if _, err := os.Stat("/.dockerenv"); err == nil {
