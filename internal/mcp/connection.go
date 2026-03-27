@@ -502,19 +502,6 @@ func unmarshalParams(params interface{}, target interface{}) error {
 	return nil
 }
 
-// callListMethod is a generic helper for SDK list operations with no additional parameters.
-// It handles the common pattern of: requireSession → SDK call → marshalToResponse.
-func (c *Connection) callListMethod(call func() (interface{}, error)) (*Response, error) {
-	if err := c.requireSession(); err != nil {
-		return nil, err
-	}
-	result, err := call()
-	if err != nil {
-		return nil, err
-	}
-	return marshalToResponse(result)
-}
-
 // callParamMethod is a generic helper for SDK operations that require typed parameters.
 // It handles the common pattern of: requireSession → unmarshalParams → fn(params) → marshalToResponse.
 // P is the type of the parameter struct to unmarshal into.
