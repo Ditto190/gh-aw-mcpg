@@ -12,7 +12,7 @@ use super::helpers::{
     is_configured_trusted_bot, is_default_branch_commit_context, is_default_branch_ref,
     is_trusted_first_party_bot, is_trusted_user, max_integrity, merged_integrity,
     policy_private_scope_label, private_user_label, project_github_label, reader_integrity,
-    secret_label, writer_integrity, PolicyContext,
+    writer_integrity, PolicyContext,
 };
 
 fn apply_repo_visibility_secrecy(
@@ -303,9 +303,10 @@ pub fn apply_tool_labels(
 
         // === Security: Secret Scanning ===
         "list_secret_scanning_alerts" | "get_secret_scanning_alert" => {
-            // S(alert) = secret - alerts reference actual secrets
+            // S(alert) = private:owner/repo - alerts may contain actual secret values
+            // Treated as private regardless of repo visibility (secrets in public repos are still sensitive)
             // I(alert) = approved - automated detection
-            secrecy = secret_label();
+            secrecy = policy_private_scope_label(&owner, &repo, repo_id, ctx);
             integrity = writer_integrity(repo_id, ctx);
         }
 
@@ -320,13 +321,34 @@ pub fn apply_tool_labels(
             integrity = writer_integrity(repo_id, ctx);
         }
 
+        // === Actions: Job Logs ===
+        "get_job_logs" => {
+            // Job logs may contain CI secrets (e.g. accidentally printed tokens) even in public repos.
+            // Always treat as private regardless of repository visibility.
+            // S(logs) = private:owner/repo; I(logs) = approved (system-generated output)
+            secrecy = policy_private_scope_label(&owner, &repo, repo_id, ctx);
+            integrity = writer_integrity(repo_id, ctx);
+        }
+
+        // === Actions: Workflow/Artifact Metadata and Artifact Downloads ===
+        "actions_get" => {
+            let method = tool_args.get("method").and_then(|v| v.as_str()).unwrap_or("");
+            if method == "download_workflow_run_artifact" {
+                // Artifact downloads may contain sensitive data or accidentally-included secrets.
+                // Always treat as private regardless of repository visibility.
+                // S(artifact) = private:owner/repo; I(artifact) = approved
+                secrecy = policy_private_scope_label(&owner, &repo, repo_id, ctx);
+            } else {
+                secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
+            }
+            integrity = writer_integrity(repo_id, ctx);
+        }
+
         // === Repo-scoped resources: visibility-inherited secrecy, approved integrity ===
         // S = inherits from repo visibility; I = approved (writer-level)
-        "actions_get"
-        | "actions_list"
+        "actions_list"
         | "get_discussion"
         | "get_discussion_comments"
-        | "get_job_logs"
         | "get_label"
         | "get_repository"
         | "get_repository_tree"
@@ -348,7 +370,7 @@ pub fn apply_tool_labels(
             secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
             // File secrecy based on path patterns
             if let Some(path) = tool_args.get("path").and_then(|v| v.as_str()) {
-                secrecy = check_file_secrecy(path, secrecy);
+                secrecy = check_file_secrecy(path, secrecy, &owner, &repo, repo_id, ctx);
             }
             let branch_ref = tool_args.get("ref").and_then(|v| v.as_str()).unwrap_or("");
             integrity = if is_default_branch_ref(branch_ref) {
@@ -543,15 +565,25 @@ pub fn apply_tool_labels(
     )
 }
 
-/// Check if a file path contains sensitive patterns
-/// Returns secret label if sensitive, otherwise returns the default secrecy
-fn check_file_secrecy(path: &str, default_secrecy: Vec<String>) -> Vec<String> {
+/// Check if a file path contains sensitive patterns.
+/// If sensitive, returns a private-scoped secrecy label for the given owner/repo
+/// regardless of the repository's public/private visibility — sensitive files
+/// (credentials, keys, workflow definitions) should always be restricted.
+/// Otherwise returns `default_secrecy` unchanged.
+fn check_file_secrecy(
+    path: &str,
+    default_secrecy: Vec<String>,
+    owner: &str,
+    repo: &str,
+    repo_id: &str,
+    ctx: &PolicyContext,
+) -> Vec<String> {
     let path_lower = path.to_lowercase();
 
     // Check for sensitive file extensions/names
     for pattern in SENSITIVE_FILE_PATTERNS {
         if path_lower.ends_with(pattern) || path_lower.contains(&format!("/{}", pattern)) {
-            return secret_label();
+            return policy_private_scope_label(owner, repo, repo_id, ctx);
         }
     }
 
@@ -561,13 +593,13 @@ fn check_file_secrecy(path: &str, default_secrecy: Vec<String>) -> Vec<String> {
     // Check for sensitive keywords in filename
     for keyword in SENSITIVE_FILE_KEYWORDS {
         if filename.contains(keyword) {
-            return secret_label();
+            return policy_private_scope_label(owner, repo, repo_id, ctx);
         }
     }
 
     // Workflow files may contain secrets
     if path_lower.starts_with(".github/workflows/") {
-        return secret_label();
+        return policy_private_scope_label(owner, repo, repo_id, ctx);
     }
 
     default_secrecy

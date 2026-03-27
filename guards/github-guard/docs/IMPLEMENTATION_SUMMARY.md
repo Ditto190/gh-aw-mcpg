@@ -61,7 +61,10 @@ pub extern "C" fn dealloc(ptr: u32, size: u32) { ... }
 |-----------|-------------|
 | Public repository | `[]` (empty) |
 | Private repository | `["private:owner/repo"]` |
-| Secret scanning alerts | `["secret"]` |
+| Secret scanning alerts | `["private:owner/repo"]` (always, even for public repos) |
+| Job logs | `["private:owner/repo"]` (always, even for public repos) |
+| Sensitive/credential files | `["private:owner/repo"]` (always, even for public repos) |
+| Artifact downloads | `["private:owner/repo"]` (always, even for public repos) |
 | User notifications | `["private:user"]` |
 
 ### Integrity Labels

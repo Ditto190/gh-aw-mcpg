@@ -11,6 +11,13 @@ DIFC uses two types of labels to control information flow:
 
 Both agents and resources have secrecy and integrity labels. Labels are sets of tags (strings).
 
+> **Terminology note**: The label *type* is called "SecrecyLabel" (or "secrecy label"). The tag
+> *values* inside a secrecy label follow the pattern `private:<scope>` (e.g. `private:octo-org`,
+> `private:octo-org/my-repo`, `private:user`). An empty secrecy label `[]` means public data.
+> There is no special tag named `"secret"` in the current implementation — all sensitive data is
+> scoped with `private:` prefixed tags so that clearance can be granted at the appropriate
+> owner/repo granularity.
+
 ## Core Rules
 
 ### Notation
@@ -51,15 +58,15 @@ For read-write operations, BOTH read AND write rules must be satisfied.
 
 ## Key Examples
 
-### Example 1: Secret Agent Cannot Write to Public Resource
+### Example 1: Private-scoped Agent Cannot Write to Public Resource
 
 ```
-Agent:    secrecy={secret}, integrity={}
+Agent:    secrecy={private:octo-org/my-repo}, integrity={}
 Resource: secrecy={}, integrity={}
 
 Write Check:
-  Secrecy: R.secrecy ⊇ A.secrecy → {} ⊇ {secret} → FALSE
-  Result: DENIED (would leak secret information to public)
+  Secrecy: R.secrecy ⊇ A.secrecy → {} ⊇ {private:octo-org/my-repo} → FALSE
+  Result: DENIED (would leak private-repo data to public)
 ```
 
 ### Example 2: High-Integrity Agent Cannot Read Low-Integrity Resource
@@ -73,14 +80,14 @@ Read Check:
   Result: DENIED (resource is not trustworthy enough for agent)
 ```
 
-### Example 3: Successful Read of Secret Document
+### Example 3: Successful Read of Private-scoped Resource
 
 ```
-Agent:    secrecy={secret, confidential}, integrity={}
-Resource: secrecy={secret}, integrity={}
+Agent:    secrecy={private:octo-org/my-repo, private:octo-org}, integrity={}
+Resource: secrecy={private:octo-org/my-repo}, integrity={}
 
 Read Check:
-  Secrecy: A.secrecy ⊇ R.secrecy → {secret, confidential} ⊇ {secret} → TRUE
+  Secrecy: A.secrecy ⊇ R.secrecy → {private:octo-org/my-repo, private:octo-org} ⊇ {private:octo-org/my-repo} → TRUE
   Integrity: R.integrity ⊇ A.integrity → {} ⊇ {} → TRUE
   Result: ALLOWED
 ```
@@ -101,8 +108,8 @@ Write Check:
 
 The **public internet** has empty labels: `secrecy={}, integrity={}`.
 
-- An agent with `secrecy={secret}` **CANNOT write** to the public internet
-  - Because: `{} ⊇ {secret}` is FALSE (would leak secrets)
+- An agent with `secrecy={private:octo-org/my-repo}` **CANNOT write** to the public internet
+  - Because: `{} ⊇ {private:octo-org/my-repo}` is FALSE (would leak private-repo data)
 
 - An agent with `integrity={trusted}` **CANNOT read** from the public internet
   - Because: `{} ⊇ {trusted}` is FALSE (source not trusted enough)

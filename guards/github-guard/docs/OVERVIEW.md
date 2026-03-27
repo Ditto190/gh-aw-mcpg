@@ -414,8 +414,9 @@ To add custom labeling rules, edit files under `rust-guard/src/labels/`:
 ```rust
 match tool_name {
     "your_tool" => {
-        secrecy = vec!["secret".to_string()];
-        integrity = writer_integrity(&repo_id);
+        // Use private:owner/repo scope for sensitive repo-scoped data
+        secrecy = policy_private_scope_label(&owner, &repo, repo_id, ctx);
+        integrity = writer_integrity(&repo_id, ctx);
     }
     // ...
 }

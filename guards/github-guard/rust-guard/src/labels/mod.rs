@@ -493,7 +493,8 @@ mod tests {
             &ctx,
         );
 
-        assert_eq!(secrecy, secret_label());
+        // Sensitive files get private:owner/repo scope regardless of repo visibility
+        assert_eq!(secrecy, vec!["private:github/copilot".to_string()]);
         assert_eq!(integrity, merged_integrity("github/copilot", &ctx));
     }
 
@@ -516,7 +517,8 @@ mod tests {
             &ctx,
         );
 
-        assert_eq!(secrecy, secret_label());
+        // Workflow files get private:owner/repo scope regardless of repo visibility
+        assert_eq!(secrecy, vec!["private:github/copilot".to_string()]);
         assert_eq!(integrity, merged_integrity("github/copilot", &ctx));
     }
 
@@ -1802,8 +1804,91 @@ mod tests {
             &ctx,
         );
 
-        assert_eq!(secrecy, Vec::<String>::new(), "get_job_logs secrecy inherits repo visibility (empty in tests)");
+        // Job logs always get private:owner/repo scope — CI logs may contain accidentally-printed secrets
+        // even in public repos, so visibility-inherited secrecy is not safe here.
+        assert_eq!(secrecy, vec!["private:github/copilot".to_string()], "get_job_logs must always have private scope (CI logs may contain secrets)");
         assert_eq!(integrity, writer_integrity("github/copilot", &ctx), "get_job_logs must have approved integrity (system-generated output)");
+    }
+
+    // -------------------------------------------------------------------------
+    // Security: list_secret_scanning_alerts
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_apply_tool_labels_list_secret_scanning_alerts() {
+        let ctx = default_ctx();
+        let tool_args = json!({
+            "owner": "github",
+            "repo": "copilot"
+        });
+
+        let (secrecy, integrity, _desc) = apply_tool_labels(
+            "list_secret_scanning_alerts",
+            &tool_args,
+            "github/copilot",
+            vec![],
+            vec![],
+            String::new(),
+            &ctx,
+        );
+
+        // Secret scanning alerts always get private:owner/repo scope — they contain actual
+        // secret values (tokens, keys) regardless of repository visibility.
+        assert_eq!(secrecy, vec!["private:github/copilot".to_string()], "list_secret_scanning_alerts must always have private scope");
+        assert_eq!(integrity, writer_integrity("github/copilot", &ctx), "list_secret_scanning_alerts must have approved integrity (automated detection)");
+    }
+
+    #[test]
+    fn test_apply_tool_labels_get_secret_scanning_alert() {
+        let ctx = default_ctx();
+        let tool_args = json!({
+            "owner": "github",
+            "repo": "copilot",
+            "alertNumber": 42
+        });
+
+        let (secrecy, integrity, _desc) = apply_tool_labels(
+            "get_secret_scanning_alert",
+            &tool_args,
+            "github/copilot",
+            vec![],
+            vec![],
+            String::new(),
+            &ctx,
+        );
+
+        assert_eq!(secrecy, vec!["private:github/copilot".to_string()], "get_secret_scanning_alert must always have private scope");
+        assert_eq!(integrity, writer_integrity("github/copilot", &ctx));
+    }
+
+    // -------------------------------------------------------------------------
+    // Actions: artifact downloads
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_apply_tool_labels_actions_get_artifact_download() {
+        let ctx = default_ctx();
+        let tool_args = json!({
+            "owner": "github",
+            "repo": "copilot",
+            "method": "download_workflow_run_artifact",
+            "resource_id": "987654321"
+        });
+
+        let (secrecy, integrity, _desc) = apply_tool_labels(
+            "actions_get",
+            &tool_args,
+            "github/copilot",
+            vec![],
+            vec![],
+            String::new(),
+            &ctx,
+        );
+
+        // Artifact downloads always get private:owner/repo scope — artifacts may contain
+        // sensitive build outputs or accidentally-included secrets.
+        assert_eq!(secrecy, vec!["private:github/copilot".to_string()], "artifact downloads must always have private scope");
+        assert_eq!(integrity, writer_integrity("github/copilot", &ctx));
     }
 
     // -------------------------------------------------------------------------

@@ -12,10 +12,10 @@ Secrecy labels prevent unauthorized writes ("no write down"):
 
 | Operation | Rule | Example |
 |-----------|------|---------|
-| **Read** | Agent must have ≥ resource secrecy tags | Resource `S_r={'secret'}` requires agent to have `S_a={'secret'}` |
-| **Write** | Resource must have ≥ agent secrecy tags | Agent with `S_a={'secret'}` can only write to resources with `S_r={'secret'}` |
+| **Read** | Agent must have ≥ resource secrecy tags | Resource `S_r={'private:octo-org/my-repo'}` requires agent to have `S_a={'private:octo-org/my-repo'}` |
+| **Write** | Resource must have ≥ agent secrecy tags | Agent with `S_a={'private:octo-org/my-repo'}` can only write to resources with `S_r={'private:octo-org/my-repo'}` |
 
-**Intuition**: Secrecy tags track what sensitive data an agent has seen. Reading secret data "taints" the agent, and tainted agents cannot leak data to less-secret destinations.
+**Intuition**: Secrecy tags track what sensitive data an agent has seen. Reading private-scoped data "taints" the agent with that scope's tag, and tainted agents cannot leak data to less-restricted destinations.
 
 ### Integrity Labels
 

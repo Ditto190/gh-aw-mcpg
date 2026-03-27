@@ -164,6 +164,7 @@ The guard applies security labels to all GitHub data:
 |-----------------|---------------|
 | Public repo | `[]` (empty - anyone can read) |
 | Private repo | `["private:<owner>/<repo>"]` |
+| Job logs, secret scanning alerts, sensitive files, artifact downloads | `["private:<owner>/<repo>"]` (always, even for public repos) |
 
 ### Integrity Labels
 
