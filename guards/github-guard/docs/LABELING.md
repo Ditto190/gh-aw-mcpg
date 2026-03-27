@@ -22,9 +22,17 @@ Secrecy labels constrain **information release** (confidentiality).
 |-------|---------|
 | `[]` (empty) | Public data, may be disclosed to anyone |
 | `private:<owner>/<repo>` | Restricted to collaborators of the repository |
-| `secret` | Must not be disclosed (e.g., scanning alerts referencing actual secrets) |
+| `private:<owner>` | Restricted to members of the organization |
+| `private:user` | Restricted to the authenticated user |
 
 **Flow Rule**: Data can only be consumed by agents with *equal or higher* secrecy clearance.
+
+> **Note on sensitive resources**: Some resources (job logs, secret scanning alerts, workflow files,
+> sensitive credential files, artifact downloads) are always assigned at least `private:owner/repo`
+> secrecy even for **public** repositories. This reflects that those resources may embed actual
+> credential values or sensitive operational data regardless of the repository's visibility setting.
+> The owner/repo scope means an agent must have matching clearance — e.g. via an `allow-only` policy
+> scoped to that repository — before the data can flow.
 
 ### Integrity Labels
 
@@ -93,7 +101,7 @@ This ensures DIFC flow checks work correctly without the evaluator understanding
 
 | Tool | Secrecy | Integrity |
 |------|---------|-----------|
-| Secret scanning | `secret` | `approved + unapproved` |
+| Secret scanning | `private:<repo>` (always, even public repos) | `approved + unapproved` |
 | Code scanning | `private:<repo>` | `approved + unapproved` |
 | Dependabot | `private:<repo>` | `approved + unapproved` |
 | Global advisories | `[]` | `approved:github` |
@@ -103,7 +111,7 @@ This ensures DIFC flow checks work correctly without the evaluator understanding
 
 | Condition | Secrecy | Integrity |
 |-----------|---------|-----------|
-| Sensitive path patterns | `secret` | Varies |
+| Sensitive path patterns | `private:<repo>` (always, even public repos) | Varies |
 | Normal files | `S(repo)` | Varies based on commit |
 
 **Sensitive path patterns**:

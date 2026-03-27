@@ -7,6 +7,7 @@ This specification defines secrecy labels for GitHub objects using a simple conf
 - `[]` (public / unrestricted)
 - `private:<owner>`
 - `private:<owner>/<repo>`
+- `private:user`
 
 For private repository objects, secrecy expansion is explicit:
 
@@ -17,6 +18,14 @@ For public repository objects:
 - public-repo object emits `[]`
 
 This ensures owner-level and repo-level confidentiality are both represented.
+
+> **Sensitive resources in public repos**: Some resources are assigned `private:owner/repo` secrecy
+> even when the repository is **public**: job logs, secret scanning alerts, sensitive credential
+> files, workflow definition files, and artifact downloads. These resources may contain actual
+> credential values or sensitive operational data regardless of repository visibility.
+> Using `private:owner/repo` (rather than a special `secret` tag) keeps the secrecy model
+> consistent and scoped — an agent needs clearance for the *specific repository* to access
+> those resources, not a global catch-all clearance.
 
 ---
 
@@ -71,12 +80,12 @@ Resource labels are coarse pre-check labels by tool call.
 | Tool / Resource Type | Private Repo | Public Repo |
 |---|---|---|
 | Repo-scoped read tools (`get_issue`, `list_issues`, `get_pull_request`, `list_pull_requests`, `get_commit`, `list_commits`, `get_file_contents`, `list_branches`, `list_tags`, `get_tag`, `list_releases`, `get_latest_release`, `get_release_by_tag`, `get_label`, `list_label`, `actions_get`, `actions_list`, `search_code`, `get_repository`, `get_repository_tree`, `list_discussions`, `get_discussion`, `get_discussion_comments`, `list_discussion_categories`) | `private:<owner>`, `private:<owner>/<repo>` | `[]` |
-| Job logs (`get_job_logs`) | `secret` | `secret` |
-| Sensitive file content (`get_file_contents` with sensitive paths) | `secret` | `secret` |
-| Secret scanning alerts (`list_secret_scanning_alerts`, `get_secret_scanning_alert`) | `secret` | `secret` |
+| Job logs (`get_job_logs`) | `private:<owner>/<repo>` | `private:<owner>/<repo>` |
+| Sensitive file content (`get_file_contents` with sensitive paths) | `private:<owner>/<repo>` | `private:<owner>/<repo>` |
+| Secret scanning alerts (`list_secret_scanning_alerts`, `get_secret_scanning_alert`) | `private:<owner>/<repo>` | `private:<owner>/<repo>` |
+| Artifact downloads (`actions_get` with method `download_workflow_run_artifact`) | `private:<owner>/<repo>` | `private:<owner>/<repo>` |
 | Code scanning & Dependabot alerts (`list_code_scanning_alerts`, `get_code_scanning_alert`, `list_dependabot_alerts`, `get_dependabot_alert`) | `private:<owner>`, `private:<owner>/<repo>` | `private:<owner>`, `private:<owner>/<repo>` |
 | Repo/org security advisories (`list_repository_security_advisories`, `list_org_repository_security_advisories`) | `private:<owner>`, `private:<owner>/<repo>` | `private:<owner>`, `private:<owner>/<repo>` |
-| Artifact downloads (`actions_get` with method `download_workflow_run_artifact`) | `secret` | `secret` |
 | User-scoped tools (`get_me`, `get_teams`, `get_team_members`, `list_starred_repositories`) | `private:user` | `private:user` |
 | Gist tools (`list_gists`, `get_gist`) | `private:user` (conservative; response refines per-item) | `private:user` (conservative; response refines per-item) |
 | Notification tools (`list_notifications`, `get_notification_details`) | `private:user` | `private:user` |
@@ -88,6 +97,9 @@ Notes:
 
 - Resource labels are intentionally coarse for search/list APIs where results may span mixed visibility.
 - Response labeling is authoritative when item-level visibility is available.
+- Resources marked with the same `private:<owner>/<repo>` for both private *and* public repos are
+  those that may embed actual credential values or sensitive operational data regardless of the
+  repository's public/private setting (job logs, secret scanning alerts, workflow files, artifacts).
 
 ---
 
@@ -104,7 +116,7 @@ Response labels are fine-grained per item and should be treated as authoritative
 | File content item (`get_file_contents`) | `private:<owner>`, `private:<owner>/<repo>` | `[]` |
 | Branch/tag/release metadata item | `private:<owner>`, `private:<owner>/<repo>` | `[]` |
 | GitHub Actions workflow/artifact metadata | `private:<owner>`, `private:<owner>/<repo>` | `[]` |
-| Job logs (`get_job_logs`) | `secret` | `secret` |
+| Job logs (`get_job_logs`) | `private:<owner>/<repo>` | `private:<owner>/<repo>` |
 | Security alert item | `private:<owner>`, `private:<owner>/<repo>` (or stricter tool-specific secrecy where configured) | `[]` (or stricter tool-specific secrecy where configured) |
 | Global security advisory | `[]` (public CVE data) | `[]` (public CVE data) |
 | Repo/org security advisory | `private:<owner>`, `private:<owner>/<repo>` | `private:<owner>`, `private:<owner>/<repo>` |
@@ -125,14 +137,29 @@ Visibility is determined from repository metadata (`private` boolean or equivale
 - `private = false` => apply `[]`
 - unknown visibility => fail-secure behavior may conservatively treat as private until resolved
 
+Certain high-sensitivity resources are always assigned `private:<owner>/<repo>` regardless of the
+`private` flag (see the note in [Secrecy Levels](#secrecy-levels) above).
+
 ---
 
-## Migration Requirement
+## Completed Migration
 
-For secrecy, standardize on these tags:
+The secrecy model uses only these tags:
 
 - `private:<owner>`
 - `private:<owner>/<repo>`
+- `private:user`
 - `[]` for public
 
 For private repository objects, emit both owner and repo secrecy tags together.
+
+The previously-used `secret` tag has been fully retired. Resources that were previously tagged
+`secret` (job logs, secret scanning alerts, workflow files, sensitive credential files, artifact
+downloads) now use `private:<owner>/<repo>`, with the guarantee that the scope is always at least
+the containing repository regardless of its visibility setting.
+
+**Rationale**: The bare `secret` tag was an unscoped global catch-all that made it impossible for
+an agent to receive targeted clearance (e.g. via an `allow-only` policy scoped to a specific repo)
+and also created a terminology ambiguity — the label *type* is called "SecrecyLabel" while the
+former tag *value* was also called "secret". Using `private:<owner>/<repo>` tags throughout
+eliminates both problems.

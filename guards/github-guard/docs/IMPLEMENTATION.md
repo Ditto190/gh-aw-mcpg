@@ -67,7 +67,7 @@ The guard implements a principled labeling scheme:
 **Secrecy Labels:**
 - Public repos: `[]` (empty)
 - Private repos: `["private:owner/repo"]`
-- Secret content: `["secret"]`
+- Sensitive resources (job logs, secret scanning alerts, workflow files, artifacts): `["private:owner/repo"]` (always, even for public repos)
 - User data: `["private:user"]`
 
 **Integrity Labels:**
