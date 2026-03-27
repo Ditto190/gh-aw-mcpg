@@ -20,7 +20,9 @@ func TestConnection_SendRequest(t *testing.T) {
 		receivedMethod = method
 
 		var req map[string]interface{}
-		json.Unmarshal(body, &req)
+		err := json.Unmarshal(body, &req)
+		require.NoError(t, err)
+		require.Contains(t, req, "id")
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
