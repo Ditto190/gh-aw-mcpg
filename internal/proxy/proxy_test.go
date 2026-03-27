@@ -933,6 +933,11 @@ func TestDeriveGitHubAPIURL(t *testing.T) {
 			envVars:  map[string]string{"GITHUB_SERVER_URL": "https://github.example.com"},
 			expected: "https://github.example.com/api/v3",
 		},
+		{
+			name:     "GITHUB_SERVER_URL=https://github.com falls back to api.github.com",
+			envVars:  map[string]string{"GITHUB_SERVER_URL": "https://github.com"},
+			expected: DefaultGitHubAPIBase,
+		},
 	}
 
 	for _, tt := range tests {
