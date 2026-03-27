@@ -218,6 +218,7 @@ func runProxy(cmd *cobra.Command, args []string) error {
 		// Print connection info
 		fmt.Fprintf(os.Stderr, "\nMCPG GitHub API Proxy\n")
 		fmt.Fprintf(os.Stderr, "  Listening: %s://%s\n", scheme, actualAddr)
+		fmt.Fprintf(os.Stderr, "  Upstream:  %s\n", apiURL)
 		fmt.Fprintf(os.Stderr, "  Mode:      %s\n", proxyDIFCMode)
 		fmt.Fprintf(os.Stderr, "  Guard:     %s\n", proxyGuardWasm)
 		if tlsCfg != nil {
