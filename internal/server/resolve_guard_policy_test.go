@@ -20,12 +20,12 @@ func validWriteSinkPolicy() *config.GuardPolicy {
 // ---- normalizeScopeKind tests ----
 
 func TestNormalizeScopeKind_NilInput(t *testing.T) {
-	result := normalizeScopeKind(nil)
+	result := config.NormalizeScopeKind(nil)
 	assert.Nil(t, result, "nil input should return nil")
 }
 
 func TestNormalizeScopeKind_EmptyMap(t *testing.T) {
-	result := normalizeScopeKind(map[string]interface{}{})
+	result := config.NormalizeScopeKind(map[string]interface{}{})
 	require.NotNil(t, result)
 	assert.Empty(t, result, "empty map should return empty copy")
 }
@@ -35,7 +35,7 @@ func TestNormalizeScopeKind_NoScopeKindField(t *testing.T) {
 		"other_field": "value",
 		"count":       42,
 	}
-	result := normalizeScopeKind(input)
+	result := config.NormalizeScopeKind(input)
 	require.NotNil(t, result)
 	assert.Equal(t, "value", result["other_field"])
 	assert.Equal(t, 42, result["count"])
@@ -47,7 +47,7 @@ func TestNormalizeScopeKind_ScopeKindAlreadyLowercase(t *testing.T) {
 	input := map[string]interface{}{
 		"scope_kind": "scoped",
 	}
-	result := normalizeScopeKind(input)
+	result := config.NormalizeScopeKind(input)
 	require.NotNil(t, result)
 	assert.Equal(t, "scoped", result["scope_kind"])
 }
@@ -56,7 +56,7 @@ func TestNormalizeScopeKind_ScopeKindUppercase(t *testing.T) {
 	input := map[string]interface{}{
 		"scope_kind": "SCOPED",
 	}
-	result := normalizeScopeKind(input)
+	result := config.NormalizeScopeKind(input)
 	require.NotNil(t, result)
 	assert.Equal(t, "scoped", result["scope_kind"])
 }
@@ -65,7 +65,7 @@ func TestNormalizeScopeKind_ScopeKindWithLeadingTrailingSpaces(t *testing.T) {
 	input := map[string]interface{}{
 		"scope_kind": "  Public  ",
 	}
-	result := normalizeScopeKind(input)
+	result := config.NormalizeScopeKind(input)
 	require.NotNil(t, result)
 	assert.Equal(t, "public", result["scope_kind"])
 }
@@ -74,7 +74,7 @@ func TestNormalizeScopeKind_ScopeKindUppercaseWithSpaces(t *testing.T) {
 	input := map[string]interface{}{
 		"scope_kind": "  OWNER_SCOPED  ",
 	}
-	result := normalizeScopeKind(input)
+	result := config.NormalizeScopeKind(input)
 	require.NotNil(t, result)
 	assert.Equal(t, "owner_scoped", result["scope_kind"])
 }
@@ -84,7 +84,7 @@ func TestNormalizeScopeKind_ScopeKindNonString(t *testing.T) {
 	input := map[string]interface{}{
 		"scope_kind": 123,
 	}
-	result := normalizeScopeKind(input)
+	result := config.NormalizeScopeKind(input)
 	require.NotNil(t, result)
 	assert.Equal(t, 123, result["scope_kind"], "non-string scope_kind should be preserved unchanged")
 }
@@ -95,7 +95,7 @@ func TestNormalizeScopeKind_PreservesOtherFieldsWithScopeKind(t *testing.T) {
 		"scope_values":  []string{"github/repo"},
 		"min-integrity": "approved",
 	}
-	result := normalizeScopeKind(input)
+	result := config.NormalizeScopeKind(input)
 	require.NotNil(t, result)
 	assert.Equal(t, "repo_scoped", result["scope_kind"])
 	assert.Equal(t, []string{"github/repo"}, result["scope_values"])
@@ -107,7 +107,7 @@ func TestNormalizeScopeKind_DoesNotMutateInput(t *testing.T) {
 	input := map[string]interface{}{
 		"scope_kind": "UPPER",
 	}
-	result := normalizeScopeKind(input)
+	result := config.NormalizeScopeKind(input)
 	assert.Equal(t, "UPPER", input["scope_kind"], "input should not be mutated")
 	assert.Equal(t, "upper", result["scope_kind"])
 }

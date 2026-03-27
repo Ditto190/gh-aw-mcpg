@@ -225,23 +225,6 @@ func (us *UnifiedServer) createGuardFromConfig(name string, cfg *config.GuardCon
 	}
 }
 
-func normalizeScopeKind(policy map[string]interface{}) map[string]interface{} {
-	if policy == nil {
-		return nil
-	}
-
-	normalized := make(map[string]interface{}, len(policy))
-	for key, value := range policy {
-		normalized[key] = value
-	}
-
-	if scopeKind, ok := normalized["scope_kind"].(string); ok {
-		normalized["scope_kind"] = strings.ToLower(strings.TrimSpace(scopeKind))
-	}
-
-	return normalized
-}
-
 func (us *UnifiedServer) resolveGuardPolicy(serverID string) (*config.GuardPolicy, string, error) {
 	logGuardInit.Printf("Resolving guard policy: serverID=%s", serverID)
 	if us.cfg != nil && us.cfg.GuardPolicy != nil {
@@ -392,7 +375,7 @@ func (us *UnifiedServer) ensureGuardInitialized(
 
 	us.sessionMu.Lock()
 	session = us.sessions[sessionID]
-	normalizedPolicy := normalizeScopeKind(labelAgentResult.NormalizedPolicy)
+	normalizedPolicy := config.NormalizeScopeKind(labelAgentResult.NormalizedPolicy)
 	if session == nil {
 		session = NewSession(sessionID, "")
 		us.sessions[sessionID] = session
