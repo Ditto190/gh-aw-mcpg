@@ -700,3 +700,22 @@ func validateGuardPolicies(cfg *Config) error {
 	}
 	return nil
 }
+
+// NormalizeScopeKind returns a copy of the policy map with the scope_kind field
+// normalized to lowercase trimmed string form. Other fields are preserved as-is.
+func NormalizeScopeKind(policy map[string]interface{}) map[string]interface{} {
+	if policy == nil {
+		return nil
+	}
+
+	normalized := make(map[string]interface{}, len(policy))
+	for key, value := range policy {
+		normalized[key] = value
+	}
+
+	if scopeKind, ok := normalized["scope_kind"].(string); ok {
+		normalized["scope_kind"] = strings.ToLower(strings.TrimSpace(scopeKind))
+	}
+
+	return normalized
+}
