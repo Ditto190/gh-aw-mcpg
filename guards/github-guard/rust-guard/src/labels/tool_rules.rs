@@ -452,10 +452,15 @@ pub fn apply_tool_labels(
             integrity = vec![];
         }
 
-        // === Context: User & Org Identity ===
-        "get_me" => {
-            // Current user profile — private to the authenticated user.
-            // May contain private email, name, and other PII.
+        // === Private GitHub-controlled metadata (user-associated): PII/org-structure sensitive ===
+        "get_me"
+        | "get_teams"
+        | "get_team_members"
+        | "list_starred_repositories"
+        | "get_copilot_space"
+        | "list_copilot_spaces" => {
+            // User profile, org team membership, starred repos, and Copilot Spaces are all
+            // GitHub-controlled metadata that may contain PII or reveal internal org structure.
             // S = private:user
             // I = project:github (GitHub-controlled metadata)
             secrecy = private_user_label();
@@ -463,28 +468,13 @@ pub fn apply_tool_labels(
             integrity = project_github_label(ctx);
         }
 
-        "get_teams" | "get_team_members" => {
-            // Org team membership — may reveal internal org structure.
-            // S = private:user (org membership is sensitive)
-            // I = project:github (GitHub-controlled metadata)
-            secrecy = private_user_label();
-            baseline_scope = "github".to_string();
-            integrity = project_github_label(ctx);
-        }
-
-        // === Starred Repositories ===
-        "list_starred_repositories" => {
-            // User's starred repos — reveals user preferences/interests.
-            // S = private:user (personal data)
-            // I = project:github (GitHub-controlled metadata)
-            secrecy = private_user_label();
-            baseline_scope = "github".to_string();
-            integrity = project_github_label(ctx);
-        }
-
-        // === Organization Search ===
-        "search_orgs" => {
-            // Public organization profiles.
+        // === Public GitHub-controlled metadata: org profiles, advisories, docs ===
+        "search_orgs"
+        | "list_global_security_advisories"
+        | "get_global_security_advisory"
+        | "github_support_docs_search" => {
+            // Public organization profiles, global CVE advisories, and GitHub docs contain no
+            // private data but are curated/controlled by GitHub.
             // S = public (empty)
             // I = project:github (GitHub-controlled metadata)
             secrecy = vec![];
@@ -492,16 +482,7 @@ pub fn apply_tool_labels(
             integrity = project_github_label(ctx);
         }
 
-        // === Security Advisories ===
-        "list_global_security_advisories" | "get_global_security_advisory" => {
-            // Global security advisories are public CVE data from GHSA.
-            // S = public (empty) — these are published advisories
-            // I = project:github — curated by GitHub security team
-            secrecy = vec![];
-            baseline_scope = "github".to_string();
-            integrity = project_github_label(ctx);
-        }
-
+        // === Security Advisories (repository/org-scoped) ===
         "list_repository_security_advisories" | "list_org_repository_security_advisories" => {
             // Repository/org security advisories may include draft advisories
             // with non-public vulnerability details.
@@ -509,26 +490,6 @@ pub fn apply_tool_labels(
             // I = approved — maintained by repo security contacts
             secrecy = policy_private_scope_label(&owner, &repo, repo_id, ctx);
             integrity = writer_integrity(repo_id, ctx);
-        }
-
-        // === Copilot Spaces (org/user-scoped) ===
-        "get_copilot_space" | "list_copilot_spaces" => {
-            // Copilot Spaces are org-scoped; may contain private configuration or policies.
-            // S = private:user (conservative — spaces may reference private data)
-            // I = project:github (GitHub-controlled metadata)
-            secrecy = private_user_label();
-            baseline_scope = "github".to_string();
-            integrity = project_github_label(ctx);
-        }
-
-        // === GitHub Support Docs Search (public) ===
-        "github_support_docs_search" => {
-            // Public GitHub documentation search — no private data.
-            // S = public (empty)
-            // I = project:github (GitHub-curated content)
-            secrecy = vec![];
-            baseline_scope = "github".to_string();
-            integrity = project_github_label(ctx);
         }
 
         _ => {

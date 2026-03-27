@@ -54,6 +54,19 @@ pub enum ScopeKind {
     RepoPrefix,
 }
 
+impl std::fmt::Display for ScopeKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            ScopeKind::All => "All",
+            ScopeKind::Public => "Public",
+            ScopeKind::Owner => "Owner",
+            ScopeKind::Repo => "Repo",
+            ScopeKind::RepoPrefix => "RepoPrefix",
+        };
+        f.write_str(s)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PolicyScopeEntry {
     pub scope_kind: ScopeKind,

@@ -460,13 +460,7 @@ fn scope_token(scopes: &[PolicyScopeEntry]) -> String {
 
 fn normalized_scope_kind(scopes: &[PolicyScopeEntry]) -> String {
     if scopes.len() == 1 {
-        match scopes[0].scope_kind {
-            ScopeKind::All => "All".to_string(),
-            ScopeKind::Public => "Public".to_string(),
-            ScopeKind::Owner => "Owner".to_string(),
-            ScopeKind::Repo => "Repo".to_string(),
-            ScopeKind::RepoPrefix => "RepoPrefix".to_string(),
-        }
+        scopes[0].scope_kind.to_string()
     } else {
         "Composite".to_string()
     }
