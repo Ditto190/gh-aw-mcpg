@@ -98,17 +98,25 @@ For each downloaded artifact set, check:
    over-filtering or misconfiguration.
 
 3. **Guard errors**: Search gateway logs for `ERROR`, `Phase .* failed`,
-   `guard not initialized`, or `unknown REST endpoint`.
+   `guard not initialized`, `unknown REST endpoint`, or `WASM guard trap`.
 
-4. **Scope violations**: Check if any response contains data from repositories
+4. **WASM guard panics**: Search for `wasm error:` in gateway logs. A Rust guard
+   panic produces a `wasm error: unreachable` trap. After such a trap, the guard
+   marks itself permanently failed and all subsequent requests return an error until
+   the gateway is restarted. Look for `WASM guard trap` entries in `mcp-gateway.log`.
+
+5. **Scope violations**: Check if any response contains data from repositories
    NOT in the workflow's `allowed-repos` policy.
 
 ```bash
 # Example: Count DIFC events in JSONL
 grep -c 'difc_integrity' "$TMPDIR"/*/mcp-logs/rpc-messages.jsonl 2>/dev/null || echo "0"
 
-# Example: Find guard errors
-grep -iE 'error|failed|blocked|unknown' "$TMPDIR"/*/mcp-logs/mcp-gateway.log 2>/dev/null | head -20
+# Example: Find guard errors (including WASM traps)
+grep -iE 'error|failed|blocked|unknown|wasm error:|WASM guard trap' "$TMPDIR"/*/mcp-logs/mcp-gateway.log 2>/dev/null | head -20
+
+# Example: Specifically search for WASM guard panics
+grep -iE 'wasm error:|WASM guard trap|unreachable' "$TMPDIR"/*/mcp-logs/mcp-gateway.log 2>/dev/null
 ```
 
 ### Step 4: Classify Findings
@@ -117,7 +125,7 @@ Classify each finding by severity:
 - 🔴 **Critical**: Data leak (out-of-scope data returned), guard bypass, or
   labeling failure that could expose unauthorized data
 - 🟡 **Warning**: Over-filtering (legitimate data blocked), unscoped tags,
-  or zero DIFC events in a run that should have filtering
+  zero DIFC events in a run that should have filtering, or WASM guard trap
 - 🟢 **Info**: Normal filtering behavior, expected blocks, or configuration notes
 
 ### Step 5: Create Summary Issue
