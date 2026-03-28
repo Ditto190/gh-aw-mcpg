@@ -40,9 +40,19 @@ type WasmGuard struct {
 	// Backend caller provided to the guard via host functions
 	backend BackendCaller
 
-	// mu serializes all calls to the WASM module
-	// WASM modules are single-threaded and cannot handle concurrent calls
+	// mu serializes all calls to the WASM module.
+	// WASM modules are single-threaded and cannot handle concurrent calls.
+	// All exported methods (LabelAgent, LabelResource, LabelResponse) hold mu
+	// for their entire duration, including any nested calls to callWasmFunction.
 	mu sync.Mutex
+
+	// failed and failedErr are set when the WASM module encounters a trap
+	// (e.g. unreachable instruction from a Rust panic). Once failed, all
+	// subsequent calls return an error immediately because the module's
+	// internal state may be corrupted.
+	// Both fields are accessed only while mu is held.
+	failed    bool
+	failedErr error
 }
 
 // NewWasmGuard creates a new WASM guard from a WASM binary file
@@ -781,8 +791,25 @@ func parsePathLabeledResponse(responseJSON []byte, originalData interface{}) (di
 	return pld.ToCollectionLabeledData(), nil
 }
 
-// callWasmFunction calls an exported function in the WASM module
+// isWasmTrap reports whether err is a WASM execution trap such as the
+// "wasm error: unreachable" produced when a Rust-compiled guard panics.
+func isWasmTrap(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "wasm error:")
+}
+
+// callWasmFunction calls an exported function in the WASM module.
+// Precondition: g.mu must be held by the caller. All public methods
+// (LabelAgent, LabelResource, LabelResponse) hold g.mu for their entire
+// duration, satisfying this requirement.
 func (g *WasmGuard) callWasmFunction(ctx context.Context, funcName string, inputJSON []byte) ([]byte, error) {
+	// If the module has already trapped, refuse further calls immediately.
+	// A WASM trap may corrupt the module's internal state (e.g. the global
+	// policy context stored by label_agent), so all subsequent calls are
+	// unsafe until the guard is reloaded.
+	if g.failed {
+		return nil, fmt.Errorf("WASM guard '%s' is unavailable after a previous trap: %w", g.name, g.failedErr)
+	}
+
 	fn := g.module.ExportedFunction(funcName)
 	if fn == nil {
 		return nil, fmt.Errorf("function %s not exported from WASM module", funcName)
@@ -809,6 +836,14 @@ func (g *WasmGuard) callWasmFunction(ctx context.Context, funcName string, input
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		result, requiredSize, err := g.tryCallWasmFunction(ctx, fn, mem, inputJSON, outputSize)
 		if err != nil {
+			if isWasmTrap(err) {
+				// A WASM trap (e.g. unreachable from a Rust panic) leaves the
+				// module in an undefined state. Log it prominently and mark the
+				// guard as permanently failed so callers get a clear error.
+				logger.LogError("backend", "WASM guard trap: guard=%s, func=%s, error=%v", g.name, funcName, err)
+				g.failed = true
+				g.failedErr = err
+			}
 			return nil, err
 		}
 

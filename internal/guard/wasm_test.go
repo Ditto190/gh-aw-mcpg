@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 
@@ -1019,5 +1020,64 @@ func TestJSONMarshaling(t *testing.T) {
 		inputJSON, err := json.Marshal(input)
 		require.NoError(t, err)
 		assert.Contains(t, string(inputJSON), "tool_result")
+	})
+}
+
+func TestIsWasmTrap(t *testing.T) {
+	t.Run("nil error is not a trap", func(t *testing.T) {
+		assert.False(t, isWasmTrap(nil))
+	})
+
+	t.Run("generic error is not a trap", func(t *testing.T) {
+		assert.False(t, isWasmTrap(errors.New("some error")))
+	})
+
+	t.Run("wrapped error containing wasm error is a trap", func(t *testing.T) {
+		err := errors.New("WASM function call failed: wasm error: unreachable")
+		assert.True(t, isWasmTrap(err))
+	})
+
+	t.Run("wasm error integer divide by zero is a trap", func(t *testing.T) {
+		err := errors.New("wasm error: integer divide by zero")
+		assert.True(t, isWasmTrap(err))
+	})
+
+	t.Run("wasm error out of bounds is a trap", func(t *testing.T) {
+		err := errors.New("wasm error: out of bounds memory access")
+		assert.True(t, isWasmTrap(err))
+	})
+}
+
+func TestWasmGuardFailedState(t *testing.T) {
+	t.Run("failed guard returns error immediately for callWasmFunction", func(t *testing.T) {
+		// Build a minimal valid WasmGuard by hand to exercise the failed-state path
+		// without needing a full WASM binary.
+		originalErr := errors.New("WASM function call failed: wasm error: unreachable")
+		g := &WasmGuard{
+			name:      "test-guard",
+			failed:    true,
+			failedErr: originalErr,
+		}
+
+		ctx := context.Background()
+		_, err := g.callWasmFunction(ctx, "label_response", []byte(`{}`))
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "unavailable after a previous trap")
+		assert.Contains(t, err.Error(), "test-guard")
+	})
+
+	t.Run("failed guard wraps original trap error", func(t *testing.T) {
+		originalErr := errors.New("WASM function call failed: wasm error: unreachable")
+		g := &WasmGuard{
+			name:      "my-guard",
+			failed:    true,
+			failedErr: originalErr,
+		}
+
+		ctx := context.Background()
+		_, err := g.callWasmFunction(ctx, "label_agent", []byte(`{}`))
+		require.Error(t, err)
+		// The original trap error should be reachable via errors.Is / errors.As
+		assert.ErrorIs(t, err, originalErr)
 	})
 }
