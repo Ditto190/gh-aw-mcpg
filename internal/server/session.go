@@ -10,6 +10,7 @@ import (
 
 	"github.com/github/gh-aw-mcpg/internal/auth"
 	"github.com/github/gh-aw-mcpg/internal/logger"
+	"github.com/github/gh-aw-mcpg/internal/syncutil"
 )
 
 var logSession = logger.New("server:session")
@@ -67,30 +68,27 @@ func (us *UnifiedServer) requireSession(ctx context.Context) error {
 	sessionID := us.getSessionID(ctx)
 	logSession.Printf("Checking session: sessionID=%s", auth.TruncateSessionID(sessionID))
 
-	// Use double-checked locking to auto-create session if needed
-	us.sessionMu.RLock()
-	session := us.sessions[sessionID]
-	us.sessionMu.RUnlock()
+	// Use syncutil.GetOrCreate to handle the double-checked locking pattern.
+	// The isNew flag is set inside the create callback (while the write lock is held)
+	// so that ensureSessionDirectory is called exactly once per new session.
+	isNew := false
+	if _, err := syncutil.GetOrCreate(&us.sessionMu, us.sessions, sessionID, func() (*Session, error) {
+		log.Printf("Auto-creating session for ID: %s", auth.TruncateSessionID(sessionID))
+		s := NewSession(sessionID, "")
+		log.Printf("Session auto-created for ID: %s", auth.TruncateSessionID(sessionID))
+		isNew = true
+		return s, nil
+	}); err != nil {
+		return err
+	}
 
-	if session == nil {
-		// Need to create session - acquire write lock
-		us.sessionMu.Lock()
-		// Double-check after acquiring write lock to avoid race condition
-		if us.sessions[sessionID] == nil {
-			log.Printf("Auto-creating session for ID: %s", auth.TruncateSessionID(sessionID))
-			us.sessions[sessionID] = NewSession(sessionID, "")
-			log.Printf("Session auto-created for ID: %s", auth.TruncateSessionID(sessionID))
-
-			// Ensure session directory exists in payload mount point
-			// This is done after releasing the lock to avoid holding it during I/O
-			us.sessionMu.Unlock()
-			if err := us.ensureSessionDirectory(sessionID); err != nil {
-				logger.LogWarn("client", "Failed to create session directory for session=%s: %v", auth.TruncateSessionID(sessionID), err)
-				// Don't fail - payloads will attempt to create the directory when needed
-			}
-			return nil
+	if isNew {
+		// Ensure session directory exists in payload mount point.
+		// Called after GetOrCreate releases the lock to avoid holding it during I/O.
+		if err := us.ensureSessionDirectory(sessionID); err != nil {
+			logger.LogWarn("client", "Failed to create session directory for session=%s: %v", auth.TruncateSessionID(sessionID), err)
+			// Don't fail - payloads will attempt to create the directory when needed
 		}
-		us.sessionMu.Unlock()
 	}
 
 	log.Printf("Session validated for ID: %s", auth.TruncateSessionID(sessionID))
