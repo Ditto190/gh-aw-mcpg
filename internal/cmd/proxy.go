@@ -16,6 +16,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var logProxyCmd = logger.New("cmd:proxy")
+
 // Proxy subcommand flag variables
 var (
 	proxyGuardWasm    string
@@ -41,9 +43,12 @@ const containerGuardWasmPath = "/guards/github/00-github-guard.wasm"
 // detectGuardWasm returns the baked-in container guard path if it exists,
 // or empty string if not found (requiring the user to specify --guard-wasm).
 func detectGuardWasm() string {
+	logProxyCmd.Printf("Checking for baked-in guard at %s", containerGuardWasmPath)
 	if _, err := os.Stat(containerGuardWasmPath); err == nil {
+		logProxyCmd.Printf("Auto-detected baked-in guard: %s", containerGuardWasmPath)
 		return containerGuardWasmPath
 	}
+	logProxyCmd.Print("Baked-in guard not found, --guard-wasm flag required")
 	return ""
 }
 
@@ -115,6 +120,8 @@ func runProxy(cmd *cobra.Command, args []string) error {
 	ctx, cancel := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
+	logProxyCmd.Printf("Starting proxy: listen=%s, guard=%s, mode=%s, tls=%v", proxyListen, proxyGuardWasm, proxyDIFCMode, proxyTLS)
+
 	if err := ValidateDIFCMode(proxyDIFCMode); err != nil {
 		return fmt.Errorf("invalid --guards-mode flag: %w", err)
 	}
@@ -155,6 +162,7 @@ func runProxy(cmd *cobra.Command, args []string) error {
 		apiURL = proxy.DefaultGitHubAPIBase
 	}
 	logger.LogInfo("startup", "Upstream GitHub API URL: %s", apiURL)
+	logProxyCmd.Printf("Resolved GitHub API URL: %s, explicit flag=%v", apiURL, proxyAPIURL != "")
 
 	// Create the proxy server
 	proxySrv, err := proxy.New(ctx, proxy.Config{
@@ -177,6 +185,7 @@ func runProxy(cmd *cobra.Command, args []string) error {
 		if tlsDir == "" {
 			tlsDir = filepath.Join(proxyLogDir, "proxy-tls")
 		}
+		logProxyCmd.Printf("Generating TLS certificates in: %s", tlsDir)
 		tlsCfg, err = proxy.GenerateSelfSignedTLS(tlsDir)
 		if err != nil {
 			return fmt.Errorf("failed to generate TLS certificates: %w", err)
