@@ -32,7 +32,7 @@ When running locally (`run.sh`), these variables are optional (warnings shown if
 | `DEBUG_COLORS` | Control colored debug output (0 to disable, auto-disabled when piping) | Auto-detect |
 | `RUNNING_IN_CONTAINER` | Manual override; set to `"true"` to force container detection when `/.dockerenv` and cgroup detection are unavailable | (unset) |
 
-**Note:** `PORT`, `HOST`, and `MODE` are not read by the `awmg` binary directly. However, `run.sh` does use `HOST` (default: `0.0.0.0`) and `MODE` (default: `--routed`) to set the bind address and routing mode. Use the `--listen` and `--routed`/`--unified` flags when running `awmg` directly.
+**Note:** `PORT`, `HOST`, and `MODE` are not read by the `awmg` binary directly. However, `run.sh` uses `HOST` (default: `0.0.0.0`), `MODE` (default: `--routed`), and falls back to `PORT` (when `MCP_GATEWAY_PORT` is unset) to set the bind address and routing mode. Use the `--listen` and `--routed`/`--unified` flags when running `awmg` directly.
 
 ## Containerized Deployment Variables
 

@@ -198,6 +198,12 @@ min-integrity = "unapproved"
   - `"approved"` - Approved contributor level (includes objects with author_association: OWNER, MEMBER, COLLABORATOR)
   - `"merged"` - Merged to main branch (any object reachable from the main branch, regardless of authorship)
 
+- **`blocked-users`** *(optional)*: Array of GitHub usernames whose content is unconditionally blocked. Items from these users receive `blocked` integrity (below `none`) and are always denied, even when `min-integrity` is `"none"`. Cannot be overridden by `approval-labels` or `trusted-users`.
+
+- **`approval-labels`** *(optional)*: Array of GitHub label names that promote a content item's effective integrity to `approved` when present. Uses `max(base, approved)` so it never lowers integrity. Does not override `blocked-users`.
+
+- **`trusted-users`** *(optional)*: Array of GitHub usernames whose content is unconditionally elevated to `approved` integrity. Useful for granting specific external contributors the same treatment as repository members without lowering `min-integrity` globally. Uses `max(base, approved)` so it never lowers integrity. Does not override `blocked-users`.
+
 - **Meaning**: Restricts the GitHub MCP server to only access specified repositories. Tools like `get_file_contents`, `search_code`, etc. will only work on allowed repositories. Attempts to access other repositories will be denied by the guard policy.
 
 ### write-sink (output servers)

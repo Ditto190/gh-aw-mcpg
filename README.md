@@ -88,13 +88,16 @@ Restricts which repositories a guard allows and at what integrity level:
 
 **`approval-labels`** *(optional)* — Array of GitHub label names that promote a content item's effective integrity to `approved` when present. Enables human-review gates where a maintainer labels an item to allow it through. Uses `max(base, approved)` so it never lowers integrity. Does not override `blocked-users`.
 
+**`trusted-users`** *(optional)* — Array of GitHub usernames whose content is unconditionally elevated to `approved` integrity. Useful for granting specific external contributors (e.g., trusted open-source maintainers) the same treatment as repository members, without lowering `min-integrity` globally. Uses `max(base, approved)` so it never lowers integrity. Does not override `blocked-users`.
+
 ```json
 "guard-policies": {
   "allow-only": {
     "repos": ["myorg/*"],
     "min-integrity": "approved",
     "blocked-users": ["spam-bot", "compromised-user"],
-    "approval-labels": ["human-reviewed", "safe-for-agent"]
+    "approval-labels": ["human-reviewed", "safe-for-agent"],
+    "trusted-users": ["alice", "trusted-contributor"]
   }
 }
 ```
