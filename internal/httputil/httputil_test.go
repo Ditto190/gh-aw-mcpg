@@ -93,7 +93,7 @@ func TestWriteJSONResponse(t *testing.T) {
 		var got []string
 		err := json.NewDecoder(rec.Body).Decode(&got)
 		require.NoError(t, err)
-		assert.ElementsMatch(t, []string{"alpha", "beta"}, got)
+		assert.Equal(t, []string{"alpha", "beta"}, got)
 	})
 
 	t.Run("encodes nested structs", func(t *testing.T) {
