@@ -71,6 +71,8 @@ Write operations (PUT, POST, DELETE, PATCH) pass through unmodified.
 | `--github-api-url` | `https://api.github.com` | Upstream GitHub API URL |
 | `--tls` | `false` | Enable HTTPS with auto-generated self-signed certificates |
 | `--tls-dir` | `<log-dir>/proxy-tls` | Directory for generated TLS certificate files |
+| `--trusted-bots` | *(disabled)* | Additional trusted bot usernames (comma-separated, extends built-in list) |
+| `--trusted-users` | *(disabled)* | User logins that receive approved integrity (comma-separated) |
 
 ## DIFC Pipeline
 
