@@ -38,11 +38,13 @@ pub const WRITE_OPERATIONS: &[&str] = &[
     // Dynamically enables additional toolsets, expanding the agent's capability set
     "enable_toolset",
     // Pre-emptive entries for anticipated future MCP tools (no equivalent tool today)
-    "archive_repository", // gh repo archive
-    "transfer_issue",     // gh issue transfer
-    "transfer_repository", // gh repo transfer — blocked: repo ownership transfer is irreversible
-    "pin_issue",          // gh issue pin
-    "unpin_issue",        // gh issue unpin
+    "archive_repository",   // gh repo archive   — blocked: repo settings change unsupported
+    "unarchive_repository", // gh repo unarchive — blocked: symmetric to archive_repository
+    "rename_repository",    // gh repo rename    — blocked: breaks clone URLs and integrations
+    "transfer_issue",       // gh issue transfer
+    "transfer_repository",  // gh repo transfer  — blocked: repo ownership transfer is irreversible
+    "pin_issue",            // gh issue pin
+    "unpin_issue",          // gh issue unpin
     "enable_workflow",    // gh workflow enable
     "disable_workflow",   // gh workflow disable
     "set_secret",         // gh secret set
@@ -116,8 +118,17 @@ pub fn is_unlock_operation(tool_name: &str) -> bool {
 /// Current entries:
 /// - `transfer_repository`: repository ownership transfer is irreversible and
 ///   must never be performed by an automated agent.
+/// - `archive_repository`: archives a repository, restricting contributions; unsupported as an
+///   agent operation.
+/// - `unarchive_repository`: re-enables contributions to a previously archived repository;
+///   symmetric to `archive_repository` and equally unsupported.
+/// - `rename_repository`: renames a repository, breaking all clone URLs, webhooks, and external
+///   references; unsupported as an agent operation.
 pub fn is_blocked_tool(tool_name: &str) -> bool {
-    matches!(tool_name, "transfer_repository")
+    matches!(
+        tool_name,
+        "transfer_repository" | "archive_repository" | "unarchive_repository" | "rename_repository"
+    )
 }
 
 #[cfg(test)]
@@ -130,6 +141,17 @@ mod tests {
             is_blocked_tool("transfer_repository"),
             "transfer_repository must be unconditionally blocked"
         );
+    }
+
+    #[test]
+    fn test_is_blocked_tool_repo_modifying_operations() {
+        for op in &["archive_repository", "unarchive_repository", "rename_repository"] {
+            assert!(
+                is_blocked_tool(op),
+                "{} must be unconditionally blocked (modifying gh repo operation)",
+                op
+            );
+        }
     }
 
     #[test]
@@ -150,6 +172,17 @@ mod tests {
             is_write_operation("transfer_repository"),
             "transfer_repository must be classified as a write operation"
         );
+    }
+
+    #[test]
+    fn test_repo_modifying_operations_are_write_operations() {
+        for op in &["archive_repository", "unarchive_repository", "rename_repository"] {
+            assert!(
+                is_write_operation(op),
+                "{} must be classified as a write operation",
+                op
+            );
+        }
     }
 
     #[test]
