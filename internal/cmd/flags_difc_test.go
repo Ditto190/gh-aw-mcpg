@@ -60,7 +60,7 @@ func TestValidateDIFCMode(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateDIFCMode(tt.mode)
+			_, err := difc.ParseEnforcementMode(tt.mode)
 			if tt.wantErr {
 				assert.Error(t, err, "expected error for mode %q", tt.mode)
 			} else {
@@ -135,10 +135,13 @@ func TestGetDefaultDIFCMode(t *testing.T) {
 func TestValidDIFCModes(t *testing.T) {
 	require := require.New(t)
 
-	// Verify all expected modes are valid using ValidateDIFCMode
-	require.NoError(ValidateDIFCMode(difc.ModeStrict), "strict should be valid")
-	require.NoError(ValidateDIFCMode(difc.ModeFilter), "filter should be valid")
-	require.NoError(ValidateDIFCMode(difc.ModePropagate), "propagate should be valid")
+	// Verify all expected modes are valid using difc.ParseEnforcementMode
+	_, err := difc.ParseEnforcementMode(difc.ModeStrict)
+	require.NoError(err, "strict should be valid")
+	_, err = difc.ParseEnforcementMode(difc.ModeFilter)
+	require.NoError(err, "filter should be valid")
+	_, err = difc.ParseEnforcementMode(difc.ModePropagate)
+	require.NoError(err, "propagate should be valid")
 
 	// Verify ValidModes slice has 3 entries
 	require.Len(difc.ValidModes, 3, "should only have 3 valid modes")

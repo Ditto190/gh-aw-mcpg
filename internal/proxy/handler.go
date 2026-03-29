@@ -11,6 +11,7 @@ import (
 
 	"github.com/github/gh-aw-mcpg/internal/difc"
 	"github.com/github/gh-aw-mcpg/internal/guard"
+	"github.com/github/gh-aw-mcpg/internal/httputil"
 	"github.com/github/gh-aw-mcpg/internal/logger"
 	"github.com/github/gh-aw-mcpg/internal/strutil"
 )
@@ -35,7 +36,7 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Health check endpoint
 	if rawPath == "/health" || rawPath == "/healthz" {
-		writeJSONResponse(w, http.StatusOK, map[string]string{"status": "ok"})
+		httputil.WriteJSONResponse(w, http.StatusOK, map[string]string{"status": "ok"})
 		return
 	}
 
@@ -67,7 +68,7 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if match == nil {
 			// Unknown GraphQL query — fail closed: deny rather than risk leaking unfiltered data
 			logHandler.Printf("unknown GraphQL query, blocking request: %s", strutil.Truncate(string(graphQLBody), 500))
-			writeJSONResponse(w, http.StatusForbidden, map[string]interface{}{
+			httputil.WriteJSONResponse(w, http.StatusForbidden, map[string]interface{}{
 				"errors": []map[string]string{{"message": "access denied: unrecognized GraphQL operation"}},
 				"data":   nil,
 			})
@@ -151,7 +152,7 @@ func (h *proxyHandler) handleWithDIFC(w http.ResponseWriter, r *http.Request, pa
 		} else {
 			// Write blocked
 			logHandler.Printf("[DIFC] Phase 2: BLOCKED %s %s — %s", r.Method, path, evalResult.Reason)
-			writeJSONResponse(w, http.StatusForbidden, map[string]string{
+			httputil.WriteJSONResponse(w, http.StatusForbidden, map[string]string{
 				"message": fmt.Sprintf("DIFC policy violation: %s", evalResult.Reason),
 			})
 			return
@@ -224,7 +225,7 @@ func (h *proxyHandler) handleWithDIFC(w http.ResponseWriter, r *http.Request, pa
 			// Strict mode: block entire response if any item filtered
 			if s.enforcementMode == difc.EnforcementStrict && filtered.GetFilteredCount() > 0 {
 				logHandler.Printf("[DIFC] STRICT: blocking response — %d filtered items", filtered.GetFilteredCount())
-				writeJSONResponse(w, http.StatusForbidden, map[string]string{
+				httputil.WriteJSONResponse(w, http.StatusForbidden, map[string]string{
 					"message": fmt.Sprintf("DIFC policy violation: %d of %d items not accessible",
 						filtered.GetFilteredCount(), filtered.TotalCount),
 				})
@@ -349,14 +350,6 @@ func (h *proxyHandler) writeEmptyResponse(w http.ResponseWriter, resp *http.Resp
 		empty = "[]" // safe default for nil or unknown types
 	}
 	w.Write([]byte(empty))
-}
-
-// writeJSONResponse sets the Content-Type header, writes the status code, and encodes
-// body as JSON. It centralises the three-line pattern used across HTTP handlers.
-func writeJSONResponse(w http.ResponseWriter, statusCode int, body interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(statusCode)
-	json.NewEncoder(w).Encode(body)
 }
 
 // forwardAndReadBody forwards a request to the upstream GitHub API and reads the

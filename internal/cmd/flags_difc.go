@@ -89,12 +89,6 @@ func getDefaultAllowOnlyMinIntegrity() string {
 	return envutil.GetEnvString("MCP_GATEWAY_ALLOWONLY_MIN_INTEGRITY", defaultAllowOnlyMinIntegrity)
 }
 
-// ValidateDIFCMode validates the guards mode flag value and returns an error if invalid
-func ValidateDIFCMode(mode string) error {
-	_, err := difc.ParseEnforcementMode(mode)
-	return err
-}
-
 func parseDIFCSinkServerIDs(input string) ([]string, error) {
 	if strings.TrimSpace(input) == "" {
 		return nil, nil
