@@ -58,7 +58,6 @@ func (us *UnifiedServer) ensureSessionDirectory(sessionID string) error {
 	}
 
 	logSession.Printf("Created session directory: %s", sessionDir)
-	log.Printf("Created payload directory for session: %s", auth.TruncateSessionID(sessionID))
 	return nil
 }
 
