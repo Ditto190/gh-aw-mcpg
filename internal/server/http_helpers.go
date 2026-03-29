@@ -3,13 +3,13 @@ package server
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"io"
 	"log"
 	"net/http"
 
 	"github.com/github/gh-aw-mcpg/internal/auth"
 	"github.com/github/gh-aw-mcpg/internal/guard"
+	"github.com/github/gh-aw-mcpg/internal/httputil"
 	"github.com/github/gh-aw-mcpg/internal/logger"
 	"github.com/github/gh-aw-mcpg/internal/logger/sanitize"
 	"github.com/github/gh-aw-mcpg/internal/mcp"
@@ -20,9 +20,7 @@ var logHelpers = logger.New("server:helpers")
 // writeJSONResponse sets the Content-Type header, writes the status code, and encodes
 // body as JSON. It centralises the three-line pattern used across HTTP handlers.
 func writeJSONResponse(w http.ResponseWriter, statusCode int, body interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(statusCode)
-	json.NewEncoder(w).Encode(body)
+	httputil.WriteJSONResponse(w, statusCode, body)
 }
 
 // withResponseLogging wraps an http.Handler to log response bodies

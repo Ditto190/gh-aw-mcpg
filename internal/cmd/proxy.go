@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"syscall"
 
+	"github.com/github/gh-aw-mcpg/internal/difc"
 	"github.com/github/gh-aw-mcpg/internal/logger"
 	"github.com/github/gh-aw-mcpg/internal/proxy"
 	"github.com/spf13/cobra"
@@ -122,7 +123,7 @@ func runProxy(cmd *cobra.Command, args []string) error {
 
 	logProxyCmd.Printf("Starting proxy: listen=%s, guard=%s, mode=%s, tls=%v", proxyListen, proxyGuardWasm, proxyDIFCMode, proxyTLS)
 
-	if err := ValidateDIFCMode(proxyDIFCMode); err != nil {
+	if _, err := difc.ParseEnforcementMode(proxyDIFCMode); err != nil {
 		return fmt.Errorf("invalid --guards-mode flag: %w", err)
 	}
 
