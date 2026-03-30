@@ -19,6 +19,11 @@ fn repo_visibility_cache() -> &'static Mutex<HashMap<String, bool>> {
     CACHE.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
+fn repo_owner_type_cache() -> &'static Mutex<HashMap<String, bool>> {
+    static CACHE: OnceLock<Mutex<HashMap<String, bool>>> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
 fn get_cached_repo_visibility(repo_id: &str) -> Option<bool> {
     repo_visibility_cache()
         .lock()
@@ -29,6 +34,19 @@ fn get_cached_repo_visibility(repo_id: &str) -> Option<bool> {
 fn set_cached_repo_visibility(repo_id: &str, is_private: bool) {
     if let Ok(mut cache) = repo_visibility_cache().lock() {
         cache.insert(repo_id.to_string(), is_private);
+    }
+}
+
+fn get_cached_owner_is_org(repo_id: &str) -> Option<bool> {
+    repo_owner_type_cache()
+        .lock()
+        .ok()
+        .and_then(|cache| cache.get(repo_id).copied())
+}
+
+fn set_cached_owner_is_org(repo_id: &str, is_org: bool) {
+    if let Ok(mut cache) = repo_owner_type_cache().lock() {
+        cache.insert(repo_id.to_string(), is_org);
     }
 }
 
@@ -183,6 +201,15 @@ pub fn is_repo_private_with_callback(
         }
 
         let result = extract_repo_private_flag(&response, &repo_id);
+        // Piggyback owner type extraction from the same search response
+        if let Some(is_org) = extract_owner_is_org(&response, &repo_id) {
+            set_cached_owner_is_org(&repo_id, is_org);
+            crate::log_debug(&format!(
+                "Repo owner type for {}: {}",
+                repo_id,
+                if is_org { "Organization" } else { "User" }
+            ));
+        }
         match result {
             Some(true) => {
                 set_cached_repo_visibility(&repo_id, true);
@@ -218,6 +245,22 @@ pub fn is_repo_private_with_callback(
     }
 
     get_cached_repo_visibility(&repo_id)
+}
+
+/// Check whether a repository is owned by an organization (vs a personal account).
+/// This is determined from the `owner.type` field in the search_repositories response,
+/// which is cached alongside repo visibility during `is_repo_private` calls.
+///
+/// Returns:
+/// - `Some(true)` if the owner is an Organization
+/// - `Some(false)` if the owner is a User (personal account)
+/// - `None` if the owner type could not be determined
+pub fn is_repo_org_owned(owner: &str, repo: &str) -> Option<bool> {
+    if owner.is_empty() || repo.is_empty() {
+        return None;
+    }
+    let repo_id = format!("{}/{}", owner, repo);
+    get_cached_owner_is_org(&repo_id)
 }
 
 /// Determine whether a pull request is from a fork.
@@ -1119,6 +1162,118 @@ mod tests {
         assert_eq!(perm.permission.as_deref(), Some("admin"));
         assert_eq!(perm.login.as_deref(), Some("wrapped-admin"));
     }
+
+    // --- Owner type (org vs user) tests ---
+
+    fn clear_owner_type_cache_for_tests() {
+        if let Ok(mut cache) = repo_owner_type_cache().lock() {
+            cache.clear();
+        }
+    }
+
+    #[test]
+    fn test_owner_type_from_repo_object_org() {
+        let item = serde_json::json!({
+            "full_name": "myorg/myrepo",
+            "owner": { "login": "myorg", "type": "Organization" }
+        });
+        assert_eq!(owner_type_from_repo_object(&item), Some(true));
+    }
+
+    #[test]
+    fn test_owner_type_from_repo_object_user() {
+        let item = serde_json::json!({
+            "full_name": "myuser/myrepo",
+            "owner": { "login": "myuser", "type": "User" }
+        });
+        assert_eq!(owner_type_from_repo_object(&item), Some(false));
+    }
+
+    #[test]
+    fn test_owner_type_from_repo_object_case_insensitive() {
+        let item = serde_json::json!({
+            "full_name": "myorg/myrepo",
+            "owner": { "login": "myorg", "type": "organization" }
+        });
+        assert_eq!(owner_type_from_repo_object(&item), Some(true));
+    }
+
+    #[test]
+    fn test_owner_type_from_repo_object_missing() {
+        let item = serde_json::json!({
+            "full_name": "myorg/myrepo",
+            "owner": { "login": "myorg" }
+        });
+        assert_eq!(owner_type_from_repo_object(&item), None);
+    }
+
+    #[test]
+    fn test_extract_owner_is_org_from_search_response() {
+        let response = serde_json::json!({
+            "items": [{
+                "full_name": "github/hello",
+                "private": false,
+                "owner": { "login": "github", "type": "Organization" }
+            }]
+        });
+        assert_eq!(extract_owner_is_org(&response, "github/hello"), Some(true));
+    }
+
+    #[test]
+    fn test_extract_owner_is_org_user_account() {
+        let response = serde_json::json!({
+            "items": [{
+                "full_name": "octocat/hello",
+                "private": false,
+                "owner": { "login": "octocat", "type": "User" }
+            }]
+        });
+        assert_eq!(extract_owner_is_org(&response, "octocat/hello"), Some(false));
+    }
+
+    #[test]
+    fn test_extract_owner_is_org_mcp_wrapped() {
+        let inner = serde_json::json!({
+            "items": [{
+                "full_name": "myorg/myrepo",
+                "private": false,
+                "owner": { "login": "myorg", "type": "Organization" }
+            }]
+        }).to_string();
+        let response = serde_json::json!({
+            "content": [{ "type": "text", "text": inner }]
+        });
+        assert_eq!(extract_owner_is_org(&response, "myorg/myrepo"), Some(true));
+    }
+
+    #[test]
+    fn test_extract_owner_is_org_no_type_field() {
+        let response = serde_json::json!({
+            "items": [{
+                "full_name": "myorg/myrepo",
+                "private": false,
+                "owner": { "login": "myorg" }
+            }]
+        });
+        assert_eq!(extract_owner_is_org(&response, "myorg/myrepo"), None);
+    }
+
+    #[test]
+    fn test_is_repo_org_owned_uses_cache() {
+        clear_owner_type_cache_for_tests();
+        set_cached_owner_is_org("cached-org/repo", true);
+        assert_eq!(is_repo_org_owned("cached-org", "repo"), Some(true));
+
+        set_cached_owner_is_org("cached-user/repo", false);
+        assert_eq!(is_repo_org_owned("cached-user", "repo"), Some(false));
+        clear_owner_type_cache_for_tests();
+    }
+
+    #[test]
+    fn test_is_repo_org_owned_empty_args() {
+        assert_eq!(is_repo_org_owned("", "repo"), None);
+        assert_eq!(is_repo_org_owned("owner", ""), None);
+    }
 }
 
 fn repo_visibility_from_items(value: &Value, repo_id: &str) -> Option<bool> {
@@ -1187,6 +1342,79 @@ fn private_flag_from_repo_object(item: &Value) -> Option<bool> {
     }
 
     None
+}
+
+/// Extract owner.type from a search_repositories response.
+/// Returns Some(true) if owner is "Organization", Some(false) if "User", None if absent.
+fn extract_owner_is_org(response: &Value, repo_id: &str) -> Option<bool> {
+    // Direct object response
+    if let Some(is_org) = owner_is_org_from_items(response, repo_id) {
+        return Some(is_org);
+    }
+
+    // MCP-wrapped response
+    let text_payload = response
+        .get("content")
+        .and_then(|v| v.as_array())
+        .and_then(|arr| arr.first())
+        .and_then(|item| item.get("text"))
+        .and_then(|v| v.as_str())?;
+
+    let parsed = serde_json::from_str::<Value>(text_payload).ok()?;
+    owner_is_org_from_items(&parsed, repo_id)
+}
+
+fn owner_is_org_from_items(value: &Value, repo_id: &str) -> Option<bool> {
+    // search_repositories shape: { items: [...] }
+    if let Some(items) = value.get("items").and_then(|v| v.as_array()) {
+        for item in items {
+            let item_repo_id = repo_id_from_repo_object(item);
+            if item_repo_id
+                .as_deref()
+                .map(|id| id.eq_ignore_ascii_case(repo_id))
+                .unwrap_or(false)
+            {
+                return owner_type_from_repo_object(item);
+            }
+        }
+    }
+
+    // Plain array response
+    if let Some(items) = value.as_array() {
+        for item in items {
+            let item_repo_id = repo_id_from_repo_object(item);
+            if item_repo_id
+                .as_deref()
+                .map(|id| id.eq_ignore_ascii_case(repo_id))
+                .unwrap_or(false)
+            {
+                return owner_type_from_repo_object(item);
+            }
+        }
+    }
+
+    // Single-object response
+    let item_repo_id = repo_id_from_repo_object(value);
+    if item_repo_id
+        .as_deref()
+        .map(|id| id.eq_ignore_ascii_case(repo_id))
+        .unwrap_or(false)
+    {
+        return owner_type_from_repo_object(value);
+    }
+
+    None
+}
+
+/// Extract owner type from a repository object.
+/// GitHub API returns owner.type as "Organization" or "User".
+fn owner_type_from_repo_object(item: &Value) -> Option<bool> {
+    let owner_type = item
+        .get("owner")
+        .and_then(|o| o.get("type"))
+        .and_then(|v| v.as_str())?;
+
+    Some(owner_type.eq_ignore_ascii_case("Organization"))
 }
 
 fn repo_id_from_repo_object(item: &Value) -> Option<String> {

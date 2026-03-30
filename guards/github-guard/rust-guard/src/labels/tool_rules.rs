@@ -141,30 +141,34 @@ pub fn apply_tool_labels(
                             }
                         }
                         // Supplement with collaborator permission when author_association
-                        // gives less than writer integrity (e.g., CONTRIBUTOR for org admins)
+                        // gives less than writer integrity (e.g., CONTRIBUTOR for org admins).
+                        // Only needed for org-owned repos where inherited permissions exist.
                         if floor.len() < 3 {
-                            if let Some(ref login) = info.author_login {
-                                crate::log_info(&format!(
-                                    "issue_read {}/{}#{}: author_association floor insufficient (len={}), checking collaborator permission for {}",
-                                    owner, repo, issue_num, floor.len(), login
-                                ));
-                                if let Some(collab) = super::backend::get_collaborator_permission(&owner, &repo, login) {
-                                    let perm_floor = collaborator_permission_floor(
-                                        repo_id,
-                                        collab.permission.as_deref(),
-                                        ctx,
-                                    );
-                                    let merged = max_integrity(repo_id, floor, perm_floor, ctx);
+                            let is_org = super::backend::is_repo_org_owned(&owner, &repo).unwrap_or(false);
+                            if is_org {
+                                if let Some(ref login) = info.author_login {
                                     crate::log_info(&format!(
-                                        "issue_read {}/{}#{}: collaborator permission={:?} → merged floor len={}",
-                                        owner, repo, issue_num, collab.permission, merged.len()
+                                        "issue_read {}/{}#{}: author_association floor insufficient (len={}), checking collaborator permission for {}",
+                                        owner, repo, issue_num, floor.len(), login
                                     ));
-                                    floor = merged;
-                                } else {
-                                    crate::log_info(&format!(
-                                        "issue_read {}/{}#{}: collaborator permission lookup returned None for {}, keeping author_association floor",
-                                        owner, repo, issue_num, login
-                                    ));
+                                    if let Some(collab) = super::backend::get_collaborator_permission(&owner, &repo, login) {
+                                        let perm_floor = collaborator_permission_floor(
+                                            repo_id,
+                                            collab.permission.as_deref(),
+                                            ctx,
+                                        );
+                                        let merged = max_integrity(repo_id, floor, perm_floor, ctx);
+                                        crate::log_info(&format!(
+                                            "issue_read {}/{}#{}: collaborator permission={:?} → merged floor len={}",
+                                            owner, repo, issue_num, collab.permission, merged.len()
+                                        ));
+                                        floor = merged;
+                                    } else {
+                                        crate::log_info(&format!(
+                                            "issue_read {}/{}#{}: collaborator permission lookup returned None for {}, keeping author_association floor",
+                                            owner, repo, issue_num, login
+                                        ));
+                                    }
                                 }
                             }
                         }
@@ -266,30 +270,34 @@ pub fn apply_tool_labels(
                         }
 
                         // Supplement with collaborator permission when author_association
-                        // gives less than writer integrity (e.g., CONTRIBUTOR for org admins)
+                        // gives less than writer integrity (e.g., CONTRIBUTOR for org admins).
+                        // Only needed for org-owned repos where inherited permissions exist.
                         if integrity.len() < 3 {
-                            if let Some(ref login) = facts.author_login {
-                                crate::log_info(&format!(
-                                    "pull_request_read {}/{}#{}: author_association integrity insufficient (len={}), checking collaborator permission for {}",
-                                    owner, repo, number, integrity.len(), login
-                                ));
-                                if let Some(collab) = super::backend::get_collaborator_permission(&owner, &repo, login) {
-                                    let perm_floor = collaborator_permission_floor(
-                                        repo_id,
-                                        collab.permission.as_deref(),
-                                        ctx,
-                                    );
-                                    let merged = max_integrity(repo_id, integrity, perm_floor, ctx);
+                            let is_org = super::backend::is_repo_org_owned(&owner, &repo).unwrap_or(false);
+                            if is_org {
+                                if let Some(ref login) = facts.author_login {
                                     crate::log_info(&format!(
-                                        "pull_request_read {}/{}#{}: collaborator permission={:?} → merged integrity len={}",
-                                        owner, repo, number, collab.permission, merged.len()
+                                        "pull_request_read {}/{}#{}: author_association integrity insufficient (len={}), checking collaborator permission for {}",
+                                        owner, repo, number, integrity.len(), login
                                     ));
-                                    integrity = merged;
-                                } else {
-                                    crate::log_info(&format!(
-                                        "pull_request_read {}/{}#{}: collaborator permission lookup returned None for {}, keeping author_association integrity",
-                                        owner, repo, number, login
-                                    ));
+                                    if let Some(collab) = super::backend::get_collaborator_permission(&owner, &repo, login) {
+                                        let perm_floor = collaborator_permission_floor(
+                                            repo_id,
+                                            collab.permission.as_deref(),
+                                            ctx,
+                                        );
+                                        let merged = max_integrity(repo_id, integrity, perm_floor, ctx);
+                                        crate::log_info(&format!(
+                                            "pull_request_read {}/{}#{}: collaborator permission={:?} → merged integrity len={}",
+                                            owner, repo, number, collab.permission, merged.len()
+                                        ));
+                                        integrity = merged;
+                                    } else {
+                                        crate::log_info(&format!(
+                                            "pull_request_read {}/{}#{}: collaborator permission lookup returned None for {}, keeping author_association integrity",
+                                            owner, repo, number, login
+                                        ));
+                                    }
                                 }
                             }
                         }
