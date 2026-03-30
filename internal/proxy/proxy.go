@@ -328,6 +328,7 @@ func (r *restBackendCaller) CallTool(ctx context.Context, toolName string, args 
 		repo, _ := argsMap["repo"].(string)
 		username, _ := argsMap["username"].(string)
 		if owner == "" || repo == "" || username == "" {
+			logProxy.Printf("restBackendCaller: get_collaborator_permission missing args (owner=%q repo=%q username=%q)", owner, repo, username)
 			return nil, fmt.Errorf("get_collaborator_permission: missing owner/repo/username")
 		}
 		apiPath = fmt.Sprintf("/repos/%s/%s/collaborators/%s/permission", owner, repo, username)
@@ -362,6 +363,20 @@ func (r *restBackendCaller) CallTool(ctx context.Context, toolName string, args 
 	if resp.StatusCode >= 400 {
 		logProxy.Printf("restBackendCaller: %s returned %d", toolName, resp.StatusCode)
 		return nil, fmt.Errorf("GitHub API returned %d", resp.StatusCode)
+	}
+
+	// For get_collaborator_permission, log the resolved permission level for observability
+	if toolName == "get_collaborator_permission" {
+		var permResp map[string]interface{}
+		if jsonErr := json.Unmarshal(body, &permResp); jsonErr == nil {
+			if perm, ok := permResp["permission"].(string); ok {
+				logProxy.Printf("restBackendCaller: get_collaborator_permission → permission=%q (HTTP %d)", perm, resp.StatusCode)
+			} else {
+				logProxy.Printf("restBackendCaller: get_collaborator_permission → HTTP %d, permission field missing from response", resp.StatusCode)
+			}
+		} else {
+			logProxy.Printf("restBackendCaller: get_collaborator_permission → HTTP %d, %d bytes (JSON parse failed: %v)", resp.StatusCode, len(body), jsonErr)
+		}
 	}
 
 	// Wrap in MCP response format: {content: [{type: "text", text: "..."}]}

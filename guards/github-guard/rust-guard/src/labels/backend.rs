@@ -481,8 +481,17 @@ pub fn get_collaborator_permission_with_callback(
     username: &str,
 ) -> Option<CollaboratorPermission> {
     if owner.is_empty() || repo.is_empty() || username.is_empty() {
+        crate::log_warn(&format!(
+            "get_collaborator_permission: skipping lookup — owner={:?} repo={:?} username={:?} (empty field)",
+            owner, repo, username
+        ));
         return None;
     }
+
+    crate::log_debug(&format!(
+        "get_collaborator_permission: fetching permission for {}/{} user {}",
+        owner, repo, username
+    ));
 
     let args = serde_json::json!({
         "owner": owner,
@@ -495,11 +504,44 @@ pub fn get_collaborator_permission_with_callback(
 
     let len = match callback("get_collaborator_permission", &args_str, &mut result_buffer) {
         Ok(len) if len > 0 => len,
-        _ => return None,
+        Ok(_) => {
+            crate::log_warn(&format!(
+                "get_collaborator_permission: empty response for {}/{} user {}",
+                owner, repo, username
+            ));
+            return None;
+        }
+        Err(code) => {
+            crate::log_warn(&format!(
+                "get_collaborator_permission: callback failed for {}/{} user {} (error code {})",
+                owner, repo, username, code
+            ));
+            return None;
+        }
     };
 
-    let response_str = std::str::from_utf8(&result_buffer[..len]).ok()?;
-    let response = serde_json::from_str::<Value>(response_str).ok()?;
+    let response_str = match std::str::from_utf8(&result_buffer[..len]) {
+        Ok(s) => s,
+        Err(e) => {
+            crate::log_warn(&format!(
+                "get_collaborator_permission: response is not valid UTF-8 for {}/{} user {}: {}",
+                owner, repo, username, e
+            ));
+            return None;
+        }
+    };
+
+    let response = match serde_json::from_str::<Value>(response_str) {
+        Ok(v) => v,
+        Err(e) => {
+            crate::log_warn(&format!(
+                "get_collaborator_permission: failed to parse JSON response for {}/{} user {}: {}",
+                owner, repo, username, e
+            ));
+            return None;
+        }
+    };
+
     let data = super::extract_mcp_response(&response);
 
     let permission = data
@@ -512,6 +554,11 @@ pub fn get_collaborator_permission_with_callback(
         .and_then(|u| u.get("login"))
         .and_then(|v| v.as_str())
         .map(String::from);
+
+    crate::log_info(&format!(
+        "get_collaborator_permission: {}/{} user {} → permission={:?} login={:?}",
+        owner, repo, username, permission, login
+    ));
 
     Some(CollaboratorPermission { permission, login })
 }

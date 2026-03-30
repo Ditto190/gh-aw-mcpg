@@ -261,6 +261,7 @@ func (g *guardBackendCaller) CallTool(ctx context.Context, toolName string, args
 func (g *guardBackendCaller) callCollaboratorPermission(ctx context.Context, args interface{}) (interface{}, error) {
 	argsMap, ok := args.(map[string]interface{})
 	if !ok {
+		logUnified.Printf("get_collaborator_permission: unexpected args type %T, expected map[string]interface{}", args)
 		return nil, fmt.Errorf("get_collaborator_permission: unexpected args type: %T", args)
 	}
 
@@ -269,12 +270,13 @@ func (g *guardBackendCaller) callCollaboratorPermission(ctx context.Context, arg
 	username, _ := argsMap["username"].(string)
 
 	if owner == "" || repo == "" || username == "" {
+		logUnified.Printf("get_collaborator_permission: missing required args (owner=%q repo=%q username=%q)", owner, repo, username)
 		return nil, fmt.Errorf("get_collaborator_permission: missing owner/repo/username")
 	}
 
 	token := lookupEnrichmentToken()
 	if token == "" {
-		logUnified.Printf("get_collaborator_permission: no GitHub token available, skipping")
+		logUnified.Printf("get_collaborator_permission: no GitHub token available for %s/%s user %s, skipping", owner, repo, username)
 		return nil, fmt.Errorf("get_collaborator_permission: no GitHub token available")
 	}
 
@@ -282,10 +284,11 @@ func (g *guardBackendCaller) callCollaboratorPermission(ctx context.Context, arg
 	path := fmt.Sprintf("/repos/%s/%s/collaborators/%s/permission", owner, repo, username)
 	url := apiURL + path
 
-	logUnified.Printf("get_collaborator_permission: GET %s", path)
+	logUnified.Printf("get_collaborator_permission: GET %s (for %s/%s user %s)", path, owner, repo, username)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
+		logUnified.Printf("get_collaborator_permission: failed to create request for %s/%s user %s: %v", owner, repo, username, err)
 		return nil, fmt.Errorf("get_collaborator_permission: failed to create request: %w", err)
 	}
 	req.Header.Set("Authorization", "token "+token)
@@ -293,18 +296,32 @@ func (g *guardBackendCaller) callCollaboratorPermission(ctx context.Context, arg
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
+		logUnified.Printf("get_collaborator_permission: REST call failed for %s/%s user %s: %v", owner, repo, username, err)
 		return nil, fmt.Errorf("get_collaborator_permission: REST call failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
+		logUnified.Printf("get_collaborator_permission: failed to read response body for %s/%s user %s: %v", owner, repo, username, err)
 		return nil, fmt.Errorf("get_collaborator_permission: failed to read response: %w", err)
 	}
 
 	if resp.StatusCode >= 400 {
 		logUnified.Printf("get_collaborator_permission: GitHub API returned %d for %s/%s user %s", resp.StatusCode, owner, repo, username)
 		return nil, fmt.Errorf("get_collaborator_permission: GitHub API returned %d", resp.StatusCode)
+	}
+
+	// Log the resulting permission level for observability
+	var permResp map[string]interface{}
+	if jsonErr := json.Unmarshal(body, &permResp); jsonErr == nil {
+		if perm, ok := permResp["permission"].(string); ok {
+			logUnified.Printf("get_collaborator_permission: %s/%s user %s → permission=%q (HTTP %d)", owner, repo, username, perm, resp.StatusCode)
+		} else {
+			logUnified.Printf("get_collaborator_permission: %s/%s user %s → HTTP %d, permission field missing from response", owner, repo, username, resp.StatusCode)
+		}
+	} else {
+		logUnified.Printf("get_collaborator_permission: %s/%s user %s → HTTP %d, %d bytes (JSON parse failed: %v)", owner, repo, username, resp.StatusCode, len(body), jsonErr)
 	}
 
 	// Wrap in MCP response format so the WASM guard can parse it consistently

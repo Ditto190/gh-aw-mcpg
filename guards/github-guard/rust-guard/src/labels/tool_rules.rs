@@ -144,13 +144,27 @@ pub fn apply_tool_labels(
                         // gives less than writer integrity (e.g., CONTRIBUTOR for org admins)
                         if floor.len() < 3 {
                             if let Some(ref login) = info.author_login {
+                                crate::log_info(&format!(
+                                    "issue_read {}/{}#{}: author_association floor insufficient (len={}), checking collaborator permission for {}",
+                                    owner, repo, issue_num, floor.len(), login
+                                ));
                                 if let Some(collab) = super::backend::get_collaborator_permission(&owner, &repo, login) {
                                     let perm_floor = collaborator_permission_floor(
                                         repo_id,
                                         collab.permission.as_deref(),
                                         ctx,
                                     );
-                                    floor = max_integrity(repo_id, floor, perm_floor, ctx);
+                                    let merged = max_integrity(repo_id, floor, perm_floor, ctx);
+                                    crate::log_info(&format!(
+                                        "issue_read {}/{}#{}: collaborator permission={:?} → merged floor len={}",
+                                        owner, repo, issue_num, collab.permission, merged.len()
+                                    ));
+                                    floor = merged;
+                                } else {
+                                    crate::log_info(&format!(
+                                        "issue_read {}/{}#{}: collaborator permission lookup returned None for {}, keeping author_association floor",
+                                        owner, repo, issue_num, login
+                                    ));
                                 }
                             }
                         }
@@ -255,13 +269,27 @@ pub fn apply_tool_labels(
                         // gives less than writer integrity (e.g., CONTRIBUTOR for org admins)
                         if integrity.len() < 3 {
                             if let Some(ref login) = facts.author_login {
+                                crate::log_info(&format!(
+                                    "pull_request_read {}/{}#{}: author_association integrity insufficient (len={}), checking collaborator permission for {}",
+                                    owner, repo, number, integrity.len(), login
+                                ));
                                 if let Some(collab) = super::backend::get_collaborator_permission(&owner, &repo, login) {
                                     let perm_floor = collaborator_permission_floor(
                                         repo_id,
                                         collab.permission.as_deref(),
                                         ctx,
                                     );
-                                    integrity = max_integrity(repo_id, integrity, perm_floor, ctx);
+                                    let merged = max_integrity(repo_id, integrity, perm_floor, ctx);
+                                    crate::log_info(&format!(
+                                        "pull_request_read {}/{}#{}: collaborator permission={:?} → merged integrity len={}",
+                                        owner, repo, number, collab.permission, merged.len()
+                                    ));
+                                    integrity = merged;
+                                } else {
+                                    crate::log_info(&format!(
+                                        "pull_request_read {}/{}#{}: collaborator permission lookup returned None for {}, keeping author_association integrity",
+                                        owner, repo, number, login
+                                    ));
                                 }
                             }
                         }
