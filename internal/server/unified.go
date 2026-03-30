@@ -26,7 +26,7 @@ const wasmGuardsDirEnvVar = "MCP_GATEWAY_WASM_GUARDS_DIR"
 const MCPProtocolVersion = mcp.MCPProtocolVersion
 
 // MCPGatewaySpecVersion is the MCP Gateway Specification version this implementation conforms to
-const MCPGatewaySpecVersion = "1.8.0"
+const MCPGatewaySpecVersion = "1.9.0"
 
 // Session represents a MCPG session
 type Session struct {
