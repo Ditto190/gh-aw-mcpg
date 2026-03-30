@@ -171,6 +171,16 @@ pub fn apply_tool_labels(
             secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
         }
 
+        // === Modifying Repository Operations (blocked: unsupported gh repo operations) ===
+        "archive_repository" | "unarchive_repository" | "rename_repository" => {
+            // All modifying `gh repo` operations (archive, unarchive, rename) are treated as
+            // unsupported for automated agents — the same policy as transfer_repository.
+            // Blocking is enforced in label_resource via is_blocked_tool(); this arm applies
+            // repo-visibility secrecy so the resource is correctly classified before the
+            // integrity override happens in label_resource.
+            secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
+        }
+
         // Search issues: extract repo scope from query or tool_args when available
         "search_issues" => {
             let (s_owner, s_repo, s_repo_id) = resolve_search_scope(tool_args, &owner, &repo);
