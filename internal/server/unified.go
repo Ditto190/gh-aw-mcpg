@@ -4,7 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -237,6 +241,11 @@ type guardBackendCaller struct {
 }
 
 func (g *guardBackendCaller) CallTool(ctx context.Context, toolName string, args interface{}) (interface{}, error) {
+	// Intercept synthetic tools that require direct REST API calls
+	if toolName == "get_collaborator_permission" {
+		return g.callCollaboratorPermission(ctx, args)
+	}
+
 	// Make a read-only call to the backend for metadata
 	// This bypasses DIFC checks since it's internal to the guard
 	log.Printf("[DIFC] Guard calling backend %s tool %s for metadata", g.serverID, toolName)
@@ -244,6 +253,109 @@ func (g *guardBackendCaller) CallTool(ctx context.Context, toolName string, args
 	sessionID := SessionIDFromContext(g.ctx)
 
 	return executeBackendToolCall(g.ctx, g.server.launcher, g.serverID, sessionID, toolName, args)
+}
+
+// callCollaboratorPermission makes a direct REST API call to GitHub to get a user's
+// effective permission level for a repository. This is more accurate than author_association
+// because it includes inherited org permissions.
+func (g *guardBackendCaller) callCollaboratorPermission(ctx context.Context, args interface{}) (interface{}, error) {
+	argsMap, ok := args.(map[string]interface{})
+	if !ok {
+		logUnified.Printf("get_collaborator_permission: unexpected args type %T, expected map[string]interface{}", args)
+		return nil, fmt.Errorf("get_collaborator_permission: unexpected args type: %T", args)
+	}
+
+	owner, _ := argsMap["owner"].(string)
+	repo, _ := argsMap["repo"].(string)
+	username, _ := argsMap["username"].(string)
+
+	if owner == "" || repo == "" || username == "" {
+		logUnified.Printf("get_collaborator_permission: missing required args (owner=%q repo=%q username=%q)", owner, repo, username)
+		return nil, fmt.Errorf("get_collaborator_permission: missing owner/repo/username")
+	}
+
+	token := lookupEnrichmentToken()
+	if token == "" {
+		logUnified.Printf("get_collaborator_permission: no GitHub token available for %s/%s user %s, skipping", owner, repo, username)
+		return nil, fmt.Errorf("get_collaborator_permission: no GitHub token available")
+	}
+
+	apiURL := lookupGitHubAPIBaseURL()
+	path := fmt.Sprintf("/repos/%s/%s/collaborators/%s/permission", owner, repo, username)
+	url := apiURL + path
+
+	logUnified.Printf("get_collaborator_permission: GET %s (for %s/%s user %s)", path, owner, repo, username)
+
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		logUnified.Printf("get_collaborator_permission: failed to create request for %s/%s user %s: %v", owner, repo, username, err)
+		return nil, fmt.Errorf("get_collaborator_permission: failed to create request: %w", err)
+	}
+	req.Header.Set("Authorization", "token "+token)
+	req.Header.Set("Accept", "application/vnd.github+json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		logUnified.Printf("get_collaborator_permission: REST call failed for %s/%s user %s: %v", owner, repo, username, err)
+		return nil, fmt.Errorf("get_collaborator_permission: REST call failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		logUnified.Printf("get_collaborator_permission: failed to read response body for %s/%s user %s: %v", owner, repo, username, err)
+		return nil, fmt.Errorf("get_collaborator_permission: failed to read response: %w", err)
+	}
+
+	if resp.StatusCode >= 400 {
+		logUnified.Printf("get_collaborator_permission: GitHub API returned %d for %s/%s user %s", resp.StatusCode, owner, repo, username)
+		return nil, fmt.Errorf("get_collaborator_permission: GitHub API returned %d", resp.StatusCode)
+	}
+
+	// Log the resulting permission level for observability
+	var permResp map[string]interface{}
+	if jsonErr := json.Unmarshal(body, &permResp); jsonErr == nil {
+		if perm, ok := permResp["permission"].(string); ok {
+			logUnified.Printf("get_collaborator_permission: %s/%s user %s → permission=%q (HTTP %d)", owner, repo, username, perm, resp.StatusCode)
+		} else {
+			logUnified.Printf("get_collaborator_permission: %s/%s user %s → HTTP %d, permission field missing from response", owner, repo, username, resp.StatusCode)
+		}
+	} else {
+		logUnified.Printf("get_collaborator_permission: %s/%s user %s → HTTP %d, %d bytes (JSON parse failed: %v)", owner, repo, username, resp.StatusCode, len(body), jsonErr)
+	}
+
+	// Wrap in MCP response format so the WASM guard can parse it consistently
+	mcpResp := map[string]interface{}{
+		"content": []map[string]interface{}{
+			{"type": "text", "text": string(body)},
+		},
+	}
+	return mcpResp, nil
+}
+
+// lookupEnrichmentToken searches environment variables for a GitHub token
+// suitable for enrichment API calls.
+func lookupEnrichmentToken() string {
+	for _, key := range []string{
+		"GITHUB_MCP_SERVER_TOKEN",
+		"GITHUB_TOKEN",
+		"GITHUB_PERSONAL_ACCESS_TOKEN",
+		"GH_TOKEN",
+	} {
+		if v := strings.TrimSpace(os.Getenv(key)); v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+// lookupGitHubAPIBaseURL returns the GitHub API base URL from environment
+// or defaults to https://api.github.com.
+func lookupGitHubAPIBaseURL() string {
+	if v := os.Getenv("GITHUB_API_URL"); v != "" {
+		return strings.TrimRight(v, "/")
+	}
+	return "https://api.github.com"
 }
 
 // newErrorCallToolResult creates a standard error CallToolResult with the error message

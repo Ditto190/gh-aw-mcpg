@@ -7,12 +7,12 @@ use serde_json::Value;
 
 use super::constants::{field_names, SENSITIVE_FILE_KEYWORDS, SENSITIVE_FILE_PATTERNS};
 use super::helpers::{
-    author_association_floor_from_str, ensure_integrity_baseline, extract_number_as_string,
-    extract_repo_info, extract_repo_info_from_search_query, format_repo_id,
-    is_configured_trusted_bot, is_default_branch_commit_context, is_default_branch_ref,
-    is_trusted_first_party_bot, is_trusted_user, max_integrity, merged_integrity,
-    policy_private_scope_label, private_user_label, project_github_label, reader_integrity,
-    writer_integrity, PolicyContext,
+    author_association_floor_from_str, collaborator_permission_floor, ensure_integrity_baseline,
+    extract_number_as_string, extract_repo_info, extract_repo_info_from_search_query,
+    format_repo_id, is_configured_trusted_bot, is_default_branch_commit_context,
+    is_default_branch_ref, is_trusted_first_party_bot, is_trusted_user, max_integrity,
+    merged_integrity, policy_private_scope_label, private_user_label, project_github_label,
+    reader_integrity, writer_integrity, PolicyContext,
 };
 
 fn apply_repo_visibility_secrecy(
@@ -140,6 +140,38 @@ pub fn apply_tool_labels(
                                 );
                             }
                         }
+                        // Supplement with collaborator permission when author_association
+                        // gives less than writer integrity (e.g., CONTRIBUTOR for org admins).
+                        // Only needed for org-owned repos where inherited permissions exist.
+                        if floor.len() < 3 {
+                            let is_org = super::backend::is_repo_org_owned(&owner, &repo).unwrap_or(false);
+                            if is_org {
+                                if let Some(ref login) = info.author_login {
+                                    crate::log_info(&format!(
+                                        "issue_read {}/{}#{}: author_association floor insufficient (len={}), checking collaborator permission for {}",
+                                        owner, repo, issue_num, floor.len(), login
+                                    ));
+                                    if let Some(collab) = super::backend::get_collaborator_permission(&owner, &repo, login) {
+                                        let perm_floor = collaborator_permission_floor(
+                                            repo_id,
+                                            collab.permission.as_deref(),
+                                            ctx,
+                                        );
+                                        let merged = max_integrity(repo_id, floor, perm_floor, ctx);
+                                        crate::log_info(&format!(
+                                            "issue_read {}/{}#{}: collaborator permission={:?} → merged floor len={}",
+                                            owner, repo, issue_num, collab.permission, merged.len()
+                                        ));
+                                        floor = merged;
+                                    } else {
+                                        crate::log_info(&format!(
+                                            "issue_read {}/{}#{}: collaborator permission lookup returned None for {}, keeping author_association floor",
+                                            owner, repo, issue_num, login
+                                        ));
+                                    }
+                                }
+                            }
+                        }
                         integrity = max_integrity(repo_id, integrity, floor, ctx);
                     }
                 }
@@ -234,6 +266,39 @@ pub fn apply_tool_labels(
                                     writer_integrity(repo_id, ctx),
                                     ctx,
                                 );
+                            }
+                        }
+
+                        // Supplement with collaborator permission when author_association
+                        // gives less than writer integrity (e.g., CONTRIBUTOR for org admins).
+                        // Only needed for org-owned repos where inherited permissions exist.
+                        if integrity.len() < 3 {
+                            let is_org = super::backend::is_repo_org_owned(&owner, &repo).unwrap_or(false);
+                            if is_org {
+                                if let Some(ref login) = facts.author_login {
+                                    crate::log_info(&format!(
+                                        "pull_request_read {}/{}#{}: author_association integrity insufficient (len={}), checking collaborator permission for {}",
+                                        owner, repo, number, integrity.len(), login
+                                    ));
+                                    if let Some(collab) = super::backend::get_collaborator_permission(&owner, &repo, login) {
+                                        let perm_floor = collaborator_permission_floor(
+                                            repo_id,
+                                            collab.permission.as_deref(),
+                                            ctx,
+                                        );
+                                        let merged = max_integrity(repo_id, integrity, perm_floor, ctx);
+                                        crate::log_info(&format!(
+                                            "pull_request_read {}/{}#{}: collaborator permission={:?} → merged integrity len={}",
+                                            owner, repo, number, collab.permission, merged.len()
+                                        ));
+                                        integrity = merged;
+                                    } else {
+                                        crate::log_info(&format!(
+                                            "pull_request_read {}/{}#{}: collaborator permission lookup returned None for {}, keeping author_association integrity",
+                                            owner, repo, number, login
+                                        ));
+                                    }
+                                }
                             }
                         }
 
