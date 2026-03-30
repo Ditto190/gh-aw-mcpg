@@ -10,7 +10,6 @@
 //!   target/wasm32-wasip1/release/github_guard.wasm
 
 mod labels;
-mod permissions;
 mod tools;
 
 use labels::constants::policy_integrity;
