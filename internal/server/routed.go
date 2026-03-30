@@ -88,7 +88,7 @@ func CreateHTTPServerForRoutedMode(addr string, unifiedServer *UnifiedServer, ap
 
 			// Return a cached filtered proxy server for this backend and session
 			// This ensures the same server instance is reused for all requests in a session
-			sessionID := r.Context().Value(SessionIDContextKey).(string)
+			sessionID := SessionIDFromContext(r.Context())
 			return serverCache.getOrCreate(backendID, sessionID, func() *sdk.Server {
 				return createFilteredServer(unifiedServer, backendID)
 			})

@@ -241,13 +241,9 @@ func (g *guardBackendCaller) CallTool(ctx context.Context, toolName string, args
 	// This bypasses DIFC checks since it's internal to the guard
 	log.Printf("[DIFC] Guard calling backend %s tool %s for metadata", g.serverID, toolName)
 
-	// Get or launch backend connection (use session-aware connection for stateful backends)
-	sessionID := g.ctx.Value(SessionIDContextKey)
-	if sessionID == nil {
-		sessionID = "default"
-	}
+	sessionID := SessionIDFromContext(g.ctx)
 
-	return executeBackendToolCall(g.ctx, g.server.launcher, g.serverID, sessionID.(string), toolName, args)
+	return executeBackendToolCall(g.ctx, g.server.launcher, g.serverID, sessionID, toolName, args)
 }
 
 // newErrorCallToolResult creates a standard error CallToolResult with the error message

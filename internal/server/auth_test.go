@@ -33,7 +33,7 @@ func TestAuthMiddleware(t *testing.T) {
 			authHeader:         "",
 			expectStatusCode:   http.StatusUnauthorized,
 			expectNextCalled:   false,
-			expectErrorMessage: "Unauthorized: missing Authorization header",
+			expectErrorMessage: "missing Authorization header",
 		},
 		{
 			name:               "InvalidAPIKey",
@@ -41,7 +41,7 @@ func TestAuthMiddleware(t *testing.T) {
 			authHeader:         "wrong-key",
 			expectStatusCode:   http.StatusUnauthorized,
 			expectNextCalled:   false,
-			expectErrorMessage: "Unauthorized: invalid API key",
+			expectErrorMessage: "invalid API key",
 		},
 		{
 			name:               "EmptyAPIKeyWithEmptyHeader",
@@ -49,7 +49,7 @@ func TestAuthMiddleware(t *testing.T) {
 			authHeader:         "",
 			expectStatusCode:   http.StatusUnauthorized,
 			expectNextCalled:   false,
-			expectErrorMessage: "Unauthorized: missing Authorization header",
+			expectErrorMessage: "missing Authorization header",
 		},
 		{
 			name:               "EmptyConfiguredKeyWithValidHeader",
@@ -57,7 +57,7 @@ func TestAuthMiddleware(t *testing.T) {
 			authHeader:         "some-key",
 			expectStatusCode:   http.StatusUnauthorized,
 			expectNextCalled:   false,
-			expectErrorMessage: "Unauthorized: invalid API key",
+			expectErrorMessage: "invalid API key",
 		},
 		{
 			name:               "CaseSensitiveKey",
@@ -65,7 +65,7 @@ func TestAuthMiddleware(t *testing.T) {
 			authHeader:         "myapikey",
 			expectStatusCode:   http.StatusUnauthorized,
 			expectNextCalled:   false,
-			expectErrorMessage: "Unauthorized: invalid API key",
+			expectErrorMessage: "invalid API key",
 		},
 		{
 			name:               "WhitespaceNotTrimmed",
@@ -73,7 +73,7 @@ func TestAuthMiddleware(t *testing.T) {
 			authHeader:         " test-key ",
 			expectStatusCode:   http.StatusUnauthorized,
 			expectNextCalled:   false,
-			expectErrorMessage: "Unauthorized: invalid API key",
+			expectErrorMessage: "invalid API key",
 		},
 		{
 			name:               "BearerSchemeNotSupported",
@@ -81,7 +81,7 @@ func TestAuthMiddleware(t *testing.T) {
 			authHeader:         "Bearer test-key",
 			expectStatusCode:   http.StatusUnauthorized,
 			expectNextCalled:   false,
-			expectErrorMessage: "Unauthorized: invalid API key",
+			expectErrorMessage: "invalid API key",
 		},
 		{
 			name:               "LongAPIKey",

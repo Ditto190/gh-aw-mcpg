@@ -86,25 +86,25 @@ func TestHandleClose_MethodValidation(t *testing.T) {
 			name:           "GET request returns 405",
 			method:         http.MethodGet,
 			expectedStatus: http.StatusMethodNotAllowed,
-			expectedBody:   "Method not allowed",
+			expectedBody:   "method not allowed",
 		},
 		{
 			name:           "PUT request returns 405",
 			method:         http.MethodPut,
 			expectedStatus: http.StatusMethodNotAllowed,
-			expectedBody:   "Method not allowed",
+			expectedBody:   "method not allowed",
 		},
 		{
 			name:           "DELETE request returns 405",
 			method:         http.MethodDelete,
 			expectedStatus: http.StatusMethodNotAllowed,
-			expectedBody:   "Method not allowed",
+			expectedBody:   "method not allowed",
 		},
 		{
 			name:           "PATCH request returns 405",
 			method:         http.MethodPatch,
 			expectedStatus: http.StatusMethodNotAllowed,
-			expectedBody:   "Method not allowed",
+			expectedBody:   "method not allowed",
 		},
 	}
 

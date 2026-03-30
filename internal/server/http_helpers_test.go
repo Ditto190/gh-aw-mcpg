@@ -502,7 +502,7 @@ func TestWrapWithMiddleware(t *testing.T) {
 			shutdown:           false,
 			expectStatusCode:   http.StatusUnauthorized,
 			expectNextCalled:   false,
-			expectErrorMessage: "Unauthorized",
+			expectErrorMessage: "unauthorized",
 		},
 		{
 			name:               "WithAuth_MissingKey_Unauthorized",
@@ -511,7 +511,7 @@ func TestWrapWithMiddleware(t *testing.T) {
 			shutdown:           false,
 			expectStatusCode:   http.StatusUnauthorized,
 			expectNextCalled:   false,
-			expectErrorMessage: "Unauthorized",
+			expectErrorMessage: "unauthorized",
 		},
 		{
 			name:               "Shutdown_RejectsRequest",

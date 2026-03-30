@@ -600,6 +600,26 @@ func parseLabelAgentResponse(resultJSON []byte) (*LabelAgentResult, error) {
 	return &result, nil
 }
 
+// callWasmGuardFunction serialises WASM access, sets the backend reference, marshals
+// inputData, logs the input, calls the named WASM export, and returns the raw result.
+// All three public dispatch methods (LabelAgent, LabelResource, LabelResponse) share
+// this preamble; keeping it in one place ensures locking and backend-update logic
+// cannot drift between them.
+func (g *WasmGuard) callWasmGuardFunction(ctx context.Context, funcName string, backend BackendCaller, inputData map[string]interface{}) ([]byte, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	g.backend = backend
+
+	inputJSON, err := json.Marshal(inputData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal %s input: %w", funcName, err)
+	}
+	logWasm.Printf("%s input JSON (%d bytes): %s", funcName, len(inputJSON), string(inputJSON))
+
+	return g.callWasmFunction(ctx, funcName, inputJSON)
+}
+
 // LabelAgent calls the WASM module's label_agent function.
 func (g *WasmGuard) LabelAgent(ctx context.Context, policy interface{}, backend BackendCaller, caps *difc.Capabilities) (*LabelAgentResult, error) {
 	logWasm.Printf("LabelAgent called: guard=%s", g.name)
@@ -608,13 +628,9 @@ func (g *WasmGuard) LabelAgent(ctx context.Context, policy interface{}, backend 
 		return nil, fmt.Errorf("WASM guard does not export label_agent")
 	}
 
-	// Serialize access to the WASM module
-	g.mu.Lock()
-	defer g.mu.Unlock()
-
-	// Update backend caller for this request
-	g.backend = backend
-
+	// Normalisation and payload-build operate only on the caller-supplied `policy`
+	// argument and do not access any g.* fields, so they are safe to run outside
+	// the lock that callWasmGuardFunction acquires.
 	normalizedPolicy, err := normalizePolicyPayload(policy)
 	if err != nil {
 		logWasm.Printf("LabelAgent normalizePolicyPayload failed: guard=%s, error=%v", g.name, err)
@@ -634,14 +650,7 @@ func (g *WasmGuard) LabelAgent(ctx context.Context, policy interface{}, backend 
 		return nil, err
 	}
 
-	inputJSON, err := json.Marshal(input)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal label_agent input: %w", err)
-	}
-
-	logWasm.Printf("LabelAgent input JSON (%d bytes): %s", len(inputJSON), string(inputJSON))
-
-	resultJSON, err := g.callWasmFunction(ctx, "label_agent", inputJSON)
+	resultJSON, err := g.callWasmGuardFunction(ctx, "label_agent", backend, input)
 	if err != nil {
 		logWasm.Printf("LabelAgent callWasmFunction failed: guard=%s, error=%v", g.name, err)
 		return nil, err
@@ -673,13 +682,6 @@ func (g *WasmGuard) LabelAgent(ctx context.Context, policy interface{}, backend 
 func (g *WasmGuard) LabelResource(ctx context.Context, toolName string, args interface{}, backend BackendCaller, caps *difc.Capabilities) (*difc.LabeledResource, difc.OperationType, error) {
 	logWasm.Printf("LabelResource called: toolName=%s, args=%+v", toolName, args)
 
-	// Serialize access to the WASM module
-	g.mu.Lock()
-	defer g.mu.Unlock()
-
-	// Update backend caller for this request
-	g.backend = backend
-
 	// Prepare input
 	input := map[string]interface{}{
 		"tool_name": toolName,
@@ -689,15 +691,7 @@ func (g *WasmGuard) LabelResource(ctx context.Context, toolName string, args int
 		input["capabilities"] = caps
 	}
 
-	inputJSON, err := json.Marshal(input)
-	if err != nil {
-		return nil, difc.OperationWrite, fmt.Errorf("failed to marshal input: %w", err)
-	}
-
-	logWasm.Printf("LabelResource input JSON (%d bytes): %s", len(inputJSON), string(inputJSON))
-
-	// Call WASM function
-	resultJSON, err := g.callWasmFunction(ctx, "label_resource", inputJSON)
+	resultJSON, err := g.callWasmGuardFunction(ctx, "label_resource", backend, input)
 	if err != nil {
 		return nil, difc.OperationWrite, err
 	}
@@ -715,13 +709,6 @@ func (g *WasmGuard) LabelResource(ctx context.Context, toolName string, args int
 func (g *WasmGuard) LabelResponse(ctx context.Context, toolName string, result interface{}, backend BackendCaller, caps *difc.Capabilities) (difc.LabeledData, error) {
 	logWasm.Printf("LabelResponse called: toolName=%s", toolName)
 
-	// Serialize access to the WASM module
-	g.mu.Lock()
-	defer g.mu.Unlock()
-
-	// Update backend caller for this request
-	g.backend = backend
-
 	// Prepare input
 	input := map[string]interface{}{
 		"tool_name":   toolName,
@@ -738,13 +725,7 @@ func (g *WasmGuard) LabelResponse(ctx context.Context, toolName string, result i
 		input["capabilities"] = caps
 	}
 
-	inputJSON, err := json.Marshal(input)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal input: %w", err)
-	}
-
-	// Call WASM function
-	resultJSON, err := g.callWasmFunction(ctx, "label_response", inputJSON)
+	resultJSON, err := g.callWasmGuardFunction(ctx, "label_response", backend, input)
 	if err != nil {
 		return nil, err
 	}

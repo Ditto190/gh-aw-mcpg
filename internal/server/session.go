@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"time"
@@ -26,17 +25,21 @@ func NewSession(sessionID, token string) *Session {
 	}
 }
 
+// SessionIDFromContext returns the MCP session ID stored in ctx, or "default" if the
+// context contains no session ID (or one of the wrong type). This is the canonical
+// place in the server package that reads SessionIDContextKey directly.
+func SessionIDFromContext(ctx context.Context) string {
+	if id, ok := ctx.Value(SessionIDContextKey).(string); ok && id != "" {
+		return id
+	}
+	return "default"
+}
+
 // getSessionID extracts the MCP session ID from the context
 func (us *UnifiedServer) getSessionID(ctx context.Context) string {
-	if sessionID, ok := ctx.Value(SessionIDContextKey).(string); ok && sessionID != "" {
-		logSession.Printf("Extracted session ID from context: %s", auth.TruncateSessionID(sessionID))
-		return sessionID
-	}
-	// No session ID in context - this happens before the SDK assigns one
-	// For now, use "default" as a placeholder for single-client scenarios
-	// In production multi-agent scenarios, the SDK will provide session IDs after initialize
-	log.Printf("No session ID in context, using 'default' (this is normal before SDK session is established)")
-	return "default"
+	sessionID := SessionIDFromContext(ctx)
+	logSession.Printf("Extracted session ID from context: %s", auth.TruncateSessionID(sessionID))
+	return sessionID
 }
 
 // ensureSessionDirectory creates the session subdirectory in the payload directory if it doesn't exist

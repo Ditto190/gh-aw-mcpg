@@ -343,10 +343,9 @@ func TestCreateHTTPServerForMCP_Close(t *testing.T) {
 			if tt.wantError {
 				switch tt.wantStatusCode {
 				case http.StatusMethodNotAllowed:
-					// http.Error writes plain text for 405
-					assert.Contains(t, w.Body.String(), "Method not allowed")
+					assert.Contains(t, w.Body.String(), "method not allowed")
 				case http.StatusUnauthorized:
-					assert.Contains(t, w.Body.String(), "Unauthorized")
+					assert.Contains(t, w.Body.String(), "unauthorized")
 				}
 			} else {
 				// Success response should be JSON
