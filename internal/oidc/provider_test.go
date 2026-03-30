@@ -28,7 +28,10 @@ func makeJWT(exp int64) string {
 		"exp": exp,
 		"iat": time.Now().Unix(),
 	}
-	claimsJSON, _ := json.Marshal(claims)
+	claimsJSON, err := json.Marshal(claims)
+	if err != nil {
+		panic("makeJWT: unexpected json.Marshal error: " + err.Error())
+	}
 	payload := base64.RawURLEncoding.EncodeToString(claimsJSON)
 	return fmt.Sprintf("%s.%s.dummysignature", header, payload)
 }
@@ -260,7 +263,10 @@ func TestProvider_JWTWithoutExpiry(t *testing.T) {
 		"iss": "https://token.actions.githubusercontent.com",
 		"sub": "repo:owner/repo:ref:refs/heads/main",
 	}
-	claimsJSON, _ := json.Marshal(claims)
+	claimsJSON, err := json.Marshal(claims)
+	if err != nil {
+		panic("TestProvider_JWTWithoutExpiry: unexpected json.Marshal error: " + err.Error())
+	}
 	payload := base64.RawURLEncoding.EncodeToString(claimsJSON)
 	noExpToken := fmt.Sprintf("%s.%s.dummysignature", header, payload)
 

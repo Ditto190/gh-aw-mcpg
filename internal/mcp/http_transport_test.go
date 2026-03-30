@@ -1167,7 +1167,10 @@ func makeTestJWT(exp int64) string {
 		"exp": exp,
 		"iss": "https://token.actions.githubusercontent.com",
 	}
-	claimsJSON, _ := json.Marshal(claims)
+	claimsJSON, err := json.Marshal(claims)
+	if err != nil {
+		panic("makeTestJWT: unexpected json.Marshal error: " + err.Error())
+	}
 	payload := base64.RawURLEncoding.EncodeToString(claimsJSON)
 	return fmt.Sprintf("%s.%s.dummy", header, payload)
 }
