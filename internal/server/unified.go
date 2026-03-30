@@ -342,11 +342,8 @@ func lookupEnrichmentToken() string {
 		"GITHUB_PERSONAL_ACCESS_TOKEN",
 		"GH_TOKEN",
 	} {
-		if v := os.Getenv(key); v != "" {
-			v = strings.TrimSpace(v)
-			if v != "" {
-				return v
-			}
+		if v := strings.TrimSpace(os.Getenv(key)); v != "" {
+			return v
 		}
 	}
 	return ""
