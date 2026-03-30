@@ -41,7 +41,7 @@ func handleClose(unifiedServer *UnifiedServer) http.Handler {
 		// Only accept POST requests
 		if r.Method != http.MethodPost {
 			logHandlers.Printf("Close request rejected: invalid method=%s", r.Method)
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 			return
 		}
 

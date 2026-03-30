@@ -23,6 +23,16 @@ func writeJSONResponse(w http.ResponseWriter, statusCode int, body interface{}) 
 	httputil.WriteJSONResponse(w, statusCode, body)
 }
 
+// writeErrorResponse writes a JSON error response with a consistent shape.
+// All HTTP error paths in the server package should use this helper to ensure
+// clients always receive application/json rather than text/plain.
+func writeErrorResponse(w http.ResponseWriter, statusCode int, code, message string) {
+	writeJSONResponse(w, statusCode, map[string]string{
+		"error":   code,
+		"message": message,
+	})
+}
+
 // withResponseLogging wraps an http.Handler to log response bodies
 func withResponseLogging(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
