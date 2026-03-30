@@ -227,13 +227,14 @@ pub fn blocked_integrity(scope: &str, ctx: &PolicyContext) -> Vec<String> {
     )]
 }
 
+/// Returns true if `username` matches any entry in `list` (case-insensitive).
+fn username_in_list(username: &str, list: &[String]) -> bool {
+    list.iter().any(|u| u.eq_ignore_ascii_case(username))
+}
+
 /// Check if a username appears in the configured blocked-users list (case-insensitive).
 pub fn is_blocked_user(username: &str, ctx: &PolicyContext) -> bool {
-    if ctx.blocked_users.is_empty() {
-        return false;
-    }
-    let lower = username.to_lowercase();
-    ctx.blocked_users.iter().any(|u| u.to_lowercase() == lower)
+    username_in_list(username, &ctx.blocked_users)
 }
 
 /// Extract GitHub label names from a content item's `labels` array.
@@ -1353,11 +1354,7 @@ pub fn is_trusted_first_party_bot(username: &str) -> bool {
 /// the gateway configuration's `trustedBots` field. Comparison is case-insensitive.
 /// This list is additive and cannot remove entries from the built-in trusted bot list.
 pub fn is_configured_trusted_bot(username: &str, ctx: &PolicyContext) -> bool {
-    if ctx.trusted_bots.is_empty() {
-        return false;
-    }
-    let lower = username.to_lowercase();
-    ctx.trusted_bots.iter().any(|b| b.to_lowercase() == lower)
+    username_in_list(username, &ctx.trusted_bots)
 }
 
 /// Check if a user is in the gateway-configured trusted users list.
@@ -1367,11 +1364,7 @@ pub fn is_configured_trusted_bot(username: &str, ctx: &PolicyContext) -> bool {
 /// (writer) integrity regardless of their `author_association`. Comparison is
 /// case-insensitive. `blocked_users` takes precedence over `trusted_users`.
 pub fn is_trusted_user(username: &str, ctx: &PolicyContext) -> bool {
-    if ctx.trusted_users.is_empty() {
-        return false;
-    }
-    let lower = username.to_lowercase();
-    ctx.trusted_users.iter().any(|u| u.to_lowercase() == lower)
+    username_in_list(username, &ctx.trusted_users)
 }
 
 /// Check if a user appears to be a bot (broad detection).
