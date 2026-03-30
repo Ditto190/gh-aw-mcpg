@@ -73,17 +73,23 @@ func runDockerInspect(containerID, formatTemplate string) (string, error) {
 		return "", err
 	}
 
+	logDockerHelpers.Printf("Running docker inspect: containerID=%s, format=%s", containerID, formatTemplate)
+
 	cmd := exec.Command("docker", "inspect", "--format", formatTemplate, containerID)
 	output, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("docker inspect failed: %w", err)
 	}
 
-	return strings.TrimSpace(string(output)), nil
+	result := strings.TrimSpace(string(output))
+	logDockerHelpers.Printf("Docker inspect succeeded: output_len=%d", len(result))
+	return result, nil
 }
 
 // checkPortMapping uses docker inspect to verify that the specified port is mapped
 func checkPortMapping(containerID, port string) (bool, error) {
+	logDockerHelpers.Printf("Checking port mapping: containerID=%s, port=%s", containerID, port)
+
 	output, err := runDockerInspect(containerID, "{{json .NetworkSettings.Ports}}")
 	if err != nil {
 		return false, err
@@ -94,7 +100,9 @@ func checkPortMapping(containerID, port string) (bool, error) {
 
 	// Check if the port is in the output with a host binding
 	// The format is like: {"8000/tcp":[{"HostIp":"0.0.0.0","HostPort":"8000"}]}
-	return strings.Contains(output, portKey) && strings.Contains(output, "HostPort"), nil
+	mapped := strings.Contains(output, portKey) && strings.Contains(output, "HostPort")
+	logDockerHelpers.Printf("Port mapping check result: port=%s, mapped=%v", portKey, mapped)
+	return mapped, nil
 }
 
 // checkStdinInteractive uses docker inspect to verify the container was started with -i flag
@@ -104,7 +112,9 @@ func checkStdinInteractive(containerID string) bool {
 		return false
 	}
 
-	return output == "true"
+	interactive := output == "true"
+	logDockerHelpers.Printf("Stdin interactive check: containerID=%s, interactive=%v", containerID, interactive)
+	return interactive
 }
 
 // checkLogDirMounted uses docker inspect to verify the log directory is mounted
@@ -115,7 +125,9 @@ func checkLogDirMounted(containerID, logDir string) bool {
 	}
 
 	// Check if the log directory is in the mounts
-	return strings.Contains(output, logDir)
+	mounted := strings.Contains(output, logDir)
+	logDockerHelpers.Printf("Log dir mount check: containerID=%s, logDir=%s, mounted=%v", containerID, logDir, mounted)
+	return mounted
 }
 
 // ExpandEnvArgs expands Docker -e flags that reference environment variables.
