@@ -773,3 +773,103 @@ func TestLauncher_MixedAuthTypes(t *testing.T) {
 	assert.NotNil(t, l, "Launcher should be created even with OIDC servers and missing env vars")
 	assert.Nil(t, l.oidcProvider, "OIDC provider should be nil without env vars")
 }
+
+func TestGetServerState_StoppedByDefault(t *testing.T) {
+	cfg := newTestConfig(map[string]*config.ServerConfig{
+		"test-server": {Type: "stdio", Command: "echo"},
+	})
+	l := New(context.Background(), cfg)
+	defer l.Close()
+
+	state := l.GetServerState("test-server")
+	assert.Equal(t, "stopped", state.Status)
+	assert.True(t, state.StartedAt.IsZero())
+	assert.Empty(t, state.LastError)
+}
+
+func TestGetServerState_UnknownServer(t *testing.T) {
+	cfg := newTestConfig(map[string]*config.ServerConfig{})
+	l := New(context.Background(), cfg)
+	defer l.Close()
+
+	state := l.GetServerState("nonexistent")
+	assert.Equal(t, "stopped", state.Status)
+}
+
+func TestRecordStart_SetsRunningState(t *testing.T) {
+	cfg := newTestConfig(map[string]*config.ServerConfig{
+		"test-server": {Type: "stdio", Command: "echo"},
+	})
+	l := New(context.Background(), cfg)
+	defer l.Close()
+
+	l.recordStart("test-server")
+
+	state := l.GetServerState("test-server")
+	assert.Equal(t, "running", state.Status)
+	assert.False(t, state.StartedAt.IsZero())
+	assert.Empty(t, state.LastError)
+}
+
+func TestRecordStart_OnlyRecordsFirstLaunch(t *testing.T) {
+	cfg := newTestConfig(map[string]*config.ServerConfig{
+		"test-server": {Type: "stdio", Command: "echo"},
+	})
+	l := New(context.Background(), cfg)
+	defer l.Close()
+
+	l.recordStart("test-server")
+	firstStart := l.serverStartTimes["test-server"]
+
+	// Second call should be a no-op
+	l.recordStart("test-server")
+	secondStart := l.serverStartTimes["test-server"]
+
+	assert.Equal(t, firstStart, secondStart)
+}
+
+func TestRecordError_SetsErrorState(t *testing.T) {
+	cfg := newTestConfig(map[string]*config.ServerConfig{
+		"test-server": {Type: "stdio", Command: "echo"},
+	})
+	l := New(context.Background(), cfg)
+	defer l.Close()
+
+	l.recordError("test-server", "connection refused")
+
+	state := l.GetServerState("test-server")
+	assert.Equal(t, "error", state.Status)
+	assert.Equal(t, "connection refused", state.LastError)
+}
+
+func TestRecordStart_ClearsError(t *testing.T) {
+	cfg := newTestConfig(map[string]*config.ServerConfig{
+		"test-server": {Type: "stdio", Command: "echo"},
+	})
+	l := New(context.Background(), cfg)
+	defer l.Close()
+
+	l.recordError("test-server", "connection refused")
+	state := l.GetServerState("test-server")
+	assert.Equal(t, "error", state.Status)
+
+	l.recordStart("test-server")
+	state = l.GetServerState("test-server")
+	assert.Equal(t, "running", state.Status)
+	assert.Empty(t, state.LastError)
+}
+
+func TestGetServerState_ErrorTakesPrecedenceOverStart(t *testing.T) {
+	cfg := newTestConfig(map[string]*config.ServerConfig{
+		"test-server": {Type: "stdio", Command: "echo"},
+	})
+	l := New(context.Background(), cfg)
+	defer l.Close()
+
+	l.recordStart("test-server")
+	l.recordError("test-server", "server crashed")
+
+	state := l.GetServerState("test-server")
+	assert.Equal(t, "error", state.Status)
+	assert.Equal(t, "server crashed", state.LastError)
+}
