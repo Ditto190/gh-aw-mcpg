@@ -48,7 +48,7 @@ func handleMarkdownLoggerError(_ error, logDir, fileName string) (*MarkdownLogge
 // InitMarkdownLogger initializes the global markdown logger
 func InitMarkdownLogger(logDir, fileName string) error {
 	logger, err := initLogger(logDir, fileName, os.O_TRUNC, setupMarkdownLogger, handleMarkdownLoggerError)
-	initGlobalMarkdownLogger(logger)
+	initGlobalLogger(&globalMarkdownMu, &globalMarkdownLogger, logger)
 	return err
 }
 
@@ -215,5 +215,5 @@ func LogDebugMd(category, format string, args ...interface{}) {
 
 // CloseMarkdownLogger closes the global markdown logger
 func CloseMarkdownLogger() error {
-	return closeGlobalMarkdownLogger()
+	return closeGlobalLogger(&globalMarkdownMu, &globalMarkdownLogger)
 }

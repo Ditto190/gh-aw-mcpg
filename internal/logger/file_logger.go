@@ -52,7 +52,7 @@ func handleFileLoggerError(err error, logDir, fileName string) (*FileLogger, err
 // If the log directory doesn't exist and can't be created, falls back to stdout
 func InitFileLogger(logDir, fileName string) error {
 	logger, err := initLogger(logDir, fileName, os.O_APPEND, setupFileLogger, handleFileLoggerError)
-	initGlobalFileLogger(logger)
+	initGlobalLogger(&globalLoggerMu, &globalFileLogger, logger)
 	return err
 }
 
@@ -153,5 +153,5 @@ var logFuncs = map[LogLevel]func(string, string, ...interface{}){
 
 // CloseGlobalLogger closes the global file logger
 func CloseGlobalLogger() error {
-	return closeGlobalFileLogger()
+	return closeGlobalLogger(&globalLoggerMu, &globalFileLogger)
 }

@@ -33,6 +33,21 @@ func writeErrorResponse(w http.ResponseWriter, statusCode int, code, message str
 	})
 }
 
+// rejectRequest logs a structured error, records a runtime error, and writes an
+// HTTP error response. This consolidates the 3-step rejection pattern that was
+// previously duplicated across auth and handler code paths.
+//
+// Parameters:
+//   - logCategory: category for the structured log (e.g. "auth")
+//   - runtimeErrType: error_type field for runtime error log (e.g. "authentication_failed")
+//   - runtimeDetail: detail field for runtime error log (e.g. "missing_auth_header")
+//   - msg: human-readable message sent back in the HTTP response
+func rejectRequest(w http.ResponseWriter, r *http.Request, status int, code, msg, logCategory, runtimeErrType, runtimeDetail string) {
+	logger.LogErrorMd(logCategory, "Request rejected: %s, remote=%s, path=%s", msg, r.RemoteAddr, r.URL.Path)
+	logRuntimeError(runtimeErrType, runtimeDetail, r, nil)
+	writeErrorResponse(w, status, code, msg)
+}
+
 // withResponseLogging wraps an http.Handler to log response bodies
 func withResponseLogging(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
