@@ -657,17 +657,12 @@ func TestSchemaCaching(t *testing.T) {
 	assert.NoError(t, err, "Validation with cached schema should succeed")
 }
 
-// TestSchemaURLConfiguration verifies that the schema URL is configurable
-func TestSchemaURLConfiguration(t *testing.T) {
-	// Verify the schema URL is properly set
-	// This test documents the schema URL configuration for version pinning
+// TestSchemaConfiguration verifies that the embedded schema is bundled correctly
+func TestSchemaConfiguration(t *testing.T) {
+	// Verify the embedded schema bytes are non-empty
+	assert.NotEmpty(t, embeddedSchemaBytes, "Embedded schema should not be empty")
 
-	// The current implementation uses 'main' branch
-	// For production, consider pinning to a specific commit SHA or version tag
-	expectedPattern := "https://raw.githubusercontent.com/github/gh-aw/"
-
-	// We can't directly test the package-level schemaURL variable,
-	// but we can verify that the schema compiles and validates correctly
+	// Verify that the schema compiles and validates correctly
 	schema, err := getOrCompileSchema()
 	assert.NoError(t, err, "Schema compilation should succeed")
 	assert.NotNil(t, schema, "Schema should not be nil")
@@ -687,10 +682,7 @@ func TestSchemaURLConfiguration(t *testing.T) {
 }`
 
 	err = validateJSONSchema([]byte(validConfig))
-	assert.NoError(t, err, "Validation should succeed with configured schema URL")
+	assert.NoError(t, err, "Validation should succeed with embedded schema")
 
-	// Document the version pinning approach in test output
-	t.Logf("Schema URL pattern: %s", expectedPattern)
-	t.Logf("For production builds, consider pinning to: %s<commit-sha>/...", expectedPattern)
-	t.Logf("Or use a version tag: %sv1.0.0/...", expectedPattern)
+	t.Logf("Embedded schema size: %d bytes", len(embeddedSchemaBytes))
 }

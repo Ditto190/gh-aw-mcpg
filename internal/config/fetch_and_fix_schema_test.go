@@ -2,40 +2,30 @@ package config
 
 import (
 	"encoding/json"
-	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// Tests for fetchAndFixSchema schema transformation logic.
+// Tests for fixSchemaBytes schema transformation logic.
 //
-// fetchAndFixSchema applies three transformations to a raw schema JSON before
+// fixSchemaBytes applies three transformations to a raw schema JSON before
 // compilation to work around JSON Schema Draft 7 limitations:
 //
 //  1. customServerConfig.type: replaces negative-lookahead pattern with not/enum
 //  2. customSchemas.patternProperties: removes negative-lookahead key, adds simple key
 //  3. stdioServerConfig / httpServerConfig: injects registry and guard-policies fields
-//
-// Existing tests (validate_against_custom_schema_test.go) exercise the HTTP-level
-// paths (non-200, unreachable) using simple mock schemas that lack the above
-// structures.  These tests exercise the three transformation branches specifically.
 
-// schemaServer is a test helper that returns an HTTP test server serving the given schema.
-// It avoids calling require/t.FailNow inside the handler goroutine (unsafe in Go <1.21).
-func schemaServer(t *testing.T, schema map[string]interface{}) *httptest.Server {
+// marshalSchema is a test helper that marshals a schema map to JSON bytes.
+func marshalSchema(t *testing.T, schema map[string]interface{}) []byte {
 	t.Helper()
-	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(schema); err != nil {
-			t.Errorf("schemaServer: failed to encode schema: %v", err)
-		}
-	}))
+	b, err := json.Marshal(schema)
+	require.NoError(t, err)
+	return b
 }
 
-// unmarshalSchema is a test helper that unmarshals fetchAndFixSchema output.
+// unmarshalSchema is a test helper that unmarshals fixSchemaBytes output.
 func unmarshalSchema(t *testing.T, schemaBytes []byte) map[string]interface{} {
 	t.Helper()
 	var result map[string]interface{}
@@ -43,25 +33,18 @@ func unmarshalSchema(t *testing.T, schemaBytes []byte) map[string]interface{} {
 	return result
 }
 
-// TestFetchAndFixSchema_InvalidJSONResponse covers the json.Unmarshal failure path
-// (validation_schema.go lines 113-115) when the server returns malformed JSON.
-func TestFetchAndFixSchema_InvalidJSONResponse(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte("this is not valid JSON {{{"))
-	}))
-	defer srv.Close()
-
-	_, err := fetchAndFixSchema(srv.URL)
+// TestFixSchemaBytes_InvalidJSON covers the json.Unmarshal failure path
+// when the input is malformed JSON.
+func TestFixSchemaBytes_InvalidJSON(t *testing.T) {
+	_, err := fixSchemaBytes([]byte("this is not valid JSON {{{"))
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to parse schema")
 }
 
-// TestFetchAndFixSchema_TransformCustomServerConfigType covers lines 121-138:
-// the customServerConfig.type transformation that removes the negative-lookahead
-// pattern and adds a not/enum constraint instead.
-func TestFetchAndFixSchema_TransformCustomServerConfigType(t *testing.T) {
+// TestFixSchemaBytes_TransformCustomServerConfigType covers the customServerConfig.type
+// transformation that removes the negative-lookahead pattern and adds a not/enum constraint.
+func TestFixSchemaBytes_TransformCustomServerConfigType(t *testing.T) {
 	schema := map[string]interface{}{
 		"$schema": "http://json-schema.org/draft-07/schema#",
 		"definitions": map[string]interface{}{
@@ -76,10 +59,8 @@ func TestFetchAndFixSchema_TransformCustomServerConfigType(t *testing.T) {
 			},
 		},
 	}
-	srv := schemaServer(t, schema)
-	defer srv.Close()
 
-	result, err := fetchAndFixSchema(srv.URL)
+	result, err := fixSchemaBytes(marshalSchema(t, schema))
 	require.NoError(t, err)
 
 	got := unmarshalSchema(t, result)
@@ -104,9 +85,9 @@ func TestFetchAndFixSchema_TransformCustomServerConfigType(t *testing.T) {
 	assert.Contains(t, enumSlice, "http", "not.enum should exclude 'http'")
 }
 
-// TestFetchAndFixSchema_CustomServerConfigType_MissingSubStructures verifies that the
+// TestFixSchemaBytes_CustomServerConfigType_MissingSubStructures verifies that the
 // transformation is a no-op when intermediate keys (properties, type) are absent.
-func TestFetchAndFixSchema_CustomServerConfigType_MissingSubStructures(t *testing.T) {
+func TestFixSchemaBytes_CustomServerConfigType_MissingSubStructures(t *testing.T) {
 	tests := []struct {
 		name   string
 		schema map[string]interface{}
@@ -154,10 +135,7 @@ func TestFetchAndFixSchema_CustomServerConfigType_MissingSubStructures(t *testin
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			srv := schemaServer(t, tt.schema)
-			defer srv.Close()
-
-			result, err := fetchAndFixSchema(srv.URL)
+			result, err := fixSchemaBytes(marshalSchema(t, tt.schema))
 
 			require.NoError(t, err, "missing structures should not cause errors")
 			assert.NotEmpty(t, result, "should return non-empty bytes")
@@ -165,10 +143,10 @@ func TestFetchAndFixSchema_CustomServerConfigType_MissingSubStructures(t *testin
 	}
 }
 
-// TestFetchAndFixSchema_TransformCustomSchemasPatternProperties covers lines 140-156:
-// the patternProperties transformation that removes the negative-lookahead key and
-// replaces it with the simple "^[a-z][a-z0-9-]*$" key.
-func TestFetchAndFixSchema_TransformCustomSchemasPatternProperties(t *testing.T) {
+// TestFixSchemaBytes_TransformCustomSchemasPatternProperties covers the patternProperties
+// transformation that removes the negative-lookahead key and replaces it with the simple
+// "^[a-z][a-z0-9-]*$" key.
+func TestFixSchemaBytes_TransformCustomSchemasPatternProperties(t *testing.T) {
 	customTypeDef := map[string]interface{}{
 		"type":        "string",
 		"description": "URL to the custom type schema",
@@ -184,10 +162,8 @@ func TestFetchAndFixSchema_TransformCustomSchemasPatternProperties(t *testing.T)
 			},
 		},
 	}
-	srv := schemaServer(t, schema)
-	defer srv.Close()
 
-	result, err := fetchAndFixSchema(srv.URL)
+	result, err := fixSchemaBytes(marshalSchema(t, schema))
 	require.NoError(t, err)
 
 	got := unmarshalSchema(t, result)
@@ -207,10 +183,10 @@ func TestFetchAndFixSchema_TransformCustomSchemasPatternProperties(t *testing.T)
 	assert.Equal(t, "string", simpleMap["type"], "replacement value should preserve original definition")
 }
 
-// TestFetchAndFixSchema_CustomSchemasPatternProperties_NoNegativeLookahead verifies
+// TestFixSchemaBytes_CustomSchemasPatternProperties_NoNegativeLookahead verifies
 // that the patternProperties transformation is skipped when no negative-lookahead key
 // is present.
-func TestFetchAndFixSchema_CustomSchemasPatternProperties_NoNegativeLookahead(t *testing.T) {
+func TestFixSchemaBytes_CustomSchemasPatternProperties_NoNegativeLookahead(t *testing.T) {
 	schema := map[string]interface{}{
 		"properties": map[string]interface{}{
 			"customSchemas": map[string]interface{}{
@@ -220,10 +196,8 @@ func TestFetchAndFixSchema_CustomSchemasPatternProperties_NoNegativeLookahead(t 
 			},
 		},
 	}
-	srv := schemaServer(t, schema)
-	defer srv.Close()
 
-	result, err := fetchAndFixSchema(srv.URL)
+	result, err := fixSchemaBytes(marshalSchema(t, schema))
 	require.NoError(t, err)
 
 	got := unmarshalSchema(t, result)
@@ -236,9 +210,9 @@ func TestFetchAndFixSchema_CustomSchemasPatternProperties_NoNegativeLookahead(t 
 	assert.True(t, hasSimple, "existing simple pattern key should be preserved when no negative-lookahead present")
 }
 
-// TestFetchAndFixSchema_AddRegistryAndGuardPoliciesToStdioConfig covers lines 179-184:
-// the injection of registry and guard-policies into stdioServerConfig.properties.
-func TestFetchAndFixSchema_AddRegistryAndGuardPoliciesToStdioConfig(t *testing.T) {
+// TestFixSchemaBytes_AddRegistryAndGuardPoliciesToStdioConfig covers the injection
+// of registry and guard-policies into stdioServerConfig.properties.
+func TestFixSchemaBytes_AddRegistryAndGuardPoliciesToStdioConfig(t *testing.T) {
 	schema := map[string]interface{}{
 		"$schema": "http://json-schema.org/draft-07/schema#",
 		"definitions": map[string]interface{}{
@@ -250,10 +224,8 @@ func TestFetchAndFixSchema_AddRegistryAndGuardPoliciesToStdioConfig(t *testing.T
 			},
 		},
 	}
-	srv := schemaServer(t, schema)
-	defer srv.Close()
 
-	result, err := fetchAndFixSchema(srv.URL)
+	result, err := fixSchemaBytes(marshalSchema(t, schema))
 	require.NoError(t, err)
 
 	got := unmarshalSchema(t, result)
@@ -276,9 +248,9 @@ func TestFetchAndFixSchema_AddRegistryAndGuardPoliciesToStdioConfig(t *testing.T
 	assert.Equal(t, true, gpMap["additionalProperties"], "guard-policies.additionalProperties should be true")
 }
 
-// TestFetchAndFixSchema_AddRegistryAndGuardPoliciesToHttpConfig covers lines 186-191:
-// the injection of registry and guard-policies into httpServerConfig.properties.
-func TestFetchAndFixSchema_AddRegistryAndGuardPoliciesToHttpConfig(t *testing.T) {
+// TestFixSchemaBytes_AddRegistryAndGuardPoliciesToHttpConfig covers the injection
+// of registry and guard-policies into httpServerConfig.properties.
+func TestFixSchemaBytes_AddRegistryAndGuardPoliciesToHttpConfig(t *testing.T) {
 	schema := map[string]interface{}{
 		"$schema": "http://json-schema.org/draft-07/schema#",
 		"definitions": map[string]interface{}{
@@ -290,10 +262,8 @@ func TestFetchAndFixSchema_AddRegistryAndGuardPoliciesToHttpConfig(t *testing.T)
 			},
 		},
 	}
-	srv := schemaServer(t, schema)
-	defer srv.Close()
 
-	result, err := fetchAndFixSchema(srv.URL)
+	result, err := fixSchemaBytes(marshalSchema(t, schema))
 	require.NoError(t, err)
 
 	got := unmarshalSchema(t, result)
@@ -313,9 +283,9 @@ func TestFetchAndFixSchema_AddRegistryAndGuardPoliciesToHttpConfig(t *testing.T)
 	assert.True(t, hasURL, "original url field should be preserved in httpServerConfig.properties")
 }
 
-// TestFetchAndFixSchema_RegistryGuardPolicies_MissingSubStructures verifies that the
+// TestFixSchemaBytes_RegistryGuardPolicies_MissingSubStructures verifies that the
 // registry/guard-policies injection is skipped gracefully when sub-structures are absent.
-func TestFetchAndFixSchema_RegistryGuardPolicies_MissingSubStructures(t *testing.T) {
+func TestFixSchemaBytes_RegistryGuardPolicies_MissingSubStructures(t *testing.T) {
 	tests := []struct {
 		name   string
 		schema map[string]interface{}
@@ -348,10 +318,7 @@ func TestFetchAndFixSchema_RegistryGuardPolicies_MissingSubStructures(t *testing
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			srv := schemaServer(t, tt.schema)
-			defer srv.Close()
-
-			result, err := fetchAndFixSchema(srv.URL)
+			result, err := fixSchemaBytes(marshalSchema(t, tt.schema))
 
 			require.NoError(t, err, "missing sub-structures should not cause errors")
 			assert.NotEmpty(t, result)
@@ -359,10 +326,10 @@ func TestFetchAndFixSchema_RegistryGuardPolicies_MissingSubStructures(t *testing
 	}
 }
 
-// TestFetchAndFixSchema_AllTransformationsApplied verifies that all three
+// TestFixSchemaBytes_AllTransformationsApplied verifies that all three
 // transformation branches run correctly when a single schema contains all the
 // structures that trigger them.
-func TestFetchAndFixSchema_AllTransformationsApplied(t *testing.T) {
+func TestFixSchemaBytes_AllTransformationsApplied(t *testing.T) {
 	schema := map[string]interface{}{
 		"$schema": "http://json-schema.org/draft-07/schema#",
 		// Trigger #1: customServerConfig.type with negative-lookahead pattern
@@ -395,10 +362,8 @@ func TestFetchAndFixSchema_AllTransformationsApplied(t *testing.T) {
 			},
 		},
 	}
-	srv := schemaServer(t, schema)
-	defer srv.Close()
 
-	result, err := fetchAndFixSchema(srv.URL)
+	result, err := fixSchemaBytes(marshalSchema(t, schema))
 	require.NoError(t, err)
 
 	got := unmarshalSchema(t, result)
@@ -440,10 +405,10 @@ func TestFetchAndFixSchema_AllTransformationsApplied(t *testing.T) {
 	assert.True(t, hasHTTPGP, "guard-policies should be injected into httpServerConfig")
 }
 
-// TestFetchAndFixSchema_PreservesSchemaIntegrity verifies that fetchAndFixSchema
-// preserves existing stdioServerConfig fields and structure while applying its
-// transformations (i.e., original properties and required entries remain intact).
-func TestFetchAndFixSchema_PreservesSchemaIntegrity(t *testing.T) {
+// TestFixSchemaBytes_PreservesSchemaIntegrity verifies that fixSchemaBytes preserves
+// existing stdioServerConfig fields and structure while applying its transformations
+// (i.e., original properties and required entries remain intact).
+func TestFixSchemaBytes_PreservesSchemaIntegrity(t *testing.T) {
 	schema := map[string]interface{}{
 		"$schema": "http://json-schema.org/draft-07/schema#",
 		"definitions": map[string]interface{}{
@@ -459,10 +424,8 @@ func TestFetchAndFixSchema_PreservesSchemaIntegrity(t *testing.T) {
 			},
 		},
 	}
-	srv := schemaServer(t, schema)
-	defer srv.Close()
 
-	result, err := fetchAndFixSchema(srv.URL)
+	result, err := fixSchemaBytes(marshalSchema(t, schema))
 	require.NoError(t, err)
 
 	got := unmarshalSchema(t, result)
