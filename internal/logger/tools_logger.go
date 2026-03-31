@@ -77,7 +77,7 @@ func handleToolsLoggerError(err error, logDir, fileName string) (*ToolsLogger, e
 // If the log directory doesn't exist and can't be created, falls back to no-op
 func InitToolsLogger(logDir, fileName string) error {
 	logger, err := initLogger(logDir, fileName, os.O_TRUNC, setupToolsLogger, handleToolsLoggerError)
-	initGlobalToolsLogger(logger)
+	initGlobalLogger(&globalToolsMu, &globalToolsLogger, logger)
 	return err
 }
 
@@ -149,5 +149,5 @@ func LogToolsForServer(serverID string, tools []ToolInfo) {
 
 // CloseToolsLogger closes the global tools logger
 func CloseToolsLogger() error {
-	return closeGlobalToolsLogger()
+	return closeGlobalLogger(&globalToolsMu, &globalToolsLogger)
 }

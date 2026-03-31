@@ -62,7 +62,7 @@ func InitJSONLLogger(logDir, fileName string) error {
 	// JSONLLogger has no fallback mode, so we should not initialize
 	// the global logger when initialization fails
 	if err == nil {
-		initGlobalJSONLLogger(logger)
+		initGlobalLogger(&globalJSONLMu, &globalJSONLLogger, logger)
 	}
 	return err
 }
@@ -107,7 +107,7 @@ func (jl *JSONLLogger) logEntry(entry interface{}) error {
 
 // CloseJSONLLogger closes the global JSONL logger
 func CloseJSONLLogger() error {
-	return closeGlobalJSONLLogger()
+	return closeGlobalLogger(&globalJSONLMu, &globalJSONLLogger)
 }
 
 // LogRPCMessageJSONL logs an RPC message to the global JSONL logger

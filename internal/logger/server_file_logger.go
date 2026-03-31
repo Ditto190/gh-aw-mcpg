@@ -37,7 +37,7 @@ func InitServerFileLogger(logDir string) error {
 			files:       make(map[string]*os.File),
 			useFallback: true,
 		}
-		initGlobalServerFileLogger(sfl)
+		initGlobalLogger(&globalServerLoggerMu, &globalServerFileLogger, sfl)
 		return nil
 	}
 
@@ -49,7 +49,7 @@ func InitServerFileLogger(logDir string) error {
 	}
 
 	log.Printf("Initialized per-serverID logging in directory: %s", logDir)
-	initGlobalServerFileLogger(sfl)
+	initGlobalLogger(&globalServerLoggerMu, &globalServerFileLogger, sfl)
 	return nil
 }
 
@@ -177,5 +177,5 @@ func LogDebugWithServer(serverID, category, format string, args ...interface{}) 
 
 // CloseServerFileLogger closes the global server file logger
 func CloseServerFileLogger() error {
-	return closeGlobalServerFileLogger()
+	return closeGlobalLogger(&globalServerLoggerMu, &globalServerFileLogger)
 }
