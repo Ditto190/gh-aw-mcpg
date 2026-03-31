@@ -585,18 +585,17 @@ func (us *UnifiedServer) GetServerIDs() []string {
 func (us *UnifiedServer) GetServerStatus() map[string]ServerStatus {
 	status := make(map[string]ServerStatus)
 
-	// Get all configured servers
 	serverIDs := us.launcher.ServerIDs()
 
 	for _, serverID := range serverIDs {
-		// Check if server has been launched by checking launcher connections
-		// For now, we'll return "running" for all configured servers
-		// and track uptime from when the gateway started
-		// This is a simple implementation - a more sophisticated version
-		// would track actual connection state per server
+		state := us.launcher.GetServerState(serverID)
+		uptime := 0
+		if !state.StartedAt.IsZero() {
+			uptime = int(time.Since(state.StartedAt).Seconds())
+		}
 		status[serverID] = ServerStatus{
-			Status: "running",
-			Uptime: 0, // Will be properly tracked when servers are actually launched
+			Status: state.Status,
+			Uptime: uptime,
 		}
 	}
 

@@ -25,6 +25,13 @@ type connectionResult struct {
 	err  error
 }
 
+// ServerState represents the observed runtime state of a backend server.
+type ServerState struct {
+	Status    string    // "running" | "stopped" | "error"
+	StartedAt time.Time // zero value means never started
+	LastError string    // most recent error message, if any
+}
+
 // Launcher manages backend MCP server connections
 type Launcher struct {
 	ctx                context.Context
@@ -35,6 +42,8 @@ type Launcher struct {
 	runningInContainer bool
 	startupTimeout     time.Duration // Timeout for backend server startup
 	oidcProvider       *oidc.Provider
+	serverStartTimes   map[string]time.Time // tracks when each server was successfully launched
+	serverErrors       map[string]string    // tracks the most recent error per server
 }
 
 // New creates a new Launcher
@@ -84,6 +93,8 @@ func New(ctx context.Context, cfg *config.Config) *Launcher {
 		runningInContainer: inContainer,
 		startupTimeout:     startupTimeout,
 		oidcProvider:       oidcProvider,
+		serverStartTimes:   make(map[string]time.Time),
+		serverErrors:       make(map[string]string),
 	}
 }
 
@@ -120,6 +131,7 @@ func GetOrLaunch(l *Launcher, serverID string) (*mcp.Connection, error) {
 				if oidcProvider == nil {
 					logger.LogErrorWithServer(serverID, "backend",
 						"Server %q requires OIDC auth but ACTIONS_ID_TOKEN_REQUEST_URL is not set", serverID)
+					l.recordError(serverID, "OIDC provider not available")
 					return nil, fmt.Errorf(
 						"server %q requires OIDC authentication but ACTIONS_ID_TOKEN_REQUEST_URL is not set; "+
 							"OIDC auth is only available in GitHub Actions with `permissions: { id-token: write }`",
@@ -133,17 +145,25 @@ func GetOrLaunch(l *Launcher, serverID string) (*mcp.Connection, error) {
 				logger.LogErrorWithServer(serverID, "backend", "Failed to create HTTP connection: %s, error=%v", serverID, err)
 				log.Printf("[LAUNCHER] ❌ FAILED to create HTTP connection for '%s'", serverID)
 				log.Printf("[LAUNCHER] Error: %v", err)
+				l.recordError(serverID, err.Error())
 				return nil, fmt.Errorf("failed to create HTTP connection: %w", err)
 			}
 
 			logger.LogInfoWithServer(serverID, "backend", "Successfully configured HTTP MCP backend: %s", serverID)
 			log.Printf("[LAUNCHER] Successfully configured HTTP backend: %s", serverID)
 
+			l.recordStart(serverID)
 			return conn, nil
 		}
 
 		// stdio backends from this point
-		return l.launchStdioConnection(serverID, "", serverCfg)
+		conn, err := l.launchStdioConnection(serverID, "", serverCfg)
+		if err != nil {
+			l.recordError(serverID, err.Error())
+			return nil, err
+		}
+		l.recordStart(serverID)
+		return conn, nil
 	})
 }
 
@@ -190,13 +210,15 @@ func GetOrLaunchForSession(l *Launcher, serverID, sessionID string) (*mcp.Connec
 
 	conn, err := l.launchStdioConnection(serverID, sessionID, serverCfg)
 	if err != nil {
-		// Record error in session pool
+		// Record error in session pool and server state
 		l.sessionPool.RecordError(serverID, sessionID)
+		l.recordError(serverID, err.Error())
 		return nil, err
 	}
 
-	// Add to session pool
+	// Add to session pool and record start
 	l.sessionPool.Set(serverID, sessionID, conn)
+	l.recordStart(serverID)
 	return conn, nil
 }
 
@@ -282,4 +304,42 @@ func (l *Launcher) Close() {
 		l.sessionPool.Stop()
 	}
 	logLauncher.Print("Launcher closed successfully")
+}
+
+// recordStart records a successful server launch time.
+// Only the first successful launch is recorded; subsequent calls are no-ops.
+func (l *Launcher) recordStart(serverID string) {
+	if _, exists := l.serverStartTimes[serverID]; !exists {
+		l.serverStartTimes[serverID] = time.Now()
+		delete(l.serverErrors, serverID)
+		logLauncher.Printf("Recorded server start: serverID=%s", serverID)
+	}
+}
+
+// recordError records a server launch failure.
+func (l *Launcher) recordError(serverID string, errMsg string) {
+	l.serverErrors[serverID] = errMsg
+	logLauncher.Printf("Recorded server error: serverID=%s, error=%s", serverID, errMsg)
+}
+
+// GetServerState returns the observed runtime state for a single server.
+func (l *Launcher) GetServerState(serverID string) ServerState {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+
+	if errMsg, hasErr := l.serverErrors[serverID]; hasErr {
+		return ServerState{
+			Status:    "error",
+			LastError: errMsg,
+		}
+	}
+
+	if startedAt, ok := l.serverStartTimes[serverID]; ok {
+		return ServerState{
+			Status:    "running",
+			StartedAt: startedAt,
+		}
+	}
+
+	return ServerState{Status: "stopped"}
 }

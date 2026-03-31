@@ -465,3 +465,45 @@ func TestBuildHealthResponse_HealthyStatus(t *testing.T) {
 	assert.NotEmpty(response.GatewayVersion, "gatewayVersion should not be empty")
 	assert.NotNil(response.Servers, "Servers map should not be nil")
 }
+
+// TestGetServerStatus_ErrorOnFailedLaunch verifies servers report "error" when launch fails
+func TestGetServerStatus_ErrorOnFailedLaunch(t *testing.T) {
+	assert := assert.New(t)
+	require := require.New(t)
+
+	cfg := &config.Config{
+		Servers: map[string]*config.ServerConfig{
+			"server-a": {Type: "stdio", Command: "docker", Args: []string{"run", "test"}},
+		},
+	}
+
+	ctx := context.Background()
+	us, err := NewUnified(ctx, cfg)
+	require.NoError(err)
+	t.Cleanup(func() { us.Close() })
+
+	status := us.GetServerStatus()
+	require.Contains(status, "server-a")
+	assert.Equal("error", status["server-a"].Status, "Server should report 'error' after failed launch")
+	assert.Equal(0, status["server-a"].Uptime, "Uptime should be 0 for errored server")
+}
+
+// TestBuildHealthResponse_UnhealthyOnError verifies that failed servers make the gateway unhealthy
+func TestBuildHealthResponse_UnhealthyOnError(t *testing.T) {
+	assert := assert.New(t)
+	require := require.New(t)
+
+	cfg := &config.Config{
+		Servers: map[string]*config.ServerConfig{
+			"server-a": {Type: "stdio", Command: "docker", Args: []string{"run", "test"}},
+		},
+	}
+
+	ctx := context.Background()
+	us, err := NewUnified(ctx, cfg)
+	require.NoError(err)
+	t.Cleanup(func() { us.Close() })
+
+	response := BuildHealthResponse(us)
+	assert.Equal("unhealthy", response.Status, "Gateway should be unhealthy when a server has errors")
+}
