@@ -16,6 +16,15 @@ package logger
 
 import "sync"
 
+// withMutexLock acquires mu, calls fn, and releases mu.
+// This is the single implementation of the per-type withLock pattern
+// used by FileLogger, JSONLLogger, MarkdownLogger, and ToolsLogger.
+func withMutexLock(mu *sync.Mutex, fn func() error) error {
+	mu.Lock()
+	defer mu.Unlock()
+	return fn()
+}
+
 // closableLogger is a constraint for types that have a Close method.
 // This is satisfied by *FileLogger, *JSONLLogger, *MarkdownLogger, *ServerFileLogger, and *ToolsLogger.
 type closableLogger interface {
