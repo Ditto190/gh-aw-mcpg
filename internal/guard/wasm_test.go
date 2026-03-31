@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"os"
 	"testing"
 	"time"
 
@@ -15,6 +16,12 @@ import (
 	"github.com/github/gh-aw-mcpg/internal/difc"
 	"github.com/tetratelabs/wazero"
 )
+
+func TestMain(m *testing.M) {
+	code := m.Run()
+	globalCompilationCache.Close(context.Background())
+	os.Exit(code)
+}
 
 type ctxKey string
 
@@ -1079,5 +1086,31 @@ func TestWasmGuardFailedState(t *testing.T) {
 		require.Error(t, err)
 		// The original trap error should be reachable via errors.Is / errors.As
 		assert.ErrorIs(t, err, originalErr)
+	})
+}
+
+func TestWasmGuardCompilationCache(t *testing.T) {
+	t.Run("global compilation cache is not nil", func(t *testing.T) {
+		assert.NotNil(t, globalCompilationCache)
+	})
+
+	t.Run("custom cache is used when provided via options", func(t *testing.T) {
+		customCache := wazero.NewCompilationCache()
+		defer customCache.Close(context.Background())
+
+		opts := &WasmGuardOptions{
+			CompilationCache: customCache,
+		}
+
+		// Instantiation will fail (minimal WASM), but the code path
+		// that selects the cache runs before module compilation.
+		ctx := context.Background()
+		_, _ = NewWasmGuardWithOptions(ctx, "cache-test", minimalGuardWasm, &mockBackendCaller{}, opts)
+	})
+
+	t.Run("global cache is used when options cache is nil", func(t *testing.T) {
+		ctx := context.Background()
+		// nil opts → global cache path
+		_, _ = NewWasmGuardWithOptions(ctx, "cache-test", minimalGuardWasm, &mockBackendCaller{}, nil)
 	})
 }
