@@ -18,11 +18,25 @@ import (
 )
 
 //go:embed schema/mcp-gateway-config.schema.json
+// embeddedSchemaBytes holds the bundled MCP Gateway configuration JSON Schema (v0.64.4).
+// Embedding the schema in the binary eliminates the runtime network request that was
+// previously needed to fetch it from GitHub, improving startup reliability and removing
+// a potential point of failure in network-restricted environments.
+//
+// To update the schema to a newer version:
+//  1. Download the new schema from https://github.com/github/gh-aw/releases
+//  2. Replace internal/config/schema/mcp-gateway-config.schema.json
+//  3. Update the version comment above
+//  4. Run tests to ensure compatibility: make test
 var embeddedSchemaBytes []byte
 
 const (
 	// maxSchemaFetchRetries is the number of fetch attempts before giving up.
 	maxSchemaFetchRetries = 3
+
+	// embeddedSchemaID is the $id URL used when registering the embedded schema with
+	// the JSON Schema compiler. It matches the $id field in the bundled schema file.
+	embeddedSchemaID = "https://docs.github.com/gh-aw/schemas/mcp-gateway-config.schema.json"
 )
 
 // schemaFetchRetryDelay is the base delay between retry attempts using exponential
@@ -299,7 +313,7 @@ func getOrCompileSchema() (*jsonschema.Schema, error) {
 
 		schemaID, ok := schemaObj["$id"].(string)
 		if !ok || schemaID == "" {
-			schemaID = "embedded:mcp-gateway-config.schema.json"
+			schemaID = embeddedSchemaID
 		}
 
 		// Compile the schema
