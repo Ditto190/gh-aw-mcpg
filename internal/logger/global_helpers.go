@@ -17,8 +17,8 @@ package logger
 import "sync"
 
 // withMutexLock acquires mu, calls fn, and releases mu.
-// It is a package-level helper to avoid repeating the lock/unlock preamble in
-// per-type withLock methods.
+// This is the single implementation of the per-type withLock pattern
+// used by FileLogger, JSONLLogger, MarkdownLogger, and ToolsLogger.
 func withMutexLock(mu *sync.Mutex, fn func() error) error {
 	mu.Lock()
 	defer mu.Unlock()
