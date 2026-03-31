@@ -1,6 +1,7 @@
 package config
 
 import (
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -15,6 +16,9 @@ import (
 	"github.com/github/gh-aw-mcpg/internal/version"
 	"github.com/santhosh-tekuri/jsonschema/v5"
 )
+
+//go:embed schema/mcp-gateway-config.schema.json
+var embeddedSchemaBytes []byte
 
 const (
 	// maxSchemaFetchRetries is the number of fetch attempts before giving up.
@@ -48,23 +52,6 @@ var (
 	// logSchema is the debug logger for schema validation
 	logSchema = logger.New("config:validation_schema")
 
-	// Schema URL configuration
-	// This URL points to the source of truth for the MCP Gateway configuration schema.
-	//
-	// Schema Version Pinning:
-	// The schema is fetched from the main branch to get the latest version.
-	//
-	// To update to a specific pinned version:
-	//   1. Check the latest gh-aw release: https://github.com/github/gh-aw/releases
-	//   2. Update the URL below to use a version tag instead of main
-	//   3. Run tests to ensure compatibility: make test
-	//   4. Update this comment with the version number
-	//
-	// Current schema version: v0.50.7
-	//
-	// Alternative: Embed the schema using go:embed directive for zero network dependency.
-	schemaURL = "https://raw.githubusercontent.com/github/gh-aw/v0.64.4/docs/public/schemas/mcp-gateway-config.schema.json"
-
 	// Schema caching to avoid recompiling the JSON schema on every validation
 	// This improves performance by compiling the schema once and reusing it
 	schemaOnce   sync.Once
@@ -72,8 +59,7 @@ var (
 	schemaErr    error
 )
 
-// fetchAndFixSchema fetches the JSON schema from the remote URL and applies
-// workarounds for JSON Schema Draft 7 limitations.
+// fixSchemaBytes applies workarounds to a raw schema JSON for JSON Schema Draft 7 limitations.
 //
 // Background:
 // The MCP Gateway configuration schema uses regex patterns with negative lookahead
@@ -100,70 +86,7 @@ var (
 // TODO: Investigate if JSON Schema v6 (library upgrade) or Draft 2019-09+/2020-12
 // (newer spec) eliminate this workaround. The jsonschema/v6 Go library may handle
 // these patterns natively, potentially allowing removal of this function entirely.
-func fetchAndFixSchema(url string) ([]byte, error) {
-	startTime := time.Now()
-	logSchema.Printf("Fetching schema from URL: %s", url)
-
-	client := &http.Client{
-		Timeout: schemaHTTPClientTimeout,
-	}
-
-	var resp *http.Response
-	var lastErr error
-
-	for attempt := 1; attempt <= maxSchemaFetchRetries; attempt++ {
-		if attempt > 1 {
-			delay := schemaFetchRetryDelay << uint(attempt-2) // 1×, 2×, 4× base delay
-			logSchema.Printf("Retrying schema fetch (attempt %d/%d) after %v: %v", attempt, maxSchemaFetchRetries, delay, lastErr)
-			time.Sleep(delay)
-		}
-
-		fetchStart := time.Now()
-		var err error
-		resp, err = client.Get(url)
-		if err != nil {
-			logSchema.Printf("Schema fetch attempt %d failed after %v: %v", attempt, time.Since(fetchStart), err)
-			lastErr = fmt.Errorf("failed to fetch schema from %s: %w", url, err)
-			resp = nil
-			continue
-		}
-		logSchema.Printf("HTTP request attempt %d completed in %v with status %d", attempt, time.Since(fetchStart), resp.StatusCode)
-
-		if resp.StatusCode == http.StatusOK {
-			lastErr = nil
-			break
-		}
-
-		if isTransientHTTPError(resp.StatusCode) {
-			lastErr = fmt.Errorf("failed to fetch schema: HTTP %d", resp.StatusCode)
-			logSchema.Printf("Schema fetch attempt %d returned transient error: HTTP %d, will retry", attempt, resp.StatusCode)
-			resp.Body.Close()
-			resp = nil
-			continue
-		}
-
-		// Permanent HTTP error (404, 403, 401, etc.) — do not retry.
-		lastErr = fmt.Errorf("failed to fetch schema: HTTP %d", resp.StatusCode)
-		logSchema.Printf("Schema fetch returned permanent error: HTTP %d", resp.StatusCode)
-		resp.Body.Close()
-		resp = nil
-		break
-	}
-
-	if resp == nil {
-		return nil, lastErr
-	}
-	defer resp.Body.Close()
-	logSchema.Printf("HTTP request completed in %v", time.Since(startTime))
-
-	readStart := time.Now()
-	schemaBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read schema response: %w", err)
-	}
-	logSchema.Printf("Schema read completed in %v (size: %d bytes)", time.Since(readStart), len(schemaBytes))
-
-	// Fix regex patterns that use negative lookahead
+func fixSchemaBytes(schemaBytes []byte) ([]byte, error) {
 	fixStart := time.Now()
 	var schema map[string]interface{}
 	if err := json.Unmarshal(schemaBytes, &schema); err != nil {
@@ -272,29 +195,97 @@ func fetchAndFixSchema(url string) ([]byte, error) {
 	}
 	logSchema.Printf("Schema fixes applied in %v", time.Since(fixStart))
 
-	logSchema.Printf("Total schema fetch and fix completed in %v", time.Since(startTime))
 	return fixedBytes, nil
+}
+
+// fetchAndFixSchema fetches the JSON schema from the remote URL and applies
+// workarounds for JSON Schema Draft 7 limitations via fixSchemaBytes.
+// This function is used for fetching custom server schemas from remote URLs.
+func fetchAndFixSchema(url string) ([]byte, error) {
+	startTime := time.Now()
+	logSchema.Printf("Fetching schema from URL: %s", url)
+
+	client := &http.Client{
+		Timeout: schemaHTTPClientTimeout,
+	}
+
+	var resp *http.Response
+	var lastErr error
+
+	for attempt := 1; attempt <= maxSchemaFetchRetries; attempt++ {
+		if attempt > 1 {
+			delay := schemaFetchRetryDelay << uint(attempt-2) // 1×, 2×, 4× base delay
+			logSchema.Printf("Retrying schema fetch (attempt %d/%d) after %v: %v", attempt, maxSchemaFetchRetries, delay, lastErr)
+			time.Sleep(delay)
+		}
+
+		fetchStart := time.Now()
+		var err error
+		resp, err = client.Get(url)
+		if err != nil {
+			logSchema.Printf("Schema fetch attempt %d failed after %v: %v", attempt, time.Since(fetchStart), err)
+			lastErr = fmt.Errorf("failed to fetch schema from %s: %w", url, err)
+			resp = nil
+			continue
+		}
+		logSchema.Printf("HTTP request attempt %d completed in %v with status %d", attempt, time.Since(fetchStart), resp.StatusCode)
+
+		if resp.StatusCode == http.StatusOK {
+			lastErr = nil
+			break
+		}
+
+		if isTransientHTTPError(resp.StatusCode) {
+			lastErr = fmt.Errorf("failed to fetch schema: HTTP %d", resp.StatusCode)
+			logSchema.Printf("Schema fetch attempt %d returned transient error: HTTP %d, will retry", attempt, resp.StatusCode)
+			resp.Body.Close()
+			resp = nil
+			continue
+		}
+
+		// Permanent HTTP error (404, 403, 401, etc.) — do not retry.
+		lastErr = fmt.Errorf("failed to fetch schema: HTTP %d", resp.StatusCode)
+		logSchema.Printf("Schema fetch returned permanent error: HTTP %d", resp.StatusCode)
+		resp.Body.Close()
+		resp = nil
+		break
+	}
+
+	if resp == nil {
+		return nil, lastErr
+	}
+	defer resp.Body.Close()
+	logSchema.Printf("HTTP request completed in %v", time.Since(startTime))
+
+	readStart := time.Now()
+	schemaBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read schema response: %w", err)
+	}
+	logSchema.Printf("Schema read completed in %v (size: %d bytes)", time.Since(readStart), len(schemaBytes))
+
+	return fixSchemaBytes(schemaBytes)
 }
 
 // getOrCompileSchema retrieves the cached compiled schema or compiles it on first use.
 // This function uses sync.Once to ensure thread-safe, one-time schema compilation,
-// which significantly improves performance by avoiding repeated schema fetching and
-// compilation on every validation call.
+// which significantly improves performance by avoiding repeated schema compilation
+// on every validation call.
 //
-// The schema is fetched from the remote URL on first call and cached for subsequent uses.
-// If schema compilation fails, the error is also cached to avoid repeated fetch attempts.
+// The schema is bundled in the binary via go:embed and fixed on first call.
+// If schema compilation fails, the error is also cached to avoid repeated attempts.
 //
 // Returns:
 //   - Compiled JSON schema on success
-//   - Error if schema fetch or compilation fails
+//   - Error if schema compilation fails
 func getOrCompileSchema() (*jsonschema.Schema, error) {
 	schemaOnce.Do(func() {
 		logSchema.Print("Compiling JSON schema for the first time")
 
-		// Fetch the schema from the configured URL
-		schemaJSON, fetchErr := fetchAndFixSchema(schemaURL)
-		if fetchErr != nil {
-			schemaErr = fmt.Errorf("failed to fetch schema: %w", fetchErr)
+		// Apply fixes to the embedded schema bytes
+		schemaJSON, fixErr := fixSchemaBytes(embeddedSchemaBytes)
+		if fixErr != nil {
+			schemaErr = fmt.Errorf("failed to process embedded schema: %w", fixErr)
 			logSchema.Printf("Schema compilation failed: %v", schemaErr)
 			return
 		}
@@ -308,24 +299,17 @@ func getOrCompileSchema() (*jsonschema.Schema, error) {
 
 		schemaID, ok := schemaObj["$id"].(string)
 		if !ok || schemaID == "" {
-			schemaID = schemaURL
+			schemaID = "embedded:mcp-gateway-config.schema.json"
 		}
 
 		// Compile the schema
 		compiler := jsonschema.NewCompiler()
 		compiler.Draft = jsonschema.Draft7
 
-		// Add the schema with both URLs (the fetch URL and the $id URL)
-		// This ensures references work correctly regardless of which URL is used
-		if addErr := compiler.AddResource(schemaURL, strings.NewReader(string(schemaJSON))); addErr != nil {
+		// Add the schema using its $id URL so internal $ref references resolve correctly
+		if addErr := compiler.AddResource(schemaID, strings.NewReader(string(schemaJSON))); addErr != nil {
 			schemaErr = fmt.Errorf("failed to add schema resource: %w", addErr)
 			return
-		}
-		if schemaID != schemaURL {
-			if addErr := compiler.AddResource(schemaID, strings.NewReader(string(schemaJSON))); addErr != nil {
-				schemaErr = fmt.Errorf("failed to add schema resource with $id: %w", addErr)
-				return
-			}
 		}
 
 		cachedSchema, schemaErr = compiler.Compile(schemaID)
