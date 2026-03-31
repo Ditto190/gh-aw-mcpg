@@ -31,8 +31,13 @@ type WasmGuardOptions struct {
 	// Stderr is the writer for WASM stderr output. Defaults to os.Stderr if nil.
 	Stderr io.Writer
 	// CompilationCache overrides the process-level compilation cache.
-	// If nil, the shared globalCompilationCache is used.
+	// If nil and DisableCompilationCache is false, the shared globalCompilationCache is used.
 	CompilationCache wazero.CompilationCache
+	// DisableCompilationCache, when true, prevents any compilation cache from being used
+	// even if a global or per-instance cache is available. This can be useful to avoid
+	// unbounded memory growth when many distinct WASM binaries are loaded over the
+	// lifetime of a long-lived process.
+	DisableCompilationCache bool
 }
 
 // WasmGuard implements Guard interface by executing a WASM module in-process
@@ -88,17 +93,15 @@ func NewWasmGuardFromBytes(ctx context.Context, name string, wasmBytes []byte, b
 func NewWasmGuardWithOptions(ctx context.Context, name string, wasmBytes []byte, backend BackendCaller, opts *WasmGuardOptions) (*WasmGuard, error) {
 	logWasm.Printf("Creating WASM guard from bytes: name=%s, size=%d", name, len(wasmBytes))
 
-	// Select compilation cache: use injected cache if provided, else shared global.
-	cache := globalCompilationCache
-	if opts != nil && opts.CompilationCache != nil {
-		cache = opts.CompilationCache
+	// Select compilation cache: explicit opt-out, injected cache, or shared global.
+	runtimeConfig := wazero.NewRuntimeConfigCompiler().WithCloseOnContextDone(true)
+	if opts != nil && opts.DisableCompilationCache {
+		// Caller explicitly disabled caching
+	} else if opts != nil && opts.CompilationCache != nil {
+		runtimeConfig = runtimeConfig.WithCompilationCache(opts.CompilationCache)
+	} else {
+		runtimeConfig = runtimeConfig.WithCompilationCache(globalCompilationCache)
 	}
-
-	// Create WASM runtime with explicit compiler config and context-based cancellation
-	// WithCloseOnContextDone enables request-scoped timeouts to propagate into guard execution
-	runtimeConfig := wazero.NewRuntimeConfigCompiler().
-		WithCloseOnContextDone(true).
-		WithCompilationCache(cache)
 	runtime := wazero.NewRuntimeWithConfig(ctx, runtimeConfig)
 
 	// Instantiate WASI
