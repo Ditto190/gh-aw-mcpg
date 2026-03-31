@@ -38,7 +38,7 @@ func writeErrorResponse(w http.ResponseWriter, statusCode int, code, message str
 // previously duplicated across auth and handler code paths.
 func rejectRequest(w http.ResponseWriter, r *http.Request, status int, code, msg, logCategory, runtimeErrType string) {
 	logger.LogErrorMd(logCategory, "Request rejected: %s, remote=%s, path=%s", msg, r.RemoteAddr, r.URL.Path)
-	logRuntimeError(runtimeErrType, msg, r, nil)
+	logRuntimeError("authentication_failed", runtimeErrType, r, nil)
 	writeErrorResponse(w, status, code, msg)
 }
 
