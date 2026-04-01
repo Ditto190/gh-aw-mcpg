@@ -198,6 +198,18 @@ func applyGatewayDefaults(cfg *GatewayConfig) {
 	}
 }
 
+// EnsureGatewayDefaults guarantees that cfg.Gateway is non-nil and that all
+// gateway-level fields have sensible defaults applied. LoadFromFile and
+// LoadFromStdin already call this, but consumers that receive a Config
+// constructed manually (e.g. in tests) can call it to avoid nil-pointer panics.
+func (cfg *Config) EnsureGatewayDefaults() {
+	if cfg.Gateway == nil {
+		cfg.Gateway = &GatewayConfig{}
+	}
+	applyGatewayDefaults(cfg.Gateway)
+	applyDefaults(cfg)
+}
+
 // LoadFromFile loads configuration from a TOML file.
 //
 // This function uses the BurntSushi/toml v1.6.0+ parser with TOML 1.1 support,
