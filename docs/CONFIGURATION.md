@@ -142,6 +142,24 @@ Run `./awmg --help` for full CLI options. Key flags:
 - **`headers`** (optional): HTTP headers to include in requests (for `type: "http"` servers)
   - Map of header name to value (e.g., `{"Authorization": "Bearer token"}`)
 
+- **`auth`** (optional, HTTP servers only): Upstream authentication configuration
+  - Only supported for `type: "http"` servers; using `auth` with stdio servers returns a validation error
+  - Currently supports one `type`:
+    - `"github-oidc"` — Obtains a GitHub Actions OIDC token and attaches it as `Authorization: Bearer <token>` on every request to the HTTP backend. Requires the GitHub Actions job to have `permissions: { id-token: write }`.
+  - **`audience`** (optional): OIDC token audience. Defaults to the server's `url` value.
+  - Tokens are cached per audience and automatically refreshed before expiry.
+  - Example:
+    ```json
+    "my-http-server": {
+      "type": "http",
+      "url": "https://my-internal-mcp.example.com",
+      "auth": {
+        "type": "github-oidc",
+        "audience": "https://my-internal-mcp.example.com"
+      }
+    }
+    ```
+
 - **`tools`** (optional): List of tool names intended to be exposed from this server
   - **Note**: This field is stored but not currently enforced at runtime; all tools from the backend are always exposed regardless of this value
   - Example: `["get_file_contents", "search_code"]`
