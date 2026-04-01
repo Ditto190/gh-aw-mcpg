@@ -199,9 +199,10 @@ func applyGatewayDefaults(cfg *GatewayConfig) {
 }
 
 // EnsureGatewayDefaults guarantees that cfg.Gateway is non-nil and that all
-// gateway-level fields have sensible defaults applied. LoadFromFile and
-// LoadFromStdin already call this, but consumers that receive a Config
-// constructed manually (e.g. in tests) can call it to avoid nil-pointer panics.
+// gateway-level fields have sensible defaults applied. This matches the
+// invariants enforced by the standard loaders (LoadFromFile, LoadFromStdin),
+// and can be used by callers that construct Config values manually (e.g. in
+// tests) to avoid nil-pointer panics and ensure consistent defaults.
 func (cfg *Config) EnsureGatewayDefaults() {
 	if cfg.Gateway == nil {
 		cfg.Gateway = &GatewayConfig{}
