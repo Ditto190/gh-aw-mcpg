@@ -111,11 +111,6 @@ type UnifiedServer struct {
 func NewUnified(ctx context.Context, cfg *config.Config) (*UnifiedServer, error) {
 	logUnified.Printf("Creating new unified server: sequentialLaunch=%v, servers=%d", cfg.SequentialLaunch, len(cfg.Servers))
 
-	// Guarantee cfg.Gateway is non-nil with defaults applied.
-	// LoadFromFile/LoadFromStdin already ensure this, but tests may
-	// construct configs manually without going through the load path.
-	cfg.EnsureGatewayDefaults()
-
 	l := launcher.New(ctx, cfg)
 
 	// Config loading guarantees cfg.Gateway is non-nil and all fields
