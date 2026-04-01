@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/github/gh-aw-mcpg/internal/logger"
 	"github.com/itchyny/gojq"
@@ -373,18 +374,22 @@ func WrapToolHandler(
 		logger.LogDebug("payload", "Schema transformation completed: tool=%s, queryID=%s, schemaSize=%d bytes",
 			toolName, queryID, len(schemaBytes))
 
-		// Build the transformed response: first PayloadPreviewSize chars + schema.
+		// Build the transformed response: first PayloadPreviewSize bytes + schema.
 		// Slice the bytes before converting to string to avoid allocating a full copy of the
-		// (potentially multi-MB) payload when only the first PayloadPreviewSize bytes are needed.
+		// (potentially multi-MB) payload when only a short preview is needed.
 		//
-		// Byte-level slicing is safe here because json.Marshal produces ASCII-clean output:
-		// non-ASCII runes are escaped as \uXXXX sequences, so every byte boundary is a
-		// valid UTF-8 boundary.
+		// json.Marshal emits raw UTF-8 for non-ASCII runes, so a naive byte slice could
+		// split a multi-byte sequence. We adjust the cut point backward to the nearest
+		// valid rune boundary to guarantee the preview is valid UTF-8.
 		payloadLen := len(payloadJSON)
 		var preview string
 		truncated := payloadLen > PayloadPreviewSize
 		if truncated {
-			preview = string(payloadJSON[:PayloadPreviewSize]) + "..."
+			cutPoint := PayloadPreviewSize
+			for cutPoint > 0 && !utf8.RuneStart(payloadJSON[cutPoint]) {
+				cutPoint--
+			}
+			preview = string(payloadJSON[:cutPoint]) + "..."
 			logger.LogInfo("payload", "Payload truncated for preview: tool=%s, queryID=%s, originalSize=%d bytes, previewSize=%d bytes",
 				toolName, queryID, payloadLen, PayloadPreviewSize)
 		} else {
