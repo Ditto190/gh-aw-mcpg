@@ -13,21 +13,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// integrationPayloadMetadataToMap converts PayloadMetadata to map[string]interface{} for test assertions
-func integrationPayloadMetadataToMap(t *testing.T, data interface{}) map[string]interface{} {
-	t.Helper()
-	pm, ok := data.(PayloadMetadata)
-	if !ok {
-		t.Fatalf("expected PayloadMetadata, got %T", data)
-	}
-	jsonBytes, err := json.Marshal(pm)
-	require.NoError(t, err)
-	var result map[string]interface{}
-	err = json.Unmarshal(jsonBytes, &result)
-	require.NoError(t, err)
-	return result
-}
-
 // TestMiddlewareIntegration tests the complete middleware flow
 func TestMiddlewareIntegration(t *testing.T) {
 	// Create temporary directory for test
@@ -214,7 +199,7 @@ func TestMiddlewareWithLargePayload(t *testing.T) {
 	}
 
 	// Also check data return value
-	dataMap := integrationPayloadMetadataToMap(t, data)
+	dataMap := payloadMetadataToMap(t, data)
 
 	// Verify preview truncation (check if it ends with ...)
 	preview := dataMap["payloadPreview"].(string)

@@ -54,6 +54,15 @@ type PayloadMetadata struct {
 //
 // For arrays, only the first element's schema is retained to represent the array structure.
 // Empty arrays are preserved as [].
+//
+// NOTE: This defines a custom walk function rather than using gojq's built-in walk(f).
+// The built-in walk(f) applies f to every node but preserves the original structure.
+// Our custom walk does two things the built-in cannot:
+//  1. Replaces leaf values with their type name (e.g., "test" → "string")
+//  2. Collapses arrays to only the first element for schema inference
+//
+// These behaviors are incompatible with standard walk(f) semantics, which would
+// apply f post-recursion without structural changes to arrays.
 const jqSchemaFilter = `
 def walk(f):
   . as $in |
@@ -143,6 +152,8 @@ func applyJqSchema(ctx context.Context, jsonData interface{}) (interface{}, erro
 	}
 
 	// Run the pre-compiled query with context support (much faster than Parse+Run)
+	// The iterator is consumed only once because the walk(.) filter produces exactly
+	// one output value (the fully-transformed schema). There is no need to drain it.
 	iter := jqSchemaCode.RunWithContext(ctx, jsonData)
 	v, ok := iter.Next()
 	if !ok {
@@ -331,10 +342,16 @@ func WrapToolHandler(
 		logger.LogDebug("payload", "Applying jq schema transformation: tool=%s, queryID=%s", toolName, queryID)
 		var schemaObj interface{}
 		if schemaErr := func() error {
-			// Unmarshal to interface{} for jq processing
+			// Prepare data for jq processing. If data is already a native Go type
+			// (map or slice), use it directly to avoid a redundant JSON round-trip.
 			var jsonData interface{}
-			if err := json.Unmarshal(payloadJSON, &jsonData); err != nil {
-				return fmt.Errorf("failed to unmarshal for schema: %w", err)
+			switch data.(type) {
+			case map[string]interface{}, []interface{}:
+				jsonData = data
+			default:
+				if err := json.Unmarshal(payloadJSON, &jsonData); err != nil {
+					return fmt.Errorf("failed to unmarshal for schema: %w", err)
+				}
 			}
 
 			schema, err := applyJqSchema(ctx, jsonData)
@@ -359,6 +376,10 @@ func WrapToolHandler(
 		// Build the transformed response: first PayloadPreviewSize chars + schema.
 		// Slice the bytes before converting to string to avoid allocating a full copy of the
 		// (potentially multi-MB) payload when only the first PayloadPreviewSize bytes are needed.
+		//
+		// Byte-level slicing is safe here because json.Marshal produces ASCII-clean output:
+		// non-ASCII runes are escaped as \uXXXX sequences, so every byte boundary is a
+		// valid UTF-8 boundary.
 		payloadLen := len(payloadJSON)
 		var preview string
 		truncated := payloadLen > PayloadPreviewSize
