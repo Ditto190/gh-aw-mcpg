@@ -60,6 +60,15 @@ When running `awmg proxy`, these variables configure the upstream GitHub API:
 | `GITHUB_SERVER_URL` | GitHub server URL; proxy auto-derives API endpoint: `*.ghe.com` → `copilot-api.*.ghe.com`, GHES → `<host>/api/v3`, `github.com` → `api.github.com` | (falls back to `api.github.com`) |
 | `GH_TOKEN` / `GITHUB_TOKEN` / `GITHUB_PERSONAL_ACCESS_TOKEN` | GitHub auth token for the proxy to forward requests (checked in priority order) | (required for upstream auth) |
 
+## GitHub Actions OIDC Variables
+
+When any HTTP server uses `auth.type = "github-oidc"`, the gateway reads these environment variables (set automatically by the GitHub Actions runner when `permissions: { id-token: write }` is granted):
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `ACTIONS_ID_TOKEN_REQUEST_URL` | GitHub Actions OIDC token endpoint. Required when any HTTP server uses `auth.type = "github-oidc"`. | (set by GitHub Actions) |
+| `ACTIONS_ID_TOKEN_REQUEST_TOKEN` | Bearer token used to authenticate the OIDC token request. Used alongside `ACTIONS_ID_TOKEN_REQUEST_URL`. | (set by GitHub Actions) |
+
 ## DIFC / Guard Policy Configuration
 
 These environment variables configure guard policies (e.g., AllowOnly policies for restricting tool access to specific GitHub repositories):

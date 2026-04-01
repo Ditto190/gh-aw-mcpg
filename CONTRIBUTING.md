@@ -151,6 +151,24 @@ Or run manually:
 echo '{"mcpServers": {...}}' | ./awmg --config-stdin
 ```
 
+### Advanced Flags
+
+```bash
+# Custom log directory
+./awmg --config config.toml --log-dir /path/to/logs
+
+# Load environment file
+./awmg --config config.toml --env .env
+
+# Increase verbosity
+./awmg --config config.toml -v
+
+# Custom payload directory and size threshold
+./awmg --config config.toml --payload-dir /tmp/payloads --payload-size-threshold 1048576
+```
+
+See [docs/ENVIRONMENT_VARIABLES.md](docs/ENVIRONMENT_VARIABLES.md) for the full list of environment variable overrides.
+
 ### Testing with Codex
 
 You can test MCPG with Codex (in another terminal):
