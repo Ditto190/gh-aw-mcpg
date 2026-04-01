@@ -102,6 +102,9 @@ type UnifiedServer struct {
 
 	// Testing support - when true, skips os.Exit() call
 	testMode bool
+
+	// Health monitoring
+	healthMonitor *launcher.HealthMonitor
 }
 
 // NewUnified creates a new unified MCP server
@@ -191,6 +194,10 @@ func NewUnified(ctx context.Context, cfg *config.Config) (*UnifiedServer, error)
 	if err := us.registerAllTools(); err != nil {
 		return nil, fmt.Errorf("failed to register tools: %w", err)
 	}
+
+	// Start periodic health monitoring and auto-restart (spec §8)
+	us.healthMonitor = launcher.NewHealthMonitor(l, launcher.DefaultHealthCheckInterval)
+	us.healthMonitor.Start()
 
 	logUnified.Printf("Unified server created successfully with %d tools", len(us.tools))
 	return us, nil
@@ -660,6 +667,11 @@ func (us *UnifiedServer) InitiateShutdown() int {
 
 		log.Println("Initiating gateway shutdown...")
 		logger.LogInfo("shutdown", "Gateway shutdown initiated")
+
+		// Stop health monitor before closing connections
+		if us.healthMonitor != nil {
+			us.healthMonitor.Stop()
+		}
 
 		// Count servers before closing
 		serversTerminated = len(us.launcher.ServerIDs())

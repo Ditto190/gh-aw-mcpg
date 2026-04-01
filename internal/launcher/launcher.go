@@ -322,6 +322,23 @@ func (l *Launcher) recordError(serverID string, errMsg string) {
 	logLauncher.Printf("Recorded server error: serverID=%s, error=%s", serverID, errMsg)
 }
 
+// clearServerForRestart removes the error record and any cached connection for
+// serverID so that a subsequent GetOrLaunch call will attempt a fresh launch.
+// Called by HealthMonitor before retrying a failed server.
+func (l *Launcher) clearServerForRestart(serverID string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	delete(l.serverErrors, serverID)
+	delete(l.serverStartTimes, serverID)
+
+	if conn, ok := l.connections[serverID]; ok {
+		conn.Close()
+		delete(l.connections, serverID)
+	}
+	logLauncher.Printf("Cleared server state for restart: serverID=%s", serverID)
+}
+
 // GetServerState returns the observed runtime state for a single server.
 func (l *Launcher) GetServerState(serverID string) ServerState {
 	l.mu.RLock()
