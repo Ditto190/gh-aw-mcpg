@@ -403,11 +403,12 @@ func trySDKTransport(
 	transportType HTTPTransportType,
 	transportName string,
 	createTransport transportConnector,
+	keepAlive time.Duration,
 ) (*Connection, error) {
-	// Create MCP client with logger and keepalive enabled.
-	// DefaultHTTPKeepaliveInterval sends periodic pings to prevent session expiry
-	// on backends (e.g. safeoutputs) that have a 30-minute idle timeout.
-	client := newMCPClient(logConn, DefaultHTTPKeepaliveInterval)
+	// Create MCP client with logger and optional keepalive.
+	// When keepAlive > 0, periodic pings prevent session expiry on backends
+	// (e.g. safeoutputs) that have an idle timeout.
+	client := newMCPClient(logConn, keepAlive)
 
 	// Create transport using the provided connector
 	transport := createTransport(url, httpClient)
@@ -422,7 +423,7 @@ func trySDKTransport(
 		return nil, fmt.Errorf("%s transport connect failed: %w", transportName, err)
 	}
 
-	conn := newHTTPConnection(ctx, cancel, client, session, url, headers, httpClient, transportType, serverID, DefaultHTTPKeepaliveInterval)
+	conn := newHTTPConnection(ctx, cancel, client, session, url, headers, httpClient, transportType, serverID, keepAlive)
 
 	logger.LogInfo("backend", "%s transport connected successfully", transportName)
 	logConn.Printf("Connected with %s transport", transportName)
@@ -430,7 +431,7 @@ func trySDKTransport(
 }
 
 // tryStreamableHTTPTransport attempts to connect using the streamable HTTP transport (2025-03-26 spec)
-func tryStreamableHTTPTransport(ctx context.Context, cancel context.CancelFunc, serverID, url string, headers map[string]string, httpClient *http.Client) (*Connection, error) {
+func tryStreamableHTTPTransport(ctx context.Context, cancel context.CancelFunc, serverID, url string, headers map[string]string, httpClient *http.Client, keepAlive time.Duration) (*Connection, error) {
 	return trySDKTransport(
 		ctx, cancel, serverID, url, headers, httpClient,
 		HTTPTransportStreamable,
@@ -442,11 +443,12 @@ func tryStreamableHTTPTransport(ctx context.Context, cancel context.CancelFunc, 
 				MaxRetries: 0, // Don't retry on failure - we'll try other transports
 			}
 		},
+		keepAlive,
 	)
 }
 
 // trySSETransport attempts to connect using the SSE transport (2024-11-05 spec)
-func trySSETransport(ctx context.Context, cancel context.CancelFunc, serverID, url string, headers map[string]string, httpClient *http.Client) (*Connection, error) {
+func trySSETransport(ctx context.Context, cancel context.CancelFunc, serverID, url string, headers map[string]string, httpClient *http.Client, keepAlive time.Duration) (*Connection, error) {
 	return trySDKTransport(
 		ctx, cancel, serverID, url, headers, httpClient,
 		HTTPTransportSSE,
@@ -457,6 +459,7 @@ func trySSETransport(ctx context.Context, cancel context.CancelFunc, serverID, u
 				HTTPClient: httpClient,
 			}
 		},
+		keepAlive,
 	)
 }
 

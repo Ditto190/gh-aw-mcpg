@@ -197,7 +197,7 @@ func NewConnection(ctx context.Context, serverID, command string, args []string,
 // Authorization header from the headers map.
 //
 // This ensures compatibility with all types of HTTP MCP servers.
-func NewHTTPConnection(ctx context.Context, serverID, url string, headers map[string]string, oidcProvider *oidc.Provider, oidcAudience string) (*Connection, error) {
+func NewHTTPConnection(ctx context.Context, serverID, url string, headers map[string]string, oidcProvider *oidc.Provider, oidcAudience string, keepAlive time.Duration) (*Connection, error) {
 	logger.LogInfo("backend", "Creating HTTP MCP connection with transport fallback, url=%s", url)
 	ctx, cancel := context.WithCancel(ctx)
 
@@ -235,7 +235,7 @@ func NewHTTPConnection(ctx context.Context, serverID, url string, headers map[st
 
 	// Try 1: Streamable HTTP (2025-03-26 spec)
 	logConn.Printf("Attempting streamable HTTP transport for %s", url)
-	conn, err := tryStreamableHTTPTransport(ctx, cancel, serverID, url, headers, headerClient)
+	conn, err := tryStreamableHTTPTransport(ctx, cancel, serverID, url, headers, headerClient, keepAlive)
 	if err == nil {
 		logger.LogInfo("backend", "Successfully connected using streamable HTTP transport, url=%s", url)
 		log.Printf("Configured HTTP MCP server with streamable transport: %s", url)
@@ -245,7 +245,7 @@ func NewHTTPConnection(ctx context.Context, serverID, url string, headers map[st
 
 	// Try 2: SSE (2024-11-05 spec)
 	logConn.Printf("Attempting SSE transport for %s", url)
-	conn, err = trySSETransport(ctx, cancel, serverID, url, headers, headerClient)
+	conn, err = trySSETransport(ctx, cancel, serverID, url, headers, headerClient, keepAlive)
 	if err == nil {
 		logger.LogWarn("backend", "⚠️  MCP over SSE has been deprecated. Connected using SSE transport for url=%s. Please migrate to streamable HTTP transport (2025-03-26 spec).", url)
 		log.Printf("⚠️  WARNING: MCP over SSE (2024-11-05 spec) has been DEPRECATED")
