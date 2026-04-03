@@ -160,40 +160,6 @@ func TestGetSessionID_FromContext(t *testing.T) {
 	assert.Equal(t, "default", extractedID, "default session ID, got '%s'")
 }
 
-func TestRequireSession(t *testing.T) {
-	cfg := &config.Config{
-		Servers: map[string]*config.ServerConfig{},
-	}
-
-	ctx := context.Background()
-	us, err := NewUnified(ctx, cfg)
-	require.NoError(t, err, "NewUnified() failed")
-	defer us.Close()
-
-	// Create a session
-	sessionID := "valid-session"
-	us.sessionMu.Lock()
-	us.sessions[sessionID] = NewSession(sessionID, "token")
-	us.sessionMu.Unlock()
-
-	// Test with valid session
-	ctxWithSession := context.WithValue(ctx, SessionIDContextKey, sessionID)
-	err = us.requireSession(ctxWithSession)
-	assert.NoError(t, err, "requireSession() failed for valid session")
-
-	// Test with non-existent session - should auto-create even with DIFC enabled
-	ctxWithNewSession := context.WithValue(ctx, SessionIDContextKey, "new-session")
-	err = us.requireSession(ctxWithNewSession)
-	require.NoError(t, err, "requireSession() should auto-create session even when DIFC is enabled")
-
-	// Verify session was created
-	us.sessionMu.RLock()
-	newSession, exists := us.sessions["new-session"]
-	us.sessionMu.RUnlock()
-	require.True(t, exists, "Session should have been auto-created")
-	require.NotNil(t, newSession, "Session should not be nil")
-}
-
 func TestRequireSession_DifcDisabled(t *testing.T) {
 	cfg := &config.Config{
 		Servers: map[string]*config.ServerConfig{},

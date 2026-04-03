@@ -172,7 +172,7 @@ GITHUB_TOKEN = "mytoken"
 }
 
 // TestLoadFromFile_UnknownKeysDoNotCauseError verifies that unknown configuration
-// keys produce a warning log but do not prevent the config from loading.
+// keys are rejected with an error per spec §4.3.1.
 func TestLoadFromFile_UnknownKeysDoNotCauseError(t *testing.T) {
 	path := writeTempTOML(t, `
 [gateway]
@@ -182,12 +182,11 @@ prot = 3000
 command = "docker"
 args = ["run", "--rm", "-i", "ghcr.io/github/github-mcp-server:latest"]
 `)
-	// Unknown key "prot" (typo for "port") should warn but not error
+	// Unknown key "prot" (typo for "port") must now return an error per spec §4.3.1
 	cfg, err := LoadFromFile(path)
-	require.NoError(t, err)
-	require.NotNil(t, cfg)
-	// Port should use default since "prot" was not recognized
-	assert.Equal(t, DefaultPort, cfg.Gateway.Port)
+	require.Error(t, err)
+	assert.Nil(t, cfg)
+	assert.Contains(t, err.Error(), "unrecognized field")
 }
 
 // TestLoadFromFile_TrustedBotsEmptyArray verifies that an explicitly set but

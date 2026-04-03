@@ -99,6 +99,46 @@ func TestAuthMiddleware(t *testing.T) {
 			expectNextCalled:   true,
 			expectErrorMessage: "",
 		},
+		{
+			name:               "MalformedHeaderNullByte",
+			configuredAPIKey:   "valid-key",
+			authHeader:         "valid-key\x00extra",
+			expectStatusCode:   http.StatusBadRequest,
+			expectNextCalled:   false,
+			expectErrorMessage: "malformed Authorization header",
+		},
+		{
+			name:               "MalformedHeaderControlChar",
+			configuredAPIKey:   "valid-key",
+			authHeader:         "valid-key\x01extra",
+			expectStatusCode:   http.StatusBadRequest,
+			expectNextCalled:   false,
+			expectErrorMessage: "malformed Authorization header",
+		},
+		{
+			name:               "MalformedHeaderDEL",
+			configuredAPIKey:   "valid-key",
+			authHeader:         "valid-key\x7F",
+			expectStatusCode:   http.StatusBadRequest,
+			expectNextCalled:   false,
+			expectErrorMessage: "malformed Authorization header",
+		},
+		{
+			name:               "MalformedHeaderNewline",
+			configuredAPIKey:   "valid-key",
+			authHeader:         "valid-key\nextra",
+			expectStatusCode:   http.StatusBadRequest,
+			expectNextCalled:   false,
+			expectErrorMessage: "malformed Authorization header",
+		},
+		{
+			name:               "TabAllowedInHeader",
+			configuredAPIKey:   "valid\tkey",
+			authHeader:         "valid\tkey",
+			expectStatusCode:   http.StatusOK,
+			expectNextCalled:   true,
+			expectErrorMessage: "",
+		},
 	}
 
 	for _, tt := range tests {
@@ -312,4 +352,31 @@ func TestLogRuntimeError(t *testing.T) {
 // Helper function to create string pointer
 func stringPtr(s string) *string {
 	return &s
+}
+
+// TestIsMalformedAuthHeader tests the isMalformedAuthHeader helper.
+func TestIsMalformedAuthHeader(t *testing.T) {
+	tests := []struct {
+		name      string
+		header    string
+		malformed bool
+	}{
+		{name: "EmptyString", header: "", malformed: false},
+		{name: "NormalKey", header: "my-api-key", malformed: false},
+		{name: "SpecialPrintableChars", header: "key!@#$%^&*()", malformed: false},
+		{name: "HorizontalTab", header: "key\tvalue", malformed: false},
+		{name: "NullByte", header: "key\x00value", malformed: true},
+		{name: "ControlCharSOH", header: "\x01key", malformed: true},
+		{name: "ControlCharLF", header: "key\nvalue", malformed: true},
+		{name: "ControlCharCR", header: "key\rvalue", malformed: true},
+		{name: "DELChar", header: "key\x7Fvalue", malformed: true},
+		{name: "ControlCharUS", header: "key\x1Fvalue", malformed: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isMalformedAuthHeader(tt.header)
+			assert.Equal(t, tt.malformed, got, "isMalformedAuthHeader(%q) should return %v", tt.header, tt.malformed)
+		})
+	}
 }

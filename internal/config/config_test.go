@@ -1036,16 +1036,17 @@ func TestLoadFromFile_UnknownKeys(t *testing.T) {
 [servers.test]
 command = "docker"
 args = ["run", "--rm", "-i", "test/container:latest"]
-unknown_field = "should trigger warning"
+unknown_field = "should trigger error"
 `
 
 	err := os.WriteFile(tmpFile, []byte(tomlContent), 0644)
 	require.NoError(t, err, "Failed to write temp TOML file")
 
-	// Should still load successfully but log warning
+	// Must now return an error per spec §4.3.1: unknown fields MUST be rejected
 	cfg, err := LoadFromFile(tmpFile)
-	require.NoError(t, err, "LoadFromFile() should succeed with unknown keys")
-	require.NotNil(t, cfg, "Config should not be nil")
+	require.Error(t, err, "LoadFromFile() should fail with unknown keys")
+	assert.Nil(t, cfg, "Config should be nil on error")
+	assert.Contains(t, err.Error(), "unrecognized field", "Error should mention unrecognized field")
 }
 
 func TestLoadFromFile_NonExistentFile(t *testing.T) {
@@ -1092,7 +1093,7 @@ port 3000
 		"Error should mention column or line position, got: %s", errMsg)
 }
 
-// TestLoadFromFile_UnknownKeysInGateway tests detection of unknown keys in gateway section
+// TestLoadFromFile_UnknownKeysInGateway tests that unknown keys in gateway section are rejected
 func TestLoadFromFile_UnknownKeysInGateway(t *testing.T) {
 	tmpDir := t.TempDir()
 	tmpFile := filepath.Join(tmpDir, "config.toml")
@@ -1111,21 +1112,14 @@ args = ["run", "--rm", "-i", "test/container:latest"]
 	err := os.WriteFile(tmpFile, []byte(tomlContent), 0644)
 	require.NoError(t, err, "Failed to write temp TOML file")
 
-	// Enable debug logging to capture warning about unknown key
-	SetDebug(true)
-	defer SetDebug(false)
-
-	// Should still load successfully, but warning will be logged
+	// Must return an error per spec §4.3.1: unknown fields MUST be rejected
 	cfg, err := LoadFromFile(tmpFile)
-	require.NoError(t, err, "LoadFromFile() should succeed even with unknown keys")
-	require.NotNil(t, cfg, "Config should not be nil")
-
-	// Port should be default since "prot" was not recognized
-	assert.Equal(t, DefaultPort, cfg.Gateway.Port, "Port should be default since 'prot' is unknown")
-	assert.Equal(t, "test-key", cfg.Gateway.APIKey, "API key should be set correctly")
+	require.Error(t, err, "LoadFromFile() should fail with unknown keys")
+	assert.Nil(t, cfg, "Config should be nil on error")
+	assert.Contains(t, err.Error(), "unrecognized field", "Error should mention unrecognized field")
 }
 
-// TestLoadFromFile_MultipleUnknownKeys tests detection of multiple typos
+// TestLoadFromFile_MultipleUnknownKeys tests that multiple unknown keys are rejected
 func TestLoadFromFile_MultipleUnknownKeys(t *testing.T) {
 	tmpDir := t.TempDir()
 	tmpFile := filepath.Join(tmpDir, "config.toml")
@@ -1146,20 +1140,11 @@ typ = "stdio"
 	err := os.WriteFile(tmpFile, []byte(tomlContent), 0644)
 	require.NoError(t, err, "Failed to write temp TOML file")
 
-	// Enable debug logging to capture warnings
-	SetDebug(true)
-	defer SetDebug(false)
-
-	// Should still load successfully
+	// Must return an error per spec §4.3.1: unknown fields MUST be rejected
 	cfg, err := LoadFromFile(tmpFile)
-	require.NoError(t, err, "LoadFromFile() should succeed even with multiple unknown keys")
-	require.NotNil(t, cfg, "Config should not be nil")
-
-	// Correctly spelled fields should work
-	assert.Equal(t, 8080, cfg.Gateway.Port, "Port should be set correctly")
-	// Misspelled fields should use defaults
-	assert.Equal(t, DefaultStartupTimeout, cfg.Gateway.StartupTimeout, "StartupTimeout should be default")
-	assert.Equal(t, DefaultToolTimeout, cfg.Gateway.ToolTimeout, "ToolTimeout should be default")
+	require.Error(t, err, "LoadFromFile() should fail with multiple unknown keys")
+	assert.Nil(t, cfg, "Config should be nil on error")
+	assert.Contains(t, err.Error(), "unrecognized field", "Error should mention unrecognized field")
 }
 
 // TestLoadFromFile_StreamingLargeFile tests that streaming decoder works efficiently

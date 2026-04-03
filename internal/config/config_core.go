@@ -12,7 +12,7 @@
 //
 // Streaming Decoder: Uses toml.NewDecoder() for memory efficiency with large configs
 // Error Reporting: Wraps ParseError with %w to preserve structured type and surface full source context
-// Unknown Fields: Uses MetaData.Undecoded() for typo warnings (not hard errors)
+// Unknown Fields: Uses MetaData.Undecoded() to reject configurations with unrecognized fields (spec §4.3.1)
 // Validation: Multi-layer approach (parse → schema → field-level → variable expansion)
 //
 // # TOML 1.1 Features Used
@@ -32,7 +32,6 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
-	"github.com/github/gh-aw-mcpg/internal/logger"
 )
 
 // Core constants for configuration defaults
@@ -235,15 +234,32 @@ func (cfg *Config) EnsureGatewayDefaults() {
 	applyDefaults(cfg)
 }
 
-// LoadFromFile loads configuration from a TOML file.
+// isDynamicTOMLPath returns true if the TOML key path falls under a known
+// map[string]interface{} field in the config struct. These fields accept
+// arbitrary nested keys by design and must be excluded from the unknown-field check.
 //
+// Dynamic sections:
+//   - servers.<name>.guard_policies.<policy>.<any> – per-server guard policy entries
+//   - guards.<name>.config.<any>                  – per-guard free-form config
+func isDynamicTOMLPath(key toml.Key) bool {
+	// servers.<name>.guard_policies.<policy>.<key> → len ≥ 5
+	if len(key) >= 5 && key[0] == "servers" && key[2] == "guard_policies" {
+		return true
+	}
+	// guards.<name>.config.<key> → len ≥ 4
+	if len(key) >= 4 && key[0] == "guards" && key[2] == "config" {
+		return true
+	}
+	return false
+}
+
 // This function uses the BurntSushi/toml v1.6.0+ parser with TOML 1.1 support,
 // which enables modern syntax features like newlines in inline tables and
 // improved duplicate key detection.
 //
 // Error Handling:
 //   - Parse errors include both line AND column numbers (v1.5.0+ feature)
-//   - Unknown fields generate warnings instead of hard errors (typo detection)
+//   - Unknown fields are rejected with an error per spec §4.3.1
 //   - Metadata tracks all decoded keys for validation purposes
 //
 // Example usage with TOML 1.1 multi-line arrays:
@@ -280,22 +296,22 @@ func LoadFromFile(path string) (*Config, error) {
 
 	logConfig.Printf("Parsed TOML config with %d servers", len(cfg.Servers))
 
-	// Detect and warn about unknown configuration keys (typos, deprecated options)
+	// Detect and reject unknown configuration keys (typos, unrecognized fields).
 	// This uses MetaData.Undecoded() to identify keys present in TOML but not
-	// in the Config struct. This provides a balance between strict validation
-	// (hard errors) and user-friendliness (warnings allow config to load).
+	// in the Config struct. Per spec §4.3.1, the gateway MUST reject configurations
+	// containing unrecognized fields with an informative error message.
 	//
-	// Design decision: We use warnings rather than toml.Decoder.DisallowUnknownFields()
-	// (which doesn't exist) or hard errors to maintain backward compatibility and
-	// allow gradual config migration. Common typos like "prot" → "port" are caught
-	// while still allowing the gateway to start.
+	// Note: map[string]interface{} fields (guard_policies, guards.*.config) are
+	// intentionally flexible and their nested keys are exempt from this check.
 	undecoded := md.Undecoded()
-	if len(undecoded) > 0 {
-		for _, key := range undecoded {
-			// Log to both debug logger and file logger for visibility
-			logConfig.Printf("WARNING: Unknown configuration key '%s' - check for typos or deprecated options", key)
-			logger.LogWarn("config", "Unknown configuration key '%s' - check for typos or deprecated options", key)
+	var unknownKeys []toml.Key
+	for _, key := range undecoded {
+		if !isDynamicTOMLPath(key) {
+			unknownKeys = append(unknownKeys, key)
 		}
+	}
+	if len(unknownKeys) > 0 {
+		return nil, fmt.Errorf("configuration contains unrecognized field(s): %v — check the MCP Gateway Specification for supported fields", unknownKeys)
 	}
 
 	// Validate required fields
