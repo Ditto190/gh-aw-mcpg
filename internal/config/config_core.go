@@ -29,6 +29,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/BurntSushi/toml"
@@ -234,19 +235,24 @@ func (cfg *Config) EnsureGatewayDefaults() {
 	applyDefaults(cfg)
 }
 
-// isDynamicTOMLPath returns true if the TOML key path falls under a known
-// map[string]interface{} field in the config struct. These fields accept
+// isDynamicTOMLPath reports whether the TOML key path falls under a known
+// map[string]interface{} field in the config struct. Such fields accept
 // arbitrary nested keys by design and must be excluded from the unknown-field check.
 //
+// toml.Key is a []string of path components, e.g.:
+//
+//	["servers", "github", "guard_policies", "mypolicy", "repos"]
+//	 [0]        [1]       [2]               [3]          [4]
+//
 // Dynamic sections:
-//   - servers.<name>.guard_policies.<policy>.<any> – per-server guard policy entries
-//   - guards.<name>.config.<any>                  – per-guard free-form config
+//   - servers[0].<name>[1].guard_policies[2].<policy>[3].<key>[4+]  (len ≥ 5)
+//   - guards[0].<name>[1].config[2].<key>[3+]                       (len ≥ 4)
 func isDynamicTOMLPath(key toml.Key) bool {
-	// servers.<name>.guard_policies.<policy>.<key> → len ≥ 5
+	// servers.<name>.guard_policies.<policy>.<key> → indices [0]="servers" [2]="guard_policies", len ≥ 5
 	if len(key) >= 5 && key[0] == "servers" && key[2] == "guard_policies" {
 		return true
 	}
-	// guards.<name>.config.<key> → len ≥ 4
+	// guards.<name>.config.<key> → indices [0]="guards" [2]="config", len ≥ 4
 	if len(key) >= 4 && key[0] == "guards" && key[2] == "config" {
 		return true
 	}
@@ -311,7 +317,11 @@ func LoadFromFile(path string) (*Config, error) {
 		}
 	}
 	if len(unknownKeys) > 0 {
-		return nil, fmt.Errorf("configuration contains unrecognized field(s): %v — check the MCP Gateway Specification for supported fields", unknownKeys)
+		keyStrs := make([]string, len(unknownKeys))
+		for i, k := range unknownKeys {
+			keyStrs[i] = k.String()
+		}
+		return nil, fmt.Errorf("configuration contains unrecognized field(s): %s — check the MCP Gateway Specification for supported fields", strings.Join(keyStrs, ", "))
 	}
 
 	// Validate required fields
