@@ -87,7 +87,7 @@ JSON configuration is the primary format for containerized deployments. Pass via
 
 ### Configuration Validation
 
-The gateway provides fail-fast validation with precise error locations (line/column for TOML parse errors), unknown key detection (catches typos like `prot` instead of `port`), and environment variable expansion validation. Check log files for warnings after startup.
+The gateway provides fail-fast validation with precise error locations (line/column for TOML parse errors), unknown field rejection (typos like `prot` instead of `port` are rejected with an error per spec §4.3.1), and environment variable expansion validation.
 
 ### Usage
 

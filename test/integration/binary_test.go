@@ -631,13 +631,21 @@ func findBinary(t *testing.T) string {
 	return ""
 }
 
-// createTempConfig creates a temporary TOML config file
+// createTempConfig creates a temporary TOML config file.
+// The gateway is configured with api_key = "test-token" so tests can use
+// "test-token" as the Authorization header value (per spec §7.1 and §7.2).
 func createTempConfig(t *testing.T, servers map[string]interface{}) string {
 	t.Helper()
 
 	tmpFile, err := os.CreateTemp("", "awmg-test-config-*.toml")
 	require.NoError(t, err, "Failed to create temp config")
 	defer tmpFile.Close()
+
+	// Write gateway section with a known test API key so tests can authenticate.
+	// The random key generation (spec §7.3) is bypassed when a key is configured.
+	fmt.Fprintln(tmpFile, "[gateway]")
+	fmt.Fprintln(tmpFile, `api_key = "test-token"`)
+	fmt.Fprintln(tmpFile, "")
 
 	// Write TOML format
 	fmt.Fprintln(tmpFile, "[servers]")
