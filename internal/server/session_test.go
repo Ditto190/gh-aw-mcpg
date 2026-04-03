@@ -231,7 +231,7 @@ func TestEnsureSessionDirectory(t *testing.T) {
 
 // TestRequireSession verifies that requireSession auto-creates a new Session
 // the first time a session ID is seen and reuses the same Session on subsequent calls.
-func TestRequireSession(t *testing.T) {
+func TestRequireSession_SessionManagement(t *testing.T) {
 	t.Run("auto-creates session for new session ID", func(t *testing.T) {
 		us := newSessionTestUnifiedServer(t)
 		us.payloadDir = t.TempDir()
