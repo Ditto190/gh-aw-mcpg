@@ -139,7 +139,7 @@ func TestNewSession_GuardInitNotShared(t *testing.T) {
 	assert.Empty(t, s2.GuardInit, "s2.GuardInit must not be affected by writes to s1.GuardInit")
 }
 
-// newMinimalUnifiedServer creates a UnifiedServer with an empty config for
+// newMinimalUnifiedServerForSessionTest creates a UnifiedServer with an empty config for
 // use in session-related tests.
 func newMinimalUnifiedServerForSessionTest(t *testing.T) *UnifiedServer {
 	t.Helper()
