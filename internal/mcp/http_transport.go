@@ -36,6 +36,11 @@ const (
 // MCPProtocolVersion is the MCP protocol version used in initialization requests.
 const MCPProtocolVersion = "2025-11-25"
 
+// DefaultHTTPKeepaliveInterval is the default interval for sending keepalive pings to HTTP backends.
+// This should be less than the backend's session idle timeout (typically 30 minutes for safeoutputs).
+// A value of 25 minutes gives a 5-minute buffer before the session would expire.
+const DefaultHTTPKeepaliveInterval = 25 * time.Minute
+
 // requestIDCounter is used to generate unique request IDs for HTTP requests
 var requestIDCounter uint64
 
@@ -167,7 +172,8 @@ func parseJSONRPCResponseWithSSE(body []byte, statusCode int, contextDesc string
 
 // newMCPClient creates a new MCP SDK client with standard implementation details
 // Pass nil for logger parameter to disable SDK logging (for tests)
-func newMCPClient(log *logger.Logger) *sdk.Client {
+// Pass keepAlive > 0 to enable periodic ping keepalives (recommended for HTTP backends)
+func newMCPClient(log *logger.Logger, keepAlive time.Duration) *sdk.Client {
 	var slogLogger *slog.Logger
 	if log != nil {
 		slogLogger = logger.NewSlogLoggerWithHandler(log)
@@ -176,18 +182,21 @@ func newMCPClient(log *logger.Logger) *sdk.Client {
 		Name:    "awmg",
 		Version: version.Get(),
 	}, &sdk.ClientOptions{
-		Logger: slogLogger,
+		Logger:    slogLogger,
+		KeepAlive: keepAlive,
 	})
 }
 
-// newHTTPConnection creates a new HTTP Connection struct with common fields
-func newHTTPConnection(ctx context.Context, cancel context.CancelFunc, client *sdk.Client, session *sdk.ClientSession, url string, headers map[string]string, httpClient *http.Client, transportType HTTPTransportType, serverID string) *Connection {
+// newHTTPConnection creates a new HTTP Connection struct with common fields.
+// keepAlive is passed through to store on the connection so that reconnectSDKTransport
+// can re-create the SDK client with the same keepalive setting.
+func newHTTPConnection(ctx context.Context, cancel context.CancelFunc, client *sdk.Client, session *sdk.ClientSession, url string, headers map[string]string, httpClient *http.Client, transportType HTTPTransportType, serverID string, keepAlive time.Duration) *Connection {
 	// Extract session ID from SDK session if available
 	var sessionID string
 	if session != nil {
 		sessionID = session.ID()
 	}
-	logHTTP.Printf("Creating HTTP connection: serverID=%s, url=%s, transport=%s, headers=%d, sessionID=%s", serverID, url, transportType, len(headers), sessionID)
+	logHTTP.Printf("Creating HTTP connection: serverID=%s, url=%s, transport=%s, headers=%d, sessionID=%s, keepAlive=%v", serverID, url, transportType, len(headers), sessionID, keepAlive)
 	return &Connection{
 		client:            client,
 		session:           session,
@@ -200,6 +209,7 @@ func newHTTPConnection(ctx context.Context, cancel context.CancelFunc, client *s
 		httpClient:        httpClient,
 		httpTransportType: transportType,
 		httpSessionID:     sessionID,
+		keepAliveInterval: keepAlive,
 	}
 }
 
@@ -394,8 +404,10 @@ func trySDKTransport(
 	transportName string,
 	createTransport transportConnector,
 ) (*Connection, error) {
-	// Create MCP client with logger
-	client := newMCPClient(logConn)
+	// Create MCP client with logger and keepalive enabled.
+	// DefaultHTTPKeepaliveInterval sends periodic pings to prevent session expiry
+	// on backends (e.g. safeoutputs) that have a 30-minute idle timeout.
+	client := newMCPClient(logConn, DefaultHTTPKeepaliveInterval)
 
 	// Create transport using the provided connector
 	transport := createTransport(url, httpClient)
@@ -410,7 +422,7 @@ func trySDKTransport(
 		return nil, fmt.Errorf("%s transport connect failed: %w", transportName, err)
 	}
 
-	conn := newHTTPConnection(ctx, cancel, client, session, url, headers, httpClient, transportType, serverID)
+	conn := newHTTPConnection(ctx, cancel, client, session, url, headers, httpClient, transportType, serverID, DefaultHTTPKeepaliveInterval)
 
 	logger.LogInfo("backend", "%s transport connected successfully", transportName)
 	logConn.Printf("Connected with %s transport", transportName)

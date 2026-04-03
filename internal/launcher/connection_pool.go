@@ -39,7 +39,10 @@ const (
 
 // Default configuration values
 const (
-	DefaultIdleTimeout     = 30 * time.Minute
+	// DefaultIdleTimeout is the maximum duration a connection can remain unused before being
+	// removed from the pool. Set to 6 hours to accommodate long-running workflow tasks
+	// (e.g. ML training, large builds) that may not make MCP calls for extended periods.
+	DefaultIdleTimeout     = 6 * time.Hour
 	DefaultCleanupInterval = 5 * time.Minute
 	DefaultMaxErrorCount   = 10
 )

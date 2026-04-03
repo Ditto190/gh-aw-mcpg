@@ -70,6 +70,7 @@ type Connection struct {
 	httpClient        *http.Client
 	httpSessionID     string            // Session ID returned by the HTTP backend
 	httpTransportType HTTPTransportType // Type of HTTP transport in use
+	keepAliveInterval time.Duration     // Keepalive interval for SDK transports (0 = disabled)
 	// sessionMu protects the mutable session fields: httpSessionID, session, and client.
 	// Always use getHTTPSessionID() or getSDKSession() to read these fields; the
 	// reconnect functions (reconnectPlainJSON, reconnectSDKTransport) hold the full Lock.
@@ -98,8 +99,8 @@ func NewConnection(ctx context.Context, serverID, command string, args []string,
 	logger.LogInfo("backend", "Creating new MCP backend connection, command=%s, args=%v", command, sanitize.SanitizeArgs(args))
 	ctx, cancel := context.WithCancel(ctx)
 
-	// Create MCP client with logger
-	client := newMCPClient(logConn)
+	// Create MCP client with logger (no keepalive for stdio – the process lifespan manages the session)
+	client := newMCPClient(logConn, 0)
 
 	// Expand Docker -e flags that reference environment variables
 	// Docker's `-e VAR_NAME` expects VAR_NAME to be in the environment
@@ -326,7 +327,8 @@ func (c *Connection) reconnectSDKTransport() error {
 	headerClient := buildHTTPClientWithHeaders(c.httpClient, c.headers)
 
 	// Build the appropriate transport.
-	client := newMCPClient(logConn)
+	// Re-use the same keepAliveInterval so the reconnected session also sends periodic pings.
+	client := newMCPClient(logConn, c.keepAliveInterval)
 	var transport sdk.Transport
 	switch c.httpTransportType {
 	case HTTPTransportStreamable:
