@@ -39,9 +39,12 @@ const (
 
 // Default configuration values
 const (
-	// DefaultIdleTimeout is the maximum duration a connection can remain unused before being
-	// removed from the pool. Set to 6 hours to accommodate long-running workflow tasks
-	// (e.g. ML training, large builds) that may not make MCP calls for extended periods.
+	// DefaultIdleTimeout is the maximum duration a STDIO-backend connection can remain unused
+	// before being removed from the session pool. Set to 6 hours to accommodate long-running
+	// workflow tasks (e.g. ML training, large builds) that may not make MCP calls for extended
+	// periods. Note: this is distinct from HTTP backend keepalive (DefaultHTTPKeepaliveInterval)
+	// which keeps the remote session alive on the HTTP server side; STDIO connections run as local
+	// child processes whose sessions are bounded only by this pool eviction window.
 	DefaultIdleTimeout     = 6 * time.Hour
 	DefaultCleanupInterval = 5 * time.Minute
 	DefaultMaxErrorCount   = 10
