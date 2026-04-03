@@ -29,6 +29,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"time"
 
 	"github.com/BurntSushi/toml"
 	"github.com/github/gh-aw-mcpg/internal/logger"
@@ -36,9 +37,10 @@ import (
 
 // Core constants for configuration defaults
 const (
-	DefaultPort           = 3000
-	DefaultStartupTimeout = 60  // seconds
-	DefaultToolTimeout    = 120 // seconds
+	DefaultPort              = 3000
+	DefaultStartupTimeout    = 60   // seconds
+	DefaultToolTimeout       = 120  // seconds
+	DefaultKeepaliveInterval = 1500 // seconds (25 minutes) — keeps HTTP backend sessions alive
 )
 
 // Config represents the internal gateway configuration.
@@ -87,6 +89,13 @@ type GatewayConfig struct {
 	// ToolTimeout is the maximum time (seconds) to wait for tool execution
 	ToolTimeout int `toml:"tool_timeout" json:"tool_timeout,omitempty"`
 
+	// KeepaliveInterval is the interval (seconds) for sending keepalive pings to HTTP
+	// backends. This prevents long-running sessions from being expired by the remote
+	// server's idle timeout (typically 30 minutes). Set to -1 to disable keepalive
+	// pings entirely (useful when higher-level timeouts manage session lifecycle).
+	// Default: 1500 (25 minutes)
+	KeepaliveInterval int `toml:"keepalive_interval" json:"keepalive_interval,omitempty"`
+
 	// PayloadDir is the directory for storing large payloads
 	PayloadDir string `toml:"payload_dir" json:"payload_dir,omitempty"`
 
@@ -108,6 +117,18 @@ type GatewayConfig struct {
 	// bot list and is purely additive (it cannot remove built-in trusted bots).
 	// Example values: "copilot-swe-agent[bot]", "my-org-bot[bot]"
 	TrustedBots []string `toml:"trusted_bots" json:"trusted_bots,omitempty"`
+}
+
+// HTTPKeepaliveInterval returns the keepalive interval as a time.Duration.
+// A negative KeepaliveInterval disables keepalive (returns 0).
+func (g *GatewayConfig) HTTPKeepaliveInterval() time.Duration {
+	if g == nil {
+		return time.Duration(DefaultKeepaliveInterval) * time.Second
+	}
+	if g.KeepaliveInterval < 0 {
+		return 0
+	}
+	return time.Duration(g.KeepaliveInterval) * time.Second
 }
 
 // GetAPIKey returns the gateway API key, handling a nil Gateway safely.
@@ -195,6 +216,9 @@ func applyGatewayDefaults(cfg *GatewayConfig) {
 	}
 	if cfg.ToolTimeout == 0 {
 		cfg.ToolTimeout = DefaultToolTimeout
+	}
+	if cfg.KeepaliveInterval == 0 {
+		cfg.KeepaliveInterval = DefaultKeepaliveInterval
 	}
 }
 

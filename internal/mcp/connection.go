@@ -70,6 +70,7 @@ type Connection struct {
 	httpClient        *http.Client
 	httpSessionID     string            // Session ID returned by the HTTP backend
 	httpTransportType HTTPTransportType // Type of HTTP transport in use
+	keepAliveInterval time.Duration     // Keepalive interval for SDK transports (0 = disabled)
 	// sessionMu protects the mutable session fields: httpSessionID, session, and client.
 	// Always use getHTTPSessionID() or getSDKSession() to read these fields; the
 	// reconnect functions (reconnectPlainJSON, reconnectSDKTransport) hold the full Lock.
@@ -98,8 +99,8 @@ func NewConnection(ctx context.Context, serverID, command string, args []string,
 	logger.LogInfo("backend", "Creating new MCP backend connection, command=%s, args=%v", command, sanitize.SanitizeArgs(args))
 	ctx, cancel := context.WithCancel(ctx)
 
-	// Create MCP client with logger
-	client := newMCPClient(logConn)
+	// Create MCP client with logger (no keepalive for stdio – the process lifespan manages the session)
+	client := newMCPClient(logConn, 0)
 
 	// Expand Docker -e flags that reference environment variables
 	// Docker's `-e VAR_NAME` expects VAR_NAME to be in the environment
@@ -196,7 +197,7 @@ func NewConnection(ctx context.Context, serverID, command string, args []string,
 // Authorization header from the headers map.
 //
 // This ensures compatibility with all types of HTTP MCP servers.
-func NewHTTPConnection(ctx context.Context, serverID, url string, headers map[string]string, oidcProvider *oidc.Provider, oidcAudience string) (*Connection, error) {
+func NewHTTPConnection(ctx context.Context, serverID, url string, headers map[string]string, oidcProvider *oidc.Provider, oidcAudience string, keepAlive time.Duration) (*Connection, error) {
 	logger.LogInfo("backend", "Creating HTTP MCP connection with transport fallback, url=%s", url)
 	ctx, cancel := context.WithCancel(ctx)
 
@@ -234,7 +235,7 @@ func NewHTTPConnection(ctx context.Context, serverID, url string, headers map[st
 
 	// Try 1: Streamable HTTP (2025-03-26 spec)
 	logConn.Printf("Attempting streamable HTTP transport for %s", url)
-	conn, err := tryStreamableHTTPTransport(ctx, cancel, serverID, url, headers, headerClient)
+	conn, err := tryStreamableHTTPTransport(ctx, cancel, serverID, url, headers, headerClient, keepAlive)
 	if err == nil {
 		logger.LogInfo("backend", "Successfully connected using streamable HTTP transport, url=%s", url)
 		log.Printf("Configured HTTP MCP server with streamable transport: %s", url)
@@ -244,7 +245,7 @@ func NewHTTPConnection(ctx context.Context, serverID, url string, headers map[st
 
 	// Try 2: SSE (2024-11-05 spec)
 	logConn.Printf("Attempting SSE transport for %s", url)
-	conn, err = trySSETransport(ctx, cancel, serverID, url, headers, headerClient)
+	conn, err = trySSETransport(ctx, cancel, serverID, url, headers, headerClient, keepAlive)
 	if err == nil {
 		logger.LogWarn("backend", "⚠️  MCP over SSE has been deprecated. Connected using SSE transport for url=%s. Please migrate to streamable HTTP transport (2025-03-26 spec).", url)
 		log.Printf("⚠️  WARNING: MCP over SSE (2024-11-05 spec) has been DEPRECATED")
@@ -326,7 +327,8 @@ func (c *Connection) reconnectSDKTransport() error {
 	headerClient := buildHTTPClientWithHeaders(c.httpClient, c.headers)
 
 	// Build the appropriate transport.
-	client := newMCPClient(logConn)
+	// Re-use the same keepAliveInterval so the reconnected session also sends periodic pings.
+	client := newMCPClient(logConn, c.keepAliveInterval)
 	var transport sdk.Transport
 	switch c.httpTransportType {
 	case HTTPTransportStreamable:
@@ -668,7 +670,9 @@ func (c *Connection) getPrompt(params interface{}) (*Response, error) {
 // Close closes the connection
 func (c *Connection) Close() error {
 	logConn.Printf("Closing connection: serverID=%s, isHTTP=%v", c.serverID, c.isHTTP)
-	c.cancel()
+	if c.cancel != nil {
+		c.cancel()
+	}
 	if session := c.getSDKSession(); session != nil {
 		return session.Close()
 	}

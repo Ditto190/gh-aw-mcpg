@@ -167,7 +167,8 @@ func parseJSONRPCResponseWithSSE(body []byte, statusCode int, contextDesc string
 
 // newMCPClient creates a new MCP SDK client with standard implementation details
 // Pass nil for logger parameter to disable SDK logging (for tests)
-func newMCPClient(log *logger.Logger) *sdk.Client {
+// Pass keepAlive > 0 to enable periodic ping keepalives (recommended for HTTP backends)
+func newMCPClient(log *logger.Logger, keepAlive time.Duration) *sdk.Client {
 	var slogLogger *slog.Logger
 	if log != nil {
 		slogLogger = logger.NewSlogLoggerWithHandler(log)
@@ -176,18 +177,21 @@ func newMCPClient(log *logger.Logger) *sdk.Client {
 		Name:    "awmg",
 		Version: version.Get(),
 	}, &sdk.ClientOptions{
-		Logger: slogLogger,
+		Logger:    slogLogger,
+		KeepAlive: keepAlive,
 	})
 }
 
-// newHTTPConnection creates a new HTTP Connection struct with common fields
-func newHTTPConnection(ctx context.Context, cancel context.CancelFunc, client *sdk.Client, session *sdk.ClientSession, url string, headers map[string]string, httpClient *http.Client, transportType HTTPTransportType, serverID string) *Connection {
+// newHTTPConnection creates a new HTTP Connection struct with common fields.
+// keepAlive is passed through to store on the connection so that reconnectSDKTransport
+// can re-create the SDK client with the same keepalive setting.
+func newHTTPConnection(ctx context.Context, cancel context.CancelFunc, client *sdk.Client, session *sdk.ClientSession, url string, headers map[string]string, httpClient *http.Client, transportType HTTPTransportType, serverID string, keepAlive time.Duration) *Connection {
 	// Extract session ID from SDK session if available
 	var sessionID string
 	if session != nil {
 		sessionID = session.ID()
 	}
-	logHTTP.Printf("Creating HTTP connection: serverID=%s, url=%s, transport=%s, headers=%d, sessionID=%s", serverID, url, transportType, len(headers), sessionID)
+	logHTTP.Printf("Creating HTTP connection: serverID=%s, url=%s, transport=%s, headers=%d, keepAlive=%v", serverID, url, transportType, len(headers), keepAlive)
 	return &Connection{
 		client:            client,
 		session:           session,
@@ -200,6 +204,7 @@ func newHTTPConnection(ctx context.Context, cancel context.CancelFunc, client *s
 		httpClient:        httpClient,
 		httpTransportType: transportType,
 		httpSessionID:     sessionID,
+		keepAliveInterval: keepAlive,
 	}
 }
 
@@ -393,9 +398,12 @@ func trySDKTransport(
 	transportType HTTPTransportType,
 	transportName string,
 	createTransport transportConnector,
+	keepAlive time.Duration,
 ) (*Connection, error) {
-	// Create MCP client with logger
-	client := newMCPClient(logConn)
+	// Create MCP client with logger and optional keepalive.
+	// When keepAlive > 0, periodic pings prevent session expiry on backends
+	// (e.g. safeoutputs) that have an idle timeout.
+	client := newMCPClient(logConn, keepAlive)
 
 	// Create transport using the provided connector
 	transport := createTransport(url, httpClient)
@@ -410,7 +418,7 @@ func trySDKTransport(
 		return nil, fmt.Errorf("%s transport connect failed: %w", transportName, err)
 	}
 
-	conn := newHTTPConnection(ctx, cancel, client, session, url, headers, httpClient, transportType, serverID)
+	conn := newHTTPConnection(ctx, cancel, client, session, url, headers, httpClient, transportType, serverID, keepAlive)
 
 	logger.LogInfo("backend", "%s transport connected successfully", transportName)
 	logConn.Printf("Connected with %s transport", transportName)
@@ -418,7 +426,7 @@ func trySDKTransport(
 }
 
 // tryStreamableHTTPTransport attempts to connect using the streamable HTTP transport (2025-03-26 spec)
-func tryStreamableHTTPTransport(ctx context.Context, cancel context.CancelFunc, serverID, url string, headers map[string]string, httpClient *http.Client) (*Connection, error) {
+func tryStreamableHTTPTransport(ctx context.Context, cancel context.CancelFunc, serverID, url string, headers map[string]string, httpClient *http.Client, keepAlive time.Duration) (*Connection, error) {
 	return trySDKTransport(
 		ctx, cancel, serverID, url, headers, httpClient,
 		HTTPTransportStreamable,
@@ -430,11 +438,12 @@ func tryStreamableHTTPTransport(ctx context.Context, cancel context.CancelFunc, 
 				MaxRetries: 0, // Don't retry on failure - we'll try other transports
 			}
 		},
+		keepAlive,
 	)
 }
 
 // trySSETransport attempts to connect using the SSE transport (2024-11-05 spec)
-func trySSETransport(ctx context.Context, cancel context.CancelFunc, serverID, url string, headers map[string]string, httpClient *http.Client) (*Connection, error) {
+func trySSETransport(ctx context.Context, cancel context.CancelFunc, serverID, url string, headers map[string]string, httpClient *http.Client, keepAlive time.Duration) (*Connection, error) {
 	return trySDKTransport(
 		ctx, cancel, serverID, url, headers, httpClient,
 		HTTPTransportSSE,
@@ -445,6 +454,7 @@ func trySSETransport(ctx context.Context, cancel context.CancelFunc, serverID, u
 				HTTPClient: httpClient,
 			}
 		},
+		keepAlive,
 	)
 }
 

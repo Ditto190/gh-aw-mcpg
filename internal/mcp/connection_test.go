@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/github/gh-aw-mcpg/internal/config"
 	"github.com/github/gh-aw-mcpg/internal/difc"
@@ -41,7 +42,7 @@ func TestHTTPRequest_SessionIDHeader(t *testing.T) {
 	// Create an HTTP connection
 	conn, err := NewHTTPConnection(context.Background(), "test-server", testServer.URL, map[string]string{
 		"Authorization": "test-auth-token",
-	}, nil, "")
+	}, nil, "", 0)
 	require.NoError(t, err, "Failed to create HTTP connection")
 
 	// Create a context with session ID
@@ -78,7 +79,7 @@ func TestHTTPRequest_NoSessionID(t *testing.T) {
 	// Create an HTTP connection
 	conn, err := NewHTTPConnection(context.Background(), "test-server", testServer.URL, map[string]string{
 		"Authorization": "test-auth-token",
-	}, nil, "")
+	}, nil, "", 0)
 	require.NoError(t, err, "Failed to create HTTP connection")
 
 	// Send a request without session ID in context
@@ -116,7 +117,7 @@ func TestHTTPRequest_ConfiguredHeaders(t *testing.T) {
 	authToken := "configured-auth-token"
 	conn, err := NewHTTPConnection(context.Background(), "test-server", testServer.URL, map[string]string{
 		"Authorization": authToken,
-	}, nil, "")
+	}, nil, "", 0)
 	require.NoError(t, err, "Failed to create HTTP connection")
 
 	// Create a context with session ID
@@ -375,7 +376,7 @@ func TestHTTPRequest_ErrorResponses(t *testing.T) {
 			// Create connection with custom headers to use plain JSON transport
 			conn, err := NewHTTPConnection(context.Background(), "test-server", testServer.URL, map[string]string{
 				"Authorization": "test-token",
-			}, nil, "")
+			}, nil, "", 0)
 			if err != nil && tt.expectError {
 				// Error during initialization is expected for some error conditions
 				if tt.errorSubstring != "" && !containsSubstring(err.Error(), tt.errorSubstring) {
@@ -427,7 +428,7 @@ func TestConnection_IsHTTP(t *testing.T) {
 		"X-Custom":      "custom-value",
 	}
 
-	conn, err := NewHTTPConnection(context.Background(), "test-server", testServer.URL, headers, nil, "")
+	conn, err := NewHTTPConnection(context.Background(), "test-server", testServer.URL, headers, nil, "", 0)
 	require.NoError(t, err, "Failed to create HTTP connection")
 	defer conn.Close()
 
@@ -474,7 +475,7 @@ func TestHTTPConnection_InvalidURL(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := NewHTTPConnection(context.Background(), "test-server", tt.url, tt.headers, nil, "")
+			_, err := NewHTTPConnection(context.Background(), "test-server", tt.url, tt.headers, nil, "", 0)
 
 			if tt.expectError {
 				if err == nil {
@@ -507,15 +508,52 @@ func stringContains(s, substr string) bool {
 
 // TestNewMCPClient tests the newMCPClient helper function
 func TestNewMCPClient(t *testing.T) {
-	client := newMCPClient(nil)
+	client := newMCPClient(nil, 0)
 	require.NotNil(t, client, "newMCPClient should return a non-nil client")
 }
 
 // TestNewMCPClientWithLogger tests that newMCPClient accepts a logger
 func TestNewMCPClientWithLogger(t *testing.T) {
 	log := logger.New("test:client")
-	client := newMCPClient(log)
+	client := newMCPClient(log, 0)
 	require.NotNil(t, client, "newMCPClient should return a non-nil client with logger")
+}
+
+// TestNewMCPClientWithKeepalive tests that newMCPClient accepts a keepalive interval
+func TestNewMCPClientWithKeepalive(t *testing.T) {
+	keepAlive := time.Duration(config.DefaultKeepaliveInterval) * time.Second
+	client := newMCPClient(nil, keepAlive)
+	require.NotNil(t, client, "newMCPClient should return a non-nil client with keepalive")
+}
+
+// TestDefaultKeepaliveInterval verifies the config keepalive default is less than a typical
+// backend session timeout (30 minutes) to prevent session expiry during long agent runs.
+func TestDefaultKeepaliveInterval(t *testing.T) {
+	const typicalBackendTimeout = 30 * time.Minute
+	keepAlive := time.Duration(config.DefaultKeepaliveInterval) * time.Second
+	assert.Less(t, keepAlive, typicalBackendTimeout,
+		"DefaultKeepaliveInterval must be less than the typical backend session timeout to prevent expiry")
+	assert.Greater(t, keepAlive, time.Duration(0),
+		"DefaultKeepaliveInterval must be positive")
+}
+
+// TestNewHTTPConnectionStoresKeepalive verifies that the keepalive interval is stored on
+// the connection struct so that reconnectSDKTransport can recreate the session with the same setting.
+func TestNewHTTPConnectionStoresKeepalive(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	keepAlive := time.Duration(config.DefaultKeepaliveInterval) * time.Second
+	client := newMCPClient(nil, keepAlive)
+	url := "http://example.com/mcp"
+	headers := map[string]string{}
+	httpClient := &http.Client{}
+
+	conn := newHTTPConnection(ctx, cancel, client, nil, url, headers, httpClient, HTTPTransportStreamable, "test-server", keepAlive)
+
+	require.NotNil(t, conn)
+	assert.Equal(t, keepAlive, conn.keepAliveInterval,
+		"keepAliveInterval should be stored on the connection for use during reconnection")
 }
 
 // TestSetupHTTPRequest tests the setupHTTPRequest helper function
@@ -593,12 +631,12 @@ func TestNewHTTPConnection(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	client := newMCPClient(nil)
+	client := newMCPClient(nil, 0)
 	url := "http://example.com/mcp"
 	headers := map[string]string{"Authorization": "test"}
 	httpClient := &http.Client{}
 
-	conn := newHTTPConnection(ctx, cancel, client, nil, url, headers, httpClient, HTTPTransportStreamable, "test-server")
+	conn := newHTTPConnection(ctx, cancel, client, nil, url, headers, httpClient, HTTPTransportStreamable, "test-server", 0)
 
 	require.NotNil(t, conn, "Connection should not be nil")
 	assert.Equal(t, client, conn.client, "Client should match")
