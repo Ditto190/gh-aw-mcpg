@@ -64,6 +64,7 @@ test-integration:
 # The MCP Gateway is a concurrent server; use this to validate thread safety.
 test-race:
 	@echo "Running unit tests with race detection..."
+	@go mod tidy
 	@go test -race -timeout=5m ./internal/...
 	@echo "Race detection tests complete!"
 
