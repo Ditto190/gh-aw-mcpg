@@ -1,4 +1,4 @@
-.PHONY: build lint test test-unit test-integration test-container-proxy test-all test-serena test-serena-gateway coverage test-ci format clean install release help agent-finished
+.PHONY: build lint test test-unit test-race test-integration test-container-proxy test-all test-serena test-serena-gateway coverage test-ci format clean install release help agent-finished
 
 # Default target
 .DEFAULT_GOAL := help
@@ -59,6 +59,13 @@ test-integration:
 		$(MAKE) build; \
 	fi
 	@go test -v ./test/integration/...
+
+# Run unit tests with race detection (catches concurrent data races)
+# The MCP Gateway is a concurrent server; use this to validate thread safety.
+test-race:
+	@echo "Running unit tests with race detection..."
+	@go test -race -timeout=5m ./internal/...
+	@echo "Race detection tests complete!"
 
 # Run container proxy integration tests (requires Docker and gh CLI)
 test-container-proxy:
@@ -305,6 +312,7 @@ help:
 	@echo "  lint            - Run all linters (go vet, gofmt check, golangci-lint)"
 	@echo "  test            - Run unit tests (no build required)"
 	@echo "  test-unit       - Run unit tests (no build required)"
+	@echo "  test-race       - Run unit tests with race detection (catches concurrent data races)"
 	@echo "  test-integration - Run binary integration tests (requires built binary)"
 	@echo "  test-all        - Run all tests (unit + integration)"
 	@echo "  test-serena     - Run Serena MCP Server tests (direct connection)"
