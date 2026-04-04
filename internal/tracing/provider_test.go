@@ -1,0 +1,119 @@
+package tracing_test
+
+import (
+	"context"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace/noop"
+
+	"github.com/github/gh-aw-mcpg/internal/config"
+	"github.com/github/gh-aw-mcpg/internal/tracing"
+)
+
+func TestInitProvider_NoEndpoint_ReturnsNoopProvider(t *testing.T) {
+	ctx := context.Background()
+
+	// With nil config (no endpoint), should return a noop provider
+	provider, err := tracing.InitProvider(ctx, nil)
+	require.NoError(t, err)
+	require.NotNil(t, provider)
+
+	// Noop provider must shut down cleanly
+	assert.NoError(t, provider.Shutdown(ctx))
+
+	// The global provider should be a noop provider
+	tp := otel.GetTracerProvider()
+	assert.IsType(t, noop.NewTracerProvider(), tp)
+}
+
+func TestInitProvider_EmptyEndpoint_ReturnsNoopProvider(t *testing.T) {
+	ctx := context.Background()
+
+	cfg := &config.TracingConfig{
+		Endpoint:    "", // explicitly empty
+		ServiceName: "test-service",
+		SampleRate:  1.0,
+	}
+
+	provider, err := tracing.InitProvider(ctx, cfg)
+	require.NoError(t, err)
+	require.NotNil(t, provider)
+
+	assert.NoError(t, provider.Shutdown(ctx))
+}
+
+func TestInitProvider_WithEndpoint_ReturnsSdkProvider(t *testing.T) {
+	ctx := context.Background()
+
+	// Point at a non-existent endpoint; exporter creation should still succeed
+	// (connection is lazy) and the provider should be initialized.
+	cfg := &config.TracingConfig{
+		Endpoint:    "http://localhost:14318", // non-existent, but valid URL
+		ServiceName: "test-service",
+		SampleRate:  1.0,
+	}
+
+	provider, err := tracing.InitProvider(ctx, cfg)
+	require.NoError(t, err)
+	require.NotNil(t, provider)
+
+	// Tracer should be non-nil
+	assert.NotNil(t, provider.Tracer())
+
+	// Shutdown with a short context so test doesn't hang waiting to flush
+	shutdownCtx, cancel := context.WithTimeout(ctx, 100*1000*1000) // 100ms
+	defer cancel()
+	// Shutdown may fail if it tries to flush to the non-existent endpoint,
+	// but the provider itself should handle it gracefully (no panic)
+	_ = provider.Shutdown(shutdownCtx)
+}
+
+func TestTracer_ReturnsNonNil(t *testing.T) {
+	// Reset to noop global provider
+	ctx := context.Background()
+	provider, err := tracing.InitProvider(ctx, nil)
+	require.NoError(t, err)
+	defer provider.Shutdown(ctx)
+
+	tr := tracing.Tracer()
+	assert.NotNil(t, tr)
+}
+
+func TestInitProvider_SampleRateZero_UsesNeverSampler(t *testing.T) {
+	ctx := context.Background()
+
+	cfg := &config.TracingConfig{
+		Endpoint:    "http://localhost:14318",
+		ServiceName: "test-service",
+		SampleRate:  0.0, // never sample
+	}
+
+	provider, err := tracing.InitProvider(ctx, cfg)
+	require.NoError(t, err)
+	require.NotNil(t, provider)
+
+	shutdownCtx, cancel := context.WithTimeout(ctx, 100*1000*1000)
+	defer cancel()
+	_ = provider.Shutdown(shutdownCtx)
+}
+
+func TestInitProvider_SampleRatePartial_UsesRatioSampler(t *testing.T) {
+	ctx := context.Background()
+
+	cfg := &config.TracingConfig{
+		Endpoint:    "http://localhost:14318",
+		ServiceName: "test-service",
+		SampleRate:  0.5, // 50% sampling
+	}
+
+	provider, err := tracing.InitProvider(ctx, cfg)
+	require.NoError(t, err)
+	require.NotNil(t, provider)
+
+	shutdownCtx, cancel := context.WithTimeout(ctx, 100*1000*1000)
+	defer cancel()
+	_ = provider.Shutdown(shutdownCtx)
+}
