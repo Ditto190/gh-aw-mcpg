@@ -378,14 +378,22 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 	logUnified.Printf("callBackendTool: serverID=%s, toolName=%s, args=%+v", serverID, toolName, args)
 
 	// Start an OTEL span for the full tool call lifecycle (spans all phases 0–6)
-	ctx, toolSpan := tracing.Tracer().Start(ctx, "gateway.tool_call",
+	// Attribute names follow MCP Gateway Specification §4.1.3.6
+	ctx, toolSpan := tracing.Tracer().Start(ctx, "mcp.tool_call",
 		oteltrace.WithAttributes(
-			attribute.String("tool.name", toolName),
-			attribute.String("server.id", serverID),
+			attribute.String("mcp.server", serverID),
+			attribute.String("mcp.method", "tools/call"),
+			attribute.String("mcp.tool", toolName),
 		),
 		oteltrace.WithSpanKind(oteltrace.SpanKindInternal),
 	)
-	defer toolSpan.End()
+	// httpStatusCode tracks the conceptual HTTP status of the proxied response (spec §4.1.3.6).
+	// It starts at 200 and is updated to 500 (error) or 403 (access denied) before each exit.
+	httpStatusCode := 200
+	defer func() {
+		toolSpan.SetAttributes(attribute.Int("http.status_code", httpStatusCode))
+		toolSpan.End()
+	}()
 
 	// Get guard for this backend
 	g := us.guardRegistry.Get(serverID)
@@ -401,6 +409,7 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 	// Initialize policy-driven guard session state (label_agent) before first guarded call.
 	enforcementMode, err := us.ensureGuardInitialized(ctx, sessionID, serverID, g, backendCaller)
 	if err != nil {
+		httpStatusCode = 500
 		return newErrorCallToolResult(fmt.Errorf("guard session initialization failed: %w", err))
 	}
 
@@ -427,6 +436,7 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 	resource, operation, err := g.LabelResource(ctx, toolName, args, backendCaller, us.capabilities)
 	if err != nil {
 		log.Printf("[DIFC] Guard labeling failed: %v", err)
+		httpStatusCode = 500
 		return newErrorCallToolResult(fmt.Errorf("guard labeling failed: %w", err))
 	}
 
@@ -452,6 +462,7 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 			detailedErr := difc.FormatViolationError(result, agentLabels.Secrecy, agentLabels.Integrity, resource)
 			toolSpan.RecordError(detailedErr)
 			toolSpan.SetStatus(codes.Error, "access denied: "+result.Reason)
+			httpStatusCode = 403
 			return &sdk.CallToolResult{
 				Content: []sdk.Content{
 					&sdk.TextContent{
@@ -478,6 +489,7 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 	if err != nil {
 		execSpan.RecordError(err)
 		execSpan.SetStatus(codes.Error, err.Error())
+		httpStatusCode = 500
 		return newErrorCallToolResult(err)
 	}
 
@@ -493,6 +505,7 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 		labeledData, err = g.LabelResponse(ctx, toolName, backendResult, backendCaller, us.capabilities)
 		if err != nil {
 			log.Printf("[DIFC] Response labeling failed: %v", err)
+			httpStatusCode = 500
 			return newErrorCallToolResult(fmt.Errorf("response labeling failed: %w", err))
 		}
 	} else {
@@ -517,6 +530,7 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 					filtered.GetFilteredCount(), filtered.TotalCount)
 				blockErr := fmt.Errorf("DIFC policy violation: %d of %d items in response are not accessible to agent %s",
 					filtered.GetFilteredCount(), filtered.TotalCount, agentID)
+				httpStatusCode = 403
 				return &sdk.CallToolResult{
 					Content: []sdk.Content{
 						&sdk.TextContent{
@@ -536,12 +550,14 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 			// Convert filtered data to result
 			finalResult, err = filtered.ToResult()
 			if err != nil {
+				httpStatusCode = 500
 				return newErrorCallToolResult(fmt.Errorf("failed to convert filtered data: %w", err))
 			}
 		} else {
 			// Simple labeled data - already passed coarse-grained check
 			finalResult, err = labeledData.ToResult()
 			if err != nil {
+				httpStatusCode = 500
 				return newErrorCallToolResult(fmt.Errorf("failed to convert labeled data: %w", err))
 			}
 		}
@@ -570,6 +586,7 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 	// Convert finalResult to SDK CallToolResult format
 	callResult, err := mcp.ConvertToCallToolResult(finalResult)
 	if err != nil {
+		httpStatusCode = 500
 		return newErrorCallToolResult(fmt.Errorf("failed to convert result: %w", err))
 	}
 

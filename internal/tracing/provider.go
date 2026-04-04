@@ -19,6 +19,8 @@ package tracing
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"time"
 
@@ -91,6 +93,78 @@ func resolveSampleRate(cfg *config.TracingConfig) float64 {
 	return config.DefaultTracingSampleRate
 }
 
+// resolveHeaders returns the configured OTLP export headers (or nil).
+func resolveHeaders(cfg *config.TracingConfig) map[string]string {
+	if cfg != nil && len(cfg.Headers) > 0 {
+		return cfg.Headers
+	}
+	return nil
+}
+
+// resolveParentContext builds a context carrying the W3C remote parent span context
+// from the configured traceId and spanId (spec §4.1.3.6).
+// If traceId is absent, or either ID is malformed, the original context is returned unchanged.
+// A missing spanId is replaced with a random span ID so the traceparent is still valid.
+func resolveParentContext(ctx context.Context, cfg *config.TracingConfig) context.Context {
+	if cfg == nil || cfg.TraceID == "" {
+		return ctx
+	}
+
+	traceIDBytes, err := hex.DecodeString(cfg.TraceID)
+	if err != nil || len(traceIDBytes) != 16 {
+		logTracing.Printf("Warning: invalid traceId '%s'; skipping W3C parent context", cfg.TraceID)
+		return ctx
+	}
+	var traceID trace.TraceID
+	copy(traceID[:], traceIDBytes)
+
+	var spanID trace.SpanID
+	if cfg.SpanID != "" {
+		spanIDBytes, err := hex.DecodeString(cfg.SpanID)
+		if err != nil || len(spanIDBytes) != 8 {
+			logTracing.Printf("Warning: invalid spanId '%s'; generating a random span ID", cfg.SpanID)
+			// Fall through to generate a random span ID below
+		} else {
+			copy(spanID[:], spanIDBytes)
+		}
+	}
+
+	// When spanId is all-zeros (absent or invalid), generate a random span ID.
+	// A valid SpanContext requires a non-zero SpanID (W3C Trace Context spec).
+	// T-OTEL-008: when only traceId is provided, a random spanId is generated.
+	if spanID == (trace.SpanID{}) {
+		generatedID, genErr := generateRandomSpanID()
+		if genErr != nil {
+			logTracing.Printf("Warning: failed to generate random span ID: %v; skipping W3C parent context", genErr)
+			return ctx
+		}
+		spanID = generatedID
+		logTracing.Printf("Generated random spanId for W3C parent context")
+	}
+
+	sc := trace.NewSpanContext(trace.SpanContextConfig{
+		TraceID:    traceID,
+		SpanID:     spanID,
+		TraceFlags: trace.FlagsSampled,
+		Remote:     true,
+	})
+	if !sc.IsValid() {
+		logTracing.Printf("Warning: constructed parent SpanContext is not valid; skipping W3C parent context")
+		return ctx
+	}
+	logTracing.Printf("W3C parent context resolved: traceId=%s, spanId=%s", traceID, spanID)
+	return trace.ContextWithRemoteSpanContext(ctx, sc)
+}
+
+// generateRandomSpanID creates a cryptographically random 8-byte span ID.
+func generateRandomSpanID() (trace.SpanID, error) {
+	var id trace.SpanID
+	if _, err := rand.Read(id[:]); err != nil {
+		return id, fmt.Errorf("failed to generate random span ID: %w", err)
+	}
+	return id, nil
+}
+
 // registerPropagator installs the global W3C TraceContext + Baggage propagator.
 // This enables incoming traceparent/tracestate headers to be extracted so that
 // agent-initiated traces are continued rather than fragmented.
@@ -132,11 +206,20 @@ func InitProvider(ctx context.Context, cfg *config.TracingConfig) (*Provider, er
 
 	logTracing.Printf("Initializing OTLP tracing: endpoint=%s, service=%s, sampleRate=%.2f", endpoint, serviceName, sampleRate)
 
-	// Build OTLP HTTP exporter with 10s timeout
-	exporter, err := otlptracehttp.New(ctx,
+	// Build OTLP HTTP exporter options
+	exporterOpts := []otlptracehttp.Option{
 		otlptracehttp.WithEndpointURL(endpoint),
-		otlptracehttp.WithTimeout(10*time.Second),
-	)
+		otlptracehttp.WithTimeout(10 * time.Second),
+	}
+
+	// Apply configured headers (spec §4.1.3.6: headers sent with every OTLP export request)
+	if headers := resolveHeaders(cfg); headers != nil {
+		logTracing.Printf("Applying %d OTLP export header(s)", len(headers))
+		exporterOpts = append(exporterOpts, otlptracehttp.WithHeaders(headers))
+	}
+
+	// Build OTLP HTTP exporter with 10s timeout
+	exporter, err := otlptracehttp.New(ctx, exporterOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create OTLP trace exporter: %w", err)
 	}
@@ -190,4 +273,11 @@ func InitProvider(ctx context.Context, cfg *config.TracingConfig) (*Provider, er
 // hold a reference to the Provider.
 func Tracer() trace.Tracer {
 	return otel.Tracer(instrumentationName)
+}
+
+// ParentContext returns a context carrying the W3C remote parent span context
+// from the configured traceId and spanId (spec §4.1.3.6).
+// Exported for use at startup to build the root span's parent context.
+func ParentContext(ctx context.Context, cfg *config.TracingConfig) context.Context {
+	return resolveParentContext(ctx, cfg)
 }

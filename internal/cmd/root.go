@@ -354,6 +354,10 @@ func run(cmd *cobra.Command, args []string) error {
 		}
 	}()
 
+	// Apply W3C parent context from configured traceId/spanId (spec §4.1.3.6).
+	// This links the gateway process lifetime span into a pre-existing trace when provided.
+	ctx = tracing.ParentContext(ctx, tracingCfg)
+
 	if tracingProvider.Tracer() != nil {
 		// Log what InitProvider actually resolved (config already has env var defaults merged via CLI flags)
 		endpoint := ""
