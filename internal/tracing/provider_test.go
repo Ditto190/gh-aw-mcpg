@@ -3,6 +3,7 @@ package tracing_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -64,7 +65,7 @@ func TestInitProvider_WithEndpoint_ReturnsSdkProvider(t *testing.T) {
 	assert.NotNil(t, provider.Tracer())
 
 	// Shutdown with a short context so test doesn't hang waiting to flush
-	shutdownCtx, cancel := context.WithTimeout(ctx, 100*1000*1000) // 100ms
+	shutdownCtx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
 	defer cancel()
 	// Shutdown may fail if it tries to flush to the non-existent endpoint,
 	// but the provider itself should handle it gracefully (no panic)
@@ -95,7 +96,7 @@ func TestInitProvider_SampleRateZero_UsesNeverSampler(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, provider)
 
-	shutdownCtx, cancel := context.WithTimeout(ctx, 100*1000*1000)
+	shutdownCtx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
 	defer cancel()
 	_ = provider.Shutdown(shutdownCtx)
 }
@@ -113,7 +114,7 @@ func TestInitProvider_SampleRatePartial_UsesRatioSampler(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, provider)
 
-	shutdownCtx, cancel := context.WithTimeout(ctx, 100*1000*1000)
+	shutdownCtx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
 	defer cancel()
 	_ = provider.Shutdown(shutdownCtx)
 }

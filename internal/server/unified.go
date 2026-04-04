@@ -473,14 +473,13 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 		),
 		oteltrace.WithSpanKind(oteltrace.SpanKindClient),
 	)
+	defer execSpan.End()
 	backendResult, err := executeBackendToolCall(execCtx, us.launcher, serverID, sessionID, toolName, args)
 	if err != nil {
 		execSpan.RecordError(err)
 		execSpan.SetStatus(codes.Error, err.Error())
-		execSpan.End()
 		return newErrorCallToolResult(err)
 	}
-	execSpan.End()
 
 	// **Phase 4: Guard labels the response data (for fine-grained filtering)**
 	// Per spec: LabelResponse() is only called for read operations in all modes,
