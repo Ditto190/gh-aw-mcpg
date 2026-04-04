@@ -359,6 +359,11 @@ func TestInitProvider_WithHeaders(t *testing.T) {
 func TestParentContext_WithValidTraceIDAndSpanID(t *testing.T) {
 	ctx := context.Background()
 
+	// Initialize noop provider to set up the W3C propagator globally
+	provider, err := tracing.InitProvider(ctx, nil)
+	require.NoError(t, err)
+	defer provider.Shutdown(ctx)
+
 	cfg := &config.TracingConfig{
 		Endpoint: "https://example.com",
 		TraceID:  "4bf92f3577b34da6a3ce929d0e0e4736",
@@ -366,22 +371,23 @@ func TestParentContext_WithValidTraceIDAndSpanID(t *testing.T) {
 	}
 
 	parentCtx := tracing.ParentContext(ctx, cfg)
-	sc := trace.SpanFromContext(parentCtx).SpanContext()
 
-	// ParentContext should inject a remote span context, not a local span.
-	// The remote span context is accessible via trace.SpanContextFromContext after
-	// trace.ContextWithRemoteSpanContext is used — check via propagation round-trip.
-	// Instead of checking SpanFromContext (which returns noop span in the absence of a started span),
-	// extract the remote span context directly.
-	remoteCtx := trace.SpanContextFromContext(parentCtx)
-	if !remoteCtx.IsValid() {
-		// Check the context for the remote parent
-		// The remote span context might not be on the regular span context
-		t.Logf("SpanFromContext returned: %v", sc)
-		t.Logf("SpanContextFromContext returned: %v", remoteCtx)
-	}
-	// Verify the context is enriched (not the zero-value background context)
+	// The context must be enriched (different from background context)
 	assert.NotEqual(t, ctx, parentCtx, "ParentContext must return an enriched context")
+
+	// Verify the remote span context contains the correct traceId and spanId
+	// by extracting it from the context and checking via propagation round-trip.
+	prop := otel.GetTextMapPropagator()
+	carrier := propagation.MapCarrier{}
+	prop.Inject(parentCtx, carrier)
+	traceparent := carrier["traceparent"]
+	require.NotEmpty(t, traceparent, "W3C traceparent must be present after injection")
+
+	// traceparent format: 00-{traceId}-{spanId}-{flags}
+	assert.Contains(t, traceparent, "4bf92f3577b34da6a3ce929d0e0e4736",
+		"traceparent must contain the configured traceId")
+	assert.Contains(t, traceparent, "00f067aa0ba902b7",
+		"traceparent must contain the configured spanId")
 }
 
 // TestParentContext_WithTraceIDOnly verifies that ParentContext works when only traceId is provided.

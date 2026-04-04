@@ -161,18 +161,23 @@ func TestOTEL009_SpanIDWithoutTraceID_NoError(t *testing.T) {
 }
 
 // T-OTEL-010: serviceName defaults to "mcp-gateway" when not specified.
+// Tests the actual registered defaults setter applied via applyDefaults.
 func TestOTEL010_ServiceNameDefaults(t *testing.T) {
-	cfg := &TracingConfig{
-		Endpoint: "https://otel-collector.example.com",
-		// ServiceName intentionally absent
-	}
-	assert.Equal(t, "", cfg.ServiceName, "ServiceName should be empty before defaults are applied")
+	// Test the constant
+	assert.Equal(t, "mcp-gateway", DefaultTracingServiceName, "T-OTEL-010: DefaultTracingServiceName must be 'mcp-gateway'")
 
-	// Simulate defaults application
-	if cfg.ServiceName == "" {
-		cfg.ServiceName = DefaultTracingServiceName
+	// Test that the defaults setter correctly applies the default service name
+	cfg := &Config{
+		Gateway: &GatewayConfig{
+			Tracing: &TracingConfig{
+				Endpoint: "https://otel-collector.example.com",
+				// ServiceName intentionally absent
+			},
+		},
 	}
-	assert.Equal(t, "mcp-gateway", cfg.ServiceName, "T-OTEL-010: default serviceName must be 'mcp-gateway'")
+	applyDefaults(cfg)
+	assert.Equal(t, "mcp-gateway", cfg.Gateway.Tracing.ServiceName,
+		"T-OTEL-010: default serviceName must be 'mcp-gateway' after applyDefaults")
 }
 
 // TestValidateOpenTelemetryConfig_VarExpressions verifies that ${VAR} expressions
