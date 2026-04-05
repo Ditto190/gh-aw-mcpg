@@ -514,25 +514,25 @@ func validateOpenTelemetryConfig(cfg *TracingConfig, enforceHTTPS bool) error {
 		}
 	}
 
-	// Validate traceId: must be 32-char lowercase hex (or a ${VAR} expression)
-	if cfg.TraceID != "" && !varExprPatternSimple.MatchString(cfg.TraceID) {
+	// Validate traceId: must be a 32-char lowercase hex string
+	if cfg.TraceID != "" {
 		if !traceIDPattern.MatchString(cfg.TraceID) {
 			logValidation.Printf("Invalid traceId format: %s", cfg.TraceID)
 			return rules.InvalidValue("traceId",
 				fmt.Sprintf("traceId must be a 32-character lowercase hexadecimal string, got '%s'", cfg.TraceID),
 				"gateway.opentelemetry.traceId",
-				"Provide a valid W3C trace ID (32 lowercase hex chars, e.g., \"4bf92f3577b34da6a3ce929d0e0e4736\")")
+				"Provide a valid W3C trace ID (32 lowercase hex chars, e.g., \"4bf92f3577b34da6a3ce929d0e0e4736\"); environment-variable expressions are not supported here")
 		}
 	}
 
-	// Validate spanId: must be 16-char lowercase hex (or a ${VAR} expression)
-	if cfg.SpanID != "" && !varExprPatternSimple.MatchString(cfg.SpanID) {
+	// Validate spanId: must be a 16-char lowercase hex string
+	if cfg.SpanID != "" {
 		if !spanIDPattern.MatchString(cfg.SpanID) {
 			logValidation.Printf("Invalid spanId format: %s", cfg.SpanID)
 			return rules.InvalidValue("spanId",
 				fmt.Sprintf("spanId must be a 16-character lowercase hexadecimal string, got '%s'", cfg.SpanID),
 				"gateway.opentelemetry.spanId",
-				"Provide a valid W3C span ID (16 lowercase hex chars, e.g., \"00f067aa0ba902b7\")")
+				"Provide a valid W3C span ID (16 lowercase hex chars, e.g., \"00f067aa0ba902b7\"); environment-variable expressions are not supported here")
 		}
 	}
 
