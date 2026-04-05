@@ -2,6 +2,7 @@ package tracing_test
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -310,4 +311,146 @@ func TestWrapHTTPHandler_GeneratesRootSpan(t *testing.T) {
 
 	assert.True(t, capturedSpanCtx.IsValid(), "should have a valid span context even without traceparent")
 	assert.False(t, capturedSpanCtx.IsRemote(), "span should not be marked remote — it is a local root span")
+}
+
+// TestInitProvider_WithHeaders verifies that OTLP export headers are forwarded
+// to the collector. A channel synchronises with the test HTTP server so the
+// assertion is deterministic rather than timing-dependent.
+func TestInitProvider_WithHeaders(t *testing.T) {
+	ctx := context.Background()
+
+	// Channel signals when the test server receives an export request.
+	received := make(chan string, 1)
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case received <- r.Header.Get("Authorization"):
+		default:
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+
+	cfg := &config.TracingConfig{
+		Endpoint: ts.URL,
+		Headers:  map[string]string{"Authorization": "Bearer test-token"},
+	}
+
+	provider, err := tracing.InitProvider(ctx, cfg)
+	require.NoError(t, err)
+	require.NotNil(t, provider)
+
+	// Create and end a span to trigger an export attempt.
+	tr := provider.Tracer()
+	_, span := tr.Start(ctx, "header-test-span")
+	span.End()
+
+	// Shutdown flushes the batch processor, ensuring the export is sent.
+	shutdownCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	_ = provider.Shutdown(shutdownCtx)
+
+	// Wait for the export request with a timeout.
+	select {
+	case auth := <-received:
+		assert.Equal(t, "Bearer test-token", auth,
+			"Authorization header must be forwarded to the OTLP collector")
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for OTLP export request — headers test is non-deterministic")
+	}
+}
+
+// TestParentContext_WithValidTraceIDAndSpanID verifies that ParentContext builds a valid
+// remote span context when both traceId and spanId are provided.
+func TestParentContext_WithValidTraceIDAndSpanID(t *testing.T) {
+	ctx := context.Background()
+
+	// Initialize noop provider to set up the W3C propagator globally
+	provider, err := tracing.InitProvider(ctx, nil)
+	require.NoError(t, err)
+	defer provider.Shutdown(ctx)
+
+	cfg := &config.TracingConfig{
+		Endpoint: "https://example.com",
+		TraceID:  "4bf92f3577b34da6a3ce929d0e0e4736",
+		SpanID:   "00f067aa0ba902b7",
+	}
+
+	parentCtx := tracing.ParentContext(ctx, cfg)
+
+	// The context must be enriched (different from background context)
+	assert.NotEqual(t, ctx, parentCtx, "ParentContext must return an enriched context")
+
+	// Verify the remote span context contains the correct traceId and spanId
+	// by extracting it from the context and checking via propagation round-trip.
+	prop := otel.GetTextMapPropagator()
+	carrier := propagation.MapCarrier{}
+	prop.Inject(parentCtx, carrier)
+	traceparent := carrier["traceparent"]
+	require.NotEmpty(t, traceparent, "W3C traceparent must be present after injection")
+
+	// traceparent format: 00-{traceId}-{spanId}-{flags}
+	assert.Contains(t, traceparent, "4bf92f3577b34da6a3ce929d0e0e4736",
+		"traceparent must contain the configured traceId")
+	assert.Contains(t, traceparent, "00f067aa0ba902b7",
+		"traceparent must contain the configured spanId")
+}
+
+// TestParentContext_WithTraceIDOnly verifies that ParentContext works when only traceId is provided.
+func TestParentContext_WithTraceIDOnly(t *testing.T) {
+	ctx := context.Background()
+
+	cfg := &config.TracingConfig{
+		TraceID: "4bf92f3577b34da6a3ce929d0e0e4736",
+		// SpanID intentionally absent
+	}
+
+	parentCtx := tracing.ParentContext(ctx, cfg)
+	// Should return an enriched context
+	assert.NotEqual(t, ctx, parentCtx, "ParentContext with traceId only must return an enriched context")
+}
+
+// TestParentContext_NoConfig verifies that ParentContext is a no-op when config is nil.
+func TestParentContext_NoConfig(t *testing.T) {
+	ctx := context.Background()
+	parentCtx := tracing.ParentContext(ctx, nil)
+	assert.Equal(t, ctx, parentCtx, "ParentContext with nil config must return the original context unchanged")
+}
+
+// TestParentContext_EmptyTraceID verifies that ParentContext is a no-op when traceId is empty.
+func TestParentContext_EmptyTraceID(t *testing.T) {
+	ctx := context.Background()
+	cfg := &config.TracingConfig{
+		SpanID: "00f067aa0ba902b7", // spanId without traceId
+	}
+	parentCtx := tracing.ParentContext(ctx, cfg)
+	assert.Equal(t, ctx, parentCtx, "ParentContext without traceId must return the original context unchanged")
+}
+
+// TestParentContext_InvalidTraceID verifies that ParentContext handles malformed traceIds gracefully.
+func TestParentContext_InvalidTraceID(t *testing.T) {
+	ctx := context.Background()
+	cfg := &config.TracingConfig{
+		TraceID: "not-valid-hex",
+	}
+	parentCtx := tracing.ParentContext(ctx, cfg)
+	assert.Equal(t, ctx, parentCtx, "ParentContext with invalid traceId must return original context")
+}
+
+// TestInitProvider_WithTraceIDAndSpanID verifies that InitProvider succeeds with traceId/spanId config.
+func TestInitProvider_WithTraceIDAndSpanID(t *testing.T) {
+	ctx := context.Background()
+
+	cfg := &config.TracingConfig{
+		Endpoint: fmt.Sprintf("http://localhost:%d", 14320),
+		TraceID:  "4bf92f3577b34da6a3ce929d0e0e4736",
+		SpanID:   "00f067aa0ba902b7",
+	}
+
+	provider, err := tracing.InitProvider(ctx, cfg)
+	require.NoError(t, err)
+	require.NotNil(t, provider)
+
+	shutdownCtx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+	defer cancel()
+	_ = provider.Shutdown(shutdownCtx)
 }

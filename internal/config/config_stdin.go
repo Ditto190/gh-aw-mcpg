@@ -32,14 +32,33 @@ type StdinConfig struct {
 // StdinGatewayConfig represents gateway configuration in stdin JSON format.
 // Uses pointers for optional fields to distinguish between unset and zero values.
 type StdinGatewayConfig struct {
-	Port              *int     `json:"port,omitempty"`
-	APIKey            string   `json:"apiKey,omitempty"`
-	Domain            string   `json:"domain,omitempty"`
-	StartupTimeout    *int     `json:"startupTimeout,omitempty"`
-	ToolTimeout       *int     `json:"toolTimeout,omitempty"`
-	KeepaliveInterval *int     `json:"keepaliveInterval,omitempty"`
-	PayloadDir        string   `json:"payloadDir,omitempty"`
-	TrustedBots       []string `json:"trustedBots,omitempty"`
+	Port              *int                      `json:"port,omitempty"`
+	APIKey            string                    `json:"apiKey,omitempty"`
+	Domain            string                    `json:"domain,omitempty"`
+	StartupTimeout    *int                      `json:"startupTimeout,omitempty"`
+	ToolTimeout       *int                      `json:"toolTimeout,omitempty"`
+	KeepaliveInterval *int                      `json:"keepaliveInterval,omitempty"`
+	PayloadDir        string                    `json:"payloadDir,omitempty"`
+	TrustedBots       []string                  `json:"trustedBots,omitempty"`
+	OpenTelemetry     *StdinOpenTelemetryConfig `json:"opentelemetry,omitempty"`
+}
+
+// StdinOpenTelemetryConfig represents the OpenTelemetry configuration in stdin JSON format (spec §4.1.3.6).
+type StdinOpenTelemetryConfig struct {
+	// Endpoint is the OTLP/HTTP collector URL. MUST be HTTPS. Supports ${VAR} expansion.
+	Endpoint string `json:"endpoint"`
+
+	// Headers are HTTP headers for export requests (e.g. auth tokens). Values support ${VAR}.
+	Headers map[string]string `json:"headers,omitempty"`
+
+	// TraceID is the parent trace ID (32-char lowercase hex, W3C format). Supports ${VAR}.
+	TraceID string `json:"traceId,omitempty"`
+
+	// SpanID is the parent span ID (16-char lowercase hex, W3C format). Ignored without TraceID. Supports ${VAR}.
+	SpanID string `json:"spanId,omitempty"`
+
+	// ServiceName is the service.name resource attribute. Default: "mcp-gateway".
+	ServiceName string `json:"serviceName,omitempty"`
 }
 
 // StdinGuardConfig represents a guard configuration in stdin JSON format.

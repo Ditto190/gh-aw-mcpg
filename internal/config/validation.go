@@ -18,6 +18,15 @@ type ValidationError = rules.ValidationError
 // Variable expression pattern: ${VARIABLE_NAME}
 var varExprPattern = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}`)
 
+// W3C trace context patterns (spec §4.1.3.6)
+var (
+	traceIDPattern = regexp.MustCompile(`^[0-9a-f]{32}$`)
+	spanIDPattern  = regexp.MustCompile(`^[0-9a-f]{16}$`)
+	// W3C Trace Context forbids all-zero trace/span IDs.
+	allZeroTraceID = regexp.MustCompile(`^0{32}$`)
+	allZeroSpanID  = regexp.MustCompile(`^0{16}$`)
+)
+
 var logValidation = logger.New("config:validation")
 
 // logValidateServerStart logs the beginning of server config validation.
@@ -106,6 +115,49 @@ func expandEnvVariables(env map[string]string, serverName string) (map[string]st
 
 	logValidation.Printf("Env variable expansion completed for server: %s", serverName)
 	return result, nil
+}
+
+// expandTracingVariables expands ${VAR} expressions in TracingConfig fields.
+// This is called for TOML-loaded configs before validation, mirroring the
+// stdin JSON path where ExpandRawJSONVariables handles expansion.
+func expandTracingVariables(cfg *TracingConfig) error {
+	if cfg == nil {
+		return nil
+	}
+
+	if cfg.Endpoint != "" {
+		expanded, err := expandVariables(cfg.Endpoint, "gateway.opentelemetry.endpoint")
+		if err != nil {
+			return err
+		}
+		cfg.Endpoint = expanded
+	}
+
+	if cfg.TraceID != "" {
+		expanded, err := expandVariables(cfg.TraceID, "gateway.opentelemetry.traceId")
+		if err != nil {
+			return err
+		}
+		cfg.TraceID = expanded
+	}
+
+	if cfg.SpanID != "" {
+		expanded, err := expandVariables(cfg.SpanID, "gateway.opentelemetry.spanId")
+		if err != nil {
+			return err
+		}
+		cfg.SpanID = expanded
+	}
+
+	for key, value := range cfg.Headers {
+		expanded, err := expandVariables(value, fmt.Sprintf("gateway.opentelemetry.headers.%s", key))
+		if err != nil {
+			return err
+		}
+		cfg.Headers[key] = expanded
+	}
+
+	return nil
 }
 
 // validateMounts validates mount specifications using centralized rules
@@ -417,6 +469,20 @@ func validateGatewayConfig(gateway *StdinGatewayConfig) error {
 		return err
 	}
 
+	// Validate OpenTelemetry config per spec §4.1.3.6 when present
+	if gateway.OpenTelemetry != nil {
+		tracingCfg := &TracingConfig{
+			Endpoint:    gateway.OpenTelemetry.Endpoint,
+			Headers:     gateway.OpenTelemetry.Headers,
+			TraceID:     gateway.OpenTelemetry.TraceID,
+			SpanID:      gateway.OpenTelemetry.SpanID,
+			ServiceName: gateway.OpenTelemetry.ServiceName,
+		}
+		if err := validateOpenTelemetryConfig(tracingCfg, true); err != nil {
+			return err
+		}
+	}
+
 	logValidation.Print("Gateway config validation passed")
 	return nil
 }
@@ -461,5 +527,78 @@ func validateTOMLStdioContainerization(servers map[string]*ServerConfig) error {
 	}
 
 	logValidation.Print("TOML stdio containerization validation passed")
+	return nil
+}
+
+// validateOpenTelemetryConfig validates OpenTelemetry configuration per spec §4.1.3.6.
+// When enforceHTTPS is true (i.e. the config came from the opentelemetry section),
+// the endpoint is required and MUST use HTTPS.
+// traceId and spanId are validated as W3C hex strings when they contain no unexpanded ${VAR}.
+func validateOpenTelemetryConfig(cfg *TracingConfig, enforceHTTPS bool) error {
+	if cfg == nil {
+		return nil
+	}
+
+	logValidation.Print("Validating OpenTelemetry configuration (spec §4.1.3.6)")
+
+	// endpoint is required when opentelemetry section is present
+	if enforceHTTPS && cfg.Endpoint == "" {
+		return rules.MissingRequired("endpoint", "opentelemetry", "gateway.opentelemetry.endpoint",
+			"Provide an HTTPS OTLP endpoint (e.g., \"https://otel-collector.example.com\")")
+	}
+
+	// endpoint MUST be HTTPS (spec §4.1.3.6)
+	if enforceHTTPS && cfg.Endpoint != "" {
+		if !strings.HasPrefix(cfg.Endpoint, "https://") {
+			logValidation.Printf("Non-HTTPS endpoint in opentelemetry config: %s", cfg.Endpoint)
+			return rules.InvalidValue("endpoint",
+				fmt.Sprintf("opentelemetry endpoint must use HTTPS, got '%s'", cfg.Endpoint),
+				"gateway.opentelemetry.endpoint",
+				"Use an HTTPS URL (e.g., \"https://otel-collector.example.com\")")
+		}
+	}
+
+	// Validate traceId: must be a 32-char lowercase hex string, not all-zero
+	if cfg.TraceID != "" {
+		if !traceIDPattern.MatchString(cfg.TraceID) {
+			logValidation.Printf("Invalid traceId format: %s", cfg.TraceID)
+			return rules.InvalidValue("traceId",
+				fmt.Sprintf("traceId must be a 32-character lowercase hexadecimal string, got '%s'", cfg.TraceID),
+				"gateway.opentelemetry.traceId",
+				"Provide a valid W3C trace ID (32 lowercase hex chars, e.g., \"4bf92f3577b34da6a3ce929d0e0e4736\")")
+		}
+		if allZeroTraceID.MatchString(cfg.TraceID) {
+			logValidation.Printf("All-zero traceId rejected per W3C Trace Context: %s", cfg.TraceID)
+			return rules.InvalidValue("traceId",
+				"traceId must not be all zeros (W3C Trace Context forbids an all-zero trace-id)",
+				"gateway.opentelemetry.traceId",
+				"Provide a non-zero W3C trace ID (e.g., \"4bf92f3577b34da6a3ce929d0e0e4736\")")
+		}
+	}
+
+	// Validate spanId: must be a 16-char lowercase hex string, not all-zero
+	if cfg.SpanID != "" {
+		if !spanIDPattern.MatchString(cfg.SpanID) {
+			logValidation.Printf("Invalid spanId format: %s", cfg.SpanID)
+			return rules.InvalidValue("spanId",
+				fmt.Sprintf("spanId must be a 16-character lowercase hexadecimal string, got '%s'", cfg.SpanID),
+				"gateway.opentelemetry.spanId",
+				"Provide a valid W3C span ID (16 lowercase hex chars, e.g., \"00f067aa0ba902b7\")")
+		}
+		if allZeroSpanID.MatchString(cfg.SpanID) {
+			logValidation.Printf("All-zero spanId rejected per W3C Trace Context: %s", cfg.SpanID)
+			return rules.InvalidValue("spanId",
+				"spanId must not be all zeros (W3C Trace Context forbids an all-zero span-id)",
+				"gateway.opentelemetry.spanId",
+				"Provide a non-zero W3C span ID (e.g., \"00f067aa0ba902b7\")")
+		}
+	}
+
+	// spanId without traceId is meaningless — log a warning but do not fail
+	if cfg.SpanID != "" && cfg.TraceID == "" {
+		logValidation.Print("Warning: opentelemetry spanId is set without traceId; spanId will be ignored")
+	}
+
+	logValidation.Print("OpenTelemetry config validation passed")
 	return nil
 }

@@ -118,10 +118,16 @@ type GatewayConfig struct {
 	// Example values: "copilot-swe-agent[bot]", "my-org-bot[bot]"
 	TrustedBots []string `toml:"trusted_bots" json:"trusted_bots,omitempty"`
 
-	// Tracing holds OpenTelemetry OTLP tracing configuration.
+	// Tracing holds OpenTelemetry OTLP tracing configuration (legacy TOML key).
+	// New configurations should use the opentelemetry key (spec §4.1.3.6).
 	// When Endpoint is set, traces are exported to the specified OTLP endpoint.
 	// When omitted or Endpoint is empty, a noop tracer is used (zero overhead).
 	Tracing *TracingConfig `toml:"tracing" json:"tracing,omitempty"`
+
+	// Opentelemetry holds OpenTelemetry OTLP tracing configuration per spec §4.1.3.6.
+	// This key takes precedence over the legacy tracing key when both are present.
+	// MUST use an HTTPS endpoint when configured.
+	Opentelemetry *TracingConfig `toml:"opentelemetry" json:"opentelemetry,omitempty"`
 }
 
 // HTTPKeepaliveInterval returns the keepalive interval as a time.Duration.
@@ -347,6 +353,21 @@ func LoadFromFile(path string) (*Config, error) {
 	// Validate trusted_bots per spec §4.1.3.4: must be non-empty array when present
 	if err := validateTrustedBots(cfg.Gateway.TrustedBots); err != nil {
 		return nil, err
+	}
+
+	// Merge opentelemetry key into tracing when present (spec §4.1.3.6).
+	// opentelemetry takes precedence over the legacy tracing key.
+	if cfg.Gateway.Opentelemetry != nil {
+		cfg.Gateway.Tracing = cfg.Gateway.Opentelemetry
+		cfg.Gateway.Opentelemetry = nil
+		// Expand ${VAR} expressions in tracing fields before validation.
+		if err := expandTracingVariables(cfg.Gateway.Tracing); err != nil {
+			return nil, err
+		}
+		// Validate HTTPS endpoint requirement for the opentelemetry section
+		if err := validateOpenTelemetryConfig(cfg.Gateway.Tracing, true); err != nil {
+			return nil, err
+		}
 	}
 
 	// Apply core gateway defaults

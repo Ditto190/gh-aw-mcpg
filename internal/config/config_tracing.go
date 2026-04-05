@@ -15,27 +15,48 @@ const DefaultTracingServiceName = "mcp-gateway"
 //   - OTEL_EXPORTER_OTLP_ENDPOINT — overrides Endpoint
 //   - OTEL_SERVICE_NAME — overrides ServiceName
 //
-// Example TOML:
+// Example TOML (spec §4.1.3.6, using the opentelemetry section):
 //
-//	[gateway.tracing]
-//	endpoint = "http://localhost:4318"
+//	[gateway.opentelemetry]
+//	endpoint = "https://otel-collector.example.com"
 //	service_name = "mcp-gateway"
-//	sample_rate = 1.0
+//	trace_id = "4bf92f3577b34da6a3ce929d0e0e4736"
+//	span_id = "00f067aa0ba902b7"
+//
+//	[gateway.opentelemetry.headers]
+//	Authorization = "Bearer ${OTEL_TOKEN}"
 type TracingConfig struct {
 	// Endpoint is the OTLP HTTP endpoint to export traces to.
-	// Example: "http://localhost:4318" (Jaeger, Grafana Tempo, Honeycomb, etc.)
+	// When using the opentelemetry section (spec §4.1.3.6), this MUST be an HTTPS URL.
 	// If empty, tracing is disabled and a noop tracer is used.
 	Endpoint string `toml:"endpoint" json:"endpoint,omitempty"`
 
+	// Headers are HTTP headers sent with every OTLP export request (e.g. auth tokens).
+	// Header values support ${VAR} variable expansion (expanded at config load time).
+	Headers map[string]string `toml:"headers" json:"headers,omitempty"`
+
+	// TraceID is an optional W3C trace ID (32-char lowercase hex) used to construct the
+	// parent traceparent header, linking gateway spans into a pre-existing trace.
+	// Supports ${VAR} variable expansion (expanded at config load time).
+	// Must be 32 lowercase hex characters and must not be all zeros.
+	TraceID string `toml:"trace_id" json:"traceId,omitempty"`
+
+	// SpanID is an optional W3C span ID (16-char lowercase hex) paired with TraceID
+	// to construct the parent traceparent header. Ignored when TraceID is absent.
+	// Supports ${VAR} variable expansion (expanded at config load time).
+	// Must be 16 lowercase hex characters and must not be all zeros.
+	SpanID string `toml:"span_id" json:"spanId,omitempty"`
+
 	// ServiceName is the service name reported in traces.
 	// Defaults to "mcp-gateway".
-	ServiceName string `toml:"service_name" json:"service_name,omitempty"`
+	ServiceName string `toml:"service_name" json:"serviceName,omitempty"`
 
 	// SampleRate controls the fraction of traces that are sampled and exported.
 	// Valid range: 0.0 (no sampling) to 1.0 (sample everything).
 	// Defaults to 1.0 (100% sampling).
 	// Uses a pointer so that 0.0 can be distinguished from "unset".
-	SampleRate *float64 `toml:"sample_rate" json:"sample_rate,omitempty"`
+	// Note: SampleRate is a gateway extension field not present in spec §4.1.3.6.
+	SampleRate *float64 `toml:"sample_rate" json:"sampleRate,omitempty"`
 }
 
 // GetSampleRate returns the configured sample rate, defaulting to 1.0 if unset.
@@ -53,6 +74,27 @@ func init() {
 			if cfg.Gateway.Tracing.ServiceName == "" {
 				cfg.Gateway.Tracing.ServiceName = DefaultTracingServiceName
 			}
+		}
+	})
+
+	// Register stdin converter for the opentelemetry gateway config field (spec §4.1.3.6).
+	RegisterStdinConverter(func(cfg *Config, stdinCfg *StdinConfig) {
+		if stdinCfg.Gateway == nil || stdinCfg.Gateway.OpenTelemetry == nil {
+			return
+		}
+		otel := stdinCfg.Gateway.OpenTelemetry
+		if cfg.Gateway == nil {
+			cfg.Gateway = &GatewayConfig{}
+		}
+		cfg.Gateway.Tracing = &TracingConfig{
+			Endpoint:    otel.Endpoint,
+			Headers:     otel.Headers,
+			TraceID:     otel.TraceID,
+			SpanID:      otel.SpanID,
+			ServiceName: otel.ServiceName,
+		}
+		if cfg.Gateway.Tracing.ServiceName == "" {
+			cfg.Gateway.Tracing.ServiceName = DefaultTracingServiceName
 		}
 	})
 }
