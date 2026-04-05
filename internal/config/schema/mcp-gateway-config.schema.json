@@ -2,7 +2,7 @@
     "$schema": "http://json-schema.org/draft-07/schema#",
     "$id": "https://docs.github.com/gh-aw/schemas/mcp-gateway-config.schema.json",
     "title": "MCP Gateway Configuration",
-    "description": "Configuration schema for the Model Context Protocol (MCP) Gateway as defined in the MCP Gateway Specification v1.0.0. The gateway provides transparent HTTP access to multiple MCP servers with protocol translation, server isolation, and authentication capabilities.",
+    "description": "Configuration schema for the Model Context Protocol (MCP) Gateway. The gateway provides transparent HTTP access to multiple MCP servers with protocol translation, server isolation, and authentication capabilities.",
     "type": "object",
     "properties": {
         "mcpServers": {
