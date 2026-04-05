@@ -98,6 +98,8 @@ func GenerateSelfSignedTLS(dir string) (*TLSConfig, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse CA certificate: %w", err)
 	}
+	logTLS.Printf("CA certificate created: serial=%s, notBefore=%s, notAfter=%s",
+		caSerial.String(), notBefore.Format(time.RFC3339), notAfter.Format(time.RFC3339))
 
 	// --- Generate server certificate ---
 	serverKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -128,6 +130,7 @@ func GenerateSelfSignedTLS(dir string) (*TLSConfig, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create server certificate: %w", err)
 	}
+	logTLS.Printf("server certificate created: dnsNames=%v, ipAddresses=%v", serverTemplate.DNSNames, serverTemplate.IPAddresses)
 
 	// --- Write files ---
 	caCertPath := filepath.Join(dir, "ca.crt")
@@ -148,12 +151,14 @@ func GenerateSelfSignedTLS(dir string) (*TLSConfig, error) {
 	if err := writePEM(keyPath, "EC PRIVATE KEY", serverKeyDER, 0600); err != nil {
 		return nil, fmt.Errorf("failed to write server key: %w", err)
 	}
+	logTLS.Printf("TLS certificate files written: caCert=%s, cert=%s, key=%s", caCertPath, certPath, keyPath)
 
 	// --- Build tls.Config ---
 	serverCertPair, err := tls.LoadX509KeyPair(certPath, keyPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load server cert pair: %w", err)
 	}
+	logTLS.Print("TLS key pair loaded successfully")
 
 	tlsCfg := &tls.Config{
 		Certificates: []tls.Certificate{serverCertPair},
