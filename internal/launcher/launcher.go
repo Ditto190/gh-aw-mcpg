@@ -75,8 +75,6 @@ func New(ctx context.Context, cfg *config.Config) *Launcher {
 	// Validate that all servers requiring OIDC have the provider available
 	for serverID, serverCfg := range cfg.Servers {
 		if serverCfg.Auth != nil && serverCfg.Auth.Type == "github-oidc" && oidcProvider == nil {
-			log.Printf("[LAUNCHER] ERROR: Server %q requires OIDC authentication but ACTIONS_ID_TOKEN_REQUEST_URL is not set.", serverID)
-			log.Printf("[LAUNCHER]        OIDC auth is only available when running in GitHub Actions with `permissions: { id-token: write }`.")
 			logger.LogError("startup",
 				"Server %q requires OIDC authentication but ACTIONS_ID_TOKEN_REQUEST_URL is not set. "+
 					"OIDC auth is only available when running in GitHub Actions with `permissions: { id-token: write }`.",
@@ -115,8 +113,6 @@ func GetOrLaunch(l *Launcher, serverID string) (*mcp.Connection, error) {
 		// Handle HTTP backends differently
 		if serverCfg.Type == "http" {
 			logger.LogInfoWithServer(serverID, "backend", "Configuring HTTP MCP backend: %s, url=%s", serverID, serverCfg.URL)
-			log.Printf("[LAUNCHER] Configuring HTTP MCP backend: %s", serverID)
-			log.Printf("[LAUNCHER] URL: %s", serverCfg.URL)
 
 			// Determine OIDC provider and audience for this server
 			var oidcProvider *oidc.Provider
@@ -142,14 +138,11 @@ func GetOrLaunch(l *Launcher, serverID string) (*mcp.Connection, error) {
 			conn, err := mcp.NewHTTPConnection(l.ctx, serverID, serverCfg.URL, serverCfg.Headers, oidcProvider, oidcAudience, l.config.Gateway.HTTPKeepaliveInterval())
 			if err != nil {
 				logger.LogErrorWithServer(serverID, "backend", "Failed to create HTTP connection: %s, error=%v", serverID, err)
-				log.Printf("[LAUNCHER] ❌ FAILED to create HTTP connection for '%s'", serverID)
-				log.Printf("[LAUNCHER] Error: %v", err)
 				l.recordError(serverID, err.Error())
 				return nil, fmt.Errorf("failed to create HTTP connection: %w", err)
 			}
 
 			logger.LogInfoWithServer(serverID, "backend", "Successfully configured HTTP MCP backend: %s", serverID)
-			log.Printf("[LAUNCHER] Successfully configured HTTP backend: %s", serverID)
 
 			l.recordStart(serverID)
 			return conn, nil

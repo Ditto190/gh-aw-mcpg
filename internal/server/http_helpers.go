@@ -100,20 +100,34 @@ func extractAndValidateSession(r *http.Request) string {
 	return sessionID
 }
 
+// peekRequestBody reads all bytes from a POST request body and restores it
+// so downstream handlers can read it again.
+// Returns nil, nil for non-POST requests or requests with no body.
+func peekRequestBody(r *http.Request) ([]byte, error) {
+	if r.Method != http.MethodPost || r.Body == nil {
+		return nil, nil
+	}
+	b, err := io.ReadAll(r.Body)
+	if err != nil {
+		return nil, err
+	}
+	r.Body = io.NopCloser(bytes.NewBuffer(b))
+	return b, nil
+}
+
 // logHTTPRequestBody logs the request body for debugging purposes.
 // It reads the body, logs it, and restores it so it can be read again.
 // The backendID parameter is optional and can be empty for unified mode.
 func logHTTPRequestBody(r *http.Request, sessionID, backendID string) {
 	logHelpers.Printf("Checking request body: method=%s, hasBody=%v, sessionID=%s", r.Method, r.Body != nil, sessionID)
 
-	if r.Method != "POST" || r.Body == nil {
-		logHelpers.Printf("Skipping body logging: not a POST request or no body present")
+	bodyBytes, err := peekRequestBody(r)
+	if err != nil {
+		logHelpers.Printf("Body read failed: err=%v", err)
 		return
 	}
-
-	bodyBytes, err := io.ReadAll(r.Body)
-	if err != nil || len(bodyBytes) == 0 {
-		logHelpers.Printf("Body read failed or empty: err=%v, size=%d", err, len(bodyBytes))
+	if len(bodyBytes) == 0 {
+		logHelpers.Printf("Skipping body logging: not a POST request, no body present, or empty body")
 		return
 	}
 
@@ -129,10 +143,7 @@ func logHTTPRequestBody(r *http.Request, sessionID, backendID string) {
 		logger.LogDebug("client", "MCP request body, session=%s, body=%s", sessionID, sanitizedBody)
 	}
 	log.Printf("Request body: %s", sanitizedBody)
-
-	// Restore body for subsequent reads
-	r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
-	logHelpers.Print("Request body restored for subsequent reads")
+	logHelpers.Print("Request body logged for debugging")
 }
 
 // injectSessionContext stores the session ID and optional backend ID into the request context.

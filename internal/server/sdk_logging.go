@@ -1,9 +1,7 @@
 package server
 
 import (
-	"bytes"
 	"encoding/json"
-	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -54,24 +52,17 @@ func WithSDKLogging(handler http.Handler, mode string) http.Handler {
 			mode, auth.TruncateSessionID(sessionID), auth.TruncateSessionID(mcpSessionID), r.Method, r.URL.Path)
 
 		// Capture and log request body for POST requests
-		var requestBody []byte
+		requestBody, err := peekRequestBody(r)
 		var jsonrpcReq JSONRPCRequest
-		if r.Method == "POST" && r.Body != nil {
-			var err error
-			requestBody, err = io.ReadAll(r.Body)
-			if err == nil && len(requestBody) > 0 {
-				// Restore body for the actual handler
-				r.Body = io.NopCloser(bytes.NewBuffer(requestBody))
-
-				// Parse JSON-RPC request
-				if err := json.Unmarshal(requestBody, &jsonrpcReq); err == nil {
-					logSDK.Printf("    JSON-RPC Request: method=%s id=%v", jsonrpcReq.Method, jsonrpcReq.ID)
-					logger.LogDebug("sdk-frontend", "JSON-RPC request parsed: mode=%s, method=%s, id=%v, session=%s",
-						mode, jsonrpcReq.Method, jsonrpcReq.ID, auth.TruncateSessionID(sessionID))
-				} else {
-					logSDK.Printf("    Failed to parse JSON-RPC request: %v", err)
-					logSDK.Printf("    Raw body: %s", string(requestBody))
-				}
+		if err == nil && len(requestBody) > 0 {
+			// Parse JSON-RPC request
+			if err := json.Unmarshal(requestBody, &jsonrpcReq); err == nil {
+				logSDK.Printf("    JSON-RPC Request: method=%s id=%v", jsonrpcReq.Method, jsonrpcReq.ID)
+				logger.LogDebug("sdk-frontend", "JSON-RPC request parsed: mode=%s, method=%s, id=%v, session=%s",
+					mode, jsonrpcReq.Method, jsonrpcReq.ID, auth.TruncateSessionID(sessionID))
+			} else {
+				logSDK.Printf("    Failed to parse JSON-RPC request: %v", err)
+				logSDK.Printf("    Raw body: %s", string(requestBody))
 			}
 		}
 
