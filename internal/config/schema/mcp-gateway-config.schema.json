@@ -286,7 +286,8 @@
                         "endpoint": {
                             "type": "string",
                             "description": "OTLP/HTTP collector URL. MUST use HTTPS (e.g., \"https://otel-collector.example.com\"). Supports ${VAR} expansion.",
-                            "minLength": 1
+                            "minLength": 1,
+                            "pattern": "^(https://.+|\\$\\{[A-Za-z_][A-Za-z0-9_]*\\})$"
                         },
                         "headers": {
                             "type": "object",
