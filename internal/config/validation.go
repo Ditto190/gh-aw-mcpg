@@ -464,6 +464,11 @@ func validateGatewayConfig(gateway *StdinGatewayConfig) error {
 		}
 	}
 
+	// Validate payloadSizeThreshold per spec §4.1.3.3: must be a positive integer when present.
+	if gateway.PayloadSizeThreshold != nil && *gateway.PayloadSizeThreshold < 1 {
+		return fmt.Errorf("gateway.payloadSizeThreshold must be a positive integer, got %d (spec §4.1.3.3)", *gateway.PayloadSizeThreshold)
+	}
+
 	// Validate trustedBots per spec §4.1.3.4: must be non-empty array when present
 	if err := validateTrustedBots(gateway.TrustedBots); err != nil {
 		return err

@@ -200,6 +200,16 @@ func fixSchemaBytes(schemaBytes []byte) ([]byte, error) {
 					},
 					"minItems": 1,
 				}
+
+				// Add keepaliveInterval to gatewayConfig.
+				// Spec §4.1.3.5: optional integer keepalive ping interval in seconds for HTTP
+				// MCP backends. The Go struct (StdinGatewayConfig.KeepaliveInterval) supports
+				// this field, but the embedded schema (v0.64.4) omits it, causing schema
+				// validation to reject the field when additionalProperties is false.
+				props["keepaliveInterval"] = map[string]interface{}{
+					"type":        "integer",
+					"description": "Keepalive ping interval in seconds for HTTP MCP backends. Use -1 to disable, 0 or unset for gateway default (1500s), or a positive integer for a custom interval.",
+				}
 			}
 		}
 	}

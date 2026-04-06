@@ -37,9 +37,10 @@ type StdinGatewayConfig struct {
 	Domain            string                    `json:"domain,omitempty"`
 	StartupTimeout    *int                      `json:"startupTimeout,omitempty"`
 	ToolTimeout       *int                      `json:"toolTimeout,omitempty"`
-	KeepaliveInterval *int                      `json:"keepaliveInterval,omitempty"`
-	PayloadDir        string                    `json:"payloadDir,omitempty"`
-	TrustedBots       []string                  `json:"trustedBots,omitempty"`
+	KeepaliveInterval    *int                      `json:"keepaliveInterval,omitempty"`
+	PayloadDir           string                    `json:"payloadDir,omitempty"`
+	PayloadSizeThreshold *int                      `json:"payloadSizeThreshold,omitempty"`
+	TrustedBots          []string                  `json:"trustedBots,omitempty"`
 	OpenTelemetry     *StdinOpenTelemetryConfig `json:"opentelemetry,omitempty"`
 }
 
@@ -307,6 +308,9 @@ func convertStdinConfig(stdinCfg *StdinConfig) (*Config, error) {
 		}
 		if stdinCfg.Gateway.PayloadDir != "" {
 			cfg.Gateway.PayloadDir = stdinCfg.Gateway.PayloadDir
+		}
+		if stdinCfg.Gateway.PayloadSizeThreshold != nil {
+			cfg.Gateway.PayloadSizeThreshold = *stdinCfg.Gateway.PayloadSizeThreshold
 		}
 		if stdinCfg.Gateway.TrustedBots != nil {
 			if err := validateTrustedBots(stdinCfg.Gateway.TrustedBots); err != nil {

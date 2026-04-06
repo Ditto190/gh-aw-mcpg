@@ -1134,3 +1134,65 @@ func TestStdinServerConfig_AuthJSON(t *testing.T) {
 		assert.False(t, exists, "auth should be a known field, not an additional property")
 	})
 }
+
+// TestConvertStdinConfig_PayloadSizeThreshold verifies that payloadSizeThreshold is
+// correctly wired from the JSON stdin format to the internal config (spec §4.1.3.3).
+func TestConvertStdinConfig_PayloadSizeThreshold(t *testing.T) {
+	intPtr := func(v int) *int { return &v }
+
+	t.Run("payloadSizeThreshold wired from stdin gateway config", func(t *testing.T) {
+		stdinCfg := &StdinConfig{
+			MCPServers: map[string]*StdinServerConfig{},
+			Gateway: &StdinGatewayConfig{
+				PayloadSizeThreshold: intPtr(1048576),
+			},
+		}
+
+		cfg, err := convertStdinConfig(stdinCfg)
+		require.NoError(t, err)
+		require.NotNil(t, cfg.Gateway)
+		assert.Equal(t, 1048576, cfg.Gateway.PayloadSizeThreshold)
+	})
+
+	t.Run("payloadSizeThreshold nil leaves default applied", func(t *testing.T) {
+		stdinCfg := &StdinConfig{
+			MCPServers: map[string]*StdinServerConfig{},
+			Gateway:    &StdinGatewayConfig{},
+		}
+
+		cfg, err := convertStdinConfig(stdinCfg)
+		require.NoError(t, err)
+		require.NotNil(t, cfg.Gateway)
+		// applyDefaults should have set the default value
+		assert.Equal(t, DefaultPayloadSizeThreshold, cfg.Gateway.PayloadSizeThreshold)
+	})
+
+	t.Run("payloadSizeThreshold zero rejected per spec §4.1.3.3", func(t *testing.T) {
+		gateway := &StdinGatewayConfig{
+			PayloadSizeThreshold: intPtr(0),
+		}
+
+		err := validateGatewayConfig(gateway)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "payloadSizeThreshold must be a positive integer")
+	})
+
+	t.Run("payloadSizeThreshold negative rejected per spec §4.1.3.3", func(t *testing.T) {
+		gateway := &StdinGatewayConfig{
+			PayloadSizeThreshold: intPtr(-1),
+		}
+
+		err := validateGatewayConfig(gateway)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "payloadSizeThreshold must be a positive integer")
+	})
+
+	t.Run("payloadSizeThreshold one accepted", func(t *testing.T) {
+		gateway := &StdinGatewayConfig{
+			PayloadSizeThreshold: intPtr(1),
+		}
+
+		err := validateGatewayConfig(gateway)
+		assert.NoError(t, err)
+	})
+}
