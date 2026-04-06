@@ -426,7 +426,7 @@ The project uses:
 - `github.com/santhosh-tekuri/jsonschema/v5` - JSON schema validation
 - `github.com/stretchr/testify` - Test assertions
 - `github.com/tetratelabs/wazero` - WASM runtime for executing WASM-based security guards
-- `go.opentelemetry.io/otel` - OpenTelemetry distributed tracing (OTLP export, span/trace management)
+- `go.opentelemetry.io/otel` - OpenTelemetry tracing API and span/trace management
 - `golang.org/x/term` - Terminal detection
 - Standard library for JSON, HTTP, exec
 
