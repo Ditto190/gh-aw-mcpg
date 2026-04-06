@@ -10,7 +10,7 @@
 //! Use path-based labeling (`label_response_paths`) when possible for better
 //! performance with large result sets.
 
-use super::constants::field_names;
+use super::constants::{field_names, label_constants};
 use super::extract_mcp_response;
 use super::helpers::*;
 use crate::{LabeledItem, ResourceLabels};
@@ -66,7 +66,7 @@ pub fn label_response_items(
                         let secrecy = if let Some((owner, repo)) = full_name.split_once('/') {
                             policy_private_scope_label(owner, repo, full_name, ctx)
                         } else {
-                            vec!["private".to_string()]
+                            vec![label_constants::PRIVATE_BASE.to_string()]
                         };
                         labeled_items.push(LabeledItem {
                             data: item.clone(),

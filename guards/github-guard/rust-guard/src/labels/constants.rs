@@ -8,6 +8,7 @@ pub mod label_constants {
     #[cfg(test)]
     pub const SECRET: &str = "secret";
     pub const PRIVATE_USER: &str = "private:user";
+    pub const PRIVATE_BASE: &str = "private";
     pub const READER_PREFIX: &str = "unapproved:";
     pub const WRITER_PREFIX: &str = "approved:";
     pub const MERGED_PREFIX: &str = "merged:";

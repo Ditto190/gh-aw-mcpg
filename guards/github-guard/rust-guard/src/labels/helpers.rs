@@ -395,7 +395,7 @@ pub fn policy_private_scope_label(
         if let Some(matched_scope) = first_matching_scope(resource_owner, resource_repo, ctx) {
             match matched_scope.scope_kind {
                 ScopeKind::All => vec![],
-                ScopeKind::Public => vec!["private".to_string()],
+                ScopeKind::Public => vec![label_constants::PRIVATE_BASE.to_string()],
                 ScopeKind::Owner => {
                     private_scope_label(matched_scope.scope_owner.as_deref().unwrap_or(""))
                 }
@@ -407,7 +407,7 @@ pub fn policy_private_scope_label(
             private_scope_label(&format!("{}/{}", resource_owner, resource_repo))
         }
     } else {
-        vec!["private".to_string()]
+        vec![label_constants::PRIVATE_BASE.to_string()]
     }
 }
 
@@ -676,21 +676,8 @@ pub fn extract_items_array(response: &Value) -> (Option<&Vec<Value>>, String) {
     }
 
     // GraphQL format: data.repository.<resource>.nodes or data.search.nodes
-    if let Some(data) = response.get("data") {
-        // data.repository.<field>.nodes (issues, pullRequests, discussions, etc.)
-        if let Some(repo) = data.get("repository") {
-            for (field, pointer) in GRAPHQL_COLLECTION_FIELDS {
-                if let Some(arr) = repo.get(*field).and_then(|v| v.get("nodes")).and_then(|v| v.as_array()) {
-                    return (Some(arr), pointer.to_string());
-                }
-            }
-        }
-        // data.search.nodes
-        if let Some(arr) = data.get("search").and_then(|v| v.get("nodes")).and_then(|v| v.as_array()) {
-            return (Some(arr), "/data/search/nodes".to_string());
-        }
-        // data.search.edges[].node — flatten into nodes
-        // (not supported as direct reference; caller should use search.nodes form)
+    if let Some((arr, pointer)) = find_graphql_nodes_with_path(response) {
+        return (Some(arr), pointer.to_string());
     }
 
     (None, String::new())
@@ -721,25 +708,26 @@ const GRAPHQL_COLLECTION_FIELDS: &[(&str, &str)] = &[
     ("discussionCategories", "/data/repository/discussionCategories/nodes"),
 ];
 
-/// Extract the items array from a GraphQL response.
-/// Traverses data.repository.<field>.nodes and data.search.nodes paths.
-pub fn extract_graphql_nodes(response: &Value) -> Option<&Vec<Value>> {
+/// Private helper: find GraphQL nodes and return both the array and its JSON Pointer path.
+fn find_graphql_nodes_with_path(response: &Value) -> Option<(&Vec<Value>, &'static str)> {
     let data = response.get("data")?;
-
-    // data.repository.<field>.nodes
     if let Some(repo) = data.get("repository") {
-        for (field, _) in GRAPHQL_COLLECTION_FIELDS {
+        for (field, pointer) in GRAPHQL_COLLECTION_FIELDS {
             if let Some(arr) = repo.get(*field).and_then(|v| v.get("nodes")).and_then(|v| v.as_array()) {
-                return Some(arr);
+                return Some((arr, pointer));
             }
         }
     }
-    // data.search.nodes
     if let Some(arr) = data.get("search").and_then(|v| v.get("nodes")).and_then(|v| v.as_array()) {
-        return Some(arr);
+        return Some((arr, "/data/search/nodes"));
     }
-
     None
+}
+
+/// Extract the items array from a GraphQL response.
+/// Traverses data.repository.<field>.nodes and data.search.nodes paths.
+pub fn extract_graphql_nodes(response: &Value) -> Option<&Vec<Value>> {
+    find_graphql_nodes_with_path(response).map(|(arr, _)| arr)
 }
 
 /// Returns true if the response is a GraphQL wrapper (has a "data" key).
