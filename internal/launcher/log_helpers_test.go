@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/github/gh-aw-mcpg/internal/config"
+	"github.com/github/gh-aw-mcpg/internal/logger"
 )
 
 // captureLogOutput captures log output to a buffer for testing
@@ -434,28 +436,39 @@ func TestLauncher_LogLaunchSuccess(t *testing.T) {
 		name      string
 		serverID  string
 		sessionID string
+		wantLog   string
 	}{
 		{
 			name:      "success with session",
 			serverID:  "github",
 			sessionID: "session-789",
+			wantLog:   "Successfully launched MCP backend server",
 		},
 		{
 			name:      "success without session",
 			serverID:  "slack",
 			sessionID: "",
+			wantLog:   "Successfully launched MCP backend server",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			launcher := &Launcher{}
+			logDir := t.TempDir()
+			require.NoError(t, logger.InitServerFileLogger(logDir))
+			t.Cleanup(func() { logger.CloseServerFileLogger() })
 
-			// logLaunchSuccess now uses only structured logging (no log.Printf);
-			// verify it runs without panic.
-			require.NotPanics(t, func() {
-				launcher.logLaunchSuccess(tt.serverID, tt.sessionID)
-			})
+			launcher := &Launcher{}
+			launcher.logLaunchSuccess(tt.serverID, tt.sessionID)
+
+			logFile := filepath.Join(logDir, tt.serverID+".log")
+			content, err := os.ReadFile(logFile)
+			require.NoError(t, err, "Server log file should exist")
+			assert.Contains(t, string(content), tt.wantLog)
+			assert.Contains(t, string(content), tt.serverID)
+			if tt.sessionID != "" {
+				assert.Contains(t, string(content), tt.sessionID)
+			}
 		})
 	}
 }
