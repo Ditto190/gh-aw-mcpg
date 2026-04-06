@@ -37,8 +37,13 @@ func (s *Server) Start() error {
 		Version: s.config.Version,
 	}
 
+	sdkLogger := s.config.Logger
+	if sdkLogger == nil {
+		sdkLogger = logger.NewSlogLoggerWithHandler(logger.New("testutil:mcptest"))
+	}
+
 	s.server = sdk.NewServer(impl, &sdk.ServerOptions{
-		Logger: logger.Discard(),
+		Logger: sdkLogger,
 	})
 
 	// Register tools
