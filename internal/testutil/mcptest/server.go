@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/github/gh-aw-mcpg/internal/logger"
 	"github.com/github/gh-aw-mcpg/internal/mcp"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -36,7 +37,14 @@ func (s *Server) Start() error {
 		Version: s.config.Version,
 	}
 
-	s.server = sdk.NewServer(impl, &sdk.ServerOptions{})
+	sdkLogger := s.config.Logger
+	if sdkLogger == nil {
+		sdkLogger = logger.NewSlogLoggerWithHandler(logger.New("testutil:mcptest"))
+	}
+
+	s.server = sdk.NewServer(impl, &sdk.ServerOptions{
+		Logger: sdkLogger,
+	})
 
 	// Register tools
 	for i, toolCfg := range s.config.Tools {

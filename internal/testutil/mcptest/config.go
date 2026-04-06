@@ -1,6 +1,10 @@
 package mcptest
 
-import sdk "github.com/modelcontextprotocol/go-sdk/mcp"
+import (
+	"log/slog"
+
+	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
+)
 
 // ServerConfig defines the configuration for a test MCP server
 type ServerConfig struct {
@@ -12,6 +16,10 @@ type ServerConfig struct {
 	Tools []ToolConfig
 	// Resources is the list of resources to expose
 	Resources []ResourceConfig
+	// Logger is an optional slog.Logger for SDK diagnostics.
+	// When nil, defaults to the project debug logger (namespace "testutil:mcptest"),
+	// which surfaces SDK protocol errors when DEBUG=testutil:* is set.
+	Logger *slog.Logger
 }
 
 // ToolConfig defines a tool for the test server
