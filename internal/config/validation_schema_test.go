@@ -686,3 +686,46 @@ func TestSchemaConfiguration(t *testing.T) {
 
 	t.Logf("Embedded schema size: %d bytes", len(embeddedSchemaBytes))
 }
+
+// TestFixSchemaBytes_keepaliveInterval verifies that keepaliveInterval is accepted by
+// the schema after fixSchemaBytes is applied (spec §4.1.3.5).
+// Prior to this fix, the field was silently rejected with additionalProperties:false
+// even though the Go struct already supported it.
+func TestFixSchemaBytes_keepaliveInterval(t *testing.T) {
+	validConfig := `{
+"mcpServers": {
+"github": {
+"container": "ghcr.io/github/github-mcp-server:latest"
+}
+},
+"gateway": {
+"port": 8080,
+"domain": "localhost",
+"apiKey": "test-key",
+"keepaliveInterval": 300
+}
+}`
+
+	err := validateJSONSchema([]byte(validConfig))
+	assert.NoError(t, err, "keepaliveInterval should be accepted by the schema (spec §4.1.3.5)")
+}
+
+// TestFixSchemaBytes_keepaliveIntervalNegative verifies that -1 (disable) is accepted.
+func TestFixSchemaBytes_keepaliveIntervalNegative(t *testing.T) {
+	validConfig := `{
+"mcpServers": {
+"github": {
+"container": "ghcr.io/github/github-mcp-server:latest"
+}
+},
+"gateway": {
+"port": 8080,
+"domain": "localhost",
+"apiKey": "test-key",
+"keepaliveInterval": -1
+}
+}`
+
+	err := validateJSONSchema([]byte(validConfig))
+	assert.NoError(t, err, "keepaliveInterval -1 (disable) should be accepted by the schema")
+}

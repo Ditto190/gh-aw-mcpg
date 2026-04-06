@@ -335,3 +335,20 @@ func TestGetAPIKey_ReturnsKey(t *testing.T) {
 	cfg := &Config{Gateway: &GatewayConfig{APIKey: "super-secret-key"}}
 	assert.Equal(t, "super-secret-key", cfg.GetAPIKey())
 }
+
+// TestLoadFromFile_NegativePayloadSizeThresholdRejected verifies that TOML configs with
+// a negative payload_size_threshold are rejected per spec §4.1.3.3.
+func TestLoadFromFile_NegativePayloadSizeThresholdRejected(t *testing.T) {
+	path := writeTempTOML(t, `
+[gateway]
+payload_size_threshold = -1
+
+[servers.github]
+command = "docker"
+args = ["run", "--rm", "-i", "ghcr.io/github/github-mcp-server:latest"]
+`)
+	cfg, err := LoadFromFile(path)
+	require.Error(t, err)
+	assert.Nil(t, cfg)
+	assert.Contains(t, err.Error(), "payload_size_threshold must be a positive integer")
+}

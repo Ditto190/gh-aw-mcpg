@@ -376,6 +376,12 @@ func LoadFromFile(path string) (*Config, error) {
 	// Apply feature-specific defaults
 	applyDefaults(&cfg)
 
+	// Validate payload_size_threshold per spec §4.1.3.3: must be positive integer.
+	// applyDefaults replaces 0 with the default, so only negative values remain to catch.
+	if cfg.Gateway.PayloadSizeThreshold < 0 {
+		return nil, fmt.Errorf("gateway.payload_size_threshold must be a positive integer, got %d (spec §4.1.3.3)", cfg.Gateway.PayloadSizeThreshold)
+	}
+
 	if err := validateGuardPolicies(&cfg); err != nil {
 		return nil, err
 	}
