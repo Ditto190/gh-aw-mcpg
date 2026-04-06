@@ -154,8 +154,14 @@ func (us *UnifiedServer) logServerGuardPolicies(serverID string) {
 	log.Printf("[DIFC] guard policy for MCP server '%s': %s", serverID, string(policyJSON))
 }
 
+// getWASMGuardsRootDir returns the trimmed value of the WASM guards root
+// directory environment variable, or an empty string if it is not set.
+func getWASMGuardsRootDir() string {
+	return strings.TrimSpace(os.Getenv(wasmGuardsDirEnvVar))
+}
+
 func findServerWASMGuardFile(serverID string) (string, bool, error) {
-	guardsRootDir := strings.TrimSpace(os.Getenv(wasmGuardsDirEnvVar))
+	guardsRootDir := getWASMGuardsRootDir()
 	if guardsRootDir == "" {
 		logGuardInit.Printf("Skipping WASM guard discovery: %s is not set", wasmGuardsDirEnvVar)
 		return "", false, nil
@@ -189,7 +195,7 @@ func findServerWASMGuardFile(serverID string) (string, bool, error) {
 }
 
 func (us *UnifiedServer) logWASMGuardsDirConfiguration() {
-	guardsRootDir := strings.TrimSpace(os.Getenv(wasmGuardsDirEnvVar))
+	guardsRootDir := getWASMGuardsRootDir()
 	if guardsRootDir == "" {
 		log.Printf("[DIFC] %s is not set", wasmGuardsDirEnvVar)
 		return

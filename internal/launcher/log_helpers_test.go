@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/github/gh-aw-mcpg/internal/config"
+	"github.com/github/gh-aw-mcpg/internal/logger"
 )
 
 // captureLogOutput captures log output to a buffer for testing
@@ -72,8 +74,6 @@ func TestLauncher_LogSecurityWarning(t *testing.T) {
 			serverID: "test-server",
 			command:  "/usr/bin/node",
 			wantInLog: []string{
-				"test-server",
-				"direct command execution",
 				"/usr/bin/node",
 				"same privileges",
 				"container",
@@ -84,8 +84,6 @@ func TestLauncher_LogSecurityWarning(t *testing.T) {
 			serverID: "docker-server",
 			command:  "docker",
 			wantInLog: []string{
-				"docker-server",
-				"WARNING",
 				"docker",
 			},
 		},
@@ -128,9 +126,6 @@ func TestLauncher_LogLaunchStart(t *testing.T) {
 			args:            []string{"run", "ghcr.io/github/github-mcp-server"},
 			isDirectCommand: false,
 			wantInLog: []string{
-				"github",
-				"session-123",
-				"Starting MCP server",
 				"docker",
 			},
 		},
@@ -142,8 +137,6 @@ func TestLauncher_LogLaunchStart(t *testing.T) {
 			args:            []string{"run", "slack-mcp-server"},
 			isDirectCommand: false,
 			wantInLog: []string{
-				"slack",
-				"Starting MCP server",
 				"docker",
 			},
 		},
@@ -155,7 +148,6 @@ func TestLauncher_LogLaunchStart(t *testing.T) {
 			args:            []string{"server.js"},
 			isDirectCommand: true,
 			wantInLog: []string{
-				"local-server",
 				"node",
 				"isDirectCommand=true",
 			},
@@ -168,8 +160,6 @@ func TestLauncher_LogLaunchStart(t *testing.T) {
 			args:            []string{"run", "-e", "API_KEY=secret-value-12345"},
 			isDirectCommand: false,
 			wantInLog: []string{
-				"env-server",
-				"env-session",
 				"secr...", // TruncateSecret shows first 4 chars + "..."
 			},
 		},
@@ -399,10 +389,6 @@ func TestLauncher_LogTimeoutError(t *testing.T) {
 			sessionID:      "session-456",
 			startupTimeout: 30 * time.Second,
 			wantInLog: []string{
-				"slow-server",
-				"session-456",
-				"timed out",
-				"30s",
 				"hanging",
 				"startupTimeout",
 			},
@@ -413,9 +399,6 @@ func TestLauncher_LogTimeoutError(t *testing.T) {
 			sessionID:      "",
 			startupTimeout: 60 * time.Second,
 			wantInLog: []string{
-				"slow-server",
-				"timed out",
-				"1m0s", // Go formats 60s as 1m0s
 				"hanging",
 			},
 		},
@@ -425,9 +408,7 @@ func TestLauncher_LogTimeoutError(t *testing.T) {
 			sessionID:      "test-session",
 			startupTimeout: 2 * time.Minute,
 			wantInLog: []string{
-				"test-server",
-				"test-session",
-				"2m0s",
+				"startupTimeout",
 			},
 		},
 	}
@@ -445,7 +426,6 @@ func TestLauncher_LogTimeoutError(t *testing.T) {
 			for _, want := range tt.wantInLog {
 				assert.Contains(t, output, want, "Expected log output to contain: %s", want)
 			}
-			assert.Contains(t, output, "❌", "Expected error emoji in output")
 			assert.Contains(t, output, "⚠️", "Expected warning emoji in output")
 		})
 	}
@@ -456,41 +436,39 @@ func TestLauncher_LogLaunchSuccess(t *testing.T) {
 		name      string
 		serverID  string
 		sessionID string
-		wantInLog []string
+		wantLog   string
 	}{
 		{
 			name:      "success with session",
 			serverID:  "github",
 			sessionID: "session-789",
-			wantInLog: []string{
-				"Successfully launched",
-				"github",
-				"session-789",
-			},
+			wantLog:   "Successfully launched MCP backend server",
 		},
 		{
 			name:      "success without session",
 			serverID:  "slack",
 			sessionID: "",
-			wantInLog: []string{
-				"Successfully launched",
-				"slack",
-			},
+			wantLog:   "Successfully launched MCP backend server",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			logDir := t.TempDir()
+			require.NoError(t, logger.InitServerFileLogger(logDir))
+			t.Cleanup(func() { logger.CloseServerFileLogger() })
+
 			launcher := &Launcher{}
+			launcher.logLaunchSuccess(tt.serverID, tt.sessionID)
 
-			output := captureLogOutput(t, func() {
-				launcher.logLaunchSuccess(tt.serverID, tt.sessionID)
-			})
-
-			for _, want := range tt.wantInLog {
-				assert.Contains(t, output, want, "Expected log output to contain: %s", want)
+			logFile := filepath.Join(logDir, tt.serverID+".log")
+			content, err := os.ReadFile(logFile)
+			require.NoError(t, err, "Server log file should exist")
+			assert.Contains(t, string(content), tt.wantLog)
+			assert.Contains(t, string(content), tt.serverID)
+			if tt.sessionID != "" {
+				assert.Contains(t, string(content), tt.sessionID)
 			}
-			assert.Contains(t, output, "[LAUNCHER]", "Expected [LAUNCHER] prefix")
 		})
 	}
 }
@@ -521,9 +499,6 @@ func TestLogHelpersIntegration(t *testing.T) {
 	allOutput.WriteString(output)
 
 	// Verify the complete flow
-	assert.Contains(t, allOutput.String(), "Starting MCP server")
-	assert.Contains(t, allOutput.String(), "test-server")
-	assert.Contains(t, allOutput.String(), "test-session")
 	assert.Contains(t, allOutput.String(), "TEST_VAR")
 }
 
