@@ -265,6 +265,7 @@ awmg/
     ├── sys/                   # System utilities
     ├── testutil/              # Test utilities and helpers
     ├── timeutil/              # Time formatting utilities
+    ├── tracing/               # OpenTelemetry OTLP tracing helpers
     ├── tty/                   # Terminal detection utilities
     └── version/               # Version management
 ```
@@ -290,6 +291,7 @@ awmg/
 - **`internal/sys/`** - System utilities
 - **`internal/testutil/`** - Test utilities and helpers
 - **`internal/timeutil/`** - Time formatting utilities
+- **`internal/tracing/`** - OpenTelemetry OTLP trace export helpers (HTTP handler wrapping, provider management)
 - **`internal/tty/`** - Terminal detection utilities
 - **`internal/version/`** - Version management
 
@@ -424,6 +426,7 @@ The project uses:
 - `github.com/santhosh-tekuri/jsonschema/v5` - JSON schema validation
 - `github.com/stretchr/testify` - Test assertions
 - `github.com/tetratelabs/wazero` - WASM runtime for executing WASM-based security guards
+- `go.opentelemetry.io/otel` - OpenTelemetry tracing API and span/trace management
 - `golang.org/x/term` - Terminal detection
 - Standard library for JSON, HTTP, exec
 
