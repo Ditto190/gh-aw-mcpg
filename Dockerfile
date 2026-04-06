@@ -9,7 +9,6 @@ RUN go mod download
 
 # Copy source code
 COPY . .
-RUN go mod tidy
 
 # Build argument for version (defaults to "dev")
 ARG VERSION=dev

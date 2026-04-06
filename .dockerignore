@@ -1,0 +1,22 @@
+# Rust build artifacts (500MB+)
+guards/github-guard/rust-guard/target/
+
+# Test directories
+test/
+.github/
+
+# Git metadata
+.git/
+
+# Build artifacts
+awmg
+mcpg
+*.test
+*.out
+coverage.*
+
+# Runtime/dev files
+.env
+.env.*
+.DS_Store
+.serena/
