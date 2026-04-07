@@ -377,6 +377,7 @@ func TestCallBackendTool_NoAllowedListPermitsAllTools(t *testing.T) {
 
 	us, err := NewUnified(context.Background(), cfg)
 	require.NoError(err)
+	defer us.Close()
 
 	ctx := context.WithValue(context.Background(), SessionIDContextKey, "test-session")
 
@@ -468,6 +469,7 @@ func TestCallBackendTool_AllowedToolsError_MessageFormat(t *testing.T) {
 	}
 	us, err := NewUnified(context.Background(), cfg)
 	require.NoError(err)
+	defer us.Close()
 
 	ctx := context.WithValue(context.Background(), SessionIDContextKey, "sess-123")
 	result, _, callErr := us.callBackendTool(ctx, "s", "blocked", nil)
