@@ -299,6 +299,7 @@ func TestCallBackendTool_AllowedToolsEnforcement(t *testing.T) {
 
 	us, err := NewUnified(context.Background(), cfg)
 	require.NoError(err)
+	defer us.Close()
 
 	ctx := context.WithValue(context.Background(), SessionIDContextKey, "test-session")
 
