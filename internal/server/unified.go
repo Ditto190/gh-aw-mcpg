@@ -89,6 +89,11 @@ type UnifiedServer struct {
 	payloadPathPrefix    string // Path prefix to use when returning payloadPath to clients (allows remapping host paths to client/agent container paths)
 	payloadSizeThreshold int    // Size threshold (in bytes) for storing payloads to disk. Payloads larger than this are stored to disk, smaller ones are returned inline.
 
+	// allowedToolSets holds a pre-computed set of allowed tool names per server ID.
+	// Built once during NewUnified from the config Tools lists. A missing or nil entry
+	// means all tools are permitted for that server.
+	allowedToolSets map[string]map[string]bool
+
 	// DIFC components
 	guardRegistry *guard.Registry
 	agentRegistry *difc.AgentRegistry
@@ -143,6 +148,7 @@ func NewUnified(ctx context.Context, cfg *config.Config) (*UnifiedServer, error)
 		payloadDir:           payloadDir,
 		payloadPathPrefix:    payloadPathPrefix,
 		payloadSizeThreshold: payloadSizeThreshold,
+		allowedToolSets:      buildAllowedToolSets(cfg),
 
 		// Initialize DIFC components
 		guardRegistry: guard.NewRegistry(),
@@ -370,6 +376,37 @@ func newErrorCallToolResult(err error) (*sdk.CallToolResult, interface{}, error)
 	}, nil, err
 }
 
+// buildAllowedToolSets converts the per-server Tools lists from the config into pre-computed
+// map[string]bool sets for O(1) lookup. Servers with no Tools list are not added to the map,
+// which signals that all tools are permitted.
+func buildAllowedToolSets(cfg *config.Config) map[string]map[string]bool {
+	sets := make(map[string]map[string]bool)
+	if cfg == nil {
+		return sets
+	}
+	for serverID, serverCfg := range cfg.Servers {
+		if len(serverCfg.Tools) > 0 {
+			set := make(map[string]bool, len(serverCfg.Tools))
+			for _, t := range serverCfg.Tools {
+				set[t] = true
+			}
+			sets[serverID] = set
+		}
+	}
+	return sets
+}
+
+// isToolAllowed reports whether toolName is permitted by the server's configured
+// allowed-tools list. When no list is configured (empty), all tools are allowed.
+// Uses the pre-computed allowedToolSets map for O(1) lookup.
+func (us *UnifiedServer) isToolAllowed(serverID, toolName string) bool {
+	set, ok := us.allowedToolSets[serverID]
+	if !ok || set == nil {
+		return true
+	}
+	return set[toolName]
+}
+
 // callBackendTool calls a tool on a backend server with DIFC enforcement
 func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName string, args interface{}) (*sdk.CallToolResult, interface{}, error) {
 	// Note: Session validation happens at the tool registration level via closures
@@ -398,6 +435,24 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 	// Get guard for this backend
 	g := us.guardRegistry.Get(serverID)
 	sessionID := us.getSessionID(ctx)
+
+	// **Allowed-tools enforcement**: reject calls for tools not in the configured list.
+	// This is a server-side guard so agents cannot bypass client-side --allowed-tools
+	// filters by sending raw tools/call requests directly to the gateway.
+	if !us.isToolAllowed(serverID, toolName) {
+		logger.LogWarn("client", "tools/call denied: tool=%q not in allowed-tools for server=%s",
+			toolName, serverID)
+		httpStatusCode = 403
+		deniedErr := fmt.Errorf("tool %q is not in the allowed-tools list for this server", toolName)
+		toolSpan.RecordError(deniedErr)
+		toolSpan.SetStatus(codes.Error, "tool not allowed")
+		return &sdk.CallToolResult{
+			IsError: true,
+			Content: []sdk.Content{
+				&sdk.TextContent{Text: deniedErr.Error()},
+			},
+		}, nil, deniedErr
+	}
 
 	// Create backend caller for the guard
 	backendCaller := &guardBackendCaller{

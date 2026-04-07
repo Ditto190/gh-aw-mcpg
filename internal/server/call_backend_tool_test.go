@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/github/gh-aw-mcpg/internal/config"
@@ -239,4 +240,245 @@ func TestCallBackendTool_ErrorStillReturnsCallToolResult(t *testing.T) {
 	require.True(result.IsError, "Result should be marked as error")
 
 	t.Log("✓ PASS: callBackendTool returns non-nil CallToolResult even on error")
+}
+
+// TestCallBackendTool_AllowedToolsEnforcement verifies that callBackendTool rejects
+// tools not present in the server's configured allowed-tools list.
+func TestCallBackendTool_AllowedToolsEnforcement(t *testing.T) {
+	require := require.New(t)
+	assert := assert.New(t)
+
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		method, _ := req["method"].(string)
+		w.Header().Set("Content-Type", "application/json")
+		switch method {
+		case "initialize":
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"jsonrpc": "2.0", "id": req["id"],
+				"result": map[string]interface{}{
+					"protocolVersion": "2024-11-05",
+					"capabilities":    map[string]interface{}{},
+					"serverInfo":      map[string]interface{}{"name": "mock", "version": "1.0.0"},
+				},
+			})
+		case "tools/list":
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"jsonrpc": "2.0", "id": req["id"],
+				"result": map[string]interface{}{
+					"tools": []map[string]interface{}{
+						{"name": "allowed_tool", "description": "allowed", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{}}},
+						{"name": "blocked_tool", "description": "blocked", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{}}},
+					},
+				},
+			})
+		case "tools/call":
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"jsonrpc": "2.0", "id": req["id"],
+				"result": map[string]interface{}{
+					"content": []map[string]interface{}{{"type": "text", "text": "ok"}},
+				},
+			})
+		}
+	}))
+	defer backend.Close()
+
+	cfg := &config.Config{
+		Servers: map[string]*config.ServerConfig{
+			"test": {
+				Type:  "http",
+				URL:   backend.URL,
+				Tools: []string{"allowed_tool"}, // only this tool is permitted
+			},
+		},
+	}
+
+	us, err := NewUnified(context.Background(), cfg)
+	require.NoError(err)
+	defer us.Close()
+
+	ctx := context.WithValue(context.Background(), SessionIDContextKey, "test-session")
+
+	// Calling an allowed tool should succeed.
+	result, _, err := us.callBackendTool(ctx, "test", "allowed_tool", map[string]interface{}{})
+	require.NoError(err)
+	require.NotNil(result)
+	assert.False(result.IsError, "allowed tool should not be an error")
+
+	// Calling a blocked tool should be rejected.
+	result, _, err = us.callBackendTool(ctx, "test", "blocked_tool", map[string]interface{}{})
+	require.Error(err, "blocked tool call should return an error")
+	require.NotNil(result)
+	assert.True(result.IsError, "blocked tool result should be marked as error")
+	require.Len(result.Content, 1)
+	textContent, ok := result.Content[0].(*sdk.TextContent)
+	require.True(ok)
+	assert.Contains(textContent.Text, "blocked_tool")
+	assert.Contains(textContent.Text, "allowed-tools")
+}
+
+// TestCallBackendTool_NoAllowedListPermitsAllTools verifies that when no allowed-tools
+// list is configured, all tools are callable.
+func TestCallBackendTool_NoAllowedListPermitsAllTools(t *testing.T) {
+	require := require.New(t)
+	assert := assert.New(t)
+
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		method, _ := req["method"].(string)
+		w.Header().Set("Content-Type", "application/json")
+		switch method {
+		case "initialize":
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"jsonrpc": "2.0", "id": req["id"],
+				"result": map[string]interface{}{
+					"protocolVersion": "2024-11-05",
+					"capabilities":    map[string]interface{}{},
+					"serverInfo":      map[string]interface{}{"name": "mock", "version": "1.0.0"},
+				},
+			})
+		case "tools/list":
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"jsonrpc": "2.0", "id": req["id"],
+				"result": map[string]interface{}{
+					"tools": []map[string]interface{}{
+						{"name": "any_tool", "description": "any", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{}}},
+					},
+				},
+			})
+		case "tools/call":
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"jsonrpc": "2.0", "id": req["id"],
+				"result": map[string]interface{}{
+					"content": []map[string]interface{}{{"type": "text", "text": "ok"}},
+				},
+			})
+		}
+	}))
+	defer backend.Close()
+
+	cfg := &config.Config{
+		Servers: map[string]*config.ServerConfig{
+			"test": {
+				Type: "http",
+				URL:  backend.URL,
+				// Tools is empty — no restriction
+			},
+		},
+	}
+
+	us, err := NewUnified(context.Background(), cfg)
+	require.NoError(err)
+	defer us.Close()
+
+	ctx := context.WithValue(context.Background(), SessionIDContextKey, "test-session")
+
+	result, _, err := us.callBackendTool(ctx, "test", "any_tool", map[string]interface{}{})
+	require.NoError(err)
+	require.NotNil(result)
+	assert.False(result.IsError)
+}
+
+// TestIsToolAllowed covers the isToolAllowed helper directly.
+func TestIsToolAllowed(t *testing.T) {
+	tests := []struct {
+		name      string
+		tools     []string
+		toolName  string
+		wantAllow bool
+	}{
+		{"no list allows anything", nil, "any_tool", true},
+		{"empty list allows anything", []string{}, "any_tool", true},
+		{"tool in list", []string{"a", "b"}, "a", true},
+		{"tool not in list", []string{"a", "b"}, "c", false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &config.Config{
+				Servers: map[string]*config.ServerConfig{
+					"s": {Tools: tc.tools},
+				},
+			}
+			us := &UnifiedServer{
+				allowedToolSets: buildAllowedToolSets(cfg),
+			}
+			got := us.isToolAllowed("s", tc.toolName)
+			assert.Equal(t, tc.wantAllow, got)
+		})
+	}
+}
+
+// TestIsToolAllowed_NilConfig verifies that a nil config allows all tools.
+func TestIsToolAllowed_NilConfig(t *testing.T) {
+	us := &UnifiedServer{allowedToolSets: buildAllowedToolSets(nil)}
+	assert.True(t, us.isToolAllowed("s", "anything"), "nil cfg should allow all tools")
+}
+
+// TestIsToolAllowed_UnknownServer verifies that an unknown server ID allows all tools.
+func TestIsToolAllowed_UnknownServer(t *testing.T) {
+	cfg := &config.Config{Servers: map[string]*config.ServerConfig{}}
+	us := &UnifiedServer{allowedToolSets: buildAllowedToolSets(cfg)}
+	assert.True(t, us.isToolAllowed("unknown", "tool"), "unknown server should allow all tools")
+}
+
+// TestCallBackendTool_AllowedToolsError_MessageFormat checks that the error returned
+// when a tool is blocked contains the tool name and a reference to allowed-tools.
+func TestCallBackendTool_AllowedToolsError_MessageFormat(t *testing.T) {
+	require := require.New(t)
+
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		method, _ := req["method"].(string)
+		w.Header().Set("Content-Type", "application/json")
+		switch method {
+		case "initialize":
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"jsonrpc": "2.0", "id": req["id"],
+				"result": map[string]interface{}{
+					"protocolVersion": "2024-11-05",
+					"capabilities":    map[string]interface{}{},
+					"serverInfo":      map[string]interface{}{"name": "mock", "version": "1.0.0"},
+				},
+			})
+		case "tools/list":
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"jsonrpc": "2.0", "id": req["id"],
+				"result": map[string]interface{}{"tools": []map[string]interface{}{}},
+			})
+		}
+	}))
+	defer backend.Close()
+
+	cfg := &config.Config{
+		Servers: map[string]*config.ServerConfig{
+			"s": {Type: "http", URL: backend.URL, Tools: []string{"other"}},
+		},
+	}
+	us, err := NewUnified(context.Background(), cfg)
+	require.NoError(err)
+	defer us.Close()
+
+	ctx := context.WithValue(context.Background(), SessionIDContextKey, "sess-123")
+	result, _, callErr := us.callBackendTool(ctx, "s", "blocked", nil)
+
+	require.Error(callErr)
+	require.NotNil(result)
+	require.True(result.IsError)
+	require.Len(result.Content, 1)
+	text := result.Content[0].(*sdk.TextContent).Text
+	assert.True(t, strings.Contains(text, `"blocked"`), "error message should include tool name: %s", text)
+	assert.True(t, strings.Contains(text, "allowed-tools"), "error message should mention allowed-tools: %s", text)
 }
