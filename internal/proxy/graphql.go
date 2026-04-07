@@ -155,6 +155,7 @@ func extractOwnerRepo(variables map[string]interface{}, query string) (string, s
 		if v, ok := variables["repo"].(string); ok && repo == "" {
 			repo = v
 		}
+		logGraphQL.Printf("extractOwnerRepo: from variables: owner=%q repo=%q", owner, repo)
 	}
 
 	// Fall back to parsing the query string
@@ -166,6 +167,7 @@ func extractOwnerRepo(variables map[string]interface{}, query string) (string, s
 			if m[2] != "" && repo == "" {
 				repo = m[2]
 			}
+			logGraphQL.Printf("extractOwnerRepo: from query regex: owner=%q repo=%q", owner, repo)
 		}
 	}
 
@@ -193,13 +195,16 @@ func extractSearchQuery(query string, variables map[string]interface{}) string {
 	// Check variables for $query
 	if variables != nil {
 		if v, ok := variables["query"].(string); ok && v != "" {
+			logGraphQL.Printf("extractSearchQuery: found in variables: %.80s", v)
 			return v
 		}
 	}
 	// Parse inline: search(query:"repo:owner/name is:issue", ...)
 	if m := searchQueryArgPattern.FindStringSubmatch(query); m != nil {
+		logGraphQL.Printf("extractSearchQuery: found inline: %.80s", m[1])
 		return m[1]
 	}
+	logGraphQL.Print("extractSearchQuery: no search query found")
 	return ""
 }
 
