@@ -291,7 +291,8 @@
             },
             "headers": {
               "type": "string",
-              "description": "Comma-separated key=value HTTP headers sent with every OTLP export request (e.g. \"Authorization=Bearer ${OTEL_TOKEN}\"). Supports ${VAR} expansion."
+              "description": "Comma-separated key=value HTTP headers sent with every OTLP export request (e.g. \"Authorization=Bearer ${OTEL_TOKEN}\"). Supports ${VAR} expansion.",
+              "pattern": "^(\\$\\{[A-Za-z_][A-Za-z0-9_]*\\}|\\s*[^=\\s,][^=,]*=.*?(\\s*,\\s*[^=\\s,][^=,]*=.*?)*)\\s*$"
             },
             "traceId": {
               "type": "string",

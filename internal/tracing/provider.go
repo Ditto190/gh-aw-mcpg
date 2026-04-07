@@ -95,7 +95,8 @@ func resolveSampleRate(cfg *config.TracingConfig) float64 {
 }
 
 // parseOTLPHeaders parses a comma-separated "key=value" string into a map.
-// Empty pairs and pairs without "=" are logged as warnings and skipped.
+// Empty pairs, pairs without "=", and pairs with an empty key are logged as
+// warnings and skipped to avoid invalid HTTP header field names.
 // Leading/trailing whitespace around keys and values is trimmed.
 func parseOTLPHeaders(raw string) map[string]string {
 	headers := make(map[string]string)
@@ -106,10 +107,15 @@ func parseOTLPHeaders(raw string) map[string]string {
 		}
 		k, v, ok := strings.Cut(trimmed, "=")
 		if !ok {
-			logTracing.Printf("Warning: skipping malformed OTLP header pair (missing '='): %q", trimmed)
+			logTracing.Printf("Warning: skipping malformed OTLP header pair (missing '=')")
 			continue
 		}
-		headers[strings.TrimSpace(k)] = strings.TrimSpace(v)
+		key := strings.TrimSpace(k)
+		if key == "" {
+			logTracing.Printf("Warning: skipping OTLP header pair with empty key")
+			continue
+		}
+		headers[key] = strings.TrimSpace(v)
 	}
 	return headers
 }
