@@ -199,7 +199,7 @@ func (us *UnifiedServer) registerToolsFromBackend(serverID string) error {
 				}
 			}
 			if n < len(listResult.Tools) {
-				log.Printf("[allowed-tools] Filtered %d tools from %s: keeping %d of %d",
+				logger.LogInfo("backend", "[allowed-tools] Filtered %d tools from %s: keeping %d of %d",
 					len(listResult.Tools)-n, serverID, n, len(listResult.Tools))
 			}
 			listResult.Tools = listResult.Tools[:n]

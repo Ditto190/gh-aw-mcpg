@@ -425,7 +425,7 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 	// This is a server-side guard so agents cannot bypass client-side --allowed-tools
 	// filters by sending raw tools/call requests directly to the gateway.
 	if !us.isToolAllowed(serverID, toolName) {
-		logger.LogWarn("auth", "tools/call denied: tool=%q not in allowed-tools for session=%s",
+		logger.LogWarn("client", "tools/call denied: tool=%q not in allowed-tools for session=%s",
 			toolName, auth.TruncateSessionID(sessionID))
 		httpStatusCode = 403
 		deniedErr := fmt.Errorf("tool %q is not in the allowed-tools list for this session", toolName)
