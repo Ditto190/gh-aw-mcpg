@@ -182,6 +182,30 @@ func (us *UnifiedServer) registerToolsFromBackend(serverID string) error {
 		return fmt.Errorf("failed to parse tools: %w", err)
 	}
 
+	// Filter tools by the server's allowed-tools list (if configured).
+	// This prevents non-allowed tools from appearing in tools/list responses
+	// and is defense-in-depth alongside the callBackendTool enforcement.
+	if us.cfg != nil {
+		if serverCfg, ok := us.cfg.Servers[serverID]; ok && len(serverCfg.Tools) > 0 {
+			allowedSet := make(map[string]bool, len(serverCfg.Tools))
+			for _, t := range serverCfg.Tools {
+				allowedSet[t] = true
+			}
+			n := 0
+			for _, tool := range listResult.Tools {
+				if allowedSet[tool.Name] {
+					listResult.Tools[n] = tool
+					n++
+				}
+			}
+			if n < len(listResult.Tools) {
+				log.Printf("[allowed-tools] Filtered %d tools from %s: keeping %d of %d",
+					len(listResult.Tools)-n, serverID, n, len(listResult.Tools))
+			}
+			listResult.Tools = listResult.Tools[:n]
+		}
+	}
+
 	// Collect tools for logging
 	toolsForLogging := make([]logger.ToolInfo, 0, len(listResult.Tools))
 	for _, tool := range listResult.Tools {

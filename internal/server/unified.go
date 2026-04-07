@@ -16,6 +16,7 @@ import (
 	"go.opentelemetry.io/otel/codes"
 	oteltrace "go.opentelemetry.io/otel/trace"
 
+	"github.com/github/gh-aw-mcpg/internal/auth"
 	"github.com/github/gh-aw-mcpg/internal/config"
 	"github.com/github/gh-aw-mcpg/internal/difc"
 	"github.com/github/gh-aw-mcpg/internal/guard"
@@ -370,6 +371,27 @@ func newErrorCallToolResult(err error) (*sdk.CallToolResult, interface{}, error)
 	}, nil, err
 }
 
+// isToolAllowed reports whether toolName is permitted by the server's configured
+// allowed-tools list. When no list is configured (empty), all tools are allowed.
+func (us *UnifiedServer) isToolAllowed(serverID, toolName string) bool {
+	if us.cfg == nil {
+		return true
+	}
+	serverCfg, ok := us.cfg.Servers[serverID]
+	if !ok {
+		return true
+	}
+	if len(serverCfg.Tools) == 0 {
+		return true
+	}
+	for _, allowed := range serverCfg.Tools {
+		if allowed == toolName {
+			return true
+		}
+	}
+	return false
+}
+
 // callBackendTool calls a tool on a backend server with DIFC enforcement
 func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName string, args interface{}) (*sdk.CallToolResult, interface{}, error) {
 	// Note: Session validation happens at the tool registration level via closures
@@ -398,6 +420,24 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 	// Get guard for this backend
 	g := us.guardRegistry.Get(serverID)
 	sessionID := us.getSessionID(ctx)
+
+	// **Allowed-tools enforcement**: reject calls for tools not in the configured list.
+	// This is a server-side guard so agents cannot bypass client-side --allowed-tools
+	// filters by sending raw tools/call requests directly to the gateway.
+	if !us.isToolAllowed(serverID, toolName) {
+		logger.LogWarn("auth", "tools/call denied: tool=%q not in allowed-tools for session=%s",
+			toolName, auth.TruncateSessionID(sessionID))
+		httpStatusCode = 403
+		deniedErr := fmt.Errorf("tool %q is not in the allowed-tools list for this session", toolName)
+		toolSpan.RecordError(deniedErr)
+		toolSpan.SetStatus(codes.Error, "tool not allowed")
+		return &sdk.CallToolResult{
+			IsError: true,
+			Content: []sdk.Content{
+				&sdk.TextContent{Text: deniedErr.Error()},
+			},
+		}, nil, deniedErr
+	}
 
 	// Create backend caller for the guard
 	backendCaller := &guardBackendCaller{

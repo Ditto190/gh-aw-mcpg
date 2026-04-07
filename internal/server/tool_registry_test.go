@@ -534,3 +534,60 @@ func TestRegisterAllToolsSequential_SingleBackend(t *testing.T) {
 	defer us.toolsMu.RUnlock()
 	assert.Contains(us.tools, "solo___solo_tool")
 }
+
+// TestRegisterToolsFromBackend_FiltersAllowedTools verifies that when an allowed-tools
+// list is configured, only those tools are registered (defense-in-depth for tools/list).
+func TestRegisterToolsFromBackend_FiltersAllowedTools(t *testing.T) {
+	require := require.New(t)
+	assert := assert.New(t)
+
+	backend := newMockBackend(t, "github", []string{"search_code", "get_file_contents", "delete_repo"})
+	defer backend.Close()
+
+	cfg := &config.Config{
+		Servers: map[string]*config.ServerConfig{
+			"github": {
+				Type:  "http",
+				URL:   backend.URL,
+				Tools: []string{"search_code", "get_file_contents"}, // delete_repo is not allowed
+			},
+		},
+	}
+
+	us, err := NewUnified(context.Background(), cfg)
+	require.NoError(err)
+	defer us.Close()
+
+	us.toolsMu.RLock()
+	defer us.toolsMu.RUnlock()
+
+	assert.Contains(us.tools, "github___search_code", "search_code should be registered")
+	assert.Contains(us.tools, "github___get_file_contents", "get_file_contents should be registered")
+	assert.NotContains(us.tools, "github___delete_repo", "delete_repo must NOT be registered when not in allowed list")
+}
+
+// TestRegisterToolsFromBackend_EmptyAllowedList registers all tools when no list is set.
+func TestRegisterToolsFromBackend_EmptyAllowedList(t *testing.T) {
+	require := require.New(t)
+	assert := assert.New(t)
+
+	backend := newMockBackend(t, "s", []string{"tool_a", "tool_b", "tool_c"})
+	defer backend.Close()
+
+	cfg := &config.Config{
+		Servers: map[string]*config.ServerConfig{
+			"s": {Type: "http", URL: backend.URL}, // no Tools filter
+		},
+	}
+
+	us, err := NewUnified(context.Background(), cfg)
+	require.NoError(err)
+	defer us.Close()
+
+	us.toolsMu.RLock()
+	defer us.toolsMu.RUnlock()
+
+	assert.Contains(us.tools, "s___tool_a")
+	assert.Contains(us.tools, "s___tool_b")
+	assert.Contains(us.tools, "s___tool_c")
+}
