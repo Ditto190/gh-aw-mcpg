@@ -264,7 +264,7 @@ func validateAuthConfig(auth *AuthConfig, serverName, jsonPath string) error {
 	if os.Getenv("ACTIONS_ID_TOKEN_REQUEST_URL") == "" {
 		logValidateServerFailed(serverName, "ACTIONS_ID_TOKEN_REQUEST_URL is not set")
 		return rules.MissingRequired(
-			"ACTIONS_ID_TOKEN_REQUEST_URL", "environment", authPath,
+			"ACTIONS_ID_TOKEN_REQUEST_URL", "github-oidc", authPath,
 			"Server requires OIDC authentication but ACTIONS_ID_TOKEN_REQUEST_URL is not set. "+
 				"OIDC auth requires running in GitHub Actions with `permissions: { id-token: write }`")
 	}
