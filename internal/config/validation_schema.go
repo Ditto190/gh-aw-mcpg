@@ -506,7 +506,7 @@ func validateStringPatterns(stdinCfg *StdinConfig) error {
 			if server.Container != "" && !containerPattern.MatchString(server.Container) {
 				return rules.InvalidPattern("container", server.Container,
 					fmt.Sprintf("%s.container", jsonPath),
-					"Use a valid container image format (e.g., 'ghcr.io/owner/image:tag' or 'owner/image:latest')")
+					"Use a valid container image format (e.g., 'ghcr.io/owner/image:tag', 'owner/image:latest', or 'ghcr.io/owner/image:tag@sha256:<digest>')")
 			}
 
 			// Validate mount patterns
