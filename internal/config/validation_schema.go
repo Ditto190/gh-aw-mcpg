@@ -59,7 +59,7 @@ func isTransientHTTPError(statusCode int) bool {
 
 var (
 	// Compile regex patterns from schema for additional validation
-	containerPattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9./_-]*(:([a-zA-Z0-9._-]+|latest))?$`)
+	containerPattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9./_-]*(:([a-zA-Z0-9._-]+|latest))?(@sha256:[a-fA-F0-9]{64})?$`)
 	urlPattern       = regexp.MustCompile(`^https?://.+`)
 	mountPattern     = regexp.MustCompile(`^[^:]+:[^:]+:(ro|rw)$`)
 	domainVarPattern = regexp.MustCompile(`^\$\{[A-Z_][A-Z0-9_]*\}$`)
