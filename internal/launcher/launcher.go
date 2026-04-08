@@ -72,9 +72,10 @@ func New(ctx context.Context, cfg *config.Config) *Launcher {
 		logger.LogInfo("startup", "GitHub Actions OIDC provider initialized")
 	}
 
-	// Pre-populate serverErrors for OIDC-misconfigured servers so /health
-	// reports them as "error" immediately at startup, not only after the
-	// first failed request.
+	// Defensive fallback: pre-populate serverErrors for OIDC-misconfigured servers
+	// so /health reports them as "error" immediately at startup. Normal config
+	// validation (validateAuthConfig) catches this earlier; this handles cases
+	// where validation was bypassed (e.g., tests constructing configs manually).
 	serverErrors := make(map[string]string)
 	for serverID, serverCfg := range cfg.Servers {
 		if serverCfg.Auth != nil && serverCfg.Auth.Type == "github-oidc" && oidcProvider == nil {
