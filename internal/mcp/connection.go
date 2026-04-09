@@ -582,22 +582,40 @@ func paginateAll[T any](
 	return all, nil
 }
 
-func (c *Connection) listTools() (*Response, error) {
+// listMCPItems is a generic helper for the list* family of MCP operations.
+// It handles session validation, logging, pagination, and response marshalling,
+// eliminating the boilerplate that was previously duplicated across listTools,
+// listResources, and listPrompts.
+func listMCPItems[Item any, Result any](
+	c *Connection,
+	kind string,
+	fetchPage func(cursor string) (paginatedPage[Item], error),
+	buildResult func([]Item) Result,
+) (*Response, error) {
 	if err := c.requireSession(); err != nil {
 		return nil, err
 	}
-	logConn.Printf("listTools: requesting tool list from backend serverID=%s", c.serverID)
-	tools, err := paginateAll(c.serverID, "tools", func(cursor string) (paginatedPage[*sdk.Tool], error) {
-		result, err := c.getSDKSession().ListTools(c.ctx, &sdk.ListToolsParams{Cursor: cursor})
-		if err != nil {
-			return paginatedPage[*sdk.Tool]{}, err
-		}
-		return paginatedPage[*sdk.Tool]{Items: result.Tools, NextCursor: result.NextCursor}, nil
-	})
+	logConn.Printf("list %s: requesting %s list from backend serverID=%s", kind, kind, c.serverID)
+	items, err := paginateAll(c.serverID, kind, fetchPage)
 	if err != nil {
 		return nil, err
 	}
-	return marshalToResponse(&sdk.ListToolsResult{Tools: tools})
+	return marshalToResponse(buildResult(items))
+}
+
+func (c *Connection) listTools() (*Response, error) {
+	return listMCPItems(c, "tools",
+		func(cursor string) (paginatedPage[*sdk.Tool], error) {
+			result, err := c.getSDKSession().ListTools(c.ctx, &sdk.ListToolsParams{Cursor: cursor})
+			if err != nil {
+				return paginatedPage[*sdk.Tool]{}, err
+			}
+			return paginatedPage[*sdk.Tool]{Items: result.Tools, NextCursor: result.NextCursor}, nil
+		},
+		func(items []*sdk.Tool) *sdk.ListToolsResult {
+			return &sdk.ListToolsResult{Tools: items}
+		},
+	)
 }
 
 func (c *Connection) callTool(params interface{}) (*Response, error) {
@@ -616,21 +634,18 @@ func (c *Connection) callTool(params interface{}) (*Response, error) {
 }
 
 func (c *Connection) listResources() (*Response, error) {
-	if err := c.requireSession(); err != nil {
-		return nil, err
-	}
-	logConn.Printf("listResources: requesting resource list from backend serverID=%s", c.serverID)
-	resources, err := paginateAll(c.serverID, "resources", func(cursor string) (paginatedPage[*sdk.Resource], error) {
-		result, err := c.getSDKSession().ListResources(c.ctx, &sdk.ListResourcesParams{Cursor: cursor})
-		if err != nil {
-			return paginatedPage[*sdk.Resource]{}, err
-		}
-		return paginatedPage[*sdk.Resource]{Items: result.Resources, NextCursor: result.NextCursor}, nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return marshalToResponse(&sdk.ListResourcesResult{Resources: resources})
+	return listMCPItems(c, "resources",
+		func(cursor string) (paginatedPage[*sdk.Resource], error) {
+			result, err := c.getSDKSession().ListResources(c.ctx, &sdk.ListResourcesParams{Cursor: cursor})
+			if err != nil {
+				return paginatedPage[*sdk.Resource]{}, err
+			}
+			return paginatedPage[*sdk.Resource]{Items: result.Resources, NextCursor: result.NextCursor}, nil
+		},
+		func(items []*sdk.Resource) *sdk.ListResourcesResult {
+			return &sdk.ListResourcesResult{Resources: items}
+		},
+	)
 }
 
 func (c *Connection) readResource(params interface{}) (*Response, error) {
@@ -646,21 +661,18 @@ func (c *Connection) readResource(params interface{}) (*Response, error) {
 }
 
 func (c *Connection) listPrompts() (*Response, error) {
-	if err := c.requireSession(); err != nil {
-		return nil, err
-	}
-	logConn.Printf("listPrompts: requesting prompt list from backend serverID=%s", c.serverID)
-	prompts, err := paginateAll(c.serverID, "prompts", func(cursor string) (paginatedPage[*sdk.Prompt], error) {
-		result, err := c.getSDKSession().ListPrompts(c.ctx, &sdk.ListPromptsParams{Cursor: cursor})
-		if err != nil {
-			return paginatedPage[*sdk.Prompt]{}, err
-		}
-		return paginatedPage[*sdk.Prompt]{Items: result.Prompts, NextCursor: result.NextCursor}, nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return marshalToResponse(&sdk.ListPromptsResult{Prompts: prompts})
+	return listMCPItems(c, "prompts",
+		func(cursor string) (paginatedPage[*sdk.Prompt], error) {
+			result, err := c.getSDKSession().ListPrompts(c.ctx, &sdk.ListPromptsParams{Cursor: cursor})
+			if err != nil {
+				return paginatedPage[*sdk.Prompt]{}, err
+			}
+			return paginatedPage[*sdk.Prompt]{Items: result.Prompts, NextCursor: result.NextCursor}, nil
+		},
+		func(items []*sdk.Prompt) *sdk.ListPromptsResult {
+			return &sdk.ListPromptsResult{Prompts: items}
+		},
+	)
 }
 
 func (c *Connection) getPrompt(params interface{}) (*Response, error) {
