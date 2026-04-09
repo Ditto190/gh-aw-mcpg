@@ -378,8 +378,8 @@ func newErrorCallToolResult(err error) (*sdk.CallToolResult, interface{}, error)
 
 // buildAllowedToolSets converts the per-server Tools lists from the config into pre-computed
 // map[string]bool sets for O(1) lookup. Servers with no Tools list are not added to the map,
-// which signals that all tools are permitted. A wildcard entry ["*"] is treated the same as
-// an empty list (all tools allowed).
+// which signals that all tools are permitted. If the Tools list contains a "*" entry anywhere,
+// the server is treated the same as having no list (all tools allowed).
 func buildAllowedToolSets(cfg *config.Config) map[string]map[string]bool {
 	sets := make(map[string]map[string]bool)
 	if cfg == nil {
@@ -387,7 +387,7 @@ func buildAllowedToolSets(cfg *config.Config) map[string]map[string]bool {
 	}
 	for serverID, serverCfg := range cfg.Servers {
 		if len(serverCfg.Tools) > 0 {
-			// Treat ["*"] as "allow all" — skip adding to the filter map
+			// Treat "*" anywhere in the list as "allow all" — skip adding to the filter map
 			if hasWildcard(serverCfg.Tools) {
 				logger.LogInfo("backend", "[allowed-tools] Wildcard \"*\" configured for %s: allowing all tools", serverID)
 				continue
