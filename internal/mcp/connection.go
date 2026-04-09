@@ -595,7 +595,7 @@ func listMCPItems[Item any, Result any](
 	if err := c.requireSession(); err != nil {
 		return nil, err
 	}
-	logConn.Printf("list %s: requesting %s list from backend serverID=%s", kind, kind, c.serverID)
+	logConn.Printf("list%s: requesting %s list from backend serverID=%s", kind, kind, c.serverID)
 	items, err := paginateAll(c.serverID, kind, fetchPage)
 	if err != nil {
 		return nil, err
