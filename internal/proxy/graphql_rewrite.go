@@ -32,17 +32,36 @@ var commitFields = []guardFieldSet{
 	{"author{user{login}}", regexp.MustCompile(`\bauthor\s*\{[^}]*\buser\s*\{[^}]*\blogin\b`)},
 }
 
-// fieldsForTool returns the guard fields applicable to the given tool name,
-// or nil if no injection is needed.
-func fieldsForTool(toolName string) []guardFieldSet {
+// issueAndPRSafeParents are connection field names whose node types support
+// author{login} and authorAssociation (i.e., types implementing the Comment
+// interface: Issue, PullRequest, IssueComment, PullRequestReview, etc.).
+// Injection into other connection nodes (e.g. assignees→User, labels→Label)
+// would cause GraphQL validation errors.
+var issueAndPRSafeParents = map[string]bool{
+	"pullRequests": true,
+	"issues":       true,
+	"comments":     true,
+	"reviews":      true,
+	"search":       true,
+}
+
+// commitSafeParents are connection field names whose node types support
+// author{user{login}} (Commit type).
+var commitSafeParents = map[string]bool{
+	"history": true,
+}
+
+// fieldsForTool returns the guard fields and safe parent connection names
+// applicable to the given tool name, or nil if no injection is needed.
+func fieldsForTool(toolName string) ([]guardFieldSet, map[string]bool) {
 	switch toolName {
 	case "list_issues", "list_pull_requests", "issue_read", "pull_request_read",
 		"search_issues":
-		return issueAndPRFields
+		return issueAndPRFields, issueAndPRSafeParents
 	case "list_commits":
-		return commitFields
+		return commitFields, commitSafeParents
 	default:
-		return nil
+		return nil, nil
 	}
 }
 
@@ -73,7 +92,7 @@ func missingFields(query string, fields []guardFieldSet) []string {
 // Returns the (possibly modified) body. If injection is not needed or fails,
 // the original body is returned unchanged.
 func InjectGuardFields(body []byte, toolName string) []byte {
-	fields := fieldsForTool(toolName)
+	fields, safeParents := fieldsForTool(toolName)
 	if fields == nil {
 		logGraphQLRewrite.Printf("No guard field injection needed for tool=%s", toolName)
 		return body
@@ -90,7 +109,7 @@ func InjectGuardFields(body []byte, toolName string) []byte {
 	}
 
 	missing := missingFields(gql.Query, fields)
-	modified := injectFieldsIntoQuery(gql.Query, missing)
+	modified := injectFieldsIntoQuery(gql.Query, missing, safeParents)
 	if modified == gql.Query {
 		return body
 	}
@@ -108,7 +127,10 @@ func InjectGuardFields(body []byte, toolName string) []byte {
 // injectFieldsIntoQuery adds the given fields into the GraphQL query's node
 // selection or fragment. Each field string (e.g. "author{login}",
 // "authorAssociation") is comma-joined and injected as a single block.
-func injectFieldsIntoQuery(query string, fields []string) string {
+// safeParents limits direct nodes injection (Step 3) to nodes blocks whose
+// parent connection field is in the set, preventing injection into User/Label
+// type nodes that don't support the injected fields.
+func injectFieldsIntoQuery(query string, fields []string, safeParents map[string]bool) string {
 	injection := strings.Join(fields, ",")
 
 	// Step 1: Check if the query uses a fragment spread in the nodes.
@@ -134,14 +156,104 @@ func injectFieldsIntoQuery(query string, fields []string) string {
 	}
 
 	// Step 3: No fragment — inject directly into nodes { ... }
-	nodesPattern := regexp.MustCompile(`(nodes\s*\{)`)
-	if nodesPattern.MatchString(query) {
-		logGraphQLRewrite.Printf("Injecting into nodes selection: fields=%q", injection)
-		return nodesPattern.ReplaceAllString(query, "${1}"+injection+",")
+	// Only inject into nodes blocks whose parent connection field is in the
+	// safeParents set. This prevents injecting fields like authorAssociation
+	// into nodes of types that don't support them (e.g. User, Label, Team).
+	nodesPattern := regexp.MustCompile(`nodes\s*\{`)
+	matches := nodesPattern.FindAllStringIndex(query, -1)
+	if len(matches) > 0 {
+		var buf strings.Builder
+		pos := 0
+		injected := false
+		for _, m := range matches {
+			parent := findParentField(query, m[0])
+			buf.WriteString(query[pos:m[1]])
+			if safeParents[parent] {
+				buf.WriteString(injection + ",")
+				injected = true
+			} else {
+				logGraphQLRewrite.Printf("Skipping injection into nodes under %q (not a safe parent)", parent)
+			}
+			pos = m[1]
+		}
+		buf.WriteString(query[pos:])
+		if injected {
+			logGraphQLRewrite.Printf("Injecting into nodes selection: fields=%q", injection)
+			return buf.String()
+		}
 	}
 
 	logGraphQLRewrite.Printf("No injection point found in query for fields=%q", injection)
 	return query
+}
+
+// findParentField extracts the GraphQL connection field name that contains
+// the given nodes block. It walks backward from idx to find the enclosing
+// opening brace, then extracts the field name before it (skipping any
+// arguments in parentheses).
+func findParentField(query string, nodesIdx int) string {
+	// Walk backward from nodesIdx to find the enclosing `{`
+	depth := 0
+	i := nodesIdx - 1
+	braceFound := false
+	for i >= 0 {
+		switch query[i] {
+		case '{':
+			if depth == 0 {
+				braceFound = true
+			} else {
+				depth--
+			}
+		case '}':
+			depth++
+		}
+		if braceFound {
+			break
+		}
+		i--
+	}
+	if !braceFound {
+		return ""
+	}
+
+	// i now points to the `{` of the enclosing block.
+	// Walk backward past whitespace.
+	i--
+	for i >= 0 && (query[i] == ' ' || query[i] == '\n' || query[i] == '\t' || query[i] == '\r') {
+		i--
+	}
+	// If there are parenthesized args, skip them.
+	if i >= 0 && query[i] == ')' {
+		parenDepth := 1
+		i--
+		for i >= 0 && parenDepth > 0 {
+			switch query[i] {
+			case ')':
+				parenDepth++
+			case '(':
+				parenDepth--
+			}
+			i--
+		}
+		// Skip whitespace after field name
+		for i >= 0 && (query[i] == ' ' || query[i] == '\n' || query[i] == '\t' || query[i] == '\r') {
+			i--
+		}
+	}
+	// Extract the field name (alphanumeric + underscore)
+	end := i + 1
+	for i >= 0 && isGraphQLFieldNameChar(query[i]) {
+		i--
+	}
+	if i+1 >= end {
+		return ""
+	}
+	return query[i+1 : end]
+}
+
+// isGraphQLFieldNameChar returns true for characters valid in a GraphQL field name.
+func isGraphQLFieldNameChar(c byte) bool {
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_'
 }
 
 // injectIntoFragment adds a field to the end of a named fragment definition.

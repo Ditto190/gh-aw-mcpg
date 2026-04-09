@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -141,7 +140,8 @@ func (h *proxyHandler) handleWithDIFC(w http.ResponseWriter, r *http.Request, pa
 	defer difcSpan.End()
 
 	if !s.guardInitialized {
-		log.Printf("[proxy] WARNING: guard not initialized, blocking request")
+		logHandler.Printf("returning 503: proxy enforcement not configured (no --policy flag provided)")
+		logger.LogError("proxy", "returning 503: proxy enforcement not configured (no --policy flag provided)")
 		http.Error(w, "proxy enforcement not configured", http.StatusServiceUnavailable)
 		return
 	}
