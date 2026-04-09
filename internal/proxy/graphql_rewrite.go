@@ -230,7 +230,7 @@ foundBrace:
 			}
 			i--
 		}
-		// Skip whitespace after field name
+		// Skip whitespace between the argument list and the field name.
 		for i >= 0 && (query[i] == ' ' || query[i] == '\n' || query[i] == '\t' || query[i] == '\r') {
 			i--
 		}
