@@ -115,8 +115,8 @@ func init() {
 func generateRandomID() string {
 	id, err := strutil.RandomHex(16)
 	if err != nil {
-		// Fallback to timestamp-based ID if random fails
-		return fmt.Sprintf("fallback-%d", os.Getpid())
+		// Fallback to a process- and time-based ID if random generation fails.
+		return fmt.Sprintf("fallback-%d-%d", os.Getpid(), time.Now().UnixNano())
 	}
 	return id
 }
