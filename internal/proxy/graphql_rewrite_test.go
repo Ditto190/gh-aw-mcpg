@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -247,6 +248,133 @@ func TestInjectGuardFields_PullRequestRead(t *testing.T) {
 	assert.Contains(t, gql.Query, "authorAssociation")
 }
 
+func TestInjectGuardFields_SkipsAssigneesNodes(t *testing.T) {
+	// Reproduces the bug from the issue: gh pr view with assignees causes
+	// "Field 'authorAssociation' doesn't exist on type 'User'" because
+	// injection was applied to ALL nodes blocks including assignees.nodes.
+	query := `query PullRequestByNumber {
+  repository(owner:"o", name:"r") {
+    pullRequest(number: 1820) {
+      number title author{login}
+      assignees(first: 100) { nodes { login } }
+    }
+  }
+}`
+	body, _ := json.Marshal(GraphQLRequest{Query: query})
+
+	result := InjectGuardFields(body, "pull_request_read")
+
+	var gql GraphQLRequest
+	require.NoError(t, json.Unmarshal(result, &gql))
+	// authorAssociation should NOT be injected because the only nodes block
+	// is assignees.nodes which returns User objects.
+	assert.NotContains(t, gql.Query, "authorAssociation",
+		"authorAssociation must not be injected into assignees.nodes (User type)")
+}
+
+func TestInjectGuardFields_MixedNodesBlocks(t *testing.T) {
+	// Query has both a safe connection (comments) and an unsafe one (assignees).
+	// Injection should only go into comments.nodes, not assignees.nodes.
+	query := `query {
+  repository(owner:"o", name:"r") {
+    pullRequest(number: 1) {
+      assignees(first: 10) { nodes { login } }
+      comments(first: 10) { nodes { body } }
+    }
+  }
+}`
+	body, _ := json.Marshal(GraphQLRequest{Query: query})
+
+	result := InjectGuardFields(body, "pull_request_read")
+
+	var gql GraphQLRequest
+	require.NoError(t, json.Unmarshal(result, &gql))
+	assert.Contains(t, gql.Query, "author{login}")
+	assert.Contains(t, gql.Query, "authorAssociation")
+	// Verify injection is in comments.nodes, not assignees.nodes
+	assert.Contains(t, gql.Query, `assignees(first: 10) { nodes { login } }`,
+		"assignees.nodes should remain unmodified")
+	assert.Contains(t, gql.Query, `comments(first: 10) { nodes {author{login},authorAssociation,`,
+		"comments.nodes should have injected fields")
+}
+
+func TestInjectGuardFields_SkipsLabelsNodes(t *testing.T) {
+	// labels.nodes returns Label objects — no authorAssociation field.
+	query := `query { repository(owner:"o", name:"r") { issues(first:10) { nodes { number labels(first:5) { nodes { name } } } } } }`
+	body, _ := json.Marshal(GraphQLRequest{Query: query})
+
+	result := InjectGuardFields(body, "list_issues")
+
+	var gql GraphQLRequest
+	require.NoError(t, json.Unmarshal(result, &gql))
+	assert.Contains(t, gql.Query, "author{login}")
+	assert.Contains(t, gql.Query, "authorAssociation")
+	// labels.nodes must not have injected fields
+	assert.Contains(t, gql.Query, `labels(first:5) { nodes { name } }`,
+		"labels.nodes should remain unmodified")
+}
+
+func TestInjectGuardFields_SkipsParticipantsNodes(t *testing.T) {
+	// participants.nodes returns User objects — no authorAssociation field.
+	query := `query {
+  repository(owner:"o", name:"r") {
+    pullRequest(number: 1) {
+      reviews(first: 5) { nodes { body } }
+      participants(first: 10) { nodes { login } }
+    }
+  }
+}`
+	body, _ := json.Marshal(GraphQLRequest{Query: query})
+
+	result := InjectGuardFields(body, "pull_request_read")
+
+	var gql GraphQLRequest
+	require.NoError(t, json.Unmarshal(result, &gql))
+	assert.Contains(t, gql.Query, "author{login}")
+	assert.Contains(t, gql.Query, "authorAssociation")
+	// participants.nodes should be unmodified
+	assert.Contains(t, gql.Query, `participants(first: 10) { nodes { login } }`)
+}
+
+func TestFindParentField(t *testing.T) {
+	tests := []struct {
+		name     string
+		query    string
+		nodesIdx int // index of "nodes" in the query
+		want     string
+	}{
+		{
+			name:  "simple connection",
+			query: `pullRequests(first:10) { nodes { number } }`,
+			want:  "pullRequests",
+		},
+		{
+			name:  "connection with totalCount before nodes",
+			query: `issues(first:5) { totalCount nodes { title } }`,
+			want:  "issues",
+		},
+		{
+			name:  "nested connection",
+			query: `pullRequest(number:1) { assignees(first:10) { nodes { login } } }`,
+			want:  "assignees",
+		},
+		{
+			name:  "connection without args",
+			query: `comments { nodes { body } }`,
+			want:  "comments",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			idx := strings.Index(tt.query, "nodes")
+			require.NotEqual(t, -1, idx, "query must contain 'nodes'")
+			got := findParentField(tt.query, idx)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
 func TestInjectGuardFields_NoNodesNoFragment(t *testing.T) {
 	// A query with required tool but no "nodes" block and no fragment spread —
 	// the injector cannot find a place to insert fields, so body is returned unchanged.
@@ -284,11 +412,13 @@ func TestFieldsForTool(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run("tool: "+tt.toolName, func(t *testing.T) {
-			fields := fieldsForTool(tt.toolName)
+			fields, safeParents := fieldsForTool(tt.toolName)
 			if tt.wantNil {
 				assert.Nil(t, fields, "expected nil fields for tool %q", tt.toolName)
+				assert.Nil(t, safeParents, "expected nil safeParents for tool %q", tt.toolName)
 			} else {
 				require.NotNil(t, fields, "expected non-nil fields for tool %q", tt.toolName)
+				require.NotNil(t, safeParents, "expected non-nil safeParents for tool %q", tt.toolName)
 				fieldStrings := make([]string, len(fields))
 				for i, f := range fields {
 					fieldStrings[i] = f.field
