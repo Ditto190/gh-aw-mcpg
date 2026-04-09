@@ -373,16 +373,16 @@ The `customSchemas` top-level field allows you to define custom server types bey
 
 ### OpenTelemetry / Tracing
 
-The gateway supports OpenTelemetry tracing via a nested configuration block. Use `opentelemetry` (preferred, per spec §4.1.3.6) or `tracing` (legacy). When both are present, `opentelemetry` takes precedence.
+The gateway supports OpenTelemetry tracing via a nested configuration block. For JSON stdin, use `gateway.opentelemetry` only. For TOML, use `[gateway.opentelemetry]` (preferred, per spec §4.1.3.6) or the legacy TOML-only `[gateway.tracing]` key. When both TOML sections are present, `opentelemetry` takes precedence.
 
 | Field | Description | Default |
 |-------|-------------|---------|
-| `endpoint` | OTLP/HTTP collector URL. MUST be HTTPS when using the `opentelemetry` key. If empty, tracing is disabled (noop tracer, zero overhead). | (disabled) |
+| `endpoint` | OTLP/HTTP collector URL. With the `opentelemetry` key, this field is required, must be non-empty, and MUST use `https://` (spec §4.1.3.6). With legacy `tracing`, an empty value disables tracing (noop tracer, zero overhead), and `http://` endpoints may be used. | (disabled) |
 | `headers` | Comma-separated `key=value` HTTP headers for export requests. Supports `${VAR}` expansion. Example: `"Authorization=Bearer ${OTEL_TOKEN}"` | (none) |
 | `traceId` (JSON) / `trace_id` (TOML) | Parent trace ID (32-char lowercase hex, W3C format) to link gateway spans into a pre-existing trace. Supports `${VAR}` expansion. | (none) |
 | `spanId` (JSON) / `span_id` (TOML) | Parent span ID (16-char lowercase hex, W3C format). Ignored without `traceId`. Supports `${VAR}` expansion. | (none) |
 | `serviceName` (JSON) / `service_name` (TOML) | The `service.name` resource attribute reported in traces. | `mcp-gateway` |
-| `sampleRate` (JSON) / `sample_rate` (TOML) | Fraction of traces sampled and exported (0.0–1.0). Gateway extension, not in spec §4.1.3.6. | `1.0` |
+| `sample_rate` (TOML only) | Fraction of traces sampled and exported (0.0–1.0). TOML/CLI only — not available in JSON stdin. Gateway extension, not in spec §4.1.3.6. | `1.0` |
 
 **TOML example:**
 
