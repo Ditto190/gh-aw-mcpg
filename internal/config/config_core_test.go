@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/BurntSushi/toml"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -351,4 +352,138 @@ args = ["run", "--rm", "-i", "ghcr.io/github/github-mcp-server:latest"]
 	require.Error(t, err)
 	assert.Nil(t, cfg)
 	assert.Contains(t, err.Error(), "payload_size_threshold must be a positive integer")
+}
+
+// TestIsDynamicTOMLPath verifies the branching logic of isDynamicTOMLPath,
+// which guards the unknown-field check by exempting map-valued sections
+// whose keys are not known at decode time.
+func TestIsDynamicTOMLPath(t *testing.T) {
+	tests := []struct {
+		name     string
+		key      toml.Key
+		expected bool
+	}{
+		// ── servers.<name>.guard_policies.<policy>.<key>  (len ≥ 5) ─────────
+		{
+			name:     "servers guard_policies at minimum length 5",
+			key:      toml.Key{"servers", "github", "guard_policies", "mypolicy", "repos"},
+			expected: true,
+		},
+		{
+			name:     "servers guard_policies longer than minimum",
+			key:      toml.Key{"servers", "github", "guard_policies", "mypolicy", "nested", "key"},
+			expected: true,
+		},
+		{
+			name:     "servers guard_policies different server name still true",
+			key:      toml.Key{"servers", "slack", "guard_policies", "p1", "field"},
+			expected: true,
+		},
+		{
+			name:     "servers guard_policies exactly 4 elements is too short",
+			key:      toml.Key{"servers", "github", "guard_policies", "mypolicy"},
+			expected: false,
+		},
+		{
+			name:     "servers guard_policies 3 elements is too short",
+			key:      toml.Key{"servers", "github", "guard_policies"},
+			expected: false,
+		},
+		{
+			name:     "servers with wrong key[2] (not guard_policies)",
+			key:      toml.Key{"servers", "github", "command", "whatever", "extra"},
+			expected: false,
+		},
+		{
+			name:     "wrong key[0] for servers path (guards instead)",
+			key:      toml.Key{"guards", "github", "guard_policies", "mypolicy", "repos"},
+			expected: false,
+		},
+		{
+			name:     "gateway prefix with guard_policies shape",
+			key:      toml.Key{"gateway", "x", "guard_policies", "p", "k"},
+			expected: false,
+		},
+
+		// ── guards.<name>.config.<key>  (len ≥ 4) ───────────────────────────
+		{
+			name:     "guards config at minimum length 4",
+			key:      toml.Key{"guards", "myfence", "config", "somekey"},
+			expected: true,
+		},
+		{
+			name:     "guards config longer than minimum",
+			key:      toml.Key{"guards", "myfence", "config", "somekey", "nested"},
+			expected: true,
+		},
+		{
+			name:     "guards config different guard name still true",
+			key:      toml.Key{"guards", "allowonly", "config", "level"},
+			expected: true,
+		},
+		{
+			name:     "guards config exactly 3 elements is too short",
+			key:      toml.Key{"guards", "myfence", "config"},
+			expected: false,
+		},
+		{
+			name:     "guards config 2 elements is too short",
+			key:      toml.Key{"guards", "myfence"},
+			expected: false,
+		},
+		{
+			name:     "guards with wrong key[2] (not config)",
+			key:      toml.Key{"guards", "myfence", "command", "somekey"},
+			expected: false,
+		},
+		{
+			name:     "wrong key[0] for guards path (servers instead)",
+			key:      toml.Key{"servers", "myfence", "config", "somekey"},
+			expected: false,
+		},
+
+		// ── Non-dynamic / ordinary TOML paths ────────────────────────────────
+		{
+			name:     "nil key",
+			key:      nil,
+			expected: false,
+		},
+		{
+			name:     "empty key",
+			key:      toml.Key{},
+			expected: false,
+		},
+		{
+			name:     "single element key",
+			key:      toml.Key{"servers"},
+			expected: false,
+		},
+		{
+			name:     "gateway port path",
+			key:      toml.Key{"gateway", "port"},
+			expected: false,
+		},
+		{
+			name:     "servers command path",
+			key:      toml.Key{"servers", "github", "command"},
+			expected: false,
+		},
+		{
+			name:     "servers args path",
+			key:      toml.Key{"servers", "github", "args"},
+			expected: false,
+		},
+		{
+			name:     "servers env path",
+			key:      toml.Key{"servers", "github", "env", "TOKEN"},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isDynamicTOMLPath(tt.key)
+			assert.Equal(t, tt.expected, got, "isDynamicTOMLPath(%v)", tt.key)
+		})
+	}
 }
