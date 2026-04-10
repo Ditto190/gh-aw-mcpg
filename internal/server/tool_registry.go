@@ -157,6 +157,8 @@ func (us *UnifiedServer) registerToolsFromBackend(serverID string) error {
 	// This helps debug compatibility issues between the gateway and specific backends.
 	if name, version := conn.ServerInfo(); name != "" {
 		logger.LogInfoWithServer(serverID, "backend", "Backend server info: name=%s, version=%s", name, version)
+	} else {
+		logUnified.Printf("Backend %s did not provide server info in initialize handshake", serverID)
 	}
 
 	// List tools from backend
