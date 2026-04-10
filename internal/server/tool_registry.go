@@ -158,7 +158,7 @@ func (us *UnifiedServer) registerToolsFromBackend(serverID string) error {
 	if name, version := conn.ServerInfo(); name != "" {
 		logger.LogInfoWithServer(serverID, "backend", "Backend server info: name=%s, version=%s", name, version)
 	} else {
-		logUnified.Printf("Backend %s did not provide server info in initialize handshake", serverID)
+		logger.LogInfoWithServer(serverID, "backend", "Backend server info unavailable (no SDK session or server omitted serverInfo)")
 	}
 
 	// List tools from backend
