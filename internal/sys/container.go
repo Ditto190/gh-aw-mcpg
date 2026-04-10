@@ -71,7 +71,7 @@ func extractContainerIDFromCgroup() string {
 }
 
 // extractContainerIDFromContent parses cgroup content line-by-line and extracts a container ID.
-// It looks for path segments following "docker" or "containerd" that are at least 12 hex chars.
+// It looks for path segments following "docker" or "containerd" that are at least 12 characters long.
 func extractContainerIDFromContent(content string) string {
 	scanner := bufio.NewScanner(strings.NewReader(content))
 	for scanner.Scan() {
@@ -87,6 +87,9 @@ func extractContainerIDFromContent(content string) string {
 				}
 			}
 		}
+	}
+	if err := scanner.Err(); err != nil {
+		logSys.Printf("Error scanning cgroup content: %v", err)
 	}
 	return ""
 }
