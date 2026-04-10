@@ -84,4 +84,14 @@ func TestLookupGitHubAPIURL(t *testing.T) {
 		t.Setenv("GITHUB_API_URL", "https://github.example.com/api/v3/")
 		assert.Equal(t, "https://github.example.com/api/v3", LookupGitHubAPIURL(defaultURL))
 	})
+
+	t.Run("returns default for whitespace-only env", func(t *testing.T) {
+		t.Setenv("GITHUB_API_URL", "   ")
+		assert.Equal(t, defaultURL, LookupGitHubAPIURL(defaultURL))
+	})
+
+	t.Run("trims whitespace before stripping trailing slash", func(t *testing.T) {
+		t.Setenv("GITHUB_API_URL", " https://github.example.com/api/v3/ ")
+		assert.Equal(t, "https://github.example.com/api/v3", LookupGitHubAPIURL(defaultURL))
+	})
 }
