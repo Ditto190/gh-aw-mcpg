@@ -32,8 +32,8 @@ func LookupGitHubToken() string {
 // environment variable. If the variable is not set or empty, it returns
 // defaultURL. Any trailing slash is stripped from the result.
 func LookupGitHubAPIURL(defaultURL string) string {
-	if v := os.Getenv("GITHUB_API_URL"); v != "" {
+	if v := strings.TrimSpace(os.Getenv("GITHUB_API_URL")); v != "" {
 		return strings.TrimRight(v, "/")
 	}
-	return defaultURL
+	return strings.TrimRight(strings.TrimSpace(defaultURL), "/")
 }
