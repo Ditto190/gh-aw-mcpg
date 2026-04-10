@@ -36,13 +36,18 @@ func DetectContainerID() (bool, string) {
 		return true, ""
 	}
 
-	// Method 2: Check /proc/1/cgroup for container indicators
-	data, err := os.ReadFile("/proc/1/cgroup")
-	if err == nil {
+	// Method 2: Check cgroup files for container indicators.
+	// Try /proc/1/cgroup first, then fall back to /proc/self/cgroup for setups
+	// where PID 1 doesn't reflect the current process's cgroup (e.g., host PID namespace).
+	for _, cgroupPath := range []string{"/proc/1/cgroup", "/proc/self/cgroup"} {
+		data, err := os.ReadFile(cgroupPath)
+		if err != nil {
+			continue
+		}
 		content := string(data)
 		for _, indicator := range containerIndicators {
 			if strings.Contains(content, indicator) {
-				logSys.Print("Container detected via /proc/1/cgroup")
+				logSys.Printf("Container detected via %s", cgroupPath)
 				if id := extractContainerIDFromContent(content); id != "" {
 					return true, id
 				}
@@ -61,13 +66,19 @@ func DetectContainerID() (bool, string) {
 	return false, ""
 }
 
-// extractContainerIDFromCgroup reads /proc/1/cgroup and tries to extract a container ID.
+// extractContainerIDFromCgroup reads cgroup files and tries to extract a container ID.
+// It checks /proc/1/cgroup first, then falls back to /proc/self/cgroup.
 func extractContainerIDFromCgroup() string {
-	data, err := os.ReadFile("/proc/1/cgroup")
-	if err != nil {
-		return ""
+	for _, cgroupPath := range []string{"/proc/1/cgroup", "/proc/self/cgroup"} {
+		data, err := os.ReadFile(cgroupPath)
+		if err != nil {
+			continue
+		}
+		if id := extractContainerIDFromContent(string(data)); id != "" {
+			return id
+		}
 	}
-	return extractContainerIDFromContent(string(data))
+	return ""
 }
 
 // extractContainerIDFromContent parses cgroup content line-by-line and extracts a container ID.

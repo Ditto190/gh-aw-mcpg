@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestDetectContainerized(t *testing.T) {
+func TestDetectContainerID(t *testing.T) {
 	// This test verifies the function doesn't panic and returns consistent results
 	isContainerized, containerID := sys.DetectContainerID()
 
