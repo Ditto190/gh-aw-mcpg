@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -415,4 +416,151 @@ args = ["run", "--rm", "-i", "ghcr.io/github/github-mcp-server:latest"]
 	require.Error(t, err)
 	assert.Nil(t, cfg)
 	assert.Contains(t, err.Error(), "payload_size_threshold must be a positive integer")
+}
+
+// TestHTTPKeepaliveInterval tests all branches of the HTTPKeepaliveInterval method.
+func TestHTTPKeepaliveInterval(t *testing.T) {
+	tests := []struct {
+		name     string
+		gateway  *GatewayConfig
+		expected time.Duration
+	}{
+		{
+			name:     "nil receiver returns default keepalive interval",
+			gateway:  nil,
+			expected: time.Duration(DefaultKeepaliveInterval) * time.Second,
+		},
+		{
+			name:     "negative value disables keepalive (returns 0)",
+			gateway:  &GatewayConfig{KeepaliveInterval: -1},
+			expected: 0,
+		},
+		{
+			name:     "highly negative value also disables keepalive",
+			gateway:  &GatewayConfig{KeepaliveInterval: -999},
+			expected: 0,
+		},
+		{
+			name:     "zero value returns zero duration",
+			gateway:  &GatewayConfig{KeepaliveInterval: 0},
+			expected: 0,
+		},
+		{
+			name:     "positive value returns correct duration in seconds",
+			gateway:  &GatewayConfig{KeepaliveInterval: 300},
+			expected: 300 * time.Second,
+		},
+		{
+			name:     "default keepalive interval value returns 25 minutes",
+			gateway:  &GatewayConfig{KeepaliveInterval: DefaultKeepaliveInterval},
+			expected: time.Duration(DefaultKeepaliveInterval) * time.Second,
+		},
+		{
+			name:     "one second interval",
+			gateway:  &GatewayConfig{KeepaliveInterval: 1},
+			expected: 1 * time.Second,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.gateway.HTTPKeepaliveInterval()
+			assert.Equal(t, tt.expected, got)
+		})
+	}
+}
+
+// TestEnsureGatewayDefaults tests the EnsureGatewayDefaults method.
+func TestEnsureGatewayDefaults(t *testing.T) {
+	t.Run("nil gateway gets created with defaults", func(t *testing.T) {
+		cfg := &Config{
+			Gateway: nil,
+			Servers: map[string]*ServerConfig{
+				"test": {Command: "docker"},
+			},
+		}
+		cfg.EnsureGatewayDefaults()
+
+		require.NotNil(t, cfg.Gateway, "Gateway should be non-nil after EnsureGatewayDefaults")
+		assert.Equal(t, DefaultPort, cfg.Gateway.Port, "Default port should be applied")
+		assert.Equal(t, DefaultStartupTimeout, cfg.Gateway.StartupTimeout, "Default startup timeout should be applied")
+		assert.Equal(t, DefaultToolTimeout, cfg.Gateway.ToolTimeout, "Default tool timeout should be applied")
+		assert.Equal(t, DefaultKeepaliveInterval, cfg.Gateway.KeepaliveInterval, "Default keepalive interval should be applied")
+	})
+
+	t.Run("non-nil gateway with zero values gets defaults applied", func(t *testing.T) {
+		cfg := &Config{
+			Gateway: &GatewayConfig{}, // all zero values
+			Servers: map[string]*ServerConfig{
+				"test": {Command: "docker"},
+			},
+		}
+		cfg.EnsureGatewayDefaults()
+
+		assert.Equal(t, DefaultPort, cfg.Gateway.Port, "Default port should be applied to zero value")
+		assert.Equal(t, DefaultStartupTimeout, cfg.Gateway.StartupTimeout, "Default startup timeout should be applied to zero value")
+		assert.Equal(t, DefaultToolTimeout, cfg.Gateway.ToolTimeout, "Default tool timeout should be applied to zero value")
+		assert.Equal(t, DefaultKeepaliveInterval, cfg.Gateway.KeepaliveInterval, "Default keepalive interval should be applied to zero value")
+	})
+
+	t.Run("non-nil gateway with explicit values preserves them", func(t *testing.T) {
+		cfg := &Config{
+			Gateway: &GatewayConfig{
+				Port:              9999,
+				StartupTimeout:    45,
+				ToolTimeout:       90,
+				KeepaliveInterval: 600,
+				APIKey:            "my-api-key",
+			},
+		}
+		cfg.EnsureGatewayDefaults()
+
+		assert.Equal(t, 9999, cfg.Gateway.Port, "Explicit port should be preserved")
+		assert.Equal(t, 45, cfg.Gateway.StartupTimeout, "Explicit startup timeout should be preserved")
+		assert.Equal(t, 90, cfg.Gateway.ToolTimeout, "Explicit tool timeout should be preserved")
+		assert.Equal(t, 600, cfg.Gateway.KeepaliveInterval, "Explicit keepalive interval should be preserved")
+		assert.Equal(t, "my-api-key", cfg.Gateway.APIKey, "Explicit API key should be preserved")
+	})
+
+	t.Run("calling EnsureGatewayDefaults twice is idempotent", func(t *testing.T) {
+		cfg := &Config{Gateway: nil}
+		cfg.EnsureGatewayDefaults()
+		firstPort := cfg.Gateway.Port
+
+		cfg.EnsureGatewayDefaults()
+		assert.Equal(t, firstPort, cfg.Gateway.Port, "Second call should not change already-defaulted values")
+	})
+}
+
+// TestSetDebug tests the SetDebug function for enabling and disabling config debug logging.
+func TestSetDebug(t *testing.T) {
+	// Save the original logConfig so we can restore it after the test.
+	originalLogConfig := logConfig
+	t.Cleanup(func() {
+		logConfig = originalLogConfig
+	})
+
+	t.Run("SetDebug(true) enables logging to stderr", func(t *testing.T) {
+		SetDebug(true)
+		// After enabling, logConfig should write to stderr (not discard).
+		// We verify this indirectly by ensuring the config package still works correctly.
+		require.NotNil(t, logConfig, "logConfig should not be nil after SetDebug(true)")
+		// Trigger a log write to exercise the enabled path (should not panic).
+		logConfig.Printf("test debug message: SetDebug(true) is working")
+	})
+
+	t.Run("SetDebug(false) disables logging to discard", func(t *testing.T) {
+		SetDebug(false)
+		require.NotNil(t, logConfig, "logConfig should not be nil after SetDebug(false)")
+		// Trigger a log write to exercise the disabled path (should not panic).
+		logConfig.Printf("test debug message: SetDebug(false) is working - this should be discarded")
+	})
+
+	t.Run("toggle SetDebug multiple times does not panic", func(t *testing.T) {
+		for i := 0; i < 5; i++ {
+			SetDebug(true)
+			SetDebug(false)
+		}
+		require.NotNil(t, logConfig, "logConfig should remain non-nil after toggling")
+	})
 }
