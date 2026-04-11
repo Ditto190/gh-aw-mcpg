@@ -251,7 +251,7 @@ func NewHTTPConnection(ctx context.Context, serverID, url string, headers map[st
 		logger.LogWarn("backend", "⚠️  WARNING: MCP over SSE (2024-11-05 spec) has been DEPRECATED")
 		logger.LogWarn("backend", "⚠️  The server at %s is using the deprecated SSE transport", url)
 		logger.LogWarn("backend", "⚠️  Please migrate to streamable HTTP transport (2025-03-26 spec)")
-		logConn.Printf("Configured HTTP MCP server with SSE transport: %s", url)
+		logger.LogWarn("backend", "Configured HTTP MCP server with SSE transport: %s", url)
 		return conn, nil
 	}
 	logConn.Printf("SSE transport failed: %v", err)
