@@ -227,7 +227,7 @@ func TestGuardBackendCallerNoToken(t *testing.T) {
 	assert.Contains(t, err.Error(), "no GitHub token available")
 }
 
-func TestLookupEnrichmentToken(t *testing.T) {
+func TestLookupGitHubToken(t *testing.T) {
 	tests := []struct {
 		name     string
 		envVars  map[string]string
