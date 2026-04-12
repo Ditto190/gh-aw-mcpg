@@ -1881,9 +1881,11 @@ mod tests {
     #[test]
     fn test_has_maintainer_reaction_backend_error_skips() {
         let ctx = ctx_with_endorsement_reactions(vec!["THUMBS_UP"]);
+        // Use a unique login to avoid hitting the global permission cache populated
+        // by other tests (e.g. admin_permission_callback caching "alice").
         let item = serde_json::json!({
             "number": 42,
-            "reactions": {"nodes": [{"user": {"login": "alice"}, "content": "THUMBS_UP"}]}
+            "reactions": {"nodes": [{"user": {"login": "error-test-user"}, "content": "THUMBS_UP"}]}
         });
         // Backend error → can't confirm permission → should not count as endorsement
         assert!(!has_maintainer_reaction_with_callback(
