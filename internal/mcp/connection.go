@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os/exec"
 	"strings"
@@ -141,11 +140,9 @@ func NewConnection(ctx context.Context, serverID, command string, args []string,
 	}()
 
 	logger.LogInfo("backend", "Starting MCP backend server, command=%s, args=%v", command, sanitize.SanitizeArgs(expandedArgs))
-	log.Printf("Starting MCP server command: %s %v", command, sanitize.SanitizeArgs(expandedArgs))
 	transport := &sdk.CommandTransport{Command: cmd}
 
 	// Connect to the server (this handles the initialization handshake automatically)
-	log.Printf("Connecting to MCP server...")
 	logConn.Print("Initiating MCP server connection and handshake")
 	session, err := client.Connect(ctx, transport, nil)
 	if err != nil {
@@ -175,7 +172,7 @@ func NewConnection(ctx context.Context, serverID, command string, args []string,
 		isHTTP:   false,
 	}
 
-	log.Printf("Started MCP server: %s %v", command, sanitize.SanitizeArgs(args))
+	logger.LogInfo("backend", "Started MCP server: %s %v", command, sanitize.SanitizeArgs(expandedArgs))
 	return conn, nil
 }
 
@@ -238,7 +235,6 @@ func NewHTTPConnection(ctx context.Context, serverID, url string, headers map[st
 	conn, err := tryStreamableHTTPTransport(ctx, cancel, serverID, url, headers, headerClient, keepAlive)
 	if err == nil {
 		logger.LogInfo("backend", "Successfully connected using streamable HTTP transport, url=%s", url)
-		log.Printf("Configured HTTP MCP server with streamable transport: %s", url)
 		return conn, nil
 	}
 	logConn.Printf("Streamable HTTP failed: %v", err)
@@ -261,7 +257,6 @@ func NewHTTPConnection(ctx context.Context, serverID, url string, headers map[st
 	conn, err = tryPlainJSONTransport(ctx, cancel, serverID, url, headers, headerClient)
 	if err == nil {
 		logger.LogInfo("backend", "Successfully connected using plain JSON-RPC transport, url=%s", url)
-		log.Printf("Configured HTTP MCP server with plain JSON-RPC transport: %s", url)
 		return conn, nil
 	}
 	logConn.Printf("Plain JSON-RPC transport failed: %v", err)
