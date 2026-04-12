@@ -364,9 +364,9 @@ The `customSchemas` top-level field allows you to define custom server types bey
 |-------|-------------|---------|
 | `port` | Validated and stored for metadata purposes only. The actual listen address is always set by the `--listen` CLI flag (default `127.0.0.1:3000`). | `3000` (informational only) |
 | `apiKey` | API key for authentication | (disabled) |
-| `domain` | Gateway domain (`"localhost"`, `"host.docker.internal"`, or `"${VAR}"`) | `localhost` |
-| `startupTimeout` | Seconds to wait for backend startup | `60` |
-| `toolTimeout` | Seconds to wait for tool execution | `120` |
+| `domain` | Gateway domain (`"localhost"`, `"host.docker.internal"`, or `"${VAR}"`) | (unset) |
+| `startupTimeout` | Seconds to wait for backend startup | `30` |
+| `toolTimeout` | Seconds to wait for tool execution | `60` |
 | `payloadDir` | Directory for large payload files | `/tmp/jq-payloads` |
 | `trustedBots` (JSON) / `trusted_bots` (TOML) | Optional list of additional bot usernames to trust with "approved" integrity level. Additive to the built-in trusted bot list. When specified, must be a non-empty array with non-empty string entries (spec §4.1.3.4); omit the field entirely if not needed. Example: `["my-bot[bot]", "org-automation"]` | (disabled) |
 | `keepaliveInterval` (JSON) / `keepalive_interval` (TOML) | Interval (seconds) between keepalive pings sent to HTTP backends. Prevents remote servers from expiring idle sessions. Set to `-1` to disable keepalive pings entirely. | `1500` (25 min) |
