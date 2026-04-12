@@ -22,11 +22,11 @@ api_key = ""
 # Used for CORS and other domain-specific features
 domain = ""
 
-# Timeout for backend MCP server startup in seconds (default: 60)
+# Timeout for backend MCP server startup in seconds (default: 30)
 # How long to wait for an MCP server to start before timing out
 startup_timeout = 60
 
-# Timeout for tool execution in seconds (default: 120)
+# Timeout for tool execution in seconds (default: 60)
 # How long to wait for a tool call to complete before timing out
 tool_timeout = 120
 
