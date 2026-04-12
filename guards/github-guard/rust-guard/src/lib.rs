@@ -276,6 +276,14 @@ struct AllowOnlyPolicy {
     approval_labels: Vec<String>,
     #[serde(rename = "trusted-users", default)]
     trusted_users: Vec<String>,
+    #[serde(rename = "endorsement-reactions", default)]
+    endorsement_reactions: Vec<String>,
+    #[serde(rename = "disapproval-reactions", default)]
+    disapproval_reactions: Vec<String>,
+    #[serde(rename = "disapproval-integrity", default)]
+    disapproval_integrity: String,
+    #[serde(rename = "endorser-min-integrity", default)]
+    endorser_min_integrity: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -502,6 +510,10 @@ pub extern "C" fn label_agent(
         blocked_users: policy.blocked_users,
         approval_labels: policy.approval_labels,
         trusted_users: policy.trusted_users,
+        endorsement_reactions: policy.endorsement_reactions,
+        disapproval_reactions: policy.disapproval_reactions,
+        disapproval_integrity: policy.disapproval_integrity,
+        endorser_min_integrity: policy.endorser_min_integrity,
     };
     set_runtime_policy_context(ctx.clone());
 

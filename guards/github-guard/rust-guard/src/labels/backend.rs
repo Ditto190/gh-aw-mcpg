@@ -24,6 +24,27 @@ fn repo_owner_type_cache() -> &'static Mutex<HashMap<String, bool>> {
     CACHE.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
+/// Cache for collaborator permission lookups keyed by "owner/repo:username".
+/// Caches the raw permission string so it can be reused across multiple items
+/// that share the same reactor within a single gateway request.
+fn collaborator_permission_cache() -> &'static Mutex<HashMap<String, Option<String>>> {
+    static CACHE: OnceLock<Mutex<HashMap<String, Option<String>>>> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn get_cached_collaborator_permission(key: &str) -> Option<Option<String>> {
+    collaborator_permission_cache()
+        .lock()
+        .ok()
+        .and_then(|cache| cache.get(key).cloned())
+}
+
+fn set_cached_collaborator_permission(key: &str, permission: Option<String>) {
+    if let Ok(mut cache) = collaborator_permission_cache().lock() {
+        cache.insert(key.to_string(), permission);
+    }
+}
+
 fn get_cached_repo_visibility(repo_id: &str) -> Option<bool> {
     repo_visibility_cache()
         .lock()
@@ -449,6 +470,9 @@ pub fn get_issue_author_info(
 /// to GET /repos/{owner}/{repo}/collaborators/{username}/permission.
 /// Returns the user's effective permission (including inherited org permissions),
 /// which is more accurate than author_association for org admins.
+///
+/// Results are cached per `(owner, repo, username)` to avoid duplicate enrichment
+/// calls when the same reactor appears on multiple items in a response collection.
 pub fn get_collaborator_permission_with_callback(
     callback: GithubMcpCallback,
     owner: &str,
@@ -461,6 +485,20 @@ pub fn get_collaborator_permission_with_callback(
             owner, repo, username
         ));
         return None;
+    }
+
+    let cache_key = format!("{}/{}:{}", owner, repo, username.to_ascii_lowercase());
+
+    // Return cached permission if available.
+    if let Some(cached) = get_cached_collaborator_permission(&cache_key) {
+        crate::log_debug(&format!(
+            "get_collaborator_permission: cache hit for {}/{} user {} → permission={:?}",
+            owner, repo, username, cached
+        ));
+        return cached.map(|permission| CollaboratorPermission {
+            permission: Some(permission),
+            login: Some(username.to_string()),
+        });
     }
 
     crate::log_debug(&format!(
@@ -484,6 +522,7 @@ pub fn get_collaborator_permission_with_callback(
                 "get_collaborator_permission: empty response for {}/{} user {}",
                 owner, repo, username
             ));
+            set_cached_collaborator_permission(&cache_key, None);
             return None;
         }
         Err(code) => {
@@ -534,6 +573,8 @@ pub fn get_collaborator_permission_with_callback(
         "get_collaborator_permission: {}/{} user {} → permission={:?} login={:?}",
         owner, repo, username, permission, login
     ));
+
+    set_cached_collaborator_permission(&cache_key, permission.clone());
 
     Some(CollaboratorPermission { permission, login })
 }

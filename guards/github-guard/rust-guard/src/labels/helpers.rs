@@ -3,9 +3,15 @@
 //! This module contains utility functions used across the labeling system,
 //! including JSON extraction, integrity determination, and common operations.
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use serde_json::Value;
 
+use super::backend::GithubMcpCallback;
 use super::constants::{field_names, label_constants};
+
+/// Ensures the gateway-mode reaction warning is emitted at most once per process lifetime.
+static REACTION_GATEWAY_WARNING_EMITTED: AtomicBool = AtomicBool::new(false);
 
 /// Extract a resource number from a JSON item, returning the number as a string.
 /// Checks the `number` field first, then falls back to extracting the trailing
@@ -114,6 +120,23 @@ pub struct PolicyContext {
     /// their author_association. Analogous to trusted_bots but for regular human users.
     /// blocked_users takes precedence over trusted_users.
     pub trusted_users: Vec<String>,
+    /// GitHub ReactionContent values (e.g. "THUMBS_UP", "HEART") that count as maintainer
+    /// endorsement. When a maintainer with sufficient integrity reacts with one of these,
+    /// the item's integrity is promoted to at least approved. Empty = feature disabled.
+    pub endorsement_reactions: Vec<String>,
+    /// GitHub ReactionContent values (e.g. "THUMBS_DOWN", "CONFUSED") that count as
+    /// maintainer disapproval. When a maintainer with sufficient integrity reacts with
+    /// one of these, the item's integrity is capped at `disapproval_integrity`.
+    /// Disapproval overrides endorsement. Empty = feature disabled.
+    pub disapproval_reactions: Vec<String>,
+    /// The integrity level to cap an item at when a maintainer disapproval reaction is
+    /// detected. Defaults to "none" when empty. Options: "none", "unapproved",
+    /// "approved", "merged".
+    pub disapproval_integrity: String,
+    /// Minimum integrity level that a reactor must have for their reaction to count as
+    /// endorsement or disapproval. Defaults to "approved" when empty. Options:
+    /// "none", "unapproved", "approved", "merged".
+    pub endorser_min_integrity: String,
 }
 
 fn normalize_scope(scope: &str, ctx: &PolicyContext) -> String {
@@ -317,6 +340,248 @@ fn apply_approval_label_promotion(
             resource_type, repo_full_name, number, label
         ));
         max_integrity(repo_full_name, integrity, writer_integrity(repo_full_name, ctx), ctx)
+    } else {
+        integrity
+    }
+}
+
+// ============================================================================
+// Reaction-based endorsement and disapproval helpers
+// ============================================================================
+
+/// Maximum number of reactions to inspect per item. Caps API enrichment calls.
+const MAX_REACTIONS_TO_CHECK: usize = 20;
+
+/// Return the effective `disapproval_integrity` level from context, defaulting to "none".
+fn effective_disapproval_integrity<'a>(ctx: &'a PolicyContext) -> &'a str {
+    let v = ctx.disapproval_integrity.trim();
+    if v.is_empty() { "none" } else { v }
+}
+
+/// Return the effective `endorser_min_integrity` level from context, defaulting to "approved".
+fn effective_endorser_min_integrity<'a>(ctx: &'a PolicyContext) -> &'a str {
+    let v = ctx.endorser_min_integrity.trim();
+    if v.is_empty() { "approved" } else { v }
+}
+
+/// Convert an integrity level name to its rank (0 = unknown, 1 = none, 2 = reader, 3 = writer, 4 = merged).
+fn integrity_level_rank(level: &str) -> u8 {
+    match level.trim().to_ascii_lowercase().as_str() {
+        "none" => 1,
+        "unapproved" => 2,
+        "approved" => 3,
+        "merged" => 4,
+        _ => 3, // unknown → default to approved
+    }
+}
+
+/// Cap integrity at the given level. Returns `min(current, cap)` using the integrity hierarchy.
+fn cap_integrity(
+    scope: &str,
+    current: Vec<String>,
+    cap: Vec<String>,
+    ctx: &PolicyContext,
+) -> Vec<String> {
+    let current_rank = integrity_rank(scope, &current, ctx);
+    let cap_rank = integrity_rank(scope, &cap, ctx);
+    integrity_for_rank(scope, current_rank.min(cap_rank), ctx)
+}
+
+/// Build the integrity `Vec<String>` for a given level name over a scope.
+fn integrity_for_level(level: &str, scope: &str, ctx: &PolicyContext) -> Vec<String> {
+    match level.trim().to_ascii_lowercase().as_str() {
+        "none" => none_integrity(scope, ctx),
+        "unapproved" => reader_integrity(scope, ctx),
+        "approved" => writer_integrity(scope, ctx),
+        "merged" => merged_integrity(scope, ctx),
+        _ => none_integrity(scope, ctx), // safe default
+    }
+}
+
+/// Core reaction evaluation helper.
+///
+/// Returns `true` if any reaction in `reaction_list` on the item was made by a
+/// user whose collaborator permission meets or exceeds `endorser_min_integrity`.
+///
+/// - Uses `callback` to invoke `get_collaborator_permission` for each qualifying reactor.
+/// - Inspects at most `MAX_REACTIONS_TO_CHECK` reactions to bound API call count.
+/// - When `reactions` data is present but contains no per-user nodes (gateway mode),
+///   emits a warning at most once per process lifetime and returns `false`.
+pub fn has_maintainer_reaction_with_callback(
+    item: &Value,
+    repo_full_name: &str,
+    reaction_list: &[String],
+    endorser_min: &str,
+    ctx: &PolicyContext,
+    callback: GithubMcpCallback,
+    reaction_kind: &str, // "endorsement" or "disapproval" — used for log messages
+) -> bool {
+    if reaction_list.is_empty() {
+        return false;
+    }
+
+    let (owner, repo) = match repo_full_name.split_once('/') {
+        Some((o, r)) if !o.is_empty() && !r.is_empty() => (o, r),
+        _ => return false,
+    };
+
+    // Try to get per-user reaction nodes.
+    let nodes = item
+        .get("reactions")
+        .and_then(|r| r.get("nodes"))
+        .and_then(|n| n.as_array());
+
+    let nodes = match nodes {
+        Some(n) => n,
+        None => {
+            // If a `reactions` field is present but has no `nodes` array, we are in
+            // gateway mode: reaction counts are available but reactor identity is not.
+            if item.get("reactions").is_some() {
+                if !REACTION_GATEWAY_WARNING_EMITTED.swap(true, Ordering::Relaxed) {
+                    crate::log_warn(&format!(
+                        "[integrity] {}: {}-reactions configured but reactor identity unavailable \
+                         (gateway mode) — ignoring reactions for integrity evaluation",
+                        repo_full_name, reaction_kind
+                    ));
+                }
+            }
+            return false;
+        }
+    };
+
+    let endorser_min_rank = integrity_level_rank(endorser_min);
+
+    for node in nodes.iter().take(MAX_REACTIONS_TO_CHECK) {
+        let content = match node.get("content").and_then(|v| v.as_str()) {
+            Some(c) => c,
+            None => continue,
+        };
+
+        // Check if this reaction type is in our configured list (case-insensitive).
+        if !reaction_list.iter().any(|r| r.eq_ignore_ascii_case(content)) {
+            continue;
+        }
+
+        // Retrieve the reactor's login.
+        let login = match node
+            .get("user")
+            .and_then(|u| u.get("login"))
+            .and_then(|v| v.as_str())
+            .filter(|l| !l.is_empty())
+        {
+            Some(l) => l,
+            None => continue,
+        };
+
+        // Fetch reactor's collaborator permission to determine their integrity level.
+        let perm = super::backend::get_collaborator_permission_with_callback(
+            callback, owner, repo, login,
+        );
+        let reactor_integrity = collaborator_permission_floor(
+            repo_full_name,
+            perm.as_ref().and_then(|p| p.permission.as_deref()),
+            ctx,
+        );
+
+        let reactor_rank = integrity_rank(repo_full_name, &reactor_integrity, ctx);
+
+        if reactor_rank >= endorser_min_rank {
+            crate::log_debug(&format!(
+                "[integrity] {}: reactor @{} has permission={:?}, integrity rank {} >= \
+                 endorser-min-integrity rank {} — counting as {} reaction {}",
+                repo_full_name,
+                login,
+                perm.as_ref().and_then(|p| p.permission.as_deref()),
+                reactor_rank,
+                endorser_min_rank,
+                reaction_kind,
+                content
+            ));
+            return true;
+        } else {
+            crate::log_info(&format!(
+                "[integrity] {}: reactor @{} has integrity rank {}, below \
+                 endorser-min-integrity rank {} — ignoring {} {}",
+                repo_full_name, login, reactor_rank, endorser_min_rank, reaction_kind, content
+            ));
+        }
+    }
+
+    false
+}
+
+/// Returns `true` if the item has a qualifying maintainer endorsement reaction.
+///
+/// Uses the production backend callback. Respects `PolicyContext.endorsement_reactions`
+/// and `PolicyContext.endorser_min_integrity`.
+pub fn has_maintainer_endorsement(item: &Value, repo_full_name: &str, ctx: &PolicyContext) -> bool {
+    has_maintainer_reaction_with_callback(
+        item,
+        repo_full_name,
+        &ctx.endorsement_reactions,
+        effective_endorser_min_integrity(ctx),
+        ctx,
+        crate::invoke_backend,
+        "endorsement",
+    )
+}
+
+/// Returns `true` if the item has a qualifying maintainer disapproval reaction.
+///
+/// Uses the production backend callback. Respects `PolicyContext.disapproval_reactions`
+/// and `PolicyContext.endorser_min_integrity`.
+pub fn has_maintainer_disapproval(item: &Value, repo_full_name: &str, ctx: &PolicyContext) -> bool {
+    has_maintainer_reaction_with_callback(
+        item,
+        repo_full_name,
+        &ctx.disapproval_reactions,
+        effective_endorser_min_integrity(ctx),
+        ctx,
+        crate::invoke_backend,
+        "disapproval",
+    )
+}
+
+/// Apply endorsement promotion: if a qualified maintainer has reacted with an endorsement
+/// reaction, raise integrity to at least writer (approved) level.
+fn apply_endorsement_promotion(
+    item: &Value,
+    resource_type: &str,
+    repo_full_name: &str,
+    integrity: Vec<String>,
+    ctx: &PolicyContext,
+) -> Vec<String> {
+    if has_maintainer_endorsement(item, repo_full_name, ctx) {
+        let number = item.get(field_names::NUMBER).and_then(|v| v.as_u64()).unwrap_or(0);
+        crate::log_info(&format!(
+            "[integrity] {}:{}#{} promoted to approved (maintainer endorsement reaction)",
+            resource_type, repo_full_name, number
+        ));
+        max_integrity(repo_full_name, integrity, writer_integrity(repo_full_name, ctx), ctx)
+    } else {
+        integrity
+    }
+}
+
+/// Apply disapproval demotion: if a qualified maintainer has reacted with a disapproval
+/// reaction, cap the item's integrity at the configured `disapproval_integrity` level.
+/// Disapproval overrides endorsement and approval labels (runs last in the chain).
+fn apply_disapproval_demotion(
+    item: &Value,
+    resource_type: &str,
+    repo_full_name: &str,
+    integrity: Vec<String>,
+    ctx: &PolicyContext,
+) -> Vec<String> {
+    if has_maintainer_disapproval(item, repo_full_name, ctx) {
+        let number = item.get(field_names::NUMBER).and_then(|v| v.as_u64()).unwrap_or(0);
+        let demote_level = effective_disapproval_integrity(ctx);
+        crate::log_info(&format!(
+            "[integrity] {}:{}#{} demoted to {} (maintainer disapproval reaction)",
+            resource_type, repo_full_name, number, demote_level
+        ));
+        let cap = integrity_for_level(demote_level, repo_full_name, ctx);
+        cap_integrity(repo_full_name, integrity, cap, ctx)
     } else {
         integrity
     }
@@ -1155,7 +1420,14 @@ pub fn pr_integrity(
     let integrity = ensure_integrity_baseline(repo_full_name, integrity, ctx);
 
     // Step 2: Apply approval-labels promotion — raise to at least approved.
-    apply_approval_label_promotion(item, "pr", repo_full_name, integrity, ctx)
+    let integrity = apply_approval_label_promotion(item, "pr", repo_full_name, integrity, ctx);
+    // Step 3: Apply endorsement promotion — raise to at least approved if a qualified
+    //         maintainer reacted with a configured endorsement reaction.
+    let integrity = apply_endorsement_promotion(item, "pr", repo_full_name, integrity, ctx);
+    // Step 4: Apply disapproval demotion — cap at configured level if a qualified
+    //         maintainer reacted with a configured disapproval reaction.
+    //         Disapproval runs last so it always wins over all promotion rules.
+    apply_disapproval_demotion(item, "pr", repo_full_name, integrity, ctx)
 }
 
 /// Determine integrity level for an issue
@@ -1232,7 +1504,14 @@ pub fn issue_integrity(
     let integrity = ensure_integrity_baseline(repo_full_name, integrity, ctx);
 
     // Step 2: Apply approval-labels promotion — raise to at least approved.
-    apply_approval_label_promotion(item, "issue", repo_full_name, integrity, ctx)
+    let integrity = apply_approval_label_promotion(item, "issue", repo_full_name, integrity, ctx);
+    // Step 3: Apply endorsement promotion — raise to at least approved if a qualified
+    //         maintainer reacted with a configured endorsement reaction.
+    let integrity = apply_endorsement_promotion(item, "issue", repo_full_name, integrity, ctx);
+    // Step 4: Apply disapproval demotion — cap at configured level if a qualified
+    //         maintainer reacted with a configured disapproval reaction.
+    //         Disapproval runs last so it always wins over all promotion rules.
+    apply_disapproval_demotion(item, "issue", repo_full_name, integrity, ctx)
 }
 
 /// Determine integrity level for a commit.
@@ -1340,13 +1619,7 @@ mod tests {
     use super::*;
 
     fn test_ctx() -> PolicyContext {
-        PolicyContext {
-            scopes: vec![],
-            blocked_users: vec![],
-            trusted_bots: vec![],
-            trusted_users: vec![],
-            approval_labels: vec![],
-        }
+        PolicyContext::default()
     }
 
     #[test]
@@ -1447,5 +1720,210 @@ mod tests {
         assert_eq!(MinIntegrity::Unapproved.as_str(), policy_integrity::UNAPPROVED);
         assert_eq!(MinIntegrity::Approved.as_str(), policy_integrity::APPROVED);
         assert_eq!(MinIntegrity::Merged.as_str(), policy_integrity::MERGED);
+    }
+
+    // =========================================================================
+    // Tests for reaction-based endorsement / disapproval helpers
+    // =========================================================================
+
+    fn ctx_with_endorsement_reactions(reactions: Vec<&str>) -> PolicyContext {
+        PolicyContext {
+            endorsement_reactions: reactions.into_iter().map(|s| s.to_string()).collect(),
+            ..Default::default()
+        }
+    }
+
+    fn ctx_with_disapproval_reactions(reactions: Vec<&str>) -> PolicyContext {
+        PolicyContext {
+            disapproval_reactions: reactions.into_iter().map(|s| s.to_string()).collect(),
+            ..Default::default()
+        }
+    }
+
+    /// Mock callback that returns admin permission for any user.
+    fn admin_permission_callback(_tool: &str, _args: &str, buf: &mut [u8]) -> Result<usize, i32> {
+        let response = r#"{"permission":"admin","user":{"login":"maintainer"}}"#;
+        let bytes = response.as_bytes();
+        let len = bytes.len().min(buf.len());
+        buf[..len].copy_from_slice(&bytes[..len]);
+        Ok(len)
+    }
+
+    /// Mock callback that returns read (low) permission for any user.
+    fn read_permission_callback(_tool: &str, _args: &str, buf: &mut [u8]) -> Result<usize, i32> {
+        let response = r#"{"permission":"read","user":{"login":"external"}}"#;
+        let bytes = response.as_bytes();
+        let len = bytes.len().min(buf.len());
+        buf[..len].copy_from_slice(&bytes[..len]);
+        Ok(len)
+    }
+
+    /// Mock callback that returns an error (simulates unavailable backend).
+    fn error_callback(_tool: &str, _args: &str, _buf: &mut [u8]) -> Result<usize, i32> {
+        Err(-1)
+    }
+
+    #[test]
+    fn test_has_maintainer_reaction_no_reactions_in_ctx() {
+        let ctx = PolicyContext::default();
+        // endorsement_reactions is empty — should always return false
+        let item = serde_json::json!({
+            "number": 1,
+            "reactions": {"nodes": [{"user": {"login": "alice"}, "content": "THUMBS_UP"}]}
+        });
+        assert!(!has_maintainer_reaction_with_callback(
+            &item, "owner/repo", &ctx.endorsement_reactions, "approved", &ctx,
+            admin_permission_callback, "endorsement"
+        ));
+    }
+
+    #[test]
+    fn test_has_maintainer_reaction_with_matching_admin_reactor() {
+        let ctx = ctx_with_endorsement_reactions(vec!["THUMBS_UP"]);
+        let item = serde_json::json!({
+            "number": 42,
+            "reactions": {"nodes": [{"user": {"login": "alice"}, "content": "THUMBS_UP"}]}
+        });
+        assert!(has_maintainer_reaction_with_callback(
+            &item, "owner/repo", &ctx.endorsement_reactions, "approved", &ctx,
+            admin_permission_callback, "endorsement"
+        ));
+    }
+
+    #[test]
+    fn test_has_maintainer_reaction_reactor_below_threshold() {
+        let ctx = ctx_with_endorsement_reactions(vec!["THUMBS_UP"]);
+        let item = serde_json::json!({
+            "number": 42,
+            "reactions": {"nodes": [{"user": {"login": "external"}, "content": "THUMBS_UP"}]}
+        });
+        // read permission → unapproved integrity, below "approved" threshold
+        assert!(!has_maintainer_reaction_with_callback(
+            &item, "owner/repo", &ctx.endorsement_reactions, "approved", &ctx,
+            read_permission_callback, "endorsement"
+        ));
+    }
+
+    #[test]
+    fn test_has_maintainer_reaction_wrong_content() {
+        let ctx = ctx_with_endorsement_reactions(vec!["HEART"]);
+        let item = serde_json::json!({
+            "number": 42,
+            "reactions": {"nodes": [{"user": {"login": "alice"}, "content": "THUMBS_UP"}]}
+        });
+        // Reaction content "THUMBS_UP" is not in endorsement list ["HEART"]
+        assert!(!has_maintainer_reaction_with_callback(
+            &item, "owner/repo", &ctx.endorsement_reactions, "approved", &ctx,
+            admin_permission_callback, "endorsement"
+        ));
+    }
+
+    #[test]
+    fn test_has_maintainer_reaction_case_insensitive_content() {
+        let ctx = ctx_with_endorsement_reactions(vec!["thumbs_up"]);
+        let item = serde_json::json!({
+            "number": 42,
+            "reactions": {"nodes": [{"user": {"login": "alice"}, "content": "THUMBS_UP"}]}
+        });
+        // Case-insensitive match between "thumbs_up" (config) and "THUMBS_UP" (data)
+        assert!(has_maintainer_reaction_with_callback(
+            &item, "owner/repo", &ctx.endorsement_reactions, "approved", &ctx,
+            admin_permission_callback, "endorsement"
+        ));
+    }
+
+    #[test]
+    fn test_has_maintainer_reaction_no_nodes_gateway_mode() {
+        // reactions field present but no nodes array (gateway mode — only counts available)
+        let ctx = ctx_with_endorsement_reactions(vec!["THUMBS_UP"]);
+        let item = serde_json::json!({
+            "number": 42,
+            "reactions": {"total_count": 3, "thumbs_up": 3, "+1": 3}
+        });
+        // Should return false (graceful degradation)
+        assert!(!has_maintainer_reaction_with_callback(
+            &item, "owner/repo", &ctx.endorsement_reactions, "approved", &ctx,
+            admin_permission_callback, "endorsement"
+        ));
+    }
+
+    #[test]
+    fn test_has_maintainer_reaction_no_reactions_field() {
+        let ctx = ctx_with_endorsement_reactions(vec!["THUMBS_UP"]);
+        let item = serde_json::json!({"number": 42, "title": "no reactions"});
+        // No reactions field → skip silently
+        assert!(!has_maintainer_reaction_with_callback(
+            &item, "owner/repo", &ctx.endorsement_reactions, "approved", &ctx,
+            admin_permission_callback, "endorsement"
+        ));
+    }
+
+    #[test]
+    fn test_has_maintainer_reaction_empty_nodes() {
+        let ctx = ctx_with_endorsement_reactions(vec!["THUMBS_UP"]);
+        let item = serde_json::json!({"number": 42, "reactions": {"nodes": []}});
+        assert!(!has_maintainer_reaction_with_callback(
+            &item, "owner/repo", &ctx.endorsement_reactions, "approved", &ctx,
+            admin_permission_callback, "endorsement"
+        ));
+    }
+
+    #[test]
+    fn test_has_maintainer_reaction_backend_error_skips() {
+        let ctx = ctx_with_endorsement_reactions(vec!["THUMBS_UP"]);
+        let item = serde_json::json!({
+            "number": 42,
+            "reactions": {"nodes": [{"user": {"login": "alice"}, "content": "THUMBS_UP"}]}
+        });
+        // Backend error → can't confirm permission → should not count as endorsement
+        assert!(!has_maintainer_reaction_with_callback(
+            &item, "owner/repo", &ctx.endorsement_reactions, "approved", &ctx,
+            error_callback, "endorsement"
+        ));
+    }
+
+    #[test]
+    fn test_cap_integrity_at_none() {
+        let ctx = test_ctx();
+        let scope = "owner/repo";
+        let current = writer_integrity(scope, &ctx);
+        let cap = none_integrity(scope, &ctx);
+        let result = cap_integrity(scope, current, cap, &ctx);
+        assert_eq!(result, none_integrity(scope, &ctx), "capping approved at none should give none");
+    }
+
+    #[test]
+    fn test_cap_integrity_cap_higher_than_current() {
+        let ctx = test_ctx();
+        let scope = "owner/repo";
+        let current = reader_integrity(scope, &ctx);
+        let cap = writer_integrity(scope, &ctx);
+        // cap > current → should stay at current (min(reader, writer) = reader)
+        let result = cap_integrity(scope, current.clone(), cap, &ctx);
+        assert_eq!(result, current, "cap higher than current should not change integrity");
+    }
+
+    #[test]
+    fn test_integrity_for_level_mapping() {
+        let ctx = test_ctx();
+        let scope = "owner/repo";
+        assert_eq!(integrity_for_level("none", scope, &ctx), none_integrity(scope, &ctx));
+        assert_eq!(integrity_for_level("unapproved", scope, &ctx), reader_integrity(scope, &ctx));
+        assert_eq!(integrity_for_level("approved", scope, &ctx), writer_integrity(scope, &ctx));
+        assert_eq!(integrity_for_level("merged", scope, &ctx), merged_integrity(scope, &ctx));
+        // Unknown should default to none (safe)
+        assert_eq!(integrity_for_level("unknown", scope, &ctx), none_integrity(scope, &ctx));
+    }
+
+    #[test]
+    fn test_effective_disapproval_integrity_defaults_to_none() {
+        let ctx = PolicyContext::default();
+        assert_eq!(effective_disapproval_integrity(&ctx), "none");
+    }
+
+    #[test]
+    fn test_effective_endorser_min_integrity_defaults_to_approved() {
+        let ctx = PolicyContext::default();
+        assert_eq!(effective_endorser_min_integrity(&ctx), "approved");
     }
 }

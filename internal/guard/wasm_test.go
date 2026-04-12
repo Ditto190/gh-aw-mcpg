@@ -690,6 +690,99 @@ func TestBuildStrictLabelAgentPayloadExtended(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "unexpected allow-only key")
 	})
+
+	t.Run("valid endorsement-reactions succeeds", func(t *testing.T) {
+		policy := map[string]interface{}{
+			"allow-only": map[string]interface{}{
+				"repos":                 "public",
+				"min-integrity":         "approved",
+				"endorsement-reactions": []interface{}{"THUMBS_UP", "HEART"},
+			},
+		}
+		result, err := buildStrictLabelAgentPayload(policy)
+		require.NoError(t, err)
+		allowOnly, _ := result["allow-only"].(map[string]interface{})
+		assert.Contains(t, allowOnly, "endorsement-reactions")
+	})
+
+	t.Run("valid disapproval-reactions succeeds", func(t *testing.T) {
+		policy := map[string]interface{}{
+			"allow-only": map[string]interface{}{
+				"repos":                 "public",
+				"min-integrity":         "approved",
+				"disapproval-reactions": []interface{}{"THUMBS_DOWN", "CONFUSED"},
+			},
+		}
+		result, err := buildStrictLabelAgentPayload(policy)
+		require.NoError(t, err)
+		allowOnly, _ := result["allow-only"].(map[string]interface{})
+		assert.Contains(t, allowOnly, "disapproval-reactions")
+	})
+
+	t.Run("valid disapproval-integrity succeeds", func(t *testing.T) {
+		policy := map[string]interface{}{
+			"allow-only": map[string]interface{}{
+				"repos":                 "public",
+				"min-integrity":         "approved",
+				"disapproval-reactions": []interface{}{"THUMBS_DOWN"},
+				"disapproval-integrity": "none",
+			},
+		}
+		_, err := buildStrictLabelAgentPayload(policy)
+		require.NoError(t, err)
+	})
+
+	t.Run("valid endorser-min-integrity succeeds", func(t *testing.T) {
+		policy := map[string]interface{}{
+			"allow-only": map[string]interface{}{
+				"repos":                  "public",
+				"min-integrity":          "approved",
+				"endorsement-reactions":  []interface{}{"THUMBS_UP"},
+				"endorser-min-integrity": "approved",
+			},
+		}
+		_, err := buildStrictLabelAgentPayload(policy)
+		require.NoError(t, err)
+	})
+
+	t.Run("endorsement-reactions with empty string entry returns error", func(t *testing.T) {
+		policy := map[string]interface{}{
+			"allow-only": map[string]interface{}{
+				"repos":                 "public",
+				"min-integrity":         "approved",
+				"endorsement-reactions": []interface{}{"THUMBS_UP", ""},
+			},
+		}
+		_, err := buildStrictLabelAgentPayload(policy)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "endorsement-reactions")
+	})
+
+	t.Run("invalid disapproval-integrity value returns error", func(t *testing.T) {
+		policy := map[string]interface{}{
+			"allow-only": map[string]interface{}{
+				"repos":                 "public",
+				"min-integrity":         "approved",
+				"disapproval-integrity": "invalid",
+			},
+		}
+		_, err := buildStrictLabelAgentPayload(policy)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "disapproval-integrity")
+	})
+
+	t.Run("invalid endorser-min-integrity value returns error", func(t *testing.T) {
+		policy := map[string]interface{}{
+			"allow-only": map[string]interface{}{
+				"repos":                  "public",
+				"min-integrity":          "approved",
+				"endorser-min-integrity": "badvalue",
+			},
+		}
+		_, err := buildStrictLabelAgentPayload(policy)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "endorser-min-integrity")
+	})
 }
 
 func TestBuildLabelAgentPayload(t *testing.T) {
