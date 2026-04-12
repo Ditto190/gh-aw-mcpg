@@ -10,8 +10,11 @@ use serde_json::Value;
 use super::backend::GithubMcpCallback;
 use super::constants::{field_names, label_constants};
 
-/// Ensures the gateway-mode reaction warning is emitted at most once per process lifetime.
-static REACTION_GATEWAY_WARNING_EMITTED: AtomicBool = AtomicBool::new(false);
+/// Ensures the endorsement gateway-mode warning is emitted at most once per process lifetime.
+static ENDORSEMENT_GATEWAY_WARNING_EMITTED: AtomicBool = AtomicBool::new(false);
+
+/// Ensures the disapproval gateway-mode warning is emitted at most once per process lifetime.
+static DISAPPROVAL_GATEWAY_WARNING_EMITTED: AtomicBool = AtomicBool::new(false);
 
 /// Extract a resource number from a JSON item, returning the number as a string.
 /// Checks the `number` field first, then falls back to extracting the trailing
@@ -371,7 +374,13 @@ fn integrity_level_rank(level: &str) -> u8 {
         "unapproved" => 2,
         "approved" => 3,
         "merged" => 4,
-        _ => 3, // unknown → default to approved
+        other => {
+            crate::log_warn(&format!(
+                "integrity_level_rank: unrecognised level {:?}, defaulting to 'approved'",
+                other
+            ));
+            3 // unrecognised → safe default is "approved" (matches endorser_min_integrity default)
+        }
     }
 }
 
@@ -437,7 +446,13 @@ pub fn has_maintainer_reaction_with_callback(
             // If a `reactions` field is present but has no `nodes` array, we are in
             // gateway mode: reaction counts are available but reactor identity is not.
             if item.get("reactions").is_some() {
-                if !REACTION_GATEWAY_WARNING_EMITTED.swap(true, Ordering::Relaxed) {
+                // Use reaction-kind-specific flags so each kind logs its own warning once.
+                let already_warned = match reaction_kind {
+                    "endorsement" => ENDORSEMENT_GATEWAY_WARNING_EMITTED.swap(true, Ordering::Relaxed),
+                    "disapproval" => DISAPPROVAL_GATEWAY_WARNING_EMITTED.swap(true, Ordering::Relaxed),
+                    _ => false,
+                };
+                if !already_warned {
                     crate::log_warn(&format!(
                         "[integrity] {}: {}-reactions configured but reactor identity unavailable \
                          (gateway mode) — ignoring reactions for integrity evaluation",

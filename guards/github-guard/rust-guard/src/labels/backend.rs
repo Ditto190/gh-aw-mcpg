@@ -487,6 +487,9 @@ pub fn get_collaborator_permission_with_callback(
         return None;
     }
 
+    // Cache key uses lowercase username because GitHub usernames are case-insensitive.
+    // The original case-sensitive username is preserved in the returned CollaboratorPermission
+    // struct (via `username.to_string()`) so callers see the canonical display form.
     let cache_key = format!("{}/{}:{}", owner, repo, username.to_ascii_lowercase());
 
     // Return cached permission if available.
