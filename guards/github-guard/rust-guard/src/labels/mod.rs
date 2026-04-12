@@ -4817,4 +4817,125 @@ mod tests {
             );
         }
     }
+
+    // =========================================================================
+    // Tests for reaction-based endorsement / disapproval wired into integrity
+    // =========================================================================
+
+    fn ctx_with_endorsement_reactions(reactions: Vec<&str>) -> PolicyContext {
+        PolicyContext {
+            endorsement_reactions: reactions.into_iter().map(|s| s.to_string()).collect(),
+            ..Default::default()
+        }
+    }
+
+    fn ctx_with_disapproval_reactions(reactions: Vec<&str>, demote_to: &str) -> PolicyContext {
+        PolicyContext {
+            disapproval_reactions: reactions.into_iter().map(|s| s.to_string()).collect(),
+            disapproval_integrity: demote_to.to_string(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_issue_integrity_no_reactions_field_endorsement_configured() {
+        // Item has no reactions field at all — endorsement_reactions configured but irrelevant.
+        // Integrity should be unchanged from base rules.
+        let repo = "github/copilot";
+        let ctx = ctx_with_endorsement_reactions(vec!["THUMBS_UP"]);
+        let issue = json!({
+            "user": {"login": "external"},
+            "author_association": "NONE",
+            "number": 10
+        });
+        // No reactions → base integrity (none for external contributor on public repo)
+        assert_eq!(
+            issue_integrity(&issue, repo, false, &ctx),
+            helpers::none_integrity(repo, &ctx)
+        );
+    }
+
+    #[test]
+    fn test_issue_integrity_gateway_mode_reactions_only_counts() {
+        // Item has a reactions object but only count fields — gateway mode.
+        // Should degrade gracefully (no promotion, no demotion).
+        let repo = "github/copilot";
+        let ctx = ctx_with_endorsement_reactions(vec!["THUMBS_UP"]);
+        let issue = json!({
+            "user": {"login": "external"},
+            "author_association": "NONE",
+            "number": 11,
+            "reactions": {"total_count": 5, "thumbs_up": 5, "+1": 5}
+        });
+        // Gateway mode → fall through to base integrity (none)
+        assert_eq!(
+            issue_integrity(&issue, repo, false, &ctx),
+            helpers::none_integrity(repo, &ctx)
+        );
+    }
+
+    #[test]
+    fn test_pr_integrity_no_reactions_field_disapproval_configured() {
+        // Item has no reactions field — disapproval_reactions configured but irrelevant.
+        // A merged PR should stay merged.
+        let repo = "github/copilot";
+        let ctx = ctx_with_disapproval_reactions(vec!["THUMBS_DOWN"], "none");
+        let merged_pr = json!({
+            "user": {"login": "external"},
+            "author_association": "NONE",
+            "merged_at": "2024-01-15T10:00:00Z",
+            "number": 20
+        });
+        // No reactions → merged stays merged
+        assert_eq!(
+            pr_integrity(&merged_pr, repo, false, Some(false), &ctx),
+            helpers::merged_integrity(repo, &ctx)
+        );
+    }
+
+    #[test]
+    fn test_issue_integrity_empty_reaction_nodes_no_change() {
+        // reactions.nodes is an empty array — no endorsement or disapproval possible.
+        let repo = "github/copilot";
+        let ctx = PolicyContext {
+            endorsement_reactions: vec!["THUMBS_UP".to_string()],
+            disapproval_reactions: vec!["THUMBS_DOWN".to_string()],
+            ..Default::default()
+        };
+        let issue = json!({
+            "user": {"login": "external"},
+            "author_association": "NONE",
+            "number": 30,
+            "reactions": {"nodes": []}
+        });
+        // Empty nodes → no change from base integrity
+        assert_eq!(
+            issue_integrity(&issue, repo, false, &ctx),
+            helpers::none_integrity(repo, &ctx)
+        );
+    }
+
+    #[test]
+    fn test_blocked_user_not_promoted_by_endorsement() {
+        // A blocked user's item must not be promoted even when endorsement reactions are present
+        // and per-user reaction data is available (blocked_users takes highest precedence).
+        let repo = "github/copilot";
+        let ctx = PolicyContext {
+            blocked_users: vec!["evil-bot".to_string()],
+            endorsement_reactions: vec!["THUMBS_UP".to_string()],
+            ..Default::default()
+        };
+        let issue = json!({
+            "user": {"login": "evil-bot"},
+            "author_association": "NONE",
+            "number": 99,
+            "reactions": {"nodes": [{"user": {"login": "maintainer"}, "content": "THUMBS_UP"}]}
+        });
+        // blocked_users takes absolute precedence — even with an endorsement reaction node present.
+        // (Backend call won't occur in unit tests since invoke_backend returns None.)
+        assert_eq!(
+            issue_integrity(&issue, repo, false, &ctx),
+            helpers::blocked_integrity(repo, &ctx)
+        );
+    }
 }

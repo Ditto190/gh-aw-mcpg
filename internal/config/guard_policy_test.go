@@ -990,3 +990,153 @@ func TestIsScopeTokenChar(t *testing.T) {
 		assert.False(t, isScopeTokenChar(c), "expected isScopeTokenChar(%q) == false", c)
 	}
 }
+
+// TestNormalizeGuardPolicyReactionEndorsement tests the new reaction-based endorsement fields.
+func TestNormalizeGuardPolicyReactionEndorsement(t *testing.T) {
+	t.Run("endorsement-reactions propagated and normalized to uppercase", func(t *testing.T) {
+		policy := &GuardPolicy{AllowOnly: &AllowOnlyPolicy{
+			Repos:                "public",
+			MinIntegrity:         "approved",
+			EndorsementReactions: []string{"thumbs_up", "HEART"},
+		}}
+		got, err := NormalizeGuardPolicy(policy)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"THUMBS_UP", "HEART"}, got.EndorsementReactions)
+	})
+
+	t.Run("disapproval-reactions propagated and normalized to uppercase", func(t *testing.T) {
+		policy := &GuardPolicy{AllowOnly: &AllowOnlyPolicy{
+			Repos:                "public",
+			MinIntegrity:         "approved",
+			DisapprovalReactions: []string{"thumbs_down", "Confused"},
+		}}
+		got, err := NormalizeGuardPolicy(policy)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"THUMBS_DOWN", "CONFUSED"}, got.DisapprovalReactions)
+	})
+
+	t.Run("disapproval-integrity validated and propagated", func(t *testing.T) {
+		policy := &GuardPolicy{AllowOnly: &AllowOnlyPolicy{
+			Repos:                "public",
+			MinIntegrity:         "approved",
+			DisapprovalReactions: []string{"THUMBS_DOWN"},
+			DisapprovalIntegrity: "none",
+		}}
+		got, err := NormalizeGuardPolicy(policy)
+		require.NoError(t, err)
+		assert.Equal(t, "none", got.DisapprovalIntegrity)
+	})
+
+	t.Run("endorser-min-integrity validated and propagated", func(t *testing.T) {
+		policy := &GuardPolicy{AllowOnly: &AllowOnlyPolicy{
+			Repos:                "public",
+			MinIntegrity:         "approved",
+			EndorsementReactions: []string{"THUMBS_UP"},
+			EndorserMinIntegrity: "approved",
+		}}
+		got, err := NormalizeGuardPolicy(policy)
+		require.NoError(t, err)
+		assert.Equal(t, "approved", got.EndorserMinIntegrity)
+	})
+
+	t.Run("endorsement-reactions deduplication (case-insensitive)", func(t *testing.T) {
+		policy := &GuardPolicy{AllowOnly: &AllowOnlyPolicy{
+			Repos:                "public",
+			MinIntegrity:         "approved",
+			EndorsementReactions: []string{"THUMBS_UP", "thumbs_up", "THUMBS_UP"},
+		}}
+		got, err := NormalizeGuardPolicy(policy)
+		require.NoError(t, err)
+		assert.Len(t, got.EndorsementReactions, 1)
+		assert.Equal(t, "THUMBS_UP", got.EndorsementReactions[0])
+	})
+
+	t.Run("invalid disapproval-integrity rejected", func(t *testing.T) {
+		policy := &GuardPolicy{AllowOnly: &AllowOnlyPolicy{
+			Repos:                "public",
+			MinIntegrity:         "approved",
+			DisapprovalIntegrity: "invalid-level",
+		}}
+		_, err := NormalizeGuardPolicy(policy)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "disapproval-integrity")
+	})
+
+	t.Run("invalid endorser-min-integrity rejected", func(t *testing.T) {
+		policy := &GuardPolicy{AllowOnly: &AllowOnlyPolicy{
+			Repos:                "public",
+			MinIntegrity:         "approved",
+			EndorserMinIntegrity: "unknown",
+		}}
+		_, err := NormalizeGuardPolicy(policy)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "endorser-min-integrity")
+	})
+
+	t.Run("empty endorsement-reactions entry rejected", func(t *testing.T) {
+		policy := &GuardPolicy{AllowOnly: &AllowOnlyPolicy{
+			Repos:                "public",
+			MinIntegrity:         "approved",
+			EndorsementReactions: []string{"THUMBS_UP", ""},
+		}}
+		_, err := NormalizeGuardPolicy(policy)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "endorsement-reactions entries must not be empty")
+	})
+
+	t.Run("empty disapproval-reactions entry rejected", func(t *testing.T) {
+		policy := &GuardPolicy{AllowOnly: &AllowOnlyPolicy{
+			Repos:                "public",
+			MinIntegrity:         "approved",
+			DisapprovalReactions: []string{"THUMBS_DOWN", ""},
+		}}
+		_, err := NormalizeGuardPolicy(policy)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "disapproval-reactions entries must not be empty")
+	})
+
+	t.Run("disapproval-reactions deduplication (case-insensitive)", func(t *testing.T) {
+		policy := &GuardPolicy{AllowOnly: &AllowOnlyPolicy{
+			Repos:                "public",
+			MinIntegrity:         "approved",
+			DisapprovalReactions: []string{"THUMBS_DOWN", "thumbs_down", "THUMBS_DOWN"},
+		}}
+		got, err := NormalizeGuardPolicy(policy)
+		require.NoError(t, err)
+		assert.Len(t, got.DisapprovalReactions, 1)
+		assert.Equal(t, "THUMBS_DOWN", got.DisapprovalReactions[0])
+	})
+
+	t.Run("reaction fields absent → normalized fields empty", func(t *testing.T) {
+		policy := &GuardPolicy{AllowOnly: &AllowOnlyPolicy{
+			Repos:        "public",
+			MinIntegrity: "none",
+		}}
+		got, err := NormalizeGuardPolicy(policy)
+		require.NoError(t, err)
+		assert.Empty(t, got.EndorsementReactions)
+		assert.Empty(t, got.DisapprovalReactions)
+		assert.Empty(t, got.DisapprovalIntegrity)
+		assert.Empty(t, got.EndorserMinIntegrity)
+	})
+
+	t.Run("AllowOnlyPolicy JSON round-trip with reaction fields", func(t *testing.T) {
+		original := AllowOnlyPolicy{
+			Repos:                "public",
+			MinIntegrity:         "approved",
+			EndorsementReactions: []string{"THUMBS_UP", "HEART"},
+			DisapprovalReactions: []string{"THUMBS_DOWN", "CONFUSED"},
+			DisapprovalIntegrity: "none",
+			EndorserMinIntegrity: "approved",
+		}
+		data, err := json.Marshal(original)
+		require.NoError(t, err)
+
+		var got AllowOnlyPolicy
+		require.NoError(t, json.Unmarshal(data, &got))
+		assert.Equal(t, original.EndorsementReactions, got.EndorsementReactions)
+		assert.Equal(t, original.DisapprovalReactions, got.DisapprovalReactions)
+		assert.Equal(t, original.DisapprovalIntegrity, got.DisapprovalIntegrity)
+		assert.Equal(t, original.EndorserMinIntegrity, got.EndorserMinIntegrity)
+	})
+}

@@ -39,21 +39,29 @@ type WriteSinkPolicy struct {
 
 // AllowOnlyPolicy configures scope and minimum required integrity.
 type AllowOnlyPolicy struct {
-	Repos          interface{} `toml:"Repos" json:"repos"`
-	MinIntegrity   string      `toml:"MinIntegrity" json:"min-integrity"`
-	BlockedUsers   []string    `toml:"BlockedUsers" json:"blocked-users,omitempty"`
-	ApprovalLabels []string    `toml:"ApprovalLabels" json:"approval-labels,omitempty"`
-	TrustedUsers   []string    `toml:"TrustedUsers" json:"trusted-users,omitempty"`
+	Repos                interface{} `toml:"Repos" json:"repos"`
+	MinIntegrity         string      `toml:"MinIntegrity" json:"min-integrity"`
+	BlockedUsers         []string    `toml:"BlockedUsers" json:"blocked-users,omitempty"`
+	ApprovalLabels       []string    `toml:"ApprovalLabels" json:"approval-labels,omitempty"`
+	TrustedUsers         []string    `toml:"TrustedUsers" json:"trusted-users,omitempty"`
+	EndorsementReactions []string    `toml:"EndorsementReactions" json:"endorsement-reactions,omitempty"`
+	DisapprovalReactions []string    `toml:"DisapprovalReactions" json:"disapproval-reactions,omitempty"`
+	DisapprovalIntegrity string      `toml:"DisapprovalIntegrity" json:"disapproval-integrity,omitempty"`
+	EndorserMinIntegrity string      `toml:"EndorserMinIntegrity" json:"endorser-min-integrity,omitempty"`
 }
 
 // NormalizedGuardPolicy is a canonical policy representation for caching and observability.
 type NormalizedGuardPolicy struct {
-	ScopeKind      string   `json:"scope_kind"`
-	ScopeValues    []string `json:"scope_values,omitempty"`
-	MinIntegrity   string   `json:"min-integrity"`
-	BlockedUsers   []string `json:"blocked-users,omitempty"`
-	ApprovalLabels []string `json:"approval-labels,omitempty"`
-	TrustedUsers   []string `json:"trusted-users,omitempty"`
+	ScopeKind            string   `json:"scope_kind"`
+	ScopeValues          []string `json:"scope_values,omitempty"`
+	MinIntegrity         string   `json:"min-integrity"`
+	BlockedUsers         []string `json:"blocked-users,omitempty"`
+	ApprovalLabels       []string `json:"approval-labels,omitempty"`
+	TrustedUsers         []string `json:"trusted-users,omitempty"`
+	EndorsementReactions []string `json:"endorsement-reactions,omitempty"`
+	DisapprovalReactions []string `json:"disapproval-reactions,omitempty"`
+	DisapprovalIntegrity string   `json:"disapproval-integrity,omitempty"`
+	EndorserMinIntegrity string   `json:"endorser-min-integrity,omitempty"`
 }
 
 func (p *GuardPolicy) UnmarshalJSON(data []byte) error {
@@ -138,6 +146,22 @@ func (p *AllowOnlyPolicy) UnmarshalJSON(data []byte) error {
 			if err := json.Unmarshal(value, &p.TrustedUsers); err != nil {
 				return fmt.Errorf("invalid allow-only.trusted-users: %w", err)
 			}
+		case "endorsement-reactions":
+			if err := json.Unmarshal(value, &p.EndorsementReactions); err != nil {
+				return fmt.Errorf("invalid allow-only.endorsement-reactions: %w", err)
+			}
+		case "disapproval-reactions":
+			if err := json.Unmarshal(value, &p.DisapprovalReactions); err != nil {
+				return fmt.Errorf("invalid allow-only.disapproval-reactions: %w", err)
+			}
+		case "disapproval-integrity":
+			if err := json.Unmarshal(value, &p.DisapprovalIntegrity); err != nil {
+				return fmt.Errorf("invalid allow-only.disapproval-integrity: %w", err)
+			}
+		case "endorser-min-integrity":
+			if err := json.Unmarshal(value, &p.EndorserMinIntegrity); err != nil {
+				return fmt.Errorf("invalid allow-only.endorser-min-integrity: %w", err)
+			}
 		default:
 			return fmt.Errorf("allow-only contains unsupported field %q", key)
 		}
@@ -155,11 +179,15 @@ func (p *AllowOnlyPolicy) UnmarshalJSON(data []byte) error {
 
 func (p AllowOnlyPolicy) MarshalJSON() ([]byte, error) {
 	type serializedAllowOnly struct {
-		Repos          interface{} `json:"repos"`
-		MinIntegrity   string      `json:"min-integrity"`
-		BlockedUsers   []string    `json:"blocked-users,omitempty"`
-		ApprovalLabels []string    `json:"approval-labels,omitempty"`
-		TrustedUsers   []string    `json:"trusted-users,omitempty"`
+		Repos                interface{} `json:"repos"`
+		MinIntegrity         string      `json:"min-integrity"`
+		BlockedUsers         []string    `json:"blocked-users,omitempty"`
+		ApprovalLabels       []string    `json:"approval-labels,omitempty"`
+		TrustedUsers         []string    `json:"trusted-users,omitempty"`
+		EndorsementReactions []string    `json:"endorsement-reactions,omitempty"`
+		DisapprovalReactions []string    `json:"disapproval-reactions,omitempty"`
+		DisapprovalIntegrity string      `json:"disapproval-integrity,omitempty"`
+		EndorserMinIntegrity string      `json:"endorser-min-integrity,omitempty"`
 	}
 
 	return json.Marshal(serializedAllowOnly(p))
@@ -353,6 +381,57 @@ func NormalizeGuardPolicy(policy *GuardPolicy) (*NormalizedGuardPolicy, error) {
 				normalized.TrustedUsers = append(normalized.TrustedUsers, u)
 			}
 		}
+	}
+
+	// Validate and normalize endorsement-reactions.
+	// Dedup uses uppercased keys to match the GraphQL ReactionContent enum.
+	if len(policy.AllowOnly.EndorsementReactions) > 0 {
+		seen := make(map[string]struct{}, len(policy.AllowOnly.EndorsementReactions))
+		for _, r := range policy.AllowOnly.EndorsementReactions {
+			r = strings.TrimSpace(r)
+			if r == "" {
+				return nil, fmt.Errorf("allow-only.endorsement-reactions entries must not be empty")
+			}
+			key := strings.ToUpper(r)
+			if _, exists := seen[key]; !exists {
+				seen[key] = struct{}{}
+				normalized.EndorsementReactions = append(normalized.EndorsementReactions, key)
+			}
+		}
+	}
+
+	// Validate and normalize disapproval-reactions.
+	if len(policy.AllowOnly.DisapprovalReactions) > 0 {
+		seen := make(map[string]struct{}, len(policy.AllowOnly.DisapprovalReactions))
+		for _, r := range policy.AllowOnly.DisapprovalReactions {
+			r = strings.TrimSpace(r)
+			if r == "" {
+				return nil, fmt.Errorf("allow-only.disapproval-reactions entries must not be empty")
+			}
+			key := strings.ToUpper(r)
+			if _, exists := seen[key]; !exists {
+				seen[key] = struct{}{}
+				normalized.DisapprovalReactions = append(normalized.DisapprovalReactions, key)
+			}
+		}
+	}
+
+	// Validate and normalize disapproval-integrity (optional; empty means feature
+	// uses Rust-side default of "none" when endorsement/disapproval is evaluated).
+	if v := strings.ToLower(strings.TrimSpace(policy.AllowOnly.DisapprovalIntegrity)); v != "" {
+		if _, ok := validMinIntegrityValues[v]; !ok {
+			return nil, fmt.Errorf("allow-only.disapproval-integrity must be one of: none, unapproved, approved, merged")
+		}
+		normalized.DisapprovalIntegrity = v
+	}
+
+	// Validate and normalize endorser-min-integrity (optional; empty means feature
+	// uses Rust-side default of "approved" when evaluating reactor eligibility).
+	if v := strings.ToLower(strings.TrimSpace(policy.AllowOnly.EndorserMinIntegrity)); v != "" {
+		if _, ok := validMinIntegrityValues[v]; !ok {
+			return nil, fmt.Errorf("allow-only.endorser-min-integrity must be one of: none, unapproved, approved, merged")
+		}
+		normalized.EndorserMinIntegrity = v
 	}
 
 	switch scope := policy.AllowOnly.Repos.(type) {

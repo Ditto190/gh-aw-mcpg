@@ -414,7 +414,8 @@ func buildStrictLabelAgentPayload(policy interface{}) (map[string]interface{}, e
 	// Validate that the allow-only object contains only known keys.
 	for k := range allowOnly {
 		switch k {
-		case "repos", "min-integrity", "integrity", "blocked-users", "approval-labels", "trusted-users":
+		case "repos", "min-integrity", "integrity", "blocked-users", "approval-labels", "trusted-users",
+			"endorsement-reactions", "disapproval-reactions", "disapproval-integrity", "endorser-min-integrity":
 			// valid allow-only keys
 		default:
 			return nil, fmt.Errorf("invalid guard policy transport shape: unexpected allow-only key %q", k)
@@ -490,6 +491,47 @@ func buildStrictLabelAgentPayload(policy interface{}) (map[string]interface{}, e
 			if s, ok := entry.(string); !ok || strings.TrimSpace(s) == "" {
 				return nil, fmt.Errorf("invalid trusted-users value: each entry must be a non-empty string")
 			}
+		}
+	}
+
+	// Validate endorsement-reactions and disapproval-reactions if present.
+	for _, reactionKey := range []string{"endorsement-reactions", "disapproval-reactions"} {
+		if reactionsRaw, ok := allowOnly[reactionKey]; ok {
+			arr, ok := reactionsRaw.([]interface{})
+			if !ok {
+				return nil, fmt.Errorf("invalid %s value: expected array of strings", reactionKey)
+			}
+			for _, entry := range arr {
+				if s, ok := entry.(string); !ok || strings.TrimSpace(s) == "" {
+					return nil, fmt.Errorf("invalid %s value: each entry must be a non-empty string", reactionKey)
+				}
+			}
+		}
+	}
+
+	// Validate disapproval-integrity if present.
+	if disIntRaw, ok := allowOnly["disapproval-integrity"]; ok {
+		disInt, ok := disIntRaw.(string)
+		if !ok {
+			return nil, fmt.Errorf("invalid disapproval-integrity value: expected one of none|unapproved|approved|merged")
+		}
+		switch strings.ToLower(strings.TrimSpace(disInt)) {
+		case "none", "unapproved", "approved", "merged":
+		default:
+			return nil, fmt.Errorf("invalid disapproval-integrity value: expected one of none|unapproved|approved|merged")
+		}
+	}
+
+	// Validate endorser-min-integrity if present.
+	if endMinRaw, ok := allowOnly["endorser-min-integrity"]; ok {
+		endMin, ok := endMinRaw.(string)
+		if !ok {
+			return nil, fmt.Errorf("invalid endorser-min-integrity value: expected one of none|unapproved|approved|merged")
+		}
+		switch strings.ToLower(strings.TrimSpace(endMin)) {
+		case "none", "unapproved", "approved", "merged":
+		default:
+			return nil, fmt.Errorf("invalid endorser-min-integrity value: expected one of none|unapproved|approved|merged")
 		}
 	}
 
