@@ -1269,8 +1269,7 @@ pub fn collaborator_permission_floor(
     match normalized.as_str() {
         "admin" | "maintain" | "write" => writer_integrity(scope, ctx),
         "triage" | "read" => reader_integrity(scope, ctx),
-        "none" => vec![],
-        _ => vec![],
+        _ => vec![], // "none" or any unrecognised value → no integrity
     }
 }
 

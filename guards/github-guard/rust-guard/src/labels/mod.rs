@@ -34,10 +34,6 @@ mod response_items;
 mod response_paths;
 pub mod tool_rules;
 
-// Re-export commonly used items for backward compatibility
-#[allow(unused_imports)]
-pub use constants::MEDIUM_BUFFER_SIZE;
-
 // Re-export helpers - these are part of the public API and used by tests
 // The unused_imports warning is suppressed because these are intentionally
 // re-exported for external modules and tests, not used within mod.rs itself
