@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -17,6 +18,15 @@ import (
 )
 
 var logRouted = logger.New("server:routed")
+
+func truncateCacheKeyForLog(key string) string {
+	backendID, sessionID, found := strings.Cut(key, "/")
+	if !found {
+		return key
+	}
+
+	return fmt.Sprintf("%s/%s", backendID, auth.TruncateSessionID(sessionID))
+}
 
 // rejectIfShutdown is a middleware that rejects requests with HTTP 503 when gateway is shutting down
 // Per spec 5.1.3: "Immediately reject any new RPC requests to /mcp/{server-name} endpoints with HTTP 503"
@@ -74,7 +84,7 @@ func (c *filteredServerCache) getOrCreate(backendID, sessionID string, creator f
 	// Lazy eviction of expired entries
 	for k, entry := range c.servers {
 		if now.Sub(entry.lastUsed) > c.ttl {
-			logRouted.Printf("[CACHE] Evicting expired server: key=%s (idle %s)", auth.TruncateSessionID(k), now.Sub(entry.lastUsed).Round(time.Second))
+			logRouted.Printf("[CACHE] Evicting expired server: key=%s (idle %s)", truncateCacheKeyForLog(k), now.Sub(entry.lastUsed).Round(time.Second))
 			delete(c.servers, k)
 		}
 	}
@@ -84,12 +94,24 @@ func (c *filteredServerCache) getOrCreate(backendID, sessionID string, creator f
 		return entry.server
 	}
 
-	// Safety bound: if at capacity after TTL eviction, log a warning but do not
-	// evict non-expired entries. Routed mode relies on reusing the same filtered
-	// server instance for a given (backend, session), and evicting an active entry
-	// would recreate that server mid-session, breaking StreamableHTTP semantics.
+	// When at capacity after TTL eviction, evict the least-recently-used entry
+	// to bound memory growth reliably. This may interrupt an active session for
+	// the evicted (backend, session) pair, but is preferable to unbounded growth.
 	if len(c.servers) >= c.maxSize {
-		logRouted.Printf("[CACHE] Max size reached (%d), retaining active entries until TTL eviction", c.maxSize)
+		lruKey := ""
+		var lruTime time.Time
+		first := true
+		for k, entry := range c.servers {
+			if first || entry.lastUsed.Before(lruTime) {
+				lruKey = k
+				lruTime = entry.lastUsed
+				first = false
+			}
+		}
+		if lruKey != "" {
+			logRouted.Printf("[CACHE] Max size reached (%d), evicting LRU entry: key=%s (idle %s)", c.maxSize, truncateCacheKeyForLog(lruKey), now.Sub(lruTime).Round(time.Second))
+			delete(c.servers, lruKey)
+		}
 	}
 
 	logRouted.Printf("[CACHE] Creating new filtered server: backend=%s, session=%s", backendID, auth.TruncateSessionID(sessionID))
