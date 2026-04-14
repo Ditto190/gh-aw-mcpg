@@ -16,6 +16,7 @@ import (
 
 	"github.com/github/gh-aw-mcpg/internal/difc"
 	"github.com/tetratelabs/wazero"
+	"github.com/tetratelabs/wazero/sys"
 )
 
 func TestMain(m *testing.M) {
@@ -1150,6 +1151,26 @@ func TestIsWasmTrap(t *testing.T) {
 
 	t.Run("wasm error out of bounds is a trap", func(t *testing.T) {
 		err := errors.New("wasm error: out of bounds memory access")
+		assert.True(t, isWasmTrap(err))
+	})
+
+	t.Run("sys.ExitError with exit code 0 is not a trap", func(t *testing.T) {
+		err := sys.NewExitError(0)
+		assert.False(t, isWasmTrap(err))
+	})
+
+	t.Run("sys.ExitError with non-zero exit code is a trap", func(t *testing.T) {
+		err := sys.NewExitError(1)
+		assert.True(t, isWasmTrap(err))
+	})
+
+	t.Run("wrapped sys.ExitError with exit code 0 is not a trap", func(t *testing.T) {
+		err := fmt.Errorf("wrapper: %w", sys.NewExitError(0))
+		assert.False(t, isWasmTrap(err))
+	})
+
+	t.Run("wrapped sys.ExitError with non-zero exit code is a trap", func(t *testing.T) {
+		err := fmt.Errorf("wrapper: %w", sys.NewExitError(2))
 		assert.True(t, isWasmTrap(err))
 	})
 }

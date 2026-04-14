@@ -1,6 +1,7 @@
 package guard
 
 import (
+	"context"
 	"fmt"
 	"sync"
 
@@ -30,7 +31,7 @@ func (r *Registry) Register(serverID string, guard Guard) {
 	defer r.mu.Unlock()
 
 	r.guards[serverID] = guard
-	log.Printf("[Guard] Registered guard '%s' for server '%s'", guard.Name(), serverID)
+	logger.LogInfo("guard", "Registered guard '%s' for server '%s'", guard.Name(), serverID)
 }
 
 // Get retrieves the guard for a server, or returns a noop guard if not found
@@ -46,7 +47,6 @@ func (r *Registry) Get(serverID string) Guard {
 
 	// Return noop guard as default
 	debugLog.Printf("No guard registered for serverID=%s, returning noop guard", serverID)
-	log.Printf("[Guard] No guard registered for server '%s', using noop guard", serverID)
 	return NewNoopGuard()
 }
 
@@ -76,7 +76,7 @@ func (r *Registry) Remove(serverID string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	delete(r.guards, serverID)
-	log.Printf("[Guard] Removed guard for server '%s'", serverID)
+	logger.LogInfo("guard", "Removed guard for server '%s'", serverID)
 }
 
 // List returns all registered server IDs
@@ -103,6 +103,20 @@ func (r *Registry) GetGuardInfo() map[string]string {
 	return info
 }
 
+// Close closes all registered guards that implement io.Closer.
+// It should be called during server shutdown to release WASM runtime resources.
+func (r *Registry) Close(ctx context.Context) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for id, g := range r.guards {
+		if c, ok := g.(interface{ Close(context.Context) error }); ok {
+			if err := c.Close(ctx); err != nil {
+				logger.LogWarn("guard", "Failed to close guard for server %s: %v", id, err)
+			}
+		}
+	}
+}
+
 // GuardFactory is a function that creates a guard instance
 type GuardFactory func() (Guard, error)
 
@@ -116,7 +130,7 @@ func RegisterGuardType(name string, factory GuardFactory) {
 	registeredGuardsMu.Lock()
 	defer registeredGuardsMu.Unlock()
 	registeredGuards[name] = factory
-	log.Printf("[Guard] Registered guard type: %s", name)
+	logger.LogInfo("guard", "Registered guard type: %s", name)
 }
 
 // CreateGuard creates a guard instance by name using registered factories

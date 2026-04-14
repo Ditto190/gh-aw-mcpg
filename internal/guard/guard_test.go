@@ -2,6 +2,7 @@ package guard
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 
@@ -15,6 +16,18 @@ import (
 // mockGuard is a simple guard implementation for testing that can be distinguished by ID
 type mockGuard struct {
 	id string
+}
+
+// mockClosableGuard is a guard that tracks whether Close was called
+type mockClosableGuard struct {
+	mockGuard
+	closed   bool
+	closeErr error
+}
+
+func (m *mockClosableGuard) Close(ctx context.Context) error {
+	m.closed = true
+	return m.closeErr
 }
 
 func (m *mockGuard) Name() string { return "mock-" + m.id }
@@ -447,6 +460,59 @@ func TestGuardRegistry_HasNonNoopGuard(t *testing.T) {
 
 		registry.Register("server1", NewNoopGuard())
 		assert.False(t, registry.HasNonNoopGuard())
+	})
+}
+
+func TestGuardRegistry_Close(t *testing.T) {
+	t.Run("close calls Close on guards that implement it", func(t *testing.T) {
+		registry := NewRegistry()
+		g := &mockClosableGuard{mockGuard: mockGuard{id: "wasm"}}
+		registry.Register("server1", g)
+
+		registry.Close(context.Background())
+
+		assert.True(t, g.closed, "expected guard Close to be called")
+	})
+
+	t.Run("close skips guards that do not implement Close", func(t *testing.T) {
+		registry := NewRegistry()
+		registry.Register("server1", NewNoopGuard())
+
+		// Should not panic
+		registry.Close(context.Background())
+	})
+
+	t.Run("close on empty registry is safe", func(t *testing.T) {
+		registry := NewRegistry()
+		// Should not panic
+		registry.Close(context.Background())
+	})
+
+	t.Run("close calls Close on all closable guards", func(t *testing.T) {
+		registry := NewRegistry()
+		g1 := &mockClosableGuard{mockGuard: mockGuard{id: "wasm1"}}
+		g2 := &mockClosableGuard{mockGuard: mockGuard{id: "wasm2"}}
+		registry.Register("server1", g1)
+		registry.Register("server2", g2)
+
+		registry.Close(context.Background())
+
+		assert.True(t, g1.closed, "expected guard 1 Close to be called")
+		assert.True(t, g2.closed, "expected guard 2 Close to be called")
+	})
+
+	t.Run("close continues when one guard returns an error", func(t *testing.T) {
+		registry := NewRegistry()
+		g1 := &mockClosableGuard{mockGuard: mockGuard{id: "failing"}, closeErr: errors.New("close failed")}
+		g2 := &mockClosableGuard{mockGuard: mockGuard{id: "ok"}}
+		registry.Register("server1", g1)
+		registry.Register("server2", g2)
+
+		// Should not panic even when one guard returns an error
+		registry.Close(context.Background())
+
+		assert.True(t, g1.closed, "expected failing guard Close to be called")
+		assert.True(t, g2.closed, "expected ok guard Close to be called")
 	})
 }
 
