@@ -399,7 +399,7 @@ audience = "https://example.com"
 	require.Error(t, err)
 	assert.Nil(t, cfg)
 	assert.Contains(t, err.Error(), "auth")
-	assert.Contains(t, err.Error(), "HTTP")
+	assert.Contains(t, err.Error(), "Remove the auth configuration or change the server type to \"http\"")
 }
 
 // TestLoadFromFile_NegativePayloadSizeThresholdRejected verifies that TOML configs with

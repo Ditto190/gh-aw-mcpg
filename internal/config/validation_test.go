@@ -991,7 +991,7 @@ func TestValidateAuthConfig(t *testing.T) {
 				},
 			},
 			shouldErr: true,
-			errMsg:    "auth is only supported for HTTP servers",
+			errMsg:    "server type \"stdio\"",
 		},
 		{
 			name: "unknown auth type is rejected",
