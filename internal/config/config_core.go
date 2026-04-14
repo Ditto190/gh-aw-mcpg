@@ -209,10 +209,11 @@ type ServerConfig struct {
 	// Guard is the name of the guard to use for this server (requires DIFC)
 	Guard string `toml:"guard" json:"guard,omitempty"`
 
-	// ConnectTimeout is the per-transport timeout (in seconds) for connecting to HTTP backends.
-	// The gateway tries multiple transports in sequence (streamable HTTP → SSE → plain JSON-RPC);
-	// each attempt uses this timeout. Increase this for backends that are slow to initialize.
-	// Only applies to HTTP server types. Default: 30 seconds.
+	// ConnectTimeout is the timeout (in seconds) used for SDK-managed HTTP transport connect attempts.
+	// The gateway tries multiple transports in sequence (streamable HTTP → SSE → plain JSON-RPC).
+	// This timeout applies to the streamable HTTP and SSE connection attempts; the plain JSON-RPC
+	// fallback uses the HTTP client's request timeout instead. Increase this for backends that are
+	// slow to initialize. Only applies to HTTP server types. Default: 30 seconds.
 	ConnectTimeout int `toml:"connect_timeout" json:"connect_timeout,omitempty"`
 }
 
