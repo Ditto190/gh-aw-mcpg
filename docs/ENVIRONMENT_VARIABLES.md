@@ -62,7 +62,7 @@ These variables provide a GitHub token used by the proxy command (`awmg proxy`) 
 | `GITHUB_PERSONAL_ACCESS_TOKEN` | Personal access token | (optional) |
 | `GH_TOKEN` | Lowest-priority fallback (set by GitHub CLI) | (optional) |
 
-> **Note:** At least one of these must be set for proxy mode upstream authentication and for the unified gateway's `get_collaborator_permission` checks. See `internal/envutil/github.go` for the lookup implementation.
+> **Note:** For proxy mode, one of these variables (or `--token`) is only needed when you want a fallback token for upstream authentication—for example, when clients do not send an `Authorization` header. In unified gateway mode, `get_collaborator_permission` requires one of these variables to be set. See `internal/envutil/github.go` for the lookup implementation.
 
 ## Proxy Mode Variables
 
