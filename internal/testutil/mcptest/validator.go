@@ -10,6 +10,8 @@ import (
 
 var logValidator = logger.New("testutil:validator")
 
+const validatorPaginationMaxPages = 1000
+
 // ValidatorClient is a client for validating MCP servers
 type ValidatorClient struct {
 	client  *sdk.Client
@@ -42,7 +44,14 @@ func NewValidatorClient(ctx context.Context, transport sdk.Transport) (*Validato
 func (v *ValidatorClient) ListTools() ([]*sdk.Tool, error) {
 	var all []*sdk.Tool
 	var cursor string
+	seenCursors := make(map[string]struct{})
+	pages := 0
 	for {
+		pages++
+		if pages > validatorPaginationMaxPages {
+			return nil, fmt.Errorf("list tools: exceeded maximum pagination limit of %d pages", validatorPaginationMaxPages)
+		}
+
 		result, err := v.session.ListTools(v.ctx, &sdk.ListToolsParams{Cursor: cursor})
 		if err != nil {
 			return nil, fmt.Errorf("list tools: %w", err)
@@ -51,6 +60,10 @@ func (v *ValidatorClient) ListTools() ([]*sdk.Tool, error) {
 		if result.NextCursor == "" {
 			break
 		}
+		if _, ok := seenCursors[result.NextCursor]; ok {
+			return nil, fmt.Errorf("list tools: detected repeated pagination cursor %q", result.NextCursor)
+		}
+		seenCursors[result.NextCursor] = struct{}{}
 		cursor = result.NextCursor
 	}
 	return all, nil
@@ -60,7 +73,14 @@ func (v *ValidatorClient) ListTools() ([]*sdk.Tool, error) {
 func (v *ValidatorClient) ListResources() ([]*sdk.Resource, error) {
 	var all []*sdk.Resource
 	var cursor string
+	seenCursors := make(map[string]struct{})
+	pages := 0
 	for {
+		pages++
+		if pages > validatorPaginationMaxPages {
+			return nil, fmt.Errorf("list resources: exceeded maximum pagination limit of %d pages", validatorPaginationMaxPages)
+		}
+
 		result, err := v.session.ListResources(v.ctx, &sdk.ListResourcesParams{Cursor: cursor})
 		if err != nil {
 			return nil, fmt.Errorf("list resources: %w", err)
@@ -69,6 +89,10 @@ func (v *ValidatorClient) ListResources() ([]*sdk.Resource, error) {
 		if result.NextCursor == "" {
 			break
 		}
+		if _, ok := seenCursors[result.NextCursor]; ok {
+			return nil, fmt.Errorf("list resources: detected repeated pagination cursor %q", result.NextCursor)
+		}
+		seenCursors[result.NextCursor] = struct{}{}
 		cursor = result.NextCursor
 	}
 	return all, nil
