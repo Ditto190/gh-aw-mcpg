@@ -99,11 +99,13 @@ func (c *filteredServerCache) getOrCreate(backendID, sessionID string, creator f
 	// the evicted (backend, session) pair, but is preferable to unbounded growth.
 	if len(c.servers) >= c.maxSize {
 		lruKey := ""
-		lruTime := now // all real entries have lastUsed <= now
+		var lruTime time.Time
+		first := true
 		for k, entry := range c.servers {
-			if entry.lastUsed.Before(lruTime) {
+			if first || entry.lastUsed.Before(lruTime) {
 				lruKey = k
 				lruTime = entry.lastUsed
+				first = false
 			}
 		}
 		if lruKey != "" {

@@ -40,62 +40,65 @@ func NewValidatorClient(ctx context.Context, transport sdk.Transport) (*Validato
 	}, nil
 }
 
-// ListTools retrieves the list of tools from the connected MCP server, including all paginated results.
-func (v *ValidatorClient) ListTools() ([]*sdk.Tool, error) {
-	var all []*sdk.Tool
+// paginate collects all pages from a paginated MCP list call.
+// fetch is called with a cursor (empty string for the first page) and returns the items,
+// the next cursor (empty when done), and any error.
+func paginate[T any](ctx context.Context, fetch func(ctx context.Context, cursor string) ([]T, string, error)) ([]T, error) {
+	var all []T
 	var cursor string
 	seenCursors := make(map[string]struct{})
 	pages := 0
 	for {
 		pages++
 		if pages > validatorPaginationMaxPages {
-			return nil, fmt.Errorf("list tools: exceeded maximum pagination limit of %d pages", validatorPaginationMaxPages)
+			return nil, fmt.Errorf("exceeded maximum pagination limit of %d pages", validatorPaginationMaxPages)
 		}
 
-		result, err := v.session.ListTools(v.ctx, &sdk.ListToolsParams{Cursor: cursor})
+		items, nextCursor, err := fetch(ctx, cursor)
 		if err != nil {
-			return nil, fmt.Errorf("list tools: %w", err)
+			return nil, err
 		}
-		all = append(all, result.Tools...)
-		if result.NextCursor == "" {
+		all = append(all, items...)
+		if nextCursor == "" {
 			break
 		}
-		if _, ok := seenCursors[result.NextCursor]; ok {
-			return nil, fmt.Errorf("list tools: detected repeated pagination cursor %q", result.NextCursor)
+		if _, ok := seenCursors[nextCursor]; ok {
+			return nil, fmt.Errorf("detected repeated pagination cursor %q", nextCursor)
 		}
-		seenCursors[result.NextCursor] = struct{}{}
-		cursor = result.NextCursor
+		seenCursors[nextCursor] = struct{}{}
+		cursor = nextCursor
 	}
 	return all, nil
 }
 
+// ListTools retrieves the list of tools from the connected MCP server, including all paginated results.
+func (v *ValidatorClient) ListTools() ([]*sdk.Tool, error) {
+	tools, err := paginate(v.ctx, func(ctx context.Context, cursor string) ([]*sdk.Tool, string, error) {
+		result, err := v.session.ListTools(ctx, &sdk.ListToolsParams{Cursor: cursor})
+		if err != nil {
+			return nil, "", err
+		}
+		return result.Tools, result.NextCursor, nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list tools: %w", err)
+	}
+	return tools, nil
+}
+
 // ListResources retrieves the list of resources from the connected MCP server, including all paginated results.
 func (v *ValidatorClient) ListResources() ([]*sdk.Resource, error) {
-	var all []*sdk.Resource
-	var cursor string
-	seenCursors := make(map[string]struct{})
-	pages := 0
-	for {
-		pages++
-		if pages > validatorPaginationMaxPages {
-			return nil, fmt.Errorf("list resources: exceeded maximum pagination limit of %d pages", validatorPaginationMaxPages)
-		}
-
-		result, err := v.session.ListResources(v.ctx, &sdk.ListResourcesParams{Cursor: cursor})
+	resources, err := paginate(v.ctx, func(ctx context.Context, cursor string) ([]*sdk.Resource, string, error) {
+		result, err := v.session.ListResources(ctx, &sdk.ListResourcesParams{Cursor: cursor})
 		if err != nil {
-			return nil, fmt.Errorf("list resources: %w", err)
+			return nil, "", err
 		}
-		all = append(all, result.Resources...)
-		if result.NextCursor == "" {
-			break
-		}
-		if _, ok := seenCursors[result.NextCursor]; ok {
-			return nil, fmt.Errorf("list resources: detected repeated pagination cursor %q", result.NextCursor)
-		}
-		seenCursors[result.NextCursor] = struct{}{}
-		cursor = result.NextCursor
+		return result.Resources, result.NextCursor, nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list resources: %w", err)
 	}
-	return all, nil
+	return resources, nil
 }
 
 // CallTool calls a tool on the MCP server
