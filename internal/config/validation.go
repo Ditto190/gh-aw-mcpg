@@ -250,7 +250,12 @@ func validateServerAuth(auth *AuthConfig, serverType, name, jsonPath string) err
 		return nil
 	}
 	if serverType != "http" {
-		return fmt.Errorf("server '%s': auth is only supported for HTTP servers (type: \"http\")", name)
+		logValidateServerFailed(name, fmt.Sprintf("auth is set on non-HTTP server type: %s", serverType))
+		return rules.UnsupportedField(
+			"auth",
+			fmt.Sprintf("server type %q", serverType),
+			jsonPath,
+			"Remove the auth configuration or change the server type to \"http\"")
 	}
 	return validateAuthConfig(auth, name, jsonPath)
 }
