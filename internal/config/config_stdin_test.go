@@ -287,7 +287,7 @@ func TestConvertStdinServerConfig_ValidationError(t *testing.T) {
 					Type: "github-oidc",
 				},
 			},
-			errorContains: "auth is only supported for HTTP servers",
+			errorContains: "server type \"stdio\"",
 		},
 	}
 
@@ -320,7 +320,7 @@ func TestConvertStdinServerConfig_StdioWithAuth(t *testing.T) {
 	var valErr *rules.ValidationError
 	require.True(t, errors.As(err, &valErr), "expected a *rules.ValidationError, got %T: %v", err, err)
 	assert.Equal(t, "auth", valErr.Field)
-	assert.Contains(t, valErr.Message, "auth is only supported for HTTP servers")
+	assert.Contains(t, valErr.Message, "server type \"stdio\"")
 	assert.Contains(t, valErr.JSONPath, "mcpServers.my-server")
 	assert.NotEmpty(t, valErr.Suggestion)
 }
