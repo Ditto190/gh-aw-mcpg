@@ -103,7 +103,7 @@ func (r *Registry) GetGuardInfo() map[string]string {
 	return info
 }
 
-// Close closes all registered guards that implement io.Closer.
+// Close closes all registered guards that implement Close(context.Context) error.
 // It should be called during server shutdown to release WASM runtime resources.
 func (r *Registry) Close(ctx context.Context) {
 	r.mu.Lock()
