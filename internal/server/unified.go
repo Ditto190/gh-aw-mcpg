@@ -718,10 +718,7 @@ func (us *UnifiedServer) GetToolHandler(backendID string, toolName string) func(
 
 // Close cleans up resources
 func (us *UnifiedServer) Close() error {
-	if us.guardRegistry != nil {
-		us.guardRegistry.Close(context.Background())
-	}
-	us.launcher.Close()
+	us.InitiateShutdown()
 	return nil
 }
 
