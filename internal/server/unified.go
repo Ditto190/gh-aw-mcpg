@@ -718,7 +718,7 @@ func (us *UnifiedServer) GetToolHandler(backendID string, toolName string) func(
 
 // Close cleans up resources
 func (us *UnifiedServer) Close() error {
-	us.launcher.Close()
+	us.InitiateShutdown()
 	return nil
 }
 
@@ -752,6 +752,11 @@ func (us *UnifiedServer) InitiateShutdown() int {
 		// Terminate all backend servers
 		logger.LogInfo("shutdown", "Terminating %d backend servers", serversTerminated)
 		us.launcher.Close()
+
+		// Release WASM runtime resources held by guards
+		if us.guardRegistry != nil {
+			us.guardRegistry.Close(context.Background())
+		}
 
 		logger.LogInfo("shutdown", "Backend servers terminated successfully")
 	})
