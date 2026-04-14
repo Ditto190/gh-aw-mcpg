@@ -574,7 +574,9 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 
 	backendResult, err := executeBackendToolCall(execCtx, us.launcher, serverID, sessionID, toolName, args)
 	if err != nil {
-		cb.RecordSuccess() // transport error ≠ rate limit; reset consecutive counter
+		// Transport errors (connection failure, JSON parse error, etc.) are not rate-limit
+		// events and must not affect the consecutive rate-limit counter. Leave the circuit
+		// breaker state unchanged so genuine rate-limit history is preserved.
 		execSpan.RecordError(err)
 		execSpan.SetStatus(codes.Error, err.Error())
 		httpStatusCode = 500

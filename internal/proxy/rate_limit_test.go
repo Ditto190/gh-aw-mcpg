@@ -33,7 +33,7 @@ func TestInjectRetryAfterIfRateLimited(t *testing.T) {
 		assert.Greater(t, secs, 0, "Retry-After should be positive")
 	})
 
-	t.Run("X-RateLimit-Remaining 0 injects Retry-After", func(t *testing.T) {
+	t.Run("X-Ratelimit-Remaining 0 injects Retry-After", func(t *testing.T) {
 		t.Parallel()
 		w := httptest.NewRecorder()
 		future := time.Now().Add(60 * time.Second)

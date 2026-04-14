@@ -422,13 +422,15 @@ func copyResponseHeaders(w http.ResponseWriter, resp *http.Response) {
 }
 
 // injectRetryAfterIfRateLimited inspects the upstream response for rate-limit signals
-// (HTTP 429 or X-RateLimit-Remaining == 0). When detected it:
+// (HTTP 429 or X-Ratelimit-Remaining == 0). When detected it:
 //  1. Injects a Retry-After header so the client knows when to retry.
 //  2. Logs the event at ERROR level so operators can monitor rate-limit incidents.
 func injectRetryAfterIfRateLimited(w http.ResponseWriter, resp *http.Response) {
 	is429 := resp.StatusCode == http.StatusTooManyRequests
-	remaining := resp.Header.Get("X-RateLimit-Remaining")
-	resetHeader := resp.Header.Get("X-RateLimit-Reset")
+	// Use Go's canonical header key form (textproto.CanonicalMIMEHeaderKey produces
+	// "X-Ratelimit-Remaining", matching GitHub's actual response headers).
+	remaining := resp.Header.Get("X-Ratelimit-Remaining")
+	resetHeader := resp.Header.Get("X-Ratelimit-Reset")
 
 	isRateLimited := is429 || remaining == "0"
 	if !isRateLimited {
@@ -441,7 +443,7 @@ func injectRetryAfterIfRateLimited(w http.ResponseWriter, resp *http.Response) {
 	w.Header().Set("Retry-After", strconv.Itoa(retryAfter))
 
 	logger.LogError("client",
-		"upstream rate limit hit: status=%d X-RateLimit-Remaining=%s X-RateLimit-Reset=%s retry-after=%ds",
+		"upstream rate limit hit: status=%d X-Ratelimit-Remaining=%s X-Ratelimit-Reset=%s retry-after=%ds",
 		resp.StatusCode, remaining, resetHeader, retryAfter)
 }
 
