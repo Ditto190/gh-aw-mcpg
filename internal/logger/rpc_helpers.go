@@ -129,9 +129,7 @@ func ExtractErrorMessage(line string) string {
 	cleanedLine = strings.TrimSpace(cleanedLine)
 
 	// If the line is too long (>200 chars), truncate it
-	if len(cleanedLine) > 200 {
-		cleanedLine = cleanedLine[:197] + "..."
-	}
+	cleanedLine = strutil.Truncate(cleanedLine, 197)
 
 	return cleanedLine
 }
