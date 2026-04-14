@@ -138,9 +138,9 @@ func TestWriteJSONResponse(t *testing.T) {
 		assert.Equal(t, "こんにちは 🌍", got["greeting"])
 	})
 
-	t.Run("unmarshalable body writes headers but no body", func(t *testing.T) {
+	t.Run("marshal failure writes headers but no body", func(t *testing.T) {
 		rec := httptest.NewRecorder()
-		// Channels cannot be marshalled to JSON; json.Marshal returns an error.
+		// Channels cannot be marshaled to JSON; json.Marshal returns an error.
 		WriteJSONResponse(rec, http.StatusInternalServerError, make(chan int))
 
 		// Content-Type and status code are committed before the marshal attempt,
