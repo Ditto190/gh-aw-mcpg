@@ -557,8 +557,8 @@ func TestCreateFilteredServer_EdgeCases(t *testing.T) {
 	})
 }
 
-// TestFilteredServerCache_MaxSize verifies that the cache allows growth beyond maxSize
-// when all entries are still active (non-expired), to avoid disrupting sessions.
+// TestFilteredServerCache_MaxSize verifies that when the cache is at capacity, the
+// least-recently-used entry is evicted to make room for a new entry.
 func TestFilteredServerCache_MaxSize(t *testing.T) {
 	assert := assert.New(t)
 
@@ -582,21 +582,30 @@ func TestFilteredServerCache_MaxSize(t *testing.T) {
 	assert.NotNil(s3)
 	assert.Equal(3, len(cache.servers), "Cache should have 3 entries")
 
-	// Adding a fourth entry should be allowed (no LRU eviction of active sessions)
+	// Manually set lastUsed to ensure deterministic LRU ordering:
+	// session1 is least recently used, session3 is most recently used.
+	now := time.Now()
+	cache.servers["backend/session1"].lastUsed = now.Add(-3 * time.Millisecond)
+	cache.servers["backend/session2"].lastUsed = now.Add(-2 * time.Millisecond)
+	cache.servers["backend/session3"].lastUsed = now.Add(-1 * time.Millisecond)
+
+	// Adding a fourth entry should evict the LRU entry (session1) to stay within maxSize
 	s4 := cache.getOrCreate("backend", "session4", creator)
 	assert.Equal(4, callCount, "Should have created a 4th server")
 	assert.NotNil(s4)
-	assert.Equal(4, len(cache.servers), "Cache should grow beyond maxSize for active sessions")
+	assert.Equal(3, len(cache.servers), "Cache should maintain maxSize by evicting the LRU entry")
 
-	// All sessions should still be present
+	// session1 (LRU) should have been evicted
 	_, session1Exists := cache.servers["backend/session1"]
-	assert.True(session1Exists, "session1 should still be cached")
+	assert.False(session1Exists, "session1 (LRU) should have been evicted to make room")
+
+	// session2, session3, session4 should still be present
 	_, session2Exists := cache.servers["backend/session2"]
 	assert.True(session2Exists, "session2 should still be cached")
 	_, session3Exists := cache.servers["backend/session3"]
 	assert.True(session3Exists, "session3 should still be cached")
 	_, session4Exists := cache.servers["backend/session4"]
-	assert.True(session4Exists, "session4 should still be cached")
+	assert.True(session4Exists, "session4 should be cached")
 }
 
 // TestFilteredServerCache_TTLEviction verifies that expired entries are evicted.

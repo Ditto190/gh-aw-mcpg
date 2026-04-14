@@ -4,8 +4,11 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/github/gh-aw-mcpg/internal/logger"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
+
+var logValidator = logger.New("testutil:validator")
 
 // ValidatorClient is a client for validating MCP servers
 type ValidatorClient struct {
@@ -19,7 +22,9 @@ func NewValidatorClient(ctx context.Context, transport sdk.Transport) (*Validato
 	client := sdk.NewClient(&sdk.Implementation{
 		Name:    "mcp-validator",
 		Version: "1.0.0",
-	}, &sdk.ClientOptions{})
+	}, &sdk.ClientOptions{
+		Logger: logger.NewSlogLoggerWithHandler(logValidator),
+	})
 
 	session, err := client.Connect(ctx, transport, nil)
 	if err != nil {
@@ -33,22 +38,40 @@ func NewValidatorClient(ctx context.Context, transport sdk.Transport) (*Validato
 	}, nil
 }
 
-// ListTools retrieves the list of tools from the connected MCP server
+// ListTools retrieves the list of tools from the connected MCP server, including all paginated results.
 func (v *ValidatorClient) ListTools() ([]*sdk.Tool, error) {
-	result, err := v.session.ListTools(v.ctx, &sdk.ListToolsParams{})
-	if err != nil {
-		return nil, fmt.Errorf("list tools: %w", err)
+	var all []*sdk.Tool
+	var cursor string
+	for {
+		result, err := v.session.ListTools(v.ctx, &sdk.ListToolsParams{Cursor: cursor})
+		if err != nil {
+			return nil, fmt.Errorf("list tools: %w", err)
+		}
+		all = append(all, result.Tools...)
+		if result.NextCursor == "" {
+			break
+		}
+		cursor = result.NextCursor
 	}
-	return result.Tools, nil
+	return all, nil
 }
 
-// ListResources retrieves the list of resources from the connected MCP server
+// ListResources retrieves the list of resources from the connected MCP server, including all paginated results.
 func (v *ValidatorClient) ListResources() ([]*sdk.Resource, error) {
-	result, err := v.session.ListResources(v.ctx, &sdk.ListResourcesParams{})
-	if err != nil {
-		return nil, fmt.Errorf("list resources: %w", err)
+	var all []*sdk.Resource
+	var cursor string
+	for {
+		result, err := v.session.ListResources(v.ctx, &sdk.ListResourcesParams{Cursor: cursor})
+		if err != nil {
+			return nil, fmt.Errorf("list resources: %w", err)
+		}
+		all = append(all, result.Resources...)
+		if result.NextCursor == "" {
+			break
+		}
+		cursor = result.NextCursor
 	}
-	return result.Resources, nil
+	return all, nil
 }
 
 // CallTool calls a tool on the MCP server

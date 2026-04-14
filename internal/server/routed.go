@@ -84,12 +84,22 @@ func (c *filteredServerCache) getOrCreate(backendID, sessionID string, creator f
 		return entry.server
 	}
 
-	// Safety bound: if at capacity after TTL eviction, log a warning but do not
-	// evict non-expired entries. Routed mode relies on reusing the same filtered
-	// server instance for a given (backend, session), and evicting an active entry
-	// would recreate that server mid-session, breaking StreamableHTTP semantics.
+	// When at capacity after TTL eviction, evict the least-recently-used entry
+	// to bound memory growth reliably. This may interrupt an active session for
+	// the evicted (backend, session) pair, but is preferable to unbounded growth.
 	if len(c.servers) >= c.maxSize {
-		logRouted.Printf("[CACHE] Max size reached (%d), retaining active entries until TTL eviction", c.maxSize)
+		lruKey := ""
+		lruTime := now // all real entries have lastUsed <= now
+		for k, entry := range c.servers {
+			if entry.lastUsed.Before(lruTime) {
+				lruKey = k
+				lruTime = entry.lastUsed
+			}
+		}
+		if lruKey != "" {
+			logRouted.Printf("[CACHE] Max size reached (%d), evicting LRU entry: key=%s (idle %s)", c.maxSize, auth.TruncateSessionID(lruKey), now.Sub(lruTime).Round(time.Second))
+			delete(c.servers, lruKey)
+		}
 	}
 
 	logRouted.Printf("[CACHE] Creating new filtered server: backend=%s, session=%s", backendID, auth.TruncateSessionID(sessionID))
