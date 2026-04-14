@@ -123,6 +123,10 @@ type StdinServerConfig struct {
 	// Auth configures upstream authentication for HTTP MCP servers.
 	Auth *AuthConfig `json:"auth,omitempty"`
 
+	// ConnectTimeout is the per-transport timeout (in seconds) for connecting to HTTP backends.
+	// Only applies to HTTP server types. Default: 30 seconds.
+	ConnectTimeout *int `json:"connect_timeout,omitempty"`
+
 	// AdditionalProperties stores any extra fields for custom server types
 	// This allows custom schemas to define their own fields beyond the standard ones
 	AdditionalProperties map[string]interface{} `json:"-"`
@@ -151,20 +155,21 @@ func (s *StdinServerConfig) UnmarshalJSON(data []byte) error {
 
 	// Known fields in the struct
 	knownFields := map[string]bool{
-		"type":           true,
-		"container":      true,
-		"entrypoint":     true,
-		"entrypointArgs": true,
-		"args":           true,
-		"mounts":         true,
-		"env":            true,
-		"url":            true,
-		"headers":        true,
-		"tools":          true,
-		"registry":       true,
-		"guard-policies": true,
-		"guard":          true,
-		"auth":           true,
+		"type":            true,
+		"container":       true,
+		"entrypoint":      true,
+		"entrypointArgs":  true,
+		"args":            true,
+		"mounts":          true,
+		"env":             true,
+		"url":             true,
+		"headers":         true,
+		"tools":           true,
+		"registry":        true,
+		"guard-policies":  true,
+		"guard":           true,
+		"auth":            true,
+		"connect_timeout": true,
 	}
 
 	// Store additional properties (fields not in the struct)
@@ -412,6 +417,9 @@ func convertStdinServerConfig(name string, server *StdinServerConfig, customSche
 			Registry:      server.Registry,
 			GuardPolicies: server.GuardPolicies,
 			Guard:         server.Guard,
+		}
+		if server.ConnectTimeout != nil {
+			serverCfg.ConnectTimeout = *server.ConnectTimeout
 		}
 		if server.Auth != nil {
 			serverCfg.Auth = &AuthConfig{

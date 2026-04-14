@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os/exec"
 	"strings"
@@ -70,6 +71,7 @@ type Connection struct {
 	httpSessionID     string            // Session ID returned by the HTTP backend
 	httpTransportType HTTPTransportType // Type of HTTP transport in use
 	keepAliveInterval time.Duration     // Keepalive interval for SDK transports (0 = disabled)
+	connectTimeout    time.Duration     // Per-transport connect timeout for SDK transports
 	// sessionMu protects the mutable session fields: httpSessionID, session, and client.
 	// Always use getHTTPSessionID() or getSDKSession() to read these fields; the
 	// reconnect functions (reconnectPlainJSON, reconnectSDKTransport) hold the full Lock.
@@ -194,17 +196,29 @@ func NewConnection(ctx context.Context, serverID, command string, args []string,
 // Authorization header from the headers map.
 //
 // This ensures compatibility with all types of HTTP MCP servers.
-func NewHTTPConnection(ctx context.Context, serverID, url string, headers map[string]string, oidcProvider *oidc.Provider, oidcAudience string, keepAlive time.Duration) (*Connection, error) {
-	logger.LogInfo("backend", "Creating HTTP MCP connection with transport fallback, url=%s", url)
+func NewHTTPConnection(ctx context.Context, serverID, url string, headers map[string]string, oidcProvider *oidc.Provider, oidcAudience string, keepAlive time.Duration, connectTimeout time.Duration) (*Connection, error) {
+	// Apply default connect timeout when not specified
+	if connectTimeout <= 0 {
+		connectTimeout = 30 * time.Second
+	}
+	logger.LogInfo("backend", "Creating HTTP MCP connection with transport fallback, url=%s, connectTimeout=%v", url, connectTimeout)
 	ctx, cancel := context.WithCancel(ctx)
 
-	// Create an HTTP client with appropriate timeouts
+	// Create an HTTP client with appropriate timeouts.
+	// Keep the existing overall request timeout, but also apply connectTimeout to
+	// the underlying HTTP transport so plain JSON-RPC fallback attempts honor the
+	// configured per-attempt connection timeout instead of waiting for the full
+	// client timeout.
 	httpClient := &http.Client{
 		Timeout: 120 * time.Second, // Overall request timeout
 		Transport: &http.Transport{
-			MaxIdleConns:        10,
-			IdleConnTimeout:     90 * time.Second,
-			TLSHandshakeTimeout: 10 * time.Second,
+			DialContext: (&net.Dialer{
+				Timeout: connectTimeout,
+			}).DialContext,
+			MaxIdleConns:          10,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ResponseHeaderTimeout: connectTimeout,
 		},
 	}
 
@@ -232,7 +246,7 @@ func NewHTTPConnection(ctx context.Context, serverID, url string, headers map[st
 
 	// Try 1: Streamable HTTP (2025-03-26 spec)
 	logConn.Printf("Attempting streamable HTTP transport for %s", url)
-	conn, err := tryStreamableHTTPTransport(ctx, cancel, serverID, url, headers, headerClient, keepAlive)
+	conn, err := tryStreamableHTTPTransport(ctx, cancel, serverID, url, headers, headerClient, keepAlive, connectTimeout)
 	if err == nil {
 		logger.LogInfo("backend", "Successfully connected using streamable HTTP transport, url=%s", url)
 		return conn, nil
@@ -241,7 +255,7 @@ func NewHTTPConnection(ctx context.Context, serverID, url string, headers map[st
 
 	// Try 2: SSE (2024-11-05 spec)
 	logConn.Printf("Attempting SSE transport for %s", url)
-	conn, err = trySSETransport(ctx, cancel, serverID, url, headers, headerClient, keepAlive)
+	conn, err = trySSETransport(ctx, cancel, serverID, url, headers, headerClient, keepAlive, connectTimeout)
 	if err == nil {
 		logger.LogWarn("backend", "⚠️  MCP over SSE (2024-11-05 spec) is DEPRECATED for url=%s. Please migrate to streamable HTTP transport (2025-03-26 spec).", url)
 		logger.LogInfo("backend", "Configured HTTP MCP server with SSE transport: %s", url)
@@ -366,7 +380,11 @@ func (c *Connection) reconnectSDKTransport() error {
 		return fmt.Errorf("cannot reconnect: unsupported transport type %s", c.httpTransportType)
 	}
 
-	connectCtx, cancel := context.WithTimeout(c.ctx, 10*time.Second)
+	timeout := c.connectTimeout
+	if timeout == 0 {
+		timeout = 30 * time.Second
+	}
+	connectCtx, cancel := context.WithTimeout(c.ctx, timeout)
 	defer cancel()
 
 	session, err := client.Connect(connectCtx, transport, nil)
