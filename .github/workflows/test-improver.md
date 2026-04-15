@@ -14,6 +14,7 @@ network:
   allowed:
     - defaults
     - containers
+    - go
 
 steps:
   - name: Set up Go
@@ -39,17 +40,7 @@ tools:
     allowed-repos: ["github/gh-aw-mcpg"]
     min-integrity: unapproved
   edit:
-  bash:
-    - "find internal -name '*_test.go' -type f"
-    - "cat internal/**/*_test.go"
-    - "cat internal/**/*.go"
-    - "go test -v ./..."
-    - "go test -coverprofile=coverage.out ./..."
-    - "go tool cover -func=coverage.out"
-    - "go vet ./..."
-    - "gofmt -l ."
-    - "grep -rn 'func Test' internal/"
-    - "wc -l internal/**/*_test.go"
+  bash: true
 
 timeout-minutes: 30
 strict: true
