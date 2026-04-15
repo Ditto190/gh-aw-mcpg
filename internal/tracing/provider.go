@@ -36,6 +36,7 @@ import (
 
 	"github.com/github/gh-aw-mcpg/internal/config"
 	"github.com/github/gh-aw-mcpg/internal/logger"
+	"github.com/github/gh-aw-mcpg/internal/version"
 )
 
 const instrumentationName = "github.com/github/gh-aw-mcpg"
@@ -251,10 +252,13 @@ func InitProvider(ctx context.Context, cfg *config.TracingConfig) (*Provider, er
 		return nil, fmt.Errorf("failed to create OTLP trace exporter: %w", err)
 	}
 
-	// Build resource with service name and version
+	// Build resource with service name, version, and SDK metadata
 	res, err := resource.New(ctx,
+		resource.WithTelemetrySDK(),
+		resource.WithSchemaURL(semconv.SchemaURL),
 		resource.WithAttributes(
 			semconv.ServiceName(serviceName),
+			semconv.ServiceVersion(version.Get()),
 		),
 		resource.WithProcessPID(),
 		resource.WithHost(),

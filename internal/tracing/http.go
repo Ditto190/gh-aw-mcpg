@@ -8,12 +8,13 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/propagation"
+	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 	oteltrace "go.opentelemetry.io/otel/trace"
 )
 
 // WrapHTTPHandler wraps an http.Handler with an OpenTelemetry server span.
-// A span named spanName is created for every request, with http.method and
-// http.path set automatically. Extra attrs are merged in.
+// A span named spanName is created for every request, with
+// http.request.method and url.path set automatically. Extra attrs are merged in.
 //
 // Incoming W3C traceparent/tracestate headers are extracted so that an
 // agent-originated trace is continued; if no such headers are present a fresh
@@ -35,8 +36,8 @@ func WrapHTTPHandler(next http.Handler, spanName string, extraAttrs ...attribute
 		logTracing.Printf("Handling request: span=%s, method=%s, path=%s, remoteParent=%v", spanName, r.Method, r.URL.Path, hasRemoteParent)
 
 		attrs := append([]attribute.KeyValue{
-			attribute.String("http.method", r.Method),
-			attribute.String("http.path", r.URL.Path),
+			semconv.HTTPRequestMethodKey.String(r.Method),
+			semconv.URLPathKey.String(r.URL.Path),
 		}, extraAttrs...)
 
 		ctx, span := t.Start(ctx, spanName,
