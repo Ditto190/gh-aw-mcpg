@@ -16,6 +16,7 @@ network:
   allowed:
     - defaults
     - containers
+    - go
 
 safe-outputs:
   threat-detection:
@@ -38,15 +39,7 @@ tools:
     allowed-repos: ["github/gh-aw-mcpg"]
     min-integrity: unapproved
   edit:
-  bash:
-    - "find internal -name '*.go' -type f ! -name '*_test.go'"
-    - "grep -r 'var log = logger.New' internal --include='*.go'"
-    - "grep -n 'func ' internal/*.go"
-    - "head -n * internal/**/*.go"
-    - "wc -l internal/**/*.go"
-    - "go build -o awmg"
-    - "go test ./..."
-    - "go vet ./..."
+  bash: true
   cache-memory:
 
 timeout-minutes: 15
