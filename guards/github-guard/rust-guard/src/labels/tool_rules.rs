@@ -557,6 +557,53 @@ pub fn apply_tool_labels(
             integrity = writer_integrity(repo_id, ctx);
         }
 
+        // === Granular issue update tools (repo-scoped writes) ===
+        "update_issue_assignees"
+        | "update_issue_body"
+        | "update_issue_labels"
+        | "update_issue_milestone"
+        | "update_issue_state"
+        | "update_issue_title"
+        | "update_issue_type" => {
+            // Granular PATCH tools that modify individual issue fields.
+            // S = S(repo); I = writer
+            secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
+            integrity = writer_integrity(repo_id, ctx);
+        }
+
+        // === Sub-issue management tools (repo-scoped writes) ===
+        "add_sub_issue" | "remove_sub_issue" | "reprioritize_sub_issue" => {
+            // Sub-issue link creation, removal, and reordering.
+            // S = S(repo); I = writer
+            secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
+            integrity = writer_integrity(repo_id, ctx);
+        }
+
+        // === Granular PR update tools (repo-scoped read-write) ===
+        "update_pull_request_body"
+        | "update_pull_request_draft_state"
+        | "update_pull_request_state"
+        | "update_pull_request_title" => {
+            // Granular PATCH tools that modify individual PR fields.
+            // S = S(repo); I = writer
+            secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
+            integrity = writer_integrity(repo_id, ctx);
+        }
+
+        // === PR review tools (repo-scoped writes) ===
+        "add_pull_request_review_comment"
+        | "create_pull_request_review"
+        | "delete_pending_pull_request_review"
+        | "request_pull_request_reviewers"
+        | "resolve_review_thread"
+        | "submit_pending_pull_request_review"
+        | "unresolve_review_thread" => {
+            // PR review creation, commenting, submission, and thread resolution.
+            // S = S(repo); I = writer
+            secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
+            integrity = writer_integrity(repo_id, ctx);
+        }
+
         // === Repo content and structure write operations ===
         "create_or_update_file" | "push_files" | "delete_file" | "create_branch"
         | "update_pull_request_branch" | "create_repository" | "fork_repository" => {
