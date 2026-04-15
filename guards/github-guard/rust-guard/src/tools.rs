@@ -74,15 +74,6 @@ pub const WRITE_OPERATIONS: &[&str] = &[
     // Pre-emptive: gist deletion (gh gist delete)
     "delete_gist", // DELETE /gists/{gist_id}
 
-    // Granular issue update tools (alongside issue_write composite)
-    "update_issue_assignees", // PATCH /repos/.../issues/{number} — assignees
-    "update_issue_body",      // PATCH /repos/.../issues/{number} — body text
-    "update_issue_labels",    // PATCH /repos/.../issues/{number} — labels
-    "update_issue_milestone", // PATCH /repos/.../issues/{number} — milestone
-    "update_issue_state",     // PATCH /repos/.../issues/{number} — open/closed
-    "update_issue_title",     // PATCH /repos/.../issues/{number} — title
-    "update_issue_type",      // PATCH /repos/.../issues/{number} — type
-
     // Sub-issue management tools (alongside sub_issue_write composite)
     "add_sub_issue",          // POST  /repos/.../issues/{number}/sub_issues
     "remove_sub_issue",       // DELETE/POST — remove sub-issue link
