@@ -4736,6 +4736,102 @@ mod tests {
     }
 
     #[test]
+    fn test_apply_tool_labels_granular_issue_update_writer_integrity() {
+        let ctx = default_ctx();
+        let repo_id = "github/copilot";
+        let tool_args = json!({
+            "owner": "github",
+            "repo": "copilot",
+            "issue_number": 1
+        });
+
+        for tool in &[
+            "update_issue_assignees",
+            "update_issue_body",
+            "update_issue_labels",
+            "update_issue_milestone",
+            "update_issue_state",
+            "update_issue_title",
+            "update_issue_type",
+        ] {
+            let (secrecy, integrity, _desc) = apply_tool_labels(
+                tool,
+                &tool_args,
+                repo_id,
+                vec![],
+                vec![],
+                String::new(),
+                &ctx,
+            );
+
+            // Repo-scoped secrecy (public repo in default_ctx → empty)
+            assert_eq!(secrecy, vec![] as Vec<String>, "{tool} secrecy mismatch");
+            assert_eq!(integrity, writer_integrity(repo_id, &ctx), "{tool} should have writer integrity");
+        }
+    }
+
+    #[test]
+    fn test_apply_tool_labels_granular_sub_issue_tools_writer_integrity() {
+        let ctx = default_ctx();
+        let repo_id = "github/copilot";
+        let tool_args = json!({
+            "owner": "github",
+            "repo": "copilot",
+            "issue_number": 1,
+            "sub_issue_id": 2
+        });
+
+        for tool in &["add_sub_issue", "remove_sub_issue", "reprioritize_sub_issue"] {
+            let (secrecy, integrity, _desc) = apply_tool_labels(
+                tool,
+                &tool_args,
+                repo_id,
+                vec![],
+                vec![],
+                String::new(),
+                &ctx,
+            );
+
+            assert_eq!(secrecy, vec![] as Vec<String>, "{tool} secrecy mismatch");
+            assert_eq!(integrity, writer_integrity(repo_id, &ctx), "{tool} should have writer integrity");
+        }
+    }
+
+    #[test]
+    fn test_apply_tool_labels_granular_pr_review_tools_writer_integrity() {
+        let ctx = default_ctx();
+        let repo_id = "github/copilot";
+        let tool_args = json!({
+            "owner": "github",
+            "repo": "copilot",
+            "pullNumber": 42
+        });
+
+        for tool in &[
+            "add_pull_request_review_comment",
+            "create_pull_request_review",
+            "delete_pending_pull_request_review",
+            "request_pull_request_reviewers",
+            "resolve_review_thread",
+            "submit_pending_pull_request_review",
+            "unresolve_review_thread",
+        ] {
+            let (secrecy, integrity, _desc) = apply_tool_labels(
+                tool,
+                &tool_args,
+                repo_id,
+                vec![],
+                vec![],
+                String::new(),
+                &ctx,
+            );
+
+            assert_eq!(secrecy, vec![] as Vec<String>, "{tool} secrecy mismatch");
+            assert_eq!(integrity, writer_integrity(repo_id, &ctx), "{tool} should have writer integrity");
+        }
+    }
+
+    #[test]
     fn test_apply_tool_labels_fork_repository_writer_integrity() {
         let ctx = default_ctx();
         let repo_id = "github/copilot";
