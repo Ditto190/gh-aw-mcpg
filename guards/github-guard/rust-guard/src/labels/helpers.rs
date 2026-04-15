@@ -1291,6 +1291,63 @@ pub fn collaborator_permission_floor(
     }
 }
 
+/// Elevate integrity via collaborator permission fallback for org repos.
+///
+/// When `author_association` gives insufficient integrity (fewer than 3 labels,
+/// i.e. below approved/writer level), this function checks the user's effective
+/// permission via the GitHub collaborator permission API. This correctly handles
+/// org owners/admins whose `author_association` is reported as "NONE" because
+/// their access is inherited through org ownership rather than direct collaboration.
+///
+/// Parameters:
+/// - `author_login`: the issue/PR/commit author's GitHub login
+/// - `repo_full_name`: "owner/repo" string
+/// - `resource_label`: label for logging (e.g. "issue", "pr", "commit")
+/// - `resource_id`: number or identifier for logging
+/// - `integrity`: current integrity labels to potentially elevate
+/// - `ctx`: policy context
+///
+/// Returns the (potentially elevated) integrity labels.
+pub fn elevate_via_collaborator_permission(
+    author_login: &str,
+    repo_full_name: &str,
+    resource_label: &str,
+    resource_id: &str,
+    integrity: Vec<String>,
+    ctx: &PolicyContext,
+) -> Vec<String> {
+    if integrity.len() >= 3 || author_login.is_empty() {
+        return integrity;
+    }
+    let (owner, repo) = match repo_full_name.split_once('/') {
+        Some((o, r)) if !o.is_empty() && !r.is_empty() => (o, r),
+        _ => return integrity,
+    };
+    let is_org = super::backend::is_repo_org_owned(owner, repo).unwrap_or(false);
+    if !is_org {
+        return integrity;
+    }
+    crate::log_info(&format!(
+        "[integrity] {}:{}: author_association floor insufficient (len={}), checking collaborator permission for {}",
+        resource_label, resource_id, integrity.len(), author_login
+    ));
+    if let Some(collab) = super::backend::get_collaborator_permission(owner, repo, author_login) {
+        let perm_floor = collaborator_permission_floor(repo_full_name, collab.permission.as_deref(), ctx);
+        let merged = max_integrity(repo_full_name, integrity, perm_floor, ctx);
+        crate::log_info(&format!(
+            "[integrity] {}:{}: collaborator permission={:?} → merged floor len={}",
+            resource_label, resource_id, collab.permission, merged.len()
+        ));
+        merged
+    } else {
+        crate::log_info(&format!(
+            "[integrity] {}:{}: collaborator permission lookup returned None for {}, keeping author_association floor",
+            resource_label, resource_id, author_login
+        ));
+        integrity
+    }
+}
+
 /// Check if a branch/ref should be treated as default branch context
 pub fn is_default_branch_ref(branch_ref: &str) -> bool {
     branch_ref.is_empty()
@@ -1417,6 +1474,16 @@ pub fn pr_integrity(
         }
     }
 
+    // Collaborator permission fallback for org repos (handles org owners/admins
+    // whose author_association is "NONE" due to inherited org access).
+    if !repo_private {
+        let number = item.get(field_names::NUMBER).and_then(|v| v.as_u64()).unwrap_or(0);
+        integrity = elevate_via_collaborator_permission(
+            author_login, repo_full_name, "pr", &format!("{}#{}", repo_full_name, number),
+            integrity, ctx,
+        );
+    }
+
     if repo_private {
         integrity = max_integrity(
             repo_full_name,
@@ -1527,6 +1594,16 @@ pub fn issue_integrity(
         }
     }
 
+    // Collaborator permission fallback for org repos (handles org owners/admins
+    // whose author_association is "NONE" due to inherited org access).
+    if !repo_private {
+        let number = item.get(field_names::NUMBER).and_then(|v| v.as_u64()).unwrap_or(0);
+        integrity = elevate_via_collaborator_permission(
+            author_login, repo_full_name, "issue", &format!("{}#{}", repo_full_name, number),
+            integrity, ctx,
+        );
+    }
+
     if repo_private {
         integrity = max_integrity(
             repo_full_name,
@@ -1578,6 +1655,17 @@ pub fn commit_integrity(
     }
 
     let mut integrity = author_association_floor(item, repo_full_name, ctx);
+
+    // Collaborator permission fallback for org repos (handles org owners/admins
+    // whose author_association is "NONE" due to inherited org access).
+    if !repo_private {
+        let sha = item.get("sha").and_then(|v| v.as_str()).unwrap_or("unknown");
+        let short_sha = if sha.len() > 8 { &sha[..8] } else { sha };
+        integrity = elevate_via_collaborator_permission(
+            author_login, repo_full_name, "commit", &format!("{}@{}", repo_full_name, short_sha),
+            integrity, ctx,
+        );
+    }
 
     if repo_private {
         integrity = max_integrity(
