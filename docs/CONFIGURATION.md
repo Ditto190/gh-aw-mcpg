@@ -174,9 +174,9 @@ Run `./awmg --help` for full CLI options. Key flags:
 
 - **`connect_timeout`** (optional, HTTP servers only): Per-transport connection timeout in seconds for connecting to HTTP backends. The gateway tries streamable HTTP then SSE transports in sequence; this timeout applies to each attempt. Default: `30`.
 
-- **`rate_limit_threshold`** (optional, TOML/JSON file configs only): Number of consecutive rate-limit errors from this backend that will trip the circuit breaker (transition CLOSED → OPEN). When OPEN, requests are immediately rejected until the cooldown period elapses. **Not available in JSON stdin format.** Default: `3`.
+- **`rate_limit_threshold`** (optional, TOML/JSON file configs only): Number of consecutive rate-limit errors from this backend that will trip the circuit breaker (transition CLOSED → OPEN). When OPEN, requests are immediately rejected until the breaker is eligible to transition to HALF-OPEN again; this is normally controlled by `rate_limit_cooldown`, but if the gateway knows an upstream rate-limit reset time (for example from response headers or parsed tool error text), that reset time takes precedence. **Not available in JSON stdin format.** Default: `3`.
 
-- **`rate_limit_cooldown`** (optional, TOML/JSON file configs only): Seconds the circuit breaker stays OPEN before allowing a single probe request (transition OPEN → HALF-OPEN). If the probe succeeds the circuit closes; if rate-limited again it re-opens. **Not available in JSON stdin format.** Default: `60`.
+- **`rate_limit_cooldown`** (optional, TOML/JSON file configs only): Default number of seconds before the circuit breaker allows a single probe request (transition OPEN → HALF-OPEN). If the gateway knows an upstream rate-limit reset time, it uses that reset time instead of this cooldown to decide when to probe again. If the probe succeeds the circuit closes; if rate-limited again it re-opens. **Not available in JSON stdin format.** Default: `60`.
 
 - **`working_directory`** (optional, TOML format only): Working directory for the server process
   - **Note**: This field is parsed and stored but not yet implemented in the launcher; it has no runtime effect currently
