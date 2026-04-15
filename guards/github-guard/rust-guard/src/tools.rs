@@ -73,6 +73,29 @@ pub const WRITE_OPERATIONS: &[&str] = &[
     "delete_release", // DELETE /repos/.../releases/{id}
     // Pre-emptive: gist deletion (gh gist delete)
     "delete_gist", // DELETE /gists/{gist_id}
+
+    // Granular issue update tools (alongside issue_write composite)
+    "update_issue_assignees", // PATCH /repos/.../issues/{number} — assignees
+    "update_issue_body",      // PATCH /repos/.../issues/{number} — body text
+    "update_issue_labels",    // PATCH /repos/.../issues/{number} — labels
+    "update_issue_milestone", // PATCH /repos/.../issues/{number} — milestone
+    "update_issue_state",     // PATCH /repos/.../issues/{number} — open/closed
+    "update_issue_title",     // PATCH /repos/.../issues/{number} — title
+    "update_issue_type",      // PATCH /repos/.../issues/{number} — type
+
+    // Sub-issue management tools (alongside sub_issue_write composite)
+    "add_sub_issue",          // POST  /repos/.../issues/{number}/sub_issues
+    "remove_sub_issue",       // DELETE/POST — remove sub-issue link
+    "reprioritize_sub_issue", // PATCH — reorder sub-issues
+
+    // PR review tools (alongside pull_request_review_write composite)
+    "add_pull_request_review_comment",    // POST /repos/.../pulls/{number}/comments
+    "create_pull_request_review",         // POST /repos/.../pulls/{number}/reviews
+    "delete_pending_pull_request_review", // DELETE /repos/.../pulls/{number}/reviews/{id}
+    "request_pull_request_reviewers",     // POST /repos/.../pulls/{number}/requested_reviewers
+    "resolve_review_thread",              // PUT  /graphql — resolveReviewThread
+    "submit_pending_pull_request_review", // POST /repos/.../pulls/{number}/reviews/{id}/events
+    "unresolve_review_thread",            // PUT  /graphql — unresolveReviewThread
 ];
 
 /// Read-write operations that both read and modify data
@@ -89,6 +112,12 @@ pub const READ_WRITE_OPERATIONS: &[&str] = &[
     "create_agent_task",
     // Deprecated alias coverage
     "update_project_item", // deprecated alias for projects_write (updateProjectV2ItemFieldValue)
+
+    // Granular PR update tools (alongside update_pull_request composite)
+    "update_pull_request_body",        // PATCH — modifies PR body
+    "update_pull_request_draft_state", // PATCH — converts to/from draft
+    "update_pull_request_state",       // PATCH — opens or closes a PR
+    "update_pull_request_title",       // PATCH — modifies PR title
 ];
 
 /// Check if a tool is a write operation
@@ -303,6 +332,76 @@ mod tests {
             assert!(
                 is_write_operation(op),
                 "{} (pre-emptive CLI) must be classified as a write operation",
+                op
+            );
+        }
+    }
+
+    #[test]
+    fn test_granular_issue_update_tools_are_write_operations() {
+        for op in &[
+            "update_issue_assignees",
+            "update_issue_body",
+            "update_issue_labels",
+            "update_issue_milestone",
+            "update_issue_state",
+            "update_issue_title",
+            "update_issue_type",
+        ] {
+            assert!(
+                is_write_operation(op),
+                "{} must be classified as a write operation",
+                op
+            );
+        }
+    }
+
+    #[test]
+    fn test_sub_issue_management_tools_are_write_operations() {
+        for op in &["add_sub_issue", "remove_sub_issue", "reprioritize_sub_issue"] {
+            assert!(
+                is_write_operation(op),
+                "{} must be classified as a write operation",
+                op
+            );
+        }
+    }
+
+    #[test]
+    fn test_pr_review_tools_are_write_operations() {
+        for op in &[
+            "add_pull_request_review_comment",
+            "create_pull_request_review",
+            "delete_pending_pull_request_review",
+            "request_pull_request_reviewers",
+            "resolve_review_thread",
+            "submit_pending_pull_request_review",
+            "unresolve_review_thread",
+        ] {
+            assert!(
+                is_write_operation(op),
+                "{} must be classified as a write operation",
+                op
+            );
+        }
+    }
+
+    #[test]
+    fn test_granular_pr_update_tools_are_read_write_operations() {
+        for op in &[
+            "update_pull_request_body",
+            "update_pull_request_draft_state",
+            "update_pull_request_state",
+            "update_pull_request_title",
+        ] {
+            assert!(
+                is_read_write_operation(op),
+                "{} must be classified as a read-write operation",
+                op
+            );
+            assert!(
+                !is_write_operation(op),
+                "{} should not be in WRITE_OPERATIONS (it is in READ_WRITE_OPERATIONS)",
                 op
             );
         }
