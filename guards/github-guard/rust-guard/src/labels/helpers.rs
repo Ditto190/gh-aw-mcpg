@@ -1293,11 +1293,20 @@ pub fn collaborator_permission_floor(
 
 /// Elevate integrity via collaborator permission fallback for org repos.
 ///
-/// When `author_association` gives insufficient integrity (fewer than 3 labels,
-/// i.e. below approved/writer level), this function checks the user's effective
-/// permission via the GitHub collaborator permission API. This correctly handles
-/// org owners/admins whose `author_association` is reported as "NONE" because
-/// their access is inherited through org ownership rather than direct collaboration.
+/// Rank threshold for writer-level integrity (none=1, reader=2, writer=3, merged=4).
+const WRITER_RANK: u8 = 3;
+
+/// Attempt to elevate integrity for an author in an org-owned repository
+/// by checking their effective collaborator permission.
+///
+/// When `author_association` gives insufficient integrity (below writer level),
+/// this function checks the user's effective permission via the GitHub
+/// collaborator permission API. This correctly handles org owners/admins whose
+/// `author_association` is reported as "NONE" because their access is inherited
+/// through org ownership rather than direct collaboration.
+///
+/// Backend calls are cached per-user, so repeated lookups for the same author
+/// across list/search items are inexpensive.
 ///
 /// Parameters:
 /// - `author_login`: the issue/PR/commit author's GitHub login
@@ -1316,7 +1325,7 @@ pub fn elevate_via_collaborator_permission(
     integrity: Vec<String>,
     ctx: &PolicyContext,
 ) -> Vec<String> {
-    if integrity.len() >= 3 || author_login.is_empty() {
+    if integrity_rank(repo_full_name, &integrity, ctx) >= WRITER_RANK || author_login.is_empty() {
         return integrity;
     }
     let (owner, repo) = match repo_full_name.split_once('/') {
@@ -1327,20 +1336,20 @@ pub fn elevate_via_collaborator_permission(
     if !is_org {
         return integrity;
     }
-    crate::log_info(&format!(
-        "[integrity] {}:{}: author_association floor insufficient (len={}), checking collaborator permission for {}",
-        resource_label, resource_id, integrity.len(), author_login
+    crate::log_debug(&format!(
+        "[integrity] {}:{}: author_association floor below writer (rank={}), checking collaborator permission for {}",
+        resource_label, resource_id, integrity_rank(repo_full_name, &integrity, ctx), author_login
     ));
     if let Some(collab) = super::backend::get_collaborator_permission(owner, repo, author_login) {
         let perm_floor = collaborator_permission_floor(repo_full_name, collab.permission.as_deref(), ctx);
         let merged = max_integrity(repo_full_name, integrity, perm_floor, ctx);
-        crate::log_info(&format!(
-            "[integrity] {}:{}: collaborator permission={:?} → merged floor len={}",
-            resource_label, resource_id, collab.permission, merged.len()
+        crate::log_debug(&format!(
+            "[integrity] {}:{}: collaborator permission={:?} → merged rank={}",
+            resource_label, resource_id, collab.permission, integrity_rank(repo_full_name, &merged, ctx)
         ));
         merged
     } else {
-        crate::log_info(&format!(
+        crate::log_debug(&format!(
             "[integrity] {}:{}: collaborator permission lookup returned None for {}, keeping author_association floor",
             resource_label, resource_id, author_login
         ));
