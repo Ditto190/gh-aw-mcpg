@@ -11,6 +11,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/propagation"
+	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 	oteltrace "go.opentelemetry.io/otel/trace"
 
 	"github.com/github/gh-aw-mcpg/internal/auth"
@@ -227,8 +228,8 @@ func WithOTELTracing(next http.Handler, tag string) http.Handler {
 
 		ctx, span := t.Start(ctx, "gateway.request",
 			oteltrace.WithAttributes(
-				attribute.String("http.method", r.Method),
-				attribute.String("http.path", r.URL.Path),
+				semconv.HTTPRequestMethodKey.String(r.Method),
+				semconv.URLPathKey.String(r.URL.Path),
 				attribute.String("gateway.tag", tag),
 			),
 			oteltrace.WithSpanKind(oteltrace.SpanKindServer),

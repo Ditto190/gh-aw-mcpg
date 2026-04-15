@@ -269,7 +269,7 @@ func (s *Server) initGuardPolicy(ctx context.Context, policyJSON string, trusted
 // Every request is wrapped with an OTEL "proxy.request" span so the full
 // proxy lifecycle (DIFC pipeline + GitHub API round-trip) appears in traces.
 func (s *Server) Handler() http.Handler {
-	return tracing.WrapHTTPHandler(&proxyHandler{server: s}, "proxy.request")
+	return tracing.WrapHTTPHandler(&proxyHandler{server: s, tracer: tracing.Tracer()}, "proxy.request")
 }
 
 // restBackendCaller translates guard CallTool requests into GitHub REST API

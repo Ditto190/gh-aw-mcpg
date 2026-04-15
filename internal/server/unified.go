@@ -13,6 +13,7 @@ import (
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
+	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 	oteltrace "go.opentelemetry.io/otel/trace"
 
 	"github.com/github/gh-aw-mcpg/internal/config"
@@ -118,6 +119,17 @@ type UnifiedServer struct {
 
 	// Health monitoring
 	healthMonitor *launcher.HealthMonitor
+
+	// tracer is cached at construction to avoid calling otel.Tracer on every request.
+	tracer oteltrace.Tracer
+}
+
+// getTracer returns the cached tracer if set, otherwise falls back to the global tracer.
+func (us *UnifiedServer) getTracer() oteltrace.Tracer {
+	if us.tracer != nil {
+		return us.tracer
+	}
+	return tracing.Tracer()
 }
 
 // NewUnified creates a new unified MCP server
@@ -160,6 +172,9 @@ func NewUnified(ctx context.Context, cfg *config.Config) (*UnifiedServer, error)
 		capabilities:  difc.NewCapabilities(),
 		evaluator:     difc.NewEvaluatorWithMode(difcMode),
 		cfg:           cfg, // Store config for guard loading
+
+		// Cache tracer at construction to avoid calling otel.Tracer on every request.
+		tracer: tracing.Tracer(),
 	}
 
 	// Create MCP server with logger
@@ -453,7 +468,7 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 
 	// Start an OTEL span for the full tool call lifecycle (spans all phases 0–6)
 	// Attribute names follow MCP Gateway Specification §4.1.3.6
-	ctx, toolSpan := tracing.Tracer().Start(ctx, "mcp.tool_call",
+	ctx, toolSpan := us.getTracer().Start(ctx, "mcp.tool_call",
 		oteltrace.WithAttributes(
 			attribute.String("mcp.server", serverID),
 			attribute.String("mcp.method", "tools/call"),
@@ -465,7 +480,7 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 	// It starts at 200 and is updated to 500 (error) or 403 (access denied) before each exit.
 	httpStatusCode := 200
 	defer func() {
-		toolSpan.SetAttributes(attribute.Int("http.status_code", httpStatusCode))
+		toolSpan.SetAttributes(semconv.HTTPResponseStatusCodeKey.Int(httpStatusCode))
 		toolSpan.End()
 	}()
 
@@ -557,7 +572,7 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 	}
 
 	// **Phase 3: Execute the backend call**
-	execCtx, execSpan := tracing.Tracer().Start(ctx, "gateway.backend.execute",
+	execCtx, execSpan := us.getTracer().Start(ctx, "gateway.backend.execute",
 		oteltrace.WithAttributes(
 			attribute.String("tool.name", toolName),
 			attribute.String("server.id", serverID),

@@ -12,6 +12,7 @@ import (
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
+	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 	oteltrace "go.opentelemetry.io/otel/trace"
 
 	"github.com/github/gh-aw-mcpg/internal/difc"
@@ -34,6 +35,15 @@ func writeDIFCForbidden(w http.ResponseWriter, message string) {
 // proxyHandler implements http.Handler and runs the DIFC pipeline on proxied requests.
 type proxyHandler struct {
 	server *Server
+	tracer oteltrace.Tracer
+}
+
+// getTracer returns the cached tracer if set, otherwise falls back to the global tracer.
+func (h *proxyHandler) getTracer() oteltrace.Tracer {
+	if h.tracer != nil {
+		return h.tracer
+	}
+	return tracing.Tracer()
 }
 
 func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -132,10 +142,10 @@ func (h *proxyHandler) handleWithDIFC(w http.ResponseWriter, r *http.Request, pa
 	backend := &restBackendCaller{server: s, clientAuth: r.Header.Get("Authorization")}
 
 	// Start a DIFC pipeline span covering all phases for this request
-	ctx, difcSpan := tracing.Tracer().Start(ctx, "proxy.difc_pipeline",
+	ctx, difcSpan := h.getTracer().Start(ctx, "proxy.difc_pipeline",
 		oteltrace.WithAttributes(
 			attribute.String("tool.name", toolName),
-			attribute.String("http.path", path),
+			semconv.URLPathKey.String(path),
 		),
 		oteltrace.WithSpanKind(oteltrace.SpanKindInternal),
 	)
@@ -188,9 +198,9 @@ func (h *proxyHandler) handleWithDIFC(w http.ResponseWriter, r *http.Request, pa
 	var resp *http.Response
 	var respBody []byte
 
-	fwdCtx, fwdSpan := tracing.Tracer().Start(ctx, "proxy.backend.forward",
+	fwdCtx, fwdSpan := h.getTracer().Start(ctx, "proxy.backend.forward",
 		oteltrace.WithAttributes(
-			attribute.String("http.path", path),
+			semconv.URLPathKey.String(path),
 			attribute.String("tool.name", toolName),
 		),
 		oteltrace.WithSpanKind(oteltrace.SpanKindClient),
@@ -201,7 +211,7 @@ func (h *proxyHandler) handleWithDIFC(w http.ResponseWriter, r *http.Request, pa
 		resp, respBody = h.forwardAndReadBody(w, fwdCtx, r.Method, path, nil, "", clientAuth)
 	}
 	if resp != nil {
-		fwdSpan.SetAttributes(attribute.Int("http.status_code", resp.StatusCode))
+		fwdSpan.SetAttributes(semconv.HTTPResponseStatusCodeKey.Int(resp.StatusCode))
 	}
 	fwdSpan.End()
 	if resp == nil {

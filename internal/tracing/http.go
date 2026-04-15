@@ -8,6 +8,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/propagation"
+	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 	oteltrace "go.opentelemetry.io/otel/trace"
 )
 
@@ -35,8 +36,8 @@ func WrapHTTPHandler(next http.Handler, spanName string, extraAttrs ...attribute
 		logTracing.Printf("Handling request: span=%s, method=%s, path=%s, remoteParent=%v", spanName, r.Method, r.URL.Path, hasRemoteParent)
 
 		attrs := append([]attribute.KeyValue{
-			attribute.String("http.method", r.Method),
-			attribute.String("http.path", r.URL.Path),
+			semconv.HTTPRequestMethodKey.String(r.Method),
+			semconv.URLPathKey.String(r.URL.Path),
 		}, extraAttrs...)
 
 		ctx, span := t.Start(ctx, spanName,
