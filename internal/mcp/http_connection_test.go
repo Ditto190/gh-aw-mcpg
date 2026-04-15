@@ -483,13 +483,13 @@ func TestNewHTTPConnection_NilHeaders(t *testing.T) {
 	assert.Equal(t, testServer.URL, conn.GetHTTPURL())
 }
 
-// TestNewHTTPConnection_HTTPClientTimeout tests that HTTP client timeout is properly configured
-func TestNewHTTPConnection_HTTPClientTimeout(t *testing.T) {
+// TestNewHTTPConnection_HTTPClientTimeoutUnset tests that overall client timeout is unset
+// so tool execution budgets are controlled by request context deadlines.
+func TestNewHTTPConnection_HTTPClientTimeoutUnset(t *testing.T) {
 	require := require.New(t)
 
-	// Create test server with delayed response (but not too long to hit default 120s timeout)
+	// Create test server with delayed response.
 	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Small delay to verify timeout handling works
 		time.Sleep(50 * time.Millisecond)
 
 		response := map[string]interface{}{
@@ -516,8 +516,9 @@ func TestNewHTTPConnection_HTTPClientTimeout(t *testing.T) {
 	require.NotNil(conn)
 	defer conn.Close()
 
-	// Verify HTTP client has proper timeout set
-	assert.Equal(t, 120*time.Second, conn.httpClient.Timeout, "HTTP client should have 120s timeout")
+	// Verify overall HTTP client timeout is unset. End-to-end request budgets
+	// should come from context deadlines, not a hardcoded client timeout.
+	assert.Zero(t, conn.httpClient.Timeout)
 }
 
 // TestNewHTTPConnection_ConnectionRefused tests handling of connection refused errors

@@ -79,10 +79,10 @@ func TestHTTPError_ClientError(t *testing.T) {
 }
 
 // TestHTTPError_ConnectionTimeout tests that connection timeouts are properly handled
-// This test is SKIPPED by default because it takes a long time (the HTTP client has a 120s timeout).
+// This test is SKIPPED by default because it takes a long time.
 // The timeout behavior is tested implicitly in other tests that use context timeouts.
 func TestHTTPError_ConnectionTimeout(t *testing.T) {
-	t.Skip("Skipping timeout test - takes too long due to HTTP client 120s timeout. Other tests verify context-based timeouts work correctly.")
+	t.Skip("Skipping timeout test - takes too long. Other tests verify context-based timeouts work correctly.")
 
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
@@ -95,7 +95,7 @@ func TestHTTPError_ConnectionTimeout(t *testing.T) {
 		if f, ok := w.(http.Flusher); ok {
 			f.Flush()
 		}
-		// Sleep to cause a read timeout (HTTP client has 120s timeout)
+		// Sleep to cause a read timeout
 		// But we'll use a shorter context timeout to cut it off sooner
 		time.Sleep(150 * time.Second)
 	}))

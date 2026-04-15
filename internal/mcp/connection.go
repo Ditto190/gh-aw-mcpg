@@ -204,13 +204,11 @@ func NewHTTPConnection(ctx context.Context, serverID, url string, headers map[st
 	logger.LogInfo("backend", "Creating HTTP MCP connection with transport fallback, url=%s, connectTimeout=%v", url, connectTimeout)
 	ctx, cancel := context.WithCancel(ctx)
 
-	// Create an HTTP client with appropriate timeouts.
-	// Keep the existing overall request timeout, but also apply connectTimeout to
-	// the underlying HTTP transport so plain JSON-RPC fallback attempts honor the
-	// configured per-attempt connection timeout instead of waiting for the full
-	// client timeout.
+	// Create an HTTP client with connect/setup timeouts.
+	// Do not set http.Client.Timeout: request execution should be controlled by
+	// per-request context deadlines (for example the gateway tool timeout budget),
+	// while connectTimeout continues to bound transport establishment/fallback.
 	httpClient := &http.Client{
-		Timeout: 120 * time.Second, // Overall request timeout
 		Transport: &http.Transport{
 			DialContext: (&net.Dialer{
 				Timeout: connectTimeout,
