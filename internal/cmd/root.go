@@ -242,11 +242,11 @@ func run(cmd *cobra.Command, args []string) error {
 		cfg.Gateway.PayloadDir = payloadDir
 	}
 
-	// Apply payload path prefix flag (if different from default, it was explicitly set)
+	// Apply payload path prefix: CLI flag takes priority, then env-derived non-empty value.
 	if cmd.Flags().Changed("payload-path-prefix") {
 		cfg.Gateway.PayloadPathPrefix = payloadPathPrefix
 	} else if payloadPathPrefix != "" {
-		// Environment variable was set
+		// envutil.GetEnvString returned a non-empty value from MCP_GATEWAY_PAYLOAD_PATH_PREFIX
 		cfg.Gateway.PayloadPathPrefix = payloadPathPrefix
 	}
 

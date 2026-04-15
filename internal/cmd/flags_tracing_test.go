@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestGetDefaultOTLPServiceName_DefaultIsCorrect(t *testing.T) {
+func TestDefaultTracingServiceName_IsCorrect(t *testing.T) {
 	// Verify the default constant value hasn't changed unexpectedly.
 	// "mcp-gateway" is the canonical service name used in OTLP traces.
 	assert.Equal(t, "mcp-gateway", config.DefaultTracingServiceName,
