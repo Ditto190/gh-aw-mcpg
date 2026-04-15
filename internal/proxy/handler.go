@@ -145,7 +145,7 @@ func (h *proxyHandler) handleWithDIFC(w http.ResponseWriter, r *http.Request, pa
 	ctx, difcSpan := h.getTracer().Start(ctx, "proxy.difc_pipeline",
 		oteltrace.WithAttributes(
 			attribute.String("tool.name", toolName),
-			semconv.URLPathKey.String(path),
+			semconv.URLPathKey.String(r.URL.Path),
 		),
 		oteltrace.WithSpanKind(oteltrace.SpanKindInternal),
 	)
