@@ -417,6 +417,16 @@ func (c *Connection) callSDKMethodWithReconnect(method string, params interface{
 	return result, err
 }
 
+// logInboundRPCResponse logs an inbound RPC response, optionally attaching agent DIFC tag snapshots.
+// When shouldAttachTags is true, snapshot must be non-nil.
+func logInboundRPCResponse(serverID string, payload []byte, err error, shouldAttachTags bool, snapshot *AgentTagsSnapshot) {
+	if shouldAttachTags {
+		logger.LogRPCResponseWithAgentSnapshot(logger.RPCDirectionInbound, serverID, payload, err, snapshot.Secrecy, snapshot.Integrity)
+	} else {
+		logger.LogRPCResponse(logger.RPCDirectionInbound, serverID, payload, err)
+	}
+}
+
 // SendRequest sends a JSON-RPC request and waits for the response
 // The serverID parameter is used for logging to associate the request with a backend server
 func (c *Connection) SendRequest(method string, params interface{}) (*Response, error) {
@@ -454,11 +464,7 @@ func (c *Connection) SendRequestWithServerID(ctx context.Context, method string,
 			if result != nil {
 				responsePayload, _ = json.Marshal(result)
 			}
-			if shouldAttachAgentTags {
-				logger.LogRPCResponseWithAgentSnapshot(logger.RPCDirectionInbound, serverID, responsePayload, err, snapshot.Secrecy, snapshot.Integrity)
-			} else {
-				logger.LogRPCResponse(logger.RPCDirectionInbound, serverID, responsePayload, err)
-			}
+			logInboundRPCResponse(serverID, responsePayload, err, shouldAttachAgentTags, snapshot)
 			return result, err
 		}
 
@@ -469,11 +475,7 @@ func (c *Connection) SendRequestWithServerID(ctx context.Context, method string,
 		if result != nil {
 			responsePayload, _ = json.Marshal(result)
 		}
-		if shouldAttachAgentTags {
-			logger.LogRPCResponseWithAgentSnapshot(logger.RPCDirectionInbound, serverID, responsePayload, err, snapshot.Secrecy, snapshot.Integrity)
-		} else {
-			logger.LogRPCResponse(logger.RPCDirectionInbound, serverID, responsePayload, err)
-		}
+		logInboundRPCResponse(serverID, responsePayload, err, shouldAttachAgentTags, snapshot)
 		return result, err
 	}
 
@@ -485,11 +487,7 @@ func (c *Connection) SendRequestWithServerID(ctx context.Context, method string,
 	if result != nil {
 		responsePayload, _ = json.Marshal(result)
 	}
-	if shouldAttachAgentTags {
-		logger.LogRPCResponseWithAgentSnapshot(logger.RPCDirectionInbound, serverID, responsePayload, err, snapshot.Secrecy, snapshot.Integrity)
-	} else {
-		logger.LogRPCResponse(logger.RPCDirectionInbound, serverID, responsePayload, err)
-	}
+	logInboundRPCResponse(serverID, responsePayload, err, shouldAttachAgentTags, snapshot)
 
 	return result, err
 }
