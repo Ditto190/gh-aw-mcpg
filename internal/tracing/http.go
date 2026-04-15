@@ -13,8 +13,8 @@ import (
 )
 
 // WrapHTTPHandler wraps an http.Handler with an OpenTelemetry server span.
-// A span named spanName is created for every request, with http.method and
-// http.path set automatically. Extra attrs are merged in.
+// A span named spanName is created for every request, with
+// http.request.method and url.path set automatically. Extra attrs are merged in.
 //
 // Incoming W3C traceparent/tracestate headers are extracted so that an
 // agent-originated trace is continued; if no such headers are present a fresh
