@@ -5,7 +5,12 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/github/gh-aw-mcpg/internal/logger"
+	"github.com/github/gh-aw-mcpg/internal/logger/sanitize"
 )
+
+var logEnvUtil = logger.New("envutil:envutil")
 
 // GetEnvString returns the value of the environment variable specified by envKey.
 // If the environment variable is not set or is empty, it returns the defaultValue.
@@ -25,18 +30,21 @@ func GetEnvInt(envKey string, defaultValue int) int {
 		if value, err := strconv.Atoi(envValue); err == nil && value > 0 {
 			return value
 		}
+		logEnvUtil.Printf("GetEnvInt: %s=%q is not a valid positive integer, using default=%d", envKey, sanitize.TruncateSecret(envValue), defaultValue)
 	}
 	return defaultValue
 }
 
 // GetEnvDuration returns the time.Duration value of the environment variable specified by envKey.
-// If the environment variable is not set, is empty, or cannot be parsed by time.ParseDuration,
-// it returns the defaultValue. Accepts any string valid for time.ParseDuration (e.g. "2h", "30m", "90s").
+// If the environment variable is not set, is empty, cannot be parsed by time.ParseDuration,
+// or is not positive (> 0), it returns the defaultValue.
+// Accepts any string valid for time.ParseDuration (e.g. "2h", "30m", "90s").
 func GetEnvDuration(envKey string, defaultValue time.Duration) time.Duration {
 	if envValue := os.Getenv(envKey); envValue != "" {
 		if d, err := time.ParseDuration(envValue); err == nil && d > 0 {
 			return d
 		}
+		logEnvUtil.Printf("GetEnvDuration: %s=%q is not a valid positive duration, using default=%v", envKey, sanitize.TruncateSecret(envValue), defaultValue)
 	}
 	return defaultValue
 }
@@ -54,6 +62,7 @@ func GetEnvBool(envKey string, defaultValue bool) bool {
 		case "0", "false", "no", "off":
 			return false
 		}
+		logEnvUtil.Printf("GetEnvBool: %s=%q is not a recognized boolean value, using default=%v", envKey, sanitize.TruncateSecret(envValue), defaultValue)
 	}
 	return defaultValue
 }
