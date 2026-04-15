@@ -32,8 +32,8 @@ safe-outputs:
 tools:
   github:
     toolsets: [default, actions]
-    allowed-repos: ["github/gh-aw-mcpg"]
-    min-integrity: unapproved
+    allowed-repos: ["github/gh-aw-mcpg", "github/gh-aw"]
+    min-integrity: none
     github-token: ${{ secrets.GH_AW_MCP_MULTIREPO_TOKEN }}
   bash: ["*"]
 
