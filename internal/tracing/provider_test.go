@@ -498,3 +498,105 @@ func TestInitProvider_WithTraceIDAndSpanID(t *testing.T) {
 	defer cancel()
 	_ = provider.Shutdown(shutdownCtx)
 }
+
+// TestInitProvider_InvalidSampleRate verifies that a sample rate outside [0.0, 1.0]
+// falls back to the default (1.0 = AlwaysSample) and still produces a working provider.
+// This exercises the warning path in resolveSampleRate.
+func TestInitProvider_InvalidSampleRate(t *testing.T) {
+	ctx := context.Background()
+
+	tests := []struct {
+		name string
+		rate float64
+	}{
+		{name: "rate above 1.0", rate: 1.5},
+		{name: "negative rate", rate: -0.5},
+		{name: "large positive rate", rate: 100.0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rate := tt.rate
+			cfg := &config.TracingConfig{
+				Endpoint:   "http://localhost:14318",
+				SampleRate: &rate,
+			}
+
+			provider, err := tracing.InitProvider(ctx, cfg)
+			require.NoError(t, err, "InitProvider should succeed even with an invalid sample rate")
+			require.NotNil(t, provider)
+
+			// The invalid rate should fall back to the default (1.0 = AlwaysSample).
+			// Verify by checking that a span is sampled.
+			tr := provider.Tracer()
+			_, span := tr.Start(ctx, "invalid-rate-test-span")
+			assert.True(t, span.SpanContext().IsSampled(), "span should be sampled when rate falls back to default 1.0")
+			span.End()
+
+			shutdownCtx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+			defer cancel()
+			_ = provider.Shutdown(shutdownCtx)
+		})
+	}
+}
+
+// TestParentContext_InvalidSpanID verifies that resolveParentContext falls through to
+// generating a random span ID when the configured spanId is not valid hex, and still
+// returns an enriched context (per spec T-OTEL-008).
+func TestParentContext_InvalidSpanID(t *testing.T) {
+	ctx := context.Background()
+
+	// Initialize noop provider to ensure the W3C propagator is registered globally.
+	provider, err := tracing.InitProvider(ctx, nil)
+	require.NoError(t, err)
+	defer provider.Shutdown(ctx)
+
+	tests := []struct {
+		name   string
+		spanID string
+	}{
+		{name: "non-hex span ID", spanID: "not-valid-hex"},
+		{name: "too-short hex span ID", spanID: "aabb"},
+		{name: "too-long hex span ID", spanID: "00f067aa0ba902b700f067aa0ba902b7"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &config.TracingConfig{
+				TraceID: "4bf92f3577b34da6a3ce929d0e0e4736",
+				SpanID:  tt.spanID,
+			}
+
+			parentCtx := tracing.ParentContext(ctx, cfg)
+
+			// Should still return an enriched context because a random span ID is generated.
+			assert.NotEqual(t, ctx, parentCtx,
+				"ParentContext must return an enriched context even when spanId is invalid")
+
+			// The context must carry a valid remote span context.
+			prop := otel.GetTextMapPropagator()
+			carrier := propagation.MapCarrier{}
+			prop.Inject(parentCtx, carrier)
+			traceparent := carrier["traceparent"]
+			require.NotEmpty(t, traceparent, "traceparent must be present in W3C propagation carrier")
+			assert.Contains(t, traceparent, "4bf92f3577b34da6a3ce929d0e0e4736",
+				"traceparent must carry the configured traceId")
+		})
+	}
+}
+
+// TestParentContext_AllZerosTraceID verifies that resolveParentContext returns the
+// original context unchanged when the traceId is all zeros (produces an invalid SpanContext).
+func TestParentContext_AllZerosTraceID(t *testing.T) {
+	ctx := context.Background()
+
+	cfg := &config.TracingConfig{
+		TraceID: "00000000000000000000000000000000", // all-zeros: invalid TraceID per W3C spec
+	}
+
+	parentCtx := tracing.ParentContext(ctx, cfg)
+
+	// An all-zeros traceId yields an invalid SpanContext; the function must return ctx unchanged.
+	assert.Equal(t, ctx, parentCtx,
+		"ParentContext with an all-zeros traceId must return the original context unchanged")
+}
