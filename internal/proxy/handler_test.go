@@ -211,7 +211,7 @@ func TestServeHTTP_GraphQLQueryStringForwardedToUpstream(t *testing.T) {
 	h.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Contains(t, receivedURL, "foo=bar")
+	assert.Equal(t, "/graphql?foo=bar", receivedURL)
 }
 
 // ─── ServeHTTP: query string is forwarded on REST GET ────────────────────────
