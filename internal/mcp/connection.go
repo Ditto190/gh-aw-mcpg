@@ -29,7 +29,8 @@ var logConn = logger.New("mcp:connection")
 // Kept in sync with config.DefaultConnectTimeout (30 s) to avoid importing the config package.
 const defaultConnectTimeout = 30 * time.Second
 
-// normalizeConnectTimeout returns defaultConnectTimeout when the input timeout is non-positive.
+// normalizeConnectTimeout returns defaultConnectTimeout when the input timeout is
+// non-positive, otherwise it returns the input timeout unchanged.
 func normalizeConnectTimeout(timeout time.Duration) time.Duration {
 	if timeout <= 0 {
 		return defaultConnectTimeout
