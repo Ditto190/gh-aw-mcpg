@@ -397,12 +397,11 @@ func (r *restBackendCaller) CallTool(ctx context.Context, toolName string, args 
 // if non-empty it is forwarded as-is, otherwise the configured fallback token is used.
 func (s *Server) forwardToGitHub(ctx context.Context, method, path string, body io.Reader, contentType string, clientAuth string) (*http.Response, error) {
 	url := s.githubAPIURL + path
-	if strings.HasSuffix(s.githubAPIURL, "/api/v3") {
-		switch {
-		case path == "/graphql":
-			url = strings.TrimSuffix(s.githubAPIURL, "/api/v3") + "/api/graphql"
-		case strings.HasPrefix(path, "/graphql?"):
-			url = strings.TrimSuffix(s.githubAPIURL, "/api/v3") + "/api/graphql" + strings.TrimPrefix(path, "/graphql")
+	pathOnly, query, hasQuery := strings.Cut(path, "?")
+	if strings.HasSuffix(s.githubAPIURL, "/api/v3") && pathOnly == "/graphql" {
+		url = strings.TrimSuffix(s.githubAPIURL, "/api/v3") + "/api/graphql"
+		if hasQuery {
+			url += "?" + query
 		}
 	}
 	logProxy.Printf("forwarding %s %s → %s", method, path, url)
