@@ -55,7 +55,7 @@ func expandVariables(value, jsonPath string) (string, error) {
 
 // ExpandRawJSONVariables expands all ${VAR} expressions in JSON data before schema validation.
 // This ensures the schema validates the expanded values, not the variable syntax.
-// It collects all undefined variables and reports them in a single error.
+// It collects undefined variables and reports the first undefined variable as an error.
 func ExpandRawJSONVariables(data []byte) ([]byte, error) {
 	result, undefinedVars, _ := expandVariablesCore(data, "raw JSON data")
 

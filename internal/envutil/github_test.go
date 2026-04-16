@@ -137,6 +137,16 @@ func TestDeriveAPIFromServerURL(t *testing.T) {
 			serverURL: "not-a-url",
 			expected:  "",
 		},
+		{
+			name:      "missing scheme is rejected",
+			serverURL: "//github.example.com",
+			expected:  "",
+		},
+		{
+			name:      "unsupported scheme is rejected",
+			serverURL: "ftp://github.example.com",
+			expected:  "",
+		},
 	}
 
 	for _, tt := range tests {

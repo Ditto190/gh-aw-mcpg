@@ -304,7 +304,7 @@ func (g *guardBackendCaller) callCollaboratorPermission(ctx context.Context, arg
 		return nil, fmt.Errorf("get_collaborator_permission: no GitHub token available")
 	}
 
-	apiURL := envutil.DeriveGitHubAPIURL("https://api.github.com")
+	apiURL := envutil.DeriveGitHubAPIURL(envutil.DefaultGitHubAPIBaseURL)
 	path := fmt.Sprintf("/repos/%s/%s/collaborators/%s/permission", owner, repo, username)
 	url := apiURL + path
 

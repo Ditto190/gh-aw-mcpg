@@ -82,6 +82,9 @@ func deriveAPIFromServerURL(serverURL string) string {
 	if err != nil || parsed.Host == "" {
 		return ""
 	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return ""
+	}
 
 	hostname := strings.ToLower(parsed.Hostname())
 

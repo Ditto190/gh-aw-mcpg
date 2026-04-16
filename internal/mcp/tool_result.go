@@ -146,6 +146,9 @@ func ParseToolArguments(req *sdk.CallToolRequest) (map[string]interface{}, error
 // NewErrorCallToolResult creates a standard error CallToolResult with the error
 // message included as text content.
 func NewErrorCallToolResult(err error) (*sdk.CallToolResult, interface{}, error) {
+	if err == nil {
+		err = fmt.Errorf("unknown error")
+	}
 	return &sdk.CallToolResult{
 		IsError: true,
 		Content: []sdk.Content{
