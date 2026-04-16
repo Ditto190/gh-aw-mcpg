@@ -101,7 +101,7 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if match.ToolName == "graphql_introspection" {
 			logHandler.Printf("GraphQL introspection query, passing through")
 			clientAuth := r.Header.Get("Authorization")
-			resp, respBody := h.forwardAndReadBody(w, r.Context(), http.MethodPost, "/graphql", bytes.NewReader(graphQLBody), "application/json", clientAuth)
+			resp, respBody := h.forwardAndReadBody(w, r.Context(), http.MethodPost, fullPath, bytes.NewReader(graphQLBody), "application/json", clientAuth)
 			if resp == nil {
 				return
 			}
@@ -206,7 +206,7 @@ func (h *proxyHandler) handleWithDIFC(w http.ResponseWriter, r *http.Request, pa
 		oteltrace.WithSpanKind(oteltrace.SpanKindClient),
 	)
 	if graphQLBody != nil {
-		resp, respBody = h.forwardAndReadBody(w, fwdCtx, http.MethodPost, "/graphql", bytes.NewReader(graphQLBody), "application/json", clientAuth)
+		resp, respBody = h.forwardAndReadBody(w, fwdCtx, http.MethodPost, path, bytes.NewReader(graphQLBody), "application/json", clientAuth)
 	} else {
 		resp, respBody = h.forwardAndReadBody(w, fwdCtx, r.Method, path, nil, "", clientAuth)
 	}

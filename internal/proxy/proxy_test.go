@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -841,6 +842,48 @@ func TestUnwrapSingleObject(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := unwrapSingleObject(tt.original, tt.filtered)
 			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+func TestForwardToGitHub_RewritesGraphQLPathForGHESAPIBase(t *testing.T) {
+	var receivedPath string
+	var receivedQuery string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedPath = r.URL.Path
+		receivedQuery = r.URL.RawQuery
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	s := &Server{
+		githubAPIURL: upstream.URL + "/api/v3",
+		httpClient:   upstream.Client(),
+	}
+
+	tests := []struct {
+		name      string
+		path      string
+		wantPath  string
+		wantQuery string
+	}{
+		{name: "plain graphql endpoint", path: "/graphql", wantPath: "/api/graphql"},
+		{name: "graphql endpoint with query string", path: "/graphql?foo=bar", wantPath: "/api/graphql", wantQuery: "foo=bar"},
+		{name: "ghes api graphql endpoint", path: "/api/graphql", wantPath: "/api/graphql"},
+		{name: "gh host prefixed graphql endpoint with query string", path: "/api/v3/graphql?foo=bar", wantPath: "/api/graphql", wantQuery: "foo=bar"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			receivedPath = ""
+			receivedQuery = ""
+
+			resp, err := s.forwardToGitHub(context.Background(), http.MethodPost, tt.path, nil, "application/json", "")
+			require.NoError(t, err)
+			require.NotNil(t, resp)
+			defer resp.Body.Close()
+
+			assert.Equal(t, tt.wantPath, receivedPath)
+			assert.Equal(t, tt.wantQuery, receivedQuery)
 		})
 	}
 }
