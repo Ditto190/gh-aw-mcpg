@@ -194,7 +194,8 @@ func TestServeHTTP_GraphQLQueryStringForwardedToUpstream(t *testing.T) {
 		receivedURL = r.URL.RequestURI()
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"data":{"repository":{"issues":{"nodes":[]}}}}`)) //nolint:errcheck
+		_, err := w.Write([]byte(`{"data":{"repository":{"issues":{"nodes":[]}}}}`))
+		require.NoError(t, err)
 	}))
 	defer upstream.Close()
 
