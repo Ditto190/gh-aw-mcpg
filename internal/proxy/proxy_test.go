@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -968,4 +969,25 @@ func TestDeriveGitHubAPIURL(t *testing.T) {
 			assert.Equal(t, tt.expected, result)
 		})
 	}
+}
+
+func TestForwardToGitHub_RewritesGraphQLPathForGHESAPIBase(t *testing.T) {
+	var receivedPath string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedPath = r.URL.Path
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	s := &Server{
+		githubAPIURL: upstream.URL + "/api/v3",
+		httpClient:   upstream.Client(),
+	}
+
+	resp, err := s.forwardToGitHub(context.Background(), http.MethodPost, "/graphql", nil, "application/json", "")
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	defer resp.Body.Close()
+
+	assert.Equal(t, "/api/graphql", receivedPath)
 }
