@@ -188,6 +188,31 @@ func TestServeHTTP_GraphQLIntrospectionPassthrough(t *testing.T) {
 	assert.Contains(t, w.Body.String(), "__schema")
 }
 
+func TestServeHTTP_GraphQLQueryStringForwardedToUpstream(t *testing.T) {
+	var receivedURL string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedURL = r.URL.RequestURI()
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"data":{"repository":{"issues":{"nodes":[]}}}}`)) //nolint:errcheck
+	}))
+	defer upstream.Close()
+
+	s := newTestServer(t, upstream.URL)
+	h := &proxyHandler{server: s}
+
+	gqlBody, _ := json.Marshal(map[string]interface{}{
+		"query": `{ repository(owner:"org", name:"repo") { issues(first: 10) { nodes { id } } } }`,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/graphql?foo=bar", bytes.NewReader(gqlBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, receivedURL, "foo=bar")
+}
+
 // ─── ServeHTTP: query string is forwarded on REST GET ────────────────────────
 
 func TestServeHTTP_QueryStringForwardedToUpstream(t *testing.T) {

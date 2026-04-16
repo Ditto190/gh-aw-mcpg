@@ -994,6 +994,8 @@ func TestForwardToGitHub_RewritesGraphQLPathForGHESAPIBase(t *testing.T) {
 	}{
 		{name: "plain graphql endpoint", path: "/graphql", wantPath: "/api/graphql"},
 		{name: "graphql endpoint with query string", path: "/graphql?foo=bar", wantPath: "/api/graphql", wantQuery: "foo=bar"},
+		{name: "ghes api graphql endpoint", path: "/api/graphql", wantPath: "/api/graphql"},
+		{name: "gh host prefixed graphql endpoint with query string", path: "/api/v3/graphql?foo=bar", wantPath: "/api/graphql", wantQuery: "foo=bar"},
 	}
 
 	for _, tt := range tests {

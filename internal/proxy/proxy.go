@@ -398,7 +398,7 @@ func (r *restBackendCaller) CallTool(ctx context.Context, toolName string, args 
 func (s *Server) forwardToGitHub(ctx context.Context, method, path string, body io.Reader, contentType string, clientAuth string) (*http.Response, error) {
 	url := s.githubAPIURL + path
 	pathOnly, query, hasQuery := strings.Cut(path, "?")
-	if strings.HasSuffix(s.githubAPIURL, "/api/v3") && pathOnly == "/graphql" {
+	if strings.HasSuffix(s.githubAPIURL, "/api/v3") && IsGraphQLPath(pathOnly) {
 		url = strings.TrimSuffix(s.githubAPIURL, "/api/v3") + "/api/graphql"
 		if hasQuery {
 			url += "?" + query
