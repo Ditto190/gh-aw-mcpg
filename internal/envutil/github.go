@@ -1,6 +1,8 @@
 package envutil
 
 import (
+	"fmt"
+	"net/url"
 	"os"
 	"strings"
 
@@ -48,4 +50,47 @@ func LookupGitHubAPIURL(defaultURL string) string {
 	url := strings.TrimRight(strings.TrimSpace(defaultURL), "/")
 	logGitHub.Printf("GitHub API URL using default: %s", url)
 	return url
+}
+
+// DeriveGitHubAPIURL resolves the GitHub API URL from environment variables:
+//  1. GITHUB_API_URL
+//  2. GITHUB_SERVER_URL (derived)
+//  3. defaultURL
+func DeriveGitHubAPIURL(defaultURL string) string {
+	if apiURL := LookupGitHubAPIURL(""); apiURL != "" {
+		return apiURL
+	}
+	if serverURL := strings.TrimSpace(os.Getenv("GITHUB_SERVER_URL")); serverURL != "" {
+		derived := deriveAPIFromServerURL(serverURL)
+		if derived != "" {
+			logGitHub.Printf("GitHub API URL derived from GITHUB_SERVER_URL=%s: %s", serverURL, derived)
+			return derived
+		}
+	}
+	return strings.TrimRight(strings.TrimSpace(defaultURL), "/")
+}
+
+// deriveAPIFromServerURL converts a GITHUB_SERVER_URL to the corresponding API endpoint.
+// GHEC tenants (*.ghe.com): https://tenant.ghe.com → https://copilot-api.tenant.ghe.com
+// GitHub.com: https://github.com → https://api.github.com
+// GHES (all others): https://github.example.com → https://github.example.com/api/v3
+func deriveAPIFromServerURL(serverURL string) string {
+	parsed, err := url.Parse(strings.TrimRight(serverURL, "/"))
+	if err != nil || parsed.Host == "" {
+		return ""
+	}
+
+	hostname := strings.ToLower(parsed.Hostname())
+
+	switch {
+	case hostname == "github.com" || hostname == "www.github.com":
+		return "https://api.github.com"
+	case strings.HasSuffix(hostname, ".ghe.com"):
+		if port := parsed.Port(); port != "" {
+			return fmt.Sprintf("%s://copilot-api.%s:%s", parsed.Scheme, hostname, port)
+		}
+		return fmt.Sprintf("%s://copilot-api.%s", parsed.Scheme, hostname)
+	default:
+		return fmt.Sprintf("%s://%s/api/v3", parsed.Scheme, parsed.Host)
+	}
 }

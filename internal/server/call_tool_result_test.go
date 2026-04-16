@@ -175,7 +175,7 @@ func TestNewErrorCallToolResult(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, data, err := newErrorCallToolResult(tt.err)
+			result, data, err := mcp.NewErrorCallToolResult(tt.err)
 
 			// Verify the error is returned
 			assert.Equal(t, tt.err, err, "Error should be returned as-is")

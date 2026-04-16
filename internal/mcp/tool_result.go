@@ -142,3 +142,14 @@ func ParseToolArguments(req *sdk.CallToolRequest) (map[string]interface{}, error
 	logToolResult.Printf("Parsed %d arguments", len(toolArgs))
 	return toolArgs, nil
 }
+
+// NewErrorCallToolResult creates a standard error CallToolResult with the error
+// message included as text content.
+func NewErrorCallToolResult(err error) (*sdk.CallToolResult, interface{}, error) {
+	return &sdk.CallToolResult{
+		IsError: true,
+		Content: []sdk.Content{
+			&sdk.TextContent{Text: err.Error()},
+		},
+	}, nil, err
+}
