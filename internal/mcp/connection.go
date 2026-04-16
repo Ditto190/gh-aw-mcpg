@@ -24,7 +24,8 @@ import (
 
 var logConn = logger.New("mcp:connection")
 
-// defaultConnectTimeout is the fallback connect timeout used when none is specified.
+// defaultConnectTimeout is the fallback connect timeout used when the configured timeout
+// is non-positive or otherwise invalid.
 // Kept in sync with config.DefaultConnectTimeout (30 s) to avoid importing the config package.
 const defaultConnectTimeout = 30 * time.Second
 
