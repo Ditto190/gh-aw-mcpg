@@ -285,7 +285,7 @@ configure_host_dns() {
     # Add host.docker.internal mapping to /etc/hosts
     # Check if the entry already exists to avoid duplicates
     if ! grep -q "host.docker.internal" /etc/hosts 2>/dev/null; then
-        if echo "$HOST_IP   host.docker.internal" >> /etc/hosts 2>/dev/null; then
+        if { echo "$HOST_IP   host.docker.internal" >> /etc/hosts; } 2>/dev/null; then
             log_info "DNS mapping configured: $HOST_IP -> host.docker.internal"
         else
             log_warn "Cannot write to /etc/hosts (running as non-root?); host.docker.internal mapping skipped"
