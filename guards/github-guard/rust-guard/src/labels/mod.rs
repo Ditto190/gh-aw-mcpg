@@ -4823,8 +4823,8 @@ mod tests {
                 &ctx,
             );
 
-            assert_eq!(secrecy, vec![] as Vec<String>, "{tool} secrecy mismatch");
-            assert_eq!(integrity, writer_integrity(repo_id, &ctx), "{tool} should have writer integrity");
+            assert_eq!(secrecy, vec![] as Vec<String>, "{} secrecy mismatch", tool);
+            assert_eq!(integrity, writer_integrity(repo_id, &ctx), "{} should have writer integrity", tool);
         }
     }
 
@@ -4857,8 +4857,8 @@ mod tests {
                 &ctx,
             );
 
-            assert_eq!(secrecy, vec![] as Vec<String>, "{tool} secrecy mismatch");
-            assert_eq!(integrity, writer_integrity(repo_id, &ctx), "{tool} should have writer integrity");
+            assert_eq!(secrecy, vec![] as Vec<String>, "{} secrecy mismatch", tool);
+            assert_eq!(integrity, writer_integrity(repo_id, &ctx), "{} should have writer integrity", tool);
         }
     }
 
