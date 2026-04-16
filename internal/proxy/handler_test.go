@@ -189,30 +189,44 @@ func TestServeHTTP_GraphQLIntrospectionPassthrough(t *testing.T) {
 }
 
 func TestServeHTTP_GraphQLPreservesQueryString(t *testing.T) {
-	var receivedURL string
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		receivedURL = r.URL.RequestURI()
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_, err := w.Write([]byte(`{"data":{"repository":{"issues":{"nodes":[]}}}}`))
-		require.NoError(t, err)
-	}))
-	defer upstream.Close()
+	tests := []struct {
+		name     string
+		path     string
+		wantPath string
+	}{
+		{name: "graphql path", path: "/graphql?foo=bar", wantPath: "/graphql?foo=bar"},
+		{name: "ghes api graphql path", path: "/api/graphql?foo=bar", wantPath: "/api/graphql?foo=bar"},
+		{name: "gh host prefixed graphql path", path: "/api/v3/graphql?foo=bar", wantPath: "/graphql?foo=bar"},
+	}
 
-	s := newTestServer(t, upstream.URL)
-	h := &proxyHandler{server: s}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var receivedURL string
+			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				receivedURL = r.URL.RequestURI()
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK)
+				_, err := w.Write([]byte(`{"data":{"repository":{"issues":{"nodes":[]}}}}`))
+				require.NoError(t, err)
+			}))
+			defer upstream.Close()
 
-	gqlBody, err := json.Marshal(map[string]interface{}{
-		"query": `{ repository(owner:"org", name:"repo") { issues(first: 10) { nodes { id } } } }`,
-	})
-	require.NoError(t, err)
-	req := httptest.NewRequest(http.MethodPost, "/graphql?foo=bar", bytes.NewReader(gqlBody))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	h.ServeHTTP(w, req)
+			s := newTestServer(t, upstream.URL)
+			h := &proxyHandler{server: s}
 
-	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Equal(t, "/graphql?foo=bar", receivedURL)
+			gqlBody, err := json.Marshal(map[string]interface{}{
+				"query": `{ repository(owner:"org", name:"repo") { issues(first: 10) { nodes { id } } } }`,
+			})
+			require.NoError(t, err)
+			req := httptest.NewRequest(http.MethodPost, tt.path, bytes.NewReader(gqlBody))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, req)
+
+			assert.Equal(t, http.StatusOK, w.Code)
+			assert.Equal(t, tt.wantPath, receivedURL)
+		})
+	}
 }
 
 // ─── ServeHTTP: query string is forwarded on REST GET ────────────────────────
