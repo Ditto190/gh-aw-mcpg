@@ -29,6 +29,14 @@ var logConn = logger.New("mcp:connection")
 // Kept in sync with config.DefaultConnectTimeout (30 s) to avoid importing the config package.
 const defaultConnectTimeout = 30 * time.Second
 
+// normalizeConnectTimeout returns defaultConnectTimeout when the input timeout is non-positive.
+func normalizeConnectTimeout(timeout time.Duration) time.Duration {
+	if timeout <= 0 {
+		return defaultConnectTimeout
+	}
+	return timeout
+}
+
 // ContextKey for session ID
 type ContextKey string
 
@@ -203,9 +211,7 @@ func NewConnection(ctx context.Context, serverID, command string, args []string,
 // This ensures compatibility with all types of HTTP MCP servers.
 func NewHTTPConnection(ctx context.Context, serverID, url string, headers map[string]string, oidcProvider *oidc.Provider, oidcAudience string, keepAlive time.Duration, connectTimeout time.Duration) (*Connection, error) {
 	// Apply default connect timeout when not specified
-	if connectTimeout <= 0 {
-		connectTimeout = defaultConnectTimeout
-	}
+	connectTimeout = normalizeConnectTimeout(connectTimeout)
 	logger.LogInfo("backend", "Creating HTTP MCP connection with transport fallback, url=%s, connectTimeout=%v", url, connectTimeout)
 	ctx, cancel := context.WithCancel(ctx)
 
@@ -383,10 +389,7 @@ func (c *Connection) reconnectSDKTransport() error {
 		return fmt.Errorf("cannot reconnect: unsupported transport type %s", c.httpTransportType)
 	}
 
-	timeout := c.connectTimeout
-	if timeout <= 0 {
-		timeout = defaultConnectTimeout
-	}
+	timeout := normalizeConnectTimeout(c.connectTimeout)
 	connectCtx, cancel := context.WithTimeout(c.ctx, timeout)
 	defer cancel()
 
@@ -468,28 +471,14 @@ func (c *Connection) SendRequestWithServerID(ctx context.Context, method string,
 		// For plain JSON-RPC transport, use manual HTTP requests
 		if c.httpTransportType == HTTPTransportPlainJSON {
 			result, err = c.sendHTTPRequest(ctx, method, params)
-			// Log the response from backend server
-			var responsePayload []byte
-			if result != nil {
-				responsePayload, _ = json.Marshal(result)
-			}
-			logInboundRPCResponse(serverID, responsePayload, err, shouldAttachAgentTags, snapshot)
-			return result, err
+		} else {
+			// For streamable and SSE transports, use SDK session methods
+			result, err = c.callSDKMethodWithReconnect(method, params)
 		}
-
-		// For streamable and SSE transports, use SDK session methods
-		result, err = c.callSDKMethodWithReconnect(method, params)
-		// Log the response from backend server
-		var responsePayload []byte
-		if result != nil {
-			responsePayload, _ = json.Marshal(result)
-		}
-		logInboundRPCResponse(serverID, responsePayload, err, shouldAttachAgentTags, snapshot)
-		return result, err
+	} else {
+		// Handle stdio connections using SDK client
+		result, err = c.callSDKMethod(method, params)
 	}
-
-	// Handle stdio connections using SDK client
-	result, err = c.callSDKMethod(method, params)
 
 	// Log the response from backend server
 	var responsePayload []byte
