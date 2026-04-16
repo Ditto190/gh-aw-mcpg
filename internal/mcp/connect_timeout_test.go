@@ -98,3 +98,37 @@ func TestDefaultConnectTimeout_Value(t *testing.T) {
 	assert.Equal(t, 30*time.Second, defaultConnectTimeout,
 		"defaultConnectTimeout must remain 30 s to stay in sync with config.DefaultConnectTimeout")
 }
+
+func TestNormalizeConnectTimeout(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name     string
+		input    time.Duration
+		expected time.Duration
+	}{
+		{
+			name:     "zero input uses default",
+			input:    0,
+			expected: defaultConnectTimeout,
+		},
+		{
+			name:     "negative input uses default",
+			input:    -1 * time.Second,
+			expected: defaultConnectTimeout,
+		},
+		{
+			name:     "positive input is unchanged",
+			input:    15 * time.Second,
+			expected: 15 * time.Second,
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tc.expected, normalizeConnectTimeout(tc.input))
+		})
+	}
+}
