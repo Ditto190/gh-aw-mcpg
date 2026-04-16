@@ -122,9 +122,9 @@ func TestExtractJWTExpiry_MissingExpClaim(t *testing.T) {
 // other than 3 (separated by ".") are rejected with a descriptive error.
 func TestExtractJWTExpiry_WrongPartCount(t *testing.T) {
 	tests := []struct {
-		name        string
-		token       string
-		wantParts   int
+		name      string
+		token     string
+		wantParts int
 	}{
 		{"one part", "headeronly", 1},
 		{"two parts", "header.payload", 2},
