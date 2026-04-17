@@ -195,7 +195,7 @@ func TestServeHTTP_GraphQLPreservesQueryString(t *testing.T) {
 		wantPath string
 	}{
 		{name: "graphql path", path: "/graphql?foo=bar", wantPath: "/graphql?foo=bar"},
-		{name: "ghes api graphql path", path: "/api/graphql?foo=bar", wantPath: "/api/graphql?foo=bar"},
+		{name: "ghes api graphql path", path: "/api/graphql?foo=bar", wantPath: "/graphql?foo=bar"},
 		{name: "gh host prefixed graphql path", path: "/api/v3/graphql?foo=bar", wantPath: "/graphql?foo=bar"},
 	}
 
