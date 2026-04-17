@@ -335,6 +335,7 @@ func configureTLSTrustEnvironment(caCertPath string) error {
 	}
 
 	// Best-effort append: the proxy should still start even if GITHUB_ENV cannot be opened.
+	// Mode is intentionally 0 because O_CREATE is not used (existing runner-managed file only).
 	f, err := os.OpenFile(githubEnvPath, os.O_APPEND|os.O_WRONLY, 0)
 	if err != nil {
 		logger.LogWarn("startup", "Skipping GITHUB_ENV TLS trust export: open failed for %s: %v", githubEnvPath, err)
