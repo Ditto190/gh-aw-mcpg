@@ -11,10 +11,10 @@ import (
 // TestNormalizeScopeKind tests all branches of NormalizeScopeKind.
 func TestNormalizeScopeKind(t *testing.T) {
 	tests := []struct {
-		name   string
-		input  map[string]interface{}
-		want   map[string]interface{}
-		isNil  bool
+		name  string
+		input map[string]interface{}
+		want  map[string]interface{}
+		isNil bool
 	}{
 		{
 			name:  "nil input returns nil",
@@ -108,14 +108,14 @@ func TestGuardPolicyUnmarshalJSON_InvalidInnerJSON(t *testing.T) {
 			wantErr: "invalid character",
 		},
 		{
-			name:    "allow-only inner value is invalid JSON",
-			json:    `{"allow-only": {not valid}}`,
-			wantErr: "invalid character",
+			name:    "allow-only inner value fails AllowOnlyPolicy unmarshal",
+			json:    `{"allow-only": "not an object"}`,
+			wantErr: "cannot unmarshal string",
 		},
 		{
-			name:    "write-sink inner value is invalid JSON",
-			json:    `{"write-sink": {not valid}}`,
-			wantErr: "invalid character",
+			name:    "write-sink inner value fails WriteSinkPolicy unmarshal",
+			json:    `{"write-sink": "not an object"}`,
+			wantErr: "cannot unmarshal string",
 		},
 		{
 			name:    "allow-only inner value fails AllowOnlyPolicy unmarshal - missing repos",
@@ -147,11 +147,6 @@ func TestAllowOnlyPolicyUnmarshalJSON_FieldErrorPaths(t *testing.T) {
 		json    string
 		wantErr string
 	}{
-		{
-			name:    "repos field invalid JSON type",
-			json:    `{"repos": {invalid}, "min-integrity": "none"}`,
-			wantErr: "invalid character",
-		},
 		{
 			name:    "min-integrity field invalid JSON type",
 			json:    `{"repos": "all", "min-integrity": [1,2,3]}`,
@@ -434,6 +429,7 @@ func TestAllowOnlyPolicyUnmarshalJSON_FullRoundTrip(t *testing.T) {
 	err = json.Unmarshal(data, parsed)
 	require.NoError(t, err)
 
+	assert.Equal(t, original.Repos, parsed.Repos)
 	assert.Equal(t, original.MinIntegrity, parsed.MinIntegrity)
 	assert.Equal(t, original.BlockedUsers, parsed.BlockedUsers)
 	assert.Equal(t, original.ApprovalLabels, parsed.ApprovalLabels)
