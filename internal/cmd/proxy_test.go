@@ -436,7 +436,7 @@ func TestConfigureTLSTrustEnvironment(t *testing.T) {
 	t.Run("appends trust environment variables to GITHUB_ENV", func(t *testing.T) {
 		assert := assert.New(t)
 		githubEnvFile := t.TempDir() + "/github_env"
-		require.NoError(t, os.WriteFile(githubEnvFile, []byte{}, 0644))
+		require.NoError(t, os.WriteFile(githubEnvFile, []byte{}, 0o644))
 		t.Setenv("GITHUB_ENV", githubEnvFile)
 		for _, key := range tlsTrustEnvKeys {
 			t.Setenv(key, "")
