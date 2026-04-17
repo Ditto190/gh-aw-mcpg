@@ -434,8 +434,15 @@ func TestConfigureTLSTrustEnvironment(t *testing.T) {
 		const original = "UNCHANGED=1\n"
 		require.NoError(t, os.WriteFile(githubEnvFile, []byte(original), 0o644))
 		t.Setenv("GITHUB_ENV", githubEnvFile)
+		for _, key := range tlsTrustEnvKeys {
+			t.Setenv(key, "")
+		}
 
 		require.NoError(t, configureTLSTrustEnvironment(caPath))
+
+		for _, key := range tlsTrustEnvKeys {
+			assert.Equal(caPath, os.Getenv(key), "expected %s to be set", key)
+		}
 
 		content, err := os.ReadFile(githubEnvFile)
 		require.NoError(t, err)
