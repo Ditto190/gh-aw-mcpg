@@ -887,3 +887,46 @@ func TestForwardToGitHub_RewritesGraphQLPathForGHESAPIBase(t *testing.T) {
 		})
 	}
 }
+
+func TestForwardToGitHub_RewritesGraphQLPathForDotComAPIBase(t *testing.T) {
+	var receivedPath string
+	var receivedQuery string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedPath = r.URL.Path
+		receivedQuery = r.URL.RawQuery
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	s := &Server{
+		githubAPIURL: upstream.URL,
+		httpClient:   upstream.Client(),
+	}
+
+	tests := []struct {
+		name      string
+		path      string
+		wantPath  string
+		wantQuery string
+	}{
+		{name: "plain graphql endpoint", path: "/graphql", wantPath: "/graphql"},
+		{name: "ghes api graphql endpoint", path: "/api/graphql", wantPath: "/graphql"},
+		{name: "gh host prefixed graphql endpoint", path: "/api/v3/graphql", wantPath: "/graphql"},
+		{name: "graphql endpoint with query string", path: "/api/graphql?foo=bar", wantPath: "/graphql", wantQuery: "foo=bar"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			receivedPath = ""
+			receivedQuery = ""
+
+			resp, err := s.forwardToGitHub(context.Background(), http.MethodPost, tt.path, nil, "application/json", "")
+			require.NoError(t, err)
+			require.NotNil(t, resp)
+			defer resp.Body.Close()
+
+			assert.Equal(t, tt.wantPath, receivedPath)
+			assert.Equal(t, tt.wantQuery, receivedQuery)
+		})
+	}
+}
