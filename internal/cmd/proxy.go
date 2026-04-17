@@ -334,9 +334,9 @@ func configureTLSTrustEnvironment(caCertPath string) error {
 		return nil
 	}
 
-	f, err := os.OpenFile(githubEnvPath, os.O_APPEND|os.O_WRONLY, 0)
+	f, err := os.OpenFile(githubEnvPath, os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
-		logProxyCmd.Printf("Skipping GITHUB_ENV TLS trust export: open failed for %s: %v", githubEnvPath, err)
+		logger.LogWarn("startup", "Skipping GITHUB_ENV TLS trust export: open failed for %s: %v", githubEnvPath, err)
 		return nil
 	}
 	defer f.Close()

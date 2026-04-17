@@ -428,10 +428,15 @@ func TestConfigureTLSTrustEnvironment(t *testing.T) {
 		}
 	})
 
+	t.Run("skips GITHUB_ENV append when env var is unset", func(t *testing.T) {
+		t.Setenv("GITHUB_ENV", "")
+		require.NoError(t, configureTLSTrustEnvironment(caPath))
+	})
+
 	t.Run("appends trust environment variables to GITHUB_ENV", func(t *testing.T) {
 		assert := assert.New(t)
 		githubEnvFile := t.TempDir() + "/github_env"
-		require.NoError(t, os.WriteFile(githubEnvFile, []byte{}, 0600))
+		require.NoError(t, os.WriteFile(githubEnvFile, []byte{}, 0644))
 		t.Setenv("GITHUB_ENV", githubEnvFile)
 		for _, key := range tlsTrustEnvKeys {
 			t.Setenv(key, "")
