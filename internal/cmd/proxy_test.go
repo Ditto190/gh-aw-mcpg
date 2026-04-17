@@ -409,3 +409,38 @@ func TestClientAddr(t *testing.T) {
 		})
 	}
 }
+
+func TestConfigureTLSTrustEnvironment(t *testing.T) {
+	caPath := "/tmp/proxy-tls/ca.crt"
+
+	t.Run("sets trust environment variables in process", func(t *testing.T) {
+		t.Setenv("GITHUB_ENV", "")
+
+		err := configureTLSTrustEnvironment(caPath)
+		require.NoError(t, err)
+
+		for _, key := range tlsTrustEnvKeys {
+			assert.Equal(t, caPath, os.Getenv(key), "expected %s to be set", key)
+		}
+	})
+
+	t.Run("appends trust environment variables to GITHUB_ENV", func(t *testing.T) {
+		githubEnvFile := t.TempDir() + "/github_env"
+		t.Setenv("GITHUB_ENV", githubEnvFile)
+
+		err := configureTLSTrustEnvironment(caPath)
+		require.NoError(t, err)
+
+		content, err := os.ReadFile(githubEnvFile)
+		require.NoError(t, err)
+		for _, key := range tlsTrustEnvKeys {
+			assert.Contains(t, string(content), key+"="+caPath+"\n")
+		}
+	})
+
+	t.Run("rejects CA cert path with newline", func(t *testing.T) {
+		err := configureTLSTrustEnvironment("/tmp/ca.crt\nMALICIOUS=1")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "contains newline")
+	})
+}

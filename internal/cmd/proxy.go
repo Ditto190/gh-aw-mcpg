@@ -4,12 +4,14 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -23,6 +25,14 @@ import (
 )
 
 var logProxyCmd = logger.New("cmd:proxy")
+
+var tlsTrustEnvKeys = []string{
+	"NODE_EXTRA_CA_CERTS",
+	"SSL_CERT_FILE",
+	"GIT_SSL_CAINFO",
+	"CURL_CA_BUNDLE",
+	"REQUESTS_CA_BUNDLE",
+}
 
 // Proxy subcommand flag variables
 var (
@@ -223,6 +233,9 @@ func runProxy(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("failed to generate TLS certificates: %w", err)
 		}
+		if err := configureTLSTrustEnvironment(tlsCfg.CACertPath); err != nil {
+			return err
+		}
 		logger.LogInfo("startup", "TLS certificates generated: ca=%s", tlsCfg.CACertPath)
 	}
 
@@ -268,6 +281,8 @@ func runProxy(cmd *cobra.Command, args []string) error {
 			fmt.Fprintf(os.Stderr, "\nConnect with:\n")
 			fmt.Fprintf(os.Stderr, "  export GH_HOST=%s\n", clientAddr(actualAddr))
 			fmt.Fprintf(os.Stderr, "  export NODE_EXTRA_CA_CERTS=%s\n", tlsCfg.CACertPath)
+			fmt.Fprintf(os.Stderr, "  export SSL_CERT_FILE=%s\n", tlsCfg.CACertPath)
+			fmt.Fprintf(os.Stderr, "  export GIT_SSL_CAINFO=%s\n", tlsCfg.CACertPath)
 			fmt.Fprintf(os.Stderr, "  gh issue list -R org/repo\n\n")
 		} else {
 			fmt.Fprintf(os.Stderr, "\nConnect with:\n")
@@ -301,4 +316,36 @@ func clientAddr(addr string) string {
 		return net.JoinHostPort("localhost", port)
 	}
 	return addr
+}
+
+func configureTLSTrustEnvironment(caCertPath string) error {
+	if strings.ContainsAny(caCertPath, "\r\n") {
+		return fmt.Errorf("invalid TLS CA cert path contains newline")
+	}
+
+	for _, key := range tlsTrustEnvKeys {
+		if err := os.Setenv(key, caCertPath); err != nil {
+			return fmt.Errorf("failed to set %s: %w", key, err)
+		}
+	}
+
+	githubEnvPath := os.Getenv("GITHUB_ENV")
+	if githubEnvPath == "" {
+		return nil
+	}
+
+	f, err := os.OpenFile(githubEnvPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+	if err != nil {
+		return fmt.Errorf("failed to open GITHUB_ENV file %s: %w", githubEnvPath, err)
+	}
+	defer f.Close()
+
+	for _, key := range tlsTrustEnvKeys {
+		if _, err := io.WriteString(f, key+"="+caCertPath+"\n"); err != nil {
+			return fmt.Errorf("failed writing %s to GITHUB_ENV file: %w", key, err)
+		}
+	}
+
+	logProxyCmd.Printf("Appended TLS trust environment to GITHUB_ENV: %s", githubEnvPath)
+	return nil
 }

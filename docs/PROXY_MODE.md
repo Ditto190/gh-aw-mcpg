@@ -22,6 +22,8 @@ awmg proxy \
 # Trust the generated CA and point gh at the proxy
 export GH_HOST=localhost:8443
 export NODE_EXTRA_CA_CERTS=/tmp/gh-aw/mcp-logs/proxy-tls/ca.crt
+export SSL_CERT_FILE=/tmp/gh-aw/mcp-logs/proxy-tls/ca.crt
+export GIT_SSL_CAINFO=/tmp/gh-aw/mcp-logs/proxy-tls/ca.crt
 gh issue list -R org/repo
 ```
 
@@ -167,6 +169,8 @@ docker run --rm -p 8443:8443 \
 # Trust the CA cert from the mounted log volume
 export GH_HOST=localhost:8443
 export NODE_EXTRA_CA_CERTS=/tmp/proxy-logs/proxy-tls/ca.crt
+export SSL_CERT_FILE=/tmp/proxy-logs/proxy-tls/ca.crt
+export GIT_SSL_CAINFO=/tmp/proxy-logs/proxy-tls/ca.crt
 gh issue list -R org/repo
 ```
 
@@ -219,7 +223,12 @@ When `--tls` is enabled, the proxy writes to `--tls-dir` (default: `<log-dir>/pr
 **gh CLI / Node.js**:
 ```bash
 export NODE_EXTRA_CA_CERTS=/tmp/gh-aw/mcp-logs/proxy-tls/ca.crt
+export SSL_CERT_FILE=/tmp/gh-aw/mcp-logs/proxy-tls/ca.crt
+export GIT_SSL_CAINFO=/tmp/gh-aw/mcp-logs/proxy-tls/ca.crt
 ```
+
+When `GITHUB_ENV` is present (GitHub Actions), `awmg proxy --tls` appends these TLS trust
+variables automatically for downstream steps.
 
 **System-wide (Ubuntu)**:
 ```bash
