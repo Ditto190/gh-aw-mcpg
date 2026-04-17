@@ -415,6 +415,7 @@ func TestConfigureTLSTrustEnvironment(t *testing.T) {
 
 	t.Run("sets trust environment variables in process", func(t *testing.T) {
 		assert := assert.New(t)
+		t.Setenv("GITHUB_ENV", "")
 		for _, key := range tlsTrustEnvKeys {
 			t.Setenv(key, "")
 		}
@@ -428,8 +429,17 @@ func TestConfigureTLSTrustEnvironment(t *testing.T) {
 	})
 
 	t.Run("does not rely on GITHUB_ENV", func(t *testing.T) {
-		t.Setenv("GITHUB_ENV", "/path/that/does/not/exist/github_env")
+		assert := assert.New(t)
+		githubEnvFile := t.TempDir() + "/github_env"
+		const original = "UNCHANGED=1\n"
+		require.NoError(t, os.WriteFile(githubEnvFile, []byte(original), 0o644))
+		t.Setenv("GITHUB_ENV", githubEnvFile)
+
 		require.NoError(t, configureTLSTrustEnvironment(caPath))
+
+		content, err := os.ReadFile(githubEnvFile)
+		require.NoError(t, err)
+		assert.Equal(original, string(content))
 	})
 
 	t.Run("rejects CA cert path with newline", func(t *testing.T) {
