@@ -335,7 +335,7 @@ func configureTLSTrustEnvironment(caCertPath string) error {
 	}
 
 	// Best-effort append: the proxy should still start even if GITHUB_ENV cannot be opened.
-	f, err := os.OpenFile(githubEnvPath, os.O_APPEND|os.O_WRONLY, 0o644)
+	f, err := os.OpenFile(githubEnvPath, os.O_APPEND|os.O_WRONLY, 0)
 	if err != nil {
 		logger.LogWarn("startup", "Skipping GITHUB_ENV TLS trust export: open failed for %s: %v", githubEnvPath, err)
 		return nil
@@ -344,7 +344,8 @@ func configureTLSTrustEnvironment(caCertPath string) error {
 
 	for _, key := range tlsTrustEnvKeys {
 		if _, err := io.WriteString(f, key+"="+caCertPath+"\n"); err != nil {
-			return fmt.Errorf("failed writing %s to GITHUB_ENV file: %w", key, err)
+			logger.LogWarn("startup", "Skipping GITHUB_ENV TLS trust export: write failed for %s (%s): %v", githubEnvPath, key, err)
+			return nil
 		}
 	}
 
