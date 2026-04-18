@@ -293,11 +293,10 @@ awmg/
 - **`internal/oidc/`** - OIDC authentication for HTTP MCP backends
 - **`internal/proxy/`** - HTTP forward proxy applying DIFC filtering to `gh` CLI and REST/GraphQL requests
 - **`internal/server/`** - HTTP server with routed and unified modes
-- **`internal/strutil/`** - String utility helpers (deduplication, trimming)
+- **`internal/strutil/`** - String and formatting utility helpers (deduplication, trimming, duration formatting)
 - **`internal/syncutil/`** - Concurrency utility helpers (get-or-create pattern)
 - **`internal/sys/`** - System utilities
 - **`internal/testutil/`** - Test utilities and helpers
-- **`internal/timeutil/`** - Time formatting utilities
 - **`internal/tracing/`** - OpenTelemetry OTLP trace export helpers (HTTP handler wrapping, provider management)
 - **`internal/tty/`** - Terminal detection utilities
 - **`internal/version/`** - Version management
