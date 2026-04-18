@@ -444,8 +444,9 @@ func logInboundRPCResponse(serverID string, payload []byte, err error, shouldAtt
 	}
 }
 
-// logInboundRPCResponseFromResult marshals a response payload, logs the inbound response, and
-// returns the original result and error unchanged.
+// logInboundRPCResponseFromResult attempts to marshal a response payload for logging,
+// silently ignores marshal failures, logs the inbound response, and returns the
+// original result and error unchanged.
 func logInboundRPCResponseFromResult(serverID string, result *Response, err error, shouldAttachTags bool, snapshot *AgentTagsSnapshot) (*Response, error) {
 	var responsePayload []byte
 	if result != nil {
