@@ -1,7 +1,6 @@
 package difc
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -590,11 +589,11 @@ func TestViolationError_Error(t *testing.T) {
 			msg := tt.err.Error()
 			assert.NotEmpty(t, msg)
 			for _, want := range tt.wantContains {
-				assert.True(t, strings.Contains(msg, want),
+				assert.Contains(t, msg, want,
 					"expected %q in error message %q", want, msg)
 			}
 			for _, absent := range tt.wantAbsent {
-				assert.False(t, strings.Contains(msg, absent),
+				assert.NotContains(t, msg, absent,
 					"expected %q NOT to be in error message %q", absent, msg)
 			}
 		})
@@ -616,7 +615,7 @@ func TestViolationError_Detailed(t *testing.T) {
 		base := err.Error()
 
 		// Detailed should contain the base error message
-		assert.True(t, strings.Contains(detailed, base), "detailed should include base error")
+		assert.Contains(t, detailed, base, "detailed should include base error")
 
 		// Detailed should include agent and resource tag context
 		assert.Contains(t, detailed, "Agent")

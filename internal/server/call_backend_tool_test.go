@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 	"time"
 
@@ -482,8 +481,8 @@ func TestCallBackendTool_AllowedToolsError_MessageFormat(t *testing.T) {
 	require.True(result.IsError)
 	require.Len(result.Content, 1)
 	text := result.Content[0].(*sdk.TextContent).Text
-	assert.True(t, strings.Contains(text, `"blocked"`), "error message should include tool name: %s", text)
-	assert.True(t, strings.Contains(text, "allowed-tools"), "error message should mention allowed-tools: %s", text)
+	assert.Contains(t, text, `"blocked"`, "error message should include tool name: %s", text)
+	assert.Contains(t, text, "allowed-tools", "error message should mention allowed-tools: %s", text)
 }
 
 // TestCallBackendTool_ToolTimeoutEnforcedViaContext verifies that the configured

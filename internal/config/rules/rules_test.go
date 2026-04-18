@@ -9,6 +9,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func validationErrAsError(err *ValidationError) error {
+	if err == nil {
+		return nil
+	}
+	return err
+}
+
 func TestPortRange(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -74,7 +81,7 @@ func TestPortRange(t *testing.T) {
 				assert.Contains(t, err.Message, tt.errMsg, "Error message should contain expected text")
 				assert.Equal(t, tt.jsonPath, err.JSONPath, "JSONPath should match")
 			} else {
-				require.Nil(t, err, "Unexpected validation error")
+				require.NoError(t, validationErrAsError(err), "Unexpected validation error")
 			}
 		})
 	}
@@ -138,7 +145,7 @@ func TestTimeoutPositive(t *testing.T) {
 				assert.Equal(t, tt.jsonPath, err.JSONPath, "JSONPath should match")
 				assert.Equal(t, tt.fieldName, err.Field, "Field name should match")
 			} else {
-				require.Nil(t, err, "Unexpected validation error")
+				require.NoError(t, validationErrAsError(err), "Unexpected validation error")
 			}
 		})
 	}
@@ -295,7 +302,7 @@ func TestMountFormat(t *testing.T) {
 				assert.Contains(t, err.Message, tt.errMsg, "Error message should contain expected text")
 				assert.Equal(t, fmt.Sprintf("%s.mounts[%d]", tt.jsonPath, tt.index), err.JSONPath, "JSONPath should match expected pattern")
 			} else {
-				require.Nil(t, err, "Unexpected validation error")
+				require.NoError(t, validationErrAsError(err), "Unexpected validation error")
 			}
 		})
 	}
@@ -899,7 +906,7 @@ func TestNonEmptyString(t *testing.T) {
 				assert.Contains(t, err.Error(), tt.errMsg)
 				assert.Contains(t, err.Error(), tt.jsonPath)
 			} else {
-				require.Nil(t, err, "Unexpected validation error")
+				require.NoError(t, validationErrAsError(err), "Unexpected validation error")
 			}
 		})
 	}
@@ -1039,7 +1046,7 @@ func TestAbsolutePath(t *testing.T) {
 				assert.Contains(t, err.Error(), tt.errMsg)
 				assert.Contains(t, err.Error(), tt.jsonPath)
 			} else {
-				require.Nil(t, err, "Unexpected validation error")
+				require.NoError(t, validationErrAsError(err), "Unexpected validation error")
 			}
 		})
 	}

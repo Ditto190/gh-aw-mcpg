@@ -195,7 +195,7 @@ func TestMiddlewareWithLargePayload(t *testing.T) {
 	// Verify preview truncation in Content field (preview ends with ... when truncated)
 	previewInContent := contentMap["payloadPreview"].(string)
 	if strings.HasSuffix(previewInContent, "...") {
-		assert.True(t, len(previewInContent) <= 503, "Preview in Content should be truncated")
+		assert.LessOrEqual(t, len(previewInContent), 503, "Preview in Content should be truncated")
 	}
 
 	// Also check data return value
@@ -204,7 +204,7 @@ func TestMiddlewareWithLargePayload(t *testing.T) {
 	// Verify preview truncation (check if it ends with ...)
 	preview := dataMap["payloadPreview"].(string)
 	if strings.HasSuffix(preview, "...") {
-		assert.True(t, len(preview) <= 503, "Preview should be truncated")
+		assert.LessOrEqual(t, len(preview), 503, "Preview should be truncated")
 	}
 
 	// Verify payload file has complete data
