@@ -19,7 +19,6 @@ func TestLogInboundRPCResponseFromResult_LogsMarshaledResponseAndReturnsResultAn
 	tmpDir := t.TempDir()
 	logDir := filepath.Join(tmpDir, "logs")
 
-	require.NoError(logger.CloseJSONLLogger())
 	require.NoError(logger.InitJSONLLogger(logDir, "rpc-messages.jsonl"))
 	t.Cleanup(func() {
 		require.NoError(logger.CloseJSONLLogger())
@@ -37,10 +36,8 @@ func TestLogInboundRPCResponseFromResult_LogsMarshaledResponseAndReturnsResultAn
 	assert.Same(expectedResult, result)
 	assert.ErrorIs(err, expectedErr)
 
-	require.NoError(logger.CloseJSONLLogger())
-
-	logFile, readErr := os.Open(filepath.Join(logDir, "rpc-messages.jsonl"))
-	require.NoError(readErr)
+	logFile, err := os.Open(filepath.Join(logDir, "rpc-messages.jsonl"))
+	require.NoError(err)
 	defer logFile.Close()
 
 	scanner := bufio.NewScanner(logFile)
