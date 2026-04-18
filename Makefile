@@ -1,4 +1,4 @@
-.PHONY: build lint test test-unit test-race test-integration test-container-proxy test-all test-serena test-serena-gateway coverage test-ci format clean install release help agent-finished
+.PHONY: build lint test test-unit test-race test-integration test-container-proxy test-all test-rust test-serena test-serena-gateway coverage test-ci format clean install release help agent-finished
 
 # Default target
 .DEFAULT_GOAL := help
@@ -50,6 +50,17 @@ test-all: build
 
 # Legacy target: run unit tests (for backward compatibility)
 test: test-unit
+
+# Run Rust guard unit tests (requires cargo)
+test-rust:
+	@echo "Running Rust guard unit tests..."
+	@if command -v cargo >/dev/null 2>&1; then \
+		cd guards/github-guard/rust-guard && cargo test 2>&1; \
+	else \
+		echo "⚠ Warning: cargo not found. Skipping Rust guard tests."; \
+		echo "  Install Rust from https://rustup.rs/ to run these tests."; \
+	fi
+	@echo "Rust guard tests complete!"
 
 # Run binary integration tests (requires built binary)
 test-integration:
@@ -106,6 +117,9 @@ agent-finished:
 	@echo ""
 	@echo "Running all tests..."
 	@go test ./...
+	@echo ""
+	@echo "Running Rust guard unit tests..."
+	@$(MAKE) test-rust
 	@echo ""
 	@echo "✓ All agent-finished checks passed!"
 
@@ -315,6 +329,7 @@ help:
 	@echo "  test-unit       - Run unit tests (no build required)"
 	@echo "  test-race       - Run unit tests with race detection (catches concurrent data races)"
 	@echo "  test-integration - Run binary integration tests (requires built binary)"
+	@echo "  test-rust       - Run Rust guard unit tests (requires cargo)"
 	@echo "  test-all        - Run all tests (unit + integration)"
 	@echo "  test-serena     - Run Serena MCP Server tests (direct connection)"
 	@echo "  test-serena-gateway - Run Serena MCP Server tests (via MCP Gateway)"
