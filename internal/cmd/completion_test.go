@@ -23,21 +23,30 @@ func captureStdoutDuring(t *testing.T, fn func()) string {
 
 	orig := os.Stdout
 	os.Stdout = w
-	// Safety net: restore if the function panics before we can restore manually.
-	t.Cleanup(func() {
+
+	defer func() {
 		if os.Stdout != orig {
 			os.Stdout = orig
 		}
-	})
+		_ = w.Close()
+		_ = r.Close()
+	}()
+
+	var buf bytes.Buffer
+	copyDone := make(chan error, 1)
+	go func() {
+		_, copyErr := io.Copy(&buf, r)
+		copyDone <- copyErr
+	}()
 
 	fn()
 
-	w.Close()
 	os.Stdout = orig // restore immediately so repeated calls in the same test work
-
-	var buf bytes.Buffer
-	_, err = io.Copy(&buf, r)
-	r.Close()
+	err = w.Close()
+	require.NoError(t, err)
+	err = <-copyDone
+	require.NoError(t, err)
+	err = r.Close()
 	require.NoError(t, err)
 
 	return buf.String()
