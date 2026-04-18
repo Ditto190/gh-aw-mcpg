@@ -119,11 +119,7 @@ agent-finished:
 	@go test ./...
 	@echo ""
 	@echo "Running Rust guard unit tests..."
-	@if command -v cargo >/dev/null 2>&1; then \
-		cd guards/github-guard/rust-guard && cargo test 2>&1; \
-	else \
-		echo "⚠ Warning: cargo not found. Skipping Rust guard tests."; \
-	fi
+	@$(MAKE) test-rust
 	@echo ""
 	@echo "✓ All agent-finished checks passed!"
 
