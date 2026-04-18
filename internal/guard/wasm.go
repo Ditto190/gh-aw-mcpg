@@ -20,15 +20,6 @@ import (
 
 var logWasm = logger.New("guard:wasm")
 
-func logMarshaledForDebug(value interface{}, onMarshalSuccess func(string), onMarshalFailure func(error)) {
-	resultJSON, err := json.Marshal(value)
-	if err != nil {
-		onMarshalFailure(err)
-		return
-	}
-	onMarshalSuccess(string(resultJSON))
-}
-
 // globalCompilationCache is a process-level compilation cache shared across all
 // WasmGuard instances. wazero's cache is goroutine-safe and eliminates redundant
 // JIT compilation when multiple guards load the same WASM binary.
@@ -704,7 +695,7 @@ func (g *WasmGuard) LabelAgent(ctx context.Context, policy interface{}, backend 
 		logWasm.Printf("LabelAgent normalizePolicyPayload failed: guard=%s, error=%v", g.name, err)
 		return nil, err
 	}
-	logMarshaledForDebug(
+	logger.LogMarshaledForDebug(
 		normalizedPolicy,
 		func(policyJSON string) {
 			logWasm.Printf("LabelAgent normalized policy: guard=%s, policy=%s", g.name, policyJSON)
@@ -739,7 +730,7 @@ func (g *WasmGuard) LabelAgent(ctx context.Context, policy interface{}, backend 
 		return nil, err
 	}
 
-	logMarshaledForDebug(
+	logger.LogMarshaledForDebug(
 		result,
 		func(responseJSON string) {
 			logWasm.Printf("LabelAgent parsed response: guard=%s, response=%s", g.name, responseJSON)
