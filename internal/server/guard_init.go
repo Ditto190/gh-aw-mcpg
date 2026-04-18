@@ -17,6 +17,15 @@ import (
 
 var logGuardInit = logger.New("server:guard_init")
 
+func logMarshaledForDebug(value interface{}, onMarshalSuccess func(string), onMarshalFailure func(error)) {
+	resultJSON, err := json.Marshal(value)
+	if err != nil {
+		onMarshalFailure(err)
+		return
+	}
+	onMarshalSuccess(string(resultJSON))
+}
+
 // hasServerGuardPolicies reports whether any server in cfg has per-server guard policies
 // configured. This is used during DIFC auto-detection to enable enforcement when policies
 // are present even if no non-noop guard was registered (e.g., guard missing or failed to load).
@@ -351,12 +360,15 @@ func (us *UnifiedServer) ensureGuardInitialized(
 		log.Printf("[DIFC] label_agent returned nil result: server=%s, session=%s, guard=%s", serverID, sessionID, g.Name())
 		return defaultMode, fmt.Errorf("label_agent returned nil result")
 	}
-	resultJSON, marshalErr := json.Marshal(labelAgentResult)
-	if marshalErr != nil {
-		log.Printf("[DIFC] label_agent returned result (failed to serialize for logging): server=%s, session=%s, guard=%s, error=%v", serverID, sessionID, g.Name(), marshalErr)
-	} else {
-		log.Printf("[DIFC] label_agent response: server=%s, session=%s, guard=%s, response=%s", serverID, sessionID, g.Name(), string(resultJSON))
-	}
+	logMarshaledForDebug(
+		labelAgentResult,
+		func(resultJSON string) {
+			log.Printf("[DIFC] label_agent response: server=%s, session=%s, guard=%s, response=%s", serverID, sessionID, g.Name(), resultJSON)
+		},
+		func(marshalErr error) {
+			log.Printf("[DIFC] label_agent returned result (failed to serialize for logging): server=%s, session=%s, guard=%s, error=%v", serverID, sessionID, g.Name(), marshalErr)
+		},
+	)
 
 	mode := defaultMode
 	if labelAgentResult.DIFCMode != "" {
