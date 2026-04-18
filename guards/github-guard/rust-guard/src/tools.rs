@@ -99,6 +99,7 @@ pub const READ_WRITE_OPERATIONS: &[&str] = &[
     "update_issue_state",     // PATCH — opens or closes an issue
     "update_issue_title",     // PATCH — modifies issue title
     "update_issue_type",      // PATCH — modifies issue type
+    "set_issue_fields",       // GraphQL — sets org-level custom field values on an issue
 
     // Sub-issue management tools (alongside sub_issue_write composite)
     "add_sub_issue",          // POST  /repos/.../issues/{number}/sub_issues
@@ -348,6 +349,7 @@ mod tests {
             "update_issue_state",
             "update_issue_title",
             "update_issue_type",
+            "set_issue_fields",
         ] {
             assert!(
                 is_read_write_operation(op),

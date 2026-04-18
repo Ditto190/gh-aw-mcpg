@@ -4753,6 +4753,7 @@ mod tests {
             "update_issue_state",
             "update_issue_title",
             "update_issue_type",
+            "set_issue_fields",
         ] {
             let (secrecy, integrity, _desc) = apply_tool_labels(
                 tool,

@@ -543,6 +543,7 @@ pub fn apply_tool_labels(
         | "update_issue_state"
         | "update_issue_title"
         | "update_issue_type"
+        | "set_issue_fields"
         | "add_sub_issue"
         | "remove_sub_issue"
         | "reprioritize_sub_issue"
