@@ -1089,7 +1089,7 @@ port 3000
 	errMsg := err.Error()
 	assert.Contains(t, errMsg, "line", "Error should mention line number")
 	// Our improved format includes "column" explicitly when ParseError is detected
-	assert.Regexp(t, `column|line 2`, errMsg,
+	assert.Regexp(t, `\bcolumn\b|\bline\s+2\b`, errMsg,
 		"Error should mention column or line position, got: %s", errMsg)
 }
 

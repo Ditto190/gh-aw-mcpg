@@ -153,7 +153,9 @@ func TestUnmarshalParams(t *testing.T) {
 		// JSON unmarshal converts numbers to float64 by default
 		assert.Equal(t, float64(42), target["int_val"])
 		assert.Equal(t, 3.14, target["float_val"])
-		assert.True(t, target["bool_val"].(bool))
+		boolVal, ok := target["bool_val"].(bool)
+		require.True(t, ok, "bool_val should be a bool")
+		assert.True(t, boolVal)
 		assert.Len(t, target["array_val"], 3)
 		assert.NotNil(t, target["object_val"])
 		assert.Nil(t, target["null_val"])
