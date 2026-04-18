@@ -4771,6 +4771,40 @@ mod tests {
     }
 
     #[test]
+    fn test_apply_tool_labels_set_issue_fields_writer_integrity() {
+        let ctx = default_ctx();
+        let repo_id = "github/copilot";
+        let tool_args = json!({
+            "owner": "github",
+            "repo": "copilot",
+            "issue_number": 1,
+            "fields": [
+                {
+                    "field_id": "PVTSSF_example",
+                    "text_value": "In progress"
+                }
+            ]
+        });
+
+        let (secrecy, integrity, _desc) = apply_tool_labels(
+            "set_issue_fields",
+            &tool_args,
+            repo_id,
+            vec![],
+            vec![],
+            String::new(),
+            &ctx,
+        );
+
+        assert_eq!(secrecy, vec![] as Vec<String>, "set_issue_fields secrecy mismatch");
+        assert_eq!(
+            integrity,
+            writer_integrity(repo_id, &ctx),
+            "set_issue_fields should have writer integrity"
+        );
+    }
+
+    #[test]
     fn test_apply_tool_labels_granular_sub_issue_tools_writer_integrity() {
         let ctx = default_ctx();
         let repo_id = "github/copilot";

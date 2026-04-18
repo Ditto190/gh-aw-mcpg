@@ -533,6 +533,15 @@ pub fn apply_tool_labels(
             integrity = writer_integrity(repo_id, ctx);
         }
 
+        // === Issue custom fields mutation (repo-scoped write) ===
+        "set_issue_fields" => {
+            // Field definitions are organization-level, but the mutation targets a specific
+            // issue in owner/repo and returns issue-scoped metadata.
+            // S = S(repo); I = writer
+            secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
+            integrity = writer_integrity(repo_id, ctx);
+        }
+
         // === Granular repo-scoped write operations ===
         // Covers granular issue PATCH tools, sub-issue management, granular PR PATCH tools,
         // and PR review tools. All follow: S = S(repo), I = writer.
