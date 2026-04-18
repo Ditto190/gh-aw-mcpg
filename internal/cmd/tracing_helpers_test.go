@@ -10,7 +10,7 @@ import (
 	"github.com/github/gh-aw-mcpg/internal/config"
 )
 
-func TestRegisterTracingFlags_DefaultsFromEnvAndConfig(t *testing.T) {
+func TestRegisterTracingFlags_DefaultsFromEnv(t *testing.T) {
 	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://collector:4318")
 	t.Setenv("OTEL_SERVICE_NAME", "test-service")
 
@@ -41,4 +41,14 @@ func TestRegisterTracingFlags_DefaultsFromEnvAndConfig(t *testing.T) {
 	actualSampleRate, err := cmd.Flags().GetFloat64("otlp-sample-rate")
 	require.NoError(t, err)
 	assert.Equal(t, config.DefaultTracingSampleRate, actualSampleRate)
+
+	err = cmd.ParseFlags([]string{
+		"--otlp-endpoint=http://override:4318",
+		"--otlp-service-name=override-service",
+		"--otlp-sample-rate=0.25",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "http://override:4318", endpoint)
+	assert.Equal(t, "override-service", service)
+	assert.Equal(t, 0.25, sampleRate)
 }
