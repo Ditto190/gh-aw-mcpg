@@ -534,8 +534,9 @@ pub fn apply_tool_labels(
         }
 
         // === Granular repo-scoped write operations ===
-        // Covers granular issue PATCH tools, sub-issue management, granular PR PATCH tools,
-        // and PR review tools. All follow: S = S(repo), I = writer.
+        // Covers granular issue mutation tools (including custom field mutations),
+        // sub-issue management, granular PR mutation tools, and PR review tools.
+        // All follow: S = S(repo), I = writer.
         "update_issue_assignees"
         | "update_issue_body"
         | "update_issue_labels"
