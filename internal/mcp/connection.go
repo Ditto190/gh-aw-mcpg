@@ -444,6 +444,17 @@ func logInboundRPCResponse(serverID string, payload []byte, err error, shouldAtt
 	}
 }
 
+// logInboundRPCResponseFromResult marshals a response payload, logs the inbound response, and
+// returns the original result and error unchanged.
+func logInboundRPCResponseFromResult(serverID string, result *Response, err error, shouldAttachTags bool, snapshot *AgentTagsSnapshot) (*Response, error) {
+	var responsePayload []byte
+	if result != nil {
+		responsePayload, _ = json.Marshal(result)
+	}
+	logInboundRPCResponse(serverID, responsePayload, err, shouldAttachTags, snapshot)
+	return result, err
+}
+
 // SendRequest sends a JSON-RPC request and waits for the response
 // The serverID parameter is used for logging to associate the request with a backend server
 func (c *Connection) SendRequest(method string, params interface{}) (*Response, error) {
@@ -481,14 +492,7 @@ func (c *Connection) SendRequestWithServerID(ctx context.Context, method string,
 		result, err = c.callSDKMethod(method, params)
 	}
 
-	// Log the response from backend server
-	var responsePayload []byte
-	if result != nil {
-		responsePayload, _ = json.Marshal(result)
-	}
-	logInboundRPCResponse(serverID, responsePayload, err, shouldAttachAgentTags, snapshot)
-
-	return result, err
+	return logInboundRPCResponseFromResult(serverID, result, err, shouldAttachAgentTags, snapshot)
 }
 
 // callSDKMethod calls the appropriate SDK method based on the method name
