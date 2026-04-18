@@ -268,7 +268,7 @@ func TestParseToolArguments(t *testing.T) {
 		require.NotNil(t, args)
 		assert.Equal(t, "search term", args["query"])
 		assert.Equal(t, float64(10), args["limit"])
-		assert.Equal(t, true, args["active"])
+		assert.True(t, args["active"].(bool))
 	})
 
 	t.Run("nested object arguments are parsed correctly", func(t *testing.T) {

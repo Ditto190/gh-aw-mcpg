@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -698,5 +697,5 @@ func TestLargePayload_PayloadPathStructure(t *testing.T) {
 
 	// This test documents the expected behavior
 	assert.Equal(t, "{payloadDir}/{sessionID}/{queryID}/payload.json", expectedStructure)
-	assert.True(t, strings.Contains(expectedStructure, "sessionID"), "Structure should include sessionID for isolation")
+	assert.Contains(t, expectedStructure, "sessionID", "Structure should include sessionID for isolation")
 }

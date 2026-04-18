@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -574,5 +573,5 @@ func TestRestBackendCaller_IssueRead_ResponseFormat(t *testing.T) {
 
 	text, ok := content[0]["text"].(string)
 	require.True(t, ok)
-	assert.True(t, strings.Contains(text, "Bug report"), "response text should contain the issue title")
+	assert.Contains(t, text, "Bug report", "response text should contain the issue title")
 }

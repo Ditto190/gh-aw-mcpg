@@ -682,7 +682,7 @@ func TestRewrapSearchResponse(t *testing.T) {
 		result := rewrapSearchResponse(original, filtered)
 		m := result.(map[string]interface{})
 		assert.Equal(t, float64(2), m["total_count"])
-		assert.Equal(t, false, m["incomplete_results"])
+		assert.False(t, m["incomplete_results"].(bool))
 		assert.Len(t, m["items"].([]interface{}), 2)
 	})
 

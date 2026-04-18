@@ -1,7 +1,6 @@
 package config
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -566,7 +565,7 @@ func TestValidateMounts(t *testing.T) {
 			if tt.shouldErr {
 				require.Error(t, err, "Expected an error but got none")
 				if tt.errMsg != "" {
-					assert.True(t, strings.Contains(err.Error(), tt.errMsg),
+					assert.Contains(t, err.Error(), tt.errMsg,
 						"Error message %q should contain %q", err.Error(), tt.errMsg)
 				}
 			} else {

@@ -245,7 +245,7 @@ func TestFixSchemaBytes_AddRegistryAndGuardPoliciesToStdioConfig(t *testing.T) {
 	require.True(t, hasGuardPolicies, "guard-policies field should be added to stdioServerConfig.properties")
 	gpMap := guardPolicies.(map[string]interface{})
 	assert.Equal(t, "object", gpMap["type"], "guard-policies.type should be 'object'")
-	assert.Equal(t, true, gpMap["additionalProperties"], "guard-policies.additionalProperties should be true")
+	assert.True(t, gpMap["additionalProperties"].(bool), "guard-policies.additionalProperties should be true")
 }
 
 // TestFixSchemaBytes_AddRegistryAndGuardPoliciesToHttpConfig covers the injection
