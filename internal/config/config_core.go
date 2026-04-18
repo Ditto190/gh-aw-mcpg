@@ -260,7 +260,7 @@ func applyGatewayDefaults(cfg *GatewayConfig) {
 	if cfg.KeepaliveInterval == 0 {
 		cfg.KeepaliveInterval = DefaultKeepaliveInterval
 	}
-	logConfig.Printf("Applied gateway defaults: port=%d, startupTimeout=%d, toolTimeout=%d, keepaliveInterval=%d",
+	logConfig.Printf("Resolved gateway config after defaulting: port=%d, startupTimeout=%d, toolTimeout=%d, keepaliveInterval=%d",
 		cfg.Port, cfg.StartupTimeout, cfg.ToolTimeout, cfg.KeepaliveInterval)
 }
 
@@ -373,7 +373,13 @@ func LoadFromFile(path string) (*Config, error) {
 	}
 
 	// Validate TOML stdio servers use Docker for containerization (Spec Section 3.2.1)
-	logConfig.Printf("Validating stdio server containerization requirements for %d servers", len(cfg.Servers))
+	stdioServerCount := 0
+	for _, serverCfg := range cfg.Servers {
+		if serverCfg.Type == "stdio" {
+			stdioServerCount++
+		}
+	}
+	logConfig.Printf("Validating stdio server containerization requirements for %d stdio servers", stdioServerCount)
 	if err := validateTOMLStdioContainerization(cfg.Servers); err != nil {
 		return nil, err
 	}
@@ -402,7 +408,7 @@ func LoadFromFile(path string) (*Config, error) {
 	// Merge opentelemetry key into tracing when present (spec §4.1.3.6).
 	// opentelemetry takes precedence over the legacy tracing key.
 	if cfg.Gateway.Opentelemetry != nil {
-		logConfig.Printf("opentelemetry section found: merging into tracing config, endpoint=%s", cfg.Gateway.Opentelemetry.Endpoint)
+		logConfig.Printf("opentelemetry section found: merging into tracing config (endpoint_set=%t)", cfg.Gateway.Opentelemetry.Endpoint != "")
 		cfg.Gateway.Tracing = cfg.Gateway.Opentelemetry
 		cfg.Gateway.Opentelemetry = nil
 		// Expand ${VAR} expressions in tracing fields before validation.
