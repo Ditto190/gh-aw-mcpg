@@ -350,7 +350,7 @@ func TestParseRateLimitResetFromText(t *testing.T) {
 			wantZero: true,
 		},
 		{
-			name:     "pattern without s/]/( terminator gives zero time",
+			name:     "pattern without s/]) terminator gives zero time",
 			text:     "rate reset in 42",
 			wantZero: true,
 		},
