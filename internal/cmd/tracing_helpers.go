@@ -25,20 +25,28 @@ func initTracingProviderWithFallback(
 	initWarningFormat string,
 	warnf func(format string, args ...any),
 ) *tracing.Provider {
+	debugLog.Print("Initializing tracing provider")
 	tracingProvider, err := tracing.InitProvider(ctx, tracingCfg)
 	if err != nil {
+		debugLog.Printf("Tracing provider init failed, falling back to no-op provider: %v", err)
 		warnf(initWarningFormat, err)
 		tracingProvider, _ = tracing.InitProvider(ctx, nil)
+	} else {
+		debugLog.Print("Tracing provider initialized successfully")
 	}
 
 	return tracingProvider
 }
 
 func shutdownTracingProviderWithTimeout(tracingProvider *tracing.Provider, warnf func(format string, args ...any)) {
+	debugLog.Print("Shutting down tracing provider")
 	shutdownCtxTracing, cancelTracing := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancelTracing()
 
 	if err := tracingProvider.Shutdown(shutdownCtxTracing); err != nil {
+		debugLog.Printf("Tracing provider shutdown error: %v", err)
 		warnf("tracing provider shutdown error: %v", err)
+	} else {
+		debugLog.Print("Tracing provider shut down successfully")
 	}
 }
