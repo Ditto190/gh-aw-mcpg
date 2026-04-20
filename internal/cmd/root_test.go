@@ -508,3 +508,189 @@ func TestPostRunCleanup(t *testing.T) {
 		assert.NotNil(t, rootCmd.PersistentPostRun, "PersistentPostRun should be set")
 	})
 }
+
+// TestWriteGatewayConfig_WildcardAddresses tests that wildcard bind addresses
+// (0.0.0.0 and ::) are replaced with 127.0.0.1 in the output client URLs,
+// since clients cannot connect to wildcard addresses directly.
+func TestWriteGatewayConfig_WildcardAddresses(t *testing.T) {
+	tests := []struct {
+		name        string
+		listenAddr  string
+		mode        string
+		wantURLHost string
+		wantPort    string
+	}{
+		{
+			name:        "IPv4 wildcard 0.0.0.0 remapped to 127.0.0.1",
+			listenAddr:  "0.0.0.0:3000",
+			mode:        "unified",
+			wantURLHost: "127.0.0.1",
+			wantPort:    "3000",
+		},
+		{
+			name:        "IPv6 wildcard :: remapped to 127.0.0.1",
+			listenAddr:  "[::]:4000",
+			mode:        "unified",
+			wantURLHost: "127.0.0.1",
+			wantPort:    "4000",
+		},
+		{
+			name:        "empty host (colon prefix) uses default 127.0.0.1",
+			listenAddr:  ":8080",
+			mode:        "routed",
+			wantURLHost: "127.0.0.1",
+			wantPort:    "8080",
+		},
+		{
+			name:        "non-wildcard IPv4 preserved as-is",
+			listenAddr:  "192.168.1.10:3000",
+			mode:        "unified",
+			wantURLHost: "192.168.1.10",
+			wantPort:    "3000",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &config.Config{
+				Servers: map[string]*config.ServerConfig{
+					"my-server": {Type: "stdio"},
+				},
+				Gateway: &config.GatewayConfig{},
+			}
+
+			var buf bytes.Buffer
+			err := writeGatewayConfig(cfg, tt.listenAddr, tt.mode, &buf)
+			require.NoError(t, err)
+
+			var result map[string]interface{}
+			err = json.Unmarshal(buf.Bytes(), &result)
+			require.NoError(t, err, "Output should be valid JSON")
+
+			mcpServers, ok := result["mcpServers"].(map[string]interface{})
+			require.True(t, ok, "Output should have mcpServers field")
+
+			serverCfg, ok := mcpServers["my-server"].(map[string]interface{})
+			require.True(t, ok, "my-server should exist in mcpServers")
+
+			serverURL, ok := serverCfg["url"].(string)
+			require.True(t, ok, "Server should have url field")
+
+			assert.Contains(t, serverURL, tt.wantURLHost,
+				"URL should contain expected host %q", tt.wantURLHost)
+			assert.Contains(t, serverURL, tt.wantPort,
+				"URL should contain expected port %q", tt.wantPort)
+			assert.NotContains(t, serverURL, "0.0.0.0",
+				"Output URL must never contain wildcard 0.0.0.0")
+			assert.NotContains(t, serverURL, "[::]",
+				"Output URL must never contain IPv6 wildcard [::]")
+		})
+	}
+}
+
+// TestWriteGatewayConfig_EmptyServerList verifies that configs with no servers
+// produce valid JSON with an empty mcpServers object.
+func TestWriteGatewayConfig_EmptyServerList(t *testing.T) {
+	cfg := &config.Config{
+		Servers: map[string]*config.ServerConfig{},
+		Gateway: &config.GatewayConfig{APIKey: "test-key"},
+	}
+
+	var buf bytes.Buffer
+	err := writeGatewayConfig(cfg, "127.0.0.1:3000", "unified", &buf)
+	require.NoError(t, err)
+
+	var result map[string]interface{}
+	err = json.Unmarshal(buf.Bytes(), &result)
+	require.NoError(t, err, "Output should be valid JSON even with no servers")
+
+	mcpServers, ok := result["mcpServers"].(map[string]interface{})
+	require.True(t, ok, "Output should have mcpServers field")
+	assert.Empty(t, mcpServers, "mcpServers should be empty when no servers configured")
+}
+
+// TestWriteGatewayConfig_FileSync tests writing to a real *os.File so the
+// f.Sync() code path is exercised.
+func TestWriteGatewayConfig_FileSync(t *testing.T) {
+	cfg := &config.Config{
+		Servers: map[string]*config.ServerConfig{
+			"svc": {Type: "stdio"},
+		},
+		Gateway: &config.GatewayConfig{APIKey: "key"},
+	}
+
+	tmpFile, err := os.CreateTemp(t.TempDir(), "gw-config-*.json")
+	require.NoError(t, err)
+	defer tmpFile.Close()
+
+	err = writeGatewayConfig(cfg, "127.0.0.1:3000", "unified", tmpFile)
+	require.NoError(t, err)
+
+	// Re-read and verify the file was written correctly
+	_, err = tmpFile.Seek(0, 0)
+	require.NoError(t, err)
+
+	var result map[string]interface{}
+	err = json.NewDecoder(tmpFile).Decode(&result)
+	require.NoError(t, err, "Written file should contain valid JSON")
+
+	mcpServers, ok := result["mcpServers"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Contains(t, mcpServers, "svc", "svc server should appear in output")
+}
+
+// TestLoadEnvFile_SkipMalformedLines verifies that lines without an '=' sign
+// are silently skipped rather than causing an error.
+func TestLoadEnvFile_SkipMalformedLines(t *testing.T) {
+	const envKey = "LOAD_ENV_VALID_KEY_SKIP_TEST"
+	t.Setenv(envKey, "")
+
+	tmpDir := t.TempDir()
+	envFilePath := filepath.Join(tmpDir, ".env")
+	content := `# comment line
+MALFORMED_NO_EQUALS
+` + envKey + `=expected_value
+ANOTHER_MALFORMED_LINE_WITHOUT_EQUALS
+`
+	require.NoError(t, os.WriteFile(envFilePath, []byte(content), 0644))
+
+	err := loadEnvFile(envFilePath)
+	require.NoError(t, err, "Malformed lines should be silently skipped, not cause errors")
+
+	// Only the valid KEY=VALUE line should have been applied
+	assert.Equal(t, "expected_value", os.Getenv(envKey))
+}
+
+// TestLoadEnvFile_OnlyComments verifies that a file with only comment and blank
+// lines is processed without error and no env vars are modified.
+func TestLoadEnvFile_OnlyComments(t *testing.T) {
+	tmpDir := t.TempDir()
+	envFilePath := filepath.Join(tmpDir, ".env")
+	content := `# This is a comment
+# Another comment
+
+# Yet another
+`
+	require.NoError(t, os.WriteFile(envFilePath, []byte(content), 0644))
+
+	err := loadEnvFile(envFilePath)
+	require.NoError(t, err, "File with only comments should be processed without error")
+}
+
+// TestLoadEnvFile_EqualsInValue verifies that values containing '=' are
+// preserved correctly (SplitN(..., 2) must not split on the second '=').
+func TestLoadEnvFile_EqualsInValue(t *testing.T) {
+	const envKey = "LOAD_ENV_EQUALS_IN_VALUE"
+	t.Setenv(envKey, "")
+
+	tmpDir := t.TempDir()
+	envFilePath := filepath.Join(tmpDir, ".env")
+	// Value intentionally contains '=' characters (e.g. base64-encoded secret)
+	content := envKey + `=dGVzdA==`
+	require.NoError(t, os.WriteFile(envFilePath, []byte(content), 0644))
+
+	err := loadEnvFile(envFilePath)
+	require.NoError(t, err)
+	assert.Equal(t, "dGVzdA==", os.Getenv(envKey),
+		"Value containing '=' signs should not be split on the second '='")
+}
