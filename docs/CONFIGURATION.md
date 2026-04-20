@@ -135,7 +135,8 @@ Run `./awmg --help` for full CLI options. Key flags:
 - **`env`** (optional): Environment variables
   - Set to `""` (empty string) for passthrough from host environment
   - Set to `"value"` for explicit value
-  - Use `"${VAR_NAME}"` for environment variable expansion (fails if undefined)
+  - Use `"${VAR_NAME}"` for environment variable expansion (JSON stdin format only; fails if undefined)
+  - **TOML note**: For passthrough, use `""` (empty string) or provide explicit values; `${VAR_NAME}` syntax is not expanded in TOML server `env` values
 
 - **`url`** (required for http): HTTP endpoint URL for `type: "http"` servers
 
@@ -353,11 +354,14 @@ The `customSchemas` top-level field allows you to define custom server types bey
   - **Stdio servers** must specify `container` (required)
   - **HTTP servers** must specify `url` (required)
   - **The `command` field is not supported** - stdio servers must use `container`
+  - Variable expansion with `${VAR_NAME}` is applied globally (all fields are expanded before parsing) and fails fast on undefined variables
 - **TOML format**:
   - Uses `command` and `args` fields directly (e.g., `command = "docker"`)
+  - Variable expansion with `${VAR_NAME}` is only supported in `[gateway.opentelemetry]` and legacy `[gateway.tracing]` fields
+  - Server `env` values, `url`, `args`, `gateway.api_key`, and other non-tracing fields are not expanded
+  - For host environment passthrough to container `env`, use an empty string `""` value
 - **Common rules** (both formats):
   - Empty/"local" type automatically normalized to "stdio"
-  - Variable expansion with `${VAR_NAME}` fails fast on undefined variables
   - All validation errors include JSONPath and helpful suggestions
   - **Mount specifications** must follow `"source:dest:mode"` format
     - `source` must be an absolute path (e.g., `/host/data`)
