@@ -1,29 +1,41 @@
 package server
 
 import (
-	"bytes"
-	"log"
 	"math"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/github/gh-aw-mcpg/internal/config"
 	"github.com/github/gh-aw-mcpg/internal/guard"
+	"github.com/github/gh-aw-mcpg/internal/logger"
 	"github.com/stretchr/testify/assert"
 )
 
-// captureStdLog redirects the standard logger to a buffer for the duration of fn
-// and returns the captured output. Restores the original logger output afterwards.
-func captureStdLog(t *testing.T, fn func()) string {
+// captureServerLog initializes the file logger to a temp directory, runs fn,
+// then reads the unified log file to return captured output. This works with
+// logger.LogInfoWithServer / logger.LogWarnWithServer which write to file loggers.
+func captureServerLog(t *testing.T, fn func()) string {
 	t.Helper()
-	var buf bytes.Buffer
-	oldOutput := log.Writer()
-	log.SetOutput(&buf)
+	logDir := t.TempDir()
+	if err := logger.InitFileLogger(logDir, "mcp-gateway.log"); err != nil {
+		t.Fatalf("failed to init file logger: %v", err)
+	}
+	if err := logger.InitServerFileLogger(logDir); err != nil {
+		t.Fatalf("failed to init server file logger: %v", err)
+	}
 	t.Cleanup(func() {
-		log.SetOutput(oldOutput)
+		logger.CloseGlobalLogger()
+		logger.CloseServerFileLogger()
 	})
 	fn()
-	return buf.String()
+	logPath := filepath.Join(logDir, "mcp-gateway.log")
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		return ""
+	}
+	return string(data)
 }
 
 // newServerForLogTest creates the minimal UnifiedServer needed to exercise
@@ -38,23 +50,23 @@ func newServerForLogTest(cfg *config.Config) *UnifiedServer {
 func TestLogServerGuardPolicies_NilConfig(t *testing.T) {
 	us := newServerForLogTest(nil)
 
-	output := captureStdLog(t, func() {
+	output := captureServerLog(t, func() {
 		us.logServerGuardPolicies("github")
 	})
 
-	assert.Contains(t, output, "[DIFC]")
-	assert.Contains(t, output, "no guard policy was set")
+	assert.Contains(t, output, "[difc]")
+	assert.Contains(t, output, "No guard policy was set")
 	assert.Contains(t, output, "github")
 }
 
 func TestLogServerGuardPolicies_NilServersMap(t *testing.T) {
 	us := newServerForLogTest(&config.Config{Servers: nil})
 
-	output := captureStdLog(t, func() {
+	output := captureServerLog(t, func() {
 		us.logServerGuardPolicies("github")
 	})
 
-	assert.Contains(t, output, "no guard policy was set")
+	assert.Contains(t, output, "No guard policy was set")
 	assert.Contains(t, output, "github")
 }
 
@@ -66,11 +78,11 @@ func TestLogServerGuardPolicies_ServerNotFound(t *testing.T) {
 	}
 	us := newServerForLogTest(cfg)
 
-	output := captureStdLog(t, func() {
+	output := captureServerLog(t, func() {
 		us.logServerGuardPolicies("github")
 	})
 
-	assert.Contains(t, output, "no guard policy was set")
+	assert.Contains(t, output, "No guard policy was set")
 	assert.Contains(t, output, "github")
 }
 
@@ -82,11 +94,11 @@ func TestLogServerGuardPolicies_NilServerConfig(t *testing.T) {
 	}
 	us := newServerForLogTest(cfg)
 
-	output := captureStdLog(t, func() {
+	output := captureServerLog(t, func() {
 		us.logServerGuardPolicies("github")
 	})
 
-	assert.Contains(t, output, "no guard policy was set")
+	assert.Contains(t, output, "No guard policy was set")
 	assert.Contains(t, output, "github")
 }
 
@@ -102,11 +114,11 @@ func TestLogServerGuardPolicies_EmptyGuardPolicies(t *testing.T) {
 	}
 	us := newServerForLogTest(cfg)
 
-	output := captureStdLog(t, func() {
+	output := captureServerLog(t, func() {
 		us.logServerGuardPolicies("github")
 	})
 
-	assert.Contains(t, output, "no guard policy was set")
+	assert.Contains(t, output, "No guard policy was set")
 	assert.Contains(t, output, "github")
 }
 
@@ -127,14 +139,14 @@ func TestLogServerGuardPolicies_ValidPolicies(t *testing.T) {
 	}
 	us := newServerForLogTest(cfg)
 
-	output := captureStdLog(t, func() {
+	output := captureServerLog(t, func() {
 		us.logServerGuardPolicies("github")
 	})
 
-	assert.Contains(t, output, "[DIFC]")
-	assert.Contains(t, output, "guard policy for MCP server 'github'")
+	assert.Contains(t, output, "[difc]")
+	assert.Contains(t, output, "Guard policy:")
 	assert.Contains(t, output, "allow-only")
-	assert.NotContains(t, output, "no guard policy was set")
+	assert.NotContains(t, output, "No guard policy was set")
 }
 
 func TestLogServerGuardPolicies_MultiplePolicies(t *testing.T) {
@@ -163,15 +175,17 @@ func TestLogServerGuardPolicies_MultiplePolicies(t *testing.T) {
 	}
 	us := newServerForLogTest(cfg)
 
-	githubOutput := captureStdLog(t, func() {
+	githubOutput := captureServerLog(t, func() {
 		us.logServerGuardPolicies("github")
 	})
-	slackOutput := captureStdLog(t, func() {
+	slackOutput := captureServerLog(t, func() {
 		us.logServerGuardPolicies("slack")
 	})
 
-	assert.Contains(t, githubOutput, "guard policy for MCP server 'github'")
-	assert.Contains(t, slackOutput, "guard policy for MCP server 'slack'")
+	assert.Contains(t, githubOutput, "[github]")
+	assert.Contains(t, githubOutput, "Guard policy:")
+	assert.Contains(t, slackOutput, "[slack]")
+	assert.Contains(t, slackOutput, "Guard policy:")
 	assert.Contains(t, slackOutput, "write-sink")
 }
 
@@ -190,14 +204,14 @@ func TestLogServerGuardPolicies_UnmarshalablePolicy(t *testing.T) {
 	}
 	us := newServerForLogTest(cfg)
 
-	output := captureStdLog(t, func() {
+	output := captureServerLog(t, func() {
 		us.logServerGuardPolicies("github")
 	})
 
-	assert.Contains(t, output, "[DIFC]")
+	assert.Contains(t, output, "[difc]")
 	assert.Contains(t, output, "github")
 	// Function logs either the error path or succeeds — either way it must not panic
-	// and must produce a [DIFC] log line mentioning the server ID.
+	// and must produce a [difc] log line mentioning the server ID.
 	assert.True(t,
 		strings.Contains(output, "failed to serialize policy") ||
 			strings.Contains(output, "guard policy"),
@@ -216,13 +230,13 @@ func TestLogServerGuardPolicies_TableDriven(t *testing.T) {
 			name:         "nil config",
 			cfg:          nil,
 			serverID:     "myserver",
-			wantContains: []string{"[DIFC]", "no guard policy was set", "myserver"},
+			wantContains: []string{"[difc]", "No guard policy was set", "myserver"},
 		},
 		{
 			name:         "nil servers",
 			cfg:          &config.Config{Servers: nil},
 			serverID:     "myserver",
-			wantContains: []string{"[DIFC]", "no guard policy was set", "myserver"},
+			wantContains: []string{"[difc]", "No guard policy was set", "myserver"},
 		},
 		{
 			name: "server absent from map",
@@ -232,7 +246,7 @@ func TestLogServerGuardPolicies_TableDriven(t *testing.T) {
 				},
 			},
 			serverID:     "myserver",
-			wantContains: []string{"no guard policy was set", "myserver"},
+			wantContains: []string{"No guard policy was set", "myserver"},
 		},
 		{
 			name: "server config is nil",
@@ -240,7 +254,7 @@ func TestLogServerGuardPolicies_TableDriven(t *testing.T) {
 				Servers: map[string]*config.ServerConfig{"myserver": nil},
 			},
 			serverID:     "myserver",
-			wantContains: []string{"no guard policy was set", "myserver"},
+			wantContains: []string{"No guard policy was set", "myserver"},
 		},
 		{
 			name: "empty guard policies map",
@@ -254,8 +268,8 @@ func TestLogServerGuardPolicies_TableDriven(t *testing.T) {
 				},
 			},
 			serverID:     "myserver",
-			wantContains: []string{"no guard policy was set", "myserver"},
-			wantAbsent:   []string{"guard policy for MCP server"},
+			wantContains: []string{"No guard policy was set", "myserver"},
+			wantAbsent:   []string{"Guard policy:"},
 		},
 		{
 			name: "valid guard policies",
@@ -274,8 +288,8 @@ func TestLogServerGuardPolicies_TableDriven(t *testing.T) {
 				},
 			},
 			serverID:     "myserver",
-			wantContains: []string{"[DIFC]", "guard policy for MCP server 'myserver'", "allow-only"},
-			wantAbsent:   []string{"no guard policy was set"},
+			wantContains: []string{"[difc]", "Guard policy:", "allow-only"},
+			wantAbsent:   []string{"No guard policy was set"},
 		},
 	}
 
@@ -283,7 +297,7 @@ func TestLogServerGuardPolicies_TableDriven(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			us := newServerForLogTest(tt.cfg)
 
-			output := captureStdLog(t, func() {
+			output := captureServerLog(t, func() {
 				us.logServerGuardPolicies(tt.serverID)
 			})
 

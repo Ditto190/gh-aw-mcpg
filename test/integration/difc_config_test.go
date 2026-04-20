@@ -81,6 +81,15 @@ func waitForStderr(buf *syncBuffer, substr string, deadline time.Duration) bool 
 	return false
 }
 
+// readUnifiedLog reads the unified mcp-gateway.log from the given log directory.
+func readUnifiedLog(logDir string) string {
+	data, err := os.ReadFile(filepath.Join(logDir, "mcp-gateway.log"))
+	if err != nil {
+		return ""
+	}
+	return string(data)
+}
+
 // TestDIFCEnvironmentVariables tests that all guards-related environment variables are recognized
 func TestDIFCEnvironmentVariables(t *testing.T) {
 	binary := binaryPath(t)
@@ -176,6 +185,7 @@ func TestDIFCEnvironmentVariables(t *testing.T) {
 func TestDIFCConfigWithGuards(t *testing.T) {
 	binary := binaryPath(t)
 	port := getFreePort(t)
+	logDir := t.TempDir()
 
 	// Set required environment variables
 	os.Setenv("GITHUB_MCP_IMAGE", "ghcr.io/github/github-mcp-server:latest")
@@ -218,10 +228,10 @@ func TestDIFCConfigWithGuards(t *testing.T) {
 		}
 	}`, port)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, binary, "--config-stdin")
+	cmd := exec.CommandContext(ctx, binary, "--config-stdin", "--log-dir", logDir)
 	cmd.Stdin = strings.NewReader(config)
 
 	var stdout bytes.Buffer
@@ -232,9 +242,9 @@ func TestDIFCConfigWithGuards(t *testing.T) {
 	err := cmd.Start()
 	require.NoError(t, err, "Failed to start gateway")
 
-	// Wait for startup — look for server name in logs
-	ok := waitForStderr(&stderr, "playwright", 5*time.Second)
-	require.Truef(t, ok, "timeout waiting for gateway stderr to contain %q within %s; stderr:\n%s", "playwright", 5*time.Second, stderr.String())
+	// Wait for full startup — ensures all servers are processed and log files flushed
+	ok := waitForStderr(&stderr, "Starting MCPG", 15*time.Second)
+	require.Truef(t, ok, "timeout waiting for gateway startup within %s; stderr:\n%s", 15*time.Second, stderr.String())
 
 	// Try health check
 	resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/health", port))
@@ -251,15 +261,20 @@ func TestDIFCConfigWithGuards(t *testing.T) {
 	stderrStr := stderr.String()
 	t.Logf("STDERR: %s", stderrStr)
 
-	// Verify config was parsed (should see server names in output)
-	assert.Contains(t, stderrStr, "github", "Should log github server")
-	assert.Contains(t, stderrStr, "playwright", "Should log playwright server")
+	// Server names appear in the structured file logger
+	logContent := readUnifiedLog(logDir)
+	t.Logf("LOG: %s", logContent)
+
+	// Verify config was parsed (should see server names in log output)
+	assert.Contains(t, logContent, "github", "Should log github server")
+	assert.Contains(t, logContent, "playwright", "Should log playwright server")
 }
 
 // TestDIFCModeFilterViaEnv tests guards filter mode via MCP_GATEWAY_GUARDS_MODE
 func TestDIFCModeFilterViaEnv(t *testing.T) {
 	binary := binaryPath(t)
 	port := getFreePort(t)
+	logDir := t.TempDir()
 
 	config := fmt.Sprintf(`{
 		"mcpServers": {
@@ -278,7 +293,7 @@ func TestDIFCModeFilterViaEnv(t *testing.T) {
 	ctx2, cancel2 := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel2()
 
-	cmd := exec.CommandContext(ctx2, binary, "--config-stdin")
+	cmd := exec.CommandContext(ctx2, binary, "--config-stdin", "--log-dir", logDir)
 	cmd.Stdin = strings.NewReader(config)
 	cmd.Env = append(os.Environ(),
 		"MCP_GATEWAY_GUARDS_MODE=filter",
@@ -302,9 +317,13 @@ func TestDIFCModeFilterViaEnv(t *testing.T) {
 	stderrStr := stderr.String()
 	t.Logf("STDERR: %s", stderrStr)
 
+	// DIFC messages are written to the structured file logger, not stderr
+	logContent := readUnifiedLog(logDir)
+	t.Logf("LOG: %s", logContent)
+
 	// Verify gateway starts with filter mode configuration accepted
 	// Without a guard policy or WASM guard, DIFC is not auto-enabled — noop guard is registered
-	assert.Contains(t, stderrStr, "[DIFC] Registered guard 'noop'", "Noop guard should be registered without a policy")
+	assert.Contains(t, logContent, "Registered guard 'noop'", "Noop guard should be registered without a policy")
 	t.Log("✓ Guards filter mode env var accepted via MCP_GATEWAY_GUARDS_MODE=filter")
 }
 
@@ -312,6 +331,7 @@ func TestDIFCModeFilterViaEnv(t *testing.T) {
 func TestDIFCModePropagateViaEnv(t *testing.T) {
 	binary := binaryPath(t)
 	port := getFreePort(t)
+	logDir := t.TempDir()
 
 	config := fmt.Sprintf(`{
 		"mcpServers": {
@@ -330,7 +350,7 @@ func TestDIFCModePropagateViaEnv(t *testing.T) {
 	ctx3, cancel3 := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel3()
 
-	cmd := exec.CommandContext(ctx3, binary, "--config-stdin")
+	cmd := exec.CommandContext(ctx3, binary, "--config-stdin", "--log-dir", logDir)
 	cmd.Stdin = strings.NewReader(config)
 	cmd.Env = append(os.Environ(),
 		"MCP_GATEWAY_GUARDS_MODE=propagate",
@@ -354,9 +374,13 @@ func TestDIFCModePropagateViaEnv(t *testing.T) {
 	stderrStr := stderr.String()
 	t.Logf("STDERR: %s", stderrStr)
 
+	// DIFC messages are written to the structured file logger, not stderr
+	logContent := readUnifiedLog(logDir)
+	t.Logf("LOG: %s", logContent)
+
 	// Verify gateway starts with propagate mode configuration accepted
 	// Without a guard policy or WASM guard, DIFC is not auto-enabled — noop guard is registered
-	assert.Contains(t, stderrStr, "[DIFC] Registered guard 'noop'", "Noop guard should be registered without a policy")
+	assert.Contains(t, logContent, "Registered guard 'noop'", "Noop guard should be registered without a policy")
 	t.Log("✓ Guards propagate mode env var accepted via MCP_GATEWAY_GUARDS_MODE=propagate")
 }
 
@@ -364,6 +388,7 @@ func TestDIFCModePropagateViaEnv(t *testing.T) {
 func TestFullDIFCConfigFromJSON(t *testing.T) {
 	binary := binaryPath(t)
 	port := getFreePort(t)
+	logDir := t.TempDir()
 
 	config := fmt.Sprintf(`{
 		"mcpServers": {
@@ -394,10 +419,10 @@ func TestFullDIFCConfigFromJSON(t *testing.T) {
 		}
 	}`, port)
 
-	ctx5, cancel5 := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx5, cancel5 := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel5()
 
-	cmd := exec.CommandContext(ctx5, binary, "--config-stdin")
+	cmd := exec.CommandContext(ctx5, binary, "--config-stdin", "--log-dir", logDir)
 	cmd.Stdin = strings.NewReader(config)
 	cmd.Env = append(os.Environ(),
 		"MCP_GATEWAY_GUARDS_MODE=filter",
@@ -411,15 +436,11 @@ func TestFullDIFCConfigFromJSON(t *testing.T) {
 	err := cmd.Start()
 	require.NoError(t, err, "Failed to start gateway")
 
-	// Wait for guard registration (appears before the blocking registerAllTools
-	// backend connections that may take 30+ seconds for Docker containers).
-	// "Starting MCPG" only prints after NewUnified returns, which blocks on
-	// backend connections — too slow for this test's DIFC-config-only assertions.
-	ok := waitForStderr(&stderr, "[DIFC] Registered guard", 5*time.Second)
-	require.Truef(t, ok, "timeout waiting for DIFC guard registration within %s; stderr:\n%s", 5*time.Second, stderr.String())
-
-	// Brief pause to let remaining sequential guard registrations flush to stderr
-	time.Sleep(300 * time.Millisecond)
+	// Wait for full startup — "Starting MCPG" prints after guard registration
+	// and backend connection attempts. With non-existent Docker images, backend
+	// failures are fast so this typically completes within a few seconds.
+	ok := waitForStderr(&stderr, "Starting MCPG", 15*time.Second)
+	require.Truef(t, ok, "timeout waiting for gateway startup within %s; stderr:\n%s", 15*time.Second, stderr.String())
 
 	cmd.Process.Kill()
 	cmd.Wait()
@@ -427,9 +448,13 @@ func TestFullDIFCConfigFromJSON(t *testing.T) {
 	stderrStr := stderr.String()
 	t.Logf("STDERR: %s", stderrStr)
 
+	// DIFC messages are written to the structured file logger, not stderr
+	logContent := readUnifiedLog(logDir)
+	t.Logf("LOG: %s", logContent)
+
 	// Verify configuration was loaded — WASM guard fails to load (no file), all servers get noop
 	assert.Contains(t, stderrStr, "server1", "Should contain server1")
 	assert.Contains(t, stderrStr, "server2", "Should contain server2")
-	assert.Contains(t, stderrStr, "[DIFC] Registered guard 'noop'", "Noop guard should be registered when all guards fall back to noop")
+	assert.Contains(t, logContent, "Registered guard 'noop'", "Noop guard should be registered when all guards fall back to noop")
 	t.Log("✓ Full guards configuration loaded successfully")
 }
