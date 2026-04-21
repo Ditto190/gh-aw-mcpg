@@ -827,6 +827,20 @@ mod tests {
     }
 
     #[test]
+    fn test_commit_integrity_owner_on_public_personal_repo_without_association() {
+        let ctx = default_ctx();
+        let repo = "ahmadabdalla/example";
+        let owner_commit = json!({
+            "author": {"login": "ahmadabdalla"}
+        });
+
+        assert_eq!(
+            commit_integrity(&owner_commit, repo, false, false, &ctx),
+            writer_integrity(repo, &ctx)
+        );
+    }
+
+    #[test]
     fn test_trusted_first_party_bot_detection() {
         use super::helpers::is_trusted_first_party_bot;
 
@@ -5187,9 +5201,7 @@ mod tests {
     }
 
     #[test]
-    fn test_elevate_via_collab_permission_no_elevation_non_org_repo() {
-        // In test mode, is_repo_org_owned returns None (no cache) → unwrap_or(false)
-        // so the function should return integrity unchanged
+    fn test_elevate_via_collab_permission_lookup_failure_keeps_integrity() {
         let ctx = default_ctx();
         let repo = "github/copilot";
         let none = none_integrity(repo, &ctx);
@@ -5197,7 +5209,7 @@ mod tests {
             "dsyme", repo, "issue", "github/copilot#42",
             none.clone(), &ctx,
         );
-        assert_eq!(result, none, "should return unchanged when repo is not org-owned (cache miss → false)");
+        assert_eq!(result, none, "should return unchanged when collaborator lookup yields no result");
     }
 
     #[test]
