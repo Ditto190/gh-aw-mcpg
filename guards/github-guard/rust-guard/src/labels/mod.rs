@@ -4614,22 +4614,31 @@ mod tests {
     }
 
     #[test]
-    fn test_apply_tool_labels_dismiss_notification_private_user() {
+    fn test_apply_tool_labels_notification_management_public_project_github() {
         let ctx = default_ctx();
         let tool_args = json!({ "threadId": "123" });
 
-        let (secrecy, integrity, _desc) = apply_tool_labels(
+        for tool in &[
             "dismiss_notification",
-            &tool_args,
-            "",
-            vec![],
-            vec![],
-            String::new(),
-            &ctx,
-        );
+            "mark_all_notifications_read",
+            "manage_notification_subscription",
+            "manage_repository_notification_subscription",
+        ] {
+            let (secrecy, integrity, _desc) =
+                apply_tool_labels(tool, &tool_args, "", vec![], vec![], String::new(), &ctx);
 
-        assert_eq!(secrecy, private_user_label(), "dismiss_notification must carry private:user secrecy");
-        assert_eq!(integrity, none_integrity("", &ctx), "dismiss_notification should have none-level integrity (references unknown content)");
+            assert!(
+                secrecy.is_empty(),
+                "{} should have empty (public) secrecy",
+                tool
+            );
+            assert_eq!(
+                integrity,
+                project_github_label(&ctx),
+                "{} should have project:github integrity",
+                tool
+            );
+        }
     }
 
     #[test]
@@ -4919,7 +4928,7 @@ mod tests {
             "repo": "copilot"
         });
 
-        let (_secrecy, integrity, _desc) = apply_tool_labels(
+        let (secrecy, integrity, _desc) = apply_tool_labels(
             "fork_repository",
             &tool_args,
             repo_id,
@@ -4929,7 +4938,38 @@ mod tests {
             &ctx,
         );
 
-        assert_eq!(integrity, writer_integrity(repo_id, &ctx), "fork_repository should have writer integrity");
+        assert!(secrecy.is_empty(), "fork_repository should have empty (public) secrecy");
+        assert_eq!(
+            integrity,
+            writer_integrity("github", &ctx),
+            "fork_repository should have writer integrity in github scope"
+        );
+    }
+
+    #[test]
+    fn test_apply_tool_labels_create_repository_writer_integrity() {
+        let ctx = default_ctx();
+        let repo_id = "github/copilot";
+        let tool_args = json!({
+            "name": "new-repo"
+        });
+
+        let (secrecy, integrity, _desc) = apply_tool_labels(
+            "create_repository",
+            &tool_args,
+            repo_id,
+            vec![],
+            vec![],
+            String::new(),
+            &ctx,
+        );
+
+        assert!(secrecy.is_empty(), "create_repository should have empty (public) secrecy");
+        assert_eq!(
+            integrity,
+            writer_integrity("github", &ctx),
+            "create_repository should have writer integrity in github scope"
+        );
     }
 
     #[test]
