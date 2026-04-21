@@ -1675,7 +1675,7 @@ pub fn commit_integrity(
     // `author_association`. Ensure owner-authored commits still get writer floor.
     if !repo_private {
         if let Some((owner, _repo)) = repo_full_name.split_once('/') {
-            if !owner.is_empty() && author_login.eq_ignore_ascii_case(owner) {
+            if author_login.eq_ignore_ascii_case(owner) {
                 integrity = max_integrity(
                     repo_full_name,
                     integrity,
