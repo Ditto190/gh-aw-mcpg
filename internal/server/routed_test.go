@@ -718,7 +718,7 @@ func TestRegisterToolWithoutValidation(t *testing.T) {
 		},
 	}, func(ctx context.Context, req *sdk.CallToolRequest, state interface{}) (*sdk.CallToolResult, interface{}, error) {
 		strictHandlerCalled = true
-		return &sdk.CallToolResult{IsError: false}, nil, nil
+		return &sdk.CallToolResult{IsError: false}, state, nil
 	})
 
 	// Use in-memory transports to connect a client to the server and invoke the tool

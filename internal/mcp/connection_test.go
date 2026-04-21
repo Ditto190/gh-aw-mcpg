@@ -982,9 +982,9 @@ func TestPaginateAll(t *testing.T) {
 		callCount := 0
 		_, err := paginateAll("server1", "tools", func(cursor string) (paginatedPage[string], error) {
 			callCount++
-			nextCursor := cursor + "next"
-			if nextCursor == "" {
-				nextCursor = "next"
+			nextCursor := "next"
+			if cursor != "" {
+				nextCursor = cursor + "next"
 			}
 			return paginatedPage[string]{Items: []string{"x"}, NextCursor: nextCursor}, nil
 		})
