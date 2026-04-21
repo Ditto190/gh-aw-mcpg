@@ -973,23 +973,12 @@ pub fn extract_repo_from_item(item: &Value) -> String {
     {
         return name.to_string();
     }
-    // repository_url parsing for search endpoints
-    if let Some(url) = item.get("repository_url").and_then(|v| v.as_str()) {
-        if let Some(repo_id) = extract_repo_from_github_url(url) {
-            return repo_id;
-        }
-    }
-    // html_url parsing as last resort - extract owner/repo from URLs like:
-    // https://github.com/owner/repo/pull/123 or https://github.com/owner/repo/issues/456
-    if let Some(url) = item.get("html_url").and_then(|v| v.as_str()) {
-        if let Some(repo_id) = extract_repo_from_github_url(url) {
-            return repo_id;
-        }
-    }
-    // Generic URL field fallback
-    if let Some(url) = item.get("url").and_then(|v| v.as_str()) {
-        if let Some(repo_id) = extract_repo_from_github_url(url) {
-            return repo_id;
+    // URL field fallback (repository_url for search results, html_url / url as generic fallbacks)
+    for field in &["repository_url", "html_url", "url"] {
+        if let Some(url) = item.get(*field).and_then(|v| v.as_str()) {
+            if let Some(repo_id) = extract_repo_from_github_url(url) {
+                return repo_id;
+            }
         }
     }
     String::new()
@@ -1278,11 +1267,7 @@ pub fn has_author_association(item: &Value) -> bool {
 /// Users in the trusted_users list are also elevated to approved integrity.
 pub fn author_association_floor(item: &Value, scope: &str, ctx: &PolicyContext) -> Vec<String> {
     let author_login = extract_author_login(item);
-    if !author_login.is_empty()
-        && (is_trusted_first_party_bot(author_login)
-            || is_configured_trusted_bot(author_login, ctx)
-            || is_trusted_user(author_login, ctx))
-    {
+    if !author_login.is_empty() && is_any_trusted_actor(author_login, ctx) {
         return writer_integrity(scope, ctx);
     }
 
@@ -1476,10 +1461,7 @@ pub fn pr_integrity(
                     );
                     // Elevate trusted bots and trusted users
                     let enriched_floor = if let Some(ref login) = facts.author_login {
-                        if is_trusted_first_party_bot(login)
-                            || is_configured_trusted_bot(login, ctx)
-                            || is_trusted_user(login, ctx)
-                        {
+                        if is_any_trusted_actor(login, ctx) {
                             max_integrity(
                                 repo_full_name,
                                 enriched_floor,
@@ -1770,6 +1752,14 @@ pub fn is_configured_trusted_bot(username: &str, ctx: &PolicyContext) -> bool {
 /// case-insensitive. `blocked_users` takes precedence over `trusted_users`.
 pub fn is_trusted_user(username: &str, ctx: &PolicyContext) -> bool {
     username_in_list(username, &ctx.trusted_users)
+}
+
+/// Returns `true` if `username` belongs to any trusted actor tier:
+/// first-party bots, gateway-configured bots, or trusted users.
+pub(crate) fn is_any_trusted_actor(username: &str, ctx: &PolicyContext) -> bool {
+    is_trusted_first_party_bot(username)
+        || is_configured_trusted_bot(username, ctx)
+        || is_trusted_user(username, ctx)
 }
 
 
