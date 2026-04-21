@@ -610,10 +610,15 @@ func paginateAll[T any](
 	logConn.Printf("list%s: received page of %d %s from serverID=%s", itemKind, len(first.Items), itemKind, serverID)
 
 	cursor := first.NextCursor
+	seenCursors := make(map[string]struct{})
 	for pageCount := 1; cursor != ""; pageCount++ {
 		if pageCount >= paginateAllMaxPages {
 			return nil, fmt.Errorf("list%s: backend serverID=%s returned more than %d pages; aborting to prevent unbounded memory growth", itemKind, serverID, paginateAllMaxPages)
 		}
+		if _, seen := seenCursors[cursor]; seen {
+			return nil, fmt.Errorf("list%s: backend serverID=%s returned cyclical cursor %q", itemKind, serverID, cursor)
+		}
+		seenCursors[cursor] = struct{}{}
 		page, err := fetch(cursor)
 		if err != nil {
 			return nil, err

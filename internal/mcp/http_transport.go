@@ -33,7 +33,9 @@ const (
 	HTTPTransportPlainJSON HTTPTransportType = "plain-json"
 )
 
-// MCPProtocolVersion is the MCP protocol version used in initialization requests.
+// MCPProtocolVersion is the MCP protocol version used only by the plain JSON-RPC
+// fallback path in this package. Streamable and SSE transports are SDK-managed
+// and negotiate protocol versions internally.
 const MCPProtocolVersion = "2025-11-25"
 
 // requestIDCounter is used to generate unique request IDs for HTTP requests
@@ -78,6 +80,8 @@ func isSessionNotFoundError(err error) bool {
 	if errors.Is(err, sdk.ErrSessionMissing) {
 		return true
 	}
+	// Plain JSON-RPC fallback requests bypass SDK session types, so they cannot
+	// return sdk.ErrSessionMissing and are matched by backend error text instead.
 	return strings.Contains(strings.ToLower(err.Error()), "session not found")
 }
 
