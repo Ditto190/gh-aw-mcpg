@@ -468,7 +468,11 @@ pub fn has_maintainer_reaction_with_callback(
 
     let endorser_min_rank = integrity_level_rank(endorser_min);
     let item_updated_at = item
-        .get("updatedAt")
+        .get("lastEditedAt")
+        .or_else(|| item.get("editedAt"))
+        .or_else(|| item.get("last_edited_at"))
+        .or_else(|| item.get("edited_at"))
+        .or_else(|| item.get("updatedAt"))
         .or_else(|| item.get("updated_at"))
         .and_then(|v| v.as_str());
 
