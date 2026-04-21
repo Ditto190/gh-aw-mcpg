@@ -113,25 +113,16 @@ func logWithLevel(level LogLevel, category, format string, args ...interface{}) 
 	})
 }
 
-// LogInfo logs an informational message
-func LogInfo(category, format string, args ...interface{}) {
-	logWithLevel(LogLevelInfo, category, format, args...)
-}
-
-// LogWarn logs a warning message
-func LogWarn(category, format string, args ...interface{}) {
-	logWithLevel(LogLevelWarn, category, format, args...)
-}
-
-// LogError logs an error message
-func LogError(category, format string, args ...interface{}) {
-	logWithLevel(LogLevelError, category, format, args...)
-}
-
-// LogDebug logs a debug message
-func LogDebug(category, format string, args ...interface{}) {
-	logWithLevel(LogLevelDebug, category, format, args...)
-}
+var (
+	// LogInfo logs an informational message.
+	LogInfo = makeLevelLogger(logWithLevel, LogLevelInfo)
+	// LogWarn logs a warning message.
+	LogWarn = makeLevelLogger(logWithLevel, LogLevelWarn)
+	// LogError logs an error message.
+	LogError = makeLevelLogger(logWithLevel, LogLevelError)
+	// LogDebug logs a debug message.
+	LogDebug = makeLevelLogger(logWithLevel, LogLevelDebug)
+)
 
 // CloseGlobalLogger closes the global file logger
 func CloseGlobalLogger() error {

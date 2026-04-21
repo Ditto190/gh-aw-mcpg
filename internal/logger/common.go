@@ -215,6 +215,24 @@ import (
 // (markdown_logger.go) and logWithLevelAndServer (server_file_logger.go).
 // When adding a new LogLevel constant, add a corresponding entry here so
 // that all dispatch sites automatically support the new level.
+func makeLevelLogger(
+	dispatch func(level LogLevel, category, format string, args ...interface{}),
+	level LogLevel,
+) func(category, format string, args ...interface{}) {
+	return func(category, format string, args ...interface{}) {
+		dispatch(level, category, format, args...)
+	}
+}
+
+func makeServerLevelLogger(
+	dispatch func(serverID string, level LogLevel, category, format string, args ...interface{}),
+	level LogLevel,
+) func(serverID, category, format string, args ...interface{}) {
+	return func(serverID, category, format string, args ...interface{}) {
+		dispatch(serverID, level, category, format, args...)
+	}
+}
+
 var logFuncs = map[LogLevel]func(string, string, ...interface{}){
 	LogLevelInfo:  LogInfo,
 	LogLevelWarn:  LogWarn,

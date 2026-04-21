@@ -180,25 +180,16 @@ func logWithMarkdown(level LogLevel, category, format string, args ...interface{
 	})
 }
 
-// LogInfoMd logs to both regular and markdown loggers
-func LogInfoMd(category, format string, args ...interface{}) {
-	logWithMarkdown(LogLevelInfo, category, format, args...)
-}
-
-// LogWarnMd logs to both regular and markdown loggers
-func LogWarnMd(category, format string, args ...interface{}) {
-	logWithMarkdown(LogLevelWarn, category, format, args...)
-}
-
-// LogErrorMd logs to both regular and markdown loggers
-func LogErrorMd(category, format string, args ...interface{}) {
-	logWithMarkdown(LogLevelError, category, format, args...)
-}
-
-// LogDebugMd logs to both regular and markdown loggers
-func LogDebugMd(category, format string, args ...interface{}) {
-	logWithMarkdown(LogLevelDebug, category, format, args...)
-}
+var (
+	// LogInfoMd logs to both regular and markdown loggers.
+	LogInfoMd = makeLevelLogger(logWithMarkdown, LogLevelInfo)
+	// LogWarnMd logs to both regular and markdown loggers.
+	LogWarnMd = makeLevelLogger(logWithMarkdown, LogLevelWarn)
+	// LogErrorMd logs to both regular and markdown loggers.
+	LogErrorMd = makeLevelLogger(logWithMarkdown, LogLevelError)
+	// LogDebugMd logs to both regular and markdown loggers.
+	LogDebugMd = makeLevelLogger(logWithMarkdown, LogLevelDebug)
+)
 
 // CloseMarkdownLogger closes the global markdown logger
 func CloseMarkdownLogger() error {
