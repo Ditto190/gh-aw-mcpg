@@ -1310,14 +1310,13 @@ pub fn collaborator_permission_floor(
 /// Rank threshold for writer-level integrity (none=1, reader=2, writer=3, merged=4).
 const WRITER_RANK: u8 = 3;
 
-/// Attempt to elevate integrity for an author in an org-owned repository
+/// Attempt to elevate integrity for an author in a public repository
 /// by checking their effective collaborator permission.
 ///
 /// When `author_association` gives insufficient integrity (below writer level),
 /// this function checks the user's effective permission via the GitHub
-/// collaborator permission API. This correctly handles org owners/admins whose
-/// `author_association` is reported as "NONE" because their access is inherited
-/// through org ownership rather than direct collaboration.
+/// collaborator permission API. This correctly handles owners/admins whose
+/// `author_association` is absent or reported as "NONE".
 ///
 /// Backend calls are cached per-user, so repeated lookups for the same author
 /// across list/search items are inexpensive.
@@ -1346,10 +1345,6 @@ pub fn elevate_via_collaborator_permission(
         Some((o, r)) if !o.is_empty() && !r.is_empty() => (o, r),
         _ => return integrity,
     };
-    let is_org = super::backend::is_repo_org_owned(owner, repo).unwrap_or(false);
-    if !is_org {
-        return integrity;
-    }
     crate::log_debug(&format!(
         "[integrity] {}:{}: author_association floor below writer (rank={}), checking collaborator permission for {}",
         resource_label, resource_id, integrity_rank(repo_full_name, &integrity, ctx), author_login
@@ -1676,8 +1671,23 @@ pub fn commit_integrity(
 
     let mut integrity = author_association_floor(item, repo_full_name, ctx);
 
-    // Collaborator permission fallback for org repos (handles org owners/admins
-    // whose author_association is "NONE" due to inherited org access).
+    // For public personal repositories, commit payloads often omit
+    // `author_association`. Ensure owner-authored commits still get writer floor.
+    if !repo_private {
+        if let Some((owner, _repo)) = repo_full_name.split_once('/') {
+            if !owner.is_empty() && author_login.eq_ignore_ascii_case(owner) {
+                integrity = max_integrity(
+                    repo_full_name,
+                    integrity,
+                    writer_integrity(repo_full_name, ctx),
+                    ctx,
+                );
+            }
+        }
+    }
+
+    // Collaborator permission fallback for public repos (handles owners/admins
+    // whose author_association is missing or "NONE").
     if !repo_private {
         let sha = item.get("sha").and_then(|v| v.as_str()).unwrap_or("unknown");
         let short_sha = if sha.len() > 8 { &sha[..8] } else { sha };
