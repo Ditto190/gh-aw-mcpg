@@ -467,6 +467,14 @@ pub fn has_maintainer_reaction_with_callback(
     };
 
     let endorser_min_rank = integrity_level_rank(endorser_min);
+    let item_updated_at = item
+        .get("lastEditedAt")
+        .or_else(|| item.get("editedAt"))
+        .or_else(|| item.get("last_edited_at"))
+        .or_else(|| item.get("edited_at"))
+        .or_else(|| item.get("updatedAt"))
+        .or_else(|| item.get("updated_at"))
+        .and_then(|v| v.as_str());
 
     for node in nodes.iter().take(MAX_REACTIONS_TO_CHECK) {
         let content = match node.get("content").and_then(|v| v.as_str()) {
@@ -489,6 +497,26 @@ pub fn has_maintainer_reaction_with_callback(
             Some(l) => l,
             None => continue,
         };
+
+        let reaction_created_at = node
+            .get("createdAt")
+            .or_else(|| node.get("created_at"))
+            .and_then(|v| v.as_str());
+        if let (Some(item_updated), Some(reaction_created)) = (item_updated_at, reaction_created_at) {
+            if item_updated > reaction_created {
+                crate::log_debug(&format!(
+                    "[integrity] {}: skipping stale {} reaction {} from @{} \
+                     (item updatedAt={} > reaction createdAt={})",
+                    repo_full_name,
+                    reaction_kind,
+                    content,
+                    login,
+                    item_updated,
+                    reaction_created
+                ));
+                continue;
+            }
+        }
 
         // Fetch reactor's collaborator permission to determine their integrity level.
         let perm = super::backend::get_collaborator_permission_with_callback(
@@ -2005,6 +2033,101 @@ mod tests {
         assert!(!has_maintainer_reaction_with_callback(
             &item, "owner/repo", &ctx.endorsement_reactions, "approved", &ctx,
             error_callback, "endorsement"
+        ));
+    }
+
+    #[test]
+    fn test_has_maintainer_reaction_honors_unmodified_item_endorsement() {
+        let ctx = ctx_with_endorsement_reactions(vec!["THUMBS_UP"]);
+        let item = serde_json::json!({
+            "number": 42,
+            "updatedAt": "2026-04-20T00:00:00Z",
+            "reactions": {"nodes": [{
+                "user": {"login": "alice"},
+                "content": "THUMBS_UP",
+                "createdAt": "2026-04-20T00:00:00Z"
+            }]}
+        });
+        assert!(has_maintainer_reaction_with_callback(
+            &item, "owner/repo", &ctx.endorsement_reactions, "approved", &ctx,
+            admin_permission_callback, "endorsement"
+        ));
+    }
+
+    #[test]
+    fn test_has_maintainer_reaction_skips_stale_endorsement_after_edit() {
+        let ctx = ctx_with_endorsement_reactions(vec!["THUMBS_UP"]);
+        let item = serde_json::json!({
+            "number": 42,
+            "updatedAt": "2026-04-21T00:00:00Z",
+            "reactions": {"nodes": [{
+                "user": {"login": "alice"},
+                "content": "THUMBS_UP",
+                "createdAt": "2026-04-20T00:00:00Z"
+            }]}
+        });
+        assert!(!has_maintainer_reaction_with_callback(
+            &item, "owner/repo", &ctx.endorsement_reactions, "approved", &ctx,
+            admin_permission_callback, "endorsement"
+        ));
+    }
+
+    #[test]
+    fn test_has_maintainer_reaction_honors_endorsement_added_after_edit() {
+        let ctx = ctx_with_endorsement_reactions(vec!["THUMBS_UP"]);
+        let item = serde_json::json!({
+            "number": 42,
+            "updated_at": "2026-04-20T00:00:00Z",
+            "reactions": {"nodes": [{
+                "user": {"login": "alice"},
+                "content": "THUMBS_UP",
+                "createdAt": "2026-04-21T00:00:00Z"
+            }]}
+        });
+        assert!(has_maintainer_reaction_with_callback(
+            &item, "owner/repo", &ctx.endorsement_reactions, "approved", &ctx,
+            admin_permission_callback, "endorsement"
+        ));
+    }
+
+    #[test]
+    fn test_has_maintainer_reaction_counts_fresh_when_stale_and_fresh_mixed() {
+        let ctx = ctx_with_endorsement_reactions(vec!["THUMBS_UP"]);
+        let item = serde_json::json!({
+            "number": 42,
+            "updatedAt": "2026-04-21T00:00:00Z",
+            "reactions": {"nodes": [
+                {
+                    "user": {"login": "alice"},
+                    "content": "THUMBS_UP",
+                    "createdAt": "2026-04-20T00:00:00Z"
+                },
+                {
+                    "user": {"login": "bob"},
+                    "content": "THUMBS_UP",
+                    "createdAt": "2026-04-22T00:00:00Z"
+                }
+            ]}
+        });
+        assert!(has_maintainer_reaction_with_callback(
+            &item, "owner/repo", &ctx.endorsement_reactions, "approved", &ctx,
+            admin_permission_callback, "endorsement"
+        ));
+    }
+
+    #[test]
+    fn test_has_maintainer_reaction_missing_timestamps_keeps_existing_behavior() {
+        let ctx = ctx_with_endorsement_reactions(vec!["THUMBS_UP"]);
+        let item = serde_json::json!({
+            "number": 42,
+            "reactions": {"nodes": [{
+                "user": {"login": "alice"},
+                "content": "THUMBS_UP"
+            }]}
+        });
+        assert!(has_maintainer_reaction_with_callback(
+            &item, "owner/repo", &ctx.endorsement_reactions, "approved", &ctx,
+            admin_permission_callback, "endorsement"
         ));
     }
 
