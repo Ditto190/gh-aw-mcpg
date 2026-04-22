@@ -156,15 +156,31 @@ func logWithLevelAndServer(serverID string, level LogLevel, category, format str
 }
 
 var (
-	// LogInfoWithServer logs an informational message to the server-specific log file.
-	LogInfoWithServer = makeServerLevelLogger(logWithLevelAndServer, LogLevelInfo)
-	// LogWarnWithServer logs a warning message to the server-specific log file.
-	LogWarnWithServer = makeServerLevelLogger(logWithLevelAndServer, LogLevelWarn)
-	// LogErrorWithServer logs an error message to the server-specific log file.
-	LogErrorWithServer = makeServerLevelLogger(logWithLevelAndServer, LogLevelError)
-	// LogDebugWithServer logs a debug message to the server-specific log file.
-	LogDebugWithServer = makeServerLevelLogger(logWithLevelAndServer, LogLevelDebug)
+	logInfoWithServer  = makeServerLevelLogger(logWithLevelAndServer, LogLevelInfo)
+	logWarnWithServer  = makeServerLevelLogger(logWithLevelAndServer, LogLevelWarn)
+	logErrorWithServer = makeServerLevelLogger(logWithLevelAndServer, LogLevelError)
+	logDebugWithServer = makeServerLevelLogger(logWithLevelAndServer, LogLevelDebug)
 )
+
+// LogInfoWithServer logs an informational message to the server-specific log file.
+func LogInfoWithServer(serverID, category, format string, args ...interface{}) {
+	logInfoWithServer(serverID, category, format, args...)
+}
+
+// LogWarnWithServer logs a warning message to the server-specific log file.
+func LogWarnWithServer(serverID, category, format string, args ...interface{}) {
+	logWarnWithServer(serverID, category, format, args...)
+}
+
+// LogErrorWithServer logs an error message to the server-specific log file.
+func LogErrorWithServer(serverID, category, format string, args ...interface{}) {
+	logErrorWithServer(serverID, category, format, args...)
+}
+
+// LogDebugWithServer logs a debug message to the server-specific log file.
+func LogDebugWithServer(serverID, category, format string, args ...interface{}) {
+	logDebugWithServer(serverID, category, format, args...)
+}
 
 // CloseServerFileLogger closes the global server file logger
 func CloseServerFileLogger() error {

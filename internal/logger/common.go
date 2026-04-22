@@ -183,24 +183,31 @@ import (
 
 // Log-Level Quad-Function Pattern
 //
-// Three sets of four public functions — one set per logger variant — share an identical
-// structural pattern where each function is a one-liner that delegates to an internal
-// helper with the appropriate LogLevel constant:
+// Three sets of four public functions — one set per logger variant — share an
+// identical structure where each exported one-liner delegates to an unexported
+// per-level closure created by helper constructors in this file:
 //
 //	func Log<Level>(category, format string, args ...interface{}) {
-//	    <internalHelper>(LogLevel<Level>, category, format, args...)
+//	    log<level>(category, format, args...)
 //	}
 //
-// The three sets and their internal helpers are:
+// The three sets and their internal dispatch helpers are:
 //
 //	file_logger.go       LogInfo / LogWarn / LogError / LogDebug          → logWithLevel
 //	markdown_logger.go   LogInfoMd / LogWarnMd / LogErrorMd / LogDebugMd  → logWithMarkdown
 //	server_file_logger.go LogInfoWithServer / ... / LogDebugWithServer    → logWithLevelAndServer
 //
-// This pattern is intentionally kept across the three files because:
+// This pattern keeps exported APIs immutable (`func` declarations) while still
+// eliminating repeated inline level wiring.
+//
+// The makeLevelLogger and makeServerLevelLogger helpers are for internal
+// delegation only and should not replace exported functions with reassignable
+// function variables.
+//
+// This remains intentionally consistent across the three files because:
 //   - Each set is a distinct public API with a different signature and set of callers.
-//   - The one-liner wrappers are trivial and unlikely to diverge.
-//   - Go lacks the metaprogramming to eliminate them without sacrificing readability.
+//   - The exported wrappers preserve a stable, non-mutable API surface.
+//   - Internal closure generation removes repetitive level-binding boilerplate.
 //
 // The shared logFuncs map below centralises the LogLevel → log-function
 // mapping so that the internal helpers (logWithMarkdown, logWithLevelAndServer)
@@ -208,7 +215,8 @@ import (
 //
 // When adding a new LogLevel constant (e.g., LogLevelTrace):
 //  1. Add a new entry to the logFuncs map below.
-//  2. Add a new LogTrace wrapper to each of the three files above.
+//  2. Add a new internal per-level closure and exported wrapper in each of the
+//     three files above.
 //
 // logFuncs maps each LogLevel to its corresponding global log function.
 // This eliminates repeated switch-on-level blocks in logWithMarkdown
