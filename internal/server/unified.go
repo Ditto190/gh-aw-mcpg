@@ -531,7 +531,7 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 	// For read operations in any mode, we skip the coarse-grained block
 	// and let the request proceed. Fine-grained filtering at Phase 5 will filter
 	// individual items from the response based on their actual labels from LabelResponse().
-	isReadOperation := (operation == difc.OperationRead)
+	isReadOperation := difc.ShouldBypassCoarseDeny(operation)
 	result := requestEvaluator.Evaluate(agentLabels.Secrecy, agentLabels.Integrity, resource, operation)
 
 	if !result.IsAllowed() {
@@ -603,8 +603,7 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 	// Per spec: LabelResponse() is only called for read operations in all modes,
 	// and for read-write operations in filter/propagate modes.
 	// For write operations and read-write in strict mode, skip LabelResponse().
-	isPureWrite := (operation == difc.OperationWrite)
-	shouldCallLabelResponse := !isPureWrite && (operation != difc.OperationReadWrite || enforcementMode != difc.EnforcementStrict)
+	shouldCallLabelResponse := difc.ShouldCallLabelResponse(operation, enforcementMode)
 
 	var labeledData difc.LabeledData
 	if shouldCallLabelResponse {
@@ -631,7 +630,7 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 				filtered.GetAccessibleCount(), filtered.TotalCount)
 
 			// **Strict mode: block entire response if ANY item is filtered**
-			if enforcementMode == difc.EnforcementStrict && filtered.GetFilteredCount() > 0 {
+			if difc.ShouldBlockFilteredResponse(enforcementMode, filtered.GetFilteredCount()) {
 				logger.LogWarn("difc", "STRICT MODE: Blocking entire response - %d/%d items violate DIFC policy",
 					filtered.GetFilteredCount(), filtered.TotalCount)
 				blockErr := fmt.Errorf("DIFC policy violation: %d of %d items in response are not accessible to agent %s",
@@ -664,7 +663,7 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 		// **Phase 6: Accumulate labels from this operation (for reads in PROPAGATE mode only)**
 		// Label accumulation should only happen when mode is EnforcementPropagate
 		// Filter mode does NOT accumulate - it just filters what the agent can see
-		if !isPureWrite && enforcementMode == difc.EnforcementPropagate {
+		if difc.ShouldAccumulateReadLabels(operation, enforcementMode) {
 			overall := labeledData.Overall()
 			agentLabels.AccumulateFromRead(overall)
 			logUnified.Printf("[DIFC] Agent %s accumulated labels (propagate mode) | Secrecy: %v | Integrity: %v",
@@ -675,7 +674,7 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 		finalResult = backendResult
 
 		// **Phase 6: Accumulate labels from resource (for reads in PROPAGATE mode only)**
-		if !isPureWrite && enforcementMode == difc.EnforcementPropagate {
+		if difc.ShouldAccumulateReadLabels(operation, enforcementMode) {
 			agentLabels.AccumulateFromRead(resource)
 			logUnified.Printf("[DIFC] Agent %s accumulated labels (propagate mode) | Secrecy: %v | Integrity: %v",
 				agentID, agentLabels.GetSecrecyTags(), agentLabels.GetIntegrityTags())

@@ -155,24 +155,31 @@ func logWithLevelAndServer(serverID string, level LogLevel, category, format str
 	}
 }
 
-// LogInfoWithServer logs an informational message to the server-specific log file
+var (
+	logInfoWithServer  = makeServerLevelLogger(logWithLevelAndServer, LogLevelInfo)
+	logWarnWithServer  = makeServerLevelLogger(logWithLevelAndServer, LogLevelWarn)
+	logErrorWithServer = makeServerLevelLogger(logWithLevelAndServer, LogLevelError)
+	logDebugWithServer = makeServerLevelLogger(logWithLevelAndServer, LogLevelDebug)
+)
+
+// LogInfoWithServer logs an informational message to the server-specific log file.
 func LogInfoWithServer(serverID, category, format string, args ...interface{}) {
-	logWithLevelAndServer(serverID, LogLevelInfo, category, format, args...)
+	logInfoWithServer(serverID, category, format, args...)
 }
 
-// LogWarnWithServer logs a warning message to the server-specific log file
+// LogWarnWithServer logs a warning message to the server-specific log file.
 func LogWarnWithServer(serverID, category, format string, args ...interface{}) {
-	logWithLevelAndServer(serverID, LogLevelWarn, category, format, args...)
+	logWarnWithServer(serverID, category, format, args...)
 }
 
-// LogErrorWithServer logs an error message to the server-specific log file
+// LogErrorWithServer logs an error message to the server-specific log file.
 func LogErrorWithServer(serverID, category, format string, args ...interface{}) {
-	logWithLevelAndServer(serverID, LogLevelError, category, format, args...)
+	logErrorWithServer(serverID, category, format, args...)
 }
 
-// LogDebugWithServer logs a debug message to the server-specific log file
+// LogDebugWithServer logs a debug message to the server-specific log file.
 func LogDebugWithServer(serverID, category, format string, args ...interface{}) {
-	logWithLevelAndServer(serverID, LogLevelDebug, category, format, args...)
+	logDebugWithServer(serverID, category, format, args...)
 }
 
 // CloseServerFileLogger closes the global server file logger

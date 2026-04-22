@@ -178,7 +178,7 @@ func (h *proxyHandler) handleWithDIFC(w http.ResponseWriter, r *http.Request, pa
 	evalResult := s.evaluator.Evaluate(agentLabels.Secrecy, agentLabels.Integrity, resource, operation)
 
 	if !evalResult.IsAllowed() {
-		if operation == difc.OperationRead {
+		if difc.ShouldBypassCoarseDeny(operation) {
 			// Read in filter mode: skip coarse block, proceed to fine-grained filtering
 			logHandler.Printf("[DIFC] Phase 2: coarse check failed for read, proceeding to Phase 3")
 		} else {
@@ -266,7 +266,7 @@ func (h *proxyHandler) handleWithDIFC(w http.ResponseWriter, r *http.Request, pa
 			}
 
 			// Strict mode: block entire response if any item filtered
-			if s.enforcementMode == difc.EnforcementStrict && filtered.GetFilteredCount() > 0 {
+			if difc.ShouldBlockFilteredResponse(s.enforcementMode, filtered.GetFilteredCount()) {
 				logHandler.Printf("[DIFC] STRICT: blocking response — %d filtered items", filtered.GetFilteredCount())
 				writeDIFCForbidden(w, fmt.Sprintf("DIFC policy violation: %d of %d items not accessible",
 					filtered.GetFilteredCount(), filtered.TotalCount))
@@ -318,7 +318,7 @@ func (h *proxyHandler) handleWithDIFC(w http.ResponseWriter, r *http.Request, pa
 	}
 
 	// **Phase 6: Label accumulation (propagate mode)**
-	if s.enforcementMode == difc.EnforcementPropagate && labeledData != nil {
+	if labeledData != nil && difc.ShouldAccumulateReadLabels(operation, s.enforcementMode) {
 		overall := labeledData.Overall()
 		agentLabels.AccumulateFromRead(overall)
 		logHandler.Printf("[DIFC] Phase 6: accumulated labels")
