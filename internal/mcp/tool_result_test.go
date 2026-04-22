@@ -415,3 +415,18 @@ func TestConvertToCallToolResult_MarshalError(t *testing.T) {
 	assert.Nil(t, result)
 	assert.Contains(t, err.Error(), "failed to marshal backend result")
 }
+
+func TestBuildMCPTextResponse(t *testing.T) {
+	text := `{"permission":"write"}`
+
+	result := BuildMCPTextResponse(text)
+
+	require := require.New(t)
+	assert := assert.New(t)
+
+	content, ok := result["content"].([]map[string]interface{})
+	require.True(ok)
+	require.Len(content, 1)
+	assert.Equal("text", content[0]["type"])
+	assert.Equal(text, content[0]["text"])
+}
