@@ -55,6 +55,42 @@ func TestFormatRPCMessage(t *testing.T) {
 			},
 			want: []string{"client←tools/call", "200b"},
 		},
+		{
+			name: "empty server ID omits server prefix",
+			info: &RPCMessageInfo{
+				Direction:   RPCDirectionOutbound,
+				MessageType: RPCMessageRequest,
+				ServerID:    "",
+				Method:      "tools/list",
+				PayloadSize: 30,
+				Payload:     `{"method":"tools/list"}`,
+			},
+			want: []string{"30b", `{"method":"tools/list"}`},
+		},
+		{
+			name: "empty payload omits payload from output",
+			info: &RPCMessageInfo{
+				Direction:   RPCDirectionOutbound,
+				MessageType: RPCMessageRequest,
+				ServerID:    "github",
+				Method:      "tools/list",
+				PayloadSize: 0,
+				Payload:     "",
+			},
+			want: []string{"github→tools/list", "0b"},
+		},
+		{
+			name: "response with error and no payload",
+			info: &RPCMessageInfo{
+				Direction:   RPCDirectionInbound,
+				MessageType: RPCMessageResponse,
+				ServerID:    "backend",
+				PayloadSize: 0,
+				Payload:     "",
+				Error:       "connection reset",
+			},
+			want: []string{"backend←resp", "0b", "err:connection reset"},
+		},
 	}
 
 	for _, tt := range tests {
@@ -177,6 +213,46 @@ func TestFormatRPCMessageMarkdown(t *testing.T) {
 			want:    []string{"**github**→`tools/call`", "```json", `"params"`},
 			notWant: []string{`"jsonrpc"`, `"method"`},
 		},
+		{
+			name: "tools/call with non-string name in params does not append tool name",
+			info: &RPCMessageInfo{
+				Direction:   RPCDirectionOutbound,
+				MessageType: RPCMessageRequest,
+				ServerID:    "github",
+				Method:      "tools/call",
+				PayloadSize: 60,
+				Payload:     `{"jsonrpc":"2.0","method":"tools/call","params":{"name":42,"arguments":{}}}`,
+			},
+			// name is not a string so tool name extraction should not add backtick-wrapped name
+			want:    []string{"**github**→`tools/call`"},
+			notWant: []string{"**github**→`tools/call` `"},
+		},
+		{
+			name: "empty server ID produces no server prefix",
+			info: &RPCMessageInfo{
+				Direction:   RPCDirectionOutbound,
+				MessageType: RPCMessageRequest,
+				ServerID:    "",
+				Method:      "tools/list",
+				PayloadSize: 40,
+				Payload:     `{"jsonrpc":"2.0","method":"tools/list","params":{"key":"val"}}`,
+			},
+			want:    []string{"```json", `"params"`},
+			notWant: []string{"**"},
+		},
+		{
+			name: "empty payload produces no code block",
+			info: &RPCMessageInfo{
+				Direction:   RPCDirectionOutbound,
+				MessageType: RPCMessageRequest,
+				ServerID:    "github",
+				Method:      "tools/list",
+				PayloadSize: 0,
+				Payload:     "",
+			},
+			want:    []string{"**github**→`tools/list`"},
+			notWant: []string{"```json"},
+		},
 	}
 
 	for _, tt := range tests {
@@ -255,6 +331,24 @@ func TestFormatJSONWithoutFields(t *testing.T) {
 			fieldsToRemove: []string{"jsonrpc", "method"},
 			wantContains:   []string{`"params"`},
 			wantNotContain: []string{},
+			wantValid:      true,
+			wantEmpty:      false,
+		},
+		{
+			name:           "nil fields to remove leaves all fields",
+			input:          `{"jsonrpc":"2.0","method":"tools/list","id":1}`,
+			fieldsToRemove: nil,
+			wantContains:   []string{`"jsonrpc"`, `"method"`, `"id"`},
+			wantNotContain: []string{},
+			wantValid:      true,
+			wantEmpty:      false,
+		},
+		{
+			name:           "removing non-existent field is a no-op",
+			input:          `{"id":1,"result":{}}`,
+			fieldsToRemove: []string{"jsonrpc", "method"},
+			wantContains:   []string{`"id"`, `"result"`},
+			wantNotContain: []string{`"jsonrpc"`, `"method"`},
 			wantValid:      true,
 			wantEmpty:      false,
 		},
