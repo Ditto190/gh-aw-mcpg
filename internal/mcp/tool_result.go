@@ -156,3 +156,12 @@ func NewErrorCallToolResult(err error) (*sdk.CallToolResult, interface{}, error)
 		},
 	}, nil, err
 }
+
+// BuildMCPTextResponse returns a raw MCP response map with a single text content item.
+func BuildMCPTextResponse(text string) map[string]interface{} {
+	return map[string]interface{}{
+		"content": []map[string]interface{}{
+			{"type": "text", "text": text},
+		},
+	}
+}

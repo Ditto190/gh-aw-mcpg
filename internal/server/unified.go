@@ -346,12 +346,7 @@ func (g *guardBackendCaller) callCollaboratorPermission(ctx context.Context, arg
 	}
 
 	// Wrap in MCP response format so the WASM guard can parse it consistently
-	mcpResp := map[string]interface{}{
-		"content": []map[string]interface{}{
-			{"type": "text", "text": string(body)},
-		},
-	}
-	return mcpResp, nil
+	return mcp.BuildMCPTextResponse(string(body)), nil
 }
 
 // buildCircuitBreakers creates per-backend circuit breakers from the configuration.

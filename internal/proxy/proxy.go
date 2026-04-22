@@ -20,6 +20,7 @@ import (
 	"github.com/github/gh-aw-mcpg/internal/difc"
 	"github.com/github/gh-aw-mcpg/internal/guard"
 	"github.com/github/gh-aw-mcpg/internal/logger"
+	"github.com/github/gh-aw-mcpg/internal/mcp"
 	"github.com/github/gh-aw-mcpg/internal/tracing"
 )
 
@@ -331,12 +332,7 @@ func (r *restBackendCaller) CallTool(ctx context.Context, toolName string, args 
 	}
 
 	// Wrap in MCP response format: {content: [{type: "text", text: "..."}]}
-	mcpResp := map[string]interface{}{
-		"content": []map[string]interface{}{
-			{"type": "text", "text": string(body)},
-		},
-	}
-	return mcpResp, nil
+	return mcp.BuildMCPTextResponse(string(body)), nil
 }
 
 // forwardToGitHub sends a request to the upstream GitHub API.

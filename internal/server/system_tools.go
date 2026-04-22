@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/github/gh-aw-mcpg/internal/logger"
+	"github.com/github/gh-aw-mcpg/internal/mcp"
 )
 
 var logSys = logger.New("server:system_tools")
@@ -89,14 +90,7 @@ func (s *SysServer) callTool(name string, args map[string]interface{}) (interfac
 
 func (s *SysServer) sysInit() (interface{}, error) {
 	logSys.Printf("Initializing MCPG system with %d servers", len(s.serverIDs))
-	return map[string]interface{}{
-		"content": []map[string]interface{}{
-			{
-				"type": "text",
-				"text": fmt.Sprintf("MCPG initialized. Available servers: %v", s.serverIDs),
-			},
-		},
-	}, nil
+	return mcp.BuildMCPTextResponse(fmt.Sprintf("MCPG initialized. Available servers: %v", s.serverIDs)), nil
 }
 
 func (s *SysServer) listServers() (interface{}, error) {
@@ -105,12 +99,5 @@ func (s *SysServer) listServers() (interface{}, error) {
 		serverList += fmt.Sprintf("%d. %s\n", i+1, id)
 	}
 
-	return map[string]interface{}{
-		"content": []map[string]interface{}{
-			{
-				"type": "text",
-				"text": fmt.Sprintf("Configured MCP Servers:\n%s", serverList),
-			},
-		},
-	}, nil
+	return mcp.BuildMCPTextResponse(fmt.Sprintf("Configured MCP Servers:\n%s", serverList)), nil
 }
