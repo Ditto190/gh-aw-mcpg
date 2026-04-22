@@ -262,6 +262,12 @@ fn infer_scope_for_baseline(tool_name: &str, tool_args: &Value, repo_id: &str) -
     }
 
     match tool_name {
+        "dismiss_notification"
+        | "mark_all_notifications_read"
+        | "manage_notification_subscription"
+        | "manage_repository_notification_subscription"
+        | "create_repository"
+        | "fork_repository" => "github".to_string(),
         "search_code" | "search_issues" | "search_pull_requests" => {
             let query = tool_args
                 .get("query")
@@ -1157,6 +1163,74 @@ mod tests {
         let tool_args = json!({"query": "repo:github/gh-aw-mcpg is:pr is:open"});
         let inferred = infer_scope_for_baseline("search_pull_requests", &tool_args, "");
         assert_eq!(inferred, "github/gh-aw-mcpg");
+    }
+
+    #[test]
+    fn infer_scope_for_baseline_uses_github_scope_for_notification_management_tools() {
+        let tool_args = json!({ "threadId": "123" });
+        for tool in &[
+            "dismiss_notification",
+            "mark_all_notifications_read",
+            "manage_notification_subscription",
+            "manage_repository_notification_subscription",
+        ] {
+            let inferred = infer_scope_for_baseline(tool, &tool_args, "");
+            assert_eq!(inferred, "github", "{} should infer github baseline scope", tool);
+        }
+    }
+
+    #[test]
+    fn infer_scope_for_baseline_uses_github_scope_for_repo_creation_tools() {
+        let tool_args = json!({ "name": "new-repo" });
+        for tool in &["create_repository", "fork_repository"] {
+            let inferred = infer_scope_for_baseline(tool, &tool_args, "");
+            assert_eq!(inferred, "github", "{} should infer github baseline scope", tool);
+        }
+    }
+
+    #[test]
+    fn notification_management_integrity_preserved_after_baseline() {
+        let ctx = PolicyContext::default();
+        let tool_args = json!({ "threadId": "123" });
+        for tool in &[
+            "dismiss_notification",
+            "mark_all_notifications_read",
+            "manage_notification_subscription",
+            "manage_repository_notification_subscription",
+        ] {
+            let (_, integrity, _) =
+                labels::apply_tool_labels(tool, &tool_args, "", vec![], vec![], String::new(), &ctx);
+            let baseline_scope = infer_scope_for_baseline(tool, &tool_args, "");
+            let after_baseline =
+                labels::ensure_integrity_baseline(&baseline_scope, integrity, &ctx);
+
+            assert_eq!(
+                after_baseline,
+                labels::project_github_label(&ctx),
+                "{} integrity should remain github-scoped after baseline enforcement",
+                tool
+            );
+        }
+    }
+
+    #[test]
+    fn repo_creation_integrity_preserved_after_baseline() {
+        let ctx = PolicyContext::default();
+        let tool_args = json!({ "name": "new-repo" });
+        for tool in &["create_repository", "fork_repository"] {
+            let (_, integrity, _) =
+                labels::apply_tool_labels(tool, &tool_args, "", vec![], vec![], String::new(), &ctx);
+            let baseline_scope = infer_scope_for_baseline(tool, &tool_args, "");
+            let after_baseline =
+                labels::ensure_integrity_baseline(&baseline_scope, integrity, &ctx);
+
+            assert_eq!(
+                after_baseline,
+                labels::writer_integrity("github", &ctx),
+                "{} integrity should remain github writer-scoped after baseline enforcement",
+                tool
+            );
+        }
     }
 
     #[test]
