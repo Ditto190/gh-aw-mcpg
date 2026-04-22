@@ -25,32 +25,40 @@ func TestBinaryInvocation_RoutedMode(t *testing.T) {
 		t.Skip("Skipping binary integration test in short mode")
 	}
 
-	// Find the binary
 	binaryPath := findBinary(t)
 	t.Logf("Using binary: %s", binaryPath)
 
-	// Create a temporary config file
-	configFile := createTempConfig(t, map[string]interface{}{
-		"testserver": map[string]interface{}{
-			"command": "docker",
-			"args":    []string{"run", "--rm", "-i", "alpine:latest", "echo"},
-		},
-	})
-	defer os.Remove(configFile)
+	// Use an in-process mock backend to avoid Docker dependency
+	mockBackend := createMinimalMockMCPBackend(t)
+	defer mockBackend.Close()
 
-	// Start the server process
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	port := "13001" // Use a specific port for testing
+	port := "13001"
 	cmd := exec.CommandContext(ctx, binaryPath,
-		"--config", configFile,
+		"--config-stdin",
 		"--listen", "127.0.0.1:"+port,
 		"--routed",
 	)
 
-	// Capture output for debugging
+	configJSON := map[string]interface{}{
+		"mcpServers": map[string]interface{}{
+			"testserver": map[string]interface{}{
+				"type": "http",
+				"url":  mockBackend.URL + "/mcp",
+			},
+		},
+		"gateway": map[string]interface{}{
+			"port":   13001,
+			"domain": "localhost",
+			"apiKey": "test-token",
+		},
+	}
+	configBytes, _ := json.Marshal(configJSON)
+
 	var stdout, stderr bytes.Buffer
+	cmd.Stdin = bytes.NewReader(configBytes)
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
@@ -58,14 +66,12 @@ func TestBinaryInvocation_RoutedMode(t *testing.T) {
 		t.Fatalf("Failed to start server: %v", err)
 	}
 
-	// Ensure the process is killed at the end
 	defer func() {
 		if cmd.Process != nil {
 			cmd.Process.Kill()
 		}
 	}()
 
-	// Wait for server to start
 	serverURL := "http://127.0.0.1:" + port
 	if !waitForServer(t, serverURL+"/health", 10*time.Second) {
 		t.Logf("STDOUT: %s", stdout.String())
@@ -130,29 +136,43 @@ func TestBinaryInvocation_UnifiedMode(t *testing.T) {
 	binaryPath := findBinary(t)
 	t.Logf("Using binary: %s", binaryPath)
 
-	configFile := createTempConfig(t, map[string]interface{}{
-		"backend1": map[string]interface{}{
-			"command": "docker",
-			"args":    []string{"run", "--rm", "-i", "alpine:latest", "echo"},
-		},
-		"backend2": map[string]interface{}{
-			"command": "docker",
-			"args":    []string{"run", "--rm", "-i", "alpine:latest", "echo"},
-		},
-	})
-	defer os.Remove(configFile)
+	// Use in-process mock backends to avoid Docker dependency
+	mockBackend1 := createMinimalMockMCPBackend(t)
+	defer mockBackend1.Close()
+	mockBackend2 := createMinimalMockMCPBackend(t)
+	defer mockBackend2.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	port := "13002"
 	cmd := exec.CommandContext(ctx, binaryPath,
-		"--config", configFile,
+		"--config-stdin",
 		"--listen", "127.0.0.1:"+port,
 		"--unified",
 	)
 
+	configJSON := map[string]interface{}{
+		"mcpServers": map[string]interface{}{
+			"backend1": map[string]interface{}{
+				"type": "http",
+				"url":  mockBackend1.URL + "/mcp",
+			},
+			"backend2": map[string]interface{}{
+				"type": "http",
+				"url":  mockBackend2.URL + "/mcp",
+			},
+		},
+		"gateway": map[string]interface{}{
+			"port":   13002,
+			"domain": "localhost",
+			"apiKey": "test-token",
+		},
+	}
+	configBytes, _ := json.Marshal(configJSON)
+
 	var stdout, stderr bytes.Buffer
+	cmd.Stdin = bytes.NewReader(configBytes)
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
