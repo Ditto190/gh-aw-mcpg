@@ -703,6 +703,24 @@ func TestRegisterToolWithoutValidation(t *testing.T) {
 		},
 	}, handler)
 
+	// This canary verifies the key behavior relied on by registerToolWithoutValidation:
+	// tool calls are not rejected by SDK argument-value validation.
+	var strictHandlerCalled bool
+	registerToolWithoutValidation(server, &sdk.Tool{
+		Name:        "strict_tool",
+		Description: "A strict-schema tool",
+		InputSchema: map[string]interface{}{
+			"type": "object",
+			"properties": map[string]interface{}{
+				"count": map[string]interface{}{"type": "integer"},
+			},
+			"required": []interface{}{"count"},
+		},
+	}, func(ctx context.Context, req *sdk.CallToolRequest, state interface{}) (*sdk.CallToolResult, interface{}, error) {
+		strictHandlerCalled = true
+		return &sdk.CallToolResult{IsError: false}, state, nil
+	})
+
 	// Use in-memory transports to connect a client to the server and invoke the tool
 	serverTransport, clientTransport := sdk.NewInMemoryTransports()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -721,6 +739,16 @@ func TestRegisterToolWithoutValidation(t *testing.T) {
 	require.NoError(err)
 	assert.False(result.IsError)
 	assert.True(handlerCalled, "Handler should have been called")
+
+	// Provide an intentionally invalid value for the strict schema ("count" must be integer).
+	// If SDK starts validating argument values on this registration path, this call will fail.
+	strictResult, err := clientSession.CallTool(ctx, &sdk.CallToolParams{
+		Name:      "strict_tool",
+		Arguments: map[string]interface{}{"count": "not-an-integer"},
+	})
+	require.NoError(err)
+	assert.False(strictResult.IsError)
+	assert.True(strictHandlerCalled, "Strict handler should be called even with schema-invalid arguments")
 }
 
 // TestCreateHTTPServerForRoutedMode_OAuth tests OAuth discovery endpoint in routed mode

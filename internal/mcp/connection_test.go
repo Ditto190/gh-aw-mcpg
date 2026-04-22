@@ -978,16 +978,43 @@ func TestPaginateAll(t *testing.T) {
 	})
 
 	t.Run("exceeding max pages returns error", func(t *testing.T) {
-		// Each call returns a cursor so the loop never ends naturally.
+		// Each call returns a unique cursor so the loop never ends naturally.
 		callCount := 0
 		_, err := paginateAll("server1", "tools", func(cursor string) (paginatedPage[string], error) {
 			callCount++
-			return paginatedPage[string]{Items: []string{"x"}, NextCursor: "next"}, nil
+			nextCursor := "next"
+			if cursor != "" {
+				nextCursor = cursor + "next"
+			}
+			return paginatedPage[string]{Items: []string{"x"}, NextCursor: nextCursor}, nil
 		})
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "more than")
 		assert.Contains(t, err.Error(), "pages")
 		// Must stop at the page limit, not run forever.
 		assert.Equal(t, paginateAllMaxPages, callCount)
+	})
+
+	t.Run("cyclical cursor returns error", func(t *testing.T) {
+		callCount := 0
+		_, err := paginateAll("server1", "tools", func(cursor string) (paginatedPage[string], error) {
+			callCount++
+			switch cursor {
+			case "":
+				return paginatedPage[string]{Items: []string{"a"}, NextCursor: "page2"}, nil
+			case "page2":
+				return paginatedPage[string]{Items: []string{"b"}, NextCursor: "page3"}, nil
+			case "page3":
+				return paginatedPage[string]{Items: []string{"c"}, NextCursor: "page2"}, nil
+			default:
+				return paginatedPage[string]{Items: nil, NextCursor: ""}, nil
+			}
+		})
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "cyclical cursor")
+		assert.Contains(t, err.Error(), "page2")
+		// Initial page + 2 unique cursor fetches, then cycle detected before another fetch.
+		assert.Equal(t, 3, callCount)
 	})
 }
