@@ -87,7 +87,7 @@ make test-integration  # Automatically builds binary if needed
 ```
 
 #### Run All Tests
-Run both unit and integration tests (automatically builds binary if needed):
+Run both unit and integration tests (always rebuilds the binary first):
 ```bash
 make test-all
 ```
