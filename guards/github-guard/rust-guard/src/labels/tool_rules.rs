@@ -466,15 +466,24 @@ pub fn apply_tool_labels(
         }
 
         // === Notifications (user-scoped, private) ===
-        "list_notifications" | "get_notification_details"
-        | "dismiss_notification" | "mark_all_notifications_read"
-        | "manage_notification_subscription"
-        | "manage_repository_notification_subscription" => {
+        "list_notifications" | "get_notification_details" => {
             // Notifications are private to the authenticated user.
             // S = private:user
             // I = none (notifications reference external content of unknown trust)
             secrecy = private_user_label();
             integrity = vec![];
+        }
+
+        // === Notification management (account-scoped writes) ===
+        "dismiss_notification"
+        | "mark_all_notifications_read"
+        | "manage_notification_subscription"
+        | "manage_repository_notification_subscription" => {
+            // These operations change notification/subscription state and return minimal metadata.
+            // S = public (empty); I = project:github
+            secrecy = vec![];
+            baseline_scope = "github".to_string();
+            integrity = project_github_label(ctx);
         }
 
         // === Private GitHub-controlled metadata (user-associated): PII/org-structure sensitive ===
@@ -562,12 +571,21 @@ pub fn apply_tool_labels(
 
         // === Repo content and structure write operations ===
         "create_or_update_file" | "push_files" | "delete_file" | "create_branch"
-        | "update_pull_request_branch" | "create_repository" | "fork_repository" => {
+        | "update_pull_request_branch" => {
             // Write operations that modify repo content/structure.
             // S = S(repo) — response references repo-scoped content
             // I = writer (agent-authored content)
             secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
             integrity = writer_integrity(repo_id, ctx);
+        }
+
+        // === Repository creation/fork (user/org-scoped writes) ===
+        "create_repository" | "fork_repository" => {
+            // Creating/forking repositories is account-scoped and does not return repo content.
+            // S = public (empty); I = writer(github)
+            secrecy = vec![];
+            baseline_scope = "github".to_string();
+            integrity = writer_integrity("github", ctx);
         }
 
         // === Projects write operations (org-scoped) ===
