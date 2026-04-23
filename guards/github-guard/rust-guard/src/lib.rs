@@ -332,9 +332,9 @@ struct AgentLabels {
 
 #[derive(Debug, Serialize)]
 struct NormalizedPolicy {
-    scope_kind: String,
+    scope_kind: &'static str,
     #[serde(rename = "min-integrity")]
-    min_integrity: String,
+    min_integrity: &'static str,
 }
 
 // ============================================================================
@@ -483,11 +483,11 @@ fn scope_token(scopes: &[PolicyScopeEntry]) -> String {
     }
 }
 
-fn normalized_scope_kind(scopes: &[PolicyScopeEntry]) -> String {
+fn normalized_scope_kind(scopes: &[PolicyScopeEntry]) -> &'static str {
     if scopes.len() == 1 {
-        scopes[0].scope_kind.to_string()
+        scopes[0].scope_kind.as_str()
     } else {
-        "Composite".to_string()
+        "Composite"
     }
 }
 
@@ -557,18 +557,19 @@ pub extern "C" fn label_agent(
         disapproval_integrity: policy.disapproval_integrity,
         endorser_min_integrity: policy.endorser_min_integrity,
     };
-    set_runtime_policy_context(ctx.clone());
 
+    // Compute integrity before moving ctx into the global — borrows ctx, no clone needed.
     let integrity = match integrity_floor {
         MinIntegrity::None => labels::none_integrity(&token, &ctx),
         MinIntegrity::Unapproved => labels::reader_integrity(&token, &ctx),
         MinIntegrity::Approved => labels::writer_integrity(&token, &ctx),
         MinIntegrity::Merged => labels::merged_integrity(&token, &ctx),
     };
+    set_runtime_policy_context(ctx);
 
     let normalized_policy = NormalizedPolicy {
         scope_kind: scope_kind_str,
-        min_integrity: integrity_floor.as_str().to_string(),
+        min_integrity: integrity_floor.as_str(),
     };
 
     let output = LabelAgentOutput {

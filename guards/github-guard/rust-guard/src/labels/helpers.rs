@@ -63,16 +63,21 @@ pub enum ScopeKind {
     RepoPrefix,
 }
 
-impl std::fmt::Display for ScopeKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let s = match self {
+impl ScopeKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
             ScopeKind::All => "All",
             ScopeKind::Public => "Public",
             ScopeKind::Owner => "Owner",
             ScopeKind::Repo => "Repo",
             ScopeKind::RepoPrefix => "RepoPrefix",
-        };
-        f.write_str(s)
+        }
+    }
+}
+
+impl std::fmt::Display for ScopeKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
     }
 }
 
