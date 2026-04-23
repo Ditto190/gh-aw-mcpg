@@ -485,3 +485,94 @@ func TestDifcPolicyLabel(t *testing.T) {
 		})
 	}
 }
+
+// TestBuildDIFCSingleItemFilteredError_IntegrityViolation verifies that an integrity
+// violation produces an error message containing [Filtered], the resource description,
+// and the denial reason.
+func TestBuildDIFCSingleItemFilteredError_IntegrityViolation(t *testing.T) {
+	detail := newIntegrityFilteredItem("issue:org/repo#42", "integrity too low for agent context")
+
+	err := buildDIFCSingleItemFilteredError(detail)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "[Filtered]")
+	assert.Contains(t, err.Error(), "issue:org/repo#42")
+	assert.Contains(t, err.Error(), "integrity policy")
+	assert.Contains(t, err.Error(), "integrity too low for agent context")
+}
+
+// TestBuildDIFCSingleItemFilteredError_SecrecyViolation verifies that a secrecy
+// violation produces an error message containing "secrecy policy".
+func TestBuildDIFCSingleItemFilteredError_SecrecyViolation(t *testing.T) {
+	detail := newSecrecyFilteredItem("resource:actions_get", "secrecy requirements not met")
+
+	err := buildDIFCSingleItemFilteredError(detail)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "[Filtered]")
+	assert.Contains(t, err.Error(), "resource:actions_get")
+	assert.Contains(t, err.Error(), "secrecy policy")
+	assert.Contains(t, err.Error(), "secrecy requirements not met")
+}
+
+// TestBuildDIFCSingleItemFilteredError_NoDescription verifies that a missing description
+// falls back to a generic "resource" label and still produces a valid error.
+func TestBuildDIFCSingleItemFilteredError_NoDescription(t *testing.T) {
+	detail := difc.FilteredItemDetail{
+		Item:               difc.LabeledItem{Labels: difc.NewLabeledResource("")},
+		Reason:             "integrity too low",
+		IsSecrecyViolation: false,
+	}
+
+	err := buildDIFCSingleItemFilteredError(detail)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "[Filtered]")
+	assert.Contains(t, err.Error(), "resource exists but is not accessible")
+	assert.Contains(t, err.Error(), "integrity policy")
+}
+
+// TestBuildDIFCSingleItemFilteredError_NoReason verifies that a missing reason still
+// produces a valid error that is not blank.
+func TestBuildDIFCSingleItemFilteredError_NoReason(t *testing.T) {
+	detail := newIntegrityFilteredItem("issue:org/repo#7", "")
+
+	err := buildDIFCSingleItemFilteredError(detail)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "[Filtered]")
+	assert.Contains(t, err.Error(), "issue:org/repo#7")
+	// No trailing "()" should appear when reason is empty.
+	assert.NotContains(t, err.Error(), "()")
+}
+
+// TestIsSingularReadTool verifies the heuristic that distinguishes singular-read tools
+// (get_*, *_read) from collection tools (list_*, search_*).
+func TestIsSingularReadTool(t *testing.T) {
+	tests := []struct {
+		toolName string
+		singular bool
+	}{
+		{"issue_read", true},
+		{"pull_request_read", true},
+		{"get_issue", true},
+		{"get_pull_request", true},
+		{"get_file_contents", true},
+		{"get_repository", true},
+		{"get_commit", true},
+		{"list_issues", false},
+		{"list_pull_requests", false},
+		{"list_commits", false},
+		{"list_branches", false},
+		{"search_issues", false},
+		{"search_pull_requests", false},
+		{"search_code", false},
+		{"search_repositories", false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.toolName, func(t *testing.T) {
+			assert.Equal(t, tc.singular, isSingularReadTool(tc.toolName),
+				"isSingularReadTool(%q) should be %v", tc.toolName, tc.singular)
+		})
+	}
+}

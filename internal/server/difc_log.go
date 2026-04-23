@@ -104,6 +104,43 @@ func extractNumberField(m map[string]interface{}) string {
 // to include inline in the DIFC filtered notice surfaced to the agent.
 const maxFilteredItemsInNotice = 5
 
+// isSingularReadTool returns true when toolName refers to a tool that is expected
+// to return a single item (e.g. issue_read, get_issue, pull_request_read).  List and
+// search tools — whose result set is inherently variable and may legitimately contain
+// just one matching item — return false so they keep the notice-only behavior even
+// when that single item is filtered.
+//
+// The heuristic: tools with the "list_" or "search_" prefix are collection tools;
+// everything else (get_*, *_read, etc.) is treated as a singular read.
+func isSingularReadTool(toolName string) bool {
+	return !strings.HasPrefix(toolName, "list_") && !strings.HasPrefix(toolName, "search_")
+}
+
+// buildDIFCSingleItemFilteredError constructs an error for when exactly one item is
+// entirely blocked by DIFC policy.  Unlike the notice approach (which appends a text
+// annotation to a partial or empty list), this returns an actual Go error that the caller
+// can surface as an MCP IsError result.  It prevents agents from misinterpreting a
+// "filtered" single-item response (e.g. issue_read) as "resource not found".
+func buildDIFCSingleItemFilteredError(detail difc.FilteredItemDetail) error {
+	policyLabel := difcPolicyLabel([]difc.FilteredItemDetail{detail})
+
+	desc := ""
+	if detail.Item.Labels != nil {
+		desc = detail.Item.Labels.Description
+	}
+
+	var msg string
+	if desc != "" {
+		msg = fmt.Sprintf("[Filtered] %s exists but is not accessible — filtered by %s", desc, policyLabel)
+	} else {
+		msg = fmt.Sprintf("[Filtered] resource exists but is not accessible — filtered by %s", policyLabel)
+	}
+	if detail.Reason != "" {
+		msg = fmt.Sprintf("%s (%s)", msg, detail.Reason)
+	}
+	return fmt.Errorf("%s", msg)
+}
+
 // buildDIFCFilteredNotice builds a human-readable notice for the agent when items are
 // removed from a tool response by DIFC policy in filter/propagate mode.
 //

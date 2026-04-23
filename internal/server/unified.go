@@ -625,6 +625,20 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 			if filtered.GetFilteredCount() > 0 {
 				logUnified.Printf("[DIFC] Filtered out %d items due to DIFC policy", filtered.GetFilteredCount())
 				logFilteredItems(serverID, toolName, filtered)
+
+				// **Single-item entirely filtered**: return a structured MCP error so the agent
+				// cannot misinterpret "filtered" as "resource not found" (e.g. issue_read).
+				// Only apply this to singular-read tools (get_*, *_read).  Collection tools
+				// (list_*, search_*) may legitimately return exactly one item that gets filtered
+				// and should still receive the notice-only behavior so agents see an empty list
+				// rather than an unexpected error.
+				if isSingularReadTool(toolName) && filtered.GetAccessibleCount() == 0 && filtered.GetFilteredCount() == 1 {
+					filteredErr := buildDIFCSingleItemFilteredError(filtered.Filtered[0])
+					logger.LogWarn("difc", "Single item filtered — returning MCP error: %v", filteredErr)
+					httpStatusCode = 403
+					return mcp.NewErrorCallToolResult(filteredErr)
+				}
+
 				difcFiltered = filtered
 			}
 

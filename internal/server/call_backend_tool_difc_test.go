@@ -524,6 +524,230 @@ func TestCallBackendTool_Phase5_NilLabeledData_PassesBackendResult(t *testing.T)
 	assert.NotNil(data, "backend result should be passed through when LabelResponse returns nil")
 }
 
+// TestCallBackendTool_Phase5_FilterMode_AllItemsFiltered_NoticePresent verifies that
+// when all items in a multi-item collection are filtered in filter mode the result is
+// not an error but the DIFC filter notice IS present so the agent knows items exist
+// but were withheld.
+func TestCallBackendTool_Phase5_FilterMode_AllItemsFiltered_NoticePresent(t *testing.T) {
+	require := require.New(t)
+	assert := assert.New(t)
+
+	listResponse := map[string]interface{}{
+		"content": []map[string]interface{}{
+			{"type": "text", "text": `[{"id":1},{"id":2}]`},
+		},
+		"isError": false,
+	}
+	backend := newBackendWithToolResponse(t, "list_issues", listResponse)
+	defer backend.Close()
+
+	// Both items carry a restricted secrecy tag the agent does not have.
+	item1Labels := difc.NewLabeledResource("restricted item 1")
+	item1Labels.Secrecy.Label.Add(difc.Tag("private:restricted/repo"))
+	item2Labels := difc.NewLabeledResource("restricted item 2")
+	item2Labels.Secrecy.Label.Add(difc.Tag("private:restricted/repo"))
+	allFilteredCollection := &difc.CollectionLabeledData{
+		Items: []difc.LabeledItem{
+			{Data: map[string]interface{}{"id": 1}, Labels: item1Labels},
+			{Data: map[string]interface{}{"id": 2}, Labels: item2Labels},
+		},
+	}
+
+	g := &difcTestGuard{
+		name:                "difc-phase5-all-filtered-guard",
+		labelResponseResult: allFilteredCollection,
+	}
+	g.labelAgentResult = &guard.LabelAgentResult{
+		Agent:    guard.AgentLabelsPayload{Secrecy: []string{}, Integrity: []string{}},
+		DIFCMode: "filter",
+		NormalizedPolicy: map[string]interface{}{
+			"scope_kind":    "all",
+			"min-integrity": "none",
+		},
+	}
+	us := makeUnifiedWithGuard(t, "difc-phase5-all-filtered-type", g, backend, "filter")
+
+	result, _, err := us.callBackendTool(callCtx("session-p5af"), "test-server", "list_issues", nil)
+
+	require.NotNil(result)
+	assert.NoError(err, "filter mode with all items filtered must not return a Go error")
+	assert.False(result.IsError, "result must not be marked IsError when multiple items are all filtered")
+
+	// The filter notice must be present so the agent knows items exist but were withheld.
+	var foundNotice bool
+	for _, c := range result.Content {
+		if tc, ok := c.(*sdk.TextContent); ok {
+			if strings.Contains(tc.Text, "[Filtered]") || strings.Contains(tc.Text, "filtered") {
+				foundNotice = true
+				break
+			}
+		}
+	}
+	assert.True(foundNotice, "result must contain a DIFC filter notice when multiple items are all filtered")
+}
+
+// TestCallBackendTool_Phase5_FilterMode_SingleItemFiltered_ReturnsMCPError verifies
+// that when exactly one item is present and it is entirely filtered in filter mode,
+// callBackendTool returns an IsError CallToolResult (MCP error) whose text includes
+// "[Filtered]".  This prevents agents from treating a filtered single-item read
+// (e.g. issue_read) as "resource not found".
+func TestCallBackendTool_Phase5_FilterMode_SingleItemFiltered_ReturnsMCPError(t *testing.T) {
+	require := require.New(t)
+	assert := assert.New(t)
+
+	listResponse := map[string]interface{}{
+		"content": []map[string]interface{}{
+			{"type": "text", "text": `[{"id":42,"number":42}]`},
+		},
+		"isError": false,
+	}
+	backend := newBackendWithToolResponse(t, "issue_read", listResponse)
+	defer backend.Close()
+
+	// Single item with a restricted secrecy tag that the agent does not hold.
+	// The DIFC read check for secrecy requires resource.Secrecy ⊆ agent.Secrecy
+	// (agent must have all secrecy tags the resource has).  Since the agent has no
+	// secrecy tags and the item requires "private:org/repo", the check fails.
+	singleItemLabels := difc.NewLabeledResource("issue:org/repo#42")
+	singleItemLabels.Secrecy.Label.Add(difc.Tag("private:org/repo"))
+	singleItemCollection := &difc.CollectionLabeledData{
+		Items: []difc.LabeledItem{
+			{Data: map[string]interface{}{"id": 42, "number": float64(42)}, Labels: singleItemLabels},
+		},
+	}
+
+	g := &difcTestGuard{
+		name:                "difc-phase5-single-filtered-guard",
+		labelResponseResult: singleItemCollection,
+	}
+	g.labelAgentResult = &guard.LabelAgentResult{
+		Agent:    guard.AgentLabelsPayload{Secrecy: []string{}, Integrity: []string{}},
+		DIFCMode: "filter",
+		NormalizedPolicy: map[string]interface{}{
+			"scope_kind":    "all",
+			"min-integrity": "none",
+		},
+	}
+	us := makeUnifiedWithGuard(t, "difc-phase5-single-filtered-type", g, backend, "filter")
+
+	result, _, err := us.callBackendTool(callCtx("session-p5sf"), "test-server", "issue_read", nil)
+
+	require.NotNil(result)
+	assert.True(result.IsError, "single filtered item must produce an IsError MCP result")
+	require.Error(err, "a Go error must accompany the IsError result")
+	assert.Contains(err.Error(), "[Filtered]",
+		"error message must contain [Filtered] marker")
+}
+
+// TestCallBackendTool_Phase5_FilterMode_GenuinelyEmptyCollection_NoNotice verifies
+// that when the backend returns an empty collection (no items at all, not filtered),
+// the result is an empty success with no DIFC filter notice.
+func TestCallBackendTool_Phase5_FilterMode_GenuinelyEmptyCollection_NoNotice(t *testing.T) {
+	require := require.New(t)
+	assert := assert.New(t)
+
+	listResponse := map[string]interface{}{
+		"content": []map[string]interface{}{
+			{"type": "text", "text": `[]`},
+		},
+		"isError": false,
+	}
+	backend := newBackendWithToolResponse(t, "list_issues", listResponse)
+	defer backend.Close()
+
+	// Guard returns an empty collection — no items at all.
+	emptyCollection := &difc.CollectionLabeledData{Items: []difc.LabeledItem{}}
+
+	g := &difcTestGuard{
+		name:                "difc-phase5-empty-guard",
+		labelResponseResult: emptyCollection,
+	}
+	g.labelAgentResult = &guard.LabelAgentResult{
+		Agent:    guard.AgentLabelsPayload{Secrecy: []string{}, Integrity: []string{}},
+		DIFCMode: "filter",
+		NormalizedPolicy: map[string]interface{}{
+			"scope_kind":    "all",
+			"min-integrity": "none",
+		},
+	}
+	us := makeUnifiedWithGuard(t, "difc-phase5-empty-type", g, backend, "filter")
+
+	result, _, err := us.callBackendTool(callCtx("session-p5e"), "test-server", "list_issues", nil)
+
+	require.NotNil(result)
+	assert.NoError(err, "genuinely empty collection must not produce a Go error")
+	assert.False(result.IsError, "genuinely empty collection must not be an MCP error")
+
+	// No filter notice should be present because no items were withheld.
+	for _, c := range result.Content {
+		if tc, ok := c.(*sdk.TextContent); ok {
+			assert.NotContains(tc.Text, "[Filtered]",
+				"filter notice must NOT be present when the collection is genuinely empty")
+		}
+	}
+}
+
+// TestCallBackendTool_Phase5_FilterMode_ListToolSingleItemFiltered_NoticeNotError
+// verifies that when a list tool (list_issues) returns exactly ONE item and that item
+// is filtered, the result is a notice-bearing success — NOT an MCP error.  This guards
+// against the regression where the single-item MCP error path was incorrectly triggered
+// for collection tools with a 1-element result set.
+func TestCallBackendTool_Phase5_FilterMode_ListToolSingleItemFiltered_NoticeNotError(t *testing.T) {
+	require := require.New(t)
+	assert := assert.New(t)
+
+	listResponse := map[string]interface{}{
+		"content": []map[string]interface{}{
+			{"type": "text", "text": `[{"id":1,"title":"only issue"}]`},
+		},
+		"isError": false,
+	}
+	backend := newBackendWithToolResponse(t, "list_issues", listResponse)
+	defer backend.Close()
+
+	// Single item with a restricted secrecy tag — the agent has no secrecy tags.
+	itemLabels := difc.NewLabeledResource("issue:org/repo#1")
+	itemLabels.Secrecy.Label.Add(difc.Tag("private:org/repo"))
+	singleItemCollection := &difc.CollectionLabeledData{
+		Items: []difc.LabeledItem{
+			{Data: map[string]interface{}{"id": 1}, Labels: itemLabels},
+		},
+	}
+
+	g := &difcTestGuard{
+		name:                "difc-phase5-list-single-filtered-guard",
+		labelResponseResult: singleItemCollection,
+	}
+	g.labelAgentResult = &guard.LabelAgentResult{
+		Agent:    guard.AgentLabelsPayload{Secrecy: []string{}, Integrity: []string{}},
+		DIFCMode: "filter",
+		NormalizedPolicy: map[string]interface{}{
+			"scope_kind":    "all",
+			"min-integrity": "none",
+		},
+	}
+	us := makeUnifiedWithGuard(t, "difc-phase5-list-single-filtered-type", g, backend, "filter")
+
+	result, _, err := us.callBackendTool(callCtx("session-p5lsf"), "test-server", "list_issues", nil)
+
+	require.NotNil(result)
+	// list_issues is a collection tool — even with exactly 1 filtered item it must NOT
+	// return an MCP error.  The agent should see an empty list + filter notice.
+	assert.NoError(err, "list tool with 1 filtered item must not return a Go error")
+	assert.False(result.IsError, "list tool with 1 filtered item must not be IsError")
+
+	var foundNotice bool
+	for _, c := range result.Content {
+		if tc, ok := c.(*sdk.TextContent); ok {
+			if strings.Contains(tc.Text, "[Filtered]") {
+				foundNotice = true
+				break
+			}
+		}
+	}
+	assert.True(foundNotice, "list tool with 1 filtered item must still carry a filter notice")
+}
+
 // ─── Phase 6: Label accumulation ─────────────────────────────────────────────
 
 // TestCallBackendTool_Phase6_PropagateModeAccumulatesLabels verifies that in
