@@ -319,16 +319,10 @@ func (r *restBackendCaller) CallTool(ctx context.Context, toolName string, args 
 
 	// For get_collaborator_permission, log the resolved permission level for observability
 	if toolName == "get_collaborator_permission" {
-		var permResp map[string]interface{}
-		if jsonErr := json.Unmarshal(body, &permResp); jsonErr == nil {
-			if perm, ok := permResp["permission"].(string); ok {
-				logProxy.Printf("restBackendCaller: get_collaborator_permission → permission=%q (HTTP %d)", perm, resp.StatusCode)
-			} else {
-				logProxy.Printf("restBackendCaller: get_collaborator_permission → HTTP %d, permission field missing from response", resp.StatusCode)
-			}
-		} else {
-			logProxy.Printf("restBackendCaller: get_collaborator_permission → HTTP %d, %d bytes (JSON parse failed: %v)", resp.StatusCode, len(body), jsonErr)
-		}
+		owner, _ := argsMap["owner"].(string)
+		repo, _ := argsMap["repo"].(string)
+		username, _ := argsMap["username"].(string)
+		return mcp.LogAndWrapCollaboratorPermission(body, owner, repo, username, resp.StatusCode, logProxy.Printf), nil
 	}
 
 	// Wrap in MCP response format: {content: [{type: "text", text: "..."}]}

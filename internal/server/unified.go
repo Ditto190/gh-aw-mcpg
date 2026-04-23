@@ -333,20 +333,8 @@ func (g *guardBackendCaller) callCollaboratorPermission(ctx context.Context, arg
 		return nil, fmt.Errorf("get_collaborator_permission: GitHub API returned %d", resp.StatusCode)
 	}
 
-	// Log the resulting permission level for observability
-	var permResp map[string]interface{}
-	if jsonErr := json.Unmarshal(body, &permResp); jsonErr == nil {
-		if perm, ok := permResp["permission"].(string); ok {
-			logUnified.Printf("get_collaborator_permission: %s/%s user %s → permission=%q (HTTP %d)", owner, repo, username, perm, resp.StatusCode)
-		} else {
-			logUnified.Printf("get_collaborator_permission: %s/%s user %s → HTTP %d, permission field missing from response", owner, repo, username, resp.StatusCode)
-		}
-	} else {
-		logUnified.Printf("get_collaborator_permission: %s/%s user %s → HTTP %d, %d bytes (JSON parse failed: %v)", owner, repo, username, resp.StatusCode, len(body), jsonErr)
-	}
-
-	// Wrap in MCP response format so the WASM guard can parse it consistently
-	return mcp.BuildMCPTextResponse(string(body)), nil
+	// Log the resulting permission level and wrap in MCP response format
+	return mcp.LogAndWrapCollaboratorPermission(body, owner, repo, username, resp.StatusCode, logUnified.Printf), nil
 }
 
 // buildCircuitBreakers creates per-backend circuit breakers from the configuration.
