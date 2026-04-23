@@ -1226,7 +1226,7 @@ pub fn max_integrity(
 /// Mapping (case-insensitive):
 /// - OWNER, MEMBER, COLLABORATOR => approved
 /// - CONTRIBUTOR, FIRST_TIME_CONTRIBUTOR, NONE => unapproved
-/// - FIRST_TIMER, missing, unknown => none
+/// - FIRST_TIMER, missing, unknown => [] (the `none:<scope>` floor is applied later by baseline enforcement)
 ///
 /// ### `NONE` vs `FIRST_TIMER`
 ///
