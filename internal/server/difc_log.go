@@ -104,6 +104,31 @@ func extractNumberField(m map[string]interface{}) string {
 // to include inline in the DIFC filtered notice surfaced to the agent.
 const maxFilteredItemsInNotice = 5
 
+// buildDIFCSingleItemFilteredError constructs an error for when exactly one item is
+// entirely blocked by DIFC policy.  Unlike the notice approach (which appends a text
+// annotation to a partial or empty list), this returns an actual Go error that the caller
+// can surface as an MCP IsError result.  It prevents agents from misinterpreting a
+// "filtered" single-item response (e.g. issue_read) as "resource not found".
+func buildDIFCSingleItemFilteredError(detail difc.FilteredItemDetail) error {
+	policyLabel := difcPolicyLabel([]difc.FilteredItemDetail{detail})
+
+	desc := ""
+	if detail.Item.Labels != nil {
+		desc = detail.Item.Labels.Description
+	}
+
+	var msg string
+	if desc != "" {
+		msg = fmt.Sprintf("[Filtered] %s exists but is not accessible — filtered by %s", desc, policyLabel)
+	} else {
+		msg = fmt.Sprintf("[Filtered] resource exists but is not accessible — filtered by %s", policyLabel)
+	}
+	if detail.Reason != "" {
+		msg = fmt.Sprintf("%s (%s)", msg, detail.Reason)
+	}
+	return fmt.Errorf("%s", msg)
+}
+
 // buildDIFCFilteredNotice builds a human-readable notice for the agent when items are
 // removed from a tool response by DIFC policy in filter/propagate mode.
 //
