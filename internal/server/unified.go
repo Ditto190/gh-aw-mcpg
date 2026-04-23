@@ -628,9 +628,11 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 
 				// **Single-item entirely filtered**: return a structured MCP error so the agent
 				// cannot misinterpret "filtered" as "resource not found" (e.g. issue_read).
-				// When exactly one item was expected and it is blocked, an error is clearer
-				// than an empty array accompanied by a text notice.
-				if filtered.GetAccessibleCount() == 0 && filtered.GetFilteredCount() == 1 {
+				// Only apply this to singular-read tools (get_*, *_read).  Collection tools
+				// (list_*, search_*) may legitimately return exactly one item that gets filtered
+				// and should still receive the notice-only behavior so agents see an empty list
+				// rather than an unexpected error.
+				if isSingularReadTool(toolName) && filtered.GetAccessibleCount() == 0 && filtered.GetFilteredCount() == 1 {
 					filteredErr := buildDIFCSingleItemFilteredError(filtered.Filtered[0])
 					logger.LogWarn("difc", "Single item filtered — returning MCP error: %v", filteredErr)
 					httpStatusCode = 403

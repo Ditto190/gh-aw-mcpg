@@ -545,3 +545,34 @@ func TestBuildDIFCSingleItemFilteredError_NoReason(t *testing.T) {
 	// No trailing "()" should appear when reason is empty.
 	assert.NotContains(t, err.Error(), "()")
 }
+
+// TestIsSingularReadTool verifies the heuristic that distinguishes singular-read tools
+// (get_*, *_read) from collection tools (list_*, search_*).
+func TestIsSingularReadTool(t *testing.T) {
+	tests := []struct {
+		toolName string
+		singular bool
+	}{
+		{"issue_read", true},
+		{"pull_request_read", true},
+		{"get_issue", true},
+		{"get_pull_request", true},
+		{"get_file_contents", true},
+		{"get_repository", true},
+		{"get_commit", true},
+		{"list_issues", false},
+		{"list_pull_requests", false},
+		{"list_commits", false},
+		{"list_branches", false},
+		{"search_issues", false},
+		{"search_pull_requests", false},
+		{"search_code", false},
+		{"search_repositories", false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.toolName, func(t *testing.T) {
+			assert.Equal(t, tc.singular, isSingularReadTool(tc.toolName),
+				"isSingularReadTool(%q) should be %v", tc.toolName, tc.singular)
+		})
+	}
+}
