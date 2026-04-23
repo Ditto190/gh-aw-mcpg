@@ -57,11 +57,19 @@ func registerAllFlags(cmd *cobra.Command) {
 
 // registerFlagCompletions registers custom completion functions for flags
 func registerFlagCompletions(cmd *cobra.Command) {
-	// File and directory completions using idiomatic cobra helpers
-	cmd.MarkFlagFilename("config", "toml")
-	cmd.MarkFlagDirname("log-dir")
-	cmd.MarkFlagDirname("payload-dir")
-	cmd.MarkFlagFilename("env", "env")
+	// File and directory completions
+	cmd.RegisterFlagCompletionFunc("config", func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
+		return []string{"toml"}, cobra.ShellCompDirectiveFilterFileExt
+	})
+	cmd.RegisterFlagCompletionFunc("log-dir", func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
+		return nil, cobra.ShellCompDirectiveFilterDirs
+	})
+	cmd.RegisterFlagCompletionFunc("payload-dir", func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
+		return nil, cobra.ShellCompDirectiveFilterDirs
+	})
+	cmd.RegisterFlagCompletionFunc("env", func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
+		return []string{"env"}, cobra.ShellCompDirectiveFilterFileExt
+	})
 
 	// Enum completions for DIFC flags
 	cmd.RegisterFlagCompletionFunc("guards-mode", cobra.FixedCompletions(
