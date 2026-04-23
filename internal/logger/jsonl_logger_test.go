@@ -3,9 +3,11 @@ package logger
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/github/gh-aw-mcpg/internal/logger/sanitize"
@@ -790,4 +792,212 @@ func TestLogRPCMessageJSONLWithTags_TagsCopied(t *testing.T) {
 	// The logged values must reflect the originals at call time, not the mutation.
 	assert.Equal([]string{"private:org/repo"}, entry.AgentSecrecy, "AgentSecrecy must be an independent copy")
 	assert.Equal([]string{"approved:org/repo"}, entry.AgentIntegrity, "AgentIntegrity must be an independent copy")
+}
+
+// TestLogEntry_NilLogFile verifies that logEntry returns a descriptive error when
+// the JSONLLogger has not been initialized (logFile == nil).
+func TestLogEntry_NilLogFile(t *testing.T) {
+	// Create a logger with nil logFile — simulates an uninitialized logger.
+	jl := &JSONLLogger{}
+
+	err := jl.logEntry(map[string]string{"key": "value"})
+
+	require.Error(t, err, "logEntry with nil logFile should return an error")
+	assert.Contains(t, err.Error(), "not initialized", "error message should indicate logger is not initialized")
+}
+
+// TestLogEntry_EncodeError verifies that logEntry returns a wrapped error when
+// json.Encoder.Encode fails (e.g., for a value that cannot be marshaled to JSON).
+func TestLogEntry_EncodeError(t *testing.T) {
+	tmpDir := t.TempDir()
+	f, err := os.CreateTemp(tmpDir, "encode-error-*.jsonl")
+	require.NoError(t, err, "failed to create temp file")
+	t.Cleanup(func() { f.Close() })
+
+	jl := &JSONLLogger{
+		logFile: f,
+		encoder: json.NewEncoder(f),
+	}
+
+	// Channels cannot be marshaled to JSON; Encode must return an error.
+	err = jl.logEntry(make(chan int))
+
+	require.Error(t, err, "logEntry should return error for un-encodable type")
+	assert.Contains(t, err.Error(), "failed to encode JSON", "error should be wrapped with context")
+}
+
+// TestLogEntry_SyncError verifies that logEntry returns a wrapped error when
+// logFile.Sync() fails. This happens for file descriptors that do not support
+// fsync, such as the write end of an OS pipe.
+func TestLogEntry_SyncError(t *testing.T) {
+	// os.Pipe returns a connected pair of Files. Calling Sync on the write end
+	// returns EINVAL on Linux because pipes do not support fsync.
+	r, w, err := os.Pipe()
+	require.NoError(t, err, "failed to create OS pipe")
+	t.Cleanup(func() {
+		r.Close()
+		w.Close()
+	})
+
+	jl := &JSONLLogger{
+		logFile: w,
+		encoder: json.NewEncoder(w),
+	}
+
+	// A simple JSON-encodable value: Encode should succeed, but Sync must fail.
+	syncErr := jl.logEntry(map[string]string{"event": "test"})
+
+	require.Error(t, syncErr, "logEntry should return an error when Sync fails")
+	assert.Contains(t, syncErr.Error(), "failed to sync log file", "error should be wrapped with sync context")
+}
+
+// TestLogEntry_HappyPath verifies that logEntry succeeds for a valid logger and
+// encodable entry, writing a single JSONL line to the underlying file.
+func TestLogEntry_HappyPath(t *testing.T) {
+	tmpDir := t.TempDir()
+	logPath := filepath.Join(tmpDir, "test.jsonl")
+	f, err := os.Create(logPath)
+	require.NoError(t, err, "failed to create log file")
+	t.Cleanup(func() { f.Close() })
+
+	jl := &JSONLLogger{
+		logFile: f,
+		encoder: json.NewEncoder(f),
+	}
+
+	type testPayload struct {
+		Event string `json:"event"`
+		Count int    `json:"count"`
+	}
+
+	err = jl.logEntry(testPayload{Event: "test-event", Count: 42})
+	require.NoError(t, err, "logEntry should succeed for valid logger and encodable entry")
+
+	// Flush and verify the file content.
+	require.NoError(t, f.Close(), "close should succeed")
+
+	data, err := os.ReadFile(logPath)
+	require.NoError(t, err, "failed to read log file")
+
+	var got testPayload
+	require.NoError(t, json.Unmarshal(data, &got), "written data should be valid JSON")
+	assert.Equal(t, "test-event", got.Event)
+	assert.Equal(t, 42, got.Count)
+}
+
+// TestLogEntry_ConcurrentAccess verifies that logEntry is safe to call from
+// multiple goroutines at the same time — the mutex must prevent data races.
+func TestLogEntry_ConcurrentAccess(t *testing.T) {
+	tmpDir := t.TempDir()
+	logPath := filepath.Join(tmpDir, "concurrent.jsonl")
+	f, err := os.Create(logPath)
+	require.NoError(t, err, "failed to create log file")
+	t.Cleanup(func() { f.Close() })
+
+	jl := &JSONLLogger{
+		logFile: f,
+		encoder: json.NewEncoder(f),
+	}
+
+	const numGoroutines = 20
+	done := make(chan error, numGoroutines)
+	for i := 0; i < numGoroutines; i++ {
+		i := i
+		go func() {
+			done <- jl.logEntry(map[string]int{"n": i})
+		}()
+	}
+
+	for i := 0; i < numGoroutines; i++ {
+		assert.NoError(t, <-done, "concurrent logEntry call should not error")
+	}
+
+	// Count lines written: each successful logEntry writes exactly one JSONL line.
+	require.NoError(t, f.Close())
+	data, err := os.ReadFile(logPath)
+	require.NoError(t, err)
+	lines := strings.Split(strings.TrimRight(string(data), "\n"), "\n")
+	assert.Len(t, lines, numGoroutines, "each goroutine should write exactly one JSONL line")
+}
+
+// TestLogEntry_EncodeErrorMessage verifies that the error wrapping preserves
+// the underlying JSON marshal error so callers can inspect it with errors.As / errors.Is.
+func TestLogEntry_EncodeErrorMessage(t *testing.T) {
+	tmpDir := t.TempDir()
+	f, err := os.CreateTemp(tmpDir, "encode-err-*.jsonl")
+	require.NoError(t, err)
+	t.Cleanup(func() { f.Close() })
+
+	jl := &JSONLLogger{logFile: f, encoder: json.NewEncoder(f)}
+
+	err = jl.logEntry(make(chan int))
+
+	require.Error(t, err)
+	// The original json.UnsupportedTypeError must be unwrappable.
+	var unsupported *json.UnsupportedTypeError
+	assert.True(t, errors.As(err, &unsupported), "wrapped error should be a *json.UnsupportedTypeError")
+}
+
+// TestLogDifcFilteredItem_NilEntry verifies that LogDifcFilteredItem does not
+// panic and returns silently when called with a nil entry.
+func TestLogDifcFilteredItem_NilEntry(t *testing.T) {
+	// This exercises the early-return guard at the top of LogDifcFilteredItem.
+	// It must not panic even when no global JSONL logger is initialised.
+	assert.NotPanics(t, func() {
+		LogDifcFilteredItem(nil)
+	}, "LogDifcFilteredItem(nil) must not panic")
+}
+
+// TestLogDifcFilteredItem_SetsTimestampAndType verifies that LogDifcFilteredItem
+// populates the Timestamp and Type fields of the entry before writing it.
+func TestLogDifcFilteredItem_SetsTimestampAndType(t *testing.T) {
+	tmpDir := t.TempDir()
+	logDir := filepath.Join(tmpDir, "logs")
+
+	require.NoError(t, InitJSONLLogger(logDir, "difc.jsonl"), "InitJSONLLogger failed")
+	defer CloseJSONLLogger()
+
+	entry := &JSONLFilteredItem{
+		FilteredItemLogEntry: FilteredItemLogEntry{
+			ServerID:    "github",
+			ToolName:    "create_issue",
+			Description: "Create a GitHub issue",
+			Reason:      "secrecy constraint violated",
+			SecrecyTags: []string{"private:org/repo"},
+		},
+	}
+
+	LogDifcFilteredItem(entry)
+	CloseJSONLLogger()
+
+	logPath := filepath.Join(logDir, "difc.jsonl")
+	data, err := os.ReadFile(logPath)
+	require.NoError(t, err, "log file must be readable")
+
+	var got JSONLFilteredItem
+	require.NoError(t, json.Unmarshal(data, &got), "log entry must be valid JSON")
+
+	assert.Equal(t, "DIFC_FILTERED", got.Type, "Type must always be DIFC_FILTERED")
+	assert.NotEmpty(t, got.Timestamp, "Timestamp must be set by LogDifcFilteredItem")
+	assert.Equal(t, "github", got.ServerID)
+	assert.Equal(t, "create_issue", got.ToolName)
+	assert.Equal(t, []string{"private:org/repo"}, got.SecrecyTags)
+}
+
+// TestLogDifcFilteredItem_NoLogger verifies that LogDifcFilteredItem does nothing
+// and does not panic when no global JSONL logger has been initialised.
+func TestLogDifcFilteredItem_NoLogger(t *testing.T) {
+	// Ensure no global logger is active.
+	CloseJSONLLogger()
+
+	entry := &JSONLFilteredItem{
+		FilteredItemLogEntry: FilteredItemLogEntry{
+			ServerID: "test",
+			ToolName: "some_tool",
+		},
+	}
+
+	assert.NotPanics(t, func() {
+		LogDifcFilteredItem(entry)
+	}, "LogDifcFilteredItem must not panic when no logger is initialised")
 }
