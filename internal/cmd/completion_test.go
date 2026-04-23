@@ -65,8 +65,8 @@ func newTestRootWithCompletion() (*cobra.Command, *cobra.Command) {
 	root := &cobra.Command{
 		Use: "awmg",
 	}
-	// Mirror the real root's group definitions so GroupID assignments on
-	// subcommands are valid when root.Execute() is called in tests.
+	// Add the real root's "utils" group so GroupID assignments on attached
+	// subcommands remain valid when root.Execute() is called in tests.
 	root.AddGroup(&cobra.Group{ID: "utils", Title: "Utilities:"})
 	completion := newCompletionCmd()
 	root.AddCommand(completion)
