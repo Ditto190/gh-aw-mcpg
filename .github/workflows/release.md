@@ -364,6 +364,8 @@ jobs:
   # Make the release immutable after all assets (binaries + SBOM) are uploaded.
   # This prevents any future modification or deletion of the release for security.
   make-immutable:
+    # `release` is listed explicitly so we can access needs.release.outputs.release_tag
+    # (GitHub Actions requires a job to be in `needs` to access its outputs).
     needs: ["generate-sbom", "release"]
     if: success()
     runs-on: ubuntu-latest
@@ -604,7 +606,7 @@ Supported platforms: `linux/amd64`, `linux/arm64`
 
 ## Output Format
 
-**IMPORTANT**: The release is already marked as immutable by the time this workflow step runs. You CANNOT update the release body. Instead, print the generated highlights to stdout so they appear in the workflow run logs.
+**NOTE**: The release will be marked as immutable by the `make-immutable` workflow job after the agent step completes. Do not attempt to update the release body as that would conflict with the immutability workflow. Instead, print the generated highlights to stdout so they appear in the workflow run logs.
 
 After running through steps 1–4 above, print the complete highlights markdown to stdout:
 

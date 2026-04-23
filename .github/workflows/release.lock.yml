@@ -324,7 +324,6 @@ jobs:
       - create-tag
       - docker
       - generate-sbom
-      - make-immutable
       - release
       - test
     runs-on: ubuntu-latest
