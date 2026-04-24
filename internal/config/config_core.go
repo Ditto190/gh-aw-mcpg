@@ -302,8 +302,9 @@ func isDynamicTOMLPath(key toml.Key) bool {
 }
 
 // LoadFromFile parses a TOML configuration file at path and returns the
-// validated Config, or an error if the file cannot be opened, parsed, or
-// contains unknown fields.
+// validated Config, or an error if the file cannot be opened, parsed,
+// contains unknown fields, or fails schema/field-level validation (e.g. no
+// servers defined, containerization, auth, tracing, or trusted_bots checks).
 //
 // This function uses the BurntSushi/toml v1.6.0+ parser with TOML 1.1 support,
 // which enables modern syntax features like newlines in inline tables and
@@ -319,7 +320,7 @@ func isDynamicTOMLPath(key toml.Key) bool {
 //
 //	var perr toml.ParseError
 //	if errors.As(err, &perr) {
-//	    fmt.Println(perr.Position())
+//		fmt.Println(perr.Position())
 //	}
 //
 // Example usage with TOML 1.1 multi-line arrays:
@@ -327,8 +328,8 @@ func isDynamicTOMLPath(key toml.Key) bool {
 //	[servers.github]
 //	command = "docker"
 //	args = [
-//	    "run", "--rm", "-i",
-//	    "--name", "awmg-github-mcp"
+//		"run", "--rm", "-i",
+//		"--name", "awmg-github-mcp"
 //	]
 func LoadFromFile(path string) (*Config, error) {
 	logConfig.Printf("Loading configuration from file: %s", path)
