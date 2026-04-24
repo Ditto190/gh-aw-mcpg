@@ -142,7 +142,10 @@ func NewUnified(ctx context.Context, cfg *config.Config) (*UnifiedServer, error)
 		payloadDir, payloadPathPrefix, payloadSizeThreshold, float64(payloadSizeThreshold)/1024)
 
 	// Initialize DIFC components (defaults to strict mode for the server)
-	difcComponents := difc.NewComponents(cfg.DIFCMode, difc.EnforcementStrict)
+	difcComponents, difcParseErr := difc.NewComponents(cfg.DIFCMode, difc.EnforcementStrict)
+	if difcParseErr != nil {
+		logger.LogWarn("startup", "invalid DIFC mode %q, defaulting to strict: %v", cfg.DIFCMode, difcParseErr)
+	}
 
 	us := &UnifiedServer{
 		launcher:             l,

@@ -97,20 +97,27 @@ type DIFCComponents struct {
 	Evaluator     *Evaluator
 }
 
-// NewComponents initializes the standard DIFC component set.
-// modeStr is parsed via ParseEnforcementMode; defaultMode is used when modeStr
-// is empty or invalid.
-func NewComponents(modeStr string, defaultMode EnforcementMode) DIFCComponents {
-	mode, err := ParseEnforcementMode(modeStr)
-	if err != nil {
-		mode = defaultMode
+// NewComponents initializes the standard DIFC component set and returns it
+// together with any parse error.
+// When modeStr is empty or cannot be parsed, defaultMode is used and the parse
+// error is returned so callers can decide whether to log a warning.
+func NewComponents(modeStr string, defaultMode EnforcementMode) (DIFCComponents, error) {
+	mode := defaultMode
+	var parseErr error
+	if modeStr != "" {
+		parsed, err := ParseEnforcementMode(modeStr)
+		if err != nil {
+			parseErr = err
+		} else {
+			mode = parsed
+		}
 	}
 	return DIFCComponents{
 		Mode:          mode,
 		AgentRegistry: NewAgentRegistryWithDefaults(nil, nil),
 		Capabilities:  NewCapabilities(),
 		Evaluator:     NewEvaluatorWithMode(mode),
-	}
+	}, parseErr
 }
 
 // AccessDecision represents the result of a DIFC evaluation

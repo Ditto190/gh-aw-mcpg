@@ -99,13 +99,12 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 	apiURL = strings.TrimRight(apiURL, "/")
 	logProxy.Printf("Using upstream GitHub API URL: %s", apiURL)
 
-	// Initialize DIFC components (defaults to filter mode for the proxy)
-	if cfg.DIFCMode != "" {
-		if _, err := difc.ParseEnforcementMode(cfg.DIFCMode); err != nil {
-			log.Printf("[proxy] WARNING: invalid DIFC mode %q, defaulting to filter", cfg.DIFCMode)
-		}
+	// Initialize DIFC components (defaults to filter mode for the proxy).
+	// NewComponents returns any parse error so we can warn without parsing twice.
+	difcComponents, difcParseErr := difc.NewComponents(cfg.DIFCMode, difc.EnforcementFilter)
+	if difcParseErr != nil {
+		log.Printf("[proxy] WARNING: invalid DIFC mode %q, defaulting to filter", cfg.DIFCMode)
 	}
-	difcComponents := difc.NewComponents(cfg.DIFCMode, difc.EnforcementFilter)
 	logProxy.Printf("Enforcement mode resolved: %s", difcComponents.Mode)
 
 	// Load the WASM guard
