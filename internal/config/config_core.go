@@ -301,6 +301,11 @@ func isDynamicTOMLPath(key toml.Key) bool {
 	return false
 }
 
+// LoadFromFile parses a TOML configuration file at path and returns the
+// validated Config, or an error if the file cannot be opened, parsed,
+// contains unknown fields, or fails schema/field-level validation (e.g. no
+// servers defined, containerization, auth, tracing, or trusted_bots checks).
+//
 // This function uses the BurntSushi/toml v1.6.0+ parser with TOML 1.1 support,
 // which enables modern syntax features like newlines in inline tables and
 // improved duplicate key detection.
@@ -310,13 +315,21 @@ func isDynamicTOMLPath(key toml.Key) bool {
 //   - Unknown fields are rejected with an error per spec §4.3.1
 //   - Metadata tracks all decoded keys for validation purposes
 //
+// Callers that need structured parse-error details (line, column, source
+// snippet) can extract the original toml.ParseError via errors.As:
+//
+//	var perr toml.ParseError
+//	if errors.As(err, &perr) {
+//		fmt.Println(perr.Position())
+//	}
+//
 // Example usage with TOML 1.1 multi-line arrays:
 //
 //	[servers.github]
 //	command = "docker"
 //	args = [
-//	    "run", "--rm", "-i",
-//	    "--name", "awmg-github-mcp"
+//		"run", "--rm", "-i",
+//		"--name", "awmg-github-mcp"
 //	]
 func LoadFromFile(path string) (*Config, error) {
 	logConfig.Printf("Loading configuration from file: %s", path)
@@ -333,12 +346,9 @@ func LoadFromFile(path string) (*Config, error) {
 	decoder := toml.NewDecoder(file)
 	md, err := decoder.Decode(&cfg)
 	if err != nil {
-		// toml.Decode returns ParseError as a value type. Wrap with %w to preserve
-		// the structured error for callers while surfacing the full source context
-		// (line snippet + column pointer) via ParseError.Error().
-		if perr, ok := err.(toml.ParseError); ok {
-			return nil, fmt.Errorf("failed to parse TOML: %w", perr)
-		}
+		// decoder.Decode returns ParseError as a value type. Wrap with %w to
+		// preserve the structured error for callers while surfacing the full
+		// source context (line snippet + column pointer) via ParseError.Error().
 		return nil, fmt.Errorf("failed to parse TOML: %w", err)
 	}
 
