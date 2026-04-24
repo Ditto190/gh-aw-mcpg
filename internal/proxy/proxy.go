@@ -186,24 +186,18 @@ func (s *Server) initGuardPolicy(ctx context.Context, policyJSON string, trusted
 		return fmt.Errorf("LabelAgent failed: %w", err)
 	}
 
-	// Apply agent labels
+	// Apply agent labels and parse enforcement mode from guard response
 	agentLabels := s.agentRegistry.GetOrCreate("proxy")
-	for _, tag := range result.Agent.Secrecy {
-		agentLabels.AddSecrecyTag(difc.Tag(tag))
-	}
-	for _, tag := range result.Agent.Integrity {
-		agentLabels.AddIntegrityTag(difc.Tag(tag))
+	newMode, err := guard.ApplyLabelAgentResult(result, agentLabels, s.enforcementMode)
+	if err != nil {
+		return fmt.Errorf("LabelAgent result invalid: %w", err)
 	}
 	logProxy.Printf("Agent labels applied: secrecy=%v, integrity=%v", result.Agent.Secrecy, result.Agent.Integrity)
 
-	// Parse enforcement mode from guard response
 	if result.DIFCMode != "" {
-		mode, err := difc.ParseEnforcementMode(result.DIFCMode)
-		if err == nil {
-			logProxy.Printf("Enforcement mode overridden by guard response: %s → %s", s.enforcementMode, mode)
-			s.enforcementMode = mode
-			s.evaluator.SetMode(mode)
-		}
+		logProxy.Printf("Enforcement mode overridden by guard response: %s → %s", s.enforcementMode, newMode)
+		s.enforcementMode = newMode
+		s.evaluator.SetMode(newMode)
 	}
 
 	s.guardInitialized = true
