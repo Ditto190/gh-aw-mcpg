@@ -89,7 +89,8 @@ func TestBuildCircuitBreakers(t *testing.T) {
 		cbs := buildCircuitBreakers(cfg)
 		require.Len(t, cbs, 1)
 
-		cb := cbs["github"]
+		cb, ok := cbs["github"]
+		require.True(t, ok, "circuit breaker for 'github' should exist")
 		// newCircuitBreaker replaces zero values with defaults.
 		assert.Equal(t, DefaultRateLimitThreshold, cb.threshold, "zero threshold should use default")
 		assert.Equal(t, DefaultRateLimitCooldown, cb.cooldown, "zero cooldown should use default")
@@ -104,6 +105,7 @@ func TestBuildCircuitBreakers(t *testing.T) {
 			},
 		}
 		cbs := buildCircuitBreakers(cfg)
+		require.Len(t, cbs, 2, "expected circuit breakers for both 'github' and 'slack'")
 		for serverID, cb := range cbs {
 			assert.Equal(t, circuitClosed, cb.State(), "circuit breaker for %s should start CLOSED", serverID)
 			assert.NoError(t, cb.Allow(), "CLOSED circuit breaker for %s should allow requests", serverID)
@@ -119,6 +121,9 @@ func TestBuildCircuitBreakers(t *testing.T) {
 			},
 		}
 		cbs := buildCircuitBreakers(cfg)
+		require.Len(t, cbs, 2, "expected circuit breakers for both 'github' and 'slack'")
+		require.Contains(t, cbs, "github", "circuit breaker for 'github' should exist")
+		require.Contains(t, cbs, "slack", "circuit breaker for 'slack' should exist")
 
 		// Open the github circuit breaker by hitting the threshold.
 		cbs["github"].RecordRateLimit(time.Time{})
