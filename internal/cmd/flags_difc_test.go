@@ -136,6 +136,32 @@ func TestValidDIFCModes(t *testing.T) {
 	require.Len(difc.ValidModes, 3, "should only have 3 valid modes")
 }
 
+func TestValidateDIFCModeFlag(t *testing.T) {
+	tests := []struct {
+		name    string
+		mode    string
+		wantErr bool
+	}{
+		{name: "strict valid", mode: "strict", wantErr: false},
+		{name: "filter valid", mode: "filter", wantErr: false},
+		{name: "propagate valid", mode: "propagate", wantErr: false},
+		{name: "empty defaults to strict", mode: "", wantErr: false},
+		{name: "invalid mode", mode: "bogus", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateDIFCModeFlag(tt.mode)
+			if tt.wantErr {
+				require.Error(t, err, "expected error for mode %q", tt.mode)
+				assert.Contains(t, err.Error(), "invalid --guards-mode flag")
+			} else {
+				assert.NoError(t, err, "unexpected error for mode %q", tt.mode)
+			}
+		})
+	}
+}
+
 func TestParseDIFCSinkServerIDs(t *testing.T) {
 	tests := []struct {
 		name    string

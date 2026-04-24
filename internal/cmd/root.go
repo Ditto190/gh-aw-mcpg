@@ -206,8 +206,8 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 
 	// Validate guards mode before applying
-	if _, err := difc.ParseEnforcementMode(difcMode); err != nil {
-		return fmt.Errorf("invalid --guards-mode flag: %w", err)
+	if err := validateDIFCModeFlag(difcMode); err != nil {
+		return err
 	}
 
 	// Apply command-line flags to config
