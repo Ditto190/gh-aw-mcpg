@@ -50,6 +50,14 @@ func getDefaultDIFCMode() string {
 	return difc.ModeStrict
 }
 
+// validateDIFCModeFlag validates the value of the --guards-mode CLI flag.
+func validateDIFCModeFlag(mode string) error {
+	if _, err := difc.ParseEnforcementMode(mode); err != nil {
+		return fmt.Errorf("invalid --guards-mode flag: %w", err)
+	}
+	return nil
+}
+
 func parseDIFCSinkServerIDs(input string) ([]string, error) {
 	if strings.TrimSpace(input) == "" {
 		return nil, nil
