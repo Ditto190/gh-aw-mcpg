@@ -142,11 +142,10 @@ func NewUnified(ctx context.Context, cfg *config.Config) (*UnifiedServer, error)
 	logUnified.Printf("Payload configuration: dir=%s, pathPrefix=%s, sizeThreshold=%d bytes (%.2f KB)",
 		payloadDir, payloadPathPrefix, payloadSizeThreshold, float64(payloadSizeThreshold)/1024)
 
-	// Parse DIFC enforcement mode
-	difcMode, err := difc.ParseEnforcementMode(cfg.DIFCMode)
-	if err != nil {
-		// Default to strict mode if not specified or invalid
-		difcMode = difc.EnforcementStrict
+	// Initialize DIFC components (defaults to strict mode for the server)
+	difcComponents, difcParseErr := difc.NewComponents(cfg.DIFCMode, difc.EnforcementStrict)
+	if difcParseErr != nil {
+		logger.LogWarn("startup", "invalid DIFC mode %q, defaulting to strict: %v", cfg.DIFCMode, difcParseErr)
 	}
 
 	us := &UnifiedServer{
@@ -164,9 +163,9 @@ func NewUnified(ctx context.Context, cfg *config.Config) (*UnifiedServer, error)
 
 		// Initialize DIFC components
 		guardRegistry: guard.NewRegistry(),
-		agentRegistry: difc.NewAgentRegistryWithDefaults(nil, nil),
-		capabilities:  difc.NewCapabilities(),
-		evaluator:     difc.NewEvaluatorWithMode(difcMode),
+		agentRegistry: difcComponents.AgentRegistry,
+		capabilities:  difcComponents.Capabilities,
+		evaluator:     difcComponents.Evaluator,
 		cfg:           cfg, // Store config for guard loading
 
 		// Cache tracer at construction to avoid calling otel.Tracer on every request.

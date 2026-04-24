@@ -100,15 +100,13 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 	apiURL = strings.TrimRight(apiURL, "/")
 	logProxy.Printf("Using upstream GitHub API URL: %s", apiURL)
 
-	// Parse enforcement mode
-	difcMode, err := difc.ParseEnforcementMode(cfg.DIFCMode)
-	if err != nil {
-		if cfg.DIFCMode != "" {
-			log.Printf("[proxy] WARNING: invalid DIFC mode %q, defaulting to filter", cfg.DIFCMode)
-		}
-		difcMode = difc.EnforcementFilter // default to filter for proxy
+	// Initialize DIFC components (defaults to filter mode for the proxy).
+	// NewComponents returns any parse error so we can warn without parsing twice.
+	difcComponents, difcParseErr := difc.NewComponents(cfg.DIFCMode, difc.EnforcementFilter)
+	if difcParseErr != nil {
+		log.Printf("[proxy] WARNING: invalid DIFC mode %q, defaulting to filter", cfg.DIFCMode)
 	}
-	logProxy.Printf("Enforcement mode resolved: %s", difcMode)
+	logProxy.Printf("Enforcement mode resolved: %s", difcComponents.Mode)
 
 	// Load the WASM guard
 	logProxy.Printf("Loading WASM guard from: %s", cfg.WasmPath)
@@ -120,12 +118,12 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 
 	s := &Server{
 		guard:           g,
-		evaluator:       difc.NewEvaluatorWithMode(difcMode),
-		agentRegistry:   difc.NewAgentRegistryWithDefaults(nil, nil),
-		capabilities:    difc.NewCapabilities(),
+		evaluator:       difcComponents.Evaluator,
+		agentRegistry:   difcComponents.AgentRegistry,
+		capabilities:    difcComponents.Capabilities,
 		githubToken:     cfg.GitHubToken,
 		githubAPIURL:    apiURL,
-		enforcementMode: difcMode,
+		enforcementMode: difcComponents.Mode,
 		httpClient: &http.Client{
 			Timeout: 60 * time.Second,
 			Transport: &http.Transport{
@@ -144,7 +142,7 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 		logProxy.Printf("No guard policy configured, running without policy enforcement")
 	}
 
-	logProxy.Printf("Proxy server created successfully: mode=%s", difcMode)
+	logProxy.Printf("Proxy server created successfully: mode=%s", difcComponents.Mode)
 	return s, nil
 }
 
