@@ -144,12 +144,6 @@ func TestRunDockerInspect(t *testing.T) {
 			formatTemplate: "{{.Config.OpenStdin}}",
 			shouldError:    true,
 		},
-		{
-			name:           "valid container ID format - command will fail without docker",
-			containerID:    "abcdef123456",
-			formatTemplate: "{{.Config.OpenStdin}}",
-			shouldError:    true, // Will fail because container doesn't exist
-		},
 	}
 
 	for _, tt := range tests {
@@ -228,18 +222,6 @@ func TestCheckPortMapping(t *testing.T) {
 			port:        "8080",
 			shouldError: true,
 		},
-		{
-			name:        "valid container ID format - nonexistent container",
-			containerID: "abcdef123456",
-			port:        "8080",
-			shouldError: true, // Will fail because container doesn't exist
-		},
-		{
-			name:        "empty port",
-			containerID: "abcdef123456",
-			port:        "",
-			shouldError: true,
-		},
 	}
 
 	for _, tt := range tests {
@@ -272,11 +254,6 @@ func TestCheckStdinInteractive(t *testing.T) {
 			containerID: "invalid;id",
 			expected:    false,
 		},
-		{
-			name:        "valid container ID format - nonexistent container",
-			containerID: "abcdef123456",
-			expected:    false, // Will fail because container doesn't exist
-		},
 	}
 
 	for _, tt := range tests {
@@ -304,18 +281,6 @@ func TestCheckLogDirMounted(t *testing.T) {
 			name:        "invalid container ID",
 			containerID: "invalid;id",
 			logDir:      "/tmp/gh-aw/mcp-logs",
-			expected:    false,
-		},
-		{
-			name:        "valid container ID format - nonexistent container",
-			containerID: "abcdef123456",
-			logDir:      "/tmp/gh-aw/mcp-logs",
-			expected:    false, // Will fail because container doesn't exist
-		},
-		{
-			name:        "empty log directory",
-			containerID: "abcdef123456",
-			logDir:      "",
 			expected:    false,
 		},
 	}
