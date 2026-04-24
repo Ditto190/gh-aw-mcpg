@@ -2338,7 +2338,7 @@ mod tests {
     }
 
     #[test]
-    fn extract_items_array_bare_array() {
+    fn test_extract_items_array_bare_array() {
         let response = serde_json::json!([{"id": 1}, {"id": 2}]);
         let (items, path) = extract_items_array(&response);
         assert!(items.is_some());
@@ -2347,7 +2347,7 @@ mod tests {
     }
 
     #[test]
-    fn extract_items_array_items_wrapper() {
+    fn test_extract_items_array_items_wrapper() {
         let response = serde_json::json!({"items": [{"id": 1}], "total_count": 1});
         let (items, path) = extract_items_array(&response);
         assert!(items.is_some());
@@ -2355,7 +2355,7 @@ mod tests {
     }
 
     #[test]
-    fn extract_items_array_issues_wrapper() {
+    fn test_extract_items_array_issues_wrapper() {
         let response = serde_json::json!({"issues": [{"number": 42}]});
         let (items, path) = extract_items_array(&response);
         assert!(items.is_some());
@@ -2363,7 +2363,7 @@ mod tests {
     }
 
     #[test]
-    fn extract_items_array_pull_requests_wrapper() {
+    fn test_extract_items_array_pull_requests_wrapper() {
         let response = serde_json::json!({"pull_requests": [{"number": 7}]});
         let (items, path) = extract_items_array(&response);
         assert!(items.is_some());
@@ -2371,7 +2371,7 @@ mod tests {
     }
 
     #[test]
-    fn extract_items_array_unknown_shape_returns_none() {
+    fn test_extract_items_array_unknown_shape_returns_none() {
         let response = serde_json::json!({"something_else": [{"id": 1}]});
         let (items, path) = extract_items_array(&response);
         assert!(items.is_none());
