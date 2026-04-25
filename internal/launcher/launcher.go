@@ -2,6 +2,7 @@ package launcher
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -18,6 +19,10 @@ import (
 )
 
 var logLauncher = logger.New("launcher:launcher")
+
+// ErrServerNotFound is returned by getServerConfig when the requested server ID
+// is not present in the gateway configuration.
+var ErrServerNotFound = errors.New("server not found in config")
 
 // connectionResult is used to return the result of a connection attempt from a goroutine
 type connectionResult struct {
@@ -98,19 +103,33 @@ func New(ctx context.Context, cfg *config.Config) *Launcher {
 	}
 }
 
+// getServerConfig looks up the configuration for serverID under a read lock.
+func (l *Launcher) getServerConfig(serverID string) (*config.ServerConfig, error) {
+	l.mu.RLock()
+	cfg, ok := l.config.Servers[serverID]
+	l.mu.RUnlock()
+	if !ok {
+		logger.LogErrorWithServer(serverID, "backend", "Backend server not found in config: %s", serverID)
+		return nil, fmt.Errorf("server '%s': %w", serverID, ErrServerNotFound)
+	}
+	return cfg, nil
+}
+
 // GetOrLaunch returns an existing connection or launches a new one
 func GetOrLaunch(l *Launcher, serverID string) (*mcp.Connection, error) {
 	logger.LogDebugWithServer(serverID, "backend", "GetOrLaunch called for server: %s", serverID)
 
+	// Look up config before entering GetOrCreate. GetOrCreate takes a read lock
+	// first, upgrading to a write lock only on a cache miss; doing this
+	// read-only check up front avoids holding any lock while validating the
+	// server ID.
+	serverCfg, err := l.getServerConfig(serverID)
+	if err != nil {
+		return nil, err
+	}
+
 	return syncutil.GetOrCreate(&l.mu, l.connections, serverID, func() (*mcp.Connection, error) {
 		logLauncher.Printf("Connection not found in cache, launching new: serverID=%s", serverID)
-
-		// Get server config
-		serverCfg, ok := l.config.Servers[serverID]
-		if !ok {
-			logger.LogErrorWithServer(serverID, "backend", "Backend server not found in config: %s", serverID)
-			return nil, fmt.Errorf("server '%s' not found in config", serverID)
-		}
 		logLauncher.Printf("Retrieved server config: serverID=%s, type=%s", serverID, serverCfg.Type)
 
 		// Handle HTTP backends differently
@@ -166,13 +185,9 @@ func GetOrLaunchForSession(l *Launcher, serverID, sessionID string) (*mcp.Connec
 	logger.LogDebugWithServer(serverID, "backend", "GetOrLaunchForSession called: server=%s, session=%s", serverID, sessionID)
 
 	// Get server config first to determine backend type
-	l.mu.RLock()
-	serverCfg, ok := l.config.Servers[serverID]
-	l.mu.RUnlock()
-
-	if !ok {
-		logger.LogErrorWithServer(serverID, "backend", "Backend server not found in config: %s", serverID)
-		return nil, fmt.Errorf("server '%s' not found in config", serverID)
+	serverCfg, err := l.getServerConfig(serverID)
+	if err != nil {
+		return nil, err
 	}
 
 	// For HTTP backends, use the regular GetOrLaunch (stateless)
