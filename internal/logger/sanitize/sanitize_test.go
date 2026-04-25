@@ -640,3 +640,58 @@ func TestSanitizeArgsDoesNotLeakSecrets(t *testing.T) {
 	assert.Contains(t, resultStr, "GITHUB_TOKEN=ghp_...", "Truncated token should be present")
 	assert.Contains(t, resultStr, "API_KEY=test...", "Truncated API key should be present")
 }
+
+func TestRedactURL(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "plain URL without credentials",
+			input:    "https://example.com/mcp",
+			expected: "https://example.com/mcp",
+		},
+		{
+			name:     "URL with query param containing secret",
+			input:    "https://api.example.com/mcp?api_key=supersecret&foo=bar",
+			expected: "https://api.example.com/mcp",
+		},
+		{
+			name:     "URL with userinfo credentials",
+			input:    "https://user:password@example.com/path",
+			expected: "https://example.com/path",
+		},
+		{
+			name:     "URL with fragment",
+			input:    "https://example.com/path#section",
+			expected: "https://example.com/path",
+		},
+		{
+			name:     "URL with token query param",
+			input:    "https://example.com/mcp?token=abc123&other=val",
+			expected: "https://example.com/mcp",
+		},
+		{
+			name:     "URL with port",
+			input:    "https://example.com:8443/mcp/path",
+			expected: "https://example.com:8443/mcp/path",
+		},
+		{
+			name:     "unparseable URL",
+			input:    "://not-a-url",
+			expected: "<unparseable-url>",
+		},
+		{
+			name:     "empty URL",
+			input:    "",
+			expected: "",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, RedactURL(tc.input))
+		})
+	}
+}

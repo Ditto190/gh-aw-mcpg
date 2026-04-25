@@ -30,6 +30,7 @@ package sanitize
 
 import (
 	"encoding/json"
+	"net/url"
 	"regexp"
 	"strings"
 )
@@ -126,6 +127,24 @@ func SanitizeJSON(payloadBytes []byte) json.RawMessage {
 	}
 	compactBytes, _ := json.Marshal(tmp)
 	return json.RawMessage(compactBytes)
+}
+
+// RedactURL returns a safe-to-log version of a URL by retaining only the scheme,
+// host, and path. Userinfo (credentials), query parameters, and fragments are
+// removed to prevent accidental leakage of secrets (e.g. api_key=..., token=...).
+// If the input cannot be parsed as a URL, the literal string "<unparseable-url>" is
+// returned instead so callers never log raw unverified input.
+func RedactURL(rawURL string) string {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return "<unparseable-url>"
+	}
+	safe := &url.URL{
+		Scheme: u.Scheme,
+		Host:   u.Host,
+		Path:   u.Path,
+	}
+	return safe.String()
 }
 
 // SanitizeArgs returns a sanitized version of command arguments for safe logging.
