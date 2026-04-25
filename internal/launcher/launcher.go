@@ -98,19 +98,30 @@ func New(ctx context.Context, cfg *config.Config) *Launcher {
 	}
 }
 
+// getServerConfig looks up the configuration for serverID under a read lock.
+func (l *Launcher) getServerConfig(serverID string) (*config.ServerConfig, error) {
+	l.mu.RLock()
+	cfg, ok := l.config.Servers[serverID]
+	l.mu.RUnlock()
+	if !ok {
+		logger.LogErrorWithServer(serverID, "backend", "Backend server not found in config: %s", serverID)
+		return nil, fmt.Errorf("server '%s' not found in config", serverID)
+	}
+	return cfg, nil
+}
+
 // GetOrLaunch returns an existing connection or launches a new one
 func GetOrLaunch(l *Launcher, serverID string) (*mcp.Connection, error) {
 	logger.LogDebugWithServer(serverID, "backend", "GetOrLaunch called for server: %s", serverID)
 
+	// Look up config before acquiring the write lock inside GetOrCreate.
+	serverCfg, err := l.getServerConfig(serverID)
+	if err != nil {
+		return nil, err
+	}
+
 	return syncutil.GetOrCreate(&l.mu, l.connections, serverID, func() (*mcp.Connection, error) {
 		logLauncher.Printf("Connection not found in cache, launching new: serverID=%s", serverID)
-
-		// Get server config
-		serverCfg, ok := l.config.Servers[serverID]
-		if !ok {
-			logger.LogErrorWithServer(serverID, "backend", "Backend server not found in config: %s", serverID)
-			return nil, fmt.Errorf("server '%s' not found in config", serverID)
-		}
 		logLauncher.Printf("Retrieved server config: serverID=%s, type=%s", serverID, serverCfg.Type)
 
 		// Handle HTTP backends differently
@@ -166,13 +177,9 @@ func GetOrLaunchForSession(l *Launcher, serverID, sessionID string) (*mcp.Connec
 	logger.LogDebugWithServer(serverID, "backend", "GetOrLaunchForSession called: server=%s, session=%s", serverID, sessionID)
 
 	// Get server config first to determine backend type
-	l.mu.RLock()
-	serverCfg, ok := l.config.Servers[serverID]
-	l.mu.RUnlock()
-
-	if !ok {
-		logger.LogErrorWithServer(serverID, "backend", "Backend server not found in config: %s", serverID)
-		return nil, fmt.Errorf("server '%s' not found in config", serverID)
+	serverCfg, err := l.getServerConfig(serverID)
+	if err != nil {
+		return nil, err
 	}
 
 	// For HTTP backends, use the regular GetOrLaunch (stateless)
