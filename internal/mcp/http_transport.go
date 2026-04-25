@@ -97,11 +97,13 @@ func isSessionNotFoundHTTPResponse(statusCode int, body []byte) bool {
 // parseSSEResponse extracts JSON data from SSE-formatted response
 // SSE format: "event: message\ndata: {json}\n\n"
 func parseSSEResponse(body []byte) ([]byte, error) {
+	logHTTP.Printf("Parsing SSE response: body_len=%d", len(body))
 	lines := strings.Split(string(body), "\n")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if strings.HasPrefix(line, "data: ") {
 			jsonData := strings.TrimPrefix(line, "data: ")
+			logHTTP.Printf("Extracted SSE data field: data_len=%d", len(jsonData))
 			return []byte(jsonData), nil
 		}
 	}
@@ -352,6 +354,8 @@ func setupHTTPRequest(ctx context.Context, url string, requestBody []byte, heade
 // It handles connection errors consistently and provides method-specific error messages.
 // The headerModifier function allows callers to modify headers before the request is sent.
 func (c *Connection) executeHTTPRequest(ctx context.Context, method string, params interface{}, requestID uint64, headerModifier func(*http.Request)) (*httpRequestResult, error) {
+	logHTTP.Printf("Executing HTTP request: method=%s, url=%s, id=%d", method, c.httpURL, requestID)
+
 	// Create JSON-RPC request
 	request := createJSONRPCRequest(requestID, method, params)
 
@@ -389,6 +393,7 @@ func (c *Connection) executeHTTPRequest(ctx context.Context, method string, para
 		return nil, fmt.Errorf("failed to read %s response: %w", method, err)
 	}
 
+	logHTTP.Printf("HTTP response received: method=%s, status=%d, body_len=%d", method, httpResp.StatusCode, len(responseBody))
 	return &httpRequestResult{
 		StatusCode:   httpResp.StatusCode,
 		ResponseBody: responseBody,
@@ -437,6 +442,7 @@ func trySDKTransport(
 
 // tryStreamableHTTPTransport attempts to connect using the streamable HTTP transport (2025-03-26 spec)
 func tryStreamableHTTPTransport(ctx context.Context, cancel context.CancelFunc, serverID, url string, headers map[string]string, httpClient *http.Client, keepAlive time.Duration, connectTimeout time.Duration) (*Connection, error) {
+	logHTTP.Printf("Attempting streamable HTTP transport: serverID=%s, url=%s, connectTimeout=%v", serverID, url, connectTimeout)
 	return trySDKTransport(
 		ctx, cancel, serverID, url, headers, httpClient,
 		HTTPTransportStreamable,
@@ -463,6 +469,7 @@ func tryStreamableHTTPTransport(ctx context.Context, cancel context.CancelFunc, 
 
 // trySSETransport attempts to connect using the SSE transport (2024-11-05 spec)
 func trySSETransport(ctx context.Context, cancel context.CancelFunc, serverID, url string, headers map[string]string, httpClient *http.Client, keepAlive time.Duration, connectTimeout time.Duration) (*Connection, error) {
+	logHTTP.Printf("Attempting SSE transport: serverID=%s, url=%s, connectTimeout=%v", serverID, url, connectTimeout)
 	return trySDKTransport(
 		ctx, cancel, serverID, url, headers, httpClient,
 		HTTPTransportSSE,
@@ -481,6 +488,7 @@ func trySSETransport(ctx context.Context, cancel context.CancelFunc, serverID, u
 // tryPlainJSONTransport attempts to connect using plain JSON-RPC 2.0 over HTTP POST (non-standard)
 // This is used for compatibility with servers like safeinputs that don't implement standard MCP HTTP transports
 func tryPlainJSONTransport(ctx context.Context, cancel context.CancelFunc, serverID, url string, headers map[string]string, httpClient *http.Client) (*Connection, error) {
+	logHTTP.Printf("Attempting plain JSON-RPC transport: serverID=%s, url=%s", serverID, url)
 	conn := &Connection{
 		ctx:               ctx,
 		cancel:            cancel,
