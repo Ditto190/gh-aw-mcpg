@@ -146,7 +146,7 @@ func TestExtractAuthorLogin(t *testing.T) {
 			want: "fallback-login",
 		},
 		{
-			name: "user object with non-string login returns empty string after fallback",
+			name: "user object with non-string login returns empty string",
 			m: map[string]interface{}{
 				"user": map[string]interface{}{"login": 42},
 			},
