@@ -135,6 +135,9 @@ func SanitizeJSON(payloadBytes []byte) json.RawMessage {
 // If the input cannot be parsed as a URL, the literal string "<unparseable-url>" is
 // returned instead so callers never log raw unverified input.
 func RedactURL(rawURL string) string {
+	if rawURL == "" {
+		return ""
+	}
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		return "<unparseable-url>"
