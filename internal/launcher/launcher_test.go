@@ -306,6 +306,7 @@ func TestGetOrLaunch_InvalidServerID(t *testing.T) {
 	conn, err := GetOrLaunch(l, "non-existent-server")
 	assert.Error(t, err, "Expected error for non-existent server")
 	assert.Nil(t, conn, "Expected nil connection")
+	assert.ErrorIs(t, err, ErrServerNotFound)
 	assert.Contains(t, err.Error(), "not found in config")
 }
 
@@ -549,6 +550,7 @@ func TestGetOrLaunchForSession_InvalidServer(t *testing.T) {
 	conn, err := GetOrLaunchForSession(l, "nonexistent", "session1")
 	assert.Error(t, err)
 	assert.Nil(t, conn)
+	assert.ErrorIs(t, err, ErrServerNotFound)
 	assert.Contains(t, err.Error(), "not found in config")
 }
 

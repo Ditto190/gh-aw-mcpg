@@ -2,6 +2,7 @@ package launcher
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -18,6 +19,10 @@ import (
 )
 
 var logLauncher = logger.New("launcher:launcher")
+
+// ErrServerNotFound is returned by getServerConfig when the requested server ID
+// is not present in the gateway configuration.
+var ErrServerNotFound = errors.New("server not found in config")
 
 // connectionResult is used to return the result of a connection attempt from a goroutine
 type connectionResult struct {
@@ -105,7 +110,7 @@ func (l *Launcher) getServerConfig(serverID string) (*config.ServerConfig, error
 	l.mu.RUnlock()
 	if !ok {
 		logger.LogErrorWithServer(serverID, "backend", "Backend server not found in config: %s", serverID)
-		return nil, fmt.Errorf("server '%s' not found in config", serverID)
+		return nil, fmt.Errorf("server '%s': %w", serverID, ErrServerNotFound)
 	}
 	return cfg, nil
 }
@@ -114,7 +119,10 @@ func (l *Launcher) getServerConfig(serverID string) (*config.ServerConfig, error
 func GetOrLaunch(l *Launcher, serverID string) (*mcp.Connection, error) {
 	logger.LogDebugWithServer(serverID, "backend", "GetOrLaunch called for server: %s", serverID)
 
-	// Look up config before acquiring the write lock inside GetOrCreate.
+	// Look up config before entering GetOrCreate. GetOrCreate takes a read lock
+	// first, upgrading to a write lock only on a cache miss; doing this
+	// read-only check up front avoids holding any lock while validating the
+	// server ID.
 	serverCfg, err := l.getServerConfig(serverID)
 	if err != nil {
 		return nil, err
