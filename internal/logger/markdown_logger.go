@@ -45,9 +45,15 @@ func handleMarkdownLoggerError(_ error, logDir, fileName string) (*MarkdownLogge
 	return ml, nil
 }
 
+// markdownLoggerFactory bundles the setup and error-handler for MarkdownLogger.
+var markdownLoggerFactory = loggerFactory[*MarkdownLogger]{
+	setup:   setupMarkdownLogger,
+	onError: handleMarkdownLoggerError,
+}
+
 // InitMarkdownLogger initializes the global markdown logger
 func InitMarkdownLogger(logDir, fileName string) error {
-	logger, err := initLogger(logDir, fileName, os.O_TRUNC, setupMarkdownLogger, handleMarkdownLoggerError)
+	logger, err := initLogger(logDir, fileName, os.O_TRUNC, markdownLoggerFactory)
 	initGlobalLogger(&globalMarkdownMu, &globalMarkdownLogger, logger)
 	return err
 }

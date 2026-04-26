@@ -73,10 +73,16 @@ func handleToolsLoggerError(err error, logDir, fileName string) (*ToolsLogger, e
 	return tl, nil
 }
 
+// toolsLoggerFactory bundles the setup and error-handler for ToolsLogger.
+var toolsLoggerFactory = loggerFactory[*ToolsLogger]{
+	setup:   setupToolsLogger,
+	onError: handleToolsLoggerError,
+}
+
 // InitToolsLogger initializes the global tools logger
 // If the log directory doesn't exist and can't be created, falls back to no-op
 func InitToolsLogger(logDir, fileName string) error {
-	logger, err := initLogger(logDir, fileName, os.O_TRUNC, setupToolsLogger, handleToolsLoggerError)
+	logger, err := initLogger(logDir, fileName, os.O_TRUNC, toolsLoggerFactory)
 	initGlobalLogger(&globalToolsMu, &globalToolsLogger, logger)
 	return err
 }
