@@ -70,7 +70,7 @@ type RequestState interface{}
 // emptyAgentLabelsResult returns a LabelAgentResult with empty agent labels for the given DIFC mode.
 // Used by guards that do not contribute agent labels (e.g. NoopGuard, WriteSinkGuard).
 func emptyAgentLabelsResult(mode string) *LabelAgentResult {
-	logGuard.Printf("Creating empty agent labels result: mode=%s", mode)
+	logGuard.Printf("Creating empty agent labels result: mode=%q", mode)
 	return &LabelAgentResult{
 		Agent: AgentLabelsPayload{
 			Secrecy:   []string{},
