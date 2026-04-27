@@ -365,7 +365,7 @@ type loggerSetupFunc[T closableLogger] func(file *os.File, logDir, fileName stri
 type loggerErrorHandlerFunc[T closableLogger] func(err error, logDir, fileName string) (T, error)
 
 // loggerFactory bundles the setup and error-handler function pair for a logger type.
-// It groups the two callbacks that control success and failure behaviour so they can
+// It groups the two callbacks that control success and failure behavior so they can
 // be passed to initLogger as a single value instead of two separate arguments.
 //
 // Define one package-level factory variable per concrete logger type:
@@ -400,9 +400,11 @@ type loggerFactory[T closableLogger] struct {
 //   - error: Any error that occurred during initialization
 //
 // This function:
-//  1. Attempts to open the log file with the specified flags
-//  2. If successful, calls factory.setup to configure the logger
-//  3. If unsuccessful, calls factory.onError to implement the logger's fallback strategy
+//  1. Validates that factory.setup and factory.onError are non-nil
+//  2. Attempts to open the log file with the specified flags
+//  3. If successful, calls factory.setup to configure the logger
+//  4. If unsuccessful, calls factory.onError to implement the logger's fallback strategy
+//  5. Returns an error if factory.setup returns a nil logger without an error (would leak the file)
 //
 // The factory.onError handler determines the fallback behavior. See "Initialization Pattern
 // for Logger Types" documentation above for details on fallback strategies:
@@ -414,6 +416,11 @@ func initLogger[T closableLogger](
 	flags int,
 	factory loggerFactory[T],
 ) (T, error) {
+	var zero T
+	if factory.setup == nil || factory.onError == nil {
+		return zero, fmt.Errorf("loggerFactory.setup and loggerFactory.onError must both be non-nil")
+	}
+
 	file, err := initLogFile(logDir, fileName, flags)
 	if err != nil {
 		return factory.onError(err, logDir, fileName)
@@ -423,9 +430,14 @@ func initLogger[T closableLogger](
 	if err != nil {
 		// If setup fails, close the file and return the error
 		file.Close()
-		// Return zero value for T (nil for pointer types)
-		var zero T
 		return zero, err
+	}
+
+	// Guard against a setup function that returns (nil, nil), which would leak the
+	// opened file descriptor. Treat this as a setup failure.
+	if logger == zero {
+		file.Close()
+		return zero, fmt.Errorf("loggerFactory.setup returned a nil logger without an error")
 	}
 
 	return logger, nil

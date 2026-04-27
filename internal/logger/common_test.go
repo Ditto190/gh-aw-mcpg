@@ -663,6 +663,73 @@ func TestInitLogger_SetupError(t *testing.T) {
 	a.NoError(err, "Log file should exist even after setup error")
 }
 
+// TestInitLogger_NilSetup verifies that initLogger returns a descriptive error when
+// factory.setup is nil, preventing a nil-dereference panic.
+func TestInitLogger_NilSetup(t *testing.T) {
+	a := assert.New(t)
+	tmpDir := t.TempDir()
+	logDir := filepath.Join(tmpDir, "logs")
+
+	logger, err := initLogger(
+		logDir, "test.log", os.O_APPEND,
+		loggerFactory[*FileLogger]{
+			setup:   nil,
+			onError: func(err error, logDir, fileName string) (*FileLogger, error) { return nil, err },
+		},
+	)
+
+	a.Error(err, "initLogger should return error when factory.setup is nil")
+	a.Contains(err.Error(), "non-nil")
+	a.Nil(logger, "logger should be nil when factory.setup is nil")
+}
+
+// TestInitLogger_NilOnError verifies that initLogger returns a descriptive error when
+// factory.onError is nil, preventing a nil-dereference panic on file-open failures.
+func TestInitLogger_NilOnError(t *testing.T) {
+	a := assert.New(t)
+	tmpDir := t.TempDir()
+	logDir := filepath.Join(tmpDir, "logs")
+
+	logger, err := initLogger(
+		logDir, "test.log", os.O_APPEND,
+		loggerFactory[*FileLogger]{
+			setup:   func(file *os.File, logDir, fileName string) (*FileLogger, error) { return nil, nil },
+			onError: nil,
+		},
+	)
+
+	a.Error(err, "initLogger should return error when factory.onError is nil")
+	a.Contains(err.Error(), "non-nil")
+	a.Nil(logger, "logger should be nil when factory.onError is nil")
+}
+
+// TestInitLogger_SetupReturnsNilLogger verifies that if factory.setup returns (nil, nil)
+// initLogger treats it as an error and closes the opened file to avoid a fd leak.
+func TestInitLogger_SetupReturnsNilLogger(t *testing.T) {
+	a := assert.New(t)
+	tmpDir := t.TempDir()
+	logDir := filepath.Join(tmpDir, "logs")
+	logPath := filepath.Join(logDir, "test.log")
+
+	logger, err := initLogger(
+		logDir, "test.log", os.O_APPEND,
+		loggerFactory[*FileLogger]{
+			setup: func(file *os.File, logDir, fileName string) (*FileLogger, error) {
+				return nil, nil // Simulate buggy setup that returns nil without error
+			},
+			onError: func(err error, logDir, fileName string) (*FileLogger, error) { return nil, err },
+		},
+	)
+
+	a.Error(err, "initLogger should return error when setup returns nil logger")
+	a.Contains(err.Error(), "nil logger")
+	a.Nil(logger, "logger should be nil")
+
+	// The file should have been created (initLogFile succeeded) but then closed.
+	_, statErr := os.Stat(logPath)
+	a.NoError(statErr, "log file should exist even after nil-logger guard fires")
+}
+
 func TestInitLogger_FileFlags(t *testing.T) {
 	assert := assert.New(t)
 	require := require.New(t)
