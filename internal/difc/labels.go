@@ -405,7 +405,7 @@ func (e *ViolationError) Detailed() string {
 }
 
 // formatIntegrityLevel converts a list of integrity tags into a human-readable
-// integrity level description (e.g., "approved" instead of "[unapproved:all approved:all]").
+// integrity level description (e.g., `"approved"` instead of "[unapproved:all approved:all]").
 func formatIntegrityLevel(tags []Tag) string {
 	if len(tags) == 0 {
 		return "none"
