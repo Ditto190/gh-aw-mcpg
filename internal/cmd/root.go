@@ -3,6 +3,7 @@ package cmd
 import (
 	"bufio"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -386,7 +387,7 @@ func run(cmd *cobra.Command, args []string) error {
 		// Extract API key from gateway config (spec 7.1)
 		apiKey := cfg.GetAPIKey()
 
-		httpServer = server.CreateHTTPServerForRoutedMode(listenAddr, unifiedServer, apiKey)
+		httpServer = server.CreateHTTPServerForRoutedMode(listenAddr, unifiedServer, apiKey, hmacSecret)
 	} else {
 		logger.StartupInfo("Starting MCPG in UNIFIED mode on %s", listenAddr)
 		logger.StartupInfo("Endpoint: /mcp")
@@ -394,14 +395,41 @@ func run(cmd *cobra.Command, args []string) error {
 		// Extract API key from gateway config (spec 7.1)
 		apiKey := cfg.GetAPIKey()
 
-		httpServer = server.CreateHTTPServerForMCP(listenAddr, unifiedServer, apiKey)
+		httpServer = server.CreateHTTPServerForMCP(listenAddr, unifiedServer, apiKey, hmacSecret)
 	}
 	// Register the HTTP server shutdown function so the /close handler can drain
 	// in-flight requests before exiting (spec 5.1.3)
 	unifiedServer.SetHTTPShutdown(httpServer.Shutdown)
+
+	// Build net.Listener — optionally wrapping with TLS (ASI-07 Phase 1).
+	// Plain HTTP is still used when no TLS certificate is configured (backward compatible).
+	listener, err := net.Listen("tcp", listenAddr)
+	if err != nil {
+		return fmt.Errorf("failed to listen on %s: %w", listenAddr, err)
+	}
+	var tlsCfg *tls.Config
+	if tlsCertPath != "" && tlsKeyPath != "" {
+		tlsCfg, err = server.LoadGatewayTLS(tlsCertPath, tlsKeyPath, tlsCAPath)
+		if err != nil {
+			_ = listener.Close()
+			return fmt.Errorf("failed to configure TLS: %w", err)
+		}
+		listener = tls.NewListener(listener, tlsCfg)
+		scheme := "https"
+		if tlsCAPath != "" {
+			scheme = "https (mTLS)"
+		}
+		logger.StartupInfo("TLS enabled: cert=%s, key=%s, ca=%s — listening on %s://%s", tlsCertPath, tlsKeyPath, tlsCAPath, scheme, listenAddr)
+	} else {
+		logger.StartupInfo("TLS not configured — listening on http://%s (set --tls-cert/--tls-key to enable)", listenAddr)
+	}
+	if hmacSecret != "" {
+		logger.StartupInfo("HMAC request signing enabled (ASI-07)")
+	}
+
 	// Start HTTP server in background
 	go func() {
-		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := httpServer.Serve(listener); err != nil && err != http.ErrServerClosed {
 			log.Printf("HTTP server error: %v", err)
 			cancel()
 		}

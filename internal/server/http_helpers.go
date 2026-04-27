@@ -238,10 +238,11 @@ func WithOTELTracing(next http.Handler, tag string) http.Handler {
 // 2. SDK logging (WithSDKLogging) - Detailed JSON-RPC translation debugging
 // 3. Shutdown check (rejectIfShutdown) - Spec 5.1.3: Reject requests during shutdown
 // 4. Auth (applyAuthIfConfigured) - Spec 7.1: API key authentication if configured
+// 5. HMAC (applyHMACIfConfigured) - ASI-07: signature verification + replay protection
 //
 // This ensures consistent middleware ordering across both routed and unified server modes.
-func wrapWithMiddleware(handler http.Handler, logTag string, unifiedServer *UnifiedServer, apiKey string) http.HandlerFunc {
-	logHelpers.Printf("Wrapping handler with middleware: logTag=%s, authEnabled=%v", logTag, apiKey != "")
+func wrapWithMiddleware(handler http.Handler, logTag string, unifiedServer *UnifiedServer, apiKey, hmacSecret string) http.HandlerFunc {
+	logHelpers.Printf("Wrapping handler with middleware: logTag=%s, authEnabled=%v, hmacEnabled=%v", logTag, apiKey != "", hmacSecret != "")
 
 	// Wrap SDK handler with detailed logging for JSON-RPC translation debugging
 	loggedHandler := WithSDKLogging(handler, logTag)
@@ -253,8 +254,11 @@ func wrapWithMiddleware(handler http.Handler, logTag string, unifiedServer *Unif
 	// Apply auth middleware if API key is configured (spec 7.1)
 	authedHandler := applyAuthIfConfigured(apiKey, shutdownHandler.ServeHTTP)
 
+	// Apply HMAC signature verification if secret is configured (ASI-07)
+	hmacHandler := applyHMACIfConfigured(hmacSecret, authedHandler)
+
 	// Wrap with OTEL tracing span (outermost, so it covers auth + shutdown + logging)
-	tracingHandler := WithOTELTracing(authedHandler, logTag)
+	tracingHandler := WithOTELTracing(hmacHandler, logTag)
 
 	logHelpers.Printf("Middleware wrapping complete: logTag=%s", logTag)
 	return tracingHandler.ServeHTTP

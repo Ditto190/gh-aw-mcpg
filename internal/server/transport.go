@@ -13,8 +13,9 @@ var logTransport = logger.New("server:transport")
 
 // CreateHTTPServerForMCP creates an HTTP server that handles MCP over streamable HTTP transport
 // If apiKey is provided, all requests except /health require authentication (spec 7.1)
-func CreateHTTPServerForMCP(addr string, unifiedServer *UnifiedServer, apiKey string) *http.Server {
-	logTransport.Printf("Creating HTTP server for MCP: addr=%s, auth_enabled=%v", addr, apiKey != "")
+// If hmacSecret is provided, each request must carry a valid HMAC-SHA256 signature (ASI-07)
+func CreateHTTPServerForMCP(addr string, unifiedServer *UnifiedServer, apiKey, hmacSecret string) *http.Server {
+	logTransport.Printf("Creating HTTP server for MCP: addr=%s, auth_enabled=%v, hmac_enabled=%v", addr, apiKey != "", hmacSecret != "")
 	mux := http.NewServeMux()
 
 	// Register common endpoints (OAuth discovery, health, close)
@@ -41,8 +42,8 @@ func CreateHTTPServerForMCP(addr string, unifiedServer *UnifiedServer, apiKey st
 		SessionTimeout: envutil.GetEnvDuration("MCP_GATEWAY_SESSION_TIMEOUT", 6*time.Hour), // Configurable; 6h default matches GitHub Actions default timeout
 	})
 
-	// Apply standard middleware stack (SDK logging → shutdown check → auth)
-	finalHandler := wrapWithMiddleware(streamableHandler, "unified", unifiedServer, apiKey)
+	// Apply standard middleware stack (SDK logging → shutdown check → auth → HMAC)
+	finalHandler := wrapWithMiddleware(streamableHandler, "unified", unifiedServer, apiKey, hmacSecret)
 
 	// Mount handler at /mcp endpoint (logging is done in the callback above)
 	mux.Handle("/mcp/", finalHandler)
