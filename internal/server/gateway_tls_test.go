@@ -74,14 +74,7 @@ func generateClientCert(t *testing.T, dir, caCertPath, caKeyPath string) (tls.Ce
 	}
 
 	certPath := filepath.Join(dir, "client.crt")
-	keyPath := filepath.Join(dir, "client.key")
-
-	certFile, err := os.OpenFile(certPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
-	if err != nil {
-		return tls.Certificate{}, err
-	}
-	defer certFile.Close()
-	if err := pem.Encode(certFile, &pem.Block{Type: "CERTIFICATE", Bytes: certDER}); err != nil {
+	if err := writePEMFile(certPath, "CERTIFICATE", certDER, 0644); err != nil {
 		return tls.Certificate{}, err
 	}
 
@@ -89,16 +82,18 @@ func generateClientCert(t *testing.T, dir, caCertPath, caKeyPath string) (tls.Ce
 	if err != nil {
 		return tls.Certificate{}, err
 	}
-	keyFile, err := os.OpenFile(keyPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
-	if err != nil {
-		return tls.Certificate{}, err
-	}
-	defer keyFile.Close()
-	if err := pem.Encode(keyFile, &pem.Block{Type: "EC PRIVATE KEY", Bytes: clientKeyDER}); err != nil {
+	keyPath := filepath.Join(dir, "client.key")
+	if err := writePEMFile(keyPath, "EC PRIVATE KEY", clientKeyDER, 0600); err != nil {
 		return tls.Certificate{}, err
 	}
 
 	return tls.LoadX509KeyPair(certPath, keyPath)
+}
+
+// writePEMFile writes a DER-encoded block as PEM to path with the given mode.
+func writePEMFile(path, blockType string, derBytes []byte, mode os.FileMode) error {
+	data := pem.EncodeToMemory(&pem.Block{Type: blockType, Bytes: derBytes})
+	return os.WriteFile(path, data, mode)
 }
 
 // generateMTLSCerts generates a CA, server cert, and client cert for mTLS tests.
@@ -141,33 +136,19 @@ func generateMTLSCerts(t *testing.T, dir string) (*mtlsCerts, error) {
 		return nil, err
 	}
 
-	// Write CA cert
 	caCertPath := filepath.Join(dir, "ca.crt")
-	f, err := os.OpenFile(caCertPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
-	if err != nil {
+	if err := writePEMFile(caCertPath, "CERTIFICATE", caCertDER, 0644); err != nil {
 		return nil, err
 	}
-	if err := pem.Encode(f, &pem.Block{Type: "CERTIFICATE", Bytes: caCertDER}); err != nil {
-		f.Close()
-		return nil, err
-	}
-	f.Close()
 
-	// Write CA key
 	caKeyDER, err := x509.MarshalECPrivateKey(caKey)
 	if err != nil {
 		return nil, err
 	}
 	caKeyPath := filepath.Join(dir, "ca.key")
-	fk, err := os.OpenFile(caKeyPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
-	if err != nil {
+	if err := writePEMFile(caKeyPath, "EC PRIVATE KEY", caKeyDER, 0600); err != nil {
 		return nil, err
 	}
-	if err := pem.Encode(fk, &pem.Block{Type: "EC PRIVATE KEY", Bytes: caKeyDER}); err != nil {
-		fk.Close()
-		return nil, err
-	}
-	fk.Close()
 
 	// --- Server cert ---
 	serverKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -193,30 +174,18 @@ func generateMTLSCerts(t *testing.T, dir string) (*mtlsCerts, error) {
 		return nil, err
 	}
 	serverCertPath := filepath.Join(dir, "server.crt")
-	serverKeyPath := filepath.Join(dir, "server.key")
-	fc, err := os.OpenFile(serverCertPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
-	if err != nil {
+	if err := writePEMFile(serverCertPath, "CERTIFICATE", serverCertDER, 0644); err != nil {
 		return nil, err
 	}
-	if err := pem.Encode(fc, &pem.Block{Type: "CERTIFICATE", Bytes: serverCertDER}); err != nil {
-		fc.Close()
-		return nil, err
-	}
-	fc.Close()
 
 	serverKeyDER, err := x509.MarshalECPrivateKey(serverKey)
 	if err != nil {
 		return nil, err
 	}
-	fsk, err := os.OpenFile(serverKeyPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
-	if err != nil {
+	serverKeyPath := filepath.Join(dir, "server.key")
+	if err := writePEMFile(serverKeyPath, "EC PRIVATE KEY", serverKeyDER, 0600); err != nil {
 		return nil, err
 	}
-	if err := pem.Encode(fsk, &pem.Block{Type: "EC PRIVATE KEY", Bytes: serverKeyDER}); err != nil {
-		fsk.Close()
-		return nil, err
-	}
-	fsk.Close()
 
 	// --- Client cert ---
 	clientTLSCert, err := generateClientCert(t, dir, caCertPath, caKeyPath)
