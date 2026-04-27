@@ -643,10 +643,17 @@ func (c *Connection) sendHTTPRequest(ctx context.Context, method string, params 
 	headerModifier := c.buildSessionHeaderModifier(ctx)
 
 	requestID := atomic.AddUint64(&requestIDCounter, 1)
+	if !logHTTP.Enabled() {
+		logConn.Printf("Sending HTTP request to %s: method=%s, id=%d", c.httpURL, method, requestID)
+	}
 
 	result, err := c.executeHTTPRequest(ctx, method, params, requestID, headerModifier)
 	if err != nil {
 		return nil, err
+	}
+
+	if !logHTTP.Enabled() {
+		logConn.Printf("Received HTTP response: status=%d, body_len=%d", result.StatusCode, len(result.ResponseBody))
 	}
 
 	// If the backend reported that the session has expired, reconnect and retry once.
