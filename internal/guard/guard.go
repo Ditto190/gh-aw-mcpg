@@ -98,7 +98,11 @@ func ApplyLabelAgentResult(result *LabelAgentResult, agentLabels *difc.AgentLabe
 			logGuard.Printf("Invalid difc_mode from label_agent: %q, error=%v", result.DIFCMode, err)
 			return defaultMode, fmt.Errorf("invalid difc_mode from label_agent: %w", err)
 		}
-		logGuard.Printf("Enforcement mode overridden: default=%s, override=%s", defaultMode, parsedMode)
+		if parsedMode != defaultMode {
+			logGuard.Printf("Enforcement mode overridden: default=%s, override=%s", defaultMode, parsedMode)
+		} else {
+			logGuard.Printf("Enforcement mode provided matches default: mode=%s", parsedMode)
+		}
 		mode = parsedMode
 	}
 
