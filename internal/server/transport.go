@@ -13,7 +13,8 @@ var logTransport = logger.New("server:transport")
 
 // CreateHTTPServerForMCP creates an HTTP server that handles MCP over streamable HTTP transport
 // If apiKey is provided, all requests except /health require authentication (spec 7.1)
-// If hmacSecret is provided, each request must carry a valid HMAC-SHA256 signature (ASI-07)
+// If hmacSecret is provided, each MCP request (/mcp, /mcp/) must carry a valid HMAC-SHA256
+// signature (ASI-07); common endpoints (e.g. /health, /close) are not HMAC-protected.
 func CreateHTTPServerForMCP(addr string, unifiedServer *UnifiedServer, apiKey, hmacSecret string) *http.Server {
 	logTransport.Printf("Creating HTTP server for MCP: addr=%s, auth_enabled=%v, hmac_enabled=%v", addr, apiKey != "", hmacSecret != "")
 	mux := http.NewServeMux()

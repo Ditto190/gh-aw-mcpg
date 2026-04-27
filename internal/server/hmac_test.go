@@ -289,6 +289,15 @@ func TestNonceCache_DuplicateNonceRejected(t *testing.T) {
 	assert.False(t, c.checkAndSet("nonce-dup"), "duplicate nonce should be rejected")
 }
 
+func TestNonceCache_SeenNonce(t *testing.T) {
+	c := newNonceCache()
+	assert.False(t, c.seenNonce("new-nonce"), "unseen nonce should return false")
+	require.True(t, c.checkAndSet("seen-nonce"))
+	assert.True(t, c.seenNonce("seen-nonce"), "seen nonce should return true")
+	// seenNonce is read-only — checkAndSet on a seenNonce should still return false
+	assert.False(t, c.checkAndSet("seen-nonce"), "checkAndSet after seenNonce should be rejected")
+}
+
 func TestNonceCache_DifferentNoncesAllowed(t *testing.T) {
 	c := newNonceCache()
 	for i := range 10 {
@@ -317,4 +326,38 @@ func TestNonceCache_ConcurrentSafety(t *testing.T) {
 		}
 	}
 	assert.Equal(t, 1, trueCount, "exactly one goroutine should win the nonce race")
+}
+
+// TestHMACMiddleware_InvalidSigDoesNotPoisonNonceCache verifies that requests with
+// invalid signatures do not consume a nonce slot — a DoS mitigation ensuring only
+// verified requests can fill the replay-protection cache.
+func TestHMACMiddleware_InvalidSigDoesNotPoisonNonceCache(t *testing.T) {
+	called := 0
+	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		called++
+		w.WriteHeader(http.StatusOK)
+	})
+	wrapped := hmacMiddleware(testHMACSecret, next)
+
+	nonce := "shared-nonce-poison-test"
+	ts := time.Now()
+	body := []byte(`{"method":"test"}`)
+
+	// First request: valid timestamp + nonce but wrong signature → rejected, nonce NOT recorded
+	req1 := httptest.NewRequest("POST", "/mcp", bytes.NewReader(body))
+	req1.Header.Set(HMACTimestampHeader, strconv.FormatInt(ts.Unix(), 10))
+	req1.Header.Set(HMACNonceHeader, nonce)
+	req1.Header.Set(HMACSignatureHeader, "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")
+	w1 := httptest.NewRecorder()
+	wrapped(w1, req1)
+	require.Equal(t, http.StatusUnauthorized, w1.Code, "bad-sig request should be rejected")
+
+	// Second request: same nonce, correct signature → should succeed because the first
+	// request's failed signature did NOT poison the nonce cache
+	req2 := httptest.NewRequest("POST", "/mcp", bytes.NewReader(body))
+	signRequest(t, req2, testHMACSecret, body, ts, nonce)
+	w2 := httptest.NewRecorder()
+	wrapped(w2, req2)
+	assert.Equal(t, http.StatusOK, w2.Code, "valid request should succeed after bad-sig attempt with same nonce")
+	assert.Equal(t, 1, called, "handler called exactly once")
 }

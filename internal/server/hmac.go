@@ -67,6 +67,23 @@ func (c *nonceCache) checkAndSet(nonce string) bool {
 	return true
 }
 
+// seenNonce returns true if the nonce is already in the cache without modifying state.
+// Used as a fast-reject path before the expensive body-read + signature check,
+// so that obvious replays are rejected without consuming I/O resources.
+func (c *nonceCache) seenNonce(nonce string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	now := time.Now()
+	// Evict expired entries so the map doesn't grow unboundedly.
+	for n, deadline := range c.entries {
+		if now.After(deadline) {
+			delete(c.entries, n)
+		}
+	}
+	_, seen := c.entries[nonce]
+	return seen
+}
+
 // computeHMAC builds the canonical signed message and returns the expected
 // hex-encoded HMAC-SHA256 signature.
 //
@@ -120,9 +137,11 @@ func hmacMiddleware(secret string, next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		// Validate nonce uniqueness (replay protection)
-		if !cache.checkAndSet(nonce) {
-			logHMAC.Printf("HMAC rejected: replay detected nonce=%s, remote=%s", nonce, r.RemoteAddr)
+		// Fast-reject obviously replayed nonces before the body-read cost.
+		// This is a read-only check; the authoritative write happens after
+		// signature verification to avoid poisoning the cache with invalid requests.
+		if cache.seenNonce(nonce) {
+			logHMAC.Printf("HMAC rejected: replay detected (pre-check) nonce=%s, remote=%s", nonce, r.RemoteAddr)
 			rejectRequest(w, r, http.StatusUnauthorized, "unauthorized", "HMAC nonce already used (replay detected)", "auth", "hmac_validation_failed", "replay_detected")
 			return
 		}
@@ -142,6 +161,16 @@ func hmacMiddleware(secret string, next http.HandlerFunc) http.HandlerFunc {
 		if !hmac.Equal([]byte(sig), []byte(expected)) {
 			logHMAC.Printf("HMAC rejected: signature mismatch, remote=%s path=%s", r.RemoteAddr, r.URL.Path)
 			rejectRequest(w, r, http.StatusUnauthorized, "unauthorized", "invalid HMAC signature", "auth", "hmac_validation_failed", "signature_mismatch")
+			return
+		}
+
+		// Signature is valid — now atomically record the nonce to block replays.
+		// Only valid requests consume nonce slots, preventing DoS via cache poisoning.
+		// If a concurrent request with the same nonce also passed the pre-check above,
+		// exactly one of them will win here; the other is correctly rejected.
+		if !cache.checkAndSet(nonce) {
+			logHMAC.Printf("HMAC rejected: replay detected (post-check) nonce=%s, remote=%s", nonce, r.RemoteAddr)
+			rejectRequest(w, r, http.StatusUnauthorized, "unauthorized", "HMAC nonce already used (replay detected)", "auth", "hmac_validation_failed", "replay_detected")
 			return
 		}
 
