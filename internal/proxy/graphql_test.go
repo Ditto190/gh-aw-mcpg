@@ -32,6 +32,8 @@ func TestMatchGraphQL_NoPatternMatch(t *testing.T) {
 
 // TestMatchGraphQL_Patterns exercises every graphqlPattern entry.
 func TestMatchGraphQL_Patterns(t *testing.T) {
+	// Ensure this table stays in sync with graphqlPatterns so adding a new pattern
+	// without a corresponding test case causes an immediate failure.
 	tests := []struct {
 		name         string
 		query        string
@@ -113,6 +115,8 @@ func TestMatchGraphQL_Patterns(t *testing.T) {
 			wantToolName: "get_file_contents",
 		},
 	}
+
+	assert.Len(t, tests, len(graphqlPatterns), "test table must have one entry per graphqlPattern")
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -284,26 +288,28 @@ func TestExtractSearchQuery_NilVariables(t *testing.T) {
 
 // --- IsGraphQLPath ---
 
-// TestIsGraphQLPath covers all accepted paths and several rejected paths.
-func TestIsGraphQLPath(t *testing.T) {
+// TestIsGraphQLPath_Paths covers all accepted paths and several rejected paths
+// using table-driven subtests with explicit names for clear output.
+func TestIsGraphQLPath_Paths(t *testing.T) {
 	tests := []struct {
+		name string
 		path string
 		want bool
 	}{
-		{"/graphql", true},
-		{"/graphql/", true},
-		{"/api/v3/graphql", true},
-		{"/api/v3/graphql/", true},
-		{"/api/graphql", true},
-		{"/api/graphql/", true},
-		{"/rest", false},
-		{"/graphqlextra", false},
-		{"", false},
-		{"/api/v3/rest", false},
+		{"graphql root", "/graphql", true},
+		{"graphql root trailing slash", "/graphql/", true},
+		{"api v3 graphql", "/api/v3/graphql", true},
+		{"api v3 graphql trailing slash", "/api/v3/graphql/", true},
+		{"api graphql", "/api/graphql", true},
+		{"api graphql trailing slash", "/api/graphql/", true},
+		{"rest path rejected", "/rest", false},
+		{"graphql prefix rejected", "/graphqlextra", false},
+		{"empty path rejected", "", false},
+		{"api v3 rest rejected", "/api/v3/rest", false},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.path, func(t *testing.T) {
+		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.want, IsGraphQLPath(tt.path))
 		})
 	}
