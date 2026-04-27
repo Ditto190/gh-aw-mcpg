@@ -124,6 +124,7 @@ func TestRunDockerInspect(t *testing.T) {
 		containerID    string
 		formatTemplate string
 		shouldError    bool
+		dockerHost     string // if set, DOCKER_HOST is overridden for this subtest
 	}{
 		{
 			name:           "empty container ID",
@@ -147,12 +148,16 @@ func TestRunDockerInspect(t *testing.T) {
 			name:           "valid container ID format - docker not running or container absent",
 			containerID:    "abc123def4567890",
 			formatTemplate: "{{.Config.OpenStdin}}",
-			shouldError:    true, // docker inspect will fail since container doesn't exist
+			shouldError:    true, // docker inspect will fail: socket doesn't exist
+			dockerHost:     "unix:///nonexistent/docker.sock",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			if tt.dockerHost != "" {
+				t.Setenv("DOCKER_HOST", tt.dockerHost)
+			}
 			output, err := runDockerInspect(tt.containerID, tt.formatTemplate)
 
 			if tt.shouldError {
@@ -180,10 +185,12 @@ func TestCheckDockerAccessible(t *testing.T) {
 		assert.False(t, result, "Should return false for nonexistent socket")
 	})
 
-	t.Run("with unix:// prefix in DOCKER_HOST", func(t *testing.T) {
-		// Set DOCKER_HOST with unix:// prefix; function should strip the prefix and check the path.
-		t.Setenv("DOCKER_HOST", "unix:///var/run/docker.sock")
-		require.NotPanics(t, func() { CheckDockerAccessible() }, "unix:// prefix stripping should not panic")
+	t.Run("with unix:// prefix in DOCKER_HOST - nonexistent socket", func(t *testing.T) {
+		// Set DOCKER_HOST with unix:// prefix pointing to a nonexistent path; function should
+		// strip the prefix, check the path, and return false without panicking.
+		t.Setenv("DOCKER_HOST", "unix:///nonexistent/docker2.sock")
+		result := CheckDockerAccessible()
+		assert.False(t, result, "Should return false for nonexistent socket path")
 	})
 
 	t.Run("with plain socket path in DOCKER_HOST", func(t *testing.T) {
@@ -200,6 +207,7 @@ func TestCheckPortMapping(t *testing.T) {
 		containerID string
 		port        string
 		shouldError bool
+		dockerHost  string // if set, DOCKER_HOST is overridden for this subtest
 	}{
 		{
 			name:        "empty container ID",
@@ -217,12 +225,16 @@ func TestCheckPortMapping(t *testing.T) {
 			name:        "valid container ID format - container absent",
 			containerID: "abc123def4567890",
 			port:        "8080",
-			shouldError: true, // docker inspect will fail since container doesn't exist
+			shouldError: true, // docker inspect will fail: socket doesn't exist
+			dockerHost:  "unix:///nonexistent/docker.sock",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			if tt.dockerHost != "" {
+				t.Setenv("DOCKER_HOST", tt.dockerHost)
+			}
 			mapped, err := CheckPortMapping(tt.containerID, tt.port)
 
 			if tt.shouldError {
@@ -240,6 +252,7 @@ func TestCheckStdinInteractive(t *testing.T) {
 		name        string
 		containerID string
 		expected    bool
+		dockerHost  string // if set, DOCKER_HOST is overridden for this subtest
 	}{
 		{
 			name:        "empty container ID",
@@ -254,12 +267,16 @@ func TestCheckStdinInteractive(t *testing.T) {
 		{
 			name:        "valid container ID format - container absent",
 			containerID: "abc123def4567890",
-			expected:    false, // docker inspect will fail since container doesn't exist
+			expected:    false, // docker inspect will fail: socket doesn't exist
+			dockerHost:  "unix:///nonexistent/docker.sock",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			if tt.dockerHost != "" {
+				t.Setenv("DOCKER_HOST", tt.dockerHost)
+			}
 			result := CheckStdinInteractive(tt.containerID)
 			assert.Equal(t, tt.expected, result, "Unexpected result for %s", tt.name)
 		})
@@ -272,6 +289,7 @@ func TestCheckLogDirMounted(t *testing.T) {
 		containerID string
 		logDir      string
 		expected    bool
+		dockerHost  string // if set, DOCKER_HOST is overridden for this subtest
 	}{
 		{
 			name:        "empty container ID",
@@ -289,12 +307,16 @@ func TestCheckLogDirMounted(t *testing.T) {
 			name:        "valid container ID format - container absent",
 			containerID: "abc123def4567890",
 			logDir:      "/tmp/gh-aw/mcp-logs",
-			expected:    false, // docker inspect will fail since container doesn't exist
+			expected:    false, // docker inspect will fail: socket doesn't exist
+			dockerHost:  "unix:///nonexistent/docker.sock",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			if tt.dockerHost != "" {
+				t.Setenv("DOCKER_HOST", tt.dockerHost)
+			}
 			result := CheckLogDirMounted(tt.containerID, tt.logDir)
 			assert.Equal(t, tt.expected, result, "Unexpected result for %s", tt.name)
 		})
