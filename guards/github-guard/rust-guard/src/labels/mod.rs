@@ -1911,26 +1911,28 @@ mod tests {
     // -------------------------------------------------------------------------
 
     #[test]
-    fn test_apply_tool_labels_actions_list_secrecy_inherits_repo_visibility() {
+    fn test_apply_tool_labels_actions_list_secrecy_preserves_existing_labels_when_repo_visibility_is_unknown() {
         let ctx = default_ctx();
         let tool_args = json!({
             "owner": "github",
             "repo": "copilot"
         });
+        let initial_secrecy = vec!["existing:scope".to_string()];
 
         let (secrecy, integrity, _desc) = apply_tool_labels(
             "actions_list",
             &tool_args,
             "github/copilot",
-            vec![],
+            initial_secrecy.clone(),
             vec![],
             String::new(),
             &ctx,
         );
 
-        // actions_list returns repo-scoped workflow metadata; secrecy inherits from
-        // repository visibility and integrity is writer-level (requires write access to manage).
-        assert_eq!(secrecy, vec![] as Vec<String>, "actions_list secrecy inherits repo visibility (public repo → empty)");
+        // In unit tests, repo visibility is not established unless explicitly primed,
+        // so actions_list should preserve the existing secrecy labels when visibility
+        // cannot be determined. Integrity remains writer-level.
+        assert_eq!(secrecy, initial_secrecy, "actions_list must preserve existing secrecy when repo visibility is unknown");
         assert_eq!(integrity, writer_integrity("github/copilot", &ctx), "actions_list must have writer-level integrity");
     }
 
