@@ -53,9 +53,15 @@ func handleJSONLLoggerError(err error, _ string, _ string) (*JSONLLogger, error)
 	return nil, err
 }
 
+// jsonlLoggerFactory bundles the setup and error-handler for JSONLLogger.
+var jsonlLoggerFactory = loggerFactory[*JSONLLogger]{
+	setup:   setupJSONLLogger,
+	onError: handleJSONLLoggerError,
+}
+
 // InitJSONLLogger initializes the global JSONL logger
 func InitJSONLLogger(logDir, fileName string) error {
-	logger, err := initLogger(logDir, fileName, os.O_APPEND, setupJSONLLogger, handleJSONLLoggerError)
+	logger, err := initLogger(logDir, fileName, os.O_APPEND, jsonlLoggerFactory)
 
 	// Only initialize global logger if successful (no error)
 	// Unlike FileLogger/MarkdownLogger which return fallback loggers,

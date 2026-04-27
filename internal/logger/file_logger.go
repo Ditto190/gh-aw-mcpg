@@ -48,10 +48,16 @@ func handleFileLoggerError(err error, logDir, fileName string) (*FileLogger, err
 	return fl, nil
 }
 
+// fileLoggerFactory bundles the setup and error-handler for FileLogger.
+var fileLoggerFactory = loggerFactory[*FileLogger]{
+	setup:   setupFileLogger,
+	onError: handleFileLoggerError,
+}
+
 // InitFileLogger initializes the global file logger
 // If the log directory doesn't exist and can't be created, falls back to stdout
 func InitFileLogger(logDir, fileName string) error {
-	logger, err := initLogger(logDir, fileName, os.O_APPEND, setupFileLogger, handleFileLoggerError)
+	logger, err := initLogger(logDir, fileName, os.O_APPEND, fileLoggerFactory)
 	initGlobalLogger(&globalLoggerMu, &globalFileLogger, logger)
 	return err
 }

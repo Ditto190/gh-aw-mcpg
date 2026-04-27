@@ -392,17 +392,19 @@ func TestInitLogger_FileLogger(t *testing.T) {
 	errorHandlerCalled := false
 	logger, err := initLogger(
 		logDir, fileName, os.O_APPEND,
-		func(file *os.File, logDir, fileName string) (*FileLogger, error) {
-			fl := &FileLogger{
-				logDir:   logDir,
-				fileName: fileName,
-				logFile:  file,
-			}
-			return fl, nil
-		},
-		func(err error, logDir, fileName string) (*FileLogger, error) {
-			errorHandlerCalled = true
-			return nil, err
+		loggerFactory[*FileLogger]{
+			setup: func(file *os.File, logDir, fileName string) (*FileLogger, error) {
+				fl := &FileLogger{
+					logDir:   logDir,
+					fileName: fileName,
+					logFile:  file,
+				}
+				return fl, nil
+			},
+			onError: func(err error, logDir, fileName string) (*FileLogger, error) {
+				errorHandlerCalled = true
+				return nil, err
+			},
 		},
 	)
 
@@ -436,20 +438,22 @@ func TestInitLogger_FileLoggerFallback(t *testing.T) {
 
 	logger, err := initLogger(
 		logDir, fileName, os.O_APPEND,
-		func(file *os.File, logDir, fileName string) (*FileLogger, error) {
-			setupHandlerCalled = true
-			return nil, nil
-		},
-		func(err error, logDir, fileName string) (*FileLogger, error) {
-			errorHandlerCalled = true
-			assert.Error(err, "Error should be passed to handler")
-			// Return fallback logger
-			fl := &FileLogger{
-				logDir:      logDir,
-				fileName:    fileName,
-				useFallback: true,
-			}
-			return fl, nil
+		loggerFactory[*FileLogger]{
+			setup: func(file *os.File, logDir, fileName string) (*FileLogger, error) {
+				setupHandlerCalled = true
+				return nil, nil
+			},
+			onError: func(err error, logDir, fileName string) (*FileLogger, error) {
+				errorHandlerCalled = true
+				assert.Error(err, "Error should be passed to handler")
+				// Return fallback logger
+				fl := &FileLogger{
+					logDir:      logDir,
+					fileName:    fileName,
+					useFallback: true,
+				}
+				return fl, nil
+			},
 		},
 	)
 
@@ -473,17 +477,19 @@ func TestInitLogger_JSONLLogger(t *testing.T) {
 	errorHandlerCalled := false
 	logger, err := initLogger(
 		logDir, fileName, os.O_APPEND,
-		func(file *os.File, logDir, fileName string) (*JSONLLogger, error) {
-			jl := &JSONLLogger{
-				logDir:   logDir,
-				fileName: fileName,
-				logFile:  file,
-			}
-			return jl, nil
-		},
-		func(err error, logDir, fileName string) (*JSONLLogger, error) {
-			errorHandlerCalled = true
-			return nil, err
+		loggerFactory[*JSONLLogger]{
+			setup: func(file *os.File, logDir, fileName string) (*JSONLLogger, error) {
+				jl := &JSONLLogger{
+					logDir:   logDir,
+					fileName: fileName,
+					logFile:  file,
+				}
+				return jl, nil
+			},
+			onError: func(err error, logDir, fileName string) (*JSONLLogger, error) {
+				errorHandlerCalled = true
+				return nil, err
+			},
 		},
 	)
 
@@ -516,15 +522,17 @@ func TestInitLogger_JSONLLoggerError(t *testing.T) {
 
 	logger, err := initLogger(
 		logDir, fileName, os.O_APPEND,
-		func(file *os.File, logDir, fileName string) (*JSONLLogger, error) {
-			setupHandlerCalled = true
-			return nil, nil
-		},
-		func(err error, logDir, fileName string) (*JSONLLogger, error) {
-			errorHandlerCalled = true
-			assert.Error(err, "Error should be passed to handler")
-			// Return error (no fallback for JSONL)
-			return nil, err
+		loggerFactory[*JSONLLogger]{
+			setup: func(file *os.File, logDir, fileName string) (*JSONLLogger, error) {
+				setupHandlerCalled = true
+				return nil, nil
+			},
+			onError: func(err error, logDir, fileName string) (*JSONLLogger, error) {
+				errorHandlerCalled = true
+				assert.Error(err, "Error should be passed to handler")
+				// Return error (no fallback for JSONL)
+				return nil, err
+			},
 		},
 	)
 
@@ -546,18 +554,20 @@ func TestInitLogger_MarkdownLogger(t *testing.T) {
 	errorHandlerCalled := false
 	logger, err := initLogger(
 		logDir, fileName, os.O_TRUNC,
-		func(file *os.File, logDir, fileName string) (*MarkdownLogger, error) {
-			ml := &MarkdownLogger{
-				logDir:      logDir,
-				fileName:    fileName,
-				logFile:     file,
-				initialized: false,
-			}
-			return ml, nil
-		},
-		func(err error, logDir, fileName string) (*MarkdownLogger, error) {
-			errorHandlerCalled = true
-			return nil, err
+		loggerFactory[*MarkdownLogger]{
+			setup: func(file *os.File, logDir, fileName string) (*MarkdownLogger, error) {
+				ml := &MarkdownLogger{
+					logDir:      logDir,
+					fileName:    fileName,
+					logFile:     file,
+					initialized: false,
+				}
+				return ml, nil
+			},
+			onError: func(err error, logDir, fileName string) (*MarkdownLogger, error) {
+				errorHandlerCalled = true
+				return nil, err
+			},
 		},
 	)
 
@@ -592,20 +602,22 @@ func TestInitLogger_MarkdownLoggerFallback(t *testing.T) {
 
 	logger, err := initLogger(
 		logDir, fileName, os.O_TRUNC,
-		func(file *os.File, logDir, fileName string) (*MarkdownLogger, error) {
-			setupHandlerCalled = true
-			return nil, nil
-		},
-		func(err error, logDir, fileName string) (*MarkdownLogger, error) {
-			errorHandlerCalled = true
-			assert.Error(err, "Error should be passed to handler")
-			// Return fallback logger
-			ml := &MarkdownLogger{
-				logDir:      logDir,
-				fileName:    fileName,
-				useFallback: true,
-			}
-			return ml, nil
+		loggerFactory[*MarkdownLogger]{
+			setup: func(file *os.File, logDir, fileName string) (*MarkdownLogger, error) {
+				setupHandlerCalled = true
+				return nil, nil
+			},
+			onError: func(err error, logDir, fileName string) (*MarkdownLogger, error) {
+				errorHandlerCalled = true
+				assert.Error(err, "Error should be passed to handler")
+				// Return fallback logger
+				ml := &MarkdownLogger{
+					logDir:      logDir,
+					fileName:    fileName,
+					useFallback: true,
+				}
+				return ml, nil
+			},
 		},
 	)
 
@@ -627,13 +639,15 @@ func TestInitLogger_SetupError(t *testing.T) {
 	errorHandlerCalled := false
 	logger, err := initLogger(
 		logDir, fileName, os.O_APPEND,
-		func(file *os.File, logDir, fileName string) (*FileLogger, error) {
-			// Simulate setup error
-			return nil, assert.AnError
-		},
-		func(err error, logDir, fileName string) (*FileLogger, error) {
-			errorHandlerCalled = true
-			return nil, err
+		loggerFactory[*FileLogger]{
+			setup: func(file *os.File, logDir, fileName string) (*FileLogger, error) {
+				// Simulate setup error
+				return nil, assert.AnError
+			},
+			onError: func(err error, logDir, fileName string) (*FileLogger, error) {
+				errorHandlerCalled = true
+				return nil, err
+			},
 		},
 	)
 
@@ -647,6 +661,73 @@ func TestInitLogger_SetupError(t *testing.T) {
 	logPath := filepath.Join(logDir, fileName)
 	_, err = os.Stat(logPath)
 	a.NoError(err, "Log file should exist even after setup error")
+}
+
+// TestInitLogger_NilSetup verifies that initLogger returns a descriptive error when
+// factory.setup is nil, preventing a nil-dereference panic.
+func TestInitLogger_NilSetup(t *testing.T) {
+	a := assert.New(t)
+	tmpDir := t.TempDir()
+	logDir := filepath.Join(tmpDir, "logs")
+
+	logger, err := initLogger(
+		logDir, "test.log", os.O_APPEND,
+		loggerFactory[*FileLogger]{
+			setup:   nil,
+			onError: func(err error, logDir, fileName string) (*FileLogger, error) { return nil, err },
+		},
+	)
+
+	a.Error(err, "initLogger should return error when factory.setup is nil")
+	a.Contains(err.Error(), "non-nil")
+	a.Nil(logger, "logger should be nil when factory.setup is nil")
+}
+
+// TestInitLogger_NilOnError verifies that initLogger returns a descriptive error when
+// factory.onError is nil, preventing a nil-dereference panic on file-open failures.
+func TestInitLogger_NilOnError(t *testing.T) {
+	a := assert.New(t)
+	tmpDir := t.TempDir()
+	logDir := filepath.Join(tmpDir, "logs")
+
+	logger, err := initLogger(
+		logDir, "test.log", os.O_APPEND,
+		loggerFactory[*FileLogger]{
+			setup:   func(file *os.File, logDir, fileName string) (*FileLogger, error) { return nil, nil },
+			onError: nil,
+		},
+	)
+
+	a.Error(err, "initLogger should return error when factory.onError is nil")
+	a.Contains(err.Error(), "non-nil")
+	a.Nil(logger, "logger should be nil when factory.onError is nil")
+}
+
+// TestInitLogger_SetupReturnsNilLogger verifies that if factory.setup returns (nil, nil)
+// initLogger treats it as an error and closes the opened file to avoid a fd leak.
+func TestInitLogger_SetupReturnsNilLogger(t *testing.T) {
+	a := assert.New(t)
+	tmpDir := t.TempDir()
+	logDir := filepath.Join(tmpDir, "logs")
+	logPath := filepath.Join(logDir, "test.log")
+
+	logger, err := initLogger(
+		logDir, "test.log", os.O_APPEND,
+		loggerFactory[*FileLogger]{
+			setup: func(file *os.File, logDir, fileName string) (*FileLogger, error) {
+				return nil, nil // Simulate buggy setup that returns nil without error
+			},
+			onError: func(err error, logDir, fileName string) (*FileLogger, error) { return nil, err },
+		},
+	)
+
+	a.Error(err, "initLogger should return error when setup returns nil logger")
+	a.Contains(err.Error(), "nil logger")
+	a.Nil(logger, "logger should be nil")
+
+	// The file should have been created (initLogFile succeeded) but then closed.
+	_, statErr := os.Stat(logPath)
+	a.NoError(statErr, "log file should exist even after nil-logger guard fires")
 }
 
 func TestInitLogger_FileFlags(t *testing.T) {
@@ -667,14 +748,16 @@ func TestInitLogger_FileFlags(t *testing.T) {
 	// Test O_APPEND - should preserve content
 	logger1, err := initLogger(
 		logDir, fileName, os.O_APPEND,
-		func(file *os.File, logDir, fileName string) (*FileLogger, error) {
-			// Write additional content
-			_, err := file.WriteString("appended content\n")
-			require.NoError(err, "Failed to write content")
-			return &FileLogger{logFile: file}, nil
-		},
-		func(err error, logDir, fileName string) (*FileLogger, error) {
-			return nil, err
+		loggerFactory[*FileLogger]{
+			setup: func(file *os.File, logDir, fileName string) (*FileLogger, error) {
+				// Write additional content
+				_, err := file.WriteString("appended content\n")
+				require.NoError(err, "Failed to write content")
+				return &FileLogger{logFile: file}, nil
+			},
+			onError: func(err error, logDir, fileName string) (*FileLogger, error) {
+				return nil, err
+			},
 		},
 	)
 	require.NoError(err, "initLogger should not return error")
@@ -689,14 +772,16 @@ func TestInitLogger_FileFlags(t *testing.T) {
 	// Test O_TRUNC - should replace content
 	logger2, err := initLogger(
 		logDir, fileName, os.O_TRUNC,
-		func(file *os.File, logDir, fileName string) (*MarkdownLogger, error) {
-			// Write new content
-			_, err := file.WriteString("new content\n")
-			require.NoError(err, "Failed to write content")
-			return &MarkdownLogger{logFile: file}, nil
-		},
-		func(err error, logDir, fileName string) (*MarkdownLogger, error) {
-			return nil, err
+		loggerFactory[*MarkdownLogger]{
+			setup: func(file *os.File, logDir, fileName string) (*MarkdownLogger, error) {
+				// Write new content
+				_, err := file.WriteString("new content\n")
+				require.NoError(err, "Failed to write content")
+				return &MarkdownLogger{logFile: file}, nil
+			},
+			onError: func(err error, logDir, fileName string) (*MarkdownLogger, error) {
+				return nil, err
+			},
 		},
 	)
 	require.NoError(err, "initLogger should not return error")
