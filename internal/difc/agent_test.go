@@ -144,6 +144,18 @@ func TestAgentLabels_GetSecrecyTags(t *testing.T) {
 	}
 }
 
+// TestAgentLabels_GetSecrecyTags_NilLabel verifies that GetSecrecyTags returns nil
+// when the underlying Label pointer is nil (defensive nil guard in getTagsLocked).
+func TestAgentLabels_GetSecrecyTags_NilLabel(t *testing.T) {
+	agent := &AgentLabels{
+		AgentID:   "test-agent",
+		Secrecy:   &SecrecyLabel{Label: nil},
+		Integrity: NewIntegrityLabel(),
+	}
+	result := agent.GetSecrecyTags()
+	assert.Nil(t, result, "GetSecrecyTags should return nil when Secrecy.Label is nil")
+}
+
 // TestAgentLabels_GetIntegrityTags tests thread-safe retrieval of integrity tags
 func TestAgentLabels_GetIntegrityTags(t *testing.T) {
 	tests := []struct {
@@ -179,6 +191,18 @@ func TestAgentLabels_GetIntegrityTags(t *testing.T) {
 			assert.ElementsMatch(t, tt.expected, result)
 		})
 	}
+}
+
+// TestAgentLabels_GetIntegrityTags_NilLabel verifies that GetIntegrityTags returns nil
+// when the underlying Label pointer is nil (defensive nil guard in getTagsLocked).
+func TestAgentLabels_GetIntegrityTags_NilLabel(t *testing.T) {
+	agent := &AgentLabels{
+		AgentID:   "test-agent",
+		Secrecy:   NewSecrecyLabel(),
+		Integrity: &IntegrityLabel{Label: nil},
+	}
+	result := agent.GetIntegrityTags()
+	assert.Nil(t, result, "GetIntegrityTags should return nil when Integrity.Label is nil")
 }
 
 // TestAgentLabels_DropIntegrityTag tests removal of integrity tags
