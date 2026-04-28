@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -70,7 +71,8 @@ var (
 // Type mapping (matches jq's built-in type function):
 //   - nil                                          → "null"
 //   - bool                                         → "boolean"
-//   - float64, int, json.Number and other numerics → "number"
+//   - any integer or floating-point numeric type   → "number"
+//     (float32/64, int/8/16/32/64, uint/8/16/32/64, json.Number)
 //   - string                                       → "string"
 //   - map[string]interface{}                       → recursed object
 //   - []interface{}                                → recursed array (first element only)
@@ -91,15 +93,24 @@ func inferSchema(v interface{}) interface{} {
 		return "null"
 	case bool:
 		return "boolean"
-	case float64, int, json.Number:
+	case float64, float32,
+		int, int8, int16, int32, int64,
+		uint, uint8, uint16, uint32, uint64,
+		json.Number:
 		return "number"
 	case string:
 		return "string"
 	default:
-		// Defensive fallback for any unexpected numeric or other types that gojq
-		// might surface (e.g. int64 from custom decoders). Returning "string" keeps
-		// the schema output valid even if the exact type is unknown.
-		return "string"
+		// Defensive fallback: classify any remaining numeric reflect.Kind as "number"
+		// and everything else as "string" to keep the schema output valid.
+		switch reflect.TypeOf(v).Kind() {
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+			reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
+			reflect.Float32, reflect.Float64:
+			return "number"
+		default:
+			return "string"
+		}
 	}
 }
 

@@ -1453,6 +1453,16 @@ func TestInferSchema(t *testing.T) {
 			expected: "number",
 		},
 		{
+			name:     "int64 leaf",
+			input:    int64(100),
+			expected: "number",
+		},
+		{
+			name:     "float32 leaf",
+			input:    float32(2.5),
+			expected: "number",
+		},
+		{
 			name:     "string leaf",
 			input:    "hello",
 			expected: "string",
@@ -1497,9 +1507,10 @@ func TestInferSchema(t *testing.T) {
 	}
 }
 
-// TestInferSchema_MatchesJqOutput verifies that inferSchema produces the same JSON as
-// applyJqSchema (which invokes the gojq runtime). This guards against drift between the
-// native Go implementation and the jq-backed path.
+// TestInferSchema_MatchesJqOutput verifies that inferSchema (called directly) produces
+// the same output as applyJqSchema (which invokes inferSchema via the gojq runtime).
+// This validates the gojq.WithFunction wiring: that the compiled jq code correctly
+// dispatches to the native Go implementation for all supported input shapes.
 func TestInferSchema_MatchesJqOutput(t *testing.T) {
 	inputs := []interface{}{
 		map[string]interface{}{"name": "test", "count": 42},
@@ -1534,11 +1545,8 @@ func TestInferSchema_MatchesJqOutput(t *testing.T) {
 func TestWrapToolHandler_JsonNumberData(t *testing.T) {
 	baseDir := t.TempDir()
 
-	// Wrap data in a map that contains a json.Number value so the type switch exercises
-	// the json.Number case via the json.Unmarshal fallback path after marshaling.
-	//
-	// To exercise the direct json.Number case in the type switch we pass json.Number as
-	// the top-level data value (the switch is on `data`, not on individual map values).
+	// Return json.Number as the top-level data value so the type switch hits the
+	// direct json.Number case (the switch is on `data`, not on individual map values).
 	mockHandler := func(ctx context.Context, req *sdk.CallToolRequest, args interface{}) (*sdk.CallToolResult, interface{}, error) {
 		return &sdk.CallToolResult{IsError: false}, json.Number("42"), nil
 	}
