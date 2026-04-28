@@ -544,6 +544,24 @@ func TestInjectIntoFragment_NoOpeningBrace(t *testing.T) {
 	assert.Equal(t, query, result)
 }
 
+func TestInjectIntoFragment_NoClosingBrace(t *testing.T) {
+	// Malformed: fragment has an opening brace but no matching closing brace.
+	// injectIntoFragment should return the query unchanged when braceEnd == -1.
+	query := `fragment pr on PullRequest { title`
+	result := injectIntoFragment(query, "pr", "author{login}")
+	assert.Equal(t, query, result)
+}
+
+func TestFindParentField_NoEnclosingBrace(t *testing.T) {
+	// When the query has no enclosing `{` before `nodes`, findParentField returns "".
+	// This covers the "no enclosing brace found" return path (line: return "").
+	query := `nodes { number }`
+	idx := strings.Index(query, "nodes")
+	require.NotEqual(t, -1, idx)
+	got := findParentField(query, idx)
+	assert.Equal(t, "", got)
+}
+
 func countOccurrences(s, substr string) int {
 	count := 0
 	for i := 0; i+len(substr) <= len(s); i++ {
