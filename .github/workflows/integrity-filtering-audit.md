@@ -129,7 +129,7 @@ For each downloaded artifact set, check:
 
 ```bash
 # Example: Count DIFC events in JSONL
-grep -c 'difc_integrity' "$ARTIFACT_DIR"/*/mcp-logs/rpc-messages.jsonl 2>/dev/null || echo "0"
+grep -c 'difc_integrity' "$ARTIFACT_DIR"/*/mcp-logs/rpc-messages.jsonl 2>/dev/null || true
 
 # Example: Find guard errors (including WASM traps)
 grep -iE 'error|failed|blocked|unknown|wasm error:|WASM guard trap' "$ARTIFACT_DIR"/*/mcp-logs/mcp-gateway.log 2>/dev/null | head -20
@@ -169,8 +169,8 @@ Use the same `ARTIFACT_DIR` variable defined in Step 2 above (the directory pass
     run_id=$(basename "$dir")
     jsonl="$dir/mcp-logs/rpc-messages.jsonl"
     if [ -f "$jsonl" ]; then
-      labelled=$(grep -c '"difc_integrity"' "$jsonl" 2>/dev/null || echo "0")
-      filtered=$(grep -c '"filtered":true\|DIFC_FILTERED' "$jsonl" 2>/dev/null || echo "0")
+      labelled=$(grep -c '"difc_integrity"' "$jsonl" 2>/dev/null || true)
+      filtered=$(grep -c '"filtered":true\|DIFC_FILTERED' "$jsonl" 2>/dev/null || true)
       echo "| $run_id | $labelled | $filtered |"
     fi
   done
