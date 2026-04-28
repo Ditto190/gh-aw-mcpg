@@ -96,7 +96,7 @@ func extractAndValidateSession(r *http.Request) string {
 		return ""
 	}
 
-	logHelpers.Printf("Session extracted successfully: sessionID=%s, remote=%s", sessionID, r.RemoteAddr)
+	logHelpers.Printf("Session extracted successfully: sessionID=%s, remote=%s", auth.TruncateSessionID(sessionID), r.RemoteAddr)
 	return sessionID
 }
 
@@ -143,7 +143,7 @@ func logHTTPRequestBody(r *http.Request, sessionID, backendID string) {
 		return
 	}
 
-	logHelpers.Printf("Request body read: size=%d bytes, sessionID=%s, backendID=%s", len(bodyBytes), sessionID, backendID)
+	logHelpers.Printf("Request body read: size=%d bytes, sessionID=%s, backendID=%s", len(bodyBytes), auth.TruncateSessionID(sessionID), backendID)
 
 	// Sanitize the body before logging
 	sanitizedBody := sanitize.SanitizeString(string(bodyBytes))
@@ -152,7 +152,7 @@ func logHTTPRequestBody(r *http.Request, sessionID, backendID string) {
 	if backendID != "" {
 		logger.LogDebug("client", "MCP client request body, backend=%s, body=%s", backendID, sanitizedBody)
 	} else {
-		logger.LogDebug("client", "MCP request body, session=%s, body=%s", sessionID, sanitizedBody)
+		logger.LogDebug("client", "MCP request body, session=%s, body=%s", auth.TruncateSessionID(sessionID), sanitizedBody)
 	}
 	logHelpers.Print("Request body logged for debugging")
 }
@@ -161,7 +161,7 @@ func logHTTPRequestBody(r *http.Request, sessionID, backendID string) {
 // If backendID is empty, only session ID is injected (unified mode).
 // Returns the modified request with updated context.
 func injectSessionContext(r *http.Request, sessionID, backendID string) *http.Request {
-	logHelpers.Printf("Injecting session context: sessionID=%s, backendID=%s", sessionID, backendID)
+	logHelpers.Printf("Injecting session context: sessionID=%s, backendID=%s", auth.TruncateSessionID(sessionID), backendID)
 
 	ctx := context.WithValue(r.Context(), SessionIDContextKey, sessionID)
 	ctx = guard.SetAgentIDInContext(ctx, sessionID)
@@ -186,10 +186,10 @@ func setupSessionCallback(r *http.Request, backendID string) (string, bool) {
 
 	if backendID != "" {
 		logger.LogInfo("client", "New MCP client connection, remote=%s, method=%s, path=%s, backend=%s, session=%s",
-			r.RemoteAddr, r.Method, r.URL.Path, backendID, sessionID)
+			r.RemoteAddr, r.Method, r.URL.Path, backendID, auth.TruncateSessionID(sessionID))
 	} else {
 		logger.LogInfo("client", "MCP connection established, remote=%s, method=%s, path=%s, session=%s",
-			r.RemoteAddr, r.Method, r.URL.Path, sessionID)
+			r.RemoteAddr, r.Method, r.URL.Path, auth.TruncateSessionID(sessionID))
 	}
 
 	logHTTPRequestBody(r, sessionID, backendID)
