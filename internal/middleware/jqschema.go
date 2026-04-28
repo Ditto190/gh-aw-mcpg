@@ -114,12 +114,7 @@ func init() {
 
 // generateRandomID generates a random ID for payload storage
 func generateRandomID() string {
-	id, err := strutil.RandomHex(16)
-	if err != nil {
-		// Fallback to a process- and time-based ID if random generation fails.
-		return fmt.Sprintf("fallback-%d-%d", os.Getpid(), time.Now().UnixNano())
-	}
-	return id
+	return strutil.RandomHexWithFallback(16)
 }
 
 // applyJqSchema applies the jq schema transformation to JSON data
