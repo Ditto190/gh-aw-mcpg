@@ -51,7 +51,7 @@ func (c *Connection) callTool(params interface{}) (*Response, error) {
 		if p.Arguments == nil {
 			p.Arguments = make(map[string]interface{})
 		}
-		logConn.Printf("callTool: parsed name=%s, arguments=%+v", p.Name, p.Arguments)
+		logConn.Printf("callTool: parsed name=%s, argumentCount=%d", p.Name, len(p.Arguments))
 		return c.getSDKSession().CallTool(c.ctx, &sdk.CallToolParams{
 			Name:      p.Name,
 			Arguments: p.Arguments,
