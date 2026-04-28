@@ -398,7 +398,7 @@ DEBUG_COLORS=0 DEBUG=* ./awmg --config config.toml
 - `MCP_GATEWAY_TLS_CERT` - Path to TLS server certificate PEM file; enables HTTPS when set together with `MCP_GATEWAY_TLS_KEY` (sets default for `--tls-cert`)
 - `MCP_GATEWAY_TLS_KEY` - Path to TLS server private key PEM file; required when `MCP_GATEWAY_TLS_CERT` is set (sets default for `--tls-key`)
 - `MCP_GATEWAY_CA_CERT` - Path to CA certificate PEM file for client certificate verification; enables mutual TLS (mTLS) when set alongside `MCP_GATEWAY_TLS_CERT`/`MCP_GATEWAY_TLS_KEY` (sets default for `--tls-ca`)
-- `MCP_GATEWAY_HMAC_SECRET` - Shared HMAC-SHA256 secret for request signing and replay protection; when set, all requests must carry valid `X-MCP-Timestamp`, `X-MCP-Nonce`, and `X-MCP-Signature` headers (sets default for `--hmac-secret`)
+- `MCP_GATEWAY_HMAC_SECRET` - Shared HMAC-SHA256 secret for request signing and replay protection; when set, requests to MCP handlers must carry valid `X-MCP-Timestamp`, `X-MCP-Nonce`, and `X-MCP-Signature` headers (sets default for `--hmac-secret`)
 - `RUNNING_IN_CONTAINER` - Set to `"true"` to force container detection when `/.dockerenv` and cgroup detection are unavailable
 
 **Note:** `PORT`, `HOST`, and `MODE` are not read by the `awmg` binary directly. However, `run.sh` does use `HOST` (default: `0.0.0.0`) and `MODE` (default: `--routed`) to set the bind address and routing mode. Use the `--listen` and `--routed`/`--unified` flags when running `awmg` directly.
