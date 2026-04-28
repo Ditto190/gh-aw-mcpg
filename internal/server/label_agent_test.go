@@ -167,7 +167,7 @@ func TestCallBackendTool_LabelAgentInitializationCached(t *testing.T) {
 	customGuard.mu.Unlock()
 	assert.Equal(1, calls, "label_agent should run once per session/server policy")
 
-	agentLabels, ok := us.agentRegistry.Get("session-123")
+	agentLabels, ok := us.AgentRegistry.Get("session-123")
 	require.True(ok)
 	assert.Contains(agentLabels.GetSecrecyTags(), difc.Tag("policy-secret"))
 	assert.Contains(agentLabels.GetIntegrityTags(), difc.Tag("policy-integrity"))
@@ -293,7 +293,7 @@ func TestCallBackendTool_LabelAgentInitializationFromServerGuardPolicies(t *test
 	customGuard.mu.Unlock()
 	assert.Equal(1, calls, "label_agent should run once per session/server policy from guard-policies")
 
-	agentLabels, ok := us.agentRegistry.Get("session-456")
+	agentLabels, ok := us.AgentRegistry.Get("session-456")
 	require.True(ok)
 	assert.Contains(agentLabels.GetSecrecyTags(), difc.Tag("policy-secret"))
 	assert.Contains(agentLabels.GetIntegrityTags(), difc.Tag("policy-integrity"))

@@ -21,14 +21,16 @@ import (
 func newTestServer(t *testing.T, upstreamURL string) *Server {
 	t.Helper()
 	return &Server{
-		guard:            guard.NewNoopGuard(),
-		evaluator:        difc.NewEvaluatorWithMode(difc.EnforcementFilter),
-		agentRegistry:    difc.NewAgentRegistryWithDefaults(nil, nil),
-		capabilities:     difc.NewCapabilities(),
+		guard: guard.NewNoopGuard(),
+		DIFCComponents: difc.DIFCComponents{
+			Mode:          difc.EnforcementFilter,
+			Evaluator:     difc.NewEvaluatorWithMode(difc.EnforcementFilter),
+			AgentRegistry: difc.NewAgentRegistryWithDefaults(nil, nil),
+			Capabilities:  difc.NewCapabilities(),
+		},
 		githubAPIURL:     upstreamURL,
 		httpClient:       &http.Client{},
 		guardInitialized: true,
-		enforcementMode:  difc.EnforcementFilter,
 	}
 }
 
@@ -510,8 +512,8 @@ func TestHandleWithDIFC_StrictModeBlocksFilteredItems(t *testing.T) {
 
 	// strict mode with NoopGuard (no labels set) — evaluator allows, no items filtered
 	s := newTestServer(t, upstream.URL)
-	s.enforcementMode = difc.EnforcementStrict
-	s.evaluator = difc.NewEvaluatorWithMode(difc.EnforcementStrict)
+	s.Mode = difc.EnforcementStrict
+	s.Evaluator = difc.NewEvaluatorWithMode(difc.EnforcementStrict)
 	h := &proxyHandler{server: s}
 
 	req := httptest.NewRequest(http.MethodGet, "/search/issues?q=test", nil)

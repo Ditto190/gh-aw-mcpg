@@ -49,10 +49,7 @@ func logRuntimeError(errorType, detail string, r *http.Request, serverName *stri
 // All HTTP error paths in the server package should use this helper to ensure
 // clients always receive application/json rather than text/plain.
 func writeErrorResponse(w http.ResponseWriter, statusCode int, code, message string) {
-	httputil.WriteJSONResponse(w, statusCode, map[string]string{
-		"error":   code,
-		"message": message,
-	})
+	httputil.WriteErrorResponse(w, statusCode, code, message)
 }
 
 // rejectRequest logs a structured error, records a runtime error, and writes an

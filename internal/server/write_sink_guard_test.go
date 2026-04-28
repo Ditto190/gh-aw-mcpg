@@ -235,7 +235,7 @@ func TestWriteSinkGuard_AllowsWriteAfterGitHubRead(t *testing.T) {
 	assert.False(result1.IsError, "GitHub read should succeed")
 
 	// Verify agent acquired tags
-	agentLabels, ok := us.agentRegistry.Get(sessionID)
+	agentLabels, ok := us.AgentRegistry.Get(sessionID)
 	require.True(ok, "agent should be registered after GitHub read")
 	assert.Contains(agentLabels.GetSecrecyTags(), difc.Tag("private:github/gh-aw*"))
 	assert.Contains(agentLabels.GetIntegrityTags(), difc.Tag("approved:github/gh-aw*"))

@@ -789,7 +789,7 @@ func TestCallBackendTool_Phase6_PropagateModeAccumulatesLabels(t *testing.T) {
 	assert.False(result.IsError)
 
 	// Agent labels should now contain the resource's secrecy tag (propagate mode).
-	agentLabels, ok := us.agentRegistry.Get(agentID)
+	agentLabels, ok := us.AgentRegistry.Get(agentID)
 	require.True(ok, "agent should exist in registry after call")
 	secrecyTags := agentLabels.GetSecrecyTags()
 	assert.Contains(secrecyTags, difc.Tag("private:org/repo"),

@@ -38,10 +38,8 @@ const (
 // It loads the same WASM guard used by the MCP gateway and runs the 6-phase
 // DIFC pipeline on every proxied response.
 type Server struct {
-	guard         guard.Guard
-	evaluator     *difc.Evaluator
-	agentRegistry *difc.AgentRegistry
-	capabilities  *difc.Capabilities
+	guard guard.Guard
+	difc.DIFCComponents
 
 	githubToken  string
 	githubAPIURL string // upstream base URL (no trailing slash)
@@ -50,7 +48,6 @@ type Server struct {
 
 	// guardInitialized tracks whether LabelAgent has been called
 	guardInitialized bool
-	enforcementMode  difc.EnforcementMode
 }
 
 // Config holds the configuration for creating a proxy Server.
@@ -116,13 +113,10 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 	logProxy.Printf("WASM guard loaded successfully")
 
 	s := &Server{
-		guard:           g,
-		evaluator:       difcComponents.Evaluator,
-		agentRegistry:   difcComponents.AgentRegistry,
-		capabilities:    difcComponents.Capabilities,
-		githubToken:     cfg.GitHubToken,
-		githubAPIURL:    apiURL,
-		enforcementMode: difcComponents.Mode,
+		guard:          g,
+		DIFCComponents: difcComponents,
+		githubToken:    cfg.GitHubToken,
+		githubAPIURL:   apiURL,
 		httpClient: &http.Client{
 			Timeout: 60 * time.Second,
 			Transport: &http.Transport{
@@ -179,31 +173,22 @@ func (s *Server) initGuardPolicy(ctx context.Context, policyJSON string, trusted
 
 	logProxy.Printf("Calling LabelAgent to initialize agent labels from guard")
 	backend := &restBackendCaller{server: s}
-	result, err := s.guard.LabelAgent(ctx, payload, backend, s.capabilities)
+	agentLabels := s.AgentRegistry.GetOrCreate("proxy")
+	newMode, result, err := guard.RunLabelAgent(ctx, s.guard, payload, backend, s.Capabilities, agentLabels, s.Mode)
 	if err != nil {
-		return fmt.Errorf("LabelAgent failed: %w", err)
-	}
-	if result == nil {
-		return fmt.Errorf("LabelAgent returned nil result")
-	}
-
-	// Apply agent labels and parse enforcement mode from guard response
-	agentLabels := s.agentRegistry.GetOrCreate("proxy")
-	newMode, err := guard.ApplyLabelAgentResult(result, agentLabels, s.enforcementMode)
-	if err != nil {
-		return fmt.Errorf("LabelAgent result invalid: %w", err)
+		return err
 	}
 	logProxy.Printf("Agent labels applied: secrecy=%v, integrity=%v", result.Agent.Secrecy, result.Agent.Integrity)
 
 	if result.DIFCMode != "" {
-		logProxy.Printf("Enforcement mode overridden by guard response: %s → %s", s.enforcementMode, newMode)
-		s.enforcementMode = newMode
-		s.evaluator.SetMode(newMode)
+		logProxy.Printf("Enforcement mode overridden by guard response: %s → %s", s.Mode, newMode)
+		s.Mode = newMode
+		s.Evaluator.SetMode(newMode)
 	}
 
 	s.guardInitialized = true
 	logProxy.Printf("Guard initialized: mode=%s, secrecy=%v, integrity=%v",
-		s.enforcementMode, result.Agent.Secrecy, result.Agent.Integrity)
+		s.Mode, result.Agent.Secrecy, result.Agent.Integrity)
 
 	return nil
 }

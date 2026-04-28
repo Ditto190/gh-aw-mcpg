@@ -310,3 +310,31 @@ func TestApplyGitHubAPIHeaders(t *testing.T) {
 		assert.Equal(t, GitHubUserAgent, req.Header.Get("User-Agent"))
 	})
 }
+
+func TestWriteErrorResponse(t *testing.T) {
+	tests := []struct {
+		name       string
+		statusCode int
+		code       string
+		message    string
+	}{
+		{name: "400", statusCode: http.StatusBadRequest, code: "bad_request", message: "malformed input"},
+		{name: "403", statusCode: http.StatusForbidden, code: "difc_forbidden", message: "DIFC policy violation"},
+		{name: "500", statusCode: http.StatusInternalServerError, code: "internal_error", message: "unexpected error"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			WriteErrorResponse(w, tt.statusCode, tt.code, tt.message)
+
+			assert.Equal(t, tt.statusCode, w.Code)
+			assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
+
+			var body map[string]string
+			require.NoError(t, json.NewDecoder(w.Body).Decode(&body))
+			assert.Equal(t, tt.code, body["error"])
+			assert.Equal(t, tt.message, body["message"])
+		})
+	}
+}
