@@ -49,13 +49,15 @@ func defaultLabelAgentStub(difcMode string, secrecy, integrity []string) *labelA
 // newTestServerForInitGuardPolicy creates a minimal proxy.Server for testing initGuardPolicy.
 func newTestServerForInitGuardPolicy(g guard.Guard, mode difc.EnforcementMode) *Server {
 	return &Server{
-		guard:           g,
-		evaluator:       difc.NewEvaluatorWithMode(mode),
-		agentRegistry:   difc.NewAgentRegistryWithDefaults(nil, nil),
-		capabilities:    difc.NewCapabilities(),
-		githubAPIURL:    "https://api.github.com",
-		httpClient:      &http.Client{},
-		enforcementMode: mode,
+		guard: g,
+		DIFCComponents: difc.DIFCComponents{
+			Mode:          mode,
+			Evaluator:     difc.NewEvaluatorWithMode(mode),
+			AgentRegistry: difc.NewAgentRegistryWithDefaults(nil, nil),
+			Capabilities:  difc.NewCapabilities(),
+		},
+		githubAPIURL: "https://api.github.com",
+		httpClient:   &http.Client{},
 	}
 }
 
@@ -143,7 +145,7 @@ func TestInitGuardPolicy_SuccessWithNoLabels(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.True(t, s.guardInitialized)
-	assert.Equal(t, difc.EnforcementFilter, s.enforcementMode)
+	assert.Equal(t, difc.EnforcementFilter, s.Mode)
 }
 
 // TestInitGuardPolicy_SuccessAppliesAgentLabels verifies that secrecy and integrity tags
@@ -157,7 +159,7 @@ func TestInitGuardPolicy_SuccessAppliesAgentLabels(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, s.guardInitialized)
 
-	labels := s.agentRegistry.GetOrCreate("proxy")
+	labels := s.AgentRegistry.GetOrCreate("proxy")
 	require.NotNil(t, labels)
 	assert.Contains(t, labels.GetSecrecyTags(), difc.Tag("private:org/repo"), "secrecy tag must be applied")
 	assert.Contains(t, labels.GetIntegrityTags(), difc.Tag("approved"), "integrity tag must be applied")
@@ -174,7 +176,7 @@ func TestInitGuardPolicy_DIFCModeOverride(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.True(t, s.guardInitialized)
-	assert.Equal(t, difc.EnforcementStrict, s.enforcementMode,
+	assert.Equal(t, difc.EnforcementStrict, s.Mode,
 		"guard response DIFCMode must override the server's enforcement mode")
 }
 
@@ -190,7 +192,7 @@ func TestInitGuardPolicy_InvalidDIFCModeError(t *testing.T) {
 	assert.Contains(t, err.Error(), "invalid difc_mode")
 	assert.False(t, s.guardInitialized,
 		"guard must not be marked initialized when DIFCMode is invalid")
-	assert.Equal(t, difc.EnforcementFilter, s.enforcementMode,
+	assert.Equal(t, difc.EnforcementFilter, s.Mode,
 		"enforcement mode must remain unchanged when DIFCMode is invalid")
 }
 
@@ -206,7 +208,7 @@ func TestInitGuardPolicy_EmptyDIFCModePreservesMode(t *testing.T) {
 	assert.True(t, s.guardInitialized)
 	// Empty DIFCMode causes the mode-override block to be skipped entirely, so the
 	// server's initial strict mode is preserved.
-	assert.Equal(t, difc.EnforcementStrict, s.enforcementMode)
+	assert.Equal(t, difc.EnforcementStrict, s.Mode)
 }
 
 // TestInitGuardPolicy_LegacyAllowOnlyKey verifies that a policy using the legacy
@@ -271,7 +273,7 @@ func TestInitGuardPolicy_MultipleSecrecyTags(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, s.guardInitialized)
 
-	labels := s.agentRegistry.GetOrCreate("proxy")
+	labels := s.AgentRegistry.GetOrCreate("proxy")
 	require.NotNil(t, labels)
 	for _, tag := range secrecy {
 		assert.Contains(t, labels.GetSecrecyTags(), difc.Tag(tag), "secrecy tag %q must be applied", tag)

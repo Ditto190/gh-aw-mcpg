@@ -61,14 +61,16 @@ func publicResource() *difc.LabeledResource {
 func newTestServerWithStub(t *testing.T, upstreamURL string, g *stubGuard, mode difc.EnforcementMode) *Server {
 	t.Helper()
 	return &Server{
-		guard:            g,
-		evaluator:        difc.NewEvaluatorWithMode(mode),
-		agentRegistry:    difc.NewAgentRegistryWithDefaults(nil, nil),
-		capabilities:     difc.NewCapabilities(),
+		guard: g,
+		DIFCComponents: difc.DIFCComponents{
+			Mode:          mode,
+			Evaluator:     difc.NewEvaluatorWithMode(mode),
+			AgentRegistry: difc.NewAgentRegistryWithDefaults(nil, nil),
+			Capabilities:  difc.NewCapabilities(),
+		},
 		githubAPIURL:     upstreamURL,
 		httpClient:       &http.Client{},
 		guardInitialized: true,
-		enforcementMode:  mode,
 	}
 }
 
@@ -78,14 +80,16 @@ func newTestServerWithPrivateAgent(t *testing.T, upstreamURL string, g *stubGuar
 	t.Helper()
 	reg := difc.NewAgentRegistryWithDefaults([]difc.Tag{"private:test-org/test-repo"}, nil)
 	return &Server{
-		guard:            g,
-		evaluator:        difc.NewEvaluatorWithMode(mode),
-		agentRegistry:    reg,
-		capabilities:     difc.NewCapabilities(),
+		guard: g,
+		DIFCComponents: difc.DIFCComponents{
+			Mode:          mode,
+			Evaluator:     difc.NewEvaluatorWithMode(mode),
+			AgentRegistry: reg,
+			Capabilities:  difc.NewCapabilities(),
+		},
 		githubAPIURL:     upstreamURL,
 		httpClient:       &http.Client{},
 		guardInitialized: true,
-		enforcementMode:  mode,
 	}
 }
 
@@ -494,14 +498,16 @@ func TestHandleWithDIFC_PropagateMode_AccumulatesLabels(t *testing.T) {
 	}
 	reg := difc.NewAgentRegistryWithDefaults(nil, nil)
 	s := &Server{
-		guard:            g,
-		evaluator:        difc.NewEvaluatorWithMode(difc.EnforcementPropagate),
-		agentRegistry:    reg,
-		capabilities:     difc.NewCapabilities(),
+		guard: g,
+		DIFCComponents: difc.DIFCComponents{
+			Mode:          difc.EnforcementPropagate,
+			Evaluator:     difc.NewEvaluatorWithMode(difc.EnforcementPropagate),
+			AgentRegistry: reg,
+			Capabilities:  difc.NewCapabilities(),
+		},
 		githubAPIURL:     upstream.URL,
 		httpClient:       &http.Client{},
 		guardInitialized: true,
-		enforcementMode:  difc.EnforcementPropagate,
 	}
 	h := &proxyHandler{server: s}
 

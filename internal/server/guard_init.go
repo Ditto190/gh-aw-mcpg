@@ -297,7 +297,7 @@ func (us *UnifiedServer) ensureGuardInitialized(
 	g guard.Guard,
 	backendCaller guard.BackendCaller,
 ) (difc.EnforcementMode, error) {
-	defaultMode := us.evaluator.GetMode()
+	defaultMode := us.Evaluator.GetMode()
 
 	policy, source, err := us.resolveGuardPolicy(serverID)
 	if err != nil {
@@ -341,14 +341,18 @@ func (us *UnifiedServer) ensureGuardInitialized(
 
 	logger.LogInfoWithServer(serverID, "difc", "Initializing guard session state: session=%s, policy_source=%s", sessionID, source)
 	logger.LogInfoWithServer(serverID, "difc", "Calling label_agent: session=%s, guard=%s, policy=%s", sessionID, g.Name(), string(policyJSON))
-	labelAgentResult, err := g.LabelAgent(ctx, labelAgentPayload, backendCaller, us.capabilities)
+
+	agentID := guard.GetAgentIDFromContext(ctx)
+
+	// Merge labels into existing agent (union semantics).
+	// Multiple guards may contribute labels for the same agent; each guard's
+	// label_agent output is additive so that later guards do not overwrite
+	// labels set by earlier ones.
+	agentLabels := us.AgentRegistry.GetOrCreate(agentID)
+	mode, labelAgentResult, err := guard.RunLabelAgent(ctx, g, labelAgentPayload, backendCaller, us.Capabilities, agentLabels, defaultMode)
 	if err != nil {
 		logger.LogErrorWithServer(serverID, "difc", "label_agent failed: session=%s, guard=%s, error=%v", sessionID, g.Name(), err)
-		return defaultMode, fmt.Errorf("label_agent failed: %w", err)
-	}
-	if labelAgentResult == nil {
-		logger.LogErrorWithServer(serverID, "difc", "label_agent returned nil result: session=%s, guard=%s", sessionID, g.Name())
-		return defaultMode, fmt.Errorf("label_agent returned nil result")
+		return defaultMode, err
 	}
 	logger.LogMarshaledForDebug(
 		labelAgentResult,
@@ -359,18 +363,6 @@ func (us *UnifiedServer) ensureGuardInitialized(
 			logger.LogWarnWithServer(serverID, "difc", "label_agent response (failed to serialize for logging): session=%s, guard=%s, error=%v", sessionID, g.Name(), marshalErr)
 		},
 	)
-
-	agentID := guard.GetAgentIDFromContext(ctx)
-
-	// Merge labels into existing agent (union semantics).
-	// Multiple guards may contribute labels for the same agent; each guard's
-	// label_agent output is additive so that later guards do not overwrite
-	// labels set by earlier ones.
-	agentLabels := us.agentRegistry.GetOrCreate(agentID)
-	mode, err := guard.ApplyLabelAgentResult(labelAgentResult, agentLabels, defaultMode)
-	if err != nil {
-		return defaultMode, fmt.Errorf("label_agent result invalid: %w", err)
-	}
 
 	us.sessionMu.Lock()
 	session = us.sessions[sessionID]

@@ -75,11 +75,14 @@ func newMinimalUnifiedServer(cfg *config.Config) *UnifiedServer {
 		}
 	}
 	return &UnifiedServer{
-		cfg:           cfg,
-		sessions:      make(map[string]*Session),
-		agentRegistry: difc.NewAgentRegistryWithDefaults(nil, nil),
-		capabilities:  difc.NewCapabilities(),
-		evaluator:     difc.NewEvaluatorWithMode(difcMode),
+		cfg:      cfg,
+		sessions: make(map[string]*Session),
+		DIFCComponents: difc.DIFCComponents{
+			Mode:          difcMode,
+			AgentRegistry: difc.NewAgentRegistryWithDefaults(nil, nil),
+			Capabilities:  difc.NewCapabilities(),
+			Evaluator:     difc.NewEvaluatorWithMode(difcMode),
+		},
 	}
 }
 
@@ -192,7 +195,7 @@ func TestEnsureGuardInitialized_LabelAgentError(t *testing.T) {
 	_, err := us.ensureGuardInitialized(context.Background(), "session-err", "server1", g, &noopBackendCaller{})
 
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "label_agent failed")
+	assert.Contains(t, err.Error(), "LabelAgent failed")
 	assert.Contains(t, err.Error(), "backend unreachable")
 }
 
@@ -213,7 +216,7 @@ func TestEnsureGuardInitialized_LabelAgentNilResult(t *testing.T) {
 	_, err := us.ensureGuardInitialized(context.Background(), "session-nil", "server1", g, &noopBackendCaller{})
 
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "label_agent returned nil result")
+	assert.Contains(t, err.Error(), "LabelAgent returned nil result")
 }
 
 // TestEnsureGuardInitialized_DIFCModeEmpty verifies that when LabelAgent returns an
@@ -345,7 +348,7 @@ func TestEnsureGuardInitialized_LabelsAddedToRegistry(t *testing.T) {
 
 	require.NoError(t, err)
 
-	agentLabels, ok := us.agentRegistry.Get("labeled-agent-id")
+	agentLabels, ok := us.AgentRegistry.Get("labeled-agent-id")
 	require.True(t, ok, "agent labels should be registered")
 	assert.Contains(t, agentLabels.GetSecrecyTags(), difc.Tag("private:org"))
 	assert.Contains(t, agentLabels.GetIntegrityTags(), difc.Tag("merged"))
@@ -542,7 +545,7 @@ func TestEnsureGuardInitialized_LabelsMergedAcrossGuards(t *testing.T) {
 	_, err = us.ensureGuardInitialized(ctx, "session-union", "server-B", gB, &noopBackendCaller{})
 	require.NoError(t, err)
 
-	agentLabels, ok := us.agentRegistry.Get(agentID)
+	agentLabels, ok := us.AgentRegistry.Get(agentID)
 	require.True(t, ok)
 	tags := agentLabels.GetSecrecyTags()
 	assert.Contains(t, tags, difc.Tag("tag-A"), "tag-A from guard-A should be present")

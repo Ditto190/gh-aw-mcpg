@@ -99,10 +99,8 @@ type UnifiedServer struct {
 
 	// DIFC components
 	guardRegistry *guard.Registry
-	agentRegistry *difc.AgentRegistry
-	capabilities  *difc.Capabilities
-	evaluator     *difc.Evaluator
-	enableDIFC    bool // When true, DIFC enforcement and session requirement are enabled
+	difc.DIFCComponents
+	enableDIFC bool // When true, DIFC enforcement and session requirement are enabled
 
 	// Configuration reference for guard loading
 	cfg *config.Config
@@ -162,11 +160,9 @@ func NewUnified(ctx context.Context, cfg *config.Config) (*UnifiedServer, error)
 		circuitBreakers:      buildCircuitBreakers(cfg),
 
 		// Initialize DIFC components
-		guardRegistry: guard.NewRegistry(),
-		agentRegistry: difcComponents.AgentRegistry,
-		capabilities:  difcComponents.Capabilities,
-		evaluator:     difcComponents.Evaluator,
-		cfg:           cfg, // Store config for guard loading
+		guardRegistry:  guard.NewRegistry(),
+		DIFCComponents: difcComponents,
+		cfg:            cfg, // Store config for guard loading
 
 		// Cache tracer at construction to avoid calling otel.Tracer on every request.
 		tracer: tracing.Tracer(),
@@ -480,7 +476,7 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 
 	// **Phase 0: Extract agent ID and get/create agent labels**
 	agentID := guard.GetAgentIDFromContext(ctx)
-	agentLabels := us.agentRegistry.GetOrCreate(agentID)
+	agentLabels := us.AgentRegistry.GetOrCreate(agentID)
 	logUnified.Printf("[DIFC] Agent %s | Secrecy: %v | Integrity: %v",
 		agentID, agentLabels.GetSecrecyTags(), agentLabels.GetIntegrityTags())
 
@@ -496,7 +492,7 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 	})
 
 	// **Phase 1: Guard labels the resource**
-	resource, operation, err := g.LabelResource(ctx, toolName, args, backendCaller, us.capabilities)
+	resource, operation, err := g.LabelResource(ctx, toolName, args, backendCaller, us.Capabilities)
 	if err != nil {
 		logger.LogWarn("difc", "Guard labeling failed: %v", err)
 		httpStatusCode = 500
@@ -586,7 +582,7 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 
 	var labeledData difc.LabeledData
 	if shouldCallLabelResponse {
-		labeledData, err = g.LabelResponse(ctx, toolName, backendResult, backendCaller, us.capabilities)
+		labeledData, err = g.LabelResponse(ctx, toolName, backendResult, backendCaller, us.Capabilities)
 		if err != nil {
 			logger.LogWarn("difc", "Response labeling failed: %v", err)
 			httpStatusCode = 500

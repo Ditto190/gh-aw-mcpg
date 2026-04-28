@@ -33,6 +33,16 @@ func WriteJSONResponse(w http.ResponseWriter, statusCode int, body interface{}) 
 	}
 }
 
+// WriteErrorResponse writes a JSON error response with a consistent
+// {"error": code, "message": message} shape. Both the server and proxy packages
+// should use this helper so that API consumers always receive the same error shape.
+func WriteErrorResponse(w http.ResponseWriter, statusCode int, code, message string) {
+	WriteJSONResponse(w, statusCode, map[string]string{
+		"error":   code,
+		"message": message,
+	})
+}
+
 // IsTransientHTTPError returns true for status codes that indicate a temporary
 // server-side condition (rate-limiting or transient failure) worth retrying.
 func IsTransientHTTPError(statusCode int) bool {
