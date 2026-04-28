@@ -83,7 +83,12 @@ func BenchmarkApplyJqSchema_CompiledCode(b *testing.B) {
 }
 
 // BenchmarkApplyJqSchema_ParseEveryTime benchmarks the old implementation
-// that parses the query on every invocation (for comparison)
+// that parses the query on every invocation (for comparison).
+//
+// NOTE: This benchmark intentionally simulates the degraded path where the
+// query is parsed (but not compiled) on every call, bypassing gojq.Compile.
+// It exists solely to quantify the speedup delivered by the compile-once
+// approach used in production. Do not switch production code to this pattern.
 func BenchmarkApplyJqSchema_ParseEveryTime(b *testing.B) {
 	tests := []struct {
 		name  string

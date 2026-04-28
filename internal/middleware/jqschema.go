@@ -41,57 +41,77 @@ type PayloadMetadata struct {
 	QueryID           string      `json:"-"` // Internal use only, not serialized to clients
 }
 
-// jqSchemaFilter is the jq filter that transforms JSON to schema
-// This filter leverages gojq v0.12.19 features including:
-// - Enhanced array handling (supports up to 536,870,912 elements / 2^29)
-// - Improved concurrent execution performance
-// - Better error messages for type errors
+// jqSchemaFilter is the jq entry point that invokes the native Go walk_schema function.
+// The recursive schema-walk logic is implemented in inferSchema (see below) and registered
+// via gojq.WithFunction, so the filter itself is a single call.
 //
-// The filter recursively walks JSON structures and replaces values with their type names:
+// The transformation replaces every leaf value with its jq type name:
 //
 //	Input:  {"name": "test", "count": 42, "items": [{"id": 1}]}
 //	Output: {"name": "string", "count": "number", "items": [{"id": "number"}]}
 //
 // For arrays, only the first element's schema is retained to represent the array structure.
 // Empty arrays are preserved as [].
-//
-// NOTE: This defines a custom walk_schema function rather than using gojq's built-in walk(f).
-// The built-in walk(f) applies f to every node but preserves the original structure.
-// Our custom walk_schema does two things the built-in cannot:
-//  1. Replaces leaf values with their type name (e.g., "test" → "string")
-//  2. Collapses arrays to only the first element for schema inference
-//
-// These behaviors are incompatible with standard walk(f) semantics, which would
-// apply f post-recursion without structural changes to arrays.
-// Using a distinct name avoids shadowing gojq's built-in walk/1.
-const jqSchemaFilter = `
-def walk_schema:
-  . as $in |
-  if type == "object" then
-    reduce keys[] as $k ({}; . + {($k): ($in[$k] | walk_schema)})
-  elif type == "array" then
-    if length == 0 then [] else [.[0] | walk_schema] end
-  else
-    type
-  end;
-walk_schema
-`
+const jqSchemaFilter = `walk_schema`
 
-// Pre-compiled jq query code for performance
-// This is compiled once at package initialization and reused for all requests
+// Pre-compiled jq query code for performance.
+// This is compiled once at package initialization and reused for all requests.
 var (
 	jqSchemaCode       *gojq.Code
 	jqSchemaCompileErr error
 )
 
-// init compiles the jq schema filter at startup for better performance and validation
-// Following gojq best practices: compile once, run many times
+// inferSchema recursively walks a JSON-compatible Go value and replaces every leaf
+// with its jq type name ("null", "boolean", "number", "string"). Objects are
+// traversed key-by-key; arrays are collapsed to a single representative element (or
+// [] when empty). The output mirrors what the previous pure-jq walk_schema filter
+// produced, but runs entirely in Go, bypassing jq interpreter overhead for recursion.
+//
+// Type mapping (matches jq's built-in type function):
+//   - nil                                          → "null"
+//   - bool                                         → "boolean"
+//   - float64, int, json.Number and other numerics → "number"
+//   - string                                       → "string"
+//   - map[string]interface{}                       → recursed object
+//   - []interface{}                                → recursed array (first element only)
+func inferSchema(v interface{}) interface{} {
+	switch val := v.(type) {
+	case map[string]interface{}:
+		result := make(map[string]interface{}, len(val))
+		for k, child := range val {
+			result[k] = inferSchema(child)
+		}
+		return result
+	case []interface{}:
+		if len(val) == 0 {
+			return []interface{}{}
+		}
+		return []interface{}{inferSchema(val[0])}
+	case nil:
+		return "null"
+	case bool:
+		return "boolean"
+	case float64, int, json.Number:
+		return "number"
+	case string:
+		return "string"
+	default:
+		// Defensive fallback for any unexpected numeric or other types that gojq
+		// might surface (e.g. int64 from custom decoders). Returning "string" keeps
+		// the schema output valid even if the exact type is unknown.
+		return "string"
+	}
+}
+
+// init compiles the jq schema filter at startup for better performance and validation.
+// Following gojq best practices: compile once, run many times.
+//
+// The walk_schema function is registered as a native Go implementation via
+// gojq.WithFunction so that the recursive schema walk runs entirely in Go,
+// avoiding jq interpreter overhead for deeply-nested payloads.
 //
 // This provides fail-fast behavior - if the jq query is invalid, the application
 // will fail at startup rather than at runtime during a tool call.
-//
-// Performance benefit: Compiling once and reusing the code provides 10-100x speedup
-// compared to parsing and compiling on every request.
 func init() {
 	query, err := gojq.Parse(jqSchemaFilter)
 	if err != nil {
@@ -101,7 +121,11 @@ func init() {
 		return
 	}
 
-	jqSchemaCode, jqSchemaCompileErr = gojq.Compile(query)
+	jqSchemaCode, jqSchemaCompileErr = gojq.Compile(query,
+		gojq.WithFunction("walk_schema", 0, 0, func(v interface{}, _ []interface{}) interface{} {
+			return inferSchema(v)
+		}),
+	)
 	if jqSchemaCompileErr != nil {
 		logMiddleware.Printf("FATAL: Failed to compile jq schema filter at init: %v", jqSchemaCompileErr)
 		logger.LogError("startup", "Failed to compile jq schema filter at init (application will not start): %v", jqSchemaCompileErr)
@@ -109,7 +133,7 @@ func init() {
 	}
 
 	logMiddleware.Printf("Successfully compiled jq schema filter at init")
-	logger.LogInfo("startup", "jq schema filter compiled successfully - array limit: 2^29 elements, timeout: %v", DefaultJqTimeout)
+	logger.LogInfo("startup", "jq schema filter compiled successfully - native Go walk_schema, array limit: 2^29 elements, timeout: %v", DefaultJqTimeout)
 }
 
 // generateRandomID generates a random ID for payload storage
@@ -350,9 +374,20 @@ func WrapToolHandler(
 			// Prepare data for jq processing. If data is already a native JSON-compatible
 			// Go type, use it directly to avoid a redundant JSON round-trip.
 			var jsonData interface{}
-			switch data.(type) {
+			switch v := data.(type) {
 			case map[string]interface{}, []interface{}, string, float64, bool:
 				jsonData = data
+			case nil:
+				// nil data produces a nil schema; nothing meaningful to infer.
+				return nil
+			case json.Number:
+				// json.Number is emitted by decoders using UseNumber(); convert to
+				// float64 so jq sees a plain number value rather than an opaque type.
+				f, convErr := v.Float64()
+				if convErr != nil {
+					return fmt.Errorf("failed to convert json.Number to float64: %w", convErr)
+				}
+				jsonData = f
 			default:
 				if err := json.Unmarshal(payloadJSON, &jsonData); err != nil {
 					return fmt.Errorf("failed to unmarshal for schema: %w", err)
