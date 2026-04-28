@@ -1416,7 +1416,24 @@ pub fn is_default_branch_commit_context(tool_name: &str, sha_or_ref: &str) -> bo
     tool_name == "get_commit" && looks_like_commit_sha(sha_or_ref)
 }
 
-/// Determine integrity level for a pull request
+/// Apply the standard post-integrity adjustment pipeline for user-authored content items:
+/// 1. Approval-label promotion  → raise to at least approved
+/// 2. Endorsement promotion     → raise to at least approved on maintainer reaction
+/// 3. Disapproval demotion      → cap at configured level on maintainer reaction (wins last)
+fn apply_post_integrity_adjustments(
+    item: &Value,
+    resource_type: &str,
+    repo_full_name: &str,
+    integrity: Vec<String>,
+    ctx: &PolicyContext,
+) -> Vec<String> {
+    let integrity =
+        apply_approval_label_promotion(item, resource_type, repo_full_name, integrity, ctx);
+    let integrity =
+        apply_endorsement_promotion(item, resource_type, repo_full_name, integrity, ctx);
+    apply_disapproval_demotion(item, resource_type, repo_full_name, integrity, ctx)
+}
+
 /// Rules:
 /// - PR authored by a blocked user => blocked-level (unconditional denial)
 /// - merged PR => merged-level
@@ -1561,15 +1578,8 @@ pub fn pr_integrity(
 
     let integrity = ensure_integrity_baseline(repo_full_name, integrity, ctx);
 
-    // Step 2: Apply approval-labels promotion — raise to at least approved.
-    let integrity = apply_approval_label_promotion(item, "pr", repo_full_name, integrity, ctx);
-    // Step 3: Apply endorsement promotion — raise to at least approved if a qualified
-    //         maintainer reacted with a configured endorsement reaction.
-    let integrity = apply_endorsement_promotion(item, "pr", repo_full_name, integrity, ctx);
-    // Step 4: Apply disapproval demotion — cap at configured level if a qualified
-    //         maintainer reacted with a configured disapproval reaction.
-    //         Disapproval runs last so it always wins over all promotion rules.
-    apply_disapproval_demotion(item, "pr", repo_full_name, integrity, ctx)
+    // Steps 2–4: approval-label promotion → endorsement promotion → disapproval demotion.
+    apply_post_integrity_adjustments(item, "pr", repo_full_name, integrity, ctx)
 }
 
 /// Determine integrity level for an issue
@@ -1655,15 +1665,8 @@ pub fn issue_integrity(
     }
     let integrity = ensure_integrity_baseline(repo_full_name, integrity, ctx);
 
-    // Step 2: Apply approval-labels promotion — raise to at least approved.
-    let integrity = apply_approval_label_promotion(item, "issue", repo_full_name, integrity, ctx);
-    // Step 3: Apply endorsement promotion — raise to at least approved if a qualified
-    //         maintainer reacted with a configured endorsement reaction.
-    let integrity = apply_endorsement_promotion(item, "issue", repo_full_name, integrity, ctx);
-    // Step 4: Apply disapproval demotion — cap at configured level if a qualified
-    //         maintainer reacted with a configured disapproval reaction.
-    //         Disapproval runs last so it always wins over all promotion rules.
-    apply_disapproval_demotion(item, "issue", repo_full_name, integrity, ctx)
+    // Steps 2–4: approval-label promotion → endorsement promotion → disapproval demotion.
+    apply_post_integrity_adjustments(item, "issue", repo_full_name, integrity, ctx)
 }
 
 /// Determine integrity level for a commit.
@@ -1744,6 +1747,21 @@ pub fn commit_integrity(
     ensure_integrity_baseline(repo_full_name, integrity, ctx)
 }
 
+/// Canonical list of trusted first-party GitHub platform bots.
+/// Each entry is the canonical username form; matching is case-insensitive.
+/// To add a new bot, append a single entry here — no other changes needed.
+const TRUSTED_FIRST_PARTY_BOTS: &[&str] = &[
+    "dependabot[bot]",
+    "github-actions[bot]",
+    "github-actions",
+    "app/github-actions",
+    "github-merge-queue[bot]",
+    "copilot",
+    "copilot-swe-agent[bot]",
+    "copilot-swe-agent",
+    "app/copilot-swe-agent",
+];
+
 /// Check if a user is a trusted first-party GitHub bot.
 ///
 /// These bots are platform services whose presence requires explicit admin
@@ -1761,15 +1779,9 @@ pub fn commit_integrity(
 /// - copilot-swe-agent: GitHub Copilot SWE agent (without [bot] suffix)
 /// - app/copilot-swe-agent: GitHub Copilot SWE agent (with app/ prefix, as returned by gh CLI)
 pub fn is_trusted_first_party_bot(username: &str) -> bool {
-    username.eq_ignore_ascii_case("dependabot[bot]")
-        || username.eq_ignore_ascii_case("github-actions[bot]")
-        || username.eq_ignore_ascii_case("github-actions")
-        || username.eq_ignore_ascii_case("app/github-actions")
-        || username.eq_ignore_ascii_case("github-merge-queue[bot]")
-        || username.eq_ignore_ascii_case("copilot")
-        || username.eq_ignore_ascii_case("copilot-swe-agent[bot]")
-        || username.eq_ignore_ascii_case("copilot-swe-agent")
-        || username.eq_ignore_ascii_case("app/copilot-swe-agent")
+    TRUSTED_FIRST_PARTY_BOTS
+        .iter()
+        .any(|b| username.eq_ignore_ascii_case(b))
 }
 
 /// Check if a user is in the gateway-configured trusted bot list.
