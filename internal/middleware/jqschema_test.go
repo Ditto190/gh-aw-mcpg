@@ -1418,3 +1418,153 @@ func TestWrapToolHandler_PreviewUTF8Boundary(t *testing.T) {
 	assert.True(t, utf8.ValidString(preview), "preview must be valid UTF-8")
 	assert.True(t, strings.HasSuffix(preview, "..."), "truncated preview must end with '...'")
 }
+
+// TestInferSchema verifies that the native Go inferSchema function produces the same
+// output as the previous pure-jq walk_schema filter for all supported value types.
+func TestInferSchema(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    interface{}
+		expected interface{}
+	}{
+		{
+			name:     "nil leaf",
+			input:    nil,
+			expected: "null",
+		},
+		{
+			name:     "bool leaf",
+			input:    true,
+			expected: "boolean",
+		},
+		{
+			name:     "float64 leaf",
+			input:    float64(3.14),
+			expected: "number",
+		},
+		{
+			name:     "int leaf",
+			input:    42,
+			expected: "number",
+		},
+		{
+			name:     "json.Number leaf",
+			input:    json.Number("99"),
+			expected: "number",
+		},
+		{
+			name:     "int64 leaf",
+			input:    int64(100),
+			expected: "number",
+		},
+		{
+			name:     "float32 leaf",
+			input:    float32(2.5),
+			expected: "number",
+		},
+		{
+			name:     "string leaf",
+			input:    "hello",
+			expected: "string",
+		},
+		{
+			name:     "empty object",
+			input:    map[string]interface{}{},
+			expected: map[string]interface{}{},
+		},
+		{
+			name:     "flat object",
+			input:    map[string]interface{}{"name": "alice", "age": float64(30), "active": false},
+			expected: map[string]interface{}{"name": "string", "age": "number", "active": "boolean"},
+		},
+		{
+			name:     "nested object",
+			input:    map[string]interface{}{"user": map[string]interface{}{"id": float64(1), "verified": true}},
+			expected: map[string]interface{}{"user": map[string]interface{}{"id": "number", "verified": "boolean"}},
+		},
+		{
+			name:     "empty array",
+			input:    []interface{}{},
+			expected: []interface{}{},
+		},
+		{
+			name:     "array collapses to first element schema",
+			input:    []interface{}{map[string]interface{}{"id": float64(1)}, map[string]interface{}{"id": float64(2)}},
+			expected: []interface{}{map[string]interface{}{"id": "number"}},
+		},
+		{
+			name:     "object with nil value",
+			input:    map[string]interface{}{"value": nil},
+			expected: map[string]interface{}{"value": "null"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := inferSchema(tt.input)
+			assert.Equal(t, tt.expected, got)
+		})
+	}
+}
+
+// TestInferSchema_MatchesJqOutput verifies that inferSchema (called directly) produces
+// the same output as applyJqSchema (which invokes inferSchema via the gojq runtime).
+// This validates the gojq.WithFunction wiring: that the compiled jq code correctly
+// dispatches to the native Go implementation for all supported input shapes.
+func TestInferSchema_MatchesJqOutput(t *testing.T) {
+	inputs := []interface{}{
+		map[string]interface{}{"name": "test", "count": 42},
+		map[string]interface{}{"user": map[string]interface{}{"id": 123, "active": true}},
+		map[string]interface{}{"items": []interface{}{map[string]interface{}{"id": 1, "name": "test"}}},
+		map[string]interface{}{"items": []interface{}{}},
+		map[string]interface{}{"value": nil},
+	}
+
+	for _, input := range inputs {
+		inputJSON, _ := json.Marshal(input)
+		t.Run(string(inputJSON), func(t *testing.T) {
+			jqResult, err := applyJqSchema(context.Background(), input)
+			require.NoError(t, err, "applyJqSchema must not error")
+
+			goResult := inferSchema(input)
+
+			jqJSON, err := json.Marshal(jqResult)
+			require.NoError(t, err)
+			goJSON, err := json.Marshal(goResult)
+			require.NoError(t, err)
+
+			assert.JSONEq(t, string(jqJSON), string(goJSON),
+				"inferSchema output must match applyJqSchema output")
+		})
+	}
+}
+
+// TestWrapToolHandler_JsonNumberData verifies that a json.Number value in the data
+// field is handled correctly by the type switch (converted to float64, not falling
+// through to the json.Unmarshal path).
+func TestWrapToolHandler_JsonNumberData(t *testing.T) {
+	baseDir := t.TempDir()
+
+	// Return json.Number as the top-level data value so the type switch hits the
+	// direct json.Number case (the switch is on `data`, not on individual map values).
+	mockHandler := func(ctx context.Context, req *sdk.CallToolRequest, args interface{}) (*sdk.CallToolResult, interface{}, error) {
+		return &sdk.CallToolResult{IsError: false}, json.Number("42"), nil
+	}
+
+	// Use a threshold of 0 to force the large-payload path.
+	wrapped := WrapToolHandler(mockHandler, "test_tool", baseDir, "", 0, testGetSessionID)
+	result, _, err := wrapped(context.Background(), &sdk.CallToolRequest{}, nil)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.False(t, result.IsError)
+
+	// The schema for a json.Number (a number leaf) should be "number".
+	require.NotEmpty(t, result.Content)
+	textContent, ok := result.Content[0].(*sdk.TextContent)
+	require.True(t, ok)
+
+	var meta map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(textContent.Text), &meta))
+	assert.Equal(t, "number", meta["payloadSchema"], "schema for json.Number data should be 'number'")
+}

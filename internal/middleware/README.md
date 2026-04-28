@@ -91,28 +91,38 @@ with open(payload_path) as f:
 
 ## Implementation Details
 
-### jq Schema Filter
+### Schema Walk: Native Go Implementation
 
-The middleware uses the same jq filter logic as the gh-aw jqschema utility:
+The middleware implements `walk_schema` as a native Go function (`inferSchema`) registered
+via `gojq.WithFunction`. This means all recursive traversal runs directly in Go instead of
+going through the jq interpreter, giving better performance on deeply-nested payloads.
+
+The transformation replaces every leaf value with its jq type name:
+
+| Go type                | Schema value |
+|------------------------|--------------|
+| `nil`                  | `"null"`     |
+| `bool`                 | `"boolean"`  |
+| `float64`, `int`, `json.Number` | `"number"` |
+| `string`               | `"string"`   |
+| `map[string]interface{}` | recursed object |
+| `[]interface{}`        | recursed array (first element only, or `[]`) |
+
+The jq filter invokes the native function with a single call:
 
 ```jq
-def walk_schema:
-  . as $in |
-  if type == "object" then
-    reduce keys[] as $k ({}; . + {($k): ($in[$k] | walk_schema)})
-  elif type == "array" then
-    if length == 0 then [] else [.[0] | walk_schema] end
-  else
-    type
-  end;
 walk_schema
 ```
 
-This recursively walks the JSON structure and replaces values with their type names. The function is named `walk_schema` to avoid shadowing gojq's built-in `walk/1`.
+This replaces the previous pure-jq recursive `def walk_schema: ...` definition. Behaviour
+is identical but the hot recursive path is now compiled Go rather than jq bytecode.
 
 ### Go Implementation
 
-The middleware is implemented using [gojq](https://github.com/itchyny/gojq), a pure Go implementation of jq, eliminating the need to spawn external processes.
+The middleware is implemented using [gojq](https://github.com/itchyny/gojq), a pure Go
+implementation of jq, eliminating the need to spawn external processes. The
+`walk_schema` function is bound to the native `inferSchema` Go function via
+`gojq.WithFunction` at compile time.
 
 ## Configuration
 
