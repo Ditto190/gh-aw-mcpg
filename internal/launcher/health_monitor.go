@@ -47,7 +47,7 @@ func NewHealthMonitor(l *Launcher, interval time.Duration) *HealthMonitor {
 // Start begins periodic health checks in a background goroutine.
 func (hm *HealthMonitor) Start() {
 	logHealth.Printf("Starting health monitor: interval=%v", hm.interval)
-	logger.LogInfo("startup", "Health monitor started (interval=%s)", hm.interval)
+	logger.LogInfo("startup", "Health monitor started (interval=%v)", hm.interval)
 	go hm.run()
 }
 
