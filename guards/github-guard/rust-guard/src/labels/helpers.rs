@@ -2403,4 +2403,138 @@ mod tests {
         assert!(items.is_none());
         assert_eq!(path, "");
     }
+
+    // -------------------------------------------------------------------------
+    // integrity_level_rank — mixed-case and unknown-input coverage
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_integrity_level_rank_known_levels_lowercase() {
+        assert_eq!(integrity_level_rank("none"), 1);
+        assert_eq!(integrity_level_rank("unapproved"), 2);
+        assert_eq!(integrity_level_rank("approved"), 3);
+        assert_eq!(integrity_level_rank("merged"), 4);
+    }
+
+    #[test]
+    fn test_integrity_level_rank_mixed_case() {
+        assert_eq!(integrity_level_rank("None"), 1);
+        assert_eq!(integrity_level_rank("NONE"), 1);
+        assert_eq!(integrity_level_rank("Unapproved"), 2);
+        assert_eq!(integrity_level_rank("UNAPPROVED"), 2);
+        assert_eq!(integrity_level_rank("Approved"), 3);
+        assert_eq!(integrity_level_rank("APPROVED"), 3);
+        assert_eq!(integrity_level_rank("Merged"), 4);
+        assert_eq!(integrity_level_rank("MERGED"), 4);
+    }
+
+    #[test]
+    fn test_integrity_level_rank_unknown_defaults_to_approved() {
+        // Unrecognised values should fall back to rank 3 (approved)
+        assert_eq!(integrity_level_rank("unknown"), 3);
+        assert_eq!(integrity_level_rank(""), 3);
+        assert_eq!(integrity_level_rank("  "), 3);
+    }
+
+    #[test]
+    fn test_integrity_level_rank_whitespace_trimmed() {
+        assert_eq!(integrity_level_rank("  none  "), 1);
+        assert_eq!(integrity_level_rank(" MERGED "), 4);
+    }
+
+    // -------------------------------------------------------------------------
+    // integrity_for_level — mixed-case coverage
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_integrity_for_level_mixed_case() {
+        let ctx = test_ctx();
+        let scope = "owner/repo";
+        assert_eq!(integrity_for_level("None", scope, &ctx), none_integrity(scope, &ctx));
+        assert_eq!(integrity_for_level("NONE", scope, &ctx), none_integrity(scope, &ctx));
+        assert_eq!(integrity_for_level("Unapproved", scope, &ctx), reader_integrity(scope, &ctx));
+        assert_eq!(integrity_for_level("APPROVED", scope, &ctx), writer_integrity(scope, &ctx));
+        assert_eq!(integrity_for_level("Merged", scope, &ctx), merged_integrity(scope, &ctx));
+    }
+
+    // -------------------------------------------------------------------------
+    // strip_query_punctuation / extract_repo_info_from_search_query
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_strip_query_punctuation_no_punctuation() {
+        assert_eq!(strip_query_punctuation("owner/repo"), "owner/repo");
+    }
+
+    #[test]
+    fn test_strip_query_punctuation_double_quotes() {
+        assert_eq!(strip_query_punctuation("\"owner/repo\""), "owner/repo");
+    }
+
+    #[test]
+    fn test_strip_query_punctuation_single_quotes() {
+        assert_eq!(strip_query_punctuation("'owner/repo'"), "owner/repo");
+    }
+
+    #[test]
+    fn test_strip_query_punctuation_parens() {
+        assert_eq!(strip_query_punctuation("(owner/repo)"), "owner/repo");
+    }
+
+    #[test]
+    fn test_strip_query_punctuation_mixed() {
+        assert_eq!(strip_query_punctuation(",(owner/repo);"), "owner/repo");
+    }
+
+    #[test]
+    fn test_extract_repo_info_from_search_query_plain() {
+        let (owner, repo, repo_id) =
+            extract_repo_info_from_search_query("repo:myorg/myrepo is:open");
+        assert_eq!(owner, "myorg");
+        assert_eq!(repo, "myrepo");
+        assert_eq!(repo_id, "myorg/myrepo");
+    }
+
+    #[test]
+    fn test_extract_repo_info_from_search_query_quoted() {
+        let (owner, repo, repo_id) =
+            extract_repo_info_from_search_query("\"repo:myorg/myrepo\" is:open");
+        assert_eq!(owner, "myorg");
+        assert_eq!(repo, "myrepo");
+        assert_eq!(repo_id, "myorg/myrepo");
+    }
+
+    #[test]
+    fn test_extract_repo_info_from_search_query_paren_wrapped() {
+        let (owner, repo, _) =
+            extract_repo_info_from_search_query("(repo:myorg/myrepo) is:open");
+        assert_eq!(owner, "myorg");
+        assert_eq!(repo, "myrepo");
+    }
+
+    #[test]
+    fn test_extract_repo_info_from_search_query_no_repo_token() {
+        let (owner, repo, repo_id) =
+            extract_repo_info_from_search_query("is:open label:bug");
+        assert_eq!(owner, "");
+        assert_eq!(repo, "");
+        assert_eq!(repo_id, "");
+    }
+
+    #[test]
+    fn test_extract_repo_info_from_search_query_empty() {
+        let (owner, repo, repo_id) = extract_repo_info_from_search_query("");
+        assert_eq!(owner, "");
+        assert_eq!(repo, "");
+        assert_eq!(repo_id, "");
+    }
+
+    #[test]
+    fn test_extract_repo_info_from_search_query_first_repo_wins() {
+        // When multiple repo: tokens appear the first valid one is returned
+        let (owner, repo, _) =
+            extract_repo_info_from_search_query("repo:first/one repo:second/two");
+        assert_eq!(owner, "first");
+        assert_eq!(repo, "one");
+    }
 }
