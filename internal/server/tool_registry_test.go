@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/github/gh-aw-mcpg/internal/config"
 	"github.com/github/gh-aw-mcpg/internal/logger/sanitize"
@@ -693,4 +695,73 @@ func TestSchemaBypassCanary(t *testing.T) {
 			InputSchema: extendedSchema,
 		}, noop)
 	}, "Server.AddTool must accept schemas with patternProperties/additionalProperties")
+}
+
+// TestArgumentValidationBypassCanary is a canary test for SDK upgrades.
+//
+// The gateway uses Server.AddTool (instance method) rather than the package-level
+// sdk.AddTool[In,Out] function because the instance method does NOT validate tool
+// argument values against the input schema at call time. This allows the gateway to
+// forward arbitrary backend tool calls without the SDK rejecting them for schema
+// violations.
+//
+// This test verifies that Server.AddTool still bypasses argument-value validation.
+// If it starts failing after an SDK upgrade, registerToolWithoutValidation needs to
+// be re-evaluated — it may need a different registration path or schema normalisation.
+//
+// See also: TestSchemaBypassCanary, registerToolWithoutValidation in tool_registry.go.
+func TestArgumentValidationBypassCanary(t *testing.T) {
+	assert := assert.New(t)
+	require := require.New(t)
+
+	server := sdk.NewServer(&sdk.Implementation{Name: "canary", Version: "1.0"}, &sdk.ServerOptions{})
+
+	var handlerCalled atomic.Bool
+	noop := func(ctx context.Context, req *sdk.CallToolRequest) (*sdk.CallToolResult, error) {
+		handlerCalled.Store(true)
+		return &sdk.CallToolResult{}, nil
+	}
+
+	// Register a tool with a strict schema requiring "count" to be an integer.
+	// The gateway relies on the fact that the SDK does NOT reject calls with
+	// schema-invalid arguments on this code path.
+	server.AddTool(&sdk.Tool{
+		Name:        "strict_tool",
+		Description: "Tool requiring integer count argument",
+		InputSchema: map[string]interface{}{
+			"type": "object",
+			"properties": map[string]interface{}{
+				"count": map[string]interface{}{"type": "integer"},
+			},
+			"required": []interface{}{"count"},
+		},
+	}, noop)
+
+	// Connect a client via in-memory transport and call the tool with an
+	// intentionally invalid argument value (string instead of integer).
+	serverTransport, clientTransport := sdk.NewInMemoryTransports()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	go func() {
+		_ = server.Run(ctx, serverTransport)
+	}()
+
+	client := sdk.NewClient(&sdk.Implementation{Name: "canary-client", Version: "1.0"}, &sdk.ClientOptions{})
+	clientSession, err := client.Connect(ctx, clientTransport, nil)
+	require.NoError(err)
+	defer clientSession.Close()
+
+	// Pass "count" as a string instead of an integer — violates the declared schema.
+	// If the SDK starts validating argument values on this code path after an upgrade,
+	// this call will fail and registerToolWithoutValidation needs to be updated.
+	result, err := clientSession.CallTool(ctx, &sdk.CallToolParams{
+		Name:      "strict_tool",
+		Arguments: map[string]interface{}{"count": "not-an-integer"},
+	})
+	require.NoError(err,
+		"Server.AddTool must not validate argument values; if this fails after an SDK upgrade, "+
+			"registerToolWithoutValidation needs to be updated")
+	assert.False(result.IsError)
+	assert.True(handlerCalled.Load(), "Handler must be called even when arguments violate the schema")
 }
