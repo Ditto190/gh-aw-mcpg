@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -127,8 +128,7 @@ func init() {
 	query, err := gojq.Parse(jqSchemaFilter)
 	if err != nil {
 		jqSchemaCompileErr = fmt.Errorf("failed to parse jq schema filter: %w", err)
-		logMiddleware.Printf("FATAL: Failed to parse jq schema filter at init: %v", err)
-		logger.LogError("startup", "Failed to parse jq schema filter at init (application will not start): %v", err)
+		log.Printf("FATAL: Failed to parse jq schema filter at init (application will not start): %v", err)
 		return
 	}
 
@@ -138,12 +138,10 @@ func init() {
 		}),
 	)
 	if jqSchemaCompileErr != nil {
-		logMiddleware.Printf("FATAL: Failed to compile jq schema filter at init: %v", jqSchemaCompileErr)
-		logger.LogError("startup", "Failed to compile jq schema filter at init (application will not start): %v", jqSchemaCompileErr)
+		log.Printf("FATAL: Failed to compile jq schema filter at init (application will not start): %v", jqSchemaCompileErr)
 		return
 	}
 
-	logMiddleware.Printf("Successfully compiled jq schema filter at init")
 	logger.LogInfo("startup", "jq schema filter compiled successfully - native Go walk_schema, array limit: 2^29 elements, timeout: %v", DefaultJqTimeout)
 }
 
@@ -300,14 +298,12 @@ func WrapToolHandler(
 			sessionID = "default"
 		}
 
-		logMiddleware.Printf("Processing tool call: tool=%s, queryID=%s, sessionID=%s", toolName, queryID, sessionID)
 		logger.LogDebug("payload", "Middleware processing tool call: tool=%s, queryID=%s, session=%s, baseDir=%s",
 			toolName, queryID, sessionID, baseDir)
 
 		// Call the original handler
 		result, data, err := handler(ctx, req, args)
 		if err != nil {
-			logMiddleware.Printf("Tool call failed: tool=%s, queryID=%s, sessionID=%s, error=%v", toolName, queryID, sessionID, err)
 			logger.LogDebug("payload", "Tool call failed, skipping payload storage: tool=%s, queryID=%s, error=%v",
 				toolName, queryID, err)
 			return result, data, err
@@ -332,7 +328,6 @@ func WrapToolHandler(
 		// Marshal the response data to JSON
 		payloadJSON, marshalErr := json.Marshal(data)
 		if marshalErr != nil {
-			logMiddleware.Printf("Failed to marshal response: tool=%s, queryID=%s, error=%v", toolName, queryID, marshalErr)
 			logger.LogError("payload", "Failed to marshal response data to JSON: tool=%s, queryID=%s, error=%v",
 				toolName, queryID, marshalErr)
 			return result, data, err
@@ -346,8 +341,6 @@ func WrapToolHandler(
 		if payloadSize <= sizeThreshold {
 			logger.LogInfo("payload", "Payload size (%d bytes) is within threshold (%d bytes), returning inline without file storage: tool=%s, queryID=%s",
 				payloadSize, sizeThreshold, toolName, queryID)
-			logMiddleware.Printf("Payload within threshold: tool=%s, queryID=%s, size=%d bytes, threshold=%d bytes, returning inline",
-				toolName, queryID, payloadSize, sizeThreshold)
 			// Return the original result without modification
 			return result, data, err
 		}
@@ -355,18 +348,13 @@ func WrapToolHandler(
 		// Payload is larger than threshold - save to filesystem
 		logger.LogInfo("payload", "Payload size (%d bytes) exceeds threshold (%d bytes), saving to filesystem: tool=%s, queryID=%s, session=%s, baseDir=%s",
 			payloadSize, sizeThreshold, toolName, queryID, sessionID, baseDir)
-		logMiddleware.Printf("Payload exceeds threshold: tool=%s, queryID=%s, size=%d bytes, threshold=%d bytes, saving to disk",
-			toolName, queryID, payloadSize, sizeThreshold)
 
 		filePath, saveErr := savePayload(baseDir, pathPrefix, sessionID, queryID, payloadJSON)
 		if saveErr != nil {
-			logMiddleware.Printf("Failed to save payload: tool=%s, queryID=%s, sessionID=%s, error=%v", toolName, queryID, sessionID, saveErr)
 			logger.LogError("payload", "Failed to save payload to filesystem: tool=%s, queryID=%s, session=%s, error=%v",
 				toolName, queryID, sessionID, saveErr)
 			// Continue even if save fails - don't break the tool call
 		} else {
-			logMiddleware.Printf("Saved payload: tool=%s, queryID=%s, sessionID=%s, path=%s, size=%d bytes",
-				toolName, queryID, sessionID, filePath, len(payloadJSON))
 			logger.LogInfo("payload", "Payload storage completed successfully: tool=%s, queryID=%s, session=%s, path=%s, size=%d bytes",
 				toolName, queryID, sessionID, filePath, len(payloadJSON))
 		}
@@ -405,7 +393,6 @@ func WrapToolHandler(
 			schemaObj = schema
 			return nil
 		}(); schemaErr != nil {
-			logMiddleware.Printf("Failed to apply jq schema: tool=%s, queryID=%s, sessionID=%s, error=%v", toolName, queryID, sessionID, schemaErr)
 			logger.LogWarn("payload", "Failed to generate schema for payload: tool=%s, queryID=%s, error=%v",
 				toolName, queryID, schemaErr)
 			// Continue with original response if schema extraction fails
@@ -448,15 +435,12 @@ func WrapToolHandler(
 			QueryID:           queryID,
 		}
 
-		logMiddleware.Printf("Rewritten response: tool=%s, queryID=%s, sessionID=%s, originalSize=%d, truncated=%v",
-			toolName, queryID, sessionID, payloadLen, truncated)
 		logger.LogInfo("payload", "Created metadata response for client: tool=%s, queryID=%s, session=%s, payloadPath=%s, originalSize=%d bytes, truncated=%v",
 			toolName, queryID, sessionID, filePath, payloadLen, truncated)
 
 		// Marshal the rewritten response to JSON for the Content field
 		rewrittenJSON, marshalErr := json.Marshal(rewrittenResponse)
 		if marshalErr != nil {
-			logMiddleware.Printf("Failed to marshal rewritten response: tool=%s, queryID=%s, error=%v", toolName, queryID, marshalErr)
 			logger.LogError("payload", "Failed to marshal metadata response: tool=%s, queryID=%s, error=%v",
 				toolName, queryID, marshalErr)
 			// Fall back to original result if we can't marshal
@@ -478,7 +462,6 @@ func WrapToolHandler(
 			Meta:    result.Meta,
 		}
 
-		logMiddleware.Printf("Transformed result with metadata: tool=%s, queryID=%s, sessionID=%s", toolName, queryID, sessionID)
 		logger.LogInfo("payload", "Returning transformed response to client: tool=%s, queryID=%s, session=%s, payloadPath=%s, clientReceivesMetadata=true",
 			toolName, queryID, sessionID, filePath)
 		logger.LogInfo("payload", "Client can access full payload at: %s (inside container: /workspace/mcp-payloads/%s/%s/payload.json)",
