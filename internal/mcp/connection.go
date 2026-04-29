@@ -361,7 +361,7 @@ func (c *Connection) reconnectSDKTransport() error {
 		transport = &sdk.StreamableClientTransport{
 			Endpoint:             c.httpURL,
 			HTTPClient:           headerClient,
-			MaxRetries:           -1, // Disable retries; reconnect logic is handled by the gateway.
+			MaxRetries:           -1, // Disable retries (-1 = 0 retries; SDK treats 0 as "use default: 5"). Reconnect logic is handled by the gateway.
 			DisableStandaloneSSE: true,
 		}
 	case HTTPTransportSSE:

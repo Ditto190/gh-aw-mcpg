@@ -83,6 +83,7 @@ func isSessionNotFoundError(err error) bool {
 	}
 	// Plain JSON-RPC fallback requests bypass SDK session types, so they cannot
 	// return sdk.ErrSessionMissing and are matched by backend error text instead.
+	// TODO: remove this string-matching fallback when the plain JSON-RPC transport is retired.
 	return strings.Contains(strings.ToLower(err.Error()), "session not found")
 }
 
