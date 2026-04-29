@@ -254,8 +254,9 @@ func savePayload(baseDir, pathPrefix, sessionID, queryID string, payload []byte)
 		return "", fmt.Errorf("failed to set payload file permissions: %w", err)
 	}
 
-	// Permissions are known to be 0600 (enforced by os.Chmod above); no syscall needed.
-	logger.LogInfo("payload", "Successfully saved large payload to filesystem: path=%s, size=%d bytes, permissions=0600",
+	// Log with the requested chmod mode rather than re-stating as a guarantee (Chmod may be
+	// a no-op on some platforms/filesystems while still returning nil).
+	logger.LogInfo("payload", "Successfully saved large payload to filesystem: path=%s, size=%d bytes, chmod=0600",
 		filePath, payloadSize)
 
 	// If pathPrefix is provided, use it to remap the path for the client
