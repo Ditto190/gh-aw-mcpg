@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -715,9 +716,9 @@ func TestArgumentValidationBypassCanary(t *testing.T) {
 
 	server := sdk.NewServer(&sdk.Implementation{Name: "canary", Version: "1.0"}, &sdk.ServerOptions{})
 
-	var handlerCalled bool
+	var handlerCalled atomic.Bool
 	noop := func(ctx context.Context, req *sdk.CallToolRequest) (*sdk.CallToolResult, error) {
-		handlerCalled = true
+		handlerCalled.Store(true)
 		return &sdk.CallToolResult{}, nil
 	}
 
@@ -762,5 +763,5 @@ func TestArgumentValidationBypassCanary(t *testing.T) {
 		"Server.AddTool must not validate argument values; if this fails after an SDK upgrade, "+
 			"registerToolWithoutValidation needs to be updated")
 	assert.False(result.IsError)
-	assert.True(handlerCalled, "Handler must be called even when arguments violate the schema")
+	assert.True(handlerCalled.Load(), "Handler must be called even when arguments violate the schema")
 }
