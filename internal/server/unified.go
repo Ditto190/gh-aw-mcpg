@@ -11,7 +11,7 @@ import (
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
-	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.27.0"
 	oteltrace "go.opentelemetry.io/otel/trace"
 
 	"github.com/github/gh-aw-mcpg/internal/config"
@@ -552,8 +552,10 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 		// Transport errors (connection failure, JSON parse error, etc.) are not rate-limit
 		// events and must not affect the consecutive rate-limit counter. Leave the circuit
 		// breaker state unchanged so genuine rate-limit history is preserved.
-		execSpan.RecordError(err)
-		execSpan.SetStatus(codes.Error, err.Error())
+		// Use a generic error message for trace recording to avoid leaking internal details
+		// to trace backends; the full error is returned to the caller and logged separately.
+		execSpan.RecordError(fmt.Errorf("tool execution failed"))
+		execSpan.SetStatus(codes.Error, "tool execution failed")
 		httpStatusCode = 500
 		return mcp.NewErrorCallToolResult(err)
 	}

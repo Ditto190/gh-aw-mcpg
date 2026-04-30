@@ -7,10 +7,38 @@ import (
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/propagation"
-	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.27.0"
 	oteltrace "go.opentelemetry.io/otel/trace"
 )
+
+// statusResponseWriter wraps http.ResponseWriter to capture the HTTP response status code.
+// Unwrap allows http.ResponseController and other callers to access the underlying
+// writer's optional interfaces (e.g. http.Flusher, http.Hijacker) transparently.
+type statusResponseWriter struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func (rw *statusResponseWriter) WriteHeader(code int) {
+	rw.statusCode = code
+	rw.ResponseWriter.WriteHeader(code)
+}
+
+// Write captures an implicit 200 status when Write is called without a prior WriteHeader.
+func (rw *statusResponseWriter) Write(b []byte) (int, error) {
+	if rw.statusCode == 0 {
+		rw.statusCode = http.StatusOK
+	}
+	return rw.ResponseWriter.Write(b)
+}
+
+// Unwrap returns the underlying http.ResponseWriter so that callers can type-assert
+// optional interfaces such as http.Flusher or http.Hijacker against the real writer.
+func (rw *statusResponseWriter) Unwrap() http.ResponseWriter {
+	return rw.ResponseWriter
+}
 
 // WrapHTTPHandler wraps an http.Handler with an OpenTelemetry server span.
 // A span named spanName is created for every request, with
@@ -48,6 +76,13 @@ func WrapHTTPHandler(next http.Handler, spanName string, extraAttrs ...attribute
 
 		logTracing.Printf("Span started: span=%s, traceID=%s", spanName, span.SpanContext().TraceID())
 
-		next.ServeHTTP(w, r.WithContext(ctx))
+		srw := &statusResponseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+		defer func() {
+			span.SetAttributes(semconv.HTTPResponseStatusCodeKey.Int(srw.statusCode))
+			if srw.statusCode >= 500 {
+				span.SetStatus(codes.Error, http.StatusText(srw.statusCode))
+			}
+		}()
+		next.ServeHTTP(srw, r.WithContext(ctx))
 	})
 }
