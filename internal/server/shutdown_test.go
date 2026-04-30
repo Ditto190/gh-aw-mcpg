@@ -16,7 +16,6 @@ import (
 
 // TestShutdownBehavior_RoutedMode tests that MCP endpoints return 503 after /close in routed mode
 func TestShutdownBehavior_RoutedMode(t *testing.T) {
-	t.Parallel()
 	tests := []struct {
 		name             string
 		endpoint         string
