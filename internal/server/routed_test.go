@@ -814,29 +814,29 @@ func TestCreateHTTPServerForRoutedMode_OAuth(t *testing.T) {
 // This ensures long-running agentic workflows (>30 min) do not get spurious
 // "session not found" errors that would occur with the previous hardcoded 30-minute timeout.
 func TestRoutedModeSessionTimeout_ReadsEnvVar(t *testing.T) {
-	// Verify that the timeout used is driven by MCP_GATEWAY_SESSION_TIMEOUT
-	// by checking with a custom value and with the default.
+	ctx := context.Background()
+	cfg := &config.Config{Servers: map[string]*config.ServerConfig{}}
+	us, err := NewUnified(ctx, cfg)
+	require.NoError(t, err)
+	defer us.Close()
+
 	t.Run("custom timeout from env", func(t *testing.T) {
 		t.Setenv("MCP_GATEWAY_SESSION_TIMEOUT", "2h")
 
-		ctx := context.Background()
-		cfg := &config.Config{Servers: map[string]*config.ServerConfig{}}
-		us, err := NewUnified(ctx, cfg)
-		require.NoError(t, err)
-		defer us.Close()
+		// CreateHTTPServerForRoutedMode calls envutil.GetEnvDuration("MCP_GATEWAY_SESSION_TIMEOUT", 6h)
+		// and passes the result to both newFilteredServerCache and sdk.StreamableHTTPOptions.SessionTimeout.
+		// Call it here to confirm no panic or build error with the env var set.
+		httpServer := CreateHTTPServerForRoutedMode(":0", us, "", "")
+		require.NotNil(t, httpServer, "HTTP server should be created with custom session timeout")
 
-		// CreateHTTPServerForRoutedMode internally calls envutil.GetEnvDuration.
-		// We verify indirectly via newFilteredServerCache: a cache created with the env-
-		// driven timeout must not evict an entry that is younger than 2 hours.
+		// Verify the cache honours the 2h TTL: a just-created entry must NOT be evicted.
 		cache := newFilteredServerCache(2 * time.Hour)
 		callCount := 0
 		creator := func() *sdk.Server {
 			callCount++
 			return sdk.NewServer(&sdk.Implementation{Name: "test", Version: "1.0"}, &sdk.ServerOptions{})
 		}
-
 		cache.getOrCreate("backend", "session1", creator)
-		// Entry was just created; it should NOT be evicted by the 2h TTL cache.
 		cache.getOrCreate("backend", "session1", creator)
 		assert.Equal(t, 1, callCount, "session should be reused within the 2h timeout")
 	})
@@ -844,20 +844,16 @@ func TestRoutedModeSessionTimeout_ReadsEnvVar(t *testing.T) {
 	t.Run("default 6h timeout when env unset", func(t *testing.T) {
 		t.Setenv("MCP_GATEWAY_SESSION_TIMEOUT", "")
 
-		ctx := context.Background()
-		cfg := &config.Config{Servers: map[string]*config.ServerConfig{}}
-		us, err := NewUnified(ctx, cfg)
-		require.NoError(t, err)
-		defer us.Close()
+		httpServer := CreateHTTPServerForRoutedMode(":0", us, "", "")
+		require.NotNil(t, httpServer, "HTTP server should be created with default session timeout")
 
-		// With no env var, the default is 6 hours; a freshly-created session must survive.
+		// With no env var the default is 6 hours; a freshly-created session must survive.
 		cache := newFilteredServerCache(6 * time.Hour)
 		callCount := 0
 		creator := func() *sdk.Server {
 			callCount++
 			return sdk.NewServer(&sdk.Implementation{Name: "test", Version: "1.0"}, &sdk.ServerOptions{})
 		}
-
 		cache.getOrCreate("backend", "session1", creator)
 		cache.getOrCreate("backend", "session1", creator)
 		assert.Equal(t, 1, callCount, "session should be reused within the 6h default timeout")
