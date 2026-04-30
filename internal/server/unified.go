@@ -11,7 +11,7 @@ import (
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
-	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.27.0"
 	oteltrace "go.opentelemetry.io/otel/trace"
 
 	"github.com/github/gh-aw-mcpg/internal/config"
@@ -553,7 +553,7 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 		// events and must not affect the consecutive rate-limit counter. Leave the circuit
 		// breaker state unchanged so genuine rate-limit history is preserved.
 		execSpan.RecordError(err)
-		execSpan.SetStatus(codes.Error, err.Error())
+		execSpan.SetStatus(codes.Error, "tool execution failed")
 		httpStatusCode = 500
 		return mcp.NewErrorCallToolResult(err)
 	}

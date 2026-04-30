@@ -7,10 +7,22 @@ import (
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/propagation"
-	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.27.0"
 	oteltrace "go.opentelemetry.io/otel/trace"
 )
+
+// statusResponseWriter wraps http.ResponseWriter to capture the HTTP response status code.
+type statusResponseWriter struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func (rw *statusResponseWriter) WriteHeader(code int) {
+	rw.statusCode = code
+	rw.ResponseWriter.WriteHeader(code)
+}
 
 // WrapHTTPHandler wraps an http.Handler with an OpenTelemetry server span.
 // A span named spanName is created for every request, with
@@ -48,6 +60,12 @@ func WrapHTTPHandler(next http.Handler, spanName string, extraAttrs ...attribute
 
 		logTracing.Printf("Span started: span=%s, traceID=%s", spanName, span.SpanContext().TraceID())
 
-		next.ServeHTTP(w, r.WithContext(ctx))
+		srw := &statusResponseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+		next.ServeHTTP(srw, r.WithContext(ctx))
+
+		span.SetAttributes(semconv.HTTPResponseStatusCodeKey.Int(srw.statusCode))
+		if srw.statusCode >= 500 {
+			span.SetStatus(codes.Error, http.StatusText(srw.statusCode))
+		}
 	})
 }
