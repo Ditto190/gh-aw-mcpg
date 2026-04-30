@@ -130,12 +130,9 @@ func preRun(cmd *cobra.Command, args []string) error {
 
 // postRun performs cleanup after command execution
 func postRun(cmd *cobra.Command, args []string) {
-	// Close all loggers
-	logger.CloseMarkdownLogger()
-	logger.CloseJSONLLogger()
-	logger.CloseServerFileLogger()
-	logger.CloseToolsLogger()
-	logger.CloseGlobalLogger()
+	if err := logger.CloseAllLoggers(); err != nil {
+		log.Printf("Warning: error closing loggers: %v", err)
+	}
 }
 
 func run(cmd *cobra.Command, args []string) error {
