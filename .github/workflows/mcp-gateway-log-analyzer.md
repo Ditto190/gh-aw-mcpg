@@ -55,6 +55,41 @@ Focus on these specific workflow files in `github/gh-aw`:
 1. `code-scanning-fixer.lock.yml`
 2. `copilot-agent-analysis.lock.yml`
 
+## Step 0: Pre-flight Access Check 🔑
+
+Before fetching workflow runs, verify that you can access the `github/gh-aw` repository.
+
+Attempt to list workflow runs for one of the target workflows:
+```
+Use github-mcp-server list_workflow_runs with:
+- owner: github
+- repo: gh-aw
+- resource_id: code-scanning-fixer.lock.yml
+- per_page: 1
+```
+
+**If you receive a 401 Unauthorized / "Bad credentials" error:**
+
+- This means the `GH_AW_MCP_MULTIREPO_TOKEN` secret does not have access to `github/gh-aw`.
+- **DO NOT use `report_incomplete`** — authentication failures are a configuration issue, not an analysis failure.
+- Emit `missing_data` with:
+  - `data_type`: `workflow_runs`
+  - `reason`: `Authentication failed (401 Bad credentials): GH_AW_MCP_MULTIREPO_TOKEN does not have access to github/gh-aw. The token may be expired or missing the required repository permissions (actions:read).`
+  - `context`: `Cannot access github/gh-aw repository via GitHub MCP server`
+- Then emit `noop` with message: `Log analysis skipped: unable to authenticate to github/gh-aw repository. The GH_AW_MCP_MULTIREPO_TOKEN secret needs to be refreshed or reconfigured with actions:read permission on github/gh-aw.`
+- **Stop here.** Do not continue to the remaining steps.
+
+**If you receive a 403 Forbidden or 404 Not Found error:**
+
+- Emit `missing_data` with:
+  - `data_type`: `workflow_runs`
+  - `reason`: `Access denied or repository not found: received HTTP [status] when accessing github/gh-aw`
+  - `context`: `Cannot access github/gh-aw repository via GitHub MCP server`
+- Then emit `noop` with a descriptive message.
+- **Stop here.**
+
+**If access succeeds**, proceed to Step 1.
+
 ## Step 1: Fetch Recent Workflow Runs 📊
 
 Use the GitHub MCP server to fetch workflow runs from the last 24 hours:
@@ -458,6 +493,12 @@ Analyzed [N] workflow runs across [M] workflows
 ```
 
 ## Important Guidelines
+
+### Access and Authentication Errors
+
+- **Never use `report_incomplete` for authentication or permission errors.** These are configuration issues that require a human to fix the secret/token — they are not analysis failures.
+- If the `github/gh-aw` repository is inaccessible (401, 403, 404), emit `missing_data` followed by `noop` and exit gracefully (see Step 0).
+- `report_incomplete` is only appropriate when a task is genuinely unfinishable due to a bug or unexpected state that the agent cannot work around.
 
 ### Accuracy
 - Verify errors are genuine (not false positives from normal operations)
