@@ -641,6 +641,94 @@ func TestSanitizeArgsDoesNotLeakSecrets(t *testing.T) {
 	assert.Contains(t, resultStr, "API_KEY=test...", "Truncated API key should be present")
 }
 
+func TestMarshalAndSanitize(t *testing.T) {
+	t.Run("nil input marshals to null", func(t *testing.T) {
+		result := MarshalAndSanitize(nil)
+		assert.Equal(t, "null", result)
+	})
+
+	t.Run("unmarshalable type returns empty string", func(t *testing.T) {
+		// Channels cannot be marshaled to JSON; json.Marshal returns nil bytes.
+		result := MarshalAndSanitize(make(chan int))
+		assert.Empty(t, result)
+	})
+
+	t.Run("simple map with no secrets is not redacted", func(t *testing.T) {
+		result := MarshalAndSanitize(map[string]interface{}{"method": "tools/list", "id": 1})
+		assert.NotContains(t, result, "[REDACTED]")
+		assert.Contains(t, result, "tools/list")
+	})
+
+	t.Run("map with token field is redacted", func(t *testing.T) {
+		result := MarshalAndSanitize(map[string]interface{}{
+			"token": "ghp_1234567890123456789012345678901234567890",
+		})
+		requireContainsRedacted(t, result, "ghp_1234567890123456789012345678901234567890")
+	})
+
+	t.Run("map with password field is redacted", func(t *testing.T) {
+		result := MarshalAndSanitize(map[string]interface{}{
+			"method":   "authenticate",
+			"password": "supersecretpassword",
+		})
+		requireContainsRedacted(t, result, "supersecretpassword")
+		assert.Contains(t, result, "authenticate", "Non-secret field should be preserved")
+	})
+
+	t.Run("nested map with auth field is redacted", func(t *testing.T) {
+		result := MarshalAndSanitize(map[string]interface{}{
+			"params": map[string]interface{}{
+				"authorization": "Bearer my-secret-token-here",
+				"user":          "alice",
+			},
+		})
+		requireContainsRedacted(t, result, "my-secret-token-here")
+	})
+
+	t.Run("map with no sensitive fields is unchanged", func(t *testing.T) {
+		result := MarshalAndSanitize(map[string]interface{}{
+			"method": "tools/call",
+			"name":   "search",
+		})
+		assert.NotContains(t, result, "[REDACTED]")
+	})
+
+	t.Run("empty map marshals to empty JSON object", func(t *testing.T) {
+		result := MarshalAndSanitize(map[string]interface{}{})
+		assert.Equal(t, "{}", result)
+	})
+
+	t.Run("slice of strings with no secrets", func(t *testing.T) {
+		result := MarshalAndSanitize([]string{"tool1", "tool2", "tool3"})
+		assert.NotContains(t, result, "[REDACTED]")
+		assert.Contains(t, result, "tool1")
+	})
+
+	t.Run("string with API key is redacted", func(t *testing.T) {
+		result := MarshalAndSanitize("api_key=sk_test_abcdefghijklmnopqrstuvwxyz")
+		requireContainsRedacted(t, result, "sk_test_abcdefghijklmnopqrstuvwxyz")
+	})
+}
+
+// TestMarshalAndSanitize_ReturnsString verifies that MarshalAndSanitize always
+// returns a string without panicking, regardless of input type.
+func TestMarshalAndSanitize_ReturnsString(t *testing.T) {
+	inputs := []any{
+		42,
+		true,
+		3.14,
+		"hello",
+		[]int{1, 2, 3},
+		map[string]string{"key": "value"},
+		nil,
+	}
+
+	for _, input := range inputs {
+		result := MarshalAndSanitize(input)
+		assert.IsType(t, "", result, "MarshalAndSanitize should always return a string")
+	}
+}
+
 func TestRedactURL(t *testing.T) {
 	tests := []struct {
 		name     string
