@@ -309,8 +309,12 @@ func convertStdinConfig(stdinCfg *StdinConfig) (*Config, error) {
 			APIKey:            stdinCfg.Gateway.APIKey,
 			Domain:            stdinCfg.Gateway.Domain,
 			StartupTimeout:    intPtrOrDefault(stdinCfg.Gateway.StartupTimeout, DefaultStartupTimeout),
-			ToolTimeout:       intPtrOrDefault(stdinCfg.Gateway.ToolTimeout, DefaultToolTimeout),
 			KeepaliveInterval: intPtrOrDefault(stdinCfg.Gateway.KeepaliveInterval, DefaultKeepaliveInterval),
+		}
+		if stdinCfg.Gateway.ToolTimeout != nil {
+			cfg.Gateway.ToolTimeout = *stdinCfg.Gateway.ToolTimeout
+		} else {
+			cfg.Gateway.ToolTimeout = toolTimeoutEnvOrDefault()
 		}
 		if stdinCfg.Gateway.PayloadDir != "" {
 			cfg.Gateway.PayloadDir = stdinCfg.Gateway.PayloadDir
@@ -328,6 +332,10 @@ func convertStdinConfig(stdinCfg *StdinConfig) (*Config, error) {
 		logStdin.Print("No gateway config in stdin, applying defaults")
 		cfg.Gateway = &GatewayConfig{}
 		applyGatewayDefaults(cfg.Gateway)
+		// Apply MCP_GATEWAY_TOOL_TIMEOUT env var if set. toolTimeoutEnvOrDefault() returns
+		// the env var value when valid and present, otherwise DefaultToolTimeout (which
+		// applyGatewayDefaults already wrote). This is a no-op when the env var is absent.
+		cfg.Gateway.ToolTimeout = toolTimeoutEnvOrDefault()
 	}
 
 	// Apply feature-specific defaults

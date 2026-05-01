@@ -120,6 +120,39 @@ func TimeoutPositive(timeout int, fieldName, jsonPath string) *ValidationError {
 	return nil
 }
 
+// TimeoutMinimum validates that a timeout value is at least min.
+// Returns nil if valid, *ValidationError if below the minimum.
+func TimeoutMinimum(timeout, min int, fieldName, jsonPath string) *ValidationError {
+	log.Printf("Validating timeout minimum: field=%s, value=%d, min=%d, jsonPath=%s", fieldName, timeout, min, jsonPath)
+	if timeout < min {
+		log.Printf("Timeout minimum validation failed: %s=%d is below minimum %d", fieldName, timeout, min)
+		return &ValidationError{
+			Field:      fieldName,
+			Message:    fmt.Sprintf("%s must be at least %d, got %d", fieldName, min, timeout),
+			JSONPath:   jsonPath,
+			Suggestion: fmt.Sprintf("Use a value of at least %d seconds", min),
+		}
+	}
+	return nil
+}
+
+// TimeoutRange validates that a timeout value is within [min, max] (inclusive).
+// Returns nil if valid, *ValidationError if outside the range.
+func TimeoutRange(timeout, min, max int, fieldName, jsonPath string) *ValidationError {
+	log.Printf("Validating timeout range: field=%s, value=%d, min=%d, max=%d, jsonPath=%s", fieldName, timeout, min, max, jsonPath)
+	if timeout < min || timeout > max {
+		log.Printf("Timeout range validation failed: %s=%d is outside [%d, %d]", fieldName, timeout, min, max)
+		suggestedTimeout := min + (max-min)/2
+		return &ValidationError{
+			Field:      fieldName,
+			Message:    fmt.Sprintf("%s must be between %d and %d, got %d", fieldName, min, max, timeout),
+			JSONPath:   jsonPath,
+			Suggestion: fmt.Sprintf("Use a value between %d and %d seconds (e.g., %d)", min, max, suggestedTimeout),
+		}
+	}
+	return nil
+}
+
 // MountFormat validates a mount specification in the format "source:dest:mode"
 // Returns nil if valid, *ValidationError if invalid
 // Per MCP Gateway specification v1.8.0 section 4.1.5:

@@ -474,7 +474,7 @@ func TestValidateGatewayConfig(t *testing.T) {
 				ToolTimeout: intPtr(-1),
 			},
 			shouldErr: true,
-			errorMsg:  "toolTimeout must be at least 1",
+			errorMsg:  "toolTimeout must be at least 10",
 		},
 		{
 			name: "zero toolTimeout",
@@ -482,7 +482,36 @@ func TestValidateGatewayConfig(t *testing.T) {
 				ToolTimeout: intPtr(0),
 			},
 			shouldErr: true,
-			errorMsg:  "toolTimeout must be at least 1",
+			errorMsg:  "toolTimeout must be at least 10",
+		},
+		{
+			name: "toolTimeout below minimum (9)",
+			gateway: &StdinGatewayConfig{
+				ToolTimeout: intPtr(9),
+			},
+			shouldErr: true,
+			errorMsg:  "toolTimeout must be at least 10",
+		},
+		{
+			name: "toolTimeout at minimum boundary (10)",
+			gateway: &StdinGatewayConfig{
+				ToolTimeout: intPtr(10),
+			},
+			shouldErr: false,
+		},
+		{
+			name: "toolTimeout large value (3600 = 1 hour)",
+			gateway: &StdinGatewayConfig{
+				ToolTimeout: intPtr(3600),
+			},
+			shouldErr: false,
+		},
+		{
+			name: "toolTimeout very large value (86400 = 24 hours)",
+			gateway: &StdinGatewayConfig{
+				ToolTimeout: intPtr(86400),
+			},
+			shouldErr: false,
 		},
 	}
 
