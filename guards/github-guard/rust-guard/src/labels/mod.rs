@@ -51,6 +51,10 @@ pub use helpers::{
 #[cfg(test)]
 pub use helpers::has_approval_label;
 #[cfg(test)]
+pub use helpers::has_demotion_label;
+#[cfg(test)]
+pub use helpers::has_promotion_label;
+#[cfg(test)]
 pub use helpers::secret_label;
 
 // Re-export response labeling functions (wrappers that pass PolicyContext)
@@ -1726,6 +1730,278 @@ mod tests {
         assert_eq!(
             issue_integrity(&issue, repo, true, &ctx),
             writer_integrity(repo, &ctx)
+        );
+    }
+
+    // =========================================================================
+    // built-in promotion-label tests
+    // =========================================================================
+
+    fn ctx_with_promotion_label(label: &str) -> PolicyContext {
+        PolicyContext {
+            promotion_label: label.to_string(),
+            ..Default::default()
+        }
+    }
+
+    fn ctx_with_demotion_label(label: &str) -> PolicyContext {
+        PolicyContext {
+            demotion_label: label.to_string(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_has_promotion_label_empty_ctx() {
+        let ctx = default_ctx();
+        let item = json!({"labels": [{"name": "agent-approved"}]});
+        assert!(!has_promotion_label(&item, &ctx));
+    }
+
+    #[test]
+    fn test_has_promotion_label_no_match() {
+        let ctx = ctx_with_promotion_label("agent-approved");
+        let item = json!({"labels": [{"name": "needs-work"}]});
+        assert!(!has_promotion_label(&item, &ctx));
+    }
+
+    #[test]
+    fn test_has_promotion_label_matching() {
+        let ctx = ctx_with_promotion_label("agent-approved");
+        let item = json!({"labels": [{"name": "agent-approved"}]});
+        assert!(has_promotion_label(&item, &ctx));
+    }
+
+    #[test]
+    fn test_has_promotion_label_case_insensitive() {
+        let ctx = ctx_with_promotion_label("Agent-Approved");
+        let item_lower = json!({"labels": [{"name": "agent-approved"}]});
+        assert!(has_promotion_label(&item_lower, &ctx));
+
+        let item_upper = json!({"labels": [{"name": "AGENT-APPROVED"}]});
+        assert!(has_promotion_label(&item_upper, &ctx));
+    }
+
+    #[test]
+    fn test_has_promotion_label_missing_labels_field() {
+        let ctx = ctx_with_promotion_label("agent-approved");
+        let item = json!({"title": "some issue"});
+        assert!(!has_promotion_label(&item, &ctx));
+    }
+
+    #[test]
+    fn test_pr_integrity_promotion_label_promotes_to_approved() {
+        let repo = "github/copilot";
+        let ctx = ctx_with_promotion_label("agent-approved");
+
+        // Public forked PR normally gets unapproved (reader) integrity
+        let forked_pr = json!({
+            "user": {"login": "external"},
+            "author_association": "NONE",
+            "merged": false,
+            "labels": [{"name": "agent-approved"}]
+        });
+        assert_eq!(
+            pr_integrity(&forked_pr, repo, false, Some(true), &ctx),
+            writer_integrity(repo, &ctx)
+        );
+    }
+
+    #[test]
+    fn test_pr_integrity_promotion_label_does_not_downgrade_merged() {
+        let repo = "github/copilot";
+        let ctx = ctx_with_promotion_label("agent-approved");
+
+        // Merged PR already at merged-level — promotion label should not downgrade it
+        let merged_pr = json!({
+            "user": {"login": "external"},
+            "author_association": "NONE",
+            "merged_at": "2024-01-15T10:00:00Z",
+            "labels": [{"name": "agent-approved"}]
+        });
+        assert_eq!(
+            pr_integrity(&merged_pr, repo, false, Some(false), &ctx),
+            merged_integrity(repo, &ctx)
+        );
+    }
+
+    #[test]
+    fn test_issue_integrity_promotion_label_promotes() {
+        let repo = "github/copilot";
+        let ctx = ctx_with_promotion_label("agent-approved");
+
+        // Public repo issue normally gets none integrity
+        let issue = json!({
+            "user": {"login": "external"},
+            "author_association": "NONE",
+            "labels": [{"name": "agent-approved"}]
+        });
+        assert_eq!(
+            issue_integrity(&issue, repo, false, &ctx),
+            writer_integrity(repo, &ctx)
+        );
+    }
+
+    // =========================================================================
+    // built-in demotion-label tests
+    // =========================================================================
+
+    #[test]
+    fn test_has_demotion_label_empty_ctx() {
+        let ctx = default_ctx();
+        let item = json!({"labels": [{"name": "agent-blocked"}]});
+        assert!(!has_demotion_label(&item, &ctx));
+    }
+
+    #[test]
+    fn test_has_demotion_label_no_match() {
+        let ctx = ctx_with_demotion_label("agent-blocked");
+        let item = json!({"labels": [{"name": "approved"}]});
+        assert!(!has_demotion_label(&item, &ctx));
+    }
+
+    #[test]
+    fn test_has_demotion_label_matching() {
+        let ctx = ctx_with_demotion_label("agent-blocked");
+        let item = json!({"labels": [{"name": "agent-blocked"}]});
+        assert!(has_demotion_label(&item, &ctx));
+    }
+
+    #[test]
+    fn test_has_demotion_label_case_insensitive() {
+        let ctx = ctx_with_demotion_label("Agent-Blocked");
+        let item_lower = json!({"labels": [{"name": "agent-blocked"}]});
+        assert!(has_demotion_label(&item_lower, &ctx));
+
+        let item_upper = json!({"labels": [{"name": "AGENT-BLOCKED"}]});
+        assert!(has_demotion_label(&item_upper, &ctx));
+    }
+
+    #[test]
+    fn test_has_demotion_label_missing_labels_field() {
+        let ctx = ctx_with_demotion_label("agent-blocked");
+        let item = json!({"title": "some issue"});
+        assert!(!has_demotion_label(&item, &ctx));
+    }
+
+    #[test]
+    fn test_pr_integrity_demotion_label_caps_at_none() {
+        let repo = "github/copilot";
+        let ctx = ctx_with_demotion_label("agent-blocked");
+
+        // Private repo PR normally gets writer (approved) integrity
+        let pr = json!({
+            "user": {"login": "member"},
+            "author_association": "MEMBER",
+            "merged": false,
+            "labels": [{"name": "agent-blocked"}]
+        });
+        assert_eq!(
+            pr_integrity(&pr, repo, true, Some(false), &ctx),
+            none_integrity(repo, &ctx)
+        );
+    }
+
+    #[test]
+    fn test_issue_integrity_demotion_label_caps_at_none() {
+        let repo = "github/copilot";
+        let ctx = ctx_with_demotion_label("agent-blocked");
+
+        // Private repo issue normally gets writer integrity
+        let issue = json!({
+            "user": {"login": "member"},
+            "author_association": "MEMBER",
+            "labels": [{"name": "agent-blocked"}]
+        });
+        assert_eq!(
+            issue_integrity(&issue, repo, true, &ctx),
+            none_integrity(repo, &ctx)
+        );
+    }
+
+    #[test]
+    fn test_demotion_label_overrides_promotion_label() {
+        let repo = "github/copilot";
+        let ctx = PolicyContext {
+            promotion_label: "agent-approved".to_string(),
+            demotion_label: "agent-blocked".to_string(),
+            ..Default::default()
+        };
+
+        // Item has both labels — demotion wins
+        let issue = json!({
+            "user": {"login": "external"},
+            "author_association": "NONE",
+            "labels": [{"name": "agent-approved"}, {"name": "agent-blocked"}]
+        });
+        assert_eq!(
+            issue_integrity(&issue, repo, false, &ctx),
+            none_integrity(repo, &ctx)
+        );
+    }
+
+    #[test]
+    fn test_demotion_label_overrides_approval_labels() {
+        let repo = "github/copilot";
+        let ctx = PolicyContext {
+            approval_labels: vec!["approved".to_string()],
+            demotion_label: "agent-blocked".to_string(),
+            ..Default::default()
+        };
+
+        // Item has both approval label and demotion label — demotion wins
+        let issue = json!({
+            "user": {"login": "external"},
+            "author_association": "NONE",
+            "labels": [{"name": "approved"}, {"name": "agent-blocked"}]
+        });
+        assert_eq!(
+            issue_integrity(&issue, repo, false, &ctx),
+            none_integrity(repo, &ctx)
+        );
+    }
+
+    #[test]
+    fn test_blocked_user_not_promoted_by_promotion_label() {
+        let repo = "github/copilot";
+        let ctx = PolicyContext {
+            blocked_users: vec!["evil-bot".to_string()],
+            promotion_label: "agent-approved".to_string(),
+            ..Default::default()
+        };
+
+        // Even with a promotion label, a blocked user's PR remains blocked
+        let pr = json!({
+            "user": {"login": "evil-bot"},
+            "author_association": "NONE",
+            "merged": false,
+            "labels": [{"name": "agent-approved"}]
+        });
+        assert_eq!(
+            pr_integrity(&pr, repo, false, Some(false), &ctx),
+            blocked_integrity(repo, &ctx)
+        );
+    }
+
+    #[test]
+    fn test_blocked_user_not_affected_by_demotion_label() {
+        let repo = "github/copilot";
+        let ctx = PolicyContext {
+            blocked_users: vec!["evil-bot".to_string()],
+            demotion_label: "agent-blocked".to_string(),
+            ..Default::default()
+        };
+
+        // Blocked user stays blocked regardless of demotion label
+        let pr = json!({
+            "user": {"login": "evil-bot"},
+            "author_association": "NONE",
+            "merged": false,
+            "labels": [{"name": "agent-blocked"}]
+        });
+        assert_eq!(
+            pr_integrity(&pr, repo, false, Some(false), &ctx),
+            blocked_integrity(repo, &ctx)
         );
     }
 

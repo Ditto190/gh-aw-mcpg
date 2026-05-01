@@ -145,6 +145,15 @@ pub struct PolicyContext {
     /// endorsement or disapproval. Defaults to "approved" when empty. Options:
     /// "none", "unapproved", "approved", "merged".
     pub endorser_min_integrity: String,
+    /// A single GitHub label name that promotes a content item's effective integrity to
+    /// "approved" when present. Disabled when empty. Case-insensitive. Composes with
+    /// `approval-labels`; both can promote to approved.
+    pub promotion_label: String,
+    /// A single GitHub label name that demotes a content item's effective integrity to
+    /// "none" when present. Disabled when empty. Case-insensitive. Overrides promotion
+    /// label, approval-labels, trusted-users, and endorsement reactions. Only
+    /// `blocked-users` takes precedence over demotion label.
+    pub demotion_label: String,
 }
 
 fn normalize_scope(scope: &str, ctx: &PolicyContext) -> String {
@@ -347,6 +356,93 @@ fn apply_approval_label_promotion(
             resource_type, repo_full_name, number, label
         ));
         max_integrity(repo_full_name, integrity, writer_integrity(repo_full_name, ctx), ctx)
+    } else {
+        integrity
+    }
+}
+
+// ============================================================================
+// Built-in promotion/demotion label helpers
+// ============================================================================
+
+/// Check whether a content item carries the configured built-in promotion label
+/// (case-insensitive). Returns `false` when `promotion_label` is empty (feature disabled).
+#[cfg(test)]
+pub fn has_promotion_label(item: &Value, ctx: &PolicyContext) -> bool {
+    if ctx.promotion_label.is_empty() {
+        return false;
+    }
+    let label_names = extract_github_label_names(item);
+    label_names
+        .iter()
+        .any(|name| ctx.promotion_label.eq_ignore_ascii_case(name))
+}
+
+/// Check whether a content item carries the configured built-in demotion label
+/// (case-insensitive). Returns `false` when `demotion_label` is empty (feature disabled).
+#[cfg(test)]
+pub fn has_demotion_label(item: &Value, ctx: &PolicyContext) -> bool {
+    if ctx.demotion_label.is_empty() {
+        return false;
+    }
+    let label_names = extract_github_label_names(item);
+    label_names
+        .iter()
+        .any(|name| ctx.demotion_label.eq_ignore_ascii_case(name))
+}
+
+/// Apply built-in promotion label: if the item carries the configured promotion label,
+/// raise integrity to at least writer (approved) level.
+fn apply_promotion_label_promotion(
+    item: &Value,
+    resource_type: &str,
+    repo_full_name: &str,
+    integrity: Vec<String>,
+    ctx: &PolicyContext,
+) -> Vec<String> {
+    if ctx.promotion_label.is_empty() {
+        return integrity;
+    }
+    let label_names = extract_github_label_names(item);
+    if label_names
+        .iter()
+        .any(|name| ctx.promotion_label.eq_ignore_ascii_case(name))
+    {
+        let number = item.get(field_names::NUMBER).and_then(|v| v.as_u64()).unwrap_or(0);
+        crate::log_info(&format!(
+            "[integrity] {}:{}#{} promoted to approved (built-in promotion-label '{}')",
+            resource_type, repo_full_name, number, ctx.promotion_label
+        ));
+        max_integrity(repo_full_name, integrity, writer_integrity(repo_full_name, ctx), ctx)
+    } else {
+        integrity
+    }
+}
+
+/// Apply built-in demotion label: if the item carries the configured demotion label,
+/// cap integrity at none. Overrides promotion label, approval-labels, trusted-users,
+/// and endorsement reactions. Only `blocked-users` takes absolute precedence.
+fn apply_demotion_label_demotion(
+    item: &Value,
+    resource_type: &str,
+    repo_full_name: &str,
+    integrity: Vec<String>,
+    ctx: &PolicyContext,
+) -> Vec<String> {
+    if ctx.demotion_label.is_empty() {
+        return integrity;
+    }
+    let label_names = extract_github_label_names(item);
+    if label_names
+        .iter()
+        .any(|name| ctx.demotion_label.eq_ignore_ascii_case(name))
+    {
+        let number = item.get(field_names::NUMBER).and_then(|v| v.as_u64()).unwrap_or(0);
+        crate::log_info(&format!(
+            "[integrity] {}:{}#{} demoted to none (built-in demotion-label '{}')",
+            resource_type, repo_full_name, number, ctx.demotion_label
+        ));
+        cap_integrity(repo_full_name, integrity, none_integrity(repo_full_name, ctx), ctx)
     } else {
         integrity
     }
@@ -1431,9 +1527,11 @@ pub fn is_default_branch_commit_context(tool_name: &str, sha_or_ref: &str) -> bo
 
 /// Apply the standard post-integrity adjustment pipeline to a content item after
 /// baseline integrity calculation:
-/// 1. Approval-label promotion  → raise to at least approved
-/// 2. Endorsement promotion     → raise to at least approved on maintainer reaction
-/// 3. Disapproval demotion      → cap at configured level on maintainer reaction (wins last)
+/// 1. Approval-label promotion       → raise to at least approved
+/// 2. Built-in promotion label       → raise to at least approved (new)
+/// 3. Endorsement promotion          → raise to at least approved on maintainer reaction
+/// 4. Built-in demotion label        → cap at none (new; overrides steps 1–3)
+/// 5. Disapproval demotion           → cap at configured level on maintainer reaction (wins last)
 fn apply_post_integrity_adjustments(
     item: &Value,
     resource_type: &str,
@@ -1444,7 +1542,11 @@ fn apply_post_integrity_adjustments(
     let integrity =
         apply_approval_label_promotion(item, resource_type, repo_full_name, integrity, ctx);
     let integrity =
+        apply_promotion_label_promotion(item, resource_type, repo_full_name, integrity, ctx);
+    let integrity =
         apply_endorsement_promotion(item, resource_type, repo_full_name, integrity, ctx);
+    let integrity =
+        apply_demotion_label_demotion(item, resource_type, repo_full_name, integrity, ctx);
     apply_disapproval_demotion(item, resource_type, repo_full_name, integrity, ctx)
 }
 
