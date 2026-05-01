@@ -272,23 +272,6 @@ func TestToolTimeoutEnvOrDefault(t *testing.T) {
 // TestConvertStdinConfig_ToolTimeoutEnvFallback verifies the stdin config priority:
 // stdin config value > MCP_GATEWAY_TOOL_TIMEOUT env var > built-in default.
 func TestConvertStdinConfig_ToolTimeoutEnvFallback(t *testing.T) {
-	baseConfig := func(toolTimeout interface{}) string {
-		if toolTimeout == nil {
-			return `{
-				"mcpServers": {
-					"test": {"type": "stdio", "container": "test/server:latest"}
-				},
-				"gateway": {"port": 3000}
-			}`
-		}
-		return `{
-			"mcpServers": {
-				"test": {"type": "stdio", "container": "test/server:latest"}
-			},
-			"gateway": {"port": 3000, "toolTimeout": ` + toolTimeout.(string) + `}
-		}`
-	}
-
 	t.Run("stdin value takes priority over env var", func(t *testing.T) {
 		t.Setenv("MCP_GATEWAY_TOOL_TIMEOUT", "120")
 		stdinCfg := &StdinConfig{
@@ -341,7 +324,6 @@ func TestConvertStdinConfig_ToolTimeoutEnvFallback(t *testing.T) {
 		cfg, err := convertStdinConfig(stdinCfg)
 		require.NoError(t, err)
 		assert.Equal(t, 180, cfg.Gateway.ToolTimeout, "env var (180) should be used when no gateway section present")
-		_ = baseConfig
 	})
 
 	t.Run("built-in default used when no gateway section and no env var", func(t *testing.T) {

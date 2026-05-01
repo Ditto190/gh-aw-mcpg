@@ -328,12 +328,10 @@ func convertStdinConfig(stdinCfg *StdinConfig) (*Config, error) {
 		logStdin.Print("No gateway config in stdin, applying defaults")
 		cfg.Gateway = &GatewayConfig{}
 		applyGatewayDefaults(cfg.Gateway)
-		// When no gateway section is present, apply MCP_GATEWAY_TOOL_TIMEOUT env var if set.
-		// applyGatewayDefaults already wrote DefaultToolTimeout; override it here when the
-		// env var provides a value so that stdin > env > built-in default priority holds.
-		if envTimeout := toolTimeoutEnvOrDefault(); envTimeout != DefaultToolTimeout {
-			cfg.Gateway.ToolTimeout = envTimeout
-		}
+		// Apply MCP_GATEWAY_TOOL_TIMEOUT env var if set. toolTimeoutEnvOrDefault() returns
+		// the env var value when valid and present, otherwise DefaultToolTimeout (which
+		// applyGatewayDefaults already wrote). This is a no-op when the env var is absent.
+		cfg.Gateway.ToolTimeout = toolTimeoutEnvOrDefault()
 	}
 
 	// Apply feature-specific defaults
