@@ -309,8 +309,12 @@ func convertStdinConfig(stdinCfg *StdinConfig) (*Config, error) {
 			APIKey:            stdinCfg.Gateway.APIKey,
 			Domain:            stdinCfg.Gateway.Domain,
 			StartupTimeout:    intPtrOrDefault(stdinCfg.Gateway.StartupTimeout, DefaultStartupTimeout),
-			ToolTimeout:       intPtrOrDefault(stdinCfg.Gateway.ToolTimeout, toolTimeoutEnvOrDefault()),
 			KeepaliveInterval: intPtrOrDefault(stdinCfg.Gateway.KeepaliveInterval, DefaultKeepaliveInterval),
+		}
+		if stdinCfg.Gateway.ToolTimeout != nil {
+			cfg.Gateway.ToolTimeout = *stdinCfg.Gateway.ToolTimeout
+		} else {
+			cfg.Gateway.ToolTimeout = toolTimeoutEnvOrDefault()
 		}
 		if stdinCfg.Gateway.PayloadDir != "" {
 			cfg.Gateway.PayloadDir = stdinCfg.Gateway.PayloadDir
