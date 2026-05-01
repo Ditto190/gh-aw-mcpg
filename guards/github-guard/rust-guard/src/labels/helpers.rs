@@ -367,7 +367,6 @@ fn apply_approval_label_promotion(
 
 /// Check whether a content item carries the configured built-in promotion label
 /// (case-insensitive). Returns `false` when `promotion_label` is empty (feature disabled).
-#[cfg(test)]
 pub fn has_promotion_label(item: &Value, ctx: &PolicyContext) -> bool {
     if ctx.promotion_label.is_empty() {
         return false;
@@ -380,7 +379,6 @@ pub fn has_promotion_label(item: &Value, ctx: &PolicyContext) -> bool {
 
 /// Check whether a content item carries the configured built-in demotion label
 /// (case-insensitive). Returns `false` when `demotion_label` is empty (feature disabled).
-#[cfg(test)]
 pub fn has_demotion_label(item: &Value, ctx: &PolicyContext) -> bool {
     if ctx.demotion_label.is_empty() {
         return false;
@@ -400,14 +398,7 @@ fn apply_promotion_label_promotion(
     integrity: Vec<String>,
     ctx: &PolicyContext,
 ) -> Vec<String> {
-    if ctx.promotion_label.is_empty() {
-        return integrity;
-    }
-    let label_names = extract_github_label_names(item);
-    if label_names
-        .iter()
-        .any(|name| ctx.promotion_label.eq_ignore_ascii_case(name))
-    {
+    if has_promotion_label(item, ctx) {
         let number = item.get(field_names::NUMBER).and_then(|v| v.as_u64()).unwrap_or(0);
         crate::log_info(&format!(
             "[integrity] {}:{}#{} promoted to approved (built-in promotion-label '{}')",
@@ -429,14 +420,7 @@ fn apply_demotion_label_demotion(
     integrity: Vec<String>,
     ctx: &PolicyContext,
 ) -> Vec<String> {
-    if ctx.demotion_label.is_empty() {
-        return integrity;
-    }
-    let label_names = extract_github_label_names(item);
-    if label_names
-        .iter()
-        .any(|name| ctx.demotion_label.eq_ignore_ascii_case(name))
-    {
+    if has_demotion_label(item, ctx) {
         let number = item.get(field_names::NUMBER).and_then(|v| v.as_u64()).unwrap_or(0);
         crate::log_info(&format!(
             "[integrity] {}:{}#{} demoted to none (built-in demotion-label '{}')",
