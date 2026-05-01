@@ -25,6 +25,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -349,6 +350,10 @@ func LoadFromFile(path string) (*Config, error) {
 		// decoder.Decode returns ParseError as a value type. Wrap with %w to
 		// preserve the structured error for callers while surfacing the full
 		// source context (line snippet + column pointer) via ParseError.Error().
+		var perr toml.ParseError
+		if errors.As(err, &perr) {
+			logConfig.Printf("TOML parse error at line %d, column %d", perr.Position.Line, perr.Position.Col)
+		}
 		return nil, fmt.Errorf("failed to parse TOML: %w", err)
 	}
 
@@ -359,8 +364,14 @@ func LoadFromFile(path string) (*Config, error) {
 	// in the Config struct. Per spec §4.3.1, the gateway MUST reject configurations
 	// containing unrecognized fields with an informative error message.
 	//
-	// Note: map[string]interface{} fields (guard_policies, guards.*.config) are
-	// intentionally flexible and their nested keys are exempt from this check.
+	// Design note: Decoder.SetStrict(true) (available since v1.6.0) would
+	// automatically reject unknown fields, but cannot be used here because the
+	// config contains map[string]interface{} sections (guard_policies,
+	// guards.*.config) that accept arbitrary nested keys by design.
+	// SetStrict(true) would treat those dynamic keys as unknown fields and
+	// reject valid configurations. The manual Undecoded() + isDynamicTOMLPath
+	// approach enforces strictness for typed struct fields while exempting the
+	// flexible map sections.
 	undecoded := md.Undecoded()
 	logConfig.Printf("Checking %d undecoded TOML keys against allowed fields", len(undecoded))
 	var unknownKeys []toml.Key
