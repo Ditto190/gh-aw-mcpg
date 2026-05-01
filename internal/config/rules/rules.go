@@ -126,11 +126,12 @@ func TimeoutRange(timeout, min, max int, fieldName, jsonPath string) *Validation
 	log.Printf("Validating timeout range: field=%s, value=%d, min=%d, max=%d, jsonPath=%s", fieldName, timeout, min, max, jsonPath)
 	if timeout < min || timeout > max {
 		log.Printf("Timeout range validation failed: %s=%d is outside [%d, %d]", fieldName, timeout, min, max)
+		suggestedTimeout := min + (max-min)/2
 		return &ValidationError{
 			Field:      fieldName,
 			Message:    fmt.Sprintf("%s must be between %d and %d, got %d", fieldName, min, max, timeout),
 			JSONPath:   jsonPath,
-			Suggestion: fmt.Sprintf("Use a value between %d and %d seconds (e.g., 60)", min, max),
+			Suggestion: fmt.Sprintf("Use a value between %d and %d seconds (e.g., %d)", min, max, suggestedTimeout),
 		}
 	}
 	return nil
