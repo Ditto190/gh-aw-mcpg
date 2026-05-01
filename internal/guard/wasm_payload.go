@@ -92,8 +92,10 @@ func buildStrictLabelAgentPayload(policy interface{}) (map[string]interface{}, e
 
 	reposRaw, hasRepos := allowOnly["repos"]
 	integrityRaw, hasIntegrity := allowOnly["min-integrity"]
+	integrityFieldName := "min-integrity"
 	if !hasIntegrity {
 		integrityRaw, hasIntegrity = allowOnly["integrity"]
+		integrityFieldName = "integrity"
 	}
 	if !hasRepos || !hasIntegrity {
 		return nil, fmt.Errorf("invalid guard policy transport shape: missing required fields repos and/or min-integrity in allow-only object")
@@ -114,7 +116,7 @@ func buildStrictLabelAgentPayload(policy interface{}) (map[string]interface{}, e
 		return nil, fmt.Errorf("invalid repos value: expected all, public, or non-empty array of scoped strings")
 	}
 
-	if err := validateIntegrityField("integrity", integrityRaw); err != nil {
+	if err := validateIntegrityField(integrityFieldName, integrityRaw); err != nil {
 		return nil, err
 	}
 
