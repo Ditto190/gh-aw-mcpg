@@ -146,14 +146,14 @@ func buildStrictLabelAgentPayload(policy interface{}) (map[string]interface{}, e
 		return nil, fmt.Errorf("invalid integrity value: expected one of none|unapproved|approved|merged")
 	}
 
-	// Validate blocked-users if present: must be a non-empty array of non-empty strings.
+	// Validate blocked-users if present: must be an array of non-empty strings.
 	if blockedUsersRaw, ok := allowOnly["blocked-users"]; ok {
 		if err := validateStringArray("blocked-users", blockedUsersRaw, false); err != nil {
 			return nil, err
 		}
 	}
 
-	// Validate approval-labels if present: must be a non-empty array of non-empty strings.
+	// Validate approval-labels if present: must be an array of non-empty strings.
 	if approvalLabelsRaw, ok := allowOnly["approval-labels"]; ok {
 		if err := validateStringArray("approval-labels", approvalLabelsRaw, false); err != nil {
 			return nil, err
@@ -169,7 +169,7 @@ func buildStrictLabelAgentPayload(policy interface{}) (map[string]interface{}, e
 	}
 
 	// Validate trusted-users if present inside allow-only.
-	// Must be a non-empty array of non-empty strings when present.
+	// Must be an array of non-empty strings when present.
 	if trustedUsersRaw, ok := allowOnly["trusted-users"]; ok {
 		if err := validateStringArray("trusted-users", trustedUsersRaw, false); err != nil {
 			return nil, err
