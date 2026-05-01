@@ -648,7 +648,9 @@ func TestMarshalAndSanitize(t *testing.T) {
 	})
 
 	t.Run("unmarshalable type returns empty string", func(t *testing.T) {
-		// Channels cannot be marshaled to JSON; json.Marshal returns nil bytes.
+		// Channels cannot be marshaled to JSON; json.Marshal returns a non-nil
+		// error and a nil []byte for unsupported types. MarshalAndSanitize ignores
+		// that error, and converting the nil slice with string(...) yields "".
 		result := MarshalAndSanitize(make(chan int))
 		assert.Empty(t, result)
 	})
@@ -710,8 +712,8 @@ func TestMarshalAndSanitize(t *testing.T) {
 	})
 }
 
-// TestMarshalAndSanitize_ReturnsString verifies that MarshalAndSanitize always
-// returns a string without panicking, regardless of input type.
+// TestMarshalAndSanitize_ReturnsString verifies that MarshalAndSanitize never
+// panics, regardless of input type.
 func TestMarshalAndSanitize_ReturnsString(t *testing.T) {
 	inputs := []any{
 		42,
@@ -723,9 +725,12 @@ func TestMarshalAndSanitize_ReturnsString(t *testing.T) {
 		nil,
 	}
 
-	for _, input := range inputs {
-		result := MarshalAndSanitize(input)
-		assert.IsType(t, "", result, "MarshalAndSanitize should always return a string")
+	for i, input := range inputs {
+		t.Run(fmt.Sprintf("input_%d_%T", i, input), func(t *testing.T) {
+			assert.NotPanics(t, func() {
+				_ = MarshalAndSanitize(input)
+			}, "MarshalAndSanitize should not panic for input %v", input)
+		})
 	}
 }
 
