@@ -309,6 +309,10 @@ struct AllowOnlyPolicy {
     disapproval_integrity: String,
     #[serde(rename = "endorser-min-integrity", default)]
     endorser_min_integrity: String,
+    #[serde(rename = "promotion-label", default)]
+    promotion_label: String,
+    #[serde(rename = "demotion-label", default)]
+    demotion_label: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -557,6 +561,8 @@ pub extern "C" fn label_agent(
         disapproval_reactions: policy.disapproval_reactions,
         disapproval_integrity: policy.disapproval_integrity,
         endorser_min_integrity: policy.endorser_min_integrity,
+        promotion_label: policy.promotion_label,
+        demotion_label: policy.demotion_label,
     };
 
     // Compute integrity before moving ctx into the global — borrows ctx, no clone needed.
