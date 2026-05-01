@@ -147,7 +147,7 @@ func TestGetGatewayToolTimeoutFromEnv(t *testing.T) {
 			envSet:   true,
 			wantOK:   false,
 			wantErr:  true,
-			errMsg:   "must be between 10 and 600",
+			errMsg:   "must be at least 10",
 		},
 		{
 			name:     "zero (out of range)",
@@ -155,7 +155,7 @@ func TestGetGatewayToolTimeoutFromEnv(t *testing.T) {
 			envSet:   true,
 			wantOK:   false,
 			wantErr:  true,
-			errMsg:   "must be between 10 and 600",
+			errMsg:   "must be at least 10",
 		},
 		{
 			name:     "negative value",
@@ -163,29 +163,13 @@ func TestGetGatewayToolTimeoutFromEnv(t *testing.T) {
 			envSet:   true,
 			wantOK:   false,
 			wantErr:  true,
-			errMsg:   "must be between 10 and 600",
-		},
-		{
-			name:     "above maximum (601)",
-			envValue: "601",
-			envSet:   true,
-			wantOK:   false,
-			wantErr:  true,
-			errMsg:   "must be between 10 and 600",
+			errMsg:   "must be at least 10",
 		},
 		{
 			name:        "valid minimum boundary (10)",
 			envValue:    "10",
 			envSet:      true,
 			wantTimeout: 10,
-			wantOK:      true,
-			wantErr:     false,
-		},
-		{
-			name:        "valid maximum boundary (600)",
-			envValue:    "600",
-			envSet:      true,
-			wantTimeout: 600,
 			wantOK:      true,
 			wantErr:     false,
 		},
@@ -202,6 +186,22 @@ func TestGetGatewayToolTimeoutFromEnv(t *testing.T) {
 			envValue:    "120",
 			envSet:      true,
 			wantTimeout: 120,
+			wantOK:      true,
+			wantErr:     false,
+		},
+		{
+			name:        "valid large value (3600 = 1 hour)",
+			envValue:    "3600",
+			envSet:      true,
+			wantTimeout: 3600,
+			wantOK:      true,
+			wantErr:     false,
+		},
+		{
+			name:        "valid very large value (86400 = 24 hours)",
+			envValue:    "86400",
+			envSet:      true,
+			wantTimeout: 86400,
 			wantOK:      true,
 			wantErr:     false,
 		},
@@ -262,10 +262,10 @@ func TestToolTimeoutEnvOrDefault(t *testing.T) {
 		assert.Equal(t, 10, got, "should return 10 at minimum boundary")
 	})
 
-	t.Run("returns env var value at maximum boundary (600)", func(t *testing.T) {
-		t.Setenv("MCP_GATEWAY_TOOL_TIMEOUT", "600")
+	t.Run("returns env var large value (3600 = 1 hour)", func(t *testing.T) {
+		t.Setenv("MCP_GATEWAY_TOOL_TIMEOUT", "3600")
 		got := toolTimeoutEnvOrDefault()
-		assert.Equal(t, 600, got, "should return 600 at maximum boundary")
+		assert.Equal(t, 3600, got, "should return 3600 (1 hour)")
 	})
 }
 

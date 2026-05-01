@@ -11,9 +11,6 @@ import (
 // ToolTimeoutMin is the minimum allowed value for toolTimeout (seconds).
 const ToolTimeoutMin = 10
 
-// ToolTimeoutMax is the maximum allowed value for toolTimeout (seconds).
-const ToolTimeoutMax = 600
-
 // GetGatewayPortFromEnv returns the MCP_GATEWAY_PORT value, parsed as int
 func GetGatewayPortFromEnv() (int, error) {
 	portStr := envutil.GetEnvString("MCP_GATEWAY_PORT", "")
@@ -59,7 +56,7 @@ func GetGatewayAPIKeyFromEnv() string {
 
 // GetGatewayToolTimeoutFromEnv returns the MCP_GATEWAY_TOOL_TIMEOUT value, parsed as int.
 // Returns (0, false) when the environment variable is not set or empty.
-// Returns an error when the variable is set but invalid (non-integer or out of bounds [10, 600]).
+// Returns an error when the variable is set but invalid (non-integer or below minimum of 10).
 func GetGatewayToolTimeoutFromEnv() (int, bool, error) {
 	timeoutStr := envutil.GetEnvString("MCP_GATEWAY_TOOL_TIMEOUT", "")
 	if timeoutStr == "" {
@@ -73,8 +70,8 @@ func GetGatewayToolTimeoutFromEnv() (int, bool, error) {
 		return 0, false, fmt.Errorf("invalid MCP_GATEWAY_TOOL_TIMEOUT value: %s", timeoutStr)
 	}
 
-	if validationErr := rules.TimeoutRange(timeout, ToolTimeoutMin, ToolTimeoutMax, "MCP_GATEWAY_TOOL_TIMEOUT", "MCP_GATEWAY_TOOL_TIMEOUT"); validationErr != nil {
-		logConfig.Printf("MCP_GATEWAY_TOOL_TIMEOUT=%d is outside valid range [%d, %d]: %s", timeout, ToolTimeoutMin, ToolTimeoutMax, validationErr.Message)
+	if validationErr := rules.TimeoutMinimum(timeout, ToolTimeoutMin, "MCP_GATEWAY_TOOL_TIMEOUT", "MCP_GATEWAY_TOOL_TIMEOUT"); validationErr != nil {
+		logConfig.Printf("MCP_GATEWAY_TOOL_TIMEOUT=%d is below minimum %d: %s", timeout, ToolTimeoutMin, validationErr.Message)
 		return 0, false, fmt.Errorf("%s", validationErr.Message)
 	}
 

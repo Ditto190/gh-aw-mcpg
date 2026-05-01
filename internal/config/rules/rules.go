@@ -120,6 +120,22 @@ func TimeoutPositive(timeout int, fieldName, jsonPath string) *ValidationError {
 	return nil
 }
 
+// TimeoutMinimum validates that a timeout value is at least min.
+// Returns nil if valid, *ValidationError if below the minimum.
+func TimeoutMinimum(timeout, min int, fieldName, jsonPath string) *ValidationError {
+	log.Printf("Validating timeout minimum: field=%s, value=%d, min=%d, jsonPath=%s", fieldName, timeout, min, jsonPath)
+	if timeout < min {
+		log.Printf("Timeout minimum validation failed: %s=%d is below minimum %d", fieldName, timeout, min)
+		return &ValidationError{
+			Field:      fieldName,
+			Message:    fmt.Sprintf("%s must be at least %d, got %d", fieldName, min, timeout),
+			JSONPath:   jsonPath,
+			Suggestion: fmt.Sprintf("Use a value of at least %d seconds", min),
+		}
+	}
+	return nil
+}
+
 // TimeoutRange validates that a timeout value is within [min, max] (inclusive).
 // Returns nil if valid, *ValidationError if outside the range.
 func TimeoutRange(timeout, min, max int, fieldName, jsonPath string) *ValidationError {
