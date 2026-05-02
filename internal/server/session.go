@@ -178,6 +178,8 @@ func setupSessionCallback(r *http.Request, backendID string) (string, bool) {
 // logHTTPRequestBody logs the request body for debugging purposes.
 // It reads the body, logs it, and restores it so it can be read again.
 // The backendID parameter is optional and can be empty for unified mode.
+// It calls peekRequestBody (defined in http_helpers.go) which is a shared
+// HTTP utility also used by WithSDKLogging.
 func logHTTPRequestBody(r *http.Request, sessionID, backendID string) {
 	logSession.Printf("Checking request body: method=%s, hasBody=%v, sessionID=%s", r.Method, r.Body != nil, sessionID)
 
