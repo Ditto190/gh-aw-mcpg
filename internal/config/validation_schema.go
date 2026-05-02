@@ -108,23 +108,42 @@ func fixSchemaBytes(schemaBytes []byte) ([]byte, error) {
 	if definitions, ok := schema["definitions"].(map[string]interface{}); ok {
 		if customServerConfig, ok := definitions["customServerConfig"].(map[string]interface{}); ok {
 			if properties, ok := customServerConfig["properties"].(map[string]interface{}); ok {
-				if typeField, ok := properties["type"].(map[string]interface{}); ok {
-					// Remove the pattern entirely - the oneOf logic combined with the fact
-					// that stdioServerConfig has enum: ["stdio"] and httpServerConfig has
-					// enum: ["http"] will ensure proper validation
-					delete(typeField, "pattern")
-					// Also remove the type constraint since we want it to only match in the oneOf context
-					delete(typeField, "type")
-					// Add a not constraint to exclude stdio and http
-					typeField["not"] = map[string]interface{}{
-						"enum": []string{"stdio", "http"},
+				typeValue, exists := properties["type"]
+				if !exists {
+					logSchema.Print("Skipped customServerConfig type fix: type field not found in customServerConfig properties")
+				} else if typeField, ok := typeValue.(map[string]interface{}); ok {
+					patternValue, hasPattern := typeField["pattern"]
+					pattern, patternIsString := patternValue.(string)
+					if !hasPattern {
+						logSchema.Print("Skipped customServerConfig type fix: type field has no pattern to replace")
+					} else if !patternIsString {
+						logSchema.Print("Skipped customServerConfig type fix: type field pattern is not a string")
+					} else if !strings.Contains(pattern, "(?!") {
+						logSchema.Print("Skipped customServerConfig type fix: type field pattern does not use negative lookahead")
+					} else {
+						// Remove the pattern entirely - the oneOf logic combined with the fact
+						// that stdioServerConfig has enum: ["stdio"] and httpServerConfig has
+						// enum: ["http"] will ensure proper validation
+						delete(typeField, "pattern")
+						// Also remove the type constraint since we want it to only match in the oneOf context
+						delete(typeField, "type")
+						// Add a not constraint to exclude stdio and http
+						typeField["not"] = map[string]interface{}{
+							"enum": []string{"stdio", "http"},
+						}
+						logSchema.Print("Applied customServerConfig type fix: replaced negative-lookahead pattern with not-enum constraint")
 					}
-					logSchema.Print("Applied customServerConfig type fix: replaced negative-lookahead pattern with not-enum constraint")
 				} else {
-					logSchema.Print("Skipped customServerConfig type fix: type field not found in schema definitions")
+					logSchema.Print("Skipped customServerConfig type fix: type field is not an object")
 				}
+			} else {
+				logSchema.Print("Skipped customServerConfig type fix: customServerConfig properties is missing or not an object")
 			}
+		} else {
+			logSchema.Print("Skipped customServerConfig type fix: customServerConfig definition is missing or not an object")
 		}
+	} else {
+		logSchema.Print("Skipped customServerConfig type fix: schema definitions is missing or not an object")
 	}
 
 	// Fix the customSchemas patternProperties
