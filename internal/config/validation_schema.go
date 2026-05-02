@@ -108,20 +108,42 @@ func fixSchemaBytes(schemaBytes []byte) ([]byte, error) {
 	if definitions, ok := schema["definitions"].(map[string]interface{}); ok {
 		if customServerConfig, ok := definitions["customServerConfig"].(map[string]interface{}); ok {
 			if properties, ok := customServerConfig["properties"].(map[string]interface{}); ok {
-				if typeField, ok := properties["type"].(map[string]interface{}); ok {
-					// Remove the pattern entirely - the oneOf logic combined with the fact
-					// that stdioServerConfig has enum: ["stdio"] and httpServerConfig has
-					// enum: ["http"] will ensure proper validation
-					delete(typeField, "pattern")
-					// Also remove the type constraint since we want it to only match in the oneOf context
-					delete(typeField, "type")
-					// Add a not constraint to exclude stdio and http
-					typeField["not"] = map[string]interface{}{
-						"enum": []string{"stdio", "http"},
+				typeValue, exists := properties["type"]
+				if !exists {
+					logSchema.Print("Skipped customServerConfig type fix: type field not found in customServerConfig properties")
+				} else if typeField, ok := typeValue.(map[string]interface{}); ok {
+					patternValue, hasPattern := typeField["pattern"]
+					pattern, patternIsString := patternValue.(string)
+					if !hasPattern {
+						logSchema.Print("Skipped customServerConfig type fix: type field has no pattern to replace")
+					} else if !patternIsString {
+						logSchema.Print("Skipped customServerConfig type fix: type field pattern is not a string")
+					} else if !strings.Contains(pattern, "(?!") {
+						logSchema.Print("Skipped customServerConfig type fix: type field pattern does not use negative lookahead")
+					} else {
+						// Remove the pattern entirely - the oneOf logic combined with the fact
+						// that stdioServerConfig has enum: ["stdio"] and httpServerConfig has
+						// enum: ["http"] will ensure proper validation
+						delete(typeField, "pattern")
+						// Also remove the type constraint since we want it to only match in the oneOf context
+						delete(typeField, "type")
+						// Add a not constraint to exclude stdio and http
+						typeField["not"] = map[string]interface{}{
+							"enum": []string{"stdio", "http"},
+						}
+						logSchema.Print("Applied customServerConfig type fix: replaced negative-lookahead pattern with not-enum constraint")
 					}
+				} else {
+					logSchema.Print("Skipped customServerConfig type fix: type field is not an object")
 				}
+			} else {
+				logSchema.Print("Skipped customServerConfig type fix: customServerConfig properties is missing or not an object")
 			}
+		} else {
+			logSchema.Print("Skipped customServerConfig type fix: customServerConfig definition is missing or not an object")
 		}
+	} else {
+		logSchema.Print("Skipped customServerConfig type fix: schema definitions is missing or not an object")
 	}
 
 	// Fix the customSchemas patternProperties
@@ -133,6 +155,7 @@ func fixSchemaBytes(schemaBytes []byte) ([]byte, error) {
 					if strings.Contains(key, "(?!") {
 						// Replace with a simple pattern that matches any lowercase word
 						// The validation logic will handle ensuring it's not stdio/http
+						logSchema.Printf("Applied customSchemas patternProperties fix: replaced negative-lookahead key %q with ^[a-z][a-z0-9-]*$", key)
 						delete(patternProps, key)
 						patternProps["^[a-z][a-z0-9-]*$"] = value
 						break
@@ -162,19 +185,30 @@ func fixSchemaBytes(schemaBytes []byte) ([]byte, error) {
 			"additionalProperties": true,
 		}
 
+		ensureProperty := func(props map[string]interface{}, key string, value map[string]interface{}) string {
+			action := "Added"
+			if _, exists := props[key]; exists {
+				action = "Updated"
+			}
+			props[key] = value
+			return action
+		}
+
 		// Add registry and guard-policies to stdioServerConfig
 		if stdioConfig, ok := definitions["stdioServerConfig"].(map[string]interface{}); ok {
 			if props, ok := stdioConfig["properties"].(map[string]interface{}); ok {
-				props["registry"] = registryProperty
-				props["guard-policies"] = guardPoliciesProperty
+				registryAction := ensureProperty(props, "registry", registryProperty)
+				guardPoliciesAction := ensureProperty(props, "guard-policies", guardPoliciesProperty)
+				logSchema.Printf("%s registry and %s guard-policies fields in stdioServerConfig", registryAction, guardPoliciesAction)
 			}
 		}
 
 		// Add registry and guard-policies to httpServerConfig
 		if httpConfig, ok := definitions["httpServerConfig"].(map[string]interface{}); ok {
 			if props, ok := httpConfig["properties"].(map[string]interface{}); ok {
-				props["registry"] = registryProperty
-				props["guard-policies"] = guardPoliciesProperty
+				registryAction := ensureProperty(props, "registry", registryProperty)
+				guardPoliciesAction := ensureProperty(props, "guard-policies", guardPoliciesProperty)
+				logSchema.Printf("%s registry and %s guard-policies fields in httpServerConfig", registryAction, guardPoliciesAction)
 			}
 		}
 
@@ -203,6 +237,7 @@ func fixSchemaBytes(schemaBytes []byte) ([]byte, error) {
 					"type":        "integer",
 					"description": "Keepalive ping interval in seconds for HTTP MCP backends. Use -1 to disable, 0 or unset for gateway default (1500s), or a positive integer for a custom interval.",
 				}
+				logSchema.Print("Added trustedBots and keepaliveInterval fields to gatewayConfig")
 			}
 		}
 	}
