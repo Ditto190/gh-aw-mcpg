@@ -971,16 +971,16 @@ assert.Empty(t, state.LastError)
 }
 
 func TestGetServerConfig_KnownServer(t *testing.T) {
-serverCfg := &config.ServerConfig{Type: "stdio", Command: "echo"}
-cfg := newTestConfig(map[string]*config.ServerConfig{
-"my-server": serverCfg,
-})
-l := New(context.Background(), cfg)
-defer l.Close()
+	serverCfg := &config.ServerConfig{Type: "stdio", Command: "echo"}
+	cfg := newTestConfig(map[string]*config.ServerConfig{
+		"my-server": serverCfg,
+	})
+	l := New(context.Background(), cfg)
+	defer l.Close()
 
-got, err := l.getServerConfig("my-server")
-require.NoError(t, err)
-assert.Equal(t, serverCfg, got)
+	got, err := l.getServerConfig("my-server")
+	require.NoError(t, err)
+	assert.Same(t, serverCfg, got)
 }
 
 func TestGetServerConfig_UnknownServer(t *testing.T) {
