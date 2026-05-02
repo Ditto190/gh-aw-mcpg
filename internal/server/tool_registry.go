@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/github/gh-aw-mcpg/internal/config"
 	"github.com/github/gh-aw-mcpg/internal/launcher"
 	"github.com/github/gh-aw-mcpg/internal/logger"
 	"github.com/github/gh-aw-mcpg/internal/logger/sanitize"
@@ -447,4 +448,42 @@ func (us *UnifiedServer) registerSysTools() error {
 
 	logUnified.Printf("Registered 2 sys tools")
 	return nil
+}
+
+// buildAllowedToolSets builds a per-server map[string]bool set for O(1) lookup.
+// Servers with no Tools list are not added to the map, which signals that all
+// tools are permitted. If the Tools list contains a "*" entry anywhere, the
+// server is treated the same as having no list (all tools allowed).
+func buildAllowedToolSets(cfg *config.Config) map[string]map[string]bool {
+	sets := make(map[string]map[string]bool)
+	if cfg == nil {
+		return sets
+	}
+	for serverID, serverCfg := range cfg.Servers {
+		if len(serverCfg.Tools) > 0 {
+			// Treat "*" anywhere in the list as "allow all" — skip adding to the filter map
+			if hasWildcard(serverCfg.Tools) {
+				logger.LogInfo("backend", "[allowed-tools] Wildcard \"*\" configured for %s: allowing all tools", serverID)
+				continue
+			}
+			set := make(map[string]bool, len(serverCfg.Tools))
+			for _, t := range serverCfg.Tools {
+				set[t] = true
+			}
+			sets[serverID] = set
+			logUnified.Printf("Built allowed tool set for server %s: %d tool(s) permitted", serverID, len(set))
+		}
+	}
+	logUnified.Printf("Built allowed tool sets: %d server(s) with tool restrictions", len(sets))
+	return sets
+}
+
+// hasWildcard reports whether the tools list contains a "*" entry.
+func hasWildcard(tools []string) bool {
+	for _, t := range tools {
+		if t == "*" {
+			return true
+		}
+	}
+	return false
 }

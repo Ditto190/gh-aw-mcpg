@@ -11,6 +11,7 @@ import (
 
 	"github.com/github/gh-aw-mcpg/internal/config"
 	"github.com/github/gh-aw-mcpg/internal/guard"
+	"github.com/github/gh-aw-mcpg/internal/httputil"
 	"github.com/github/gh-aw-mcpg/internal/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -732,7 +733,7 @@ func stringPtr(s string) *string {
 	return &s
 }
 
-// TestWriteErrorResponse verifies that writeErrorResponse writes a JSON error
+// TestWriteErrorResponse verifies that httputil.WriteErrorResponse writes a JSON error
 // body with "error" and "message" fields and the correct status code and Content-Type.
 func TestWriteErrorResponse(t *testing.T) {
 	tests := []struct {
@@ -782,7 +783,7 @@ func TestWriteErrorResponse(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			w := httptest.NewRecorder()
-			writeErrorResponse(w, tt.statusCode, tt.code, tt.message)
+			httputil.WriteErrorResponse(w, tt.statusCode, tt.code, tt.message)
 
 			assert.Equal(t, tt.statusCode, w.Code, "status code should match")
 			assert.Equal(t, "application/json", w.Header().Get("Content-Type"), "Content-Type should be application/json")
