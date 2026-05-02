@@ -119,6 +119,9 @@ func fixSchemaBytes(schemaBytes []byte) ([]byte, error) {
 					typeField["not"] = map[string]interface{}{
 						"enum": []string{"stdio", "http"},
 					}
+					logSchema.Print("Applied customServerConfig type fix: replaced negative-lookahead pattern with not-enum constraint")
+				} else {
+					logSchema.Print("Skipped customServerConfig type fix: type field not found in schema definitions")
 				}
 			}
 		}
@@ -133,6 +136,7 @@ func fixSchemaBytes(schemaBytes []byte) ([]byte, error) {
 					if strings.Contains(key, "(?!") {
 						// Replace with a simple pattern that matches any lowercase word
 						// The validation logic will handle ensuring it's not stdio/http
+						logSchema.Printf("Applied customSchemas patternProperties fix: replaced negative-lookahead key %q with ^[a-z][a-z0-9-]*$", key)
 						delete(patternProps, key)
 						patternProps["^[a-z][a-z0-9-]*$"] = value
 						break
@@ -167,6 +171,7 @@ func fixSchemaBytes(schemaBytes []byte) ([]byte, error) {
 			if props, ok := stdioConfig["properties"].(map[string]interface{}); ok {
 				props["registry"] = registryProperty
 				props["guard-policies"] = guardPoliciesProperty
+				logSchema.Print("Added registry and guard-policies fields to stdioServerConfig")
 			}
 		}
 
@@ -175,6 +180,7 @@ func fixSchemaBytes(schemaBytes []byte) ([]byte, error) {
 			if props, ok := httpConfig["properties"].(map[string]interface{}); ok {
 				props["registry"] = registryProperty
 				props["guard-policies"] = guardPoliciesProperty
+				logSchema.Print("Added registry and guard-policies fields to httpServerConfig")
 			}
 		}
 
@@ -203,6 +209,7 @@ func fixSchemaBytes(schemaBytes []byte) ([]byte, error) {
 					"type":        "integer",
 					"description": "Keepalive ping interval in seconds for HTTP MCP backends. Use -1 to disable, 0 or unset for gateway default (1500s), or a positive integer for a custom interval.",
 				}
+				logSchema.Print("Added trustedBots and keepaliveInterval fields to gatewayConfig")
 			}
 		}
 	}
