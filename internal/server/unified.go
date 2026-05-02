@@ -329,22 +329,6 @@ func (g *guardBackendCaller) callCollaboratorPermission(ctx context.Context, arg
 	return mcp.LogAndWrapCollaboratorPermission(body, owner, repo, username, resp.StatusCode, logUnified.Printf), nil
 }
 
-// buildCircuitBreakers creates per-backend circuit breakers from the configuration.
-func buildCircuitBreakers(cfg *config.Config) map[string]*circuitBreaker {
-	cbs := make(map[string]*circuitBreaker)
-	if cfg == nil {
-		return cbs
-	}
-	for serverID, serverCfg := range cfg.Servers {
-		threshold := serverCfg.RateLimitThreshold
-		cooldown := time.Duration(serverCfg.RateLimitCooldown) * time.Second
-		cbs[serverID] = newCircuitBreaker(serverID, threshold, cooldown)
-		logUnified.Printf("Created circuit breaker for server %s: threshold=%d, cooldown=%s",
-			serverID, threshold, cooldown)
-	}
-	return cbs
-}
-
 // getCircuitBreaker returns the circuit breaker for serverID, creating one with
 // defaults if none exists (e.g., when called from tests that bypass NewUnified).
 func (us *UnifiedServer) getCircuitBreaker(serverID string) *circuitBreaker {
@@ -357,43 +341,6 @@ func (us *UnifiedServer) getCircuitBreaker(serverID string) *circuitBreaker {
 	cb := newCircuitBreaker(serverID, DefaultRateLimitThreshold, DefaultRateLimitCooldown)
 	us.circuitBreakers[serverID] = cb
 	return cb
-}
-
-// map[string]bool sets for O(1) lookup. Servers with no Tools list are not added to the map,
-// which signals that all tools are permitted. If the Tools list contains a "*" entry anywhere,
-// the server is treated the same as having no list (all tools allowed).
-func buildAllowedToolSets(cfg *config.Config) map[string]map[string]bool {
-	sets := make(map[string]map[string]bool)
-	if cfg == nil {
-		return sets
-	}
-	for serverID, serverCfg := range cfg.Servers {
-		if len(serverCfg.Tools) > 0 {
-			// Treat "*" anywhere in the list as "allow all" — skip adding to the filter map
-			if hasWildcard(serverCfg.Tools) {
-				logger.LogInfo("backend", "[allowed-tools] Wildcard \"*\" configured for %s: allowing all tools", serverID)
-				continue
-			}
-			set := make(map[string]bool, len(serverCfg.Tools))
-			for _, t := range serverCfg.Tools {
-				set[t] = true
-			}
-			sets[serverID] = set
-			logUnified.Printf("Built allowed tool set for server %s: %d tool(s) permitted", serverID, len(set))
-		}
-	}
-	logUnified.Printf("Built allowed tool sets: %d server(s) with tool restrictions", len(sets))
-	return sets
-}
-
-// hasWildcard reports whether the tools list contains a "*" entry.
-func hasWildcard(tools []string) bool {
-	for _, t := range tools {
-		if t == "*" {
-			return true
-		}
-	}
-	return false
 }
 
 // isToolAllowed reports whether toolName is permitted by the server's configured

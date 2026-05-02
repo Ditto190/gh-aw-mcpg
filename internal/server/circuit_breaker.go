@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/github/gh-aw-mcpg/internal/config"
 	"github.com/github/gh-aw-mcpg/internal/logger"
 	"github.com/github/gh-aw-mcpg/internal/strutil"
 )
@@ -231,6 +232,22 @@ func formatResetAt(t time.Time) string {
 		return "unknown"
 	}
 	return fmt.Sprintf("%s (in %s)", t.UTC().Format(time.RFC3339), strutil.FormatDuration(time.Until(t).Round(time.Second)))
+}
+
+// buildCircuitBreakers creates per-backend circuit breakers from the configuration.
+func buildCircuitBreakers(cfg *config.Config) map[string]*circuitBreaker {
+	cbs := make(map[string]*circuitBreaker)
+	if cfg == nil {
+		return cbs
+	}
+	for serverID, serverCfg := range cfg.Servers {
+		threshold := serverCfg.RateLimitThreshold
+		cooldown := time.Duration(serverCfg.RateLimitCooldown) * time.Second
+		cbs[serverID] = newCircuitBreaker(serverID, threshold, cooldown)
+		logCircuitBreaker.Printf("Created circuit breaker for server %s: threshold=%d, cooldown=%s",
+			serverID, threshold, cooldown)
+	}
+	return cbs
 }
 
 // extractRateLimitErrorText extracts the text content from a raw tool result
