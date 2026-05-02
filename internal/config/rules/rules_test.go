@@ -1222,6 +1222,10 @@ func TestTimeoutRange(t *testing.T) {
 				assert.Equal(t, tt.jsonPath, err.JSONPath, "JSONPath should match")
 				assert.Equal(t, tt.fieldName, err.Field, "Field name should match")
 				assert.NotEmpty(t, err.Suggestion, "Suggestion should be non-empty")
+				if tt.name == "suggestion includes midpoint" {
+					expectedMidpoint := tt.min + (tt.max-tt.min)/2
+					assert.Contains(t, err.Suggestion, fmt.Sprintf("%d", expectedMidpoint), "Suggestion should include the midpoint example value")
+				}
 			} else {
 				require.NoError(t, validationErrAsError(err), "Unexpected validation error")
 			}
