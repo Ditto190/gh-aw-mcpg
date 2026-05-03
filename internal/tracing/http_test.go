@@ -58,7 +58,7 @@ func TestStatusResponseWriter_Unwrap_ReturnsUnderlying(t *testing.T) {
 	srw := &statusResponseWriter{ResponseWriter: rec}
 
 	underlying := srw.Unwrap()
-	assert.Equal(t, rec, underlying, "Unwrap should return the wrapped ResponseWriter")
+	assert.Same(t, rec, underlying, "Unwrap should return the wrapped ResponseWriter")
 }
 
 func TestStatusResponseWriter_Unwrap_ExposesOptionalInterfaces(t *testing.T) {
