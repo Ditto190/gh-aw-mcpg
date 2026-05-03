@@ -222,6 +222,23 @@ func TestConvertToCallToolResult(t *testing.T) {
 		require.NotNil(t, result)
 	})
 
+	t.Run("content as []map[string]interface{} (BuildMCPTextResponse output) is handled correctly", func(t *testing.T) {
+		// BuildMCPTextResponse returns content as []map[string]interface{}, not []interface{}.
+		// Passing its output directly to ConvertToCallToolResult must yield proper TextContent items.
+		input := BuildMCPTextResponse("hello from BuildMCPTextResponse")
+
+		result, err := ConvertToCallToolResult(input)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Len(t, result.Content, 1)
+		assert.False(t, result.IsError)
+
+		text, ok := result.Content[0].(*sdk.TextContent)
+		require.True(t, ok, "Expected TextContent")
+		assert.Equal(t, "hello from BuildMCPTextResponse", text.Text)
+	})
+
 	// This test exercises the fallback path in ConvertToCallToolResult where
 	// json.Unmarshal into the typed backendResult struct fails. This happens
 	// when the "content" field exists but holds a non-array JSON value (e.g. a
@@ -434,15 +451,15 @@ func TestBuildMCPTextResponse(t *testing.T) {
 // BenchmarkConvertToCallToolResult_TextContent benchmarks the common case:
 // a map[string]interface{} with text content items (fast path).
 func BenchmarkConvertToCallToolResult_TextContent(b *testing.B) {
-input := map[string]interface{}{
-"content": []interface{}{
-map[string]interface{}{"type": "text", "text": "response line 1"},
-map[string]interface{}{"type": "text", "text": "response line 2"},
-},
-"isError": false,
-}
-b.ResetTimer()
-for range b.N {
-_, _ = ConvertToCallToolResult(input)
-}
+	input := map[string]interface{}{
+		"content": []interface{}{
+			map[string]interface{}{"type": "text", "text": "response line 1"},
+			map[string]interface{}{"type": "text", "text": "response line 2"},
+		},
+		"isError": false,
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = ConvertToCallToolResult(input)
+	}
 }

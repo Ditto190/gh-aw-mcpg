@@ -66,9 +66,21 @@ func convertMapToCallToolResult(m map[string]interface{}) (*sdk.CallToolResult, 
 		}, nil
 	}
 
-	contentArr, ok := contentVal.([]interface{})
-	if !ok {
-		// content field exists but is not an array — wrap the whole map as text.
+	// Collect content items from either []interface{} (produced by json.Unmarshal) or
+	// []map[string]interface{} (produced by helpers like BuildMCPTextResponse).
+	var items []map[string]interface{}
+	switch v := contentVal.(type) {
+	case []interface{}:
+		items = make([]map[string]interface{}, 0, len(v))
+		for _, item := range v {
+			if ci, ok := item.(map[string]interface{}); ok {
+				items = append(items, ci)
+			}
+		}
+	case []map[string]interface{}:
+		items = v
+	default:
+		// content field exists but is not a recognizable slice type — wrap the whole map as text.
 		dataBytes, err := json.Marshal(m)
 		if err != nil {
 			return nil, fmt.Errorf("failed to marshal backend result: %w", err)
@@ -79,12 +91,8 @@ func convertMapToCallToolResult(m map[string]interface{}) (*sdk.CallToolResult, 
 	}
 
 	// Note: empty content array is valid and should be preserved (0 items).
-	content := make([]sdk.Content, 0, len(contentArr))
-	for _, item := range contentArr {
-		ci, ok := item.(map[string]interface{})
-		if !ok {
-			continue
-		}
+	content := make([]sdk.Content, 0, len(items))
+	for _, ci := range items {
 		c, err := convertContentItem(ci)
 		if err != nil {
 			return nil, err
