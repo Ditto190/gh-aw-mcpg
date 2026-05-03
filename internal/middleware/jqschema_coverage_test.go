@@ -253,6 +253,18 @@ func TestWrapToolHandler_SavePayloadFailure(t *testing.T) {
 	// WrapToolHandler must not propagate the savePayload error.
 	require.NoError(t, err, "WrapToolHandler must not return an error when savePayload fails")
 	require.NotNil(t, result)
+
+	// Assert the observable failure-specific behavior: the wrapper still returns
+	// metadata (schema + preview), but no payload path/file is produced.
+	resultJSON, marshalErr := json.Marshal(result)
+	require.NoError(t, marshalErr)
+	assert.Contains(t, string(resultJSON), `"schema"`, "expected metadata response to include schema when payload saving fails")
+	assert.Contains(t, string(resultJSON), `"preview"`, "expected metadata response to include preview when payload saving fails")
+	assert.NotContains(t, string(resultJSON), `"payload_path"`, "metadata response should not include a saved payload path when savePayload fails")
+
+	entries, readErr := os.ReadDir(baseDir)
+	require.NoError(t, readErr)
+	assert.Len(t, entries, 0, "savePayload failure path should not leave any saved payload files or directories behind")
 }
 
 
