@@ -42,12 +42,15 @@ func TestStatusResponseWriter_Write_SetsImplicit200(t *testing.T) {
 
 func TestStatusResponseWriter_Write_PreservesExplicitStatus(t *testing.T) {
 	rec := httptest.NewRecorder()
-	srw := &statusResponseWriter{ResponseWriter: rec, statusCode: http.StatusAccepted}
+	srw := &statusResponseWriter{ResponseWriter: rec}
+
+	srw.WriteHeader(http.StatusAccepted)
 
 	_, err := srw.Write([]byte("body"))
 	require.NoError(t, err)
-	// statusCode was already set; Write must not overwrite it.
+	// statusCode was already set via WriteHeader; Write must not overwrite it.
 	assert.Equal(t, http.StatusAccepted, srw.statusCode)
+	assert.Equal(t, http.StatusAccepted, rec.Code)
 }
 
 func TestStatusResponseWriter_Unwrap_ReturnsUnderlying(t *testing.T) {
