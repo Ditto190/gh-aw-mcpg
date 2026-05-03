@@ -223,6 +223,7 @@ func NewUnified(ctx context.Context, cfg *config.Config) (*UnifiedServer, error)
 // Callers are responsible for adapting the result to their specific return types
 // and wrapping errors as needed.
 func executeBackendToolCall(ctx context.Context, l *launcher.Launcher, serverID, sessionID, toolName string, args interface{}) (interface{}, error) {
+	logUnified.Printf("executeBackendToolCall: serverID=%s, toolName=%s", serverID, toolName)
 	conn, err := launcher.GetOrLaunchForSession(l, serverID, sessionID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect: %w", err)
@@ -238,6 +239,7 @@ func executeBackendToolCall(ctx context.Context, l *launcher.Launcher, serverID,
 
 	// Check if the backend returned an error
 	if response.Error != nil {
+		logUnified.Printf("executeBackendToolCall: backend error: serverID=%s, toolName=%s, code=%d", serverID, toolName, response.Error.Code)
 		return nil, fmt.Errorf("backend error: code=%d, message=%s", response.Error.Code, response.Error.Message)
 	}
 
@@ -338,6 +340,7 @@ func (us *UnifiedServer) getCircuitBreaker(serverID string) *circuitBreaker {
 	if cb, ok := us.circuitBreakers[serverID]; ok {
 		return cb
 	}
+	logUnified.Printf("Creating new circuit breaker for serverID=%s (threshold=%d, cooldown=%v)", serverID, DefaultRateLimitThreshold, DefaultRateLimitCooldown)
 	cb := newCircuitBreaker(serverID, DefaultRateLimitThreshold, DefaultRateLimitCooldown)
 	us.circuitBreakers[serverID] = cb
 	return cb
@@ -709,6 +712,7 @@ func (us *UnifiedServer) GetToolHandler(backendID string, toolName string) func(
 	if toolInfo, ok := us.tools[prefixedName]; ok {
 		return toolInfo.Handler
 	}
+	logUnified.Printf("GetToolHandler: no handler found for backendID=%s, toolName=%s", backendID, toolName)
 	return nil
 }
 
