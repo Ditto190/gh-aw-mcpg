@@ -277,3 +277,127 @@ func TestValidateOpenTelemetryConfig_NonEnforcing(t *testing.T) {
 	err := validateOpenTelemetryConfig(cfg, false)
 	require.NoError(t, err, "Non-enforcing mode should accept HTTP endpoints for backward compat")
 }
+
+// TestGetSampleRate_NilReceiver verifies that calling GetSampleRate on a nil
+// *TracingConfig returns the default sample rate rather than panicking.
+func TestGetSampleRate_NilReceiver(t *testing.T) {
+	var cfg *TracingConfig
+	assert.InDelta(t, DefaultTracingSampleRate, cfg.GetSampleRate(), 0.001,
+		"nil receiver must return DefaultTracingSampleRate")
+}
+
+// TestGetSampleRate_NilSampleRate verifies that a non-nil TracingConfig with an
+// unset (nil) SampleRate pointer returns the default sample rate.
+func TestGetSampleRate_NilSampleRate(t *testing.T) {
+	cfg := &TracingConfig{
+		Endpoint:    "https://otel-collector.example.com",
+		ServiceName: "mcp-gateway",
+		// SampleRate intentionally absent
+	}
+	assert.InDelta(t, DefaultTracingSampleRate, cfg.GetSampleRate(), 0.001,
+		"nil SampleRate must return DefaultTracingSampleRate")
+}
+
+// TestGetSampleRate_ZeroExplicitRate verifies that an explicitly set SampleRate of 0.0
+// (disable all sampling) is returned as-is and not replaced with the default.
+func TestGetSampleRate_ZeroExplicitRate(t *testing.T) {
+	rate := 0.0
+	cfg := &TracingConfig{SampleRate: &rate}
+	assert.InDelta(t, 0.0, cfg.GetSampleRate(), 0.001,
+		"explicit 0.0 SampleRate must be returned unchanged")
+}
+
+// TestTracingDefaults_ServiceNameAlreadySet verifies that applyDefaults does NOT
+// overwrite a ServiceName that was explicitly configured.
+func TestTracingDefaults_ServiceNameAlreadySet(t *testing.T) {
+	cfg := &Config{
+		Gateway: &GatewayConfig{
+			Tracing: &TracingConfig{
+				Endpoint:    "https://otel-collector.example.com",
+				ServiceName: "custom-service",
+			},
+		},
+	}
+	applyDefaults(cfg)
+	assert.Equal(t, "custom-service", cfg.Gateway.Tracing.ServiceName,
+		"applyDefaults must not overwrite an explicitly configured ServiceName")
+}
+
+// TestTracingDefaults_NilGateway verifies that EnsureGatewayDefaults initialises
+// cfg.Gateway when it is nil, matching the invariant enforced by the standard loaders.
+func TestTracingDefaults_NilGateway(t *testing.T) {
+	cfg := &Config{} // Gateway is nil
+	require.NotPanics(t, func() { cfg.EnsureGatewayDefaults() },
+		"EnsureGatewayDefaults must not panic when Gateway is nil")
+	require.NotNil(t, cfg.Gateway, "EnsureGatewayDefaults must initialise Gateway")
+}
+
+// TestTracingDefaults_NilTracing verifies that applyDefaults does not panic when
+// cfg.Gateway.Tracing is nil.
+func TestTracingDefaults_NilTracing(t *testing.T) {
+	cfg := &Config{Gateway: &GatewayConfig{}}
+	require.NotPanics(t, func() { applyDefaults(cfg) },
+		"applyDefaults must not panic when Gateway.Tracing is nil")
+}
+
+// TestStdinConverter_OTelConfig verifies that the stdin converter registered by init()
+// maps StdinOpenTelemetryConfig fields to TracingConfig correctly.
+func TestStdinConverter_OTelConfig(t *testing.T) {
+	cfg := &Config{Gateway: &GatewayConfig{}}
+	stdinCfg := &StdinConfig{
+		Gateway: &StdinGatewayConfig{
+			OpenTelemetry: &StdinOpenTelemetryConfig{
+				Endpoint:    "https://otel.example.com",
+				Headers:     "Authorization=Bearer tok",
+				TraceID:     "4bf92f3577b34da6a3ce929d0e0e4736",
+				SpanID:      "00f067aa0ba902b7",
+				ServiceName: "my-service",
+			},
+		},
+	}
+	applyStdinConverters(cfg, stdinCfg)
+
+	require.NotNil(t, cfg.Gateway.Tracing, "TracingConfig must be populated by the stdin converter")
+	assert.Equal(t, "https://otel.example.com", cfg.Gateway.Tracing.Endpoint)
+	assert.Equal(t, "Authorization=Bearer tok", cfg.Gateway.Tracing.Headers)
+	assert.Equal(t, "4bf92f3577b34da6a3ce929d0e0e4736", cfg.Gateway.Tracing.TraceID)
+	assert.Equal(t, "00f067aa0ba902b7", cfg.Gateway.Tracing.SpanID)
+	assert.Equal(t, "my-service", cfg.Gateway.Tracing.ServiceName)
+}
+
+// TestStdinConverter_OTelConfig_DefaultsServiceName verifies that the stdin converter
+// sets the default ServiceName when none is provided in the stdin config.
+func TestStdinConverter_OTelConfig_DefaultsServiceName(t *testing.T) {
+	cfg := &Config{Gateway: &GatewayConfig{}}
+	stdinCfg := &StdinConfig{
+		Gateway: &StdinGatewayConfig{
+			OpenTelemetry: &StdinOpenTelemetryConfig{
+				Endpoint: "https://otel.example.com",
+				// ServiceName intentionally absent
+			},
+		},
+	}
+	applyStdinConverters(cfg, stdinCfg)
+
+	require.NotNil(t, cfg.Gateway.Tracing)
+	assert.Equal(t, DefaultTracingServiceName, cfg.Gateway.Tracing.ServiceName,
+		"stdin converter must apply DefaultTracingServiceName when ServiceName is empty")
+}
+
+// TestStdinConverter_OTelConfig_NilGateway verifies that the stdin converter does not
+// panic or modify cfg when stdinCfg.Gateway is nil.
+func TestStdinConverter_OTelConfig_NilGateway(t *testing.T) {
+	cfg := &Config{Gateway: &GatewayConfig{}}
+	stdinCfg := &StdinConfig{} // Gateway is nil
+	require.NotPanics(t, func() { applyStdinConverters(cfg, stdinCfg) })
+	assert.Nil(t, cfg.Gateway.Tracing, "Tracing must remain nil when stdin gateway is nil")
+}
+
+// TestStdinConverter_OTelConfig_NilOpenTelemetry verifies that the stdin converter does
+// not panic or modify cfg when stdinCfg.Gateway.OpenTelemetry is nil.
+func TestStdinConverter_OTelConfig_NilOpenTelemetry(t *testing.T) {
+	cfg := &Config{Gateway: &GatewayConfig{}}
+	stdinCfg := &StdinConfig{Gateway: &StdinGatewayConfig{}} // OpenTelemetry is nil
+	require.NotPanics(t, func() { applyStdinConverters(cfg, stdinCfg) })
+	assert.Nil(t, cfg.Gateway.Tracing, "Tracing must remain nil when stdin OpenTelemetry is nil")
+}
