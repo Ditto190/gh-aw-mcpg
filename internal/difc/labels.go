@@ -107,7 +107,9 @@ func (l *Label) Intersect(other *Label) {
 		// Intersection with nil/empty is empty
 		l.mu.Lock()
 		defer l.mu.Unlock()
+		before := len(l.tags)
 		l.tags = make(map[Tag]struct{})
+		logLabels.Printf("Intersect with nil: cleared %d tags", before)
 		return
 	}
 	other.mu.RLock()
@@ -115,10 +117,15 @@ func (l *Label) Intersect(other *Label) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	// Remove tags not in other
+	removed := 0
 	for tag := range l.tags {
 		if _, ok := other.tags[tag]; !ok {
 			delete(l.tags, tag)
+			removed++
 		}
+	}
+	if removed > 0 {
+		logLabels.Printf("Intersect: removed %d tags, %d remaining", removed, len(l.tags))
 	}
 }
 
@@ -130,6 +137,7 @@ func (l *Label) Clone() *Label {
 	for tag := range l.tags {
 		newLabel.tags[tag] = struct{}{}
 	}
+	logLabels.Printf("Cloned label: %d tags", len(newLabel.tags))
 	return newLabel
 }
 
@@ -372,6 +380,7 @@ type ViolationError struct {
 }
 
 func (e *ViolationError) Error() string {
+	logLabels.Printf("Formatting %s violation: resource=%s, isWrite=%v", e.Type, e.Resource, e.IsWrite)
 	var msg string
 
 	if e.Type == SecrecyViolation {
@@ -420,6 +429,7 @@ func formatIntegrityLevel(tags []Tag) string {
 		}
 		switch s {
 		case "merged":
+			logLabels.Printf("formatIntegrityLevel: resolved to \"merged\" from tags=%v", tags)
 			return "\"merged\""
 		case "approved":
 			highest = "\"approved\""
@@ -430,6 +440,7 @@ func formatIntegrityLevel(tags []Tag) string {
 		}
 	}
 	if highest != "" {
+		logLabels.Printf("formatIntegrityLevel: resolved to %s from tags=%v", highest, tags)
 		return highest
 	}
 	return fmt.Sprintf("%v", tags)
@@ -460,6 +471,7 @@ func formatSecrecyLevel(tags []Tag) string {
 	}
 
 	if bestScope != "" {
+		logLabels.Printf("formatSecrecyLevel: resolved to private(%s) from tags=%v", bestScope, tags)
 		return fmt.Sprintf("private (%s)", bestScope)
 	}
 	if hasPrivate {
