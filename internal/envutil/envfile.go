@@ -3,12 +3,14 @@ package envutil
 import (
 	"bufio"
 	"fmt"
-	"log"
 	"os"
 	"strings"
 
+	"github.com/github/gh-aw-mcpg/internal/logger"
 	"github.com/github/gh-aw-mcpg/internal/logger/sanitize"
 )
+
+var logEnvFile = logger.New("envutil:envfile")
 
 // LoadEnvFile reads a .env file and sets environment variables.
 // Lines beginning with '#' and blank lines are ignored.
@@ -22,7 +24,7 @@ func LoadEnvFile(path string) error {
 	}
 	defer file.Close()
 
-	log.Printf("Loading environment from %s...", path)
+	logEnvFile.Printf("Loading environment from %s...", path)
 	scanner := bufio.NewScanner(file)
 	loadedVars := 0
 	for scanner.Scan() {
@@ -50,11 +52,11 @@ func LoadEnvFile(path string) error {
 		}
 
 		// Log loaded variable (hide sensitive values)
-		log.Printf("  Loaded: %s=%s", key, sanitize.TruncateSecret(value))
+		logEnvFile.Printf("  Loaded: %s=%s", key, sanitize.TruncateSecret(value))
 		loadedVars++
 	}
 
-	log.Printf("Loaded %d environment variables from %s", loadedVars, path)
+	logEnvFile.Printf("Loaded %d environment variables from %s", loadedVars, path)
 
 	return scanner.Err()
 }
