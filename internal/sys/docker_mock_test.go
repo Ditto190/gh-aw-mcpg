@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -11,17 +12,30 @@ import (
 )
 
 // mockDockerBinary creates a fake docker binary in a temp directory that outputs
-// a fixed response and returns a cleanup function. The caller must prepend the
-// returned directory to PATH via t.Setenv before calling any docker-dependent code.
+// a fixed response. The caller must prepend the returned directory to PATH via
+// t.Setenv before calling any docker-dependent code. Cleanup is handled
+// automatically by t.TempDir.
+//
+// The test is skipped on non-Unix platforms because the fake binary relies on
+// a /bin/sh shell script.
 //
 // output is what the fake docker script prints to stdout.
 // exitCode controls whether the fake docker succeeds (0) or fails (non-zero).
 func mockDockerBinary(t *testing.T, output string, exitCode int) string {
 	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("mock docker binary requires a Unix-like shell (/bin/sh)")
+	}
 	dir := t.TempDir()
-	script := filepath.Join(dir, "docker")
 
-	content := fmt.Sprintf("#!/bin/sh\nprintf '%%s' '%s'\nexit %d\n", output, exitCode)
+	// Write the output to a separate file so no shell-escaping is needed,
+	// which avoids breakage when output contains single quotes or other
+	// shell-special characters.
+	outputFile := filepath.Join(dir, "output.bin")
+	require.NoError(t, os.WriteFile(outputFile, []byte(output), 0o600))
+
+	script := filepath.Join(dir, "docker")
+	content := fmt.Sprintf("#!/bin/sh\ncat \"%s\"\nexit %d\n", outputFile, exitCode)
 	require.NoError(t, os.WriteFile(script, []byte(content), 0o755))
 	return dir
 }
@@ -30,7 +44,7 @@ func mockDockerBinary(t *testing.T, output string, exitCode int) string {
 func prependPath(t *testing.T, dir string) {
 	t.Helper()
 	origPath := os.Getenv("PATH")
-	t.Setenv("PATH", dir+":"+origPath)
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+origPath)
 }
 
 // TestCheckPortMapping_SuccessPath verifies the happy-path branches of CheckPortMapping
