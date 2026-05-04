@@ -85,9 +85,7 @@ func (l *Label) Union(other *Label) {
 		return
 	}
 	other.mu.RLock()
-	defer other.mu.RUnlock()
 	l.mu.Lock()
-	defer l.mu.Unlock()
 	added := 0
 	for tag := range other.tags {
 		if _, exists := l.tags[tag]; !exists {
@@ -95,6 +93,8 @@ func (l *Label) Union(other *Label) {
 			added++
 		}
 	}
+	l.mu.Unlock()
+	other.mu.RUnlock()
 	if added > 0 {
 		logLabels.Printf("Label union: merged %d new tags from other label", added)
 	}
@@ -106,16 +106,14 @@ func (l *Label) Intersect(other *Label) {
 	if other == nil {
 		// Intersection with nil/empty is empty
 		l.mu.Lock()
-		defer l.mu.Unlock()
 		before := len(l.tags)
 		l.tags = make(map[Tag]struct{})
+		l.mu.Unlock()
 		logLabels.Printf("Intersect with nil: cleared %d tags", before)
 		return
 	}
 	other.mu.RLock()
-	defer other.mu.RUnlock()
 	l.mu.Lock()
-	defer l.mu.Unlock()
 	// Remove tags not in other
 	removed := 0
 	for tag := range l.tags {
@@ -124,20 +122,24 @@ func (l *Label) Intersect(other *Label) {
 			removed++
 		}
 	}
+	remaining := len(l.tags)
+	l.mu.Unlock()
+	other.mu.RUnlock()
 	if removed > 0 {
-		logLabels.Printf("Intersect: removed %d tags, %d remaining", removed, len(l.tags))
+		logLabels.Printf("Intersect: removed %d tags, %d remaining", removed, remaining)
 	}
 }
 
 // Clone creates a copy of this label
 func (l *Label) Clone() *Label {
 	l.mu.RLock()
-	defer l.mu.RUnlock()
 	newLabel := NewLabel()
 	for tag := range l.tags {
 		newLabel.tags[tag] = struct{}{}
 	}
-	logLabels.Printf("Cloned label: %d tags", len(newLabel.tags))
+	count := len(newLabel.tags)
+	l.mu.RUnlock()
+	logLabels.Printf("Cloned label: %d tags", count)
 	return newLabel
 }
 
