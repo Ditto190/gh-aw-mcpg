@@ -323,12 +323,13 @@ func TestTracingDefaults_ServiceNameAlreadySet(t *testing.T) {
 		"applyDefaults must not overwrite an explicitly configured ServiceName")
 }
 
-// TestTracingDefaults_NilGateway verifies that applyDefaults does not panic when
-// cfg.Gateway is nil (tracing is not configured).
+// TestTracingDefaults_NilGateway verifies that EnsureGatewayDefaults initialises
+// cfg.Gateway when it is nil, matching the invariant enforced by the standard loaders.
 func TestTracingDefaults_NilGateway(t *testing.T) {
-	cfg := &Config{}
-	require.NotPanics(t, func() { applyDefaults(cfg) },
-		"applyDefaults must not panic when Gateway is nil")
+	cfg := &Config{} // Gateway is nil
+	require.NotPanics(t, func() { cfg.EnsureGatewayDefaults() },
+		"EnsureGatewayDefaults must not panic when Gateway is nil")
+	require.NotNil(t, cfg.Gateway, "EnsureGatewayDefaults must initialise Gateway")
 }
 
 // TestTracingDefaults_NilTracing verifies that applyDefaults does not panic when
