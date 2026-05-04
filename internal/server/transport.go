@@ -37,7 +37,14 @@ func CreateHTTPServerForMCP(addr string, unifiedServer *UnifiedServer, apiKey, h
 		}
 
 		return unifiedServer.server
-	}, logTransport, envutil.GetEnvDuration("MCP_GATEWAY_SESSION_TIMEOUT", 6*time.Hour), "unified", unifiedServer, apiKey, hmacSecret)
+	}, mcpHandlerConfig{
+		handlerLog:     logTransport,
+		sessionTimeout: envutil.GetEnvDuration("MCP_GATEWAY_SESSION_TIMEOUT", 6*time.Hour), // Configurable; 6h default matches GitHub Actions default timeout
+		logTag:         "unified",
+		unifiedServer:  unifiedServer,
+		apiKey:         apiKey,
+		hmacSecret:     hmacSecret,
+	})
 
 	// Mount handler at /mcp endpoint (logging is done in the callback above)
 	mux.Handle("/mcp/", finalHandler)

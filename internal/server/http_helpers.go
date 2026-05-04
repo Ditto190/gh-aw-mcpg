@@ -167,6 +167,19 @@ func wrapWithMiddleware(handler http.Handler, logTag string, unifiedServer *Unif
 	return tracingHandler.ServeHTTP
 }
 
+// mcpHandlerConfig holds the non-factory options for buildMCPHandler.
+// Using a struct instead of positional parameters makes call sites
+// self-documenting and eliminates the risk of swapping the logTag, apiKey,
+// and hmacSecret string arguments.
+type mcpHandlerConfig struct {
+	handlerLog     *logger.Logger
+	sessionTimeout time.Duration
+	logTag         string
+	unifiedServer  *UnifiedServer
+	apiKey         string
+	hmacSecret     string
+}
+
 // buildMCPHandler constructs the standard streamable HTTP handler stack used by both
 // unified (transport.go) and routed (routed.go) server modes.
 //
@@ -176,20 +189,13 @@ func wrapWithMiddleware(handler http.Handler, logTag string, unifiedServer *Unif
 //     MCP initialize handshake (e.g. Gemini CLI v0.37.x)
 //  3. wrapWithMiddleware – standard middleware chain (OTEL → auth → HMAC →
 //     shutdown check → SDK logging)
-func buildMCPHandler(
-	serverFactory func(*http.Request) *sdk.Server,
-	log *logger.Logger,
-	sessionTimeout time.Duration,
-	logTag string,
-	unifiedServer *UnifiedServer,
-	apiKey, hmacSecret string,
-) http.Handler {
+func buildMCPHandler(serverFactory func(*http.Request) *sdk.Server, cfg mcpHandlerConfig) http.Handler {
 	h := sdk.NewStreamableHTTPHandler(serverFactory, &sdk.StreamableHTTPOptions{
 		Stateless:      false,
-		Logger:         logger.NewSlogLoggerWithHandler(log),
-		SessionTimeout: sessionTimeout,
+		Logger:         logger.NewSlogLoggerWithHandler(cfg.handlerLog),
+		SessionTimeout: cfg.sessionTimeout,
 	})
-	return wrapWithMiddleware(WrapWithSessionAutoInit(h), logTag, unifiedServer, apiKey, hmacSecret)
+	return wrapWithMiddleware(WrapWithSessionAutoInit(h), cfg.logTag, cfg.unifiedServer, cfg.apiKey, cfg.hmacSecret)
 }
 
 // WithSDKLogging wraps an SDK StreamableHTTPHandler to log JSON-RPC translation results.
