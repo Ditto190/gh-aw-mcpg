@@ -159,8 +159,8 @@ func CreateHTTPServerForRoutedMode(addr string, unifiedServer *UnifiedServer, ap
 		backendID := serverID
 		route := fmt.Sprintf("/mcp/%s", backendID)
 
-		// Create StreamableHTTP handler for this route
-		routeHandler := sdk.NewStreamableHTTPHandler(func(r *http.Request) *sdk.Server {
+		// Create the standard MCP handler stack (StreamableHTTP + session auto-init + middleware).
+		finalHandler := buildMCPHandler(func(r *http.Request) *sdk.Server {
 			if _, ok := setupSessionCallback(r, backendID); !ok {
 				return nil
 			}
@@ -171,18 +171,7 @@ func CreateHTTPServerForRoutedMode(addr string, unifiedServer *UnifiedServer, ap
 			return serverCache.getOrCreate(backendID, sessionID, func() *sdk.Server {
 				return createFilteredServer(unifiedServer, backendID)
 			})
-		}, &sdk.StreamableHTTPOptions{
-			Stateless:      false,
-			Logger:         logger.NewSlogLoggerWithHandler(logRouted),
-			SessionTimeout: routedSessionTimeout,
-		})
-
-		// Wrap with session auto-init to handle clients (e.g. Gemini CLI v0.37.x) that send
-		// tools/call before completing the MCP initialize handshake.
-		autoInitHandler := WrapWithSessionAutoInit(routeHandler)
-
-		// Apply standard middleware stack (outermost-first: OTEL tracing → auth → HMAC → shutdown check → SDK logging)
-		finalHandler := wrapWithMiddleware(autoInitHandler, "routed:"+backendID, unifiedServer, apiKey, hmacSecret)
+		}, logRouted, routedSessionTimeout, "routed:"+backendID, unifiedServer, apiKey, hmacSecret)
 
 		// Mount the handler at both /mcp/<server> and /mcp/<server>/
 		mux.Handle(route+"/", finalHandler)

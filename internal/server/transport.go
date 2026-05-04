@@ -23,9 +23,9 @@ func CreateHTTPServerForMCP(addr string, unifiedServer *UnifiedServer, apiKey, h
 	registerCommonEndpoints(mux, unifiedServer, apiKey)
 
 	logTransport.Print("Registering streamable HTTP handler for MCP protocol")
-	// Create StreamableHTTP handler for MCP protocol (supports POST requests)
+	// Create the standard MCP handler stack (StreamableHTTP + session auto-init + middleware).
 	// This is what Codex uses with transport = "streamablehttp"
-	streamableHandler := sdk.NewStreamableHTTPHandler(func(r *http.Request) *sdk.Server {
+	finalHandler := buildMCPHandler(func(r *http.Request) *sdk.Server {
 		// With streamable HTTP, this callback fires for each new session establishment
 		// Subsequent JSON-RPC messages in the same session are handled by the SDK
 		// We use the Authorization header value as the session ID
@@ -37,18 +37,7 @@ func CreateHTTPServerForMCP(addr string, unifiedServer *UnifiedServer, apiKey, h
 		}
 
 		return unifiedServer.server
-	}, &sdk.StreamableHTTPOptions{
-		Stateless:      false,                                                              // Support stateful sessions
-		Logger:         logger.NewSlogLoggerWithHandler(logTransport),                      // Integrate SDK logging with project logger
-		SessionTimeout: envutil.GetEnvDuration("MCP_GATEWAY_SESSION_TIMEOUT", 6*time.Hour), // Configurable; 6h default matches GitHub Actions default timeout
-	})
-
-	// Wrap with session auto-init to handle clients (e.g. Gemini CLI v0.37.x) that send
-	// tools/call before completing the MCP initialize handshake.
-	autoInitHandler := WrapWithSessionAutoInit(streamableHandler)
-
-	// Apply standard middleware stack (outermost-first: OTEL tracing → auth → HMAC → shutdown check → SDK logging)
-	finalHandler := wrapWithMiddleware(autoInitHandler, "unified", unifiedServer, apiKey, hmacSecret)
+	}, logTransport, envutil.GetEnvDuration("MCP_GATEWAY_SESSION_TIMEOUT", 6*time.Hour), "unified", unifiedServer, apiKey, hmacSecret)
 
 	// Mount handler at /mcp endpoint (logging is done in the callback above)
 	mux.Handle("/mcp/", finalHandler)
