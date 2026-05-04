@@ -580,7 +580,7 @@ func TestFilteredServerCache_MaxSize(t *testing.T) {
 	assert.NotNil(s1)
 	assert.NotNil(s2)
 	assert.NotNil(s3)
-	assert.Equal(3, len(cache.servers), "Cache should have 3 entries")
+	assert.Len(cache.servers, 3, "Cache should have 3 entries")
 
 	// Manually set lastUsed to ensure deterministic LRU ordering:
 	// session1 is least recently used, session3 is most recently used.
@@ -593,7 +593,7 @@ func TestFilteredServerCache_MaxSize(t *testing.T) {
 	s4 := cache.getOrCreate("backend", "session4", creator)
 	assert.Equal(4, callCount, "Should have created a 4th server")
 	assert.NotNil(s4)
-	assert.Equal(3, len(cache.servers), "Cache should maintain maxSize by evicting the LRU entry")
+	assert.Len(cache.servers, 3, "Cache should maintain maxSize by evicting the LRU entry")
 
 	// session1 (LRU) should have been evicted
 	_, session1Exists := cache.servers["backend/session1"]
@@ -666,7 +666,7 @@ func TestFilteredServerCache_TTLEviction(t *testing.T) {
 	// Add an entry
 	cache.getOrCreate("backend", "session1", creator)
 	assert.Equal(1, callCount)
-	assert.Equal(1, len(cache.servers))
+	assert.Len(cache.servers, 1)
 
 	// Wait for TTL to expire (use generous margin to avoid CI flakiness)
 	time.Sleep(200 * time.Millisecond)
