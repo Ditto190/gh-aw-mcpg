@@ -809,35 +809,35 @@ mod tests {
     fn check_file_secrecy_rsa_key_triggers_private() {
         let ctx = default_ctx();
         let result = check_file_secrecy(".ssh/id_rsa", vec![], "octocat", "hello-world", "octocat/hello-world", &ctx);
-        assert_eq!(result, private_label("octocat", "hello-world"));
+        assert_eq!(result, private_label("octocat", "hello-world", "octocat/hello-world", &ctx));
     }
 
     #[test]
     fn check_file_secrecy_workflow_file_triggers_private() {
         let ctx = default_ctx();
         let result = check_file_secrecy(".github/workflows/ci.yml", vec![], "octocat", "hello-world", "octocat/hello-world", &ctx);
-        assert_eq!(result, private_label("octocat", "hello-world"));
+        assert_eq!(result, private_label("octocat", "hello-world", "octocat/hello-world", &ctx));
     }
 
     #[test]
     fn check_file_secrecy_secrets_json_triggers_private() {
         let ctx = default_ctx();
         let result = check_file_secrecy("config/secrets.json", vec![], "octocat", "hello-world", "octocat/hello-world", &ctx);
-        assert_eq!(result, private_label("octocat", "hello-world"));
+        assert_eq!(result, private_label("octocat", "hello-world", "octocat/hello-world", &ctx));
     }
 
     #[test]
     fn check_file_secrecy_password_file_triggers_private() {
         let ctx = default_ctx();
         let result = check_file_secrecy("db_password.txt", vec![], "octocat", "hello-world", "octocat/hello-world", &ctx);
-        assert_eq!(result, private_label("octocat", "hello-world"));
+        assert_eq!(result, private_label("octocat", "hello-world", "octocat/hello-world", &ctx));
     }
 
     #[test]
     fn check_file_secrecy_token_file_triggers_private() {
         let ctx = default_ctx();
         let result = check_file_secrecy("auth_token", vec![], "octocat", "hello-world", "octocat/hello-world", &ctx);
-        assert_eq!(result, private_label("octocat", "hello-world"));
+        assert_eq!(result, private_label("octocat", "hello-world", "octocat/hello-world", &ctx));
     }
 
     #[test]
@@ -861,7 +861,7 @@ mod tests {
         let ctx = default_ctx();
         // .ENV (uppercase) should still match
         let result = check_file_secrecy("config/.ENV", vec![], "octocat", "hello-world", "octocat/hello-world", &ctx);
-        assert_eq!(result, private_label("octocat", "hello-world"));
+        assert_eq!(result, private_label("octocat", "hello-world", "octocat/hello-world", &ctx));
     }
 
     #[test]
@@ -869,6 +869,6 @@ mod tests {
         let ctx = default_ctx();
         // SECRET (uppercase) in filename should match keyword check
         let result = check_file_secrecy("MY_SECRET_KEY", vec![], "octocat", "hello-world", "octocat/hello-world", &ctx);
-        assert_eq!(result, private_label("octocat", "hello-world"));
+        assert_eq!(result, private_label("octocat", "hello-world", "octocat/hello-world", &ctx));
     }
 }
