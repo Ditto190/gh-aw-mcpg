@@ -780,29 +780,29 @@ mod tests {
         PolicyContext::default()
     }
 
-    fn private_label(owner: &str, repo: &str) -> Vec<String> {
-        vec![format!("private:{}/{}", owner, repo)]
+    fn private_label(owner: &str, repo: &str, repo_id: &str, ctx: &PolicyContext) -> Vec<String> {
+        super::policy_private_scope_label(owner, repo, repo_id, ctx)
     }
 
     #[test]
     fn check_file_secrecy_env_file_triggers_private() {
         let ctx = default_ctx();
         let result = check_file_secrecy(".env", vec![], "octocat", "hello-world", "octocat/hello-world", &ctx);
-        assert_eq!(result, private_label("octocat", "hello-world"));
+        assert_eq!(result, private_label("octocat", "hello-world", "octocat/hello-world", &ctx));
     }
 
     #[test]
     fn check_file_secrecy_dotenv_extension_triggers_private() {
         let ctx = default_ctx();
         let result = check_file_secrecy("deploy/config.env", vec![], "octocat", "hello-world", "octocat/hello-world", &ctx);
-        assert_eq!(result, private_label("octocat", "hello-world"));
+        assert_eq!(result, private_label("octocat", "hello-world", "octocat/hello-world", &ctx));
     }
 
     #[test]
     fn check_file_secrecy_pem_file_triggers_private() {
         let ctx = default_ctx();
         let result = check_file_secrecy("certs/server.pem", vec![], "octocat", "hello-world", "octocat/hello-world", &ctx);
-        assert_eq!(result, private_label("octocat", "hello-world"));
+        assert_eq!(result, private_label("octocat", "hello-world", "octocat/hello-world", &ctx));
     }
 
     #[test]
