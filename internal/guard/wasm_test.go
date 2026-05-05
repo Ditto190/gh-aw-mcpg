@@ -276,6 +276,24 @@ func TestNormalizePolicyPayloadExtended(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, policy, result)
 	})
+
+	t.Run("JSON string literal rejected", func(t *testing.T) {
+		_, err := normalizePolicyPayload(`"hello"`)
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "must decode to an object")
+	})
+
+	t.Run("JSON number literal rejected", func(t *testing.T) {
+		_, err := normalizePolicyPayload(`42`)
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "must decode to an object")
+	})
+
+	t.Run("non-string non-map policy passed through without error", func(t *testing.T) {
+		result, err := normalizePolicyPayload(true)
+		require.NoError(t, err)
+		assert.True(t, result.(bool))
+	})
 }
 
 func TestBuildStrictLabelAgentPayloadExtended(t *testing.T) {
@@ -939,6 +957,23 @@ func TestBuildLabelAgentPayload(t *testing.T) {
 		allowOnly, ok := resultMap["allow-only"].(map[string]interface{})
 		require.True(t, ok)
 		assert.Contains(t, allowOnly, "trusted-users")
+	})
+
+	t.Run("trusted users not injected when allow-only absent", func(t *testing.T) {
+		policy := map[string]interface{}{
+			"something": "value",
+		}
+		result := BuildLabelAgentPayload(policy, nil, []string{"user1"})
+		payloadMap, ok := result.(map[string]interface{})
+		require.True(t, ok)
+		// trusted-users should NOT be added at top level (only injected inside allow-only)
+		assert.NotContains(t, payloadMap, "trusted-users")
+	})
+
+	t.Run("non-JSON-object policy falls back to original on conversion failure", func(t *testing.T) {
+		// PolicyToMap fails for a string that is not a JSON object
+		result := BuildLabelAgentPayload("not-a-json-object", []string{"bot"}, nil)
+		assert.Equal(t, "not-a-json-object", result)
 	})
 }
 

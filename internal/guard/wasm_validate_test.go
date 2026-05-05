@@ -162,6 +162,23 @@ func TestValidateStringArray(t *testing.T) {
 			wantErr:         true,
 			wantErrContains: "my-field",
 		},
+		// nil raw value
+		{
+			name:            "nil raw with requireNonEmpty=false returns error",
+			fieldName:       "blocked-users",
+			raw:             nil,
+			requireNonEmpty: false,
+			wantErr:         true,
+			wantErrContains: "expected array of strings",
+		},
+		{
+			name:            "nil raw with requireNonEmpty=true returns error",
+			fieldName:       "trusted-bots",
+			raw:             nil,
+			requireNonEmpty: true,
+			wantErr:         true,
+			wantErrContains: "expected non-empty array of strings",
+		},
 	}
 
 	for _, tt := range tests {
