@@ -176,7 +176,11 @@ func (g *WasmGuard) callWasmFunction(ctx context.Context, funcName string, input
 // Returns (nil, 0, error) on actual error.
 func (g *WasmGuard) tryCallWasmFunction(ctx context.Context, fn api.Function, mem api.Memory, inputJSON []byte, outputSize uint32) ([]byte, uint32, error) {
 	inputSize := uint32(len(inputJSON))
-	logWasm.Printf("tryCallWasmFunction: guard=%s, inputSize=%d, outputSize=%d", g.name, inputSize, outputSize)
+	functionName := "<unknown>"
+	if def := fn.Definition(); def != nil && def.Name() != "" {
+		functionName = def.Name()
+	}
+	logWasm.Printf("tryCallWasmFunction: guard=%s, func=%s, inputSize=%d, outputSize=%d", g.name, functionName, inputSize, outputSize)
 
 	// Preferred path: use guard allocator only when both allocator exports are
 	// available, to avoid overlapping host-managed buffers with guard heap
