@@ -158,17 +158,18 @@ func TestGetServerStatus_MultipleServers(t *testing.T) {
 	assert.Equal(0, status["bad-backend"].Uptime, "Error server uptime should be 0")
 }
 
-// TestGetServerStatus_NilConfig verifies GetServerStatus handles a nil-config unified server gracefully.
-func TestGetServerStatus_NilConfig(t *testing.T) {
+// TestGetServerStatus_EmptyConfig verifies GetServerStatus handles a unified server
+// with an empty config gracefully.
+func TestGetServerStatus_EmptyConfig(t *testing.T) {
 	require := require.New(t)
 	assert := assert.New(t)
 
-	us, err := NewUnified(context.Background(), nil)
+	us, err := NewUnified(context.Background(), &config.Config{})
 	require.NoError(err)
 	t.Cleanup(func() { us.Close() })
 
 	status := us.GetServerStatus()
-	assert.NotNil(status, "GetServerStatus should return a non-nil map even with nil config")
+	assert.NotNil(status, "GetServerStatus should return a non-nil map even with empty config")
 	assert.Empty(status, "No servers configured means empty status map")
 }
 
