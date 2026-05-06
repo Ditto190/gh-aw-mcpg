@@ -118,6 +118,14 @@ func validateStandardServerConfig(name string, server *StdinServerConfig, jsonPa
 		}
 	}
 
+	// Validate per-server tool_timeout if provided
+	if server.ToolTimeout != nil {
+		if err := rules.TimeoutMinimum(*server.ToolTimeout, ToolTimeoutMin, "tool_timeout", jsonPath+".tool_timeout"); err != nil {
+			logValidateServerFailed(name, fmt.Sprintf("tool_timeout %d is below minimum %d", *server.ToolTimeout, ToolTimeoutMin))
+			return err
+		}
+	}
+
 	logValidateServerPassed(name)
 	return nil
 }
