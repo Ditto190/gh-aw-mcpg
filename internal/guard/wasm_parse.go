@@ -178,11 +178,12 @@ func (g *WasmGuard) tryCallWasmFunction(ctx context.Context, fn api.Function, me
 	inputSize := uint32(len(inputJSON))
 	logWasm.Printf("tryCallWasmFunction: guard=%s, inputSize=%d, outputSize=%d", g.name, inputSize, outputSize)
 
-	// Preferred path: use guard allocator if exported to avoid overlapping
-	// host-managed buffers with guard heap allocations.
+	// Preferred path: use guard allocator only when both allocator exports are
+	// available, to avoid overlapping host-managed buffers with guard heap
+	// allocations and to ensure allocated memory can be freed.
 	allocFn := g.module.ExportedFunction("alloc")
 	deallocFn := g.module.ExportedFunction("dealloc")
-	if allocFn != nil {
+	if allocFn != nil && deallocFn != nil {
 		logWasm.Printf("Using guard allocator path: guard=%s", g.name)
 		// Use a non-cancelable context for cleanup to avoid leaking WASM heap
 		// allocations if the request context is canceled or times out.
