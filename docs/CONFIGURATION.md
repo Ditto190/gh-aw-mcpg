@@ -176,7 +176,8 @@ Run `./awmg --help` for full CLI options. Key flags:
 
 - **`connect_timeout`** (optional, HTTP servers only): Per-transport connection timeout in seconds for connecting to HTTP backends. The gateway tries streamable HTTP, then SSE, then plain JSON-RPC over HTTP POST in sequence; this timeout applies to each attempt. It does **not** set the end-to-end `tools/call` execution timeout. Default: `30`.
 
-- **`tool_timeout`** (optional): Per-server tool invocation timeout in seconds. When set, overrides the global `gateway.toolTimeout` for `tools/call` requests to this specific server. This allows reusable shared workflow components wrapping long-running HTTP MCP servers to set an appropriate timeout once, without requiring every consumer to configure `MCP_GATEWAY_TOOL_TIMEOUT`. Minimum: `10`. When omitted, the global `gateway.toolTimeout` (or its `MCP_GATEWAY_TOOL_TIMEOUT` env fallback) is used.
+- **`tool_timeout`** (optional): Per-server tool invocation timeout in seconds. When set to a positive value, overrides the global tool timeout for `tools/call` requests to this specific server. This allows reusable shared workflow components wrapping long-running HTTP MCP servers to set an appropriate timeout once, without requiring every consumer to configure `MCP_GATEWAY_TOOL_TIMEOUT`. Minimum: `10`. Omit the field (or set to `0`) to fall back to the global timeout.
+  - Global timeout field name: **`toolTimeout`** in stdin JSON (`gateway.toolTimeout`), **`tool_timeout`** in TOML (`[gateway]` → `tool_timeout`)
   - Example (stdin JSON): `"tool_timeout": 600` on an HTTP MCP server that may take up to 10 minutes
   - Example (TOML): `tool_timeout = 600` under a `[servers.my-server]` section
 

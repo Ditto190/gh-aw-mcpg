@@ -118,8 +118,9 @@ func validateStandardServerConfig(name string, server *StdinServerConfig, jsonPa
 		}
 	}
 
-	// Validate per-server tool_timeout if provided
-	if server.ToolTimeout != nil {
+	// Validate per-server tool_timeout if provided and non-zero.
+	// A value of 0 means "unset – fall back to the global gateway timeout".
+	if server.ToolTimeout != nil && *server.ToolTimeout != 0 {
 		if err := rules.TimeoutMinimum(*server.ToolTimeout, ToolTimeoutMin, "tool_timeout", jsonPath+".tool_timeout"); err != nil {
 			logValidateServerFailed(name, fmt.Sprintf("tool_timeout %d is below minimum %d", *server.ToolTimeout, ToolTimeoutMin))
 			return err

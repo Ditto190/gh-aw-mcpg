@@ -584,8 +584,13 @@ func TestCallBackendTool_PerServerToolTimeoutOverridesGlobal(t *testing.T) {
 				"result": map[string]interface{}{"tools": []map[string]interface{}{}},
 			})
 		case "tools/call":
-			// Delay longer than per-server timeout (1s), but shorter than global (30s)
-			time.Sleep(3 * time.Second)
+			// Block until the client's context is canceled (per-server timeout fires) or
+			// a generous safety timer elapses.  Using select avoids the 3s unconditional
+			// sleep that previously made the test slow and delayed backend.Close().
+			select {
+			case <-r.Context().Done():
+			case <-time.After(10 * time.Second):
+			}
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"jsonrpc": "2.0", "id": req["id"],
 				"result": map[string]interface{}{

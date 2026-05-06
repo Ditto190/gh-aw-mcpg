@@ -1129,14 +1129,13 @@ func TestValidatePerServerToolTimeout(t *testing.T) {
 			errMsg:    "tool_timeout",
 		},
 		{
-			name: "tool_timeout of 0 on http server",
+			name: "tool_timeout of 0 on http server (treated as unset, falls back to global)",
 			server: &StdinServerConfig{
 				Type:        "http",
 				URL:         "https://example.com/mcp",
 				ToolTimeout: intPtr(0),
 			},
-			shouldErr: true,
-			errMsg:    "tool_timeout",
+			shouldErr: false,
 		},
 		{
 			name: "valid tool_timeout on stdio server",

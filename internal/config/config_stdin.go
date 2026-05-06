@@ -128,8 +128,9 @@ type StdinServerConfig struct {
 	ConnectTimeout *int `json:"connect_timeout,omitempty"`
 
 	// ToolTimeout is the per-server maximum time (seconds) to wait for a single tool invocation.
-	// When set, this overrides the global gateway.toolTimeout for calls to this server only.
-	// Minimum: 10. When 0 or omitted, the global gateway.toolTimeout is used.
+	// When set to a positive value, this overrides the global gateway.toolTimeout for calls to
+	// this server only. Minimum: 10. Omit the field (or set to 0) to fall back to the global
+	// gateway.toolTimeout (or MCP_GATEWAY_TOOL_TIMEOUT env fallback).
 	ToolTimeout *int `json:"tool_timeout,omitempty"`
 
 	// AdditionalProperties stores any extra fields for custom server types

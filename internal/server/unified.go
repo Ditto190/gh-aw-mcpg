@@ -370,7 +370,7 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 	// Per-server tool_timeout takes precedence over the global gateway.tool_timeout.
 	toolTimeout := 0
 	if us.cfg != nil {
-		if serverCfg, ok := us.cfg.Servers[serverID]; ok && serverCfg.ToolTimeout > 0 {
+		if serverCfg, ok := us.cfg.Servers[serverID]; ok && serverCfg != nil && serverCfg.ToolTimeout > 0 {
 			toolTimeout = serverCfg.ToolTimeout
 			logUnified.Printf("callBackendTool: using per-server tool_timeout=%d for serverID=%s", toolTimeout, serverID)
 		} else if us.cfg.Gateway != nil && us.cfg.Gateway.ToolTimeout > 0 {
