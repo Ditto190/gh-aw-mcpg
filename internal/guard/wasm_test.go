@@ -1298,6 +1298,23 @@ func TestWasmGuardCompilationCache(t *testing.T) {
 		assert.NotEmpty(t, entries, "expected compilation artifacts in global cache directory")
 	})
 
+	t.Run("global cache can be reconfigured to a disk-backed directory", func(t *testing.T) {
+		ctx := context.Background()
+		cacheDir := t.TempDir()
+
+		require.NoError(t, ConfigureGlobalCompilationCache(ctx, cacheDir))
+		t.Cleanup(func() {
+			require.NoError(t, ConfigureGlobalCompilationCache(ctx, ""))
+		})
+
+		_, err := NewWasmGuardWithOptions(ctx, "cache-test", minimalGuardWasm, &mockBackendCaller{}, nil)
+		require.Error(t, err)
+
+		entries, readErr := os.ReadDir(cacheDir)
+		require.NoError(t, readErr)
+		assert.NotEmpty(t, entries, "expected compilation artifacts in reconfigured global cache directory")
+	})
+
 	t.Run("cache is disabled when DisableCompilationCache is true", func(t *testing.T) {
 		ctx := context.Background()
 

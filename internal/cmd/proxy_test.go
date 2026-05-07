@@ -53,6 +53,7 @@ func TestNewProxyCmd_AllFlagsRegistered(t *testing.T) {
 		"github-token",
 		"listen",
 		"log-dir",
+		"wasm-cache-dir",
 		"guards-mode",
 		"github-api-url",
 		"tls",
@@ -335,6 +336,20 @@ func TestNewProxyCmd_LogDirDefault(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, config.DefaultLogDir, val,
 		"--log-dir should default to config.DefaultLogDir when MCP_GATEWAY_LOG_DIR is unset")
+}
+
+// TestNewProxyCmd_WasmCacheDirDefault verifies --wasm-cache-dir defaults beneath --log-dir.
+func TestNewProxyCmd_WasmCacheDirDefault(t *testing.T) {
+	t.Setenv("MCP_GATEWAY_LOG_DIR", "")
+	t.Setenv(wasmCacheDirEnvVar, "")
+
+	cmd := newProxyCmd()
+	require.NotNil(t, cmd)
+
+	val, err := cmd.Flags().GetString("wasm-cache-dir")
+	require.NoError(t, err)
+	assert.Equal(t, defaultWasmCacheDir(config.DefaultLogDir), val,
+		"--wasm-cache-dir should default beneath config.DefaultLogDir when env vars are unset")
 }
 
 // TestNewProxyCmd_ListenFlag verifies --listen, -l shorthand and default value.

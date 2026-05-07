@@ -382,6 +382,7 @@ DEBUG_COLORS=0 DEBUG=* ./awmg --config config.toml
 - `DEBUG` - Enable debug logging (e.g., `DEBUG=*`, `DEBUG=server:*,launcher:*`)
 - `DEBUG_COLORS` - Control colored output (0 to disable, auto-disabled when piping)
 - `MCP_GATEWAY_LOG_DIR` - Log file directory (sets default for `--log-dir` flag, default: `/tmp/gh-aw/mcp-logs`)
+- `MCP_GATEWAY_WASM_CACHE_DIR` - Disk-backed wazero compilation cache directory (sets default for `--wasm-cache-dir`, default: `<log-dir>/wazero-cache`)
 - `MCP_GATEWAY_PAYLOAD_DIR` - Large payload storage directory (sets default for `--payload-dir` flag, default: `/tmp/jq-payloads`)
 - `MCP_GATEWAY_PAYLOAD_PATH_PREFIX` - Path prefix for remapping payloadPath returned to clients (sets default for `--payload-path-prefix` flag, default: empty)
 - `MCP_GATEWAY_PAYLOAD_SIZE_THRESHOLD` - Size threshold in bytes for payload storage; payloads larger than this are stored to disk (sets default for `--payload-size-threshold` flag, default: `524288`)

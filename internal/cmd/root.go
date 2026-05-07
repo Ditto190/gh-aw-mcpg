@@ -19,6 +19,7 @@ import (
 	"github.com/github/gh-aw-mcpg/internal/config"
 	"github.com/github/gh-aw-mcpg/internal/difc"
 	"github.com/github/gh-aw-mcpg/internal/envutil"
+	"github.com/github/gh-aw-mcpg/internal/guard"
 	"github.com/github/gh-aw-mcpg/internal/logger"
 	"github.com/github/gh-aw-mcpg/internal/server"
 	"github.com/github/gh-aw-mcpg/internal/tracing"
@@ -149,6 +150,12 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 	logger.LogInfoMd("startup", "Starting MCPG with config: %s, listen: %s, log-dir: %s", configSource, listenAddr, logDir)
 	debugLog.Printf("Starting MCPG with config: %s, listen: %s", configSource, listenAddr)
+
+	resolvedWasmCacheDir := resolveWasmCacheDir(cmd.Flags().Changed("wasm-cache-dir"), wasmCacheDir, logDir)
+	if err := guard.ConfigureGlobalCompilationCache(ctx, resolvedWasmCacheDir); err != nil {
+		return fmt.Errorf("failed to configure WASM compilation cache: %w", err)
+	}
+	logger.StartupInfo("WASM compilation cache directory: %s", resolvedWasmCacheDir)
 
 	// Load .env file if specified
 	if envFile != "" {
