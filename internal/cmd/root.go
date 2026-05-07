@@ -19,7 +19,6 @@ import (
 	"github.com/github/gh-aw-mcpg/internal/config"
 	"github.com/github/gh-aw-mcpg/internal/difc"
 	"github.com/github/gh-aw-mcpg/internal/envutil"
-	"github.com/github/gh-aw-mcpg/internal/guard"
 	"github.com/github/gh-aw-mcpg/internal/logger"
 	"github.com/github/gh-aw-mcpg/internal/server"
 	"github.com/github/gh-aw-mcpg/internal/tracing"
@@ -139,6 +138,14 @@ func run(cmd *cobra.Command, args []string) error {
 	ctx, cancel := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
+	// Load .env file if specified before resolving env-backed startup settings.
+	if envFile != "" {
+		debugLog.Printf("Loading environment from file: %s", envFile)
+		if err := envutil.LoadEnvFile(envFile); err != nil {
+			return fmt.Errorf("failed to load .env file: %w", err)
+		}
+	}
+
 	logger.InitGatewayLoggers(logDir)
 
 	logger.LogInfoMd("startup", "MCPG Gateway version: %s", cliVersion)
@@ -151,19 +158,11 @@ func run(cmd *cobra.Command, args []string) error {
 	logger.LogInfoMd("startup", "Starting MCPG with config: %s, listen: %s, log-dir: %s", configSource, listenAddr, logDir)
 	debugLog.Printf("Starting MCPG with config: %s, listen: %s", configSource, listenAddr)
 
-	resolvedWasmCacheDir := resolveWasmCacheDir(cmd.Flags().Changed("wasm-cache-dir"), wasmCacheDir, logDir)
-	if err := guard.ConfigureGlobalCompilationCache(ctx, resolvedWasmCacheDir); err != nil {
-		return fmt.Errorf("failed to configure WASM compilation cache: %w", err)
+	resolvedWasmCacheDir, cacheErr := configureWasmCompilationCache(ctx, cmd.Flags().Changed("wasm-cache-dir"), wasmCacheDir, logDir, logger.StartupWarn)
+	if cacheErr != nil {
+		return cacheErr
 	}
 	logger.StartupInfo("WASM compilation cache directory: %s", resolvedWasmCacheDir)
-
-	// Load .env file if specified
-	if envFile != "" {
-		debugLog.Printf("Loading environment from file: %s", envFile)
-		if err := envutil.LoadEnvFile(envFile); err != nil {
-			return fmt.Errorf("failed to load .env file: %w", err)
-		}
-	}
 
 	// Validate execution environment if requested
 	if validateEnv {

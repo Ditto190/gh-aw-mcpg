@@ -167,9 +167,9 @@ func runProxy(cmd *cobra.Command, args []string) error {
 
 	logger.LogInfo("startup", "MCPG Proxy starting: listen=%s, guard=%s, mode=%s, tls=%v", proxyListen, proxyGuardWasm, proxyDIFCMode, proxyTLS)
 
-	resolvedWasmCacheDir := resolveWasmCacheDir(cmd.Flags().Changed("wasm-cache-dir"), proxyWasmCacheDir, proxyLogDir)
-	if err := guard.ConfigureGlobalCompilationCache(ctx, resolvedWasmCacheDir); err != nil {
-		return fmt.Errorf("failed to configure WASM compilation cache: %w", err)
+	resolvedWasmCacheDir, err := configureWasmCompilationCache(ctx, cmd.Flags().Changed("wasm-cache-dir"), proxyWasmCacheDir, proxyLogDir, logger.StartupWarn)
+	if err != nil {
+		return err
 	}
 	cleanupCtx := context.WithoutCancel(ctx)
 	defer func() {
