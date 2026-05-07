@@ -139,7 +139,9 @@ Local usage:
 		cmd.MarkFlagRequired("guard-wasm")
 	}
 
-	// Enum completions for proxy DIFC flag
+	// Enum completions for the proxy command's own DIFC flag.
+	// Note: rootCmd registers guards-mode completion separately for the root
+	// command's distinct flag definition; keep both registrations in place.
 	cmd.RegisterFlagCompletionFunc("guards-mode", cobra.FixedCompletions(
 		[]string{"strict", "filter", "propagate"}, cobra.ShellCompDirectiveNoFileComp))
 
