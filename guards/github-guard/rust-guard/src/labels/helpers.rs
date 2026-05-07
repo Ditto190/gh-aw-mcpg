@@ -480,9 +480,10 @@ fn cap_integrity(
     cap: Vec<String>,
     ctx: &PolicyContext,
 ) -> Vec<String> {
-    let current_rank = integrity_rank(scope, &current, ctx);
-    let cap_rank = integrity_rank(scope, &cap, ctx);
-    integrity_for_rank(scope, current_rank.min(cap_rank), ctx)
+    let normalized_scope = normalize_scope(scope, ctx);
+    let current_rank = integrity_rank_normalized(&normalized_scope, &current);
+    let cap_rank = integrity_rank_normalized(&normalized_scope, &cap);
+    build_integrity_labels(&normalized_scope, current_rank.min(cap_rank).saturating_sub(1) as usize)
 }
 
 /// Build the integrity `Vec<String>` for a given level name over a scope.
@@ -1279,25 +1280,18 @@ pub fn merged_integrity(scope: &str, ctx: &PolicyContext) -> Vec<String> {
 }
 
 fn integrity_rank(scope: &str, labels: &[String], ctx: &PolicyContext) -> u8 {
-    let normalized_scope = normalize_scope(scope, ctx);
+    integrity_rank_normalized(&normalize_scope(scope, ctx), labels)
+}
 
+fn integrity_rank_normalized(normalized_scope: &str, labels: &[String]) -> u8 {
     // Check from highest to lowest, allocating one label at a time.
     for (rank, (prefix, base)) in INTEGRITY_LEVELS.iter().enumerate().rev() {
-        let tag = format_integrity_label(prefix, &normalized_scope, base);
+        let tag = format_integrity_label(prefix, normalized_scope, base);
         if labels.iter().any(|l| l == &tag) {
             return (rank + 1) as u8;
         }
     }
     0
-}
-
-fn integrity_for_rank(scope: &str, rank: u8, ctx: &PolicyContext) -> Vec<String> {
-    match rank {
-        4 => merged_integrity(scope, ctx),
-        3 => writer_integrity(scope, ctx),
-        2 => reader_integrity(scope, ctx),
-        _ => none_integrity(scope, ctx),
-    }
 }
 
 /// Elevate integrity to the max of current and candidate levels for a scope.
@@ -1307,9 +1301,10 @@ pub fn max_integrity(
     candidate: Vec<String>,
     ctx: &PolicyContext,
 ) -> Vec<String> {
-    let left = integrity_rank(scope, &current, ctx);
-    let right = integrity_rank(scope, &candidate, ctx);
-    integrity_for_rank(scope, left.max(right), ctx)
+    let normalized_scope = normalize_scope(scope, ctx);
+    let left = integrity_rank_normalized(&normalized_scope, &current);
+    let right = integrity_rank_normalized(&normalized_scope, &candidate);
+    build_integrity_labels(&normalized_scope, left.max(right).saturating_sub(1) as usize)
 }
 
 /// Map a GitHub `author_association` value to initial integrity labels.
@@ -1349,11 +1344,16 @@ pub fn author_association_floor_from_str(
         return vec![];
     };
 
-    let normalized = raw.trim().to_ascii_uppercase();
-    match normalized.as_str() {
-        "OWNER" | "MEMBER" | "COLLABORATOR" => writer_integrity(scope, ctx),
-        "CONTRIBUTOR" | "FIRST_TIME_CONTRIBUTOR" | "NONE" => reader_integrity(scope, ctx),
-        _ => vec![], // FIRST_TIMER or any unrecognised value
+    let raw = raw.trim();
+    if ["OWNER", "MEMBER", "COLLABORATOR"].iter().any(|value| raw.eq_ignore_ascii_case(value)) {
+        writer_integrity(scope, ctx)
+    } else if ["CONTRIBUTOR", "FIRST_TIME_CONTRIBUTOR", "NONE"]
+        .iter()
+        .any(|value| raw.eq_ignore_ascii_case(value))
+    {
+        reader_integrity(scope, ctx)
+    } else {
+        vec![] // FIRST_TIMER or any unrecognised value
     }
 }
 
@@ -1415,11 +1415,13 @@ pub fn collaborator_permission_floor(
         return vec![];
     };
 
-    let normalized = raw.trim().to_ascii_lowercase();
-    match normalized.as_str() {
-        "admin" | "maintain" | "write" => writer_integrity(scope, ctx),
-        "triage" | "read" => reader_integrity(scope, ctx),
-        _ => vec![], // "none" or any unrecognised value → no integrity
+    let raw = raw.trim();
+    if ["admin", "maintain", "write"].iter().any(|value| raw.eq_ignore_ascii_case(value)) {
+        writer_integrity(scope, ctx)
+    } else if ["triage", "read"].iter().any(|value| raw.eq_ignore_ascii_case(value)) {
+        reader_integrity(scope, ctx)
+    } else {
+        vec![] // "none" or any unrecognised value → no integrity
     }
 }
 
@@ -2303,6 +2305,16 @@ mod tests {
         // cap > current → should stay at current (min(reader, writer) = reader)
         let result = cap_integrity(scope, current.clone(), cap, &ctx);
         assert_eq!(result, current, "cap higher than current should not change integrity");
+    }
+
+    #[test]
+    fn test_max_integrity_promotes_to_higher_rank() {
+        let ctx = test_ctx();
+        let scope = "owner/repo";
+        let current = reader_integrity(scope, &ctx);
+        let candidate = merged_integrity(scope, &ctx);
+        let result = max_integrity(scope, current, candidate.clone(), &ctx);
+        assert_eq!(result, candidate, "max_integrity should keep the higher integrity rank");
     }
 
     #[test]
