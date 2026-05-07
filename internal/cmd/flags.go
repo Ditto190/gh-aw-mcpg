@@ -36,6 +36,7 @@ package cmd
 
 import (
 	"github.com/github/gh-aw-mcpg/internal/difc"
+	"github.com/github/gh-aw-mcpg/internal/guard"
 	"github.com/spf13/cobra"
 )
 
@@ -78,7 +79,7 @@ func registerFlagCompletions(cmd *cobra.Command) {
 	cmd.RegisterFlagCompletionFunc("guards-mode", cobra.FixedCompletions(
 		difc.ValidModes, cobra.ShellCompDirectiveNoFileComp))
 	cmd.RegisterFlagCompletionFunc("allowonly-min-integrity", cobra.FixedCompletions(
-		[]string{"none", "unapproved", "approved", "merged"}, cobra.ShellCompDirectiveNoFileComp))
+		guard.AllowedIntegrityLevels, cobra.ShellCompDirectiveNoFileComp))
 
 	// Add ActiveHelp for --config and --config-stdin flags
 	cmd.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
