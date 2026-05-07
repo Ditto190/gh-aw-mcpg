@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/github/gh-aw-mcpg/internal/difc"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -151,7 +152,7 @@ func TestRegisterFlagCompletions(t *testing.T) {
 		completions, directive := completionFn(cmd, nil, "")
 		assert.Equal(t, cobra.ShellCompDirectiveNoFileComp, directive,
 			"guards-mode flag should use NoFileComp directive")
-		assert.ElementsMatch(t, []string{"strict", "filter", "propagate"}, completions,
+		assert.ElementsMatch(t, difc.ValidModes, completions,
 			"guards-mode should complete with all valid mode values")
 	})
 

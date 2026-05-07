@@ -34,7 +34,10 @@
 //  2. Document the environment variable in AGENTS.md and README.md.
 package cmd
 
-import "github.com/spf13/cobra"
+import (
+	"github.com/github/gh-aw-mcpg/internal/difc"
+	"github.com/spf13/cobra"
+)
 
 // FlagRegistrar is a function that registers flags on a command
 type FlagRegistrar func(cmd *cobra.Command)
@@ -73,7 +76,7 @@ func registerFlagCompletions(cmd *cobra.Command) {
 
 	// Enum completions for DIFC flags
 	cmd.RegisterFlagCompletionFunc("guards-mode", cobra.FixedCompletions(
-		[]string{"strict", "filter", "propagate"}, cobra.ShellCompDirectiveNoFileComp))
+		difc.ValidModes, cobra.ShellCompDirectiveNoFileComp))
 	cmd.RegisterFlagCompletionFunc("allowonly-min-integrity", cobra.FixedCompletions(
 		[]string{"none", "unapproved", "approved", "merged"}, cobra.ShellCompDirectiveNoFileComp))
 
