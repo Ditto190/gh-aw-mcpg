@@ -3,6 +3,7 @@ package server
 import (
 	"net/http"
 
+	"github.com/github/gh-aw-mcpg/internal/config"
 	"github.com/github/gh-aw-mcpg/internal/logger"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -37,7 +38,7 @@ func CreateHTTPServerForMCP(addr string, unifiedServer *UnifiedServer, apiKey, h
 		return unifiedServer.server
 	}, mcpHandlerConfig{
 		handlerLog:     logTransport,
-		sessionTimeout: getSessionTimeout(),
+		sessionTimeout: config.GetGatewaySessionTimeoutFromEnv(),
 		logTag:         "unified",
 		unifiedServer:  unifiedServer,
 		apiKey:         apiKey,

@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/github/gh-aw-mcpg/internal/config/rules"
 	"github.com/github/gh-aw-mcpg/internal/envutil"
@@ -77,6 +78,12 @@ func GetGatewayToolTimeoutFromEnv() (int, bool, error) {
 
 	logConfig.Printf("MCP_GATEWAY_TOOL_TIMEOUT resolved to %d", timeout)
 	return timeout, true, nil
+}
+
+// GetGatewaySessionTimeoutFromEnv returns MCP_GATEWAY_SESSION_TIMEOUT as a duration.
+// Defaults to 6 hours when the variable is unset or invalid.
+func GetGatewaySessionTimeoutFromEnv() time.Duration {
+	return envutil.GetEnvDuration("MCP_GATEWAY_SESSION_TIMEOUT", 6*time.Hour)
 }
 
 // toolTimeoutEnvOrDefault returns the value of MCP_GATEWAY_TOOL_TIMEOUT when set and valid,

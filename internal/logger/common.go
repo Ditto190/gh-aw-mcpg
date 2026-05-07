@@ -72,6 +72,9 @@ import (
 // The setup and error-handler callbacks are defined as named package-level functions
 // (e.g., setupFileLogger, handleFileLoggerError) and bundled into a package-level
 // loggerFactory[T] variable to aid readability and testability:
+// The small per-logger Init*/setup*/handle* wrappers are intentional even though they
+// look similar: each logger type exposes a stable public API and keeps fallback semantics
+// explicit at the call site (stdout fallback, silent fallback, strict error, etc.).
 //
 //	var fileLoggerFactory = loggerFactory[*FileLogger]{
 //	    setup:   setupFileLogger,
