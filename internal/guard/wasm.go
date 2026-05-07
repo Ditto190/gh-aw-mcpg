@@ -19,10 +19,56 @@ import (
 
 var logWasm = logger.New("guard:wasm")
 
+var globalCompilationCacheMu sync.Mutex
+
 // globalCompilationCache is a process-level compilation cache shared across all
 // WasmGuard instances. wazero's cache is goroutine-safe and eliminates redundant
 // JIT compilation when multiple guards load the same WASM binary.
 var globalCompilationCache = wazero.NewCompilationCache()
+
+func newCompilationCache(dir string) (wazero.CompilationCache, error) {
+	if dir == "" {
+		return wazero.NewCompilationCache(), nil
+	}
+	return wazero.NewCompilationCacheWithDir(dir)
+}
+
+// ConfigureGlobalCompilationCache replaces the process-level compilation cache.
+// This should be called during process startup before any guards are created.
+func ConfigureGlobalCompilationCache(ctx context.Context, dir string) error {
+	cache, err := newCompilationCache(dir)
+	if err != nil {
+		return err
+	}
+
+	globalCompilationCacheMu.Lock()
+	oldCache := globalCompilationCache
+	globalCompilationCacheMu.Unlock()
+
+	if oldCache == nil {
+		globalCompilationCacheMu.Lock()
+		globalCompilationCache = cache
+		globalCompilationCacheMu.Unlock()
+		return nil
+	}
+
+	if err := oldCache.Close(ctx); err != nil {
+		closeReplacementErr := cache.Close(ctx)
+		if closeReplacementErr != nil {
+			return errors.Join(
+				fmt.Errorf("failed to close previous compilation cache: %w", err),
+				fmt.Errorf("failed to close replacement compilation cache: %w", closeReplacementErr),
+			)
+		}
+		return fmt.Errorf("failed to close previous compilation cache: %w", err)
+	}
+
+	globalCompilationCacheMu.Lock()
+	globalCompilationCache = cache
+	globalCompilationCacheMu.Unlock()
+
+	return nil
+}
 
 // CloseGlobalCompilationCache releases JIT resources held by the shared
 // compilation cache. It must be called once during graceful shutdown, after
@@ -30,7 +76,13 @@ var globalCompilationCache = wazero.NewCompilationCache()
 // Calling it while guards are still active or calling it more than once leads
 // to undefined behavior. It is not safe to call concurrently.
 func CloseGlobalCompilationCache(ctx context.Context) error {
-	return globalCompilationCache.Close(ctx)
+	globalCompilationCacheMu.Lock()
+	cache := globalCompilationCache
+	globalCompilationCacheMu.Unlock()
+	if cache == nil {
+		return nil
+	}
+	return cache.Close(ctx)
 }
 
 // WasmGuardOptions configures optional settings for WASM guard creation
@@ -76,6 +128,10 @@ type WasmGuard struct {
 	// Both fields are accessed only while mu is held.
 	failed    bool
 	failedErr error
+
+	// warnedDirectMemoryPath ensures we emit the allocator-fallback warning at
+	// most once per guard instance. It is accessed only while mu is held.
+	warnedDirectMemoryPath bool
 }
 
 // NewWasmGuard creates a new WASM guard from a WASM binary file
@@ -134,7 +190,12 @@ func NewWasmGuardWithOptions(ctx context.Context, name string, wasmBytes []byte,
 	// Configure module options with stdout/stderr and stdin isolation
 	// WithStdin prevents WASM from accidentally reading gateway's MCP protocol stdin
 	moduleConfig := wazero.NewModuleConfig().
-		WithName("guard").
+		WithName(func() string {
+			if name == "" {
+				return "guard"
+			}
+			return name
+		}()).
 		WithStartFunctions().
 		WithStdin(strings.NewReader("")) // Isolate stdin
 	if opts != nil {

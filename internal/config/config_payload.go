@@ -8,6 +8,10 @@ const DefaultPayloadDir = "/tmp/jq-payloads"
 // DefaultLogDir is the default directory for storing log files.
 const DefaultLogDir = "/tmp/gh-aw/mcp-logs"
 
+// DefaultWasmCacheDirName is the default subdirectory name for persisted wazero
+// compilation artifacts beneath the effective log directory.
+const DefaultWasmCacheDirName = "wazero-cache"
+
 // DefaultPayloadSizeThreshold is the default size threshold (in bytes) for storing payloads to disk.
 // Payloads larger than this threshold are stored to disk, smaller ones are returned inline.
 // Default: 524288 bytes (512KB) - chosen to accommodate typical MCP tool responses including

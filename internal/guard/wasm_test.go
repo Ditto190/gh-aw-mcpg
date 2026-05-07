@@ -75,6 +75,16 @@ type mockBackendCaller struct {
 	err      error
 }
 
+type mockCompilationCache struct {
+	closeErr error
+	closed   bool
+}
+
+func (m *mockCompilationCache) Close(context.Context) error {
+	m.closed = true
+	return m.closeErr
+}
+
 func (m *mockBackendCaller) CallTool(ctx context.Context, toolName string, args interface{}) (interface{}, error) {
 	m.called = true
 	m.toolName = toolName
@@ -1296,6 +1306,39 @@ func TestWasmGuardCompilationCache(t *testing.T) {
 		entries, readErr := os.ReadDir(cacheDir)
 		require.NoError(t, readErr)
 		assert.NotEmpty(t, entries, "expected compilation artifacts in global cache directory")
+	})
+
+	t.Run("global cache can be reconfigured to a disk-backed directory", func(t *testing.T) {
+		ctx := context.Background()
+		cacheDir := t.TempDir()
+
+		require.NoError(t, ConfigureGlobalCompilationCache(ctx, cacheDir))
+		t.Cleanup(func() {
+			require.NoError(t, ConfigureGlobalCompilationCache(ctx, ""))
+		})
+
+		_, err := NewWasmGuardWithOptions(ctx, "cache-test", minimalGuardWasm, &mockBackendCaller{}, nil)
+		require.Error(t, err)
+
+		entries, readErr := os.ReadDir(cacheDir)
+		require.NoError(t, readErr)
+		assert.NotEmpty(t, entries, "expected compilation artifacts in reconfigured global cache directory")
+	})
+
+	t.Run("global cache remains unchanged when closing previous cache fails", func(t *testing.T) {
+		ctx := context.Background()
+		origCache := globalCompilationCache
+		failingCache := &mockCompilationCache{closeErr: errors.New("close failed")}
+		globalCompilationCache = failingCache
+		t.Cleanup(func() {
+			globalCompilationCache = origCache
+		})
+
+		err := ConfigureGlobalCompilationCache(ctx, "")
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "failed to close previous compilation cache")
+		assert.Same(t, failingCache, globalCompilationCache)
+		assert.True(t, failingCache.closed, "expected failing cache to be closed")
 	})
 
 	t.Run("cache is disabled when DisableCompilationCache is true", func(t *testing.T) {

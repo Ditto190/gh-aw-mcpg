@@ -71,6 +71,9 @@ func registerFlagCompletions(cmd *cobra.Command) {
 	cmd.RegisterFlagCompletionFunc("payload-dir", func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
 		return nil, cobra.ShellCompDirectiveFilterDirs
 	})
+	cmd.RegisterFlagCompletionFunc("wasm-cache-dir", func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
+		return nil, cobra.ShellCompDirectiveFilterDirs
+	})
 	cmd.RegisterFlagCompletionFunc("env", func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
 		return []string{"env"}, cobra.ShellCompDirectiveFilterFileExt
 	})

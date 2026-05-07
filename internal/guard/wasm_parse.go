@@ -244,10 +244,19 @@ func (g *WasmGuard) tryCallWasmFunction(ctx context.Context, fn api.Function, me
 		return resultCopy, 0, nil
 	}
 
+	if !g.warnedDirectMemoryPath {
+		logger.LogWarn("guard", "WASM guard '%s' is using the direct memory fallback for %s without alloc/dealloc exports; export alloc/dealloc to avoid linear-memory overlap risks", g.name, functionName)
+		g.warnedDirectMemoryPath = true
+	}
 	logWasm.Printf("Using direct memory path: guard=%s, inputSize=%d, outputSize=%d", g.name, inputSize, outputSize)
 
 	// Ensure memory is large enough for our buffers
 	// Layout: [...guard memory...][input buffer][output buffer]
+	// wazero enforces only the module's declared linear-memory maximum, so guard
+	// authors should set an explicit max page count in the WASM binary when they
+	// need a hard cap. The gateway does not impose an additional host-side limit,
+	// so a guard that declares an excessively large maximum can still consume
+	// correspondingly large host memory if it grows toward that maximum.
 	requiredMemory := inputSize + outputSize + uint32(64*1024) // Extra 64KB for safety margin
 
 	memSize := mem.Size()

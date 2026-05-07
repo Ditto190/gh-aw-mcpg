@@ -158,7 +158,7 @@ See **[docs/CONFIGURATION.md](docs/CONFIGURATION.md)** for the complete mapping 
 
 **Security**: WASM-based DIFC guards enforce secrecy and integrity labels per request. Guards are loaded from `MCP_GATEWAY_WASM_GUARDS_DIR` and assigned per-server. Authentication uses plain API keys per MCP spec 7.1 (`Authorization: <api-key>`).
 
-**Logging**: Per-server log files (`{serverID}.log`), unified `mcp-gateway.log`, markdown workflow previews (`gateway.md`), and machine-readable `rpc-messages.jsonl`.
+**Logging**: Per-server log files (`{serverID}.log`), unified `mcp-gateway.log`, markdown workflow previews (`gateway.md`), machine-readable `rpc-messages.jsonl`, and a persisted wazero compilation cache under `<log-dir>/wazero-cache` by default.
 
 ## API Endpoints
 

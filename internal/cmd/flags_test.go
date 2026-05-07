@@ -41,6 +41,7 @@ func TestRegisterAllFlags(t *testing.T) {
 		// Logging flags
 		assert.NotNil(t, cmd.Flags().Lookup("log-dir"), "log-dir flag should be registered")
 		assert.NotNil(t, cmd.Flags().Lookup("payload-dir"), "payload-dir flag should be registered")
+		assert.NotNil(t, cmd.Flags().Lookup("wasm-cache-dir"), "wasm-cache-dir flag should be registered")
 
 		// Tracing flags
 		assert.NotNil(t, cmd.Flags().Lookup("otlp-endpoint"), "otlp-endpoint flag should be registered")
@@ -131,6 +132,16 @@ func TestRegisterFlagCompletions(t *testing.T) {
 		_, directive := compFunc(cmd, nil, "")
 		assert.Equal(t, cobra.ShellCompDirectiveFilterDirs, directive,
 			"payload-dir flag should have directory completion directive")
+	})
+
+	t.Run("wasm-cache-dir flag completion returns directory filter", func(t *testing.T) {
+		cmd := setupCmd(t)
+
+		compFunc, ok := cmd.GetFlagCompletionFunc("wasm-cache-dir")
+		require.True(t, ok, "wasm-cache-dir flag should have a completion function")
+		_, directive := compFunc(cmd, nil, "")
+		assert.Equal(t, cobra.ShellCompDirectiveFilterDirs, directive,
+			"wasm-cache-dir flag should have directory completion directive")
 	})
 
 	t.Run("env flag completion returns .env extension filter", func(t *testing.T) {

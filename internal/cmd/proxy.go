@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"log"
@@ -15,6 +16,7 @@ import (
 	"github.com/github/gh-aw-mcpg/internal/config"
 	"github.com/github/gh-aw-mcpg/internal/difc"
 	"github.com/github/gh-aw-mcpg/internal/envutil"
+	"github.com/github/gh-aw-mcpg/internal/guard"
 	"github.com/github/gh-aw-mcpg/internal/logger"
 	"github.com/github/gh-aw-mcpg/internal/proxy"
 	"github.com/spf13/cobra"
@@ -37,6 +39,7 @@ var (
 	proxyToken          string
 	proxyListen         string
 	proxyLogDir         string
+	proxyWasmCacheDir   string
 	proxyDIFCMode       string
 	proxyAPIURL         string
 	proxyTLS            bool
@@ -69,6 +72,7 @@ func detectGuardWasm() string {
 
 func newProxyCmd() *cobra.Command {
 	defaultGuard := detectGuardWasm()
+	defaultProxyLogDir := envutil.GetEnvString("MCP_GATEWAY_LOG_DIR", config.DefaultLogDir)
 
 	cmd := &cobra.Command{
 		Use:   "proxy",
@@ -123,7 +127,8 @@ Local usage:
 	cmd.Flags().StringVar(&proxyPolicy, "policy", os.Getenv("MCP_GATEWAY_GUARD_POLICY_JSON"), "Guard policy JSON")
 	cmd.Flags().StringVar(&proxyToken, "github-token", "", "Fallback GitHub API token (default: forwards client Authorization header)")
 	cmd.Flags().StringVarP(&proxyListen, "listen", "l", "127.0.0.1:8080", "Proxy listen address")
-	cmd.Flags().StringVar(&proxyLogDir, "log-dir", envutil.GetEnvString("MCP_GATEWAY_LOG_DIR", config.DefaultLogDir), "Log file directory")
+	cmd.Flags().StringVar(&proxyLogDir, "log-dir", defaultProxyLogDir, "Log file directory")
+	cmd.Flags().StringVar(&proxyWasmCacheDir, "wasm-cache-dir", resolveWasmCacheDir(false, "", defaultProxyLogDir), "Directory for disk-backed wazero compilation cache (default: <log-dir>/wazero-cache)")
 	cmd.Flags().StringVar(&proxyDIFCMode, "guards-mode", "filter", "DIFC enforcement mode: strict, filter, propagate")
 	cmd.Flags().StringVar(&proxyAPIURL, "github-api-url", "", "Upstream GitHub API URL (default: auto-derived from GITHUB_API_URL or GITHUB_SERVER_URL, falls back to https://api.github.com)")
 	cmd.Flags().BoolVar(&proxyTLS, "tls", false, "Enable HTTPS with auto-generated self-signed certificates")
@@ -161,6 +166,18 @@ func runProxy(cmd *cobra.Command, args []string) error {
 	logger.InitProxyLoggers(proxyLogDir)
 
 	logger.LogInfo("startup", "MCPG Proxy starting: listen=%s, guard=%s, mode=%s, tls=%v", proxyListen, proxyGuardWasm, proxyDIFCMode, proxyTLS)
+
+	resolvedWasmCacheDir, err := configureWasmCompilationCache(ctx, cmd.Flags().Changed("wasm-cache-dir"), proxyWasmCacheDir, proxyLogDir, logger.StartupWarn)
+	if err != nil {
+		return err
+	}
+	cleanupCtx := context.WithoutCancel(ctx)
+	defer func() {
+		if err := guard.CloseGlobalCompilationCache(cleanupCtx); err != nil {
+			logger.LogError("shutdown", "Failed to close WASM compilation cache: %v", err)
+		}
+	}()
+	logger.LogInfo("startup", "WASM compilation cache directory: %s", resolvedWasmCacheDir)
 
 	// Initialize OpenTelemetry tracer provider for the proxy server.
 	// When no endpoint is configured, a noop provider is used (zero overhead).
