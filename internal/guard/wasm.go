@@ -180,12 +180,13 @@ func NewWasmGuardWithOptions(ctx context.Context, name string, wasmBytes []byte,
 
 	// Configure module options with stdout/stderr and stdin isolation
 	// WithStdin prevents WASM from accidentally reading gateway's MCP protocol stdin
-	moduleName := name
-	if moduleName == "" {
-		moduleName = "guard"
-	}
 	moduleConfig := wazero.NewModuleConfig().
-		WithName(moduleName).
+		WithName(func() string {
+			if name == "" {
+				return "guard"
+			}
+			return name
+		}()).
 		WithStartFunctions().
 		WithStdin(strings.NewReader("")) // Isolate stdin
 	if opts != nil {
