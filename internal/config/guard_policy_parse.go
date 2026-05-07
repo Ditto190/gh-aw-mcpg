@@ -3,7 +3,10 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
+
+	"github.com/github/gh-aw-mcpg/internal/envutil"
 )
 
 // ParseServerGuardPolicy parses a guard policy from a server-specific raw policy map.
@@ -194,6 +197,59 @@ func ParseGuardPolicyJSON(policyJSON string) (*GuardPolicy, error) {
 		return nil, err
 	}
 	return policy, nil
+}
+
+// ResolveGuardPolicyOverride resolves a guard policy override from CLI and environment inputs.
+// Precedence: changed CLI flags > MCP_GATEWAY_GUARD_POLICY_JSON > AllowOnly environment variables.
+func ResolveGuardPolicyOverride(
+	cliChanged bool,
+	cliPolicyJSON string,
+	allowOnlyPublic bool,
+	allowOnlyOwner, allowOnlyRepo, allowOnlyMinIntegrity string,
+) (*GuardPolicy, string, error) {
+	if cliChanged {
+		if strings.TrimSpace(cliPolicyJSON) != "" {
+			policy, err := ParseGuardPolicyJSON(cliPolicyJSON)
+			if err != nil {
+				return nil, "", err
+			}
+			return policy, "cli", nil
+		}
+
+		policy, err := BuildAllowOnlyPolicy(allowOnlyPublic, allowOnlyOwner, allowOnlyRepo, allowOnlyMinIntegrity)
+		if err != nil {
+			return nil, "", err
+		}
+		return policy, "cli", nil
+	}
+
+	if envPolicyJSON := strings.TrimSpace(os.Getenv("MCP_GATEWAY_GUARD_POLICY_JSON")); envPolicyJSON != "" {
+		policy, err := ParseGuardPolicyJSON(envPolicyJSON)
+		if err != nil {
+			return nil, "", err
+		}
+		return policy, "env", nil
+	}
+
+	_, hasScopePublic := os.LookupEnv("MCP_GATEWAY_ALLOWONLY_SCOPE_PUBLIC")
+	_, hasScopeOwner := os.LookupEnv("MCP_GATEWAY_ALLOWONLY_SCOPE_OWNER")
+	_, hasScopeRepo := os.LookupEnv("MCP_GATEWAY_ALLOWONLY_SCOPE_REPO")
+	_, hasMinIntegrity := os.LookupEnv("MCP_GATEWAY_ALLOWONLY_MIN_INTEGRITY")
+
+	if hasScopePublic || hasScopeOwner || hasScopeRepo || hasMinIntegrity {
+		policy, err := BuildAllowOnlyPolicy(
+			envutil.GetEnvBool("MCP_GATEWAY_ALLOWONLY_SCOPE_PUBLIC", false),
+			os.Getenv("MCP_GATEWAY_ALLOWONLY_SCOPE_OWNER"),
+			os.Getenv("MCP_GATEWAY_ALLOWONLY_SCOPE_REPO"),
+			os.Getenv("MCP_GATEWAY_ALLOWONLY_MIN_INTEGRITY"),
+		)
+		if err != nil {
+			return nil, "", err
+		}
+		return policy, "env", nil
+	}
+
+	return nil, "", nil
 }
 
 // NormalizeScopeKind returns a copy of the policy map with the scope_kind field
