@@ -72,10 +72,12 @@ func convertMapToCallToolResult(m map[string]interface{}) (*sdk.CallToolResult, 
 	switch v := contentVal.(type) {
 	case []interface{}:
 		items = make([]map[string]interface{}, 0, len(v))
-		for _, item := range v {
-			if ci, ok := item.(map[string]interface{}); ok {
-				items = append(items, ci)
+		for i, item := range v {
+			ci, ok := item.(map[string]interface{})
+			if !ok {
+				return nil, fmt.Errorf("content item %d: expected map, got %T", i, item)
 			}
+			items = append(items, ci)
 		}
 	case []map[string]interface{}:
 		items = v
@@ -155,13 +157,17 @@ func convertContentItem(ci map[string]interface{}) (sdk.Content, error) {
 // When data arrives via json.Unmarshal into interface{}, []byte fields are stored as
 // base64 strings; this function handles both the string and pre-decoded []byte forms.
 func decodeContentData(ci map[string]interface{}) ([]byte, error) {
-	switch v := ci["data"].(type) {
+	raw, exists := ci["data"]
+	if !exists || raw == nil {
+		return nil, fmt.Errorf("missing required 'data' field")
+	}
+	switch v := raw.(type) {
 	case []byte:
 		return v, nil
 	case string:
 		return base64.StdEncoding.DecodeString(v)
 	default:
-		return nil, nil
+		return nil, fmt.Errorf("unsupported data type %T", raw)
 	}
 }
 
