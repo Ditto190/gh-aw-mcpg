@@ -375,10 +375,10 @@ fn parse_scoped_entry(entry: &str) -> Result<(ScopeKind, Option<String>, Option<
     }
 
     if repo_part.ends_with('*') {
+        // Invariant: star_count == 1 (checked above) and repo_part != "*" (caught above),
+        // so there is at least one non-'*' character before the trailing '*' — prefix is
+        // always non-empty here.
         let prefix = repo_part.trim_end_matches('*');
-        if prefix.is_empty() {
-            return Err("AllowOnly.repos repo prefix before '*' must be non-empty".to_string());
-        }
         return Ok((
             ScopeKind::RepoPrefix,
             Some(owner.to_string()),
@@ -469,25 +469,6 @@ fn scope_string(scope_kind: ScopeKind, owner: Option<&str>, repo: Option<&str>) 
     }
 }
 
-fn scope_token(scopes: &[PolicyScopeEntry]) -> String {
-    let labels: Vec<&str> = scopes
-        .iter()
-        .filter_map(|scope| {
-            if scope.scope_label.is_empty() {
-                None
-            } else {
-                Some(scope.scope_label.as_str())
-            }
-        })
-        .collect();
-
-    if labels.is_empty() {
-        String::new()
-    } else {
-        labels.join(" | ")
-    }
-}
-
 fn normalized_scope_kind(scopes: &[PolicyScopeEntry]) -> &'static str {
     if scopes.len() == 1 {
         scopes[0].scope_kind.as_str()
@@ -548,7 +529,7 @@ pub extern "C" fn label_agent(
         })
         .collect();
 
-    let token = scope_token(&scopes);
+    let token = labels::helpers::policy_scope_token(&scopes);
     let scope_kind_str = normalized_scope_kind(&scopes);
 
     let ctx = PolicyContext {

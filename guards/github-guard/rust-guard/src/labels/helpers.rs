@@ -191,7 +191,7 @@ fn split_repo_id(repo_id: &str) -> Option<(&str, &str)> {
     Some((owner, repo))
 }
 
-fn policy_scope_token(scopes: &[PolicyScopeEntry]) -> String {
+pub(crate) fn policy_scope_token(scopes: &[PolicyScopeEntry]) -> String {
     let labels: Vec<&str> = scopes
         .iter()
         .map(|s| s.scope_label.as_str())
