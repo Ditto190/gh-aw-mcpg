@@ -58,6 +58,17 @@ func registerToolWithoutValidation(server *sdk.Server, tool *sdk.Tool, handler f
 	})
 }
 
+func getToolResponseFilter(cfg *config.Config, serverID, toolName string) string {
+	if cfg == nil {
+		return ""
+	}
+	serverCfg, ok := cfg.Servers[serverID]
+	if !ok || serverCfg == nil {
+		return ""
+	}
+	return strings.TrimSpace(serverCfg.ToolResponseFilters[toolName])
+}
+
 // registerAllTools fetches and registers tools from all backend servers
 func (us *UnifiedServer) registerAllTools() error {
 	logger.LogInfo("backend", "Starting tool registration for %d backends", len(us.launcher.ServerIDs()))
@@ -295,7 +306,11 @@ func (us *UnifiedServer) registerToolsFromBackend(serverID string) error {
 		// Wrap handler with jqschema middleware if applicable
 		finalHandler := handler
 		if middleware.ShouldApplyMiddleware(prefixedName) {
-			finalHandler = middleware.WrapToolHandler(handler, prefixedName, us.payloadDir, us.payloadPathPrefix, us.payloadSizeThreshold, us.getSessionID)
+			if filter := getToolResponseFilter(us.cfg, serverIDCopy, toolNameCopy); filter != "" {
+				finalHandler = middleware.WrapToolHandlerWithFilter(handler, prefixedName, us.payloadDir, us.payloadPathPrefix, us.payloadSizeThreshold, us.getSessionID, filter)
+			} else {
+				finalHandler = middleware.WrapToolHandler(handler, prefixedName, us.payloadDir, us.payloadPathPrefix, us.payloadSizeThreshold, us.getSessionID)
+			}
 		}
 
 		// Store handler for routed mode to reuse

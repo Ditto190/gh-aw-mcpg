@@ -10,6 +10,7 @@ import (
 	"github.com/github/gh-aw-mcpg/internal/config/rules"
 	"github.com/github/gh-aw-mcpg/internal/logger"
 	"github.com/github/gh-aw-mcpg/internal/oidc"
+	"github.com/itchyny/gojq"
 	"github.com/santhosh-tekuri/jsonschema/v5"
 )
 
@@ -127,7 +128,38 @@ func validateStandardServerConfig(name string, server *StdinServerConfig, jsonPa
 		}
 	}
 
+	if err := validateToolResponseFilters(server.ToolResponseFilters, jsonPath+".tool_response_filters"); err != nil {
+		logValidateServerFailed(name, fmt.Sprintf("tool_response_filters invalid: %v", err))
+		return err
+	}
+
 	logValidateServerPassed(name)
+	return nil
+}
+
+func validateToolResponseFilters(filters map[string]string, jsonPath string) error {
+	if len(filters) == 0 {
+		return nil
+	}
+
+	for toolName, rawFilter := range filters {
+		if strings.TrimSpace(toolName) == "" {
+			return fmt.Errorf("%s contains an empty tool name", jsonPath)
+		}
+		filter := strings.TrimSpace(rawFilter)
+		if filter == "" {
+			return fmt.Errorf("%s.%s must not be empty", jsonPath, toolName)
+		}
+
+		query, err := gojq.Parse(filter)
+		if err != nil {
+			return fmt.Errorf("%s.%s contains an invalid jq expression: %w", jsonPath, toolName, err)
+		}
+		if _, err := gojq.Compile(query); err != nil {
+			return fmt.Errorf("%s.%s contains an invalid jq expression: %w", jsonPath, toolName, err)
+		}
+	}
+
 	return nil
 }
 
