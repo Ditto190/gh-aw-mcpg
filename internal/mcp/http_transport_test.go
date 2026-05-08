@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -1312,6 +1313,10 @@ func TestOIDCRoundTripper_ErrorPropagation(t *testing.T) {
 // See also: tryStreamableHTTPTransport / reconnectSDKTransport in connection.go.
 func TestMaxRetriesSentinelCanary(t *testing.T) {
 	var sseGETs atomic.Int64
+	// firstSSEDone is closed by the handler after the first SSE GET completes,
+	// allowing the test to synchronise without a hard-coded sleep.
+	firstSSEDone := make(chan struct{})
+	var firstSSEOnce sync.Once
 
 	// Backend that:
 	//  - Handles the MCP initialize POST (so Connect succeeds)
@@ -1329,6 +1334,9 @@ func TestMaxRetriesSentinelCanary(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 			// Close immediately without sending any event or id — no "progress"
 			// is recorded, so retriesWithoutProgress will increment on each call.
+
+			// Signal that the first SSE GET has been processed.
+			firstSSEOnce.Do(func() { close(firstSSEDone) })
 		case http.MethodPost:
 			var req map[string]interface{}
 			_ = json.NewDecoder(r.Body).Decode(&req)
@@ -1369,10 +1377,20 @@ func TestMaxRetriesSentinelCanary(t *testing.T) {
 	require.NoError(t, err, "Initial connect should succeed")
 	defer session.Close()
 
-	// Give the SDK enough time to attempt reconnects (if any).
-	// With MaxRetries: -1 (0 retries), the SDK must fail permanently after the
-	// first closed SSE stream and must NOT issue a second GET.
-	time.Sleep(500 * time.Millisecond)
+	// Wait until the first SSE GET has been served (channel-based, not a sleep).
+	select {
+	case <-firstSSEDone:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for the first SSE GET")
+	}
+
+	// After the first SSE stream closes without progress, the SDK either calls
+	// c.fail() immediately (MaxRetries: -1 → 0 retries) or schedules a reconnect
+	// (MaxRetries: 0 → 5 retries). Any reconnect GET would arrive after the SDK's
+	// minimum reconnect delay (≥1 s; see reconnectInitialDelay in streamable.go).
+	// Waiting 200ms is sufficient to catch an immediate retry while keeping the
+	// test fast — a legitimate reconnect would not occur within that window.
+	time.Sleep(200 * time.Millisecond)
 
 	got := sseGETs.Load()
 	// Exactly 1 SSE GET is expected: the initial standalone SSE stream.

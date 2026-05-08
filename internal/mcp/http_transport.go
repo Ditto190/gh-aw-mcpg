@@ -85,7 +85,7 @@ func isSessionNotFoundError(err error) bool {
 	// return sdk.ErrSessionMissing and are matched by backend error text instead.
 	// TODO(tech-debt): remove this string-matching fallback once the plain JSON-RPC
 	// transport (HTTPTransportPlainJSON) is retired. The plain JSON-RPC path exists
-	// only for compatibility with backends that pre-date the 2024-11-05 MCP spec.
+	// only for compatibility with backends that predate the 2024-11-05 MCP spec.
 	return strings.Contains(strings.ToLower(err.Error()), "session not found")
 }
 
