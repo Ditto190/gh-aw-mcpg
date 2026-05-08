@@ -1313,10 +1313,12 @@ func TestOIDCRoundTripper_ErrorPropagation(t *testing.T) {
 // See also: tryStreamableHTTPTransport / reconnectSDKTransport in connection.go.
 func TestMaxRetriesSentinelCanary(t *testing.T) {
 	var sseGETs atomic.Int64
-	// firstSSEDone is closed by the handler after the first SSE GET completes,
-	// allowing the test to synchronise without a hard-coded sleep.
+	// firstSSEDone fires once the initial SSE GET has been served.
 	firstSSEDone := make(chan struct{})
 	var firstSSEOnce sync.Once
+	// unexpectedReconnect fires if any second SSE GET arrives.
+	unexpectedReconnect := make(chan struct{})
+	var reconnectOnce sync.Once
 
 	// Backend that:
 	//  - Handles the MCP initialize POST (so Connect succeeds)
@@ -1327,16 +1329,19 @@ func TestMaxRetriesSentinelCanary(t *testing.T) {
 		case http.MethodDelete:
 			w.WriteHeader(http.StatusOK)
 		case http.MethodGet:
-			// Count SSE reconnect attempts.
-			sseGETs.Add(1)
+			n := sseGETs.Add(1)
 			w.Header().Set("Content-Type", "text/event-stream")
 			w.Header().Set("Cache-Control", "no-cache")
 			w.WriteHeader(http.StatusOK)
 			// Close immediately without sending any event or id — no "progress"
 			// is recorded, so retriesWithoutProgress will increment on each call.
-
-			// Signal that the first SSE GET has been processed.
-			firstSSEOnce.Do(func() { close(firstSSEDone) })
+			if n == 1 {
+				// Signal that the initial SSE GET has been processed.
+				firstSSEOnce.Do(func() { close(firstSSEDone) })
+			} else {
+				// Signal that an unexpected reconnect occurred.
+				reconnectOnce.Do(func() { close(unexpectedReconnect) })
+			}
 		case http.MethodPost:
 			var req map[string]interface{}
 			_ = json.NewDecoder(r.Body).Decode(&req)
@@ -1377,31 +1382,29 @@ func TestMaxRetriesSentinelCanary(t *testing.T) {
 	require.NoError(t, err, "Initial connect should succeed")
 	defer session.Close()
 
-	// Wait until the first SSE GET has been served (channel-based, not a sleep).
+	// Wait until the first SSE GET has been served (channel-based).
 	select {
 	case <-firstSSEDone:
 	case <-time.After(5 * time.Second):
 		t.Fatal("timed out waiting for the first SSE GET")
 	}
 
-	// After the first SSE stream closes without progress, the SDK either calls
-	// c.fail() immediately (MaxRetries: -1 → 0 retries) or schedules a reconnect
-	// (MaxRetries: 0 → 5 retries). Any reconnect GET would arrive after the SDK's
-	// minimum reconnect delay (≥1 s; see reconnectInitialDelay in streamable.go).
-	// Waiting 200ms is sufficient to catch an immediate retry while keeping the
-	// test fast — a legitimate reconnect would not occur within that window.
-	time.Sleep(200 * time.Millisecond)
-
-	got := sseGETs.Load()
-	// Exactly 1 SSE GET is expected: the initial standalone SSE stream.
-	// With MaxRetries: -1 (0 retries), the SDK must NOT attempt to reconnect
-	// when the stream closes without progress.
-	// If this assertion fails after an SDK upgrade, re-verify the MaxRetries
-	// sentinel in streamable.go:1547-1552 and update the gateway comments.
-	require.Equal(t, int64(1), got,
-		"MaxRetries: -1 must result in 0 SSE reconnects (exactly 1 SSE GET total); "+
-			"if this fails after an SDK upgrade, re-verify streamable.go MaxRetries handling "+
-			"and update tryStreamableHTTPTransport / reconnectSDKTransport")
+	// With MaxRetries: -1 (0 retries), the SDK calls c.fail() immediately when
+	// the SSE stream closes without progress — no reconnect is scheduled.
+	// With MaxRetries: 0 (5 retries), the SDK would schedule a reconnect after
+	// its minimum delay of ≥1 s (reconnectInitialDelay in streamable.go).
+	//
+	// We listen on unexpectedReconnect for 300 ms. Any legitimately-triggered
+	// reconnect would arrive no sooner than 1 s after the initial GET, so a 300 ms
+	// window cleanly distinguishes "no reconnect" from "reconnect scheduled".
+	select {
+	case <-unexpectedReconnect:
+		t.Error("MaxRetries: -1 must result in 0 SSE reconnects; " +
+			"if this fails after an SDK upgrade, re-verify streamable.go:1547-1552 " +
+			"MaxRetries handling and update tryStreamableHTTPTransport / reconnectSDKTransport")
+	case <-time.After(300 * time.Millisecond):
+		// Good: no reconnect arrived within the window — sentinel is working.
+	}
 }
 
 // TestResponseHeaderTimeout_NotCappedByConnectTimeout verifies that
