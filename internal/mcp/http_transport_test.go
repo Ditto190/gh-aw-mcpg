@@ -1287,8 +1287,8 @@ func TestOIDCRoundTripper_ErrorPropagation(t *testing.T) {
 //
 // The gateway sets MaxRetries: -1 on StreamableClientTransport to disable
 // SDK-level SSE-stream reconnect retries. The SDK interprets -1 as 0 retries
-// (give up immediately after the first failed reconnect), while 0 means "use
-// the default of 5 retries".
+// (give up immediately when the stream closes without making any retry attempts),
+// while 0 means "use the default of 5 retries".
 //
 // This test verifies the SDK's sentinel interpretation: with MaxRetries: -1, the
 // standalone SSE stream is NOT reconnected after it closes without making progress
@@ -1404,7 +1404,7 @@ func TestMaxRetriesSentinelCanary(t *testing.T) {
 			"if this fails after an SDK upgrade, re-verify streamable.go:1547-1552 " +
 			"MaxRetries handling and update tryStreamableHTTPTransport / reconnectSDKTransport")
 	case <-time.After(300 * time.Millisecond):
-		// Good: no reconnect arrived within the window — sentinel is working.
+		// Good: no reconnect arrived within the window -- sentinel is working.
 	}
 }
 
