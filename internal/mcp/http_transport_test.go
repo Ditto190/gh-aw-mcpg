@@ -8,7 +8,6 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -1313,12 +1312,10 @@ func TestOIDCRoundTripper_ErrorPropagation(t *testing.T) {
 // See also: tryStreamableHTTPTransport / reconnectSDKTransport in connection.go.
 func TestMaxRetriesSentinelCanary(t *testing.T) {
 	var sseGETs atomic.Int64
-	// firstSSEDone fires once the initial SSE GET has been served.
-	firstSSEDone := make(chan struct{})
-	var firstSSEOnce sync.Once
-	// unexpectedReconnect fires if any second SSE GET arrives.
-	unexpectedReconnect := make(chan struct{})
-	var reconnectOnce sync.Once
+	// firstSSEDone is signalled once the initial SSE GET has been served.
+	firstSSEDone := make(chan struct{}, 1)
+	// unexpectedReconnect is signalled if any subsequent SSE GET arrives.
+	unexpectedReconnect := make(chan struct{}, 1)
 
 	// Backend that:
 	//  - Handles the MCP initialize POST (so Connect succeeds)
@@ -1337,10 +1334,14 @@ func TestMaxRetriesSentinelCanary(t *testing.T) {
 			// is recorded, so retriesWithoutProgress will increment on each call.
 			if n == 1 {
 				// Signal that the initial SSE GET has been processed.
-				firstSSEOnce.Do(func() { close(firstSSEDone) })
+				firstSSEDone <- struct{}{}
 			} else {
-				// Signal that an unexpected reconnect occurred.
-				reconnectOnce.Do(func() { close(unexpectedReconnect) })
+				// Signal that an unexpected reconnect occurred (non-blocking;
+				// buffered channel absorbs any additional reconnects).
+				select {
+				case unexpectedReconnect <- struct{}{}:
+				default:
+				}
 			}
 		case http.MethodPost:
 			var req map[string]interface{}
