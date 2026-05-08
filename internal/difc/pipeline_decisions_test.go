@@ -20,6 +20,7 @@ func TestShouldBypassCoarseDeny(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			assert.Equal(t, tt.want, ShouldBypassCoarseDeny(tt.operation))
@@ -55,6 +56,7 @@ func TestShouldCallLabelResponse(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			assert.Equal(t, tt.want, ShouldCallLabelResponse(tt.operation, tt.enforcementMode))
@@ -86,6 +88,7 @@ func TestShouldBlockFilteredResponse(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			assert.Equal(t, tt.want, ShouldBlockFilteredResponse(tt.enforcementMode, tt.filteredCount))
@@ -119,6 +122,7 @@ func TestShouldAccumulateReadLabels(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			assert.Equal(t, tt.want, ShouldAccumulateReadLabels(tt.operation, tt.enforcementMode))
