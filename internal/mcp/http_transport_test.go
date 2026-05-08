@@ -1320,3 +1320,105 @@ func TestResponseHeaderTimeout_NotCappedByConnectTimeout(t *testing.T) {
 	defer resp.Body.Close()
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 }
+
+// =============================================================================
+// parseHTTPResult tests
+// =============================================================================
+
+func TestParseHTTPResult(t *testing.T) {
+	t.Run("status 200 with valid JSON-RPC result", func(t *testing.T) {
+		result := &httpRequestResult{
+			StatusCode:   http.StatusOK,
+			ResponseBody: []byte(`{"jsonrpc":"2.0","id":1,"result":{"value":"hello"}}`),
+		}
+		resp, err := parseHTTPResult(result)
+		require.NoError(t, err)
+		require.NotNil(t, resp)
+		assert.Nil(t, resp.Error, "response should have no error for 200 OK")
+	})
+
+	t.Run("status 200 with invalid JSON returns error", func(t *testing.T) {
+		result := &httpRequestResult{
+			StatusCode:   http.StatusOK,
+			ResponseBody: []byte(`not valid json at all`),
+		}
+		resp, err := parseHTTPResult(result)
+		assert.Error(t, err, "should return error for unparseable 200 response")
+		assert.Nil(t, resp)
+	})
+
+	t.Run("status 200 with empty body returns error", func(t *testing.T) {
+		result := &httpRequestResult{
+			StatusCode:   http.StatusOK,
+			ResponseBody: []byte{},
+		}
+		resp, err := parseHTTPResult(result)
+		assert.Error(t, err, "should return error for empty 200 response body")
+		assert.Nil(t, resp)
+	})
+
+	t.Run("status 400 synthesises JSON-RPC error", func(t *testing.T) {
+		result := &httpRequestResult{
+			StatusCode:   http.StatusBadRequest,
+			ResponseBody: []byte(`bad request body`),
+		}
+		resp, err := parseHTTPResult(result)
+		require.NoError(t, err, "non-200 status should not return a Go error")
+		require.NotNil(t, resp)
+		require.NotNil(t, resp.Error, "response should carry a JSON-RPC error for non-200 status")
+		assert.Equal(t, -32603, resp.Error.Code)
+		assert.Contains(t, resp.Error.Message, "400")
+	})
+
+	t.Run("status 401 synthesises JSON-RPC error with status text", func(t *testing.T) {
+		result := &httpRequestResult{
+			StatusCode:   http.StatusUnauthorized,
+			ResponseBody: []byte(`Unauthorized`),
+		}
+		resp, err := parseHTTPResult(result)
+		require.NoError(t, err)
+		require.NotNil(t, resp)
+		require.NotNil(t, resp.Error)
+		assert.Equal(t, -32603, resp.Error.Code)
+		assert.Contains(t, resp.Error.Message, "401")
+		assert.Contains(t, resp.Error.Message, "Unauthorized")
+	})
+
+	t.Run("status 500 synthesises JSON-RPC error", func(t *testing.T) {
+		result := &httpRequestResult{
+			StatusCode:   http.StatusInternalServerError,
+			ResponseBody: []byte(`Internal Server Error`),
+		}
+		resp, err := parseHTTPResult(result)
+		require.NoError(t, err)
+		require.NotNil(t, resp)
+		require.NotNil(t, resp.Error)
+		assert.Equal(t, -32603, resp.Error.Code)
+		assert.Contains(t, resp.Error.Message, "500")
+	})
+
+	t.Run("status 200 with SSE-formatted valid response", func(t *testing.T) {
+		sseBody := []byte("event: message\ndata: {\"jsonrpc\":\"2.0\",\"id\":2,\"result\":{\"tools\":[]}}" + "\n\n")
+		result := &httpRequestResult{
+			StatusCode:   http.StatusOK,
+			ResponseBody: sseBody,
+		}
+		resp, err := parseHTTPResult(result)
+		require.NoError(t, err)
+		require.NotNil(t, resp)
+		assert.Nil(t, resp.Error)
+	})
+
+	t.Run("status 200 with JSON-RPC error field passes through", func(t *testing.T) {
+		result := &httpRequestResult{
+			StatusCode:   http.StatusOK,
+			ResponseBody: []byte(`{"jsonrpc":"2.0","id":3,"error":{"code":-32601,"message":"Method not found"}}`),
+		}
+		resp, err := parseHTTPResult(result)
+		require.NoError(t, err)
+		require.NotNil(t, resp)
+		require.NotNil(t, resp.Error, "JSON-RPC error in 200 response should be passed through")
+		assert.Equal(t, -32601, resp.Error.Code)
+		assert.Equal(t, "Method not found", resp.Error.Message)
+	})
+}
