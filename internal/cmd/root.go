@@ -301,22 +301,13 @@ func run(cmd *cobra.Command, args []string) error {
 	// Apply tracing flags: CLI flags override config values.
 	// Merge CLI/env tracing settings into gateway config.
 	if otlpEndpoint != "" || cmd.Flags().Changed("otlp-endpoint") {
-		if cfg.Gateway.Tracing == nil {
-			cfg.Gateway.Tracing = &config.TracingConfig{}
-		}
-		cfg.Gateway.Tracing.Endpoint = otlpEndpoint
+		ensureTracingConfig(cfg).Endpoint = otlpEndpoint
 	}
 	if cmd.Flags().Changed("otlp-service-name") {
-		if cfg.Gateway.Tracing == nil {
-			cfg.Gateway.Tracing = &config.TracingConfig{}
-		}
-		cfg.Gateway.Tracing.ServiceName = otlpServiceName
+		ensureTracingConfig(cfg).ServiceName = otlpServiceName
 	}
 	if cmd.Flags().Changed("otlp-sample-rate") {
-		if cfg.Gateway.Tracing == nil {
-			cfg.Gateway.Tracing = &config.TracingConfig{}
-		}
-		cfg.Gateway.Tracing.SampleRate = &otlpSampleRate
+		ensureTracingConfig(cfg).SampleRate = &otlpSampleRate
 	}
 
 	// Initialize OpenTelemetry tracer provider.
@@ -462,6 +453,14 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+// ensureTracingConfig returns cfg.Gateway.Tracing, initializing it if nil.
+func ensureTracingConfig(cfg *config.Config) *config.TracingConfig {
+	if cfg.Gateway.Tracing == nil {
+		cfg.Gateway.Tracing = &config.TracingConfig{}
+	}
+	return cfg.Gateway.Tracing
 }
 
 // Execute runs the root command
