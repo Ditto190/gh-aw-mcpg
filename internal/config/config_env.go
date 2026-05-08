@@ -12,26 +12,39 @@ import (
 // ToolTimeoutMin is the minimum allowed value for toolTimeout (seconds).
 const ToolTimeoutMin = 10
 
+func parseAndValidateIntEnv(envKey string, validate func(int) *rules.ValidationError) (int, bool, error) {
+	raw := envutil.GetEnvString(envKey, "")
+	if raw == "" {
+		logConfig.Printf("%s not set in environment", envKey)
+		return 0, false, nil
+	}
+
+	value, err := strconv.Atoi(raw)
+	if err != nil {
+		logConfig.Printf("%s=%q is not a valid integer: %v", envKey, raw, err)
+		return 0, false, fmt.Errorf("invalid %s value: %s", envKey, raw)
+	}
+
+	if validationErr := validate(value); validationErr != nil {
+		logConfig.Printf("%s=%d failed validation: %s", envKey, value, validationErr.Message)
+		return 0, false, fmt.Errorf("%s", validationErr.Message)
+	}
+
+	logConfig.Printf("%s resolved to %d", envKey, value)
+	return value, true, nil
+}
+
 // GetGatewayPortFromEnv returns the MCP_GATEWAY_PORT value, parsed as int
 func GetGatewayPortFromEnv() (int, error) {
-	portStr := envutil.GetEnvString("MCP_GATEWAY_PORT", "")
-	if portStr == "" {
-		logConfig.Print("MCP_GATEWAY_PORT not set in environment")
+	port, ok, err := parseAndValidateIntEnv("MCP_GATEWAY_PORT", func(port int) *rules.ValidationError {
+		return rules.PortRange(port, "MCP_GATEWAY_PORT")
+	})
+	if err != nil {
+		return 0, err
+	}
+	if !ok {
 		return 0, fmt.Errorf("MCP_GATEWAY_PORT environment variable not set")
 	}
-
-	port, err := strconv.Atoi(portStr)
-	if err != nil {
-		logConfig.Printf("MCP_GATEWAY_PORT=%q is not a valid integer: %v", portStr, err)
-		return 0, fmt.Errorf("invalid MCP_GATEWAY_PORT value: %s", portStr)
-	}
-
-	if validationErr := rules.PortRange(port, "MCP_GATEWAY_PORT"); validationErr != nil {
-		logConfig.Printf("MCP_GATEWAY_PORT=%d is outside valid port range: %s", port, validationErr.Message)
-		return 0, fmt.Errorf("%s", validationErr.Message)
-	}
-
-	logConfig.Printf("MCP_GATEWAY_PORT resolved to %d", port)
 	return port, nil
 }
 
@@ -59,25 +72,9 @@ func GetGatewayAPIKeyFromEnv() string {
 // Returns (0, false) when the environment variable is not set or empty.
 // Returns an error when the variable is set but invalid (non-integer or below minimum of 10).
 func GetGatewayToolTimeoutFromEnv() (int, bool, error) {
-	timeoutStr := envutil.GetEnvString("MCP_GATEWAY_TOOL_TIMEOUT", "")
-	if timeoutStr == "" {
-		logConfig.Print("MCP_GATEWAY_TOOL_TIMEOUT not set in environment")
-		return 0, false, nil
-	}
-
-	timeout, err := strconv.Atoi(timeoutStr)
-	if err != nil {
-		logConfig.Printf("MCP_GATEWAY_TOOL_TIMEOUT=%q is not a valid integer: %v", timeoutStr, err)
-		return 0, false, fmt.Errorf("invalid MCP_GATEWAY_TOOL_TIMEOUT value: %s", timeoutStr)
-	}
-
-	if validationErr := rules.TimeoutMinimum(timeout, ToolTimeoutMin, "MCP_GATEWAY_TOOL_TIMEOUT", "MCP_GATEWAY_TOOL_TIMEOUT"); validationErr != nil {
-		logConfig.Printf("MCP_GATEWAY_TOOL_TIMEOUT=%d is below minimum %d: %s", timeout, ToolTimeoutMin, validationErr.Message)
-		return 0, false, fmt.Errorf("%s", validationErr.Message)
-	}
-
-	logConfig.Printf("MCP_GATEWAY_TOOL_TIMEOUT resolved to %d", timeout)
-	return timeout, true, nil
+	return parseAndValidateIntEnv("MCP_GATEWAY_TOOL_TIMEOUT", func(timeout int) *rules.ValidationError {
+		return rules.TimeoutMinimum(timeout, ToolTimeoutMin, "MCP_GATEWAY_TOOL_TIMEOUT", "MCP_GATEWAY_TOOL_TIMEOUT")
+	})
 }
 
 // GetGatewaySessionTimeoutFromEnv returns MCP_GATEWAY_SESSION_TIMEOUT as a duration.
