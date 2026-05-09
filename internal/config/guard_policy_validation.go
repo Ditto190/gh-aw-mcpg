@@ -305,9 +305,9 @@ func isScopeTokenChar(char byte) bool {
 	return (char >= 'a' && char <= 'z') || (char >= '0' && char <= '9') || char == '_' || char == '-'
 }
 
-// normalizeStringSlice trims, validates, deduplicates, and normalises entries
+// normalizeStringSlice trims, validates, deduplicates, and normalizes entries
 // for the named allow-only field. caseNorm maps each trimmed entry to its
-// deduplication key. When storeNorm is true the normalised key is stored;
+// deduplication key. When storeNorm is true the normalized key is stored;
 // otherwise the original trimmed value is stored.
 func normalizeStringSlice(field string, input []string, caseNorm func(string) string, storeNorm bool) ([]string, error) {
 	if len(input) == 0 {
