@@ -262,7 +262,142 @@ func TestWrapWithSessionAutoInit_FallsBackOnAutoInitFailure(t *testing.T) {
 		"fallback response should contain the SDK error message")
 }
 
-// TestCopyAutoInitHeaders verifies that the helper copies the expected headers.
+// TestPerformSessionAutoInit_MissingSessionID verifies that performSessionAutoInit
+// returns an error when the initialize response does not include an Mcp-Session-Id
+// header, regardless of the HTTP status code.
+func TestPerformSessionAutoInit_MissingSessionID(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		bodyBytes, _ := peekRequestBody(r)
+		var rpcReq struct {
+			Method string `json:"method"`
+		}
+		_ = json.Unmarshal(bodyBytes, &rpcReq)
+		if rpcReq.Method == "initialize" {
+			// No Mcp-Session-Id header: auto-init must fail.
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2025-11-25","capabilities":{}}}`))
+			return
+		}
+		http.Error(w, "unexpected method", http.StatusBadRequest)
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/mcp", nil)
+	req.Header.Set("Authorization", "test-api-key")
+	_, err := performSessionAutoInit(req, handler)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "missing Mcp-Session-Id")
+}
+
+// TestPerformSessionAutoInit_NonOKStatusWithSessionID verifies that performSessionAutoInit
+// returns an error when the initialize response returns a non-200 status code even if
+// the Mcp-Session-Id header is present. The non-200 status check comes after the
+// session ID check in the implementation.
+func TestPerformSessionAutoInit_NonOKStatusWithSessionID(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		bodyBytes, _ := peekRequestBody(r)
+		var rpcReq struct {
+			Method string `json:"method"`
+		}
+		_ = json.Unmarshal(bodyBytes, &rpcReq)
+		if rpcReq.Method == "initialize" {
+			// Set the session ID header BUT return a non-200 status to exercise the
+			// "initialize returned unexpected status" error branch.
+			w.Header().Set("Mcp-Session-Id", "session-from-error-response")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":1,"error":{"code":-32603,"message":"internal error"}}`))
+			return
+		}
+		http.Error(w, "unexpected method", http.StatusBadRequest)
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/mcp", nil)
+	req.Header.Set("Authorization", "test-api-key")
+	_, err := performSessionAutoInit(req, handler)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "unexpected status 500")
+}
+
+// TestPerformSessionAutoInit_Success verifies the happy path: performSessionAutoInit
+// returns the session ID established by the backend and sends both initialize and
+// notifications/initialized requests.
+func TestPerformSessionAutoInit_Success(t *testing.T) {
+	var receivedMethods []string
+	var receivedSessionIDs []string
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		bodyBytes, _ := peekRequestBody(r)
+		var rpcReq struct {
+			Method string `json:"method"`
+		}
+		_ = json.Unmarshal(bodyBytes, &rpcReq)
+		receivedMethods = append(receivedMethods, rpcReq.Method)
+		receivedSessionIDs = append(receivedSessionIDs, r.Header.Get("Mcp-Session-Id"))
+
+		switch rpcReq.Method {
+		case "initialize":
+			w.Header().Set("Mcp-Session-Id", "happy-path-session")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2025-11-25","capabilities":{}}}`))
+		case "notifications/initialized":
+			w.WriteHeader(http.StatusAccepted)
+		default:
+			http.Error(w, "unexpected method", http.StatusBadRequest)
+		}
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/mcp", nil)
+	req.Header.Set("Authorization", "Bearer test-token")
+	sessionID, err := performSessionAutoInit(req, handler)
+
+	require.NoError(t, err)
+	assert.Equal(t, "happy-path-session", sessionID)
+
+	// Both initialize and notifications/initialized must have been sent.
+	assert.Equal(t, []string{"initialize", "notifications/initialized"}, receivedMethods)
+
+	// The notifications/initialized request must carry the established session ID.
+	assert.Equal(t, "happy-path-session", receivedSessionIDs[1])
+}
+
+// TestPerformSessionAutoInit_AuthHeaderCopied verifies that performSessionAutoInit
+// copies the Authorization header from the original request into the auto-init
+// initialize request so that authentication is preserved.
+func TestPerformSessionAutoInit_AuthHeaderCopied(t *testing.T) {
+	var capturedInitAuth string
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		bodyBytes, _ := peekRequestBody(r)
+		var rpcReq struct {
+			Method string `json:"method"`
+		}
+		_ = json.Unmarshal(bodyBytes, &rpcReq)
+
+		switch rpcReq.Method {
+		case "initialize":
+			capturedInitAuth = r.Header.Get("Authorization")
+			w.Header().Set("Mcp-Session-Id", "auth-test-session")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2025-11-25","capabilities":{}}}`))
+		case "notifications/initialized":
+			w.WriteHeader(http.StatusAccepted)
+		default:
+			http.Error(w, "unexpected method", http.StatusBadRequest)
+		}
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/mcp", nil)
+	req.Header.Set("Authorization", "my-secret-api-key")
+	_, err := performSessionAutoInit(req, handler)
+
+	require.NoError(t, err)
+	assert.Equal(t, "my-secret-api-key", capturedInitAuth,
+		"Authorization header must be forwarded to the auto-init initialize request")
+}
+
 func TestCopyAutoInitHeaders(t *testing.T) {
 	tests := []struct {
 		name       string
