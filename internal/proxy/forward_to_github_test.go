@@ -142,6 +142,85 @@ func TestForwardToGitHub_ForwardsRequestBody(t *testing.T) {
 	assert.Equal(t, requestBody, capturedBody)
 }
 
+// TestForwardToGitHub_GraphQLPathRouting verifies that forwardToGitHub correctly
+// rewrites GraphQL request URLs depending on the configured githubAPIURL:
+//
+//   - Standard GitHub.com URLs: /graphql → {base}/graphql
+//   - GHES /api/v3 URLs: /graphql → {base-without-api/v3}/api/graphql
+//   - GraphQL paths with a query string have the query string preserved.
+//
+// These branches are separate from the auth-header tests above so that URL
+// construction logic can be verified independently.
+func TestForwardToGitHub_GraphQLPathRouting(t *testing.T) {
+	tests := []struct {
+		name           string
+		apiURLSuffix   string // appended to the mock server URL to form githubAPIURL
+		requestPath    string // path argument to forwardToGitHub
+		wantServerPath string // path the upstream server should receive
+	}{
+		{
+			name:           "standard graphql path routes to base/graphql",
+			apiURLSuffix:   "",
+			requestPath:    "/graphql",
+			wantServerPath: "/graphql",
+		},
+		{
+			name:           "graphql path with query string preserves query",
+			apiURLSuffix:   "",
+			requestPath:    "/graphql?foo=bar&baz=1",
+			wantServerPath: "/graphql?foo=bar&baz=1",
+		},
+		{
+			// GHES exposes its API at /api/v3 and its GraphQL endpoint at /api/graphql.
+			// When githubAPIURL ends with /api/v3, forwardToGitHub must rewrite the
+			// graphql URL to use /api/graphql instead of /api/v3/graphql.
+			name:           "GHES api/v3 URL rewrites graphql to api/graphql",
+			apiURLSuffix:   "/api/v3",
+			requestPath:    "/graphql",
+			wantServerPath: "/api/graphql",
+		},
+		{
+			name:           "GHES api/v3 URL with query string preserves query on graphql path",
+			apiURLSuffix:   "/api/v3",
+			requestPath:    "/graphql?ref=main&query=foo",
+			wantServerPath: "/api/graphql?ref=main&query=foo",
+		},
+		{
+			// Non-GraphQL paths are forwarded unchanged regardless of API URL format.
+			name:           "non-graphql REST path is not rewritten",
+			apiURLSuffix:   "/api/v3",
+			requestPath:    "/repos/org/repo",
+			wantServerPath: "/api/v3/repos/org/repo",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var capturedPath string
+			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				// Capture the full request URI (path + query string).
+				capturedPath = r.RequestURI
+				w.WriteHeader(http.StatusOK)
+			}))
+			defer upstream.Close()
+
+			s := &Server{
+				githubAPIURL: upstream.URL + tt.apiURLSuffix,
+				httpClient:   upstream.Client(),
+			}
+
+			resp, err := s.forwardToGitHub(context.Background(), http.MethodPost, tt.requestPath, nil, "", "")
+			require.NoError(t, err)
+			require.NotNil(t, resp)
+			defer resp.Body.Close()
+
+			assert.Equal(t, tt.wantServerPath, capturedPath,
+				"upstream received wrong path for requestPath=%q with apiURLSuffix=%q",
+				tt.requestPath, tt.apiURLSuffix)
+		})
+	}
+}
+
 // TestForwardToGitHub_ForwardsHTTPMethod verifies that the HTTP method is forwarded
 // correctly to the upstream.
 func TestForwardToGitHub_ForwardsHTTPMethod(t *testing.T) {
