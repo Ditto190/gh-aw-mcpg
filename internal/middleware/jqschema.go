@@ -179,6 +179,9 @@ func applyJqSchema(ctx context.Context, jsonData interface{}) (interface{}, erro
 	v, _, cancel, err := runJqCode(ctx, jqSchemaCode, jsonData, "jq schema filter")
 	defer cancel()
 	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return nil, fmt.Errorf("jq query execution failed: %w", ctxErr)
+		}
 		return nil, err
 	}
 
