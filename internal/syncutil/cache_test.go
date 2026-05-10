@@ -5,6 +5,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/github/gh-aw-mcpg/internal/syncutil"
 	"github.com/stretchr/testify/assert"
@@ -128,4 +129,77 @@ func TestGetOrCreate_RaceDetector(t *testing.T) {
 		}(key)
 	}
 	wg.Wait()
+}
+
+// TestGetOrCreate_DoubleCheckPreventsRedundantCreate verifies the double-check locking
+// branch in GetOrCreate: when two goroutines both observe a cache miss under the read lock
+// and then race for the write lock, the second goroutine must find the key already
+// populated after acquiring the write lock and must NOT call create a second time.
+//
+// Coordination strategy:
+//  1. The test holds the write lock before starting the goroutines; this forces both G1
+//     and G2 to block at their first mu.RLock() call, guaranteeing both will see a miss
+//     when the write lock is eventually released.
+//  2. After a small delay the test releases the write lock; both goroutines unblock,
+//     acquire the read lock concurrently, observe a cache miss, and release the read lock.
+//  3. Both goroutines then race for the write lock. The winner (say G1) acquires it,
+//     calls create(), and blocks on the firstCreate channel.
+//  4. G2 is now blocked on mu.Lock() behind G1.
+//  5. The test closes firstCreate; G1's create returns, stores the value, and releases
+//     the write lock. G2 then acquires the write lock, executes the double-check, finds
+//     the key already present, and returns without invoking create a second time.
+func TestGetOrCreate_DoubleCheckPreventsRedundantCreate(t *testing.T) {
+	var mu sync.RWMutex
+	cache := map[string]int{}
+
+	// Hold the write lock before starting goroutines so that both G1 and G2 block at
+	// mu.RLock() and are guaranteed to see a cache miss when released.
+	mu.Lock()
+
+	// firstCreate is closed once, by whichever goroutine wins the write lock and enters
+	// create(). It blocks that goroutine inside create() so the other goroutine has time
+	// to queue behind the write lock.
+	firstCreate := make(chan struct{})
+
+	var createCount atomic.Int32
+	var wg sync.WaitGroup
+
+	wg.Add(2)
+	for range 2 {
+		go func() {
+			defer wg.Done()
+			v, err := syncutil.GetOrCreate(&mu, cache, "key", func() (int, error) {
+				// Only the first goroutine to win the write lock reaches here.
+				// It blocks on firstCreate so that the other goroutine queues on mu.Lock().
+				createCount.Add(1)
+				<-firstCreate
+				return 42, nil
+			})
+			require.NoError(t, err)
+			assert.Equal(t, 42, v)
+		}()
+	}
+
+	// Give both goroutines time to reach mu.RLock() and block waiting for the write lock.
+	time.Sleep(10 * time.Millisecond)
+
+	// Release the test's write lock. Both goroutines unblock from mu.RLock(), observe a
+	// cache miss, release the read lock, and race for the write lock.
+	mu.Unlock()
+
+	// Give the write-lock winner time to enter create() and start blocking on firstCreate,
+	// while the other goroutine queues on mu.Lock().
+	time.Sleep(10 * time.Millisecond)
+
+	// Unblock the create function. The winning goroutine stores the value and releases the
+	// write lock. The other goroutine then acquires the write lock, executes the
+	// double-check at the top of the write-locked section, finds the key already present,
+	// and returns without calling create a second time.
+	close(firstCreate)
+
+	wg.Wait()
+
+	assert.Equal(t, int32(1), createCount.Load(),
+		"create must be called exactly once; the double-check must prevent the second goroutine from calling it")
+	assert.Equal(t, 42, cache["key"])
 }
