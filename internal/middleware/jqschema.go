@@ -174,19 +174,78 @@ func applyJqSchema(ctx context.Context, jsonData interface{}) (interface{}, erro
 
 	logMiddleware.Printf("applyJqSchema: starting schema inference, dataType=%T", jsonData)
 
-	// Run the pre-compiled query with context support (much faster than Parse+Run).
-	// The walk_schema filter produces exactly one output value (the fully-transformed schema).
-	v, _, cancel, err := runJqCode(ctx, jqSchemaCode, jsonData, "jq schema filter")
-	defer cancel()
+	v, err := runJqCode(ctx, jqSchemaCode, jsonData, "jq schema filter", runJqCodeOptions{
+		ExecutionPrefix:   "jq query",
+		LogDefaultTimeout: true,
+	})
 	if err != nil {
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			return nil, fmt.Errorf("jq query execution failed: %w", ctxErr)
-		}
 		return nil, err
 	}
 
 	// Return the schema object directly (no JSON marshaling needed here)
 	logMiddleware.Printf("applyJqSchema: schema inference completed, resultType=%T", v)
+	return v, nil
+}
+
+type runJqCodeOptions struct {
+	// ExecutionPrefix overrides the prefix used for context cancellation/timeout errors.
+	// When empty, errPrefix is reused.
+	ExecutionPrefix string
+	// LogDefaultTimeout emits the standard timeout log when this helper applies DefaultJqTimeout.
+	LogDefaultTimeout bool
+	// CheckMultipleResults enforces a single-output contract and returns an error when the
+	// iterator produces additional values.
+	CheckMultipleResults bool
+}
+
+// runJqCode executes precompiled gojq code against jsonData and applies the standard
+// middleware timeout/error handling behavior shared by jq schema and tool response filters.
+func runJqCode(
+	ctx context.Context,
+	code *gojq.Code,
+	jsonData interface{},
+	errPrefix string,
+	opts runJqCodeOptions,
+) (interface{}, error) {
+	executionPrefix := opts.ExecutionPrefix
+	if executionPrefix == "" {
+		executionPrefix = errPrefix
+	}
+
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, DefaultJqTimeout)
+		defer cancel()
+		if opts.LogDefaultTimeout {
+			logMiddleware.Printf("Applied default timeout of %v to jq query execution", DefaultJqTimeout)
+		}
+	}
+
+	iter := code.RunWithContext(ctx, jsonData)
+	v, ok := iter.Next()
+	if !ok {
+		return nil, fmt.Errorf("%s returned no results", errPrefix)
+	}
+
+	if err, ok := v.(error); ok {
+		if ctx.Err() != nil {
+			return nil, fmt.Errorf("%s execution failed: %w", executionPrefix, ctx.Err())
+		}
+		if haltErr, ok := err.(*gojq.HaltError); ok {
+			if haltErr.Value() == nil {
+				return nil, fmt.Errorf("%s halted cleanly with no output", errPrefix)
+			}
+			return nil, fmt.Errorf("%s halted with error (exit code %d): %w", errPrefix, haltErr.ExitCode(), err)
+		}
+		return nil, fmt.Errorf("%s error: %w", errPrefix, err)
+	}
+
+	if opts.CheckMultipleResults {
+		if extra, ok := iter.Next(); ok {
+			return nil, fmt.Errorf("%s returned multiple results, first=%T extra=%T", errPrefix, v, extra)
+		}
+	}
+
 	return v, nil
 }
 
@@ -206,52 +265,10 @@ func CompileToolResponseFilter(filter string) (*gojq.Code, error) {
 	return code, nil
 }
 
-// runJqCode applies a pre-compiled gojq code object to jsonData and returns the first result.
-// When ctx has no deadline, it wraps ctx with DefaultJqTimeout; the returned CancelFunc must
-// be called by the caller (a no-op is returned when no timeout was added). errPrefix is used
-// to namespace returned error messages (e.g. "jq schema filter").
-func runJqCode(ctx context.Context, code *gojq.Code, jsonData interface{}, errPrefix string) (interface{}, gojq.Iter, context.CancelFunc, error) {
-	cancel := context.CancelFunc(func() {})
-	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
-		ctx, cancel = context.WithTimeout(ctx, DefaultJqTimeout)
-	}
-
-	iter := code.RunWithContext(ctx, jsonData)
-	v, ok := iter.Next()
-	if !ok {
-		cancel()
-		return nil, nil, func() {}, fmt.Errorf("%s returned no results", errPrefix)
-	}
-
-	if err, ok := v.(error); ok {
-		cancel()
-		if ctx.Err() != nil {
-			return nil, nil, func() {}, fmt.Errorf("%s execution failed: %w", errPrefix, ctx.Err())
-		}
-		if haltErr, ok := err.(*gojq.HaltError); ok {
-			if haltErr.Value() == nil {
-				return nil, nil, func() {}, fmt.Errorf("%s halted cleanly with no output", errPrefix)
-			}
-			return nil, nil, func() {}, fmt.Errorf("%s halted with error (exit code %d): %w", errPrefix, haltErr.ExitCode(), err)
-		}
-		return nil, nil, func() {}, fmt.Errorf("%s error: %w", errPrefix, err)
-	}
-
-	return v, iter, cancel, nil
-}
-
 func applyToolResponseFilter(ctx context.Context, code *gojq.Code, jsonData interface{}) (interface{}, error) {
-	v, iter, cancel, err := runJqCode(ctx, code, jsonData, "tool response filter")
-	defer cancel()
-	if err != nil {
-		return nil, err
-	}
-
-	if extra, ok := iter.Next(); ok {
-		return nil, fmt.Errorf("tool response filter returned multiple results, first=%T extra=%T", v, extra)
-	}
-
-	return v, nil
+	return runJqCode(ctx, code, jsonData, "tool response filter", runJqCodeOptions{
+		CheckMultipleResults: true,
+	})
 }
 
 // ApplyToolResponseFilter compiles and applies a jq expression to tool response data.
