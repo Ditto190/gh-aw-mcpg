@@ -174,7 +174,10 @@ func applyJqSchema(ctx context.Context, jsonData interface{}) (interface{}, erro
 
 	logMiddleware.Printf("applyJqSchema: starting schema inference, dataType=%T", jsonData)
 
-	v, err := runJqCode(ctx, jqSchemaCode, jsonData, "jq schema filter", "jq query", true, false)
+	v, err := runJqCode(ctx, jqSchemaCode, jsonData, "jq schema filter", runJqCodeOptions{
+		ExecutionPrefix:   "jq query",
+		LogDefaultTimeout: true,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -184,20 +187,36 @@ func applyJqSchema(ctx context.Context, jsonData interface{}) (interface{}, erro
 	return v, nil
 }
 
+type runJqCodeOptions struct {
+	// ExecutionPrefix overrides the prefix used for context cancellation/timeout errors.
+	// When empty, errPrefix is reused.
+	ExecutionPrefix string
+	// LogDefaultTimeout emits the standard timeout log when this helper applies DefaultJqTimeout.
+	LogDefaultTimeout bool
+	// CheckMultipleResults enforces a single-output contract and returns an error when the
+	// iterator produces additional values.
+	CheckMultipleResults bool
+}
+
+// runJqCode executes precompiled gojq code against jsonData and applies the standard
+// middleware timeout/error handling behavior shared by jq schema and tool response filters.
 func runJqCode(
 	ctx context.Context,
 	code *gojq.Code,
 	jsonData interface{},
 	errPrefix string,
-	executionPrefix string,
-	logDefaultTimeout bool,
-	checkMultipleResults bool,
+	opts runJqCodeOptions,
 ) (interface{}, error) {
+	executionPrefix := opts.ExecutionPrefix
+	if executionPrefix == "" {
+		executionPrefix = errPrefix
+	}
+
 	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, DefaultJqTimeout)
 		defer cancel()
-		if logDefaultTimeout {
+		if opts.LogDefaultTimeout {
 			logMiddleware.Printf("Applied default timeout of %v to jq query execution", DefaultJqTimeout)
 		}
 	}
@@ -221,7 +240,7 @@ func runJqCode(
 		return nil, fmt.Errorf("%s error: %w", errPrefix, err)
 	}
 
-	if checkMultipleResults {
+	if opts.CheckMultipleResults {
 		if extra, ok := iter.Next(); ok {
 			return nil, fmt.Errorf("%s returned multiple results, first=%T extra=%T", errPrefix, v, extra)
 		}
@@ -247,7 +266,9 @@ func CompileToolResponseFilter(filter string) (*gojq.Code, error) {
 }
 
 func applyToolResponseFilter(ctx context.Context, code *gojq.Code, jsonData interface{}) (interface{}, error) {
-	return runJqCode(ctx, code, jsonData, "tool response filter", "tool response filter", false, true)
+	return runJqCode(ctx, code, jsonData, "tool response filter", runJqCodeOptions{
+		CheckMultipleResults: true,
+	})
 }
 
 // ApplyToolResponseFilter compiles and applies a jq expression to tool response data.
