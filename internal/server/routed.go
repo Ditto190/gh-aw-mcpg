@@ -54,6 +54,7 @@ type filteredServerEntry struct {
 
 // newFilteredServerCache creates a new server cache with the given entry TTL.
 func newFilteredServerCache(ttl time.Duration) *filteredServerCache {
+	logRouted.Printf("[CACHE] Creating filtered server cache: ttl=%s, maxSize=%d", ttl, filteredServerCacheMaxSize)
 	return &filteredServerCache{
 		servers: make(map[string]*filteredServerEntry),
 		ttl:     ttl,
@@ -81,6 +82,7 @@ func (c *filteredServerCache) getOrCreate(backendID, sessionID string, creator f
 
 	if entry, ok := c.servers[key]; ok {
 		entry.lastUsed = now
+		logRouted.Printf("[CACHE] Cache hit: key=%s", truncateCacheKeyForLog(key))
 		return entry.server
 	}
 
