@@ -1355,8 +1355,11 @@ mod tests {
     fn parse_integrity_rejects_unknown_value() {
         let err = parse_integrity("superuser").expect_err("unknown value must be rejected");
         assert!(err.contains("must be one of"), "error should describe constraint: {err}");
-        assert!(err.contains("none"), "error should mention \"none\": {err}");
-        assert!(err.contains("merged"), "error should mention \"merged\": {err}");
+        assert!(
+            err.contains(policy_integrity::ORDER_LOW_TO_HIGH_PIPED),
+            "error should contain the full valid-options string \"{}\": {err}",
+            policy_integrity::ORDER_LOW_TO_HIGH_PIPED
+        );
     }
 
     #[test]
