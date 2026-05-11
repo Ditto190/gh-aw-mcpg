@@ -29,6 +29,30 @@ pub mod policy_integrity {
     pub const MERGED: &str = "merged";
 
     pub const ORDER_HIGH_TO_LOW: [&str; 4] = [MERGED, APPROVED, UNAPPROVED, NONE];
+    /// Low-to-high order joined with `|`, ready for use in error messages.
+    pub const ORDER_LOW_TO_HIGH_PIPED: &str = "none|unapproved|approved|merged";
+}
+
+#[cfg(test)]
+mod tests {
+    use super::policy_integrity;
+
+    /// Ensures ORDER_LOW_TO_HIGH_PIPED stays in sync with ORDER_HIGH_TO_LOW.
+    /// If a new integrity level is added or reordered, this test will catch the drift.
+    #[test]
+    fn order_low_to_high_piped_matches_order_high_to_low() {
+        let derived: String = policy_integrity::ORDER_HIGH_TO_LOW
+            .iter()
+            .rev()
+            .copied()
+            .collect::<Vec<_>>()
+            .join("|");
+        assert_eq!(
+            derived,
+            policy_integrity::ORDER_LOW_TO_HIGH_PIPED,
+            "ORDER_LOW_TO_HIGH_PIPED is out of sync with ORDER_HIGH_TO_LOW"
+        );
+    }
 }
 
 /// Canonical *reserved* scope token strings used for baseline and integrity scoping.

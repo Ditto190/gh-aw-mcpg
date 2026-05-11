@@ -443,12 +443,7 @@ fn parse_integrity(value: &str) -> Result<MinIntegrity, String> {
         policy_integrity::MERGED => Ok(MinIntegrity::Merged),
         _ => Err(format!(
             "AllowOnly.min-integrity must be one of {}",
-            policy_integrity::ORDER_HIGH_TO_LOW
-                .iter()
-                .rev()
-                .copied()
-                .collect::<Vec<_>>()
-                .join("|")
+            policy_integrity::ORDER_LOW_TO_HIGH_PIPED
         )),
     }
 }
@@ -1346,5 +1341,36 @@ mod tests {
         let preview = safe_preview(&accented, 500);
         assert_eq!(preview.len(), 500);
         assert_eq!(preview.chars().count(), 250);
+    }
+
+    #[test]
+    fn parse_integrity_accepts_all_valid_values() {
+        assert_eq!(parse_integrity("none"), Ok(MinIntegrity::None));
+        assert_eq!(parse_integrity("unapproved"), Ok(MinIntegrity::Unapproved));
+        assert_eq!(parse_integrity("approved"), Ok(MinIntegrity::Approved));
+        assert_eq!(parse_integrity("merged"), Ok(MinIntegrity::Merged));
+    }
+
+    #[test]
+    fn parse_integrity_rejects_unknown_value() {
+        let err = parse_integrity("superuser").expect_err("unknown value must be rejected");
+        assert!(err.contains("must be one of"), "error should describe constraint: {err}");
+        assert!(
+            err.contains(policy_integrity::ORDER_LOW_TO_HIGH_PIPED),
+            "error should contain the full valid-options string \"{}\": {err}",
+            policy_integrity::ORDER_LOW_TO_HIGH_PIPED
+        );
+    }
+
+    #[test]
+    fn scope_string_all_arms() {
+        assert_eq!(scope_string(ScopeKind::All, None, None), POLICY_SCOPE_ALL);
+        assert_eq!(scope_string(ScopeKind::Public, None, None), POLICY_SCOPE_PUBLIC);
+        assert_eq!(scope_string(ScopeKind::Owner, Some("octocat"), None), "octocat");
+        assert_eq!(scope_string(ScopeKind::Owner, None, None), "");
+        assert_eq!(scope_string(ScopeKind::Repo, Some("o"), Some("r")), "o/r");
+        assert_eq!(scope_string(ScopeKind::Repo, None, None), "");
+        assert_eq!(scope_string(ScopeKind::RepoPrefix, Some("o"), Some("pfx")), "o/pfx*");
+        assert_eq!(scope_string(ScopeKind::RepoPrefix, None, None), "");
     }
 }
