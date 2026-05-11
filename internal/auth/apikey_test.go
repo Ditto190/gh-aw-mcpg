@@ -42,7 +42,8 @@ func TestGenerateRandomAPIKey_IsLowercaseHex(t *testing.T) {
 	key, err := auth.GenerateRandomAPIKey()
 	require.NoError(t, err)
 
-	matched, _ := regexp.MatchString(`^[0-9a-f]{64}$`, key)
+	matched, matchErr := regexp.MatchString(`^[0-9a-f]{64}$`, key)
+	require.NoError(t, matchErr)
 	assert.True(t, matched, "key should consist of exactly 64 lowercase hex chars; got %q", key)
 }
 
