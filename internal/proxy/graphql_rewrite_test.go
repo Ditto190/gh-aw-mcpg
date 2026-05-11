@@ -566,6 +566,7 @@ func TestFindParentField_NoEnclosingBrace(t *testing.T) {
 // covering all four code paths: named fragment spread, inline fragment, direct
 // nodes injection with safe/unsafe parents, and no-match fallback.
 func TestInjectFieldsIntoQuery(t *testing.T) {
+	pstr := func(s string) *string { return &s }
 	tests := []struct {
 		name        string
 		query       string
@@ -573,7 +574,7 @@ func TestInjectFieldsIntoQuery(t *testing.T) {
 		safeParents map[string]bool
 		wantContain []string
 		wantAbsent  []string
-		wantEqualTo string // if set, result must equal input (no-op)
+		wantEqualTo *string // if non-nil, result must exactly equal this value
 	}{
 		{
 			name:        "named fragment spread — delegates to injectIntoFragment",
@@ -628,8 +629,8 @@ func TestInjectFieldsIntoQuery(t *testing.T) {
 				"nodes {authorAssociation,",
 			},
 			wantAbsent: []string{
-				// assignees.nodes must NOT get the field appended right after {
-				"login } }",
+				// authorAssociation must NOT be injected into the assignees nodes block
+				"assignees(first:5) { nodes {authorAssociation",
 			},
 		},
 		{
@@ -637,14 +638,14 @@ func TestInjectFieldsIntoQuery(t *testing.T) {
 			query:       `query { repository { pullRequest(number:1) { title body } } }`,
 			fields:      []string{"author{login}"},
 			safeParents: map[string]bool{"pullRequest": true},
-			wantEqualTo: `query { repository { pullRequest(number:1) { title body } } }`,
+			wantEqualTo: pstr(`query { repository { pullRequest(number:1) { title body } } }`),
 		},
 		{
 			name:        "empty query — returns empty unchanged",
 			query:       ``,
 			fields:      []string{"author{login}"},
 			safeParents: map[string]bool{"anything": true},
-			wantEqualTo: ``,
+			wantEqualTo: pstr(``),
 		},
 		{
 			name:        "nil safeParents — no direct injection (all parents unsafe)",
@@ -672,8 +673,8 @@ func TestInjectFieldsIntoQuery(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := injectFieldsIntoQuery(tt.query, tt.fields, tt.safeParents)
-			if tt.wantEqualTo != "" {
-				assert.Equal(t, tt.wantEqualTo, got)
+			if tt.wantEqualTo != nil {
+				assert.Equal(t, *tt.wantEqualTo, got)
 			}
 			for _, want := range tt.wantContain {
 				assert.Contains(t, got, want)
