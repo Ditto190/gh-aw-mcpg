@@ -982,7 +982,10 @@ args = ["run", "--rm", "-i", "test/container:latest"]
 
 func TestLoadFromFile_InvalidTOMLWithLineNumber(t *testing.T) {
 	// Invalid TOML: unterminated string on line 2
-	path := writeTempTOML(t, "[servers.test]\ncommand = \"docker\nargs = [\"run\"]\n")
+	path := writeTempTOML(t, `[servers.test]
+command = "docker
+args = ["run"]
+`)
 
 	cfg, err := LoadFromFile(path)
 	require.Error(t, err, "Expected error for invalid TOML")
