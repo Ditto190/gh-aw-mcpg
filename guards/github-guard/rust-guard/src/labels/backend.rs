@@ -1255,7 +1255,26 @@ mod tests {
     }
 
     #[test]
-    fn test_repo_id_from_repo_object_full_name_camel_case() {
+    fn test_extract_owner_is_org_first_match_missing_type_returns_none() {
+        let response = serde_json::json!({
+            "items": [
+                {
+                    "full_name": "myorg/myrepo",
+                    "private": false,
+                    "owner": { "login": "myorg" }
+                },
+                {
+                    "full_name": "myorg/myrepo",
+                    "private": false,
+                    "owner": { "login": "myorg", "type": "Organization" }
+                }
+            ]
+        });
+        assert_eq!(extract_owner_is_org(&response, "myorg/myrepo"), None);
+    }
+
+    #[test]
+    fn test_repo_id_from_repo_object_full_name_camelcase() {
         let item = serde_json::json!({
             "fullName": "myorg/myrepo",
             "owner": { "login": "myorg", "type": "Organization" }
@@ -1355,18 +1374,29 @@ fn extract_owner_is_org(response: &Value, repo_id: &str) -> Option<bool> {
     owner_is_org_from_items(&parsed, repo_id)
 }
 
+fn find_org_in_items(items: &[Value], repo_id: &str) -> Option<bool> {
+    items
+        .iter()
+        .find(|item| {
+            repo_id_from_repo_object(item)
+                .map(|item_repo_id| item_repo_id.eq_ignore_ascii_case(repo_id))
+                .unwrap_or(false)
+        })
+        .and_then(owner_type_from_repo_object)
+}
+
 fn owner_is_org_from_items(value: &Value, repo_id: &str) -> Option<bool> {
     // search_repositories shape: { items: [...] }
     if let Some(items) = value.get("items").and_then(|v| v.as_array()) {
-        if let Some(is_org) = find_org_in_items(items, repo_id) {
-            return Some(is_org);
+        if let Some(result) = find_org_in_items(items, repo_id) {
+            return Some(result);
         }
     }
 
     // Plain array response
     if let Some(items) = value.as_array() {
-        if let Some(is_org) = find_org_in_items(items, repo_id) {
-            return Some(is_org);
+        if let Some(result) = find_org_in_items(items, repo_id) {
+            return Some(result);
         }
     }
 
@@ -1381,17 +1411,6 @@ fn owner_is_org_from_items(value: &Value, repo_id: &str) -> Option<bool> {
     }
 
     None
-}
-
-fn find_org_in_items(items: &[Value], repo_id: &str) -> Option<bool> {
-    items.iter().find_map(|item| {
-        let item_repo_id = repo_id_from_repo_object(item)?;
-        if item_repo_id.eq_ignore_ascii_case(repo_id) {
-            owner_type_from_repo_object(item)
-        } else {
-            None
-        }
-    })
 }
 
 /// Extract owner type from a repository object.
@@ -1436,4 +1455,55 @@ fn repo_id_from_repo_object(item: &Value) -> Option<String> {
     }
 
     None
+}
+
+#[cfg(test)]
+mod tests_dedup {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn find_org_in_items_matches_by_full_name() {
+        let items = vec![
+            json!({"full_name": "acme/alpha", "owner": {"type": "Organization"}}),
+            json!({"full_name": "acme/beta",  "owner": {"type": "User"}}),
+        ];
+        assert_eq!(find_org_in_items(&items, "acme/alpha"), Some(true));
+        assert_eq!(find_org_in_items(&items, "acme/beta"), Some(false));
+    }
+
+    #[test]
+    fn find_org_in_items_case_insensitive() {
+        let items = vec![json!({"full_name": "Acme/Alpha", "owner": {"type": "Organization"}})];
+        assert_eq!(find_org_in_items(&items, "acme/alpha"), Some(true));
+    }
+
+    #[test]
+    fn find_org_in_items_no_match_returns_none() {
+        let items = vec![json!({"full_name": "acme/alpha", "owner": {"type": "Organization"}})];
+        assert_eq!(find_org_in_items(&items, "acme/gamma"), None);
+    }
+
+    #[test]
+    fn find_org_in_items_empty_slice_returns_none() {
+        assert_eq!(find_org_in_items(&[], "acme/alpha"), None);
+    }
+
+    #[test]
+    fn repo_id_prefers_full_name_over_fullname() {
+        let item = json!({"full_name": "a/b", "fullName": "x/y"});
+        assert_eq!(repo_id_from_repo_object(&item).as_deref(), Some("a/b"));
+    }
+
+    #[test]
+    fn repo_id_falls_back_to_fullname() {
+        let item = json!({"fullName": "x/y"});
+        assert_eq!(repo_id_from_repo_object(&item).as_deref(), Some("x/y"));
+    }
+
+    #[test]
+    fn repo_id_ignores_empty_full_name() {
+        let item = json!({"full_name": "", "fullName": "x/y"});
+        assert_eq!(repo_id_from_repo_object(&item).as_deref(), Some("x/y"));
+    }
 }
