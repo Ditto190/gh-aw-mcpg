@@ -32,11 +32,11 @@ func LogConnectionError(errCtx ConnectionErrorContext, err error) {
 
 	// Structured log via file logger.
 	if errCtx.ServerID != "" {
-		logger.LogErrorWithServer(errCtx.ServerID, "backend",
+		logger.LogErrorToServer(errCtx.ServerID, "backend",
 			"MCP backend connection failed%s: server=%s, command=%s, args=%v, error=%v",
 			suffix, errCtx.ServerID, errCtx.Command, sanitize.SanitizeArgs(errCtx.Args), err)
 	} else {
-		logger.LogErrorMd("backend",
+		logger.LogErrorToMarkdown("backend",
 			"MCP backend connection failed, command=%s, args=%v, error=%v",
 			errCtx.Command, sanitize.SanitizeArgs(errCtx.Args), err)
 	}
@@ -65,7 +65,7 @@ func LogConnectionError(errCtx ConnectionErrorContext, err error) {
 	// Log captured stderr output from the container/process.
 	if errCtx.StderrOutput != "" {
 		sanitizedStderr := sanitize.SanitizeString(errCtx.StderrOutput)
-		logger.LogErrorMd("backend", "MCP backend stderr output:\n%s", sanitizedStderr)
+		logger.LogErrorToMarkdown("backend", "MCP backend stderr output:\n%s", sanitizedStderr)
 		log.Printf("[LAUNCHER]   📋 Process stderr output:")
 		for _, line := range strings.Split(sanitizedStderr, "\n") {
 			log.Printf("[LAUNCHER]      %s", line)
@@ -88,13 +88,13 @@ func LogConnectionError(errCtx ConnectionErrorContext, err error) {
 	// Hints based on error message content.
 	errStr := err.Error()
 	if strings.Contains(errStr, "executable file not found") || strings.Contains(errStr, "no such file or directory") {
-		logger.LogErrorMd("backend", "MCP backend command not found, command=%s", errCtx.Command)
+		logger.LogErrorToMarkdown("backend", "MCP backend command not found, command=%s", errCtx.Command)
 		log.Printf("[LAUNCHER] ⚠️  Command '%s' not found in PATH", errCtx.Command)
 		log.Printf("[LAUNCHER] ⚠️  Verify the command is installed and executable")
 	}
 
 	if strings.Contains(errStr, "EOF") || strings.Contains(errStr, "broken pipe") {
-		logger.LogErrorMd("backend", "MCP backend connection/protocol error, command=%s", errCtx.Command)
+		logger.LogErrorToMarkdown("backend", "MCP backend connection/protocol error, command=%s", errCtx.Command)
 		log.Printf("[LAUNCHER] ⚠️  Process started but terminated unexpectedly")
 		log.Printf("[LAUNCHER] ⚠️  Check if the command supports MCP protocol over stdio")
 	}

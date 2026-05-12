@@ -36,10 +36,10 @@ func TestMarkdownLoggerFormatting(t *testing.T) {
 	require.NoError(t, err, "InitMarkdownLogger failed")
 
 	// Write messages at different levels
-	LogInfoMd("test", "This is an info message")
-	LogWarnMd("test", "This is a warning message")
-	LogErrorMd("test", "This is an error message")
-	LogDebugMd("test", "This is a debug message")
+	LogInfoToMarkdown("test", "This is an info message")
+	LogWarnToMarkdown("test", "This is a warning message")
+	LogErrorToMarkdown("test", "This is an error message")
+	LogDebugToMarkdown("test", "This is a debug message")
 
 	CloseMarkdownLogger()
 
@@ -111,7 +111,7 @@ func TestMarkdownLoggerSecretSanitization(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		LogInfoMd("test", "%s", tc.input)
+		LogInfoToMarkdown("test", "%s", tc.input)
 	}
 
 	CloseMarkdownLogger()
@@ -153,7 +153,7 @@ func TestMarkdownLoggerCategories(t *testing.T) {
 	// Log messages with different categories
 	categories := []string{"startup", "client", "backend", "shutdown"}
 	for _, category := range categories {
-		LogInfoMd(category, "Message for category %s", category)
+		LogInfoToMarkdown(category, "Message for category %s", category)
 	}
 
 	CloseMarkdownLogger()
@@ -185,7 +185,7 @@ func TestMarkdownLoggerConcurrency(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		go func(id int) {
 			for j := 0; j < 10; j++ {
-				LogInfoMd("concurrent", "Message from goroutine %d, iteration %d", id, j)
+				LogInfoToMarkdown("concurrent", "Message from goroutine %d, iteration %d", id, j)
 			}
 			done <- true
 		}(i)
@@ -221,9 +221,9 @@ func TestMarkdownLoggerCodeBlocks(t *testing.T) {
 	require.NoError(t, err, "InitMarkdownLogger failed")
 
 	// Log messages with technical content that should use code blocks
-	LogInfoMd("test", "command=/usr/bin/docker args=[run --rm -i container]")
-	LogInfoMd("test", "Multi-line\ncontent\nhere")
-	LogInfoMd("test", "Simple message")
+	LogInfoToMarkdown("test", "command=/usr/bin/docker args=[run --rm -i container]")
+	LogInfoToMarkdown("test", "Multi-line\ncontent\nhere")
+	LogInfoToMarkdown("test", "Simple message")
 
 	CloseMarkdownLogger()
 
@@ -258,7 +258,7 @@ func TestMarkdownLoggerFallback(t *testing.T) {
 	}
 
 	// Should not panic when logging
-	LogInfoMd("test", "This should not crash")
+	LogInfoToMarkdown("test", "This should not crash")
 }
 
 func TestMarkdownLoggerRPCFormatting(t *testing.T) {
@@ -270,13 +270,13 @@ func TestMarkdownLoggerRPCFormatting(t *testing.T) {
 	require.NoError(t, err, "InitMarkdownLogger failed")
 
 	// Test RPC-style pre-formatted messages (should NOT be wrapped in code blocks)
-	LogDebugMd("rpc", "**github**→`tools/list`")
-	LogDebugMd("rpc", "**safeoutputs**→`tools/call`\n\n```json\n{\n  \"id\": 1\n}\n```")
-	LogDebugMd("rpc", "**backend**←`resp`")
+	LogDebugToMarkdown("rpc", "**github**→`tools/list`")
+	LogDebugToMarkdown("rpc", "**safeoutputs**→`tools/call`\n\n```json\n{\n  \"id\": 1\n}\n```")
+	LogDebugToMarkdown("rpc", "**backend**←`resp`")
 
 	// Test regular messages (should use code blocks for multi-line)
-	LogInfoMd("backend", "command=/usr/bin/docker args=[run]")
-	LogInfoMd("backend", "Multi\nline\ncontent")
+	LogInfoToMarkdown("backend", "command=/usr/bin/docker args=[run]")
+	LogInfoToMarkdown("backend", "Multi\nline\ncontent")
 
 	CloseMarkdownLogger()
 
@@ -332,7 +332,7 @@ Error: doesn't validate with schema
 
 Please check your configuration`
 
-	LogErrorMd("startup", "Configuration validation failed:\n%s", errorMsg)
+	LogErrorToMarkdown("startup", "Configuration validation failed:\n%s", errorMsg)
 
 	CloseMarkdownLogger()
 

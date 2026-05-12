@@ -38,9 +38,9 @@ func TestServerFileLoggerCreatesLogFiles(t *testing.T) {
 	defer CloseServerFileLogger()
 
 	// Log messages for different servers
-	LogInfoWithServer("github", "test", "Test message 1")
-	LogInfoWithServer("slack", "test", "Test message 2")
-	LogWarnWithServer("github", "test", "Warning message")
+	LogInfoToServer("github", "test", "Test message 1")
+	LogInfoToServer("slack", "test", "Test message 2")
+	LogWarnToServer("github", "test", "Warning message")
 
 	// Close to flush all files
 	err = CloseServerFileLogger()
@@ -90,7 +90,7 @@ func TestServerFileLoggerConcurrentAccess(t *testing.T) {
 			wg.Add(1)
 			go func(sid string, index int) {
 				defer wg.Done()
-				LogInfoWithServer(sid, "test", "Message %d", index)
+				LogInfoToServer(sid, "test", "Message %d", index)
 			}(serverID, i)
 		}
 	}
@@ -131,7 +131,7 @@ func TestServerFileLoggerFallback(t *testing.T) {
 
 	// Log should not panic in fallback mode
 	assert.NotPanics(t, func() {
-		LogInfoWithServer("github", "test", "Test message in fallback mode")
+		LogInfoToServer("github", "test", "Test message in fallback mode")
 	})
 }
 
@@ -148,10 +148,10 @@ func TestServerFileLoggerAllLevels(t *testing.T) {
 	serverID := "test-server"
 
 	// Log messages at all levels
-	LogInfoWithServer(serverID, "test", "Info message")
-	LogWarnWithServer(serverID, "test", "Warning message")
-	LogErrorWithServer(serverID, "test", "Error message")
-	LogDebugWithServer(serverID, "test", "Debug message")
+	LogInfoToServer(serverID, "test", "Info message")
+	LogWarnToServer(serverID, "test", "Warning message")
+	LogErrorToServer(serverID, "test", "Error message")
+	LogDebugToServer(serverID, "test", "Debug message")
 
 	// Close to flush
 	err = CloseServerFileLogger()
@@ -187,14 +187,14 @@ func TestServerFileLoggerMultipleInit(t *testing.T) {
 	require.NoError(t, err)
 
 	// Log a message
-	LogInfoWithServer("server1", "test", "Message 1")
+	LogInfoToServer("server1", "test", "Message 1")
 
 	// Re-initialize (should close old logger and create new one)
 	err = InitServerFileLogger(logDir)
 	require.NoError(t, err)
 
 	// Log another message
-	LogInfoWithServer("server1", "test", "Message 2")
+	LogInfoToServer("server1", "test", "Message 2")
 
 	// Close
 	err = CloseServerFileLogger()
@@ -224,9 +224,9 @@ func TestServerFileLoggerPreservesUnifiedView(t *testing.T) {
 	defer CloseServerFileLogger()
 
 	// Log messages using per-serverID logging
-	LogInfoWithServer("github", "backend", "GitHub server started")
-	LogWarnWithServer("slack", "backend", "Slack connection timeout")
-	LogErrorWithServer("github", "backend", "GitHub authentication failed")
+	LogInfoToServer("github", "backend", "GitHub server started")
+	LogWarnToServer("slack", "backend", "Slack connection timeout")
+	LogErrorToServer("github", "backend", "GitHub authentication failed")
 
 	// Close loggers to flush
 	err = CloseServerFileLogger()

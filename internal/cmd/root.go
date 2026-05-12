@@ -145,14 +145,14 @@ func run(cmd *cobra.Command, args []string) error {
 
 	logger.InitGatewayLoggers(logDir)
 
-	logger.LogInfoMd("startup", "MCPG Gateway version: %s", cliVersion)
+	logger.LogInfoToMarkdown("startup", "MCPG Gateway version: %s", cliVersion)
 
 	// Log config source based on what was provided
 	configSource := configFile
 	if configStdin {
 		configSource = "stdin"
 	}
-	logger.LogInfoMd("startup", "Starting MCPG with config: %s, listen: %s, log-dir: %s", configSource, listenAddr, logDir)
+	logger.LogInfoToMarkdown("startup", "Starting MCPG with config: %s, listen: %s, log-dir: %s", configSource, listenAddr, logDir)
 	debugLog.Printf("Starting MCPG with config: %s, listen: %s", configSource, listenAddr)
 
 	resolvedWasmCacheDir, cacheErr := configureWasmCompilationCache(ctx, cmd.Flags().Changed("wasm-cache-dir"), wasmCacheDir, logDir, logger.StartupWarn)
@@ -166,7 +166,7 @@ func run(cmd *cobra.Command, args []string) error {
 		debugLog.Printf("Validating execution environment...")
 		result := config.ValidateExecutionEnvironment()
 		if !result.IsValid() {
-			logger.LogErrorMd("startup", "Environment validation failed: %s", result.Error())
+			logger.LogErrorToMarkdown("startup", "Environment validation failed: %s", result.Error())
 			return fmt.Errorf("environment validation failed: %s", result.Error())
 		}
 		logger.StartupInfo("Environment validation passed")
@@ -186,7 +186,7 @@ func run(cmd *cobra.Command, args []string) error {
 
 	if err != nil {
 		// Log configuration validation errors to markdown logger
-		logger.LogErrorMd("startup", "Configuration validation failed:\n%s", err.Error())
+		logger.LogErrorToMarkdown("startup", "Configuration validation failed:\n%s", err.Error())
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
@@ -199,9 +199,9 @@ func run(cmd *cobra.Command, args []string) error {
 		serverNames = append(serverNames, name)
 	}
 	if len(serverNames) > 0 {
-		logger.LogInfoMd("startup", "Loaded %d MCP server(s): %v", len(cfg.Servers), serverNames)
+		logger.LogInfoToMarkdown("startup", "Loaded %d MCP server(s): %v", len(cfg.Servers), serverNames)
 	} else {
-		logger.LogInfoMd("startup", "Loaded %d MCP server(s)", len(cfg.Servers))
+		logger.LogInfoToMarkdown("startup", "Loaded %d MCP server(s)", len(cfg.Servers))
 	}
 
 	// Validate guards mode before applying
@@ -362,7 +362,7 @@ func run(cmd *cobra.Command, args []string) error {
 	// Handle graceful shutdown via context cancellation
 	go func() {
 		<-ctx.Done()
-		logger.LogInfoMd("shutdown", "Shutting down gateway...")
+		logger.LogInfoToMarkdown("shutdown", "Shutting down gateway...")
 		log.Println("Shutting down...")
 		unifiedServer.Close()
 	}()

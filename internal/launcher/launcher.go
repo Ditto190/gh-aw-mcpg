@@ -109,7 +109,7 @@ func (l *Launcher) getServerConfig(serverID string) (*config.ServerConfig, error
 	cfg, ok := l.config.Servers[serverID]
 	l.mu.RUnlock()
 	if !ok {
-		logger.LogErrorWithServer(serverID, "backend", "Backend server not found in config: %s", serverID)
+		logger.LogErrorToServer(serverID, "backend", "Backend server not found in config: %s", serverID)
 		return nil, fmt.Errorf("server '%s': %w", serverID, ErrServerNotFound)
 	}
 	return cfg, nil
@@ -117,7 +117,7 @@ func (l *Launcher) getServerConfig(serverID string) (*config.ServerConfig, error
 
 // GetOrLaunch returns an existing connection or launches a new one
 func GetOrLaunch(l *Launcher, serverID string) (*mcp.Connection, error) {
-	logger.LogDebugWithServer(serverID, "backend", "GetOrLaunch called for server: %s", serverID)
+	logger.LogDebugToServer(serverID, "backend", "GetOrLaunch called for server: %s", serverID)
 
 	// Look up config before entering GetOrCreate. GetOrCreate takes a read lock
 	// first, upgrading to a write lock only on a cache miss; doing this
@@ -134,7 +134,7 @@ func GetOrLaunch(l *Launcher, serverID string) (*mcp.Connection, error) {
 
 		// Handle HTTP backends differently
 		if serverCfg.Type == "http" {
-			logger.LogInfoWithServer(serverID, "backend", "Configuring HTTP MCP backend: %s, url=%s", serverID, serverCfg.URL)
+			logger.LogInfoToServer(serverID, "backend", "Configuring HTTP MCP backend: %s, url=%s", serverID, serverCfg.URL)
 
 			// Determine OIDC provider and audience for this server
 			var oidcProvider *oidc.Provider
@@ -147,7 +147,7 @@ func GetOrLaunch(l *Launcher, serverID string) (*mcp.Connection, error) {
 				}
 				if oidcProvider == nil {
 					oidcErr := oidc.ErrMissingOIDCEnvVar(serverID)
-					logger.LogErrorWithServer(serverID, "backend", "%v", oidcErr)
+					logger.LogErrorToServer(serverID, "backend", "%v", oidcErr)
 					l.recordError(serverID, oidcErr.Error())
 					return nil, oidcErr
 				}
@@ -157,12 +157,12 @@ func GetOrLaunch(l *Launcher, serverID string) (*mcp.Connection, error) {
 			conn, err := mcp.NewHTTPConnection(l.ctx, serverID, serverCfg.URL, serverCfg.Headers, oidcProvider, oidcAudience, l.config.Gateway.HTTPKeepaliveInterval(), serverCfg.HTTPConnectTimeout())
 			if err != nil {
 				log.Printf("FAILED to create HTTP connection for server %q: %v", serverID, err)
-				logger.LogErrorWithServer(serverID, "backend", "Failed to create HTTP connection: %s, error=%v", serverID, err)
+				logger.LogErrorToServer(serverID, "backend", "Failed to create HTTP connection: %s, error=%v", serverID, err)
 				l.recordError(serverID, err.Error())
 				return nil, fmt.Errorf("failed to create HTTP connection: %w", err)
 			}
 
-			logger.LogInfoWithServer(serverID, "backend", "Successfully configured HTTP MCP backend: %s", serverID)
+			logger.LogInfoToServer(serverID, "backend", "Successfully configured HTTP MCP backend: %s", serverID)
 
 			l.recordStart(serverID)
 			return conn, nil
@@ -182,7 +182,7 @@ func GetOrLaunch(l *Launcher, serverID string) (*mcp.Connection, error) {
 // GetOrLaunchForSession returns a session-aware connection or launches a new one
 // This is used for stateful stdio backends that require persistent connections
 func GetOrLaunchForSession(l *Launcher, serverID, sessionID string) (*mcp.Connection, error) {
-	logger.LogDebugWithServer(serverID, "backend", "GetOrLaunchForSession called: server=%s, session=%s", serverID, sessionID)
+	logger.LogDebugToServer(serverID, "backend", "GetOrLaunchForSession called: server=%s, session=%s", serverID, sessionID)
 
 	// Get server config first to determine backend type
 	serverCfg, err := l.getServerConfig(serverID)
@@ -199,7 +199,7 @@ func GetOrLaunchForSession(l *Launcher, serverID, sessionID string) (*mcp.Connec
 	logLauncher.Printf("Checking session pool: serverID=%s, sessionID=%s", serverID, sessionID)
 	// For stdio backends, check the session pool first
 	if conn, exists := l.sessionPool.Get(serverID, sessionID); exists {
-		logger.LogDebugWithServer(serverID, "backend", "Reusing session connection: server=%s, session=%s", serverID, sessionID)
+		logger.LogDebugToServer(serverID, "backend", "Reusing session connection: server=%s, session=%s", serverID, sessionID)
 		return conn, nil
 	}
 
@@ -212,7 +212,7 @@ func GetOrLaunchForSession(l *Launcher, serverID, sessionID string) (*mcp.Connec
 
 	// Double-check after acquiring lock
 	if conn, exists := l.sessionPool.Get(serverID, sessionID); exists {
-		logger.LogDebugWithServer(serverID, "backend", "Session connection created by another goroutine: server=%s, session=%s", serverID, sessionID)
+		logger.LogDebugToServer(serverID, "backend", "Session connection created by another goroutine: server=%s, session=%s", serverID, sessionID)
 		return conn, nil
 	}
 

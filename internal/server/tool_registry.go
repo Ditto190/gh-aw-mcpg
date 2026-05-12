@@ -152,12 +152,12 @@ func (us *UnifiedServer) registerAllToolsParallel(serverIDs []string) error {
 	var failedServers []string
 	for result := range results {
 		if result.err != nil {
-			logger.LogErrorWithServer(result.serverID, "backend", "Failed to register tools from %s (took %v): %v", result.serverID, result.duration, result.err)
+			logger.LogErrorToServer(result.serverID, "backend", "Failed to register tools from %s (took %v): %v", result.serverID, result.duration, result.err)
 			failureCount++
 			failedServers = append(failedServers, result.serverID)
 		} else {
 			logUnified.Printf("Successfully registered tools from %s (took %v)", result.serverID, result.duration)
-			logger.LogInfoWithServer(result.serverID, "backend", "Successfully registered tools from %s (took %v)", result.serverID, result.duration)
+			logger.LogInfoToServer(result.serverID, "backend", "Successfully registered tools from %s (took %v)", result.serverID, result.duration)
 			successCount++
 		}
 	}
@@ -184,9 +184,9 @@ func (us *UnifiedServer) registerToolsFromBackend(serverID string) error {
 	// Surface backend server info from the MCP initialize handshake for diagnostics.
 	// This helps debug compatibility issues between the gateway and specific backends.
 	if name, version := conn.ServerInfo(); name != "" {
-		logger.LogInfoWithServer(serverID, "backend", "Backend server info: name=%s, version=%s", name, version)
+		logger.LogInfoToServer(serverID, "backend", "Backend server info: name=%s, version=%s", name, version)
 	} else {
-		logger.LogInfoWithServer(serverID, "backend", "Backend server info unavailable (no SDK session or server omitted serverInfo)")
+		logger.LogInfoToServer(serverID, "backend", "Backend server info unavailable (no SDK session or server omitted serverInfo)")
 	}
 
 	// List tools from backend

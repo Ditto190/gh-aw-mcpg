@@ -21,11 +21,11 @@ func logFilteredItems(serverID, toolName string, filtered *difc.FilteredCollecti
 		entry := buildFilteredItemLogEntry(serverID, toolName, detail)
 		b, err := json.Marshal(entry)
 		if err != nil {
-			logger.LogInfoWithServer(serverID, "difc", "Failed to marshal filtered item log entry: %v", err)
+			logger.LogInfoToServer(serverID, "difc", "Failed to marshal filtered item log entry: %v", err)
 			continue
 		}
 		jsonStr := string(b)
-		logger.LogInfoWithServer(serverID, "difc", "[DIFC-FILTERED] %s", jsonStr)
+		logger.LogInfoToServer(serverID, "difc", "[DIFC-FILTERED] %s", jsonStr)
 		logger.LogDifcFilteredItem(&logger.JSONLFilteredItem{FilteredItemLogEntry: entry})
 	}
 }

@@ -203,8 +203,8 @@ import (
 // The three sets and their internal dispatch helpers are:
 //
 //	file_logger.go       LogInfo / LogWarn / LogError / LogDebug          → logWithLevel
-//	markdown_logger.go   LogInfoMd / LogWarnMd / LogErrorMd / LogDebugMd  → logWithMarkdown
-//	server_file_logger.go LogInfoWithServer / ... / LogDebugWithServer    → logWithLevelAndServer
+//	markdown_logger.go   LogInfoToMarkdown / ... / LogDebugToMarkdown     → logWithMarkdown
+//	server_file_logger.go LogInfoToServer / ... / LogDebugToServer        → logWithLevelAndServer
 //
 // This pattern keeps exported APIs immutable (`func` declarations) while still
 // eliminating repeated inline level wiring.
@@ -234,8 +234,8 @@ import (
 // three locations to keep the public API consistent:
 //  1. Add a new entry to the logFuncs map in this file.
 //  2. In file_logger.go: add a var entry and exported wrapper (see LogInfo pattern).
-//  3. In markdown_logger.go: add a var entry and exported wrapper (see LogInfoMd pattern).
-//  4. In server_file_logger.go: add a var entry and exported wrapper (see LogInfoWithServer pattern).
+//  3. In markdown_logger.go: add a var entry and exported wrapper (see LogInfoToMarkdown pattern).
+//  4. In server_file_logger.go: add a var entry and exported wrapper (see LogInfoToServer pattern).
 //  5. Update TestLogLevelWrappers_CoverAllRegisteredLevels in log_level_wrappers_test.go.
 //
 // logFuncs maps each LogLevel to its corresponding global log function.
@@ -312,6 +312,15 @@ func formatLogLine(level LogLevel, category, format string, args ...interface{})
 	timestamp := time.Now().UTC().Format(time.RFC3339)
 	message := fmt.Sprintf(format, args...)
 	return fmt.Sprintf("[%s] [%s] [%s] %s", timestamp, level, category, message)
+}
+
+// SessionSuffix returns a formatted session suffix for log messages.
+// Returns " for session '<sessionID>'" when sessionID is non-empty, or "" otherwise.
+func SessionSuffix(sessionID string) string {
+	if sessionID == "" {
+		return ""
+	}
+	return fmt.Sprintf(" for session '%s'", sessionID)
 }
 
 // It syncs buffered data before closing and handles errors appropriately.

@@ -191,30 +191,50 @@ func logWithMarkdown(level LogLevel, category, format string, args ...interface{
 // intentionally repeated across file_logger.go, markdown_logger.go, and
 // server_file_logger.go. See common.go for the rationale and update instructions.
 var (
-	logInfoMd  = makeLevelLogger(logWithMarkdown, LogLevelInfo)
-	logWarnMd  = makeLevelLogger(logWithMarkdown, LogLevelWarn)
-	logErrorMd = makeLevelLogger(logWithMarkdown, LogLevelError)
-	logDebugMd = makeLevelLogger(logWithMarkdown, LogLevelDebug)
+	logInfoToMarkdown  = makeLevelLogger(logWithMarkdown, LogLevelInfo)
+	logWarnToMarkdown  = makeLevelLogger(logWithMarkdown, LogLevelWarn)
+	logErrorToMarkdown = makeLevelLogger(logWithMarkdown, LogLevelError)
+	logDebugToMarkdown = makeLevelLogger(logWithMarkdown, LogLevelDebug)
 )
 
-// LogInfoMd logs to both regular and markdown loggers.
+// LogInfoToMarkdown logs to both regular and markdown loggers.
+func LogInfoToMarkdown(category, format string, args ...interface{}) {
+	logInfoToMarkdown(category, format, args...)
+}
+
+// LogWarnToMarkdown logs to both regular and markdown loggers.
+func LogWarnToMarkdown(category, format string, args ...interface{}) {
+	logWarnToMarkdown(category, format, args...)
+}
+
+// LogErrorToMarkdown logs to both regular and markdown loggers.
+func LogErrorToMarkdown(category, format string, args ...interface{}) {
+	logErrorToMarkdown(category, format, args...)
+}
+
+// LogDebugToMarkdown logs to both regular and markdown loggers.
+func LogDebugToMarkdown(category, format string, args ...interface{}) {
+	logDebugToMarkdown(category, format, args...)
+}
+
+// LogInfoMd is kept for backward compatibility.
 func LogInfoMd(category, format string, args ...interface{}) {
-	logInfoMd(category, format, args...)
+	LogInfoToMarkdown(category, format, args...)
 }
 
-// LogWarnMd logs to both regular and markdown loggers.
+// LogWarnMd is kept for backward compatibility.
 func LogWarnMd(category, format string, args ...interface{}) {
-	logWarnMd(category, format, args...)
+	LogWarnToMarkdown(category, format, args...)
 }
 
-// LogErrorMd logs to both regular and markdown loggers.
+// LogErrorMd is kept for backward compatibility.
 func LogErrorMd(category, format string, args ...interface{}) {
-	logErrorMd(category, format, args...)
+	LogErrorToMarkdown(category, format, args...)
 }
 
-// LogDebugMd logs to both regular and markdown loggers.
+// LogDebugMd is kept for backward compatibility.
 func LogDebugMd(category, format string, args ...interface{}) {
-	logDebugMd(category, format, args...)
+	LogDebugToMarkdown(category, format, args...)
 }
 
 // CloseMarkdownLogger closes the global markdown logger

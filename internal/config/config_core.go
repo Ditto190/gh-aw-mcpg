@@ -43,7 +43,29 @@ const (
 	DefaultToolTimeout       = 60   // seconds (per spec §4.1.3)
 	DefaultKeepaliveInterval = 1500 // seconds (25 minutes) — keeps HTTP backend sessions alive
 	DefaultConnectTimeout    = 30   // seconds — per-transport timeout for HTTP backend connect
+	// DefaultPayloadDir is the default directory for storing large payloads.
+	DefaultPayloadDir = "/tmp/jq-payloads"
+	// DefaultLogDir is the default directory for storing log files.
+	DefaultLogDir = "/tmp/gh-aw/mcp-logs"
+	// DefaultWasmCacheDirName is the default subdirectory name for persisted wazero compilation artifacts.
+	DefaultWasmCacheDirName = "wazero-cache"
+	// DefaultPayloadSizeThreshold is the default threshold (in bytes) for storing payloads on disk.
+	DefaultPayloadSizeThreshold = 524288
 )
+
+func init() {
+	// Register default setter for payload-related gateway settings.
+	RegisterDefaults(func(cfg *Config) {
+		if cfg.Gateway != nil {
+			if cfg.Gateway.PayloadDir == "" {
+				cfg.Gateway.PayloadDir = DefaultPayloadDir
+			}
+			if cfg.Gateway.PayloadSizeThreshold == 0 {
+				cfg.Gateway.PayloadSizeThreshold = DefaultPayloadSizeThreshold
+			}
+		}
+	})
+}
 
 // Config represents the internal gateway configuration.
 // Feature-specific fields are added in their respective config_*.go files.

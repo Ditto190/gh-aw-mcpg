@@ -151,7 +151,7 @@ func NewConnection(ctx context.Context, serverID, command string, args []string,
 		for scanner.Scan() {
 			line := scanner.Text()
 			sanitizedLine := sanitize.SanitizeString(line)
-			logger.LogInfoWithServer(serverID, "backend", "[stderr] %s", sanitizedLine)
+			logger.LogInfoToServer(serverID, "backend", "[stderr] %s", sanitizedLine)
 		}
 	}()
 
@@ -177,7 +177,7 @@ func NewConnection(ctx context.Context, serverID, command string, args []string,
 		return nil, fmt.Errorf("failed to connect: %w", err)
 	}
 
-	logger.LogInfoMd("backend", "Successfully connected to MCP backend server, command=%s", command)
+	logger.LogInfoToMarkdown("backend", "Successfully connected to MCP backend server, command=%s", command)
 
 	conn := &Connection{
 		client:   client,
