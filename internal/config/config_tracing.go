@@ -86,7 +86,8 @@ func (c *TracingConfig) GetSampleRate() float64 {
 // validateOpenTelemetryConfig validates OpenTelemetry configuration per spec §4.1.3.6.
 // When enforceHTTPS is true (i.e. the config came from the opentelemetry section),
 // the endpoint is required and MUST use HTTPS.
-// traceId and spanId are validated as W3C hex strings when they contain no unexpanded ${VAR}.
+// Non-empty traceId and spanId values are validated as W3C hex strings; variables
+// must be expanded before validation, and unexpanded ${VAR} expressions are rejected.
 func validateOpenTelemetryConfig(cfg *TracingConfig, enforceHTTPS bool) error {
 	if cfg == nil {
 		return nil
