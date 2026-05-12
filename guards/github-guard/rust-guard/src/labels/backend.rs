@@ -1334,14 +1334,14 @@ fn extract_owner_is_org(response: &Value, repo_id: &str) -> Option<bool> {
 }
 
 fn find_org_in_items(items: &[Value], repo_id: &str) -> Option<bool> {
-    items.iter().find_map(|item| {
-        let item_repo_id = repo_id_from_repo_object(item)?;
-        if item_repo_id.eq_ignore_ascii_case(repo_id) {
-            owner_type_from_repo_object(item)
-        } else {
-            None
-        }
-    })
+    items
+        .iter()
+        .find(|item| {
+            repo_id_from_repo_object(item)
+                .map(|item_repo_id| item_repo_id.eq_ignore_ascii_case(repo_id))
+                .unwrap_or(false)
+        })
+        .and_then(owner_type_from_repo_object)
 }
 
 fn owner_is_org_from_items(value: &Value, repo_id: &str) -> Option<bool> {
