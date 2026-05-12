@@ -7,9 +7,11 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// These tests complement existing response-transform helper tests in proxy_test.go
+// by exercising defensive and less-common branches in response_transform.go.
+//
 // TestRewrapSearchResponse_Repositories verifies that rewrapSearchResponse uses the
-// "repositories" key when the original search envelope uses that field name
-// (e.g. GitHub code-search responses: {"total_count": N, "repositories": [...]}).
+// "repositories" key when the original search envelope uses that field name.
 func TestRewrapSearchResponse_Repositories(t *testing.T) {
 	original := map[string]interface{}{
 		"total_count":        float64(5),
