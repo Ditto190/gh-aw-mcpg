@@ -234,7 +234,7 @@ func NewIntegrityLabelWithTags(tags []Tag) *IntegrityLabel {
 }
 
 // getLabel returns the underlying Label, or nil if the receiver is nil.
-func (l *FlowLabel[T]) getLabel() *Label {
+func (l *flowLabel[T]) getLabel() *Label {
 	if l == nil {
 		return nil
 	}
@@ -244,7 +244,7 @@ func (l *FlowLabel[T]) getLabel() *Label {
 // CanFlowTo checks if this label can flow to target.
 // For SecrecyLabel: l ⊆ target (source must have no tags absent from target).
 // For IntegrityLabel: l ⊇ target (source must have all tags that target has).
-func (l *FlowLabel[T]) CanFlowTo(target *FlowLabel[T]) bool {
+func (l *flowLabel[T]) CanFlowTo(target *flowLabel[T]) bool {
 	var kind T
 	ok, _ := checkFlowHelper(l.getLabel(), target.getLabel(), kind.isSubset(), kind.typeName())
 	return ok
@@ -340,14 +340,14 @@ func checkFlowHelper(srcLabel *Label, targetLabel *Label, checkSubset bool, labe
 }
 
 // CheckFlow checks if this label can flow to target and returns violation details if not.
-func (l *FlowLabel[T]) CheckFlow(target *FlowLabel[T]) (bool, []Tag) {
+func (l *flowLabel[T]) CheckFlow(target *flowLabel[T]) (bool, []Tag) {
 	var kind T
 	return checkFlowHelper(l.getLabel(), target.getLabel(), kind.isSubset(), kind.typeName())
 }
 
 // Clone creates an independent copy of the label.
-func (l *FlowLabel[T]) Clone() *FlowLabel[T] {
-	return &FlowLabel[T]{Label: cloneLabelOrNew(l.getLabel())}
+func (l *flowLabel[T]) Clone() *flowLabel[T] {
+	return &flowLabel[T]{Label: cloneLabelOrNew(l.getLabel())}
 }
 
 // ViolationType indicates what kind of DIFC violation occurred
