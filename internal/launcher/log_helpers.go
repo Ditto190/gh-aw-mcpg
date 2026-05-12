@@ -13,7 +13,7 @@ import (
 
 // logSecurityWarning logs container security warnings
 func (l *Launcher) logSecurityWarning(serverID string, serverCfg *config.ServerConfig) {
-	logger.LogWarnWithServer(serverID, "backend", "Server '%s' uses direct command execution inside a container (command: %s)", serverID, serverCfg.Command)
+	logger.LogWarnToServer(serverID, "backend", "Server '%s' uses direct command execution inside a container (command: %s)", serverID, serverCfg.Command)
 	log.Printf("[LAUNCHER] ⚠️  Security Notice: Command '%s' will execute with the same privileges as the gateway", serverCfg.Command)
 	log.Printf("[LAUNCHER] ⚠️  Consider using 'container' field instead for better isolation")
 }
@@ -21,7 +21,7 @@ func (l *Launcher) logSecurityWarning(serverID string, serverCfg *config.ServerC
 // logLaunchStart logs server launch initiation
 func (l *Launcher) logLaunchStart(serverID, sessionID string, serverCfg *config.ServerConfig, isDirectCommand bool) {
 	suffix := logger.SessionSuffix(sessionID)
-	logger.LogInfoWithServer(serverID, "backend", "Launching MCP backend server%s: server=%s%s, command=%s, args=%v",
+	logger.LogInfoToServer(serverID, "backend", "Launching MCP backend server%s: server=%s%s, command=%s, args=%v",
 		suffix, serverID, suffix, serverCfg.Command, sanitize.SanitizeArgs(serverCfg.Args))
 	if sessionID != "" {
 		logLauncher.Printf("Launching new session server: serverID=%s, sessionID=%s, command=%s", serverID, sessionID, serverCfg.Command)
@@ -74,7 +74,7 @@ func (l *Launcher) logLaunchError(serverID, sessionID string, err error, serverC
 // logTimeoutError logs startup timeout diagnostics
 func (l *Launcher) logTimeoutError(serverID, sessionID string) {
 	suffix := logger.SessionSuffix(sessionID)
-	logger.LogErrorWithServer(serverID, "backend", "MCP backend server startup timeout%s: server=%s%s, timeout=%v",
+	logger.LogErrorToServer(serverID, "backend", "MCP backend server startup timeout%s: server=%s%s, timeout=%v",
 		suffix, serverID, suffix, l.startupTimeout)
 	log.Printf("[LAUNCHER] ⚠️  The server may be hanging or taking too long to initialize")
 	log.Printf("[LAUNCHER] ⚠️  Consider increasing 'startupTimeout' in gateway config if server needs more time")
@@ -84,6 +84,6 @@ func (l *Launcher) logTimeoutError(serverID, sessionID string) {
 // logLaunchSuccess logs successful server launch
 func (l *Launcher) logLaunchSuccess(serverID, sessionID string) {
 	suffix := logger.SessionSuffix(sessionID)
-	logger.LogInfoWithServer(serverID, "backend", "Successfully launched MCP backend server%s: server=%s%s", suffix, serverID, suffix)
+	logger.LogInfoToServer(serverID, "backend", "Successfully launched MCP backend server%s: server=%s%s", suffix, serverID, suffix)
 	logLauncher.Printf("Connection established: serverID=%s%s", serverID, suffix)
 }

@@ -63,10 +63,10 @@ func TestLogWithLevelAndServer(t *testing.T) {
 	serverID := "test-server"
 
 	// Test all log levels using the helper
-	LogInfoWithServer(serverID, "test", "Info message via server helper")
-	LogWarnWithServer(serverID, "test", "Warning message via server helper")
-	LogErrorWithServer(serverID, "test", "Error message via server helper")
-	LogDebugWithServer(serverID, "test", "Debug message via server helper")
+	LogInfoToServer(serverID, "test", "Info message via server helper")
+	LogWarnToServer(serverID, "test", "Warning message via server helper")
+	LogErrorToServer(serverID, "test", "Error message via server helper")
+	LogDebugToServer(serverID, "test", "Debug message via server helper")
 
 	CloseServerFileLogger()
 	CloseGlobalLogger()
@@ -115,10 +115,10 @@ func TestLogWithMarkdown(t *testing.T) {
 	defer CloseMarkdownLogger()
 
 	// Test all log levels using the helper
-	LogInfoMd("test", "Info message via markdown helper")
-	LogWarnMd("test", "Warning message via markdown helper")
-	LogErrorMd("test", "Error message via markdown helper")
-	LogDebugMd("test", "Debug message via markdown helper")
+	LogInfoToMarkdown("test", "Info message via markdown helper")
+	LogWarnToMarkdown("test", "Warning message via markdown helper")
+	LogErrorToMarkdown("test", "Error message via markdown helper")
+	LogDebugToMarkdown("test", "Debug message via markdown helper")
 
 	CloseMarkdownLogger()
 	CloseGlobalLogger()

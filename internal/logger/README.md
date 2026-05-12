@@ -30,10 +30,10 @@ The logger package supports creating separate log files for each backend MCP ser
 import "github.com/github/gh-aw-mcpg/internal/logger"
 
 // Log to both the unified log and the server-specific log
-logger.LogInfoWithServer("github", "backend", "Server started successfully")
-logger.LogWarnWithServer("slack", "backend", "Connection timeout")
-logger.LogErrorWithServer("github", "backend", "Failed to authenticate: %v", err)
-logger.LogDebugWithServer("notion", "backend", "Processing request: %v", req)
+logger.LogInfoToServer("github", "backend", "Server started successfully")
+logger.LogWarnToServer("slack", "backend", "Connection timeout")
+logger.LogErrorToServer("github", "backend", "Failed to authenticate: %v", err)
+logger.LogDebugToServer("notion", "backend", "Processing request: %v", req)
 ```
 
 ### Log File Structure

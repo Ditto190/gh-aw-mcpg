@@ -15,17 +15,17 @@ func TestLogLevelWrappers_CoverAllRegisteredLevels(t *testing.T) {
 	}
 
 	markdownWrappers := map[LogLevel]func(string, string, ...interface{}){
-		LogLevelInfo:  LogInfoMd,
-		LogLevelWarn:  LogWarnMd,
-		LogLevelError: LogErrorMd,
-		LogLevelDebug: LogDebugMd,
+		LogLevelInfo:  LogInfoToMarkdown,
+		LogLevelWarn:  LogWarnToMarkdown,
+		LogLevelError: LogErrorToMarkdown,
+		LogLevelDebug: LogDebugToMarkdown,
 	}
 
 	serverWrappers := map[LogLevel]func(string, string, string, ...interface{}){
-		LogLevelInfo:  LogInfoWithServer,
-		LogLevelWarn:  LogWarnWithServer,
-		LogLevelError: LogErrorWithServer,
-		LogLevelDebug: LogDebugWithServer,
+		LogLevelInfo:  LogInfoToServer,
+		LogLevelWarn:  LogWarnToServer,
+		LogLevelError: LogErrorToServer,
+		LogLevelDebug: LogDebugToServer,
 	}
 
 	expectedLevels := make([]LogLevel, 0, len(logFuncs))

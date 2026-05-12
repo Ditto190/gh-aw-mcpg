@@ -159,30 +159,50 @@ func logWithLevelAndServer(serverID string, level LogLevel, category, format str
 // intentionally repeated across file_logger.go, markdown_logger.go, and
 // server_file_logger.go. See common.go for the rationale and update instructions.
 var (
-	logInfoWithServer  = makeServerLevelLogger(logWithLevelAndServer, LogLevelInfo)
-	logWarnWithServer  = makeServerLevelLogger(logWithLevelAndServer, LogLevelWarn)
-	logErrorWithServer = makeServerLevelLogger(logWithLevelAndServer, LogLevelError)
-	logDebugWithServer = makeServerLevelLogger(logWithLevelAndServer, LogLevelDebug)
+	logInfoToServer  = makeServerLevelLogger(logWithLevelAndServer, LogLevelInfo)
+	logWarnToServer  = makeServerLevelLogger(logWithLevelAndServer, LogLevelWarn)
+	logErrorToServer = makeServerLevelLogger(logWithLevelAndServer, LogLevelError)
+	logDebugToServer = makeServerLevelLogger(logWithLevelAndServer, LogLevelDebug)
 )
 
-// LogInfoWithServer logs an informational message to the server-specific log file.
+// LogInfoToServer logs an informational message to the server-specific log file.
+func LogInfoToServer(serverID, category, format string, args ...interface{}) {
+	logInfoToServer(serverID, category, format, args...)
+}
+
+// LogWarnToServer logs a warning message to the server-specific log file.
+func LogWarnToServer(serverID, category, format string, args ...interface{}) {
+	logWarnToServer(serverID, category, format, args...)
+}
+
+// LogErrorToServer logs an error message to the server-specific log file.
+func LogErrorToServer(serverID, category, format string, args ...interface{}) {
+	logErrorToServer(serverID, category, format, args...)
+}
+
+// LogDebugToServer logs a debug message to the server-specific log file.
+func LogDebugToServer(serverID, category, format string, args ...interface{}) {
+	logDebugToServer(serverID, category, format, args...)
+}
+
+// LogInfoWithServer is kept for backward compatibility.
 func LogInfoWithServer(serverID, category, format string, args ...interface{}) {
-	logInfoWithServer(serverID, category, format, args...)
+	LogInfoToServer(serverID, category, format, args...)
 }
 
-// LogWarnWithServer logs a warning message to the server-specific log file.
+// LogWarnWithServer is kept for backward compatibility.
 func LogWarnWithServer(serverID, category, format string, args ...interface{}) {
-	logWarnWithServer(serverID, category, format, args...)
+	LogWarnToServer(serverID, category, format, args...)
 }
 
-// LogErrorWithServer logs an error message to the server-specific log file.
+// LogErrorWithServer is kept for backward compatibility.
 func LogErrorWithServer(serverID, category, format string, args ...interface{}) {
-	logErrorWithServer(serverID, category, format, args...)
+	LogErrorToServer(serverID, category, format, args...)
 }
 
-// LogDebugWithServer logs a debug message to the server-specific log file.
+// LogDebugWithServer is kept for backward compatibility.
 func LogDebugWithServer(serverID, category, format string, args ...interface{}) {
-	logDebugWithServer(serverID, category, format, args...)
+	LogDebugToServer(serverID, category, format, args...)
 }
 
 // CloseServerFileLogger closes the global server file logger

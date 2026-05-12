@@ -55,7 +55,7 @@ func logRuntimeError(errorType, detail string, r *http.Request, serverName *stri
 //   - runtimeDetail: detail field for runtime error log (e.g. "missing_auth_header")
 //   - msg: human-readable message sent back in the HTTP response
 func rejectRequest(w http.ResponseWriter, r *http.Request, status int, code, msg, logCategory, runtimeErrType, runtimeDetail string) {
-	logger.LogErrorMd(logCategory, "Request rejected: %s, remote=%s, path=%s", msg, r.RemoteAddr, r.URL.Path)
+	logger.LogErrorToMarkdown(logCategory, "Request rejected: %s, remote=%s, path=%s", msg, r.RemoteAddr, r.URL.Path)
 	logRuntimeError(runtimeErrType, runtimeDetail, r, nil)
 	httputil.WriteErrorResponse(w, status, code, msg)
 }

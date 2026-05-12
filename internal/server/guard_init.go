@@ -43,14 +43,14 @@ func (us *UnifiedServer) registerGuard(serverID string) error {
 	// Check if a per-server WASM guard exists in MCP_GATEWAY_WASM_GUARDS_DIR.
 	// If found and loadable, it takes precedence over config-defined guards.
 	if wasmPath, found, err := findServerWASMGuardFile(serverID); err != nil {
-		logger.LogWarnWithServer(serverID, "difc", "Failed to discover WASM guard from %s: %v", wasmGuardsDirEnvVar, err)
+		logger.LogWarnToServer(serverID, "difc", "Failed to discover WASM guard from %s: %v", wasmGuardsDirEnvVar, err)
 	} else if found {
 		ctx := context.Background()
 		loadedGuard, loadErr := guard.NewWasmGuard(ctx, serverID, wasmPath, nil)
 		if loadErr != nil {
-			logger.LogWarnWithServer(serverID, "difc", "Failed to load discovered WASM guard from %s: %v", wasmPath, loadErr)
+			logger.LogWarnToServer(serverID, "difc", "Failed to load discovered WASM guard from %s: %v", wasmPath, loadErr)
 		} else {
-			logger.LogInfoWithServer(serverID, "difc", "Loaded discovered WASM guard from file: %s", filepath.Base(wasmPath))
+			logger.LogInfoToServer(serverID, "difc", "Loaded discovered WASM guard from file: %s", filepath.Base(wasmPath))
 			g = loadedGuard
 		}
 	}
@@ -59,7 +59,7 @@ func (us *UnifiedServer) registerGuard(serverID string) error {
 		// Check if server has a write-sink policy — create WriteSinkGuard directly
 		if ws := us.resolveWriteSinkPolicy(serverID); ws != nil {
 			g = guard.NewWriteSinkGuard(ws.Accept)
-			logger.LogInfoWithServer(serverID, "difc", "Created write-sink guard with %d accept patterns", len(ws.Accept))
+			logger.LogInfoToServer(serverID, "difc", "Created write-sink guard with %d accept patterns", len(ws.Accept))
 		}
 	}
 
@@ -76,7 +76,7 @@ func (us *UnifiedServer) registerGuard(serverID string) error {
 				var err error
 				g, err = us.createGuardFromConfig(guardName, guardCfg)
 				if err != nil {
-					logger.LogWarnWithServer(serverID, "difc", "Failed to create guard '%s': %v (falling back to noop)", guardName, err)
+					logger.LogWarnToServer(serverID, "difc", "Failed to create guard '%s': %v (falling back to noop)", guardName, err)
 					g = guard.NewNoopGuard()
 				}
 			} else {
@@ -84,7 +84,7 @@ func (us *UnifiedServer) registerGuard(serverID string) error {
 				var err error
 				g, err = guard.CreateGuard(guardName)
 				if err != nil {
-					logger.LogWarnWithServer(serverID, "difc", "Guard '%s' not found: %v (falling back to noop)", guardName, err)
+					logger.LogWarnToServer(serverID, "difc", "Guard '%s' not found: %v (falling back to noop)", guardName, err)
 					g = guard.NewNoopGuard()
 				}
 			}
@@ -101,7 +101,7 @@ func (us *UnifiedServer) registerGuard(serverID string) error {
 	}
 
 	us.guardRegistry.Register(serverID, g)
-	logger.LogInfoWithServer(serverID, "difc", "Registered guard '%s'", g.Name())
+	logger.LogInfoToServer(serverID, "difc", "Registered guard '%s'", g.Name())
 	return nil
 }
 
@@ -120,12 +120,12 @@ func (us *UnifiedServer) requireGuardPolicyIfGuardEnabled(serverID string, g gua
 		// If not, fall back to noop guard.
 		if us.cfg != nil && us.cfg.Servers != nil {
 			if serverCfg, ok := us.cfg.Servers[serverID]; ok && serverCfg != nil && len(serverCfg.GuardPolicies) > 0 {
-				logger.LogInfoWithServer(serverID, "difc", "Guard '%s' loaded with guard-policies config (policy will be resolved during guard initialization)", g.Name())
+				logger.LogInfoToServer(serverID, "difc", "Guard '%s' loaded with guard-policies config (policy will be resolved during guard initialization)", g.Name())
 				return g, nil
 			}
 		}
 
-		logger.LogWarnWithServer(serverID, "difc", "Guard '%s' is available but no guard policy is set; falling back to noop guard", g.Name())
+		logger.LogWarnToServer(serverID, "difc", "Guard '%s' is available but no guard policy is set; falling back to noop guard", g.Name())
 		return guard.NewNoopGuard(), nil
 	}
 
@@ -134,23 +134,23 @@ func (us *UnifiedServer) requireGuardPolicyIfGuardEnabled(serverID string, g gua
 
 func (us *UnifiedServer) logServerGuardPolicies(serverID string) {
 	if us.cfg == nil || us.cfg.Servers == nil {
-		logger.LogInfoWithServer(serverID, "difc", "No guard policy was set")
+		logger.LogInfoToServer(serverID, "difc", "No guard policy was set")
 		return
 	}
 
 	serverCfg, ok := us.cfg.Servers[serverID]
 	if !ok || serverCfg == nil || len(serverCfg.GuardPolicies) == 0 {
-		logger.LogInfoWithServer(serverID, "difc", "No guard policy was set")
+		logger.LogInfoToServer(serverID, "difc", "No guard policy was set")
 		return
 	}
 
 	policyJSON, err := json.Marshal(serverCfg.GuardPolicies)
 	if err != nil {
-		logger.LogWarnWithServer(serverID, "difc", "Guard policy is set (failed to serialize policy: %v)", err)
+		logger.LogWarnToServer(serverID, "difc", "Guard policy is set (failed to serialize policy: %v)", err)
 		return
 	}
 
-	logger.LogInfoWithServer(serverID, "difc", "Guard policy: %s", string(policyJSON))
+	logger.LogInfoToServer(serverID, "difc", "Guard policy: %s", string(policyJSON))
 }
 
 // getWASMGuardsRootDir returns the trimmed value of the WASM guards root
@@ -304,7 +304,7 @@ func (us *UnifiedServer) ensureGuardInitialized(
 		return defaultMode, fmt.Errorf("failed to resolve guard policy: %w", err)
 	}
 	if policy == nil {
-		logger.LogInfoWithServer(serverID, "difc", "Guard policy not configured; using legacy session labels")
+		logger.LogInfoToServer(serverID, "difc", "Guard policy not configured; using legacy session labels")
 		return defaultMode, nil
 	}
 
@@ -339,8 +339,8 @@ func (us *UnifiedServer) ensureGuardInitialized(
 	}
 	us.sessionMu.RUnlock()
 
-	logger.LogInfoWithServer(serverID, "difc", "Initializing guard session state: session=%s, policy_source=%s", sessionID, source)
-	logger.LogInfoWithServer(serverID, "difc", "Calling label_agent: session=%s, guard=%s, policy=%s", sessionID, g.Name(), string(policyJSON))
+	logger.LogInfoToServer(serverID, "difc", "Initializing guard session state: session=%s, policy_source=%s", sessionID, source)
+	logger.LogInfoToServer(serverID, "difc", "Calling label_agent: session=%s, guard=%s, policy=%s", sessionID, g.Name(), string(policyJSON))
 
 	agentID := guard.GetAgentIDFromContext(ctx)
 
@@ -351,16 +351,16 @@ func (us *UnifiedServer) ensureGuardInitialized(
 	agentLabels := us.AgentRegistry.GetOrCreate(agentID)
 	mode, labelAgentResult, err := guard.RunLabelAgent(ctx, g, labelAgentPayload, backendCaller, us.Capabilities, agentLabels, defaultMode)
 	if err != nil {
-		logger.LogErrorWithServer(serverID, "difc", "label_agent failed: session=%s, guard=%s, error=%v", sessionID, g.Name(), err)
+		logger.LogErrorToServer(serverID, "difc", "label_agent failed: session=%s, guard=%s, error=%v", sessionID, g.Name(), err)
 		return defaultMode, err
 	}
 	logger.LogMarshaledForDebug(
 		labelAgentResult,
 		func(resultJSON string) {
-			logger.LogInfoWithServer(serverID, "difc", "label_agent response: session=%s, guard=%s, response=%s", sessionID, g.Name(), resultJSON)
+			logger.LogInfoToServer(serverID, "difc", "label_agent response: session=%s, guard=%s, response=%s", sessionID, g.Name(), resultJSON)
 		},
 		func(marshalErr error) {
-			logger.LogWarnWithServer(serverID, "difc", "label_agent response (failed to serialize for logging): session=%s, guard=%s, error=%v", sessionID, g.Name(), marshalErr)
+			logger.LogWarnToServer(serverID, "difc", "label_agent response (failed to serialize for logging): session=%s, guard=%s, error=%v", sessionID, g.Name(), marshalErr)
 		},
 	)
 
@@ -383,7 +383,7 @@ func (us *UnifiedServer) ensureGuardInitialized(
 	}
 	us.sessionMu.Unlock()
 
-	logger.LogInfoWithServer(serverID, "difc", "Guard policy initialized: session=%s, guard_policy.source=%s, difc_mode=%s, guard_policy.normalized=%v",
+	logger.LogInfoToServer(serverID, "difc", "Guard policy initialized: session=%s, guard_policy.source=%s, difc_mode=%s, guard_policy.normalized=%v",
 		sessionID, source, mode, normalizedPolicy)
 
 	return mode, nil
