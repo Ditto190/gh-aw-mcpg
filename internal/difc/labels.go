@@ -194,25 +194,24 @@ type integrityKind struct{}
 func (integrityKind) isSubset() bool   { return false }
 func (integrityKind) typeName() string { return "Integrity" }
 
-// FlowLabel is a generic label type parameterized by a phantom kind type T.
-// Use the SecrecyLabel and IntegrityLabel type aliases rather than FlowLabel directly.
+// flowLabel is the internal generic label implementation parameterized by a phantom kind type T.
 //
 // The kind type T determines flow direction:
-//   - FlowLabel[secrecyKind]   — secrecy semantics: l ⊆ target (source ⊆ target)
-//   - FlowLabel[integrityKind] — integrity semantics: l ⊇ target (source ⊇ target)
-type FlowLabel[T labelKind] struct {
+//   - flowLabel[secrecyKind]   — secrecy semantics: l ⊆ target (source ⊆ target)
+//   - flowLabel[integrityKind] — integrity semantics: l ⊇ target (source ⊇ target)
+type flowLabel[T labelKind] struct {
 	Label *Label
 }
 
 // SecrecyLabel wraps Label with secrecy-specific flow semantics.
 // Secrecy flow: data can only flow to contexts with equal or more secrecy tags.
 // l ⊆ target (this has no tags that target doesn't have)
-type SecrecyLabel = FlowLabel[secrecyKind]
+type SecrecyLabel = flowLabel[secrecyKind]
 
 // IntegrityLabel wraps Label with integrity-specific flow semantics.
 // Integrity flow: data can flow from high integrity to low integrity.
 // l ⊇ target (this has all tags that target has)
-type IntegrityLabel = FlowLabel[integrityKind]
+type IntegrityLabel = flowLabel[integrityKind]
 
 // NewSecrecyLabel creates a new empty secrecy label
 func NewSecrecyLabel() *SecrecyLabel {
