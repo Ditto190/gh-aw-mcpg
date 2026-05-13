@@ -25,7 +25,9 @@ func TestRewrapSearchResponse_Repositories(t *testing.T) {
 	m, ok := result.(map[string]interface{})
 	assert.True(t, ok, "result should be a map")
 	assert.Equal(t, float64(2), m["total_count"], "total_count should reflect filtered count")
-	assert.Equal(t, false, m["incomplete_results"])
+	incompleteResults, ok := m["incomplete_results"].(bool)
+	assert.True(t, ok, "incomplete_results should be a bool")
+	assert.False(t, incompleteResults)
 	repos, ok := m["repositories"].([]interface{})
 	assert.True(t, ok, "repositories key should be present")
 	assert.Len(t, repos, 2)
@@ -69,7 +71,9 @@ func TestRewrapSearchResponse_NeitherItemsNorRepositories(t *testing.T) {
 	m, ok := result.(map[string]interface{})
 	assert.True(t, ok, "result should be a map")
 	assert.Equal(t, float64(2), m["total_count"], "total_count updated to filtered length")
-	assert.Equal(t, false, m["incomplete_results"])
+	incompleteResults, ok := m["incomplete_results"].(bool)
+	assert.True(t, ok, "incomplete_results should be a bool")
+	assert.False(t, incompleteResults)
 	assert.Equal(t, "value", m["other_field"], "unrelated fields should be preserved")
 	_, hasItems := m["items"]
 	assert.False(t, hasItems, "items key should not be created when absent from original")
@@ -125,7 +129,9 @@ func TestDeepCloneJSON_Slice(t *testing.T) {
 func TestDeepCloneJSON_Primitive(t *testing.T) {
 	assert.Equal(t, "hello", deepCloneJSON("hello"))
 	assert.Equal(t, float64(3.14), deepCloneJSON(float64(3.14)))
-	assert.Equal(t, true, deepCloneJSON(true))
+	clonedBool, ok := deepCloneJSON(true).(bool)
+	assert.True(t, ok, "cloned bool should remain a bool")
+	assert.True(t, clonedBool)
 	assert.Nil(t, deepCloneJSON(nil))
 }
 
