@@ -52,6 +52,7 @@ func (s *SysServer) HandleRequest(method string, params json.RawMessage) (interf
 }
 
 func (s *SysServer) listTools() (interface{}, error) {
+	logSys.Print("Listing system tools")
 	return map[string]interface{}{
 		"tools": []map[string]interface{}{
 			{
@@ -90,10 +91,13 @@ func (s *SysServer) callTool(name string, args map[string]interface{}) (interfac
 
 func (s *SysServer) sysInit() (interface{}, error) {
 	logSys.Printf("Initializing MCPG system with %d servers", len(s.serverIDs))
-	return mcp.BuildMCPTextResponse(fmt.Sprintf("MCPG initialized. Available servers: %v", s.serverIDs)), nil
+	response := mcp.BuildMCPTextResponse(fmt.Sprintf("MCPG initialized. Available servers: %v", s.serverIDs))
+	logSys.Printf("MCPG system initialized: availableServers=%v", s.serverIDs)
+	return response, nil
 }
 
 func (s *SysServer) listServers() (interface{}, error) {
+	logSys.Printf("Listing %d configured servers", len(s.serverIDs))
 	serverList := ""
 	for i, id := range s.serverIDs {
 		serverList += fmt.Sprintf("%d. %s\n", i+1, id)
