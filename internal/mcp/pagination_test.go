@@ -3,6 +3,8 @@ package mcp
 import (
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -10,7 +12,7 @@ import (
 )
 
 // TestPaginateAll tests the paginateAll generic pagination helper.
-func TestPaginateAll(t *testing.T) {
+func TestPaginateAllHelper(t *testing.T) {
 	t.Run("single page with no next cursor", func(t *testing.T) {
 		fetch := func(cursor string) (paginatedPage[string], error) {
 			assert.Equal(t, "", cursor, "first call should use empty cursor")
@@ -146,7 +148,14 @@ func TestPaginateAll(t *testing.T) {
 		fetch := func(cursor string) (paginatedPage[string], error) {
 			pageNum := 0
 			if cursor != "" {
-				fmt.Sscanf(cursor, "cursor%d", &pageNum)
+				if !strings.HasPrefix(cursor, "cursor") {
+					return paginatedPage[string]{}, fmt.Errorf("invalid cursor format: %q", cursor)
+				}
+				parsed, err := strconv.Atoi(strings.TrimPrefix(cursor, "cursor"))
+				if err != nil {
+					return paginatedPage[string]{}, fmt.Errorf("invalid cursor format: %q: %w", cursor, err)
+				}
+				pageNum = parsed
 			}
 			nextCursor := fmt.Sprintf("cursor%d", pageNum+1)
 			return paginatedPage[string]{
@@ -179,6 +188,7 @@ func TestPaginateAll(t *testing.T) {
 
 		require.Error(t, err)
 		assert.ErrorContains(t, err, serverID)
+		assert.ErrorContains(t, err, itemKind)
 	})
 
 	t.Run("exactly paginateAllMaxPages-1 pages succeeds", func(t *testing.T) {
@@ -204,23 +214,6 @@ func TestPaginateAll(t *testing.T) {
 	})
 
 	t.Run("different cursors on different pages are all valid", func(t *testing.T) {
-		cursors := []string{"alpha", "beta", "gamma"}
-		callCount := 0
-		fetch := func(cursor string) (paginatedPage[string], error) {
-			callCount++
-			if callCount <= len(cursors) {
-				nextCursor := ""
-				if callCount < len(cursors) {
-					nextCursor = cursors[callCount]
-				}
-				return paginatedPage[string]{
-					Items:      []string{fmt.Sprintf("item%d", callCount)},
-					NextCursor: nextCursor,
-				}, nil
-			}
-			return paginatedPage[string]{Items: []string{"last"}, NextCursor: ""}, nil
-		}
-
 		// First call uses empty cursor, then cursor "alpha", then "beta"
 		fetch2 := func(cursor string) (paginatedPage[string], error) {
 			switch cursor {
@@ -241,7 +234,6 @@ func TestPaginateAll(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, []string{"a", "b", "c", "d"}, items)
-		_ = fetch // avoid unused warning
 	})
 
 	t.Run("works with struct item types", func(t *testing.T) {
@@ -270,8 +262,9 @@ func TestPaginateAll(t *testing.T) {
 		assert.Equal(t, "tool3", items[2].Name)
 	})
 
-	t.Run("server ID is passed in error messages for max pages", func(t *testing.T) {
+	t.Run("server ID and item kind are passed in error messages for max pages", func(t *testing.T) {
 		const serverID = "critical-server"
+		const itemKind = "Tools"
 		pageNum := 0
 		fetch := func(cursor string) (paginatedPage[string], error) {
 			pageNum++
@@ -281,10 +274,11 @@ func TestPaginateAll(t *testing.T) {
 			}, nil
 		}
 
-		_, err := paginateAll(serverID, "Tools", fetch)
+		_, err := paginateAll(serverID, itemKind, fetch)
 
 		require.Error(t, err)
 		assert.ErrorContains(t, err, serverID)
+		assert.ErrorContains(t, err, itemKind)
 		assert.ErrorContains(t, err, fmt.Sprintf("%d", paginateAllMaxPages))
 	})
 }
@@ -295,9 +289,7 @@ func TestPaginateAllMaxPagesConstant(t *testing.T) {
 		"paginateAllMaxPages should be 100 to guard against runaway backends")
 }
 
-// TestMarshalToResponseAndUnmarshalParams_Pagination tests the full pipeline
-// combining pagination with response marshaling, exercising pagination.go
-// alongside related helpers from the same file.
+// TestPaginateAll_ItemOrdering verifies item ordering is preserved across pages.
 func TestPaginateAll_ItemOrdering(t *testing.T) {
 	// Verify that items from later pages appear after items from earlier pages
 	fetch := func(cursor string) (paginatedPage[int], error) {
