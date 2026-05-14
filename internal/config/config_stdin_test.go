@@ -763,6 +763,17 @@ func TestBuildStdioServerConfig_ToolsPreserved(t *testing.T) {
 	assert.Equal(t, tools, result.Tools)
 }
 
+func TestBuildStdioServerConfig_ToolTimeoutPreserved(t *testing.T) {
+	server := &StdinServerConfig{
+		Container:   "my/image:latest",
+		ToolTimeout: intPtr(120),
+	}
+
+	result := buildStdioServerConfig("test-server", server)
+
+	assert.Equal(t, 120, result.ToolTimeout)
+}
+
 // TestBuildStdioServerConfig_RegistryPreserved verifies that Registry field is passed through.
 func TestBuildStdioServerConfig_RegistryPreserved(t *testing.T) {
 	server := &StdinServerConfig{
@@ -1172,6 +1183,74 @@ func TestStdinServerConfig_AuthJSON(t *testing.T) {
 		// "auth" should not appear in AdditionalProperties
 		_, exists := server.AdditionalProperties["auth"]
 		assert.False(t, exists, "auth should be a known field, not an additional property")
+	})
+}
+
+func TestStdinServerConfig_TimeoutJSONAliases(t *testing.T) {
+	t.Run("camelCase timeout fields are unmarshaled correctly", func(t *testing.T) {
+		data := []byte(`{
+"type": "http",
+"url": "https://my-server.example.com/mcp",
+"connectTimeout": 45,
+"toolTimeout": 600
+}`)
+
+		var server StdinServerConfig
+		err := server.UnmarshalJSON(data)
+		require.NoError(t, err)
+		require.NotNil(t, server.ConnectTimeout)
+		require.NotNil(t, server.ToolTimeout)
+		assert.Equal(t, 45, *server.ConnectTimeout)
+		assert.Equal(t, 600, *server.ToolTimeout)
+	})
+
+	t.Run("legacy snake_case timeout fields remain supported", func(t *testing.T) {
+		data := []byte(`{
+"type": "http",
+"url": "https://my-server.example.com/mcp",
+"connect_timeout": 30,
+"tool_timeout": 120
+}`)
+
+		var server StdinServerConfig
+		err := server.UnmarshalJSON(data)
+		require.NoError(t, err)
+		require.NotNil(t, server.ConnectTimeout)
+		require.NotNil(t, server.ToolTimeout)
+		assert.Equal(t, 30, *server.ConnectTimeout)
+		assert.Equal(t, 120, *server.ToolTimeout)
+	})
+}
+
+// TestConvertStdinConfig_PayloadPathPrefix verifies that payloadPathPrefix is
+// correctly wired from the JSON stdin format to the internal config.
+func TestConvertStdinConfig_PayloadPathPrefix(t *testing.T) {
+	stringPtr := func(v string) *string { return &v }
+
+	t.Run("payloadPathPrefix wired from stdin gateway config", func(t *testing.T) {
+		stdinCfg := &StdinConfig{
+			MCPServers: map[string]*StdinServerConfig{},
+			Gateway: &StdinGatewayConfig{
+				PayloadPathPrefix: stringPtr("/workspace/payloads"),
+			},
+		}
+
+		cfg, err := convertStdinConfig(stdinCfg)
+		require.NoError(t, err)
+		require.NotNil(t, cfg.Gateway)
+		assert.Equal(t, "/workspace/payloads", cfg.Gateway.PayloadPathPrefix)
+	})
+
+	t.Run("payloadPathPrefix nil leaves internal config empty", func(t *testing.T) {
+		stdinCfg := &StdinConfig{
+			MCPServers: map[string]*StdinServerConfig{},
+			Gateway:    &StdinGatewayConfig{},
+		}
+
+		cfg, err := convertStdinConfig(stdinCfg)
+		require.NoError(t, err)
+		require.NotNil(t, cfg.Gateway)
+		assert.Empty(t, cfg.Gateway.PayloadPathPrefix)
 	})
 }
 

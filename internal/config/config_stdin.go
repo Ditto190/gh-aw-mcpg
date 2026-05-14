@@ -39,6 +39,7 @@ type StdinGatewayConfig struct {
 	ToolTimeout          *int                      `json:"toolTimeout,omitempty"`
 	KeepaliveInterval    *int                      `json:"keepaliveInterval,omitempty"`
 	PayloadDir           string                    `json:"payloadDir,omitempty"`
+	PayloadPathPrefix    *string                   `json:"payloadPathPrefix,omitempty"`
 	PayloadSizeThreshold *int                      `json:"payloadSizeThreshold,omitempty"`
 	TrustedBots          []string                  `json:"trustedBots,omitempty"`
 	OpenTelemetry        *StdinOpenTelemetryConfig `json:"opentelemetry,omitempty"`
@@ -129,17 +130,19 @@ type StdinServerConfig struct {
 
 	// ConnectTimeout is the per-transport timeout (in seconds) for connecting to HTTP backends.
 	// Only applies to HTTP server types. Default: 30 seconds.
-	ConnectTimeout *int `json:"connect_timeout,omitempty"`
+	ConnectTimeout *int `json:"connectTimeout,omitempty"`
 
 	// ToolTimeout is the per-server maximum time (seconds) to wait for a single tool invocation.
 	// When set to a positive value, this overrides the global gateway.toolTimeout for calls to
 	// this server only. Minimum: 10. Omit the field (or set to 0) to fall back to the global
 	// gateway.toolTimeout (or MCP_GATEWAY_TOOL_TIMEOUT env fallback).
-	ToolTimeout *int `json:"tool_timeout,omitempty"`
+	ToolTimeout *int `json:"toolTimeout,omitempty"`
 
 	// AdditionalProperties stores any extra fields for custom server types
 	// This allows custom schemas to define their own fields beyond the standard ones
 	AdditionalProperties map[string]interface{} `json:"-"`
+
+	toolTimeoutFieldName string `json:"-"`
 }
 
 // UnmarshalJSON implements custom JSON unmarshaling to capture additional properties
@@ -154,6 +157,25 @@ func (s *StdinServerConfig) UnmarshalJSON(data []byte) error {
 
 	// Unmarshal into the auxiliary struct first
 	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+
+	var rawFields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &rawFields); err != nil {
+		return err
+	}
+
+	s.toolTimeoutFieldName = "toolTimeout"
+	if _, ok := rawFields["toolTimeout"]; !ok {
+		if _, legacyOK := rawFields["tool_timeout"]; legacyOK {
+			s.toolTimeoutFieldName = "tool_timeout"
+		}
+	}
+
+	if err := assignLegacyIntAlias(rawFields, "connect_timeout", &s.ConnectTimeout); err != nil {
+		return err
+	}
+	if err := assignLegacyIntAlias(rawFields, "tool_timeout", &s.ToolTimeout); err != nil {
 		return err
 	}
 
@@ -180,7 +202,9 @@ func (s *StdinServerConfig) UnmarshalJSON(data []byte) error {
 		"guard-policies":        true,
 		"guard":                 true,
 		"auth":                  true,
+		"connectTimeout":        true,
 		"connect_timeout":       true,
+		"toolTimeout":           true,
 		"tool_timeout":          true,
 	}
 
@@ -192,6 +216,30 @@ func (s *StdinServerConfig) UnmarshalJSON(data []byte) error {
 		}
 	}
 
+	return nil
+}
+
+func (s *StdinServerConfig) toolTimeoutField() string {
+	if s.toolTimeoutFieldName != "" {
+		return s.toolTimeoutFieldName
+	}
+	return "toolTimeout"
+}
+
+func assignLegacyIntAlias(rawFields map[string]json.RawMessage, alias string, target **int) error {
+	if *target != nil {
+		return nil
+	}
+	raw, ok := rawFields[alias]
+	if !ok {
+		return nil
+	}
+
+	var value int
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return fmt.Errorf("invalid %s value: %w", alias, err)
+	}
+	*target = &value
 	return nil
 }
 
@@ -332,6 +380,9 @@ func convertStdinConfig(stdinCfg *StdinConfig) (*Config, error) {
 		}
 		if stdinCfg.Gateway.PayloadDir != "" {
 			cfg.Gateway.PayloadDir = stdinCfg.Gateway.PayloadDir
+		}
+		if stdinCfg.Gateway.PayloadPathPrefix != nil {
+			cfg.Gateway.PayloadPathPrefix = *stdinCfg.Gateway.PayloadPathPrefix
 		}
 		if stdinCfg.Gateway.PayloadSizeThreshold != nil {
 			cfg.Gateway.PayloadSizeThreshold = *stdinCfg.Gateway.PayloadSizeThreshold
@@ -518,7 +569,7 @@ func buildStdioServerConfig(name string, server *StdinServerConfig) *ServerConfi
 	logStdin.Printf("Server %q: configured stdio container=%s, env_vars=%d, mounts=%d", name, server.Container, len(server.Env), len(server.Mounts))
 	logConfig.Printf("Configured stdio MCP server: name=%s, container=%s", name, server.Container)
 
-	return &ServerConfig{
+	serverCfg := &ServerConfig{
 		Type:                "stdio",
 		Command:             "docker",
 		Args:                args,
@@ -529,6 +580,10 @@ func buildStdioServerConfig(name string, server *StdinServerConfig) *ServerConfi
 		GuardPolicies:       server.GuardPolicies,
 		Guard:               server.Guard,
 	}
+	if server.ToolTimeout != nil {
+		serverCfg.ToolTimeout = *server.ToolTimeout
+	}
+	return serverCfg
 }
 
 // normalizeLocalType normalizes "local" type to "stdio" for backward compatibility.
