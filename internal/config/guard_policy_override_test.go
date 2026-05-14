@@ -100,6 +100,7 @@ func TestResolveGuardPolicyOverride(t *testing.T) {
 		require.NotNil(t, policy)
 		assert.Equal(t, "cli", source)
 		require.NotNil(t, policy.AllowOnly)
+		assert.Equal(t, "myorg/myrepo", policy.AllowOnly.Repos)
 		assert.Equal(t, "approved", policy.AllowOnly.MinIntegrity)
 	})
 
