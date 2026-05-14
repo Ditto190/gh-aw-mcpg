@@ -745,17 +745,25 @@ fn check_file_secrecy(
     ctx: &PolicyContext,
 ) -> Vec<String> {
     let path_lower = path.to_lowercase();
-    let segments: Vec<&str> = path_lower.split('/').collect();
 
     // Check for sensitive file extensions/names
-    for pattern in SENSITIVE_FILE_PATTERNS {
-        if path_lower.ends_with(pattern) || segments.iter().any(|seg| seg.starts_with(*pattern)) {
-            return policy_private_scope_label(owner, repo, repo_id, ctx);
-        }
+    if SENSITIVE_FILE_PATTERNS
+        .iter()
+        .any(|pattern| path_lower.ends_with(pattern))
+    {
+        return policy_private_scope_label(owner, repo, repo_id, ctx);
+    }
+
+    if path_lower.split('/').any(|seg| {
+        SENSITIVE_FILE_PATTERNS
+            .iter()
+            .any(|pattern| seg.starts_with(*pattern))
+    }) {
+        return policy_private_scope_label(owner, repo, repo_id, ctx);
     }
 
     // Get filename
-    let filename = segments.last().copied().unwrap_or(path_lower.as_str());
+    let filename = path_lower.rsplit('/').next().unwrap_or(&path_lower);
 
     // Check for sensitive keywords in filename
     for keyword in SENSITIVE_FILE_KEYWORDS {
