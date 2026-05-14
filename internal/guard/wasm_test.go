@@ -34,9 +34,10 @@ type ctxKey string
 
 const testCtxKey ctxKey = "test-key"
 
-// minimalGuardWasm is a minimal WASM binary that exports the required guard functions
-// This is compiled from WAT (WebAssembly Text Format) for zero-dependency testing
-// The functions return minimal valid JSON responses
+// minimalGuardWasm is a minimal valid WASM module used for tests that only need
+// module instantiation behavior.
+// Precompiled WASM binary for:
+// (module)
 var minimalGuardWasm = []byte{
 	0x00, 0x61, 0x73, 0x6d, // WASM magic number
 	0x01, 0x00, 0x00, 0x00, // WASM version
@@ -70,8 +71,8 @@ var blockingGuardWasm = []byte{
 type mockBackendCaller struct {
 	called   bool
 	toolName string
-	args     interface{}
-	result   interface{}
+	args     any
+	result   any
 	err      error
 }
 
@@ -85,7 +86,7 @@ func (m *mockCompilationCache) Close(context.Context) error {
 	return m.closeErr
 }
 
-func (m *mockBackendCaller) CallTool(ctx context.Context, toolName string, args interface{}) (interface{}, error) {
+func (m *mockBackendCaller) CallTool(ctx context.Context, toolName string, args any) (any, error) {
 	m.called = true
 	m.toolName = toolName
 	m.args = args
@@ -1256,6 +1257,18 @@ func TestWasmGuardFailedState(t *testing.T) {
 
 func TestWasmGuardCompilationCache(t *testing.T) {
 	t.Run("global compilation cache is not nil", func(t *testing.T) {
+		assert.NotNil(t, globalCompilationCache)
+	})
+
+	t.Run("global cache can be initialized when nil", func(t *testing.T) {
+		ctx := context.Background()
+		origCache := globalCompilationCache
+		globalCompilationCache = nil
+		t.Cleanup(func() {
+			globalCompilationCache = origCache
+		})
+
+		require.NoError(t, ConfigureGlobalCompilationCache(ctx, ""))
 		assert.NotNil(t, globalCompilationCache)
 	})
 

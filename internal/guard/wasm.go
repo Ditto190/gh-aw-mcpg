@@ -43,14 +43,12 @@ func ConfigureGlobalCompilationCache(ctx context.Context, dir string) error {
 
 	globalCompilationCacheMu.Lock()
 	oldCache := globalCompilationCache
-	globalCompilationCacheMu.Unlock()
-
 	if oldCache == nil {
-		globalCompilationCacheMu.Lock()
 		globalCompilationCache = cache
 		globalCompilationCacheMu.Unlock()
 		return nil
 	}
+	globalCompilationCacheMu.Unlock()
 
 	if err := oldCache.Close(ctx); err != nil {
 		closeReplacementErr := cache.Close(ctx)
@@ -303,7 +301,7 @@ func (g *WasmGuard) hostCallBackend(ctx context.Context, m api.Module, stack []u
 	}
 
 	// Parse args
-	var args interface{}
+	var args any
 	if len(argsBytes) > 0 {
 		if err := json.Unmarshal(argsBytes, &args); err != nil {
 			logWasm.Printf("Failed to unmarshal backend call args: %v", err)
@@ -398,7 +396,7 @@ func (g *WasmGuard) Name() string {
 // All three public dispatch methods (LabelAgent, LabelResource, LabelResponse) share
 // this preamble; keeping it in one place ensures locking and backend-update logic
 // cannot drift between them.
-func (g *WasmGuard) callWasmGuardFunction(ctx context.Context, funcName string, backend BackendCaller, inputData map[string]interface{}) ([]byte, error) {
+func (g *WasmGuard) callWasmGuardFunction(ctx context.Context, funcName string, backend BackendCaller, inputData map[string]any) ([]byte, error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
@@ -414,7 +412,7 @@ func (g *WasmGuard) callWasmGuardFunction(ctx context.Context, funcName string, 
 }
 
 // LabelAgent calls the WASM module's label_agent function.
-func (g *WasmGuard) LabelAgent(ctx context.Context, policy interface{}, backend BackendCaller, caps *difc.Capabilities) (*LabelAgentResult, error) {
+func (g *WasmGuard) LabelAgent(ctx context.Context, policy any, backend BackendCaller, caps *difc.Capabilities) (*LabelAgentResult, error) {
 	logWasm.Printf("LabelAgent called: guard=%s", g.name)
 
 	// Normalisation and payload-build operate only on the caller-supplied `policy`
@@ -474,11 +472,11 @@ func (g *WasmGuard) LabelAgent(ctx context.Context, policy interface{}, backend 
 }
 
 // LabelResource calls the WASM module's label_resource function
-func (g *WasmGuard) LabelResource(ctx context.Context, toolName string, args interface{}, backend BackendCaller, caps *difc.Capabilities) (*difc.LabeledResource, difc.OperationType, error) {
+func (g *WasmGuard) LabelResource(ctx context.Context, toolName string, args any, backend BackendCaller, caps *difc.Capabilities) (*difc.LabeledResource, difc.OperationType, error) {
 	logWasm.Printf("LabelResource called: toolName=%s, args=%+v", toolName, args)
 
 	// Prepare input
-	input := map[string]interface{}{
+	input := map[string]any{
 		"tool_name": toolName,
 		"tool_args": args,
 	}
@@ -492,7 +490,7 @@ func (g *WasmGuard) LabelResource(ctx context.Context, toolName string, args int
 	}
 
 	// Parse result
-	var response map[string]interface{}
+	var response map[string]any
 	if err := json.Unmarshal(resultJSON, &response); err != nil {
 		return nil, difc.OperationWrite, fmt.Errorf("failed to unmarshal WASM response: %w", err)
 	}
@@ -501,16 +499,16 @@ func (g *WasmGuard) LabelResource(ctx context.Context, toolName string, args int
 }
 
 // LabelResponse calls the WASM module's label_response function
-func (g *WasmGuard) LabelResponse(ctx context.Context, toolName string, result interface{}, backend BackendCaller, caps *difc.Capabilities) (difc.LabeledData, error) {
+func (g *WasmGuard) LabelResponse(ctx context.Context, toolName string, result any, backend BackendCaller, caps *difc.Capabilities) (difc.LabeledData, error) {
 	logWasm.Printf("LabelResponse called: toolName=%s", toolName)
 
 	// Prepare input
-	input := map[string]interface{}{
+	input := map[string]any{
 		"tool_name":   toolName,
 		"tool_result": result,
 	}
 	if state := GetRequestStateFromContext(ctx); state != nil {
-		if stateMap, ok := state.(map[string]interface{}); ok {
+		if stateMap, ok := state.(map[string]any); ok {
 			if toolArgs, hasToolArgs := stateMap["tool_args"]; hasToolArgs {
 				input["tool_args"] = toolArgs
 			}
@@ -531,7 +529,7 @@ func (g *WasmGuard) LabelResponse(ctx context.Context, toolName string, result i
 	}
 
 	// Parse result - check for new path-based format first
-	var responseMap map[string]interface{}
+	var responseMap map[string]any
 	if err := json.Unmarshal(resultJSON, &responseMap); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal WASM response: %w", err)
 	}
@@ -542,7 +540,7 @@ func (g *WasmGuard) LabelResponse(ctx context.Context, toolName string, result i
 	}
 
 	// Legacy format: check if it's a collection with "items"
-	if items, ok := responseMap["items"].([]interface{}); ok && len(items) > 0 {
+	if items, ok := responseMap["items"].([]any); ok && len(items) > 0 {
 		return parseCollectionLabeledData(items)
 	}
 

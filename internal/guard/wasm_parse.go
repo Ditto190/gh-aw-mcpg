@@ -16,7 +16,7 @@ import (
 // parseLabelAgentResponse validates and decodes the raw JSON returned by the
 // WASM label_agent function into a LabelAgentResult.
 func parseLabelAgentResponse(resultJSON []byte) (*LabelAgentResult, error) {
-	var raw map[string]interface{}
+	var raw map[string]any
 	if err := json.Unmarshal(resultJSON, &raw); err != nil {
 		logWasm.Printf("label_agent response parse error (invalid JSON): error=%v, raw=%s", err, string(resultJSON))
 		return nil, fmt.Errorf("failed to unmarshal label_agent response: %w", err)
@@ -54,7 +54,7 @@ func parseLabelAgentResponse(resultJSON []byte) (*LabelAgentResult, error) {
 
 // parsePathLabeledResponse parses the path-based labeling format.
 // This is more efficient as guards don't need to copy data, just return paths and labels.
-func parsePathLabeledResponse(responseJSON []byte, originalData interface{}) (difc.LabeledData, error) {
+func parsePathLabeledResponse(responseJSON []byte, originalData any) (difc.LabeledData, error) {
 	pathLabels, err := difc.ParsePathLabels(responseJSON)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse path labels: %w", err)
@@ -73,7 +73,8 @@ func parsePathLabeledResponse(responseJSON []byte, originalData interface{}) (di
 // permanently poison the guard. Normal process exits (exit code 0, e.g. TinyGo
 // init) are NOT considered traps. A non-zero exit code is treated as a trap.
 // As a fallback for wazero execution faults (e.g. Rust panic → unreachable),
-// the function also matches on wazero's "wasm error:" message prefix.
+// the function also matches on wazero's "wasm error:" message prefix
+// (as of wazero v1.x; re-verify on wazero upgrades).
 func isWasmTrap(err error) bool {
 	if err == nil {
 		return false
@@ -350,8 +351,8 @@ func (g *WasmGuard) wasmDealloc(ctx context.Context, deallocFn api.Function, ptr
 }
 
 // parseResourceResponse converts the guard label_resource response to a LabeledResource.
-func parseResourceResponse(response map[string]interface{}) (*difc.LabeledResource, difc.OperationType, error) {
-	resourceData, ok := response["resource"].(map[string]interface{})
+func parseResourceResponse(response map[string]any) (*difc.LabeledResource, difc.OperationType, error) {
+	resourceData, ok := response["resource"].(map[string]any)
 	if !ok {
 		return nil, difc.OperationWrite, fmt.Errorf("invalid resource format in guard response")
 	}
@@ -363,7 +364,7 @@ func parseResourceResponse(response map[string]interface{}) (*difc.LabeledResour
 	}
 
 	// Parse secrecy tags
-	if secrecy, ok := resourceData["secrecy"].([]interface{}); ok {
+	if secrecy, ok := resourceData["secrecy"].([]any); ok {
 		tags := make([]difc.Tag, 0, len(secrecy))
 		for _, t := range secrecy {
 			if tagStr, ok := t.(string); ok {
@@ -376,7 +377,7 @@ func parseResourceResponse(response map[string]interface{}) (*difc.LabeledResour
 	}
 
 	// Parse integrity tags
-	if integrity, ok := resourceData["integrity"].([]interface{}); ok {
+	if integrity, ok := resourceData["integrity"].([]any); ok {
 		tags := make([]difc.Tag, 0, len(integrity))
 		for _, t := range integrity {
 			if tagStr, ok := t.(string); ok {
@@ -406,13 +407,13 @@ func parseResourceResponse(response map[string]interface{}) (*difc.LabeledResour
 }
 
 // parseCollectionLabeledData converts an array of items to CollectionLabeledData.
-func parseCollectionLabeledData(items []interface{}) (*difc.CollectionLabeledData, error) {
+func parseCollectionLabeledData(items []any) (*difc.CollectionLabeledData, error) {
 	collection := &difc.CollectionLabeledData{
 		Items: make([]difc.LabeledItem, 0, len(items)),
 	}
 
 	for _, item := range items {
-		itemMap, ok := item.(map[string]interface{})
+		itemMap, ok := item.(map[string]any)
 		if !ok {
 			continue
 		}
@@ -422,7 +423,7 @@ func parseCollectionLabeledData(items []interface{}) (*difc.CollectionLabeledDat
 		}
 
 		// Parse labels
-		if labelsData, ok := itemMap["labels"].(map[string]interface{}); ok {
+		if labelsData, ok := itemMap["labels"].(map[string]any); ok {
 			labels := &difc.LabeledResource{}
 
 			if desc, ok := labelsData["description"].(string); ok {
@@ -430,7 +431,7 @@ func parseCollectionLabeledData(items []interface{}) (*difc.CollectionLabeledDat
 			}
 
 			// Parse secrecy tags
-			if secrecy, ok := labelsData["secrecy"].([]interface{}); ok {
+			if secrecy, ok := labelsData["secrecy"].([]any); ok {
 				tags := make([]difc.Tag, 0, len(secrecy))
 				for _, t := range secrecy {
 					if tagStr, ok := t.(string); ok {
@@ -443,7 +444,7 @@ func parseCollectionLabeledData(items []interface{}) (*difc.CollectionLabeledDat
 			}
 
 			// Parse integrity tags
-			if integrity, ok := labelsData["integrity"].([]interface{}); ok {
+			if integrity, ok := labelsData["integrity"].([]any); ok {
 				tags := make([]difc.Tag, 0, len(integrity))
 				for _, t := range integrity {
 					if tagStr, ok := t.(string); ok {
