@@ -1114,6 +1114,22 @@ mod tests {
     }
 
     #[test]
+    fn infer_scope_for_baseline_borrows_github_scope_for_repo_creation() {
+        let tool_args = json!({});
+        let inferred = infer_scope_for_baseline("create_repository", &tool_args, "");
+
+        assert!(matches!(inferred, Cow::Borrowed(scope_names::GITHUB)));
+    }
+
+    #[test]
+    fn infer_scope_for_baseline_borrows_empty_scope_for_other_tools() {
+        let tool_args = json!({});
+        let inferred = infer_scope_for_baseline("get_file_contents", &tool_args, "");
+
+        assert!(matches!(inferred, Cow::Borrowed("")));
+    }
+
+    #[test]
     fn search_code_baseline_preserves_scoped_integrity() {
         let ctx = PolicyContext {
             scopes: vec![PolicyScopeEntry {
