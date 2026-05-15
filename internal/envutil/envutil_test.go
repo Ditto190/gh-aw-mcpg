@@ -8,6 +8,18 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestHasEnvVar(t *testing.T) {
+	t.Run("unset returns false", func(t *testing.T) {
+		os.Unsetenv("TEST_HAS_ENV_VAR")
+		assert.False(t, HasEnvVar("TEST_HAS_ENV_VAR"))
+	})
+
+	t.Run("set to empty string returns true", func(t *testing.T) {
+		t.Setenv("TEST_HAS_ENV_VAR", "")
+		assert.True(t, HasEnvVar("TEST_HAS_ENV_VAR"))
+	})
+}
+
 func TestGetEnvDuration(t *testing.T) {
 	tests := []struct {
 		name         string
