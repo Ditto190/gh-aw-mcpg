@@ -56,11 +56,11 @@ When using `run_containerized.sh`, these additional variables are available:
 |----------|-------------|---------|
 | `DOCKER_HOST` | Docker daemon socket path | `/var/run/docker.sock` |
 
-### Helper Script Variables (Not Read by `awmg` Binary)
+### Helper/CLI Docker Variables
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `DOCKER_API_VERSION` | Docker API version used by helper scripts only (`run.sh` and integration test scripts); the Docker Go client in `awmg` auto-negotiates API version. | Set by querying Docker daemon's current API version; falls back to `1.44` if detection fails |
+| `DOCKER_API_VERSION` | Docker API version used by helper scripts such as `run.sh`, integration test scripts, and `run_containerized.sh`. The Docker Go client in `awmg` auto-negotiates API version, but an exported `DOCKER_API_VERSION` can still affect `docker` CLI subprocesses launched with the inherited environment. | Set by querying Docker daemon's current API version; falls back to `1.44` if detection fails |
 
 ## GitHub Authentication
 
