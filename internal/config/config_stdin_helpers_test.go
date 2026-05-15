@@ -12,12 +12,13 @@ import (
 // correctly removes gateway-specific extension fields from JSON config data.
 func TestStripExtensionFieldsForValidation(t *testing.T) {
 	tests := []struct {
-		name        string
-		input       string
-		wantKeys    []string // top-level keys expected in output
-		wantAbsent  []string // top-level keys expected to be removed
-		wantErr     bool
-		checkServer func(t *testing.T, servers map[string]interface{})
+		name            string
+		input           string
+		wantKeys        []string // top-level keys expected in output
+		wantAbsent      []string // top-level keys expected to be removed
+		wantOutputEmpty bool     // assert the entire output map is empty
+		wantErr         bool
+		checkServer     func(t *testing.T, servers map[string]interface{})
 	}{
 		{
 			name: "removes top-level guards field",
@@ -127,7 +128,7 @@ func TestStripExtensionFieldsForValidation(t *testing.T) {
 					"s1": {
 						"type": "http",
 						"url": "https://example.com",
-						"guard-policies": [{"allow-only": {"repos": "public", "min-integrity": "none"}}]
+						"guard-policies": {"allow-only": {"repos": "public", "min-integrity": "none"}}
 					}
 				}
 			}`,
@@ -169,8 +170,9 @@ func TestStripExtensionFieldsForValidation(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:  "empty config is preserved",
-			input: `{}`,
+			name:            "empty config is preserved",
+			input:           `{}`,
+			wantOutputEmpty: true,
 		},
 		{
 			name: "no extension fields: output matches input structure",
@@ -211,6 +213,9 @@ func TestStripExtensionFieldsForValidation(t *testing.T) {
 			for _, k := range tt.wantAbsent {
 				assert.NotContains(t, out, k, "expected key %q to be absent", k)
 			}
+			if tt.wantOutputEmpty {
+				assert.Empty(t, out, "output should be an empty JSON object")
+			}
 
 			if tt.checkServer != nil {
 				servers, ok := out["mcpServers"].(map[string]interface{})
@@ -226,12 +231,13 @@ func TestAssignLegacyIntAlias(t *testing.T) {
 	t.Run("target already set: skips assignment", func(t *testing.T) {
 		existing := 99
 		target := &existing
+		// Use malformed JSON for the alias to prove the already-set path never attempts unmarshalling.
 		fields := map[string]json.RawMessage{
-			"timeout": json.RawMessage(`42`),
+			"timeout": json.RawMessage(`{not valid json}`),
 		}
 		err := assignLegacyIntAlias(fields, "timeout", &target)
 		require.NoError(t, err)
-		// target should remain unchanged
+		// target should remain unchanged because the already-set guard fires before any parsing
 		assert.Equal(t, 99, *target, "target should not be overwritten when already set")
 	})
 
