@@ -98,21 +98,23 @@ import (
 //
 // Different logger types implement different fallback strategies based on their purpose:
 //
-// 1. FileLogger - Stdout Fallback:
+// 1. FileLogger - Stderr Fallback:
 //    - Purpose: Operational logs must always be visible
-//    - Fallback: Redirects to stdout if log directory/file creation fails
+//    - Fallback: Redirects to stderr if log directory/file creation fails
+//              (stderr is used, not stdout, to avoid corrupting the stdout
+//               JSON channel that callers use to receive gateway config output)
 //    - Error: Returns nil (never fails, always provides output)
 //    - Use case: Critical operational messages that must be seen
 //
 //    Example error handler:
 //    func(err error, logDir, fileName string) (*FileLogger, error) {
 //        log.Printf("WARNING: Failed to initialize log file: %v", err)
-//        log.Printf("WARNING: Falling back to stdout for logging")
+//        log.Printf("WARNING: Falling back to stderr for logging")
 //        return &FileLogger{
 //            logDir:      logDir,
 //            fileName:    fileName,
 //            useFallback: true,
-//            logger:      log.New(os.Stdout, "", 0),
+//            logger:      log.New(os.Stderr, "", 0),
 //        }, nil
 //    }
 //

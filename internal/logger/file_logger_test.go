@@ -200,7 +200,7 @@ func TestFileLoggerFlushes(t *testing.T) {
 }
 
 // TestFileLogger_GetWriter verifies GetWriter returns the underlying file for a real
-// logger and os.Stdout for the fallback logger.
+// logger and os.Stderr for the fallback logger.
 func TestFileLogger_GetWriter(t *testing.T) {
 	t.Run("real logger returns file writer", func(t *testing.T) {
 		tmpDir := t.TempDir()
@@ -221,7 +221,7 @@ func TestFileLogger_GetWriter(t *testing.T) {
 		assert.True(t, isFile, "GetWriter should return *os.File for real logger")
 	})
 
-	t.Run("fallback logger returns stdout", func(t *testing.T) {
+	t.Run("fallback logger returns stderr", func(t *testing.T) {
 		err := InitFileLogger("/root/nonexistent/directory", "test.log")
 		require.NoError(t, err)
 		defer CloseGlobalLogger()
@@ -233,7 +233,7 @@ func TestFileLogger_GetWriter(t *testing.T) {
 		require.NotNil(t, logger)
 		if logger.useFallback {
 			w := logger.GetWriter()
-			assert.Equal(t, os.Stdout, w, "Fallback logger GetWriter should return os.Stdout")
+			assert.Equal(t, os.Stderr, w, "Fallback logger GetWriter should return os.Stderr")
 		} else {
 			t.Skip("System has permissions to write to /root; cannot test fallback path")
 		}

@@ -8,7 +8,7 @@ import (
 	"sync"
 )
 
-// FileLogger manages logging to a file with fallback to stdout
+// FileLogger manages logging to a file with fallback to stderr
 type FileLogger struct {
 	lockable
 	logFile     *os.File
@@ -35,14 +35,16 @@ func setupFileLogger(file *os.File, logDir, fileName string) (*FileLogger, error
 	return fl, nil
 }
 
-// handleFileLoggerError falls back to stdout when the log file cannot be opened.
+// handleFileLoggerError falls back to stderr when the log file cannot be opened.
+// Stderr is used (not stdout) to avoid corrupting the stdout JSON channel that
+// callers use to receive the gateway configuration output.
 func handleFileLoggerError(err error, logDir, fileName string) (*FileLogger, error) {
-	logFallbackWarnings(err, "Failed to initialize log file", "Falling back to stdout for logging")
+	logFallbackWarnings(err, "Failed to initialize log file", "Falling back to stderr for logging")
 	fl := &FileLogger{
 		logDir:      logDir,
 		fileName:    fileName,
 		useFallback: true,
-		logger:      log.New(os.Stdout, "", 0),
+		logger:      log.New(os.Stderr, "", 0),
 	}
 	return fl, nil
 }
@@ -54,7 +56,7 @@ var fileLoggerFactory = loggerFactory[*FileLogger]{
 }
 
 // InitFileLogger initializes the global file logger
-// If the log directory doesn't exist and can't be created, falls back to stdout
+// If the log directory doesn't exist and can't be created, falls back to stderr
 func InitFileLogger(logDir, fileName string) error {
 	logger, err := initLogger(logDir, fileName, os.O_APPEND, fileLoggerFactory)
 	initGlobalLogger(&globalLoggerMu, &globalFileLogger, logger)
@@ -103,7 +105,7 @@ func (fl *FileLogger) GetWriter() io.Writer {
 	if fl.logFile != nil {
 		return fl.logFile
 	}
-	return os.Stdout
+	return os.Stderr
 }
 
 // Global logging functions that use the global file logger
