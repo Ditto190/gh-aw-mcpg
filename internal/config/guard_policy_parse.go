@@ -217,11 +217,12 @@ func ResolveGuardPolicyOverride(
 	allowOnlyPublic bool,
 	allowOnlyOwner, allowOnlyRepo, allowOnlyMinIntegrity string,
 ) (*GuardPolicy, string, error) {
+	hasCLIPolicyJSON := strings.TrimSpace(cliPolicyJSON) != ""
 	logGuardPolicy.Printf("ResolveGuardPolicyOverride: cliChanged=%v, hasCLIPolicyJSON=%v, allowOnlyPublic=%v, owner=%q, repo=%q, minIntegrity=%q",
-		cliChanged, strings.TrimSpace(cliPolicyJSON) != "", allowOnlyPublic, allowOnlyOwner, allowOnlyRepo, allowOnlyMinIntegrity)
+		cliChanged, hasCLIPolicyJSON, allowOnlyPublic, allowOnlyOwner, allowOnlyRepo, allowOnlyMinIntegrity)
 
 	if cliChanged {
-		if strings.TrimSpace(cliPolicyJSON) != "" {
+		if hasCLIPolicyJSON {
 			logGuardPolicy.Print("ResolveGuardPolicyOverride: using CLI-provided guard policy JSON")
 			policy, err := ParseGuardPolicyJSON(cliPolicyJSON)
 			if err != nil {
