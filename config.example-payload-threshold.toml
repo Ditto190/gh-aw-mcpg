@@ -17,6 +17,7 @@ api_key = "your-api-key-here"
 # - Flag: --payload-dir /custom/path
 # - Env:  MCP_GATEWAY_PAYLOAD_DIR=/custom/path
 # Default: /tmp/jq-payloads
+# Note: This runtime path may live under /tmp; AGENTS.md restrictions on /tmp are for agent file-editing tasks.
 payload_dir = "/tmp/jq-payloads"
 
 # Payload path prefix for remapping file paths returned to clients
