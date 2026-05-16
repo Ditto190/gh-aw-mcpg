@@ -383,6 +383,16 @@ pub fn apply_tool_labels(
             integrity = writer_integrity(repo_id, ctx);
         }
 
+        // === Repository collaborators (repo-scoped, access-sensitive) ===
+        "list_repository_collaborators" => {
+            // Lists users with access to the repository; reveals who holds write/admin rights.
+            // S = private policy scope — collaborator/permission information is access-controlled
+            // even for public repositories.
+            // I = writer (GitHub-controlled repository access metadata)
+            secrecy = policy_private_scope_label(&owner, &repo, repo_id, ctx);
+            integrity = writer_integrity(repo_id, ctx);
+        }
+
         // === Content Access ===
         "get_file_contents" => {
             secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
@@ -534,6 +544,16 @@ pub fn apply_tool_labels(
         | "pull_request_review_write" | "add_comment_to_pending_review"
         | "add_reply_to_pull_request_comment" => {
             // Write operations that return the created/modified resource.
+            // S = S(repo) — response contains repo-scoped content
+            // I = writer (agent-authored content)
+            secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
+            integrity = writer_integrity(repo_id, ctx);
+        }
+
+        // === Discussion comment write (repo-scoped) ===
+        "discussion_comment_write" => {
+            // Creates or edits GitHub Discussion comments via GraphQL mutations
+            // (addDiscussionComment / updateDiscussionComment).
             // S = S(repo) — response contains repo-scoped content
             // I = writer (agent-authored content)
             secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
@@ -879,5 +899,51 @@ mod tests {
         // SECRET (uppercase) in filename should match keyword check
         let result = check_file_secrecy("MY_SECRET_KEY", vec![], "octocat", "hello-world", "octocat/hello-world", &ctx);
         assert_eq!(result, private_label("octocat", "hello-world", "octocat/hello-world", &ctx));
+    }
+
+    #[test]
+    fn apply_tool_labels_discussion_comment_write_is_repo_scoped_write() {
+        let ctx = default_ctx();
+        let args = serde_json::json!({"owner": "octocat", "repo": "hello-world", "discussionId": "D_12345", "body": "Hello"});
+        let (secrecy, integrity, _) = super::apply_tool_labels(
+            "discussion_comment_write",
+            &args,
+            "octocat/hello-world",
+            vec![],
+            vec![],
+            String::new(),
+            &ctx,
+        );
+        let _ = secrecy; // secrecy inherits from repo visibility (backend unavailable in tests)
+        let expected_writer_integrity = writer_integrity("octocat/hello-world", &ctx);
+        // integrity must be writer-level (non-empty)
+        assert!(!integrity.is_empty(), "discussion_comment_write must produce writer-level integrity");
+        assert!(
+            integrity.iter().any(|l| expected_writer_integrity.contains(l)),
+            "discussion_comment_write integrity must contain a writer-level approved label, got: {:?}",
+            integrity
+        );
+    }
+
+    #[test]
+    fn apply_tool_labels_list_repository_collaborators_is_repo_scoped_metadata() {
+        let ctx = default_ctx();
+        let args = serde_json::json!({"owner": "octocat", "repo": "hello-world"});
+        let (secrecy, integrity, _) = super::apply_tool_labels(
+            "list_repository_collaborators",
+            &args,
+            "octocat/hello-world",
+            vec![],
+            vec![],
+            String::new(),
+            &ctx,
+        );
+        let _ = secrecy; // secrecy inherits from repo visibility (backend unavailable in tests)
+        let expected_integrity = super::writer_integrity("octocat/hello-world", &ctx);
+        assert_eq!(
+            integrity,
+            expected_integrity,
+            "list_repository_collaborators must produce writer-level integrity"
+        );
     }
 }
