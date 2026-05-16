@@ -8,7 +8,7 @@ import (
 	"github.com/github/gh-aw-mcpg/internal/logger"
 )
 
-var logGuardInit = logger.New("guard:init")
+var logLabelAgent = logger.New("guard:label_agent")
 
 // RunLabelAgent executes the standard LabelAgent initialization pipeline:
 //  1. Calls the guard's LabelAgent method with the provided pre-built payload.
@@ -28,24 +28,24 @@ func RunLabelAgent(
 	agentLabels *difc.AgentLabels,
 	defaultMode difc.EnforcementMode,
 ) (difc.EnforcementMode, *LabelAgentResult, error) {
-	logGuardInit.Printf("Calling LabelAgent: guard=%s", g.Name())
+	logLabelAgent.Printf("Calling LabelAgent: guard=%s", g.Name())
 
 	result, err := g.LabelAgent(ctx, payload, backend, caps)
 	if err != nil {
-		logGuardInit.Printf("LabelAgent failed: guard=%s, error=%v", g.Name(), err)
+		logLabelAgent.Printf("LabelAgent failed: guard=%s, error=%v", g.Name(), err)
 		return defaultMode, nil, fmt.Errorf("LabelAgent failed: %w", err)
 	}
 	if result == nil {
-		logGuardInit.Printf("LabelAgent returned nil result: guard=%s", g.Name())
+		logLabelAgent.Printf("LabelAgent returned nil result: guard=%s", g.Name())
 		return defaultMode, nil, fmt.Errorf("LabelAgent returned nil result")
 	}
 
 	mode, err := ApplyLabelAgentResult(result, agentLabels, defaultMode)
 	if err != nil {
-		logGuardInit.Printf("LabelAgent result invalid: guard=%s, error=%v", g.Name(), err)
+		logLabelAgent.Printf("LabelAgent result invalid: guard=%s, error=%v", g.Name(), err)
 		return defaultMode, nil, fmt.Errorf("LabelAgent result invalid: %w", err)
 	}
 
-	logGuardInit.Printf("LabelAgent completed: guard=%s, mode=%s", g.Name(), mode)
+	logLabelAgent.Printf("LabelAgent completed: guard=%s, mode=%s", g.Name(), mode)
 	return mode, result, nil
 }
