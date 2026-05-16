@@ -389,7 +389,7 @@ pub fn apply_tool_labels(
             // S = private policy scope — collaborator/permission information is access-controlled
             // even for public repositories.
             // I = writer (GitHub-controlled repository access metadata)
-            secrecy = Cow::Owned(vec![policy_private_scope_label()]);
+            secrecy = policy_private_scope_label(&owner, &repo, repo_id, ctx);
             integrity = writer_integrity(repo_id, ctx);
         }
 
@@ -926,7 +926,7 @@ mod tests {
     }
 
     #[test]
-    fn apply_tool_labels_list_repository_collaborators_is_repo_scoped_read() {
+    fn apply_tool_labels_list_repository_collaborators_is_repo_scoped_metadata() {
         let ctx = default_ctx();
         let args = serde_json::json!({"owner": "octocat", "repo": "hello-world"});
         let (secrecy, integrity, _) = super::apply_tool_labels(
@@ -939,11 +939,11 @@ mod tests {
             &ctx,
         );
         let _ = secrecy; // secrecy inherits from repo visibility (backend unavailable in tests)
-        let expected_integrity = super::reader_integrity("octocat/hello-world".to_string(), &ctx);
+        let expected_integrity = super::writer_integrity("octocat/hello-world", &ctx);
         assert_eq!(
             integrity,
             expected_integrity,
-            "list_repository_collaborators must produce reader-level integrity"
+            "list_repository_collaborators must produce writer-level integrity"
         );
     }
 }
