@@ -915,11 +915,12 @@ mod tests {
             &ctx,
         );
         let _ = secrecy; // secrecy inherits from repo visibility (backend unavailable in tests)
+        let expected_writer_integrity = writer_integrity("octocat/hello-world", &ctx);
         // integrity must be writer-level (non-empty)
         assert!(!integrity.is_empty(), "discussion_comment_write must produce writer-level integrity");
         assert!(
-            integrity.iter().any(|l| l.contains("approved")),
-            "discussion_comment_write integrity must contain an approved label, got: {:?}",
+            integrity.iter().any(|l| expected_writer_integrity.contains(l)),
+            "discussion_comment_write integrity must contain a writer-level approved label, got: {:?}",
             integrity
         );
     }
