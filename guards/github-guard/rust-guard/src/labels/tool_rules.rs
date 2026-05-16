@@ -937,12 +937,11 @@ mod tests {
             &ctx,
         );
         let _ = secrecy; // secrecy inherits from repo visibility (backend unavailable in tests)
-        // integrity must be reader-level (non-empty)
-        assert!(!integrity.is_empty(), "list_repository_collaborators must produce reader-level integrity");
-        assert!(
-            integrity.iter().any(|l| l.contains("unapproved")),
-            "list_repository_collaborators integrity must contain an unapproved label, got: {:?}",
-            integrity
+        let expected_integrity = super::reader_integrity("octocat/hello-world".to_string(), &ctx);
+        assert_eq!(
+            integrity,
+            expected_integrity,
+            "list_repository_collaborators must produce reader-level integrity"
         );
     }
 }
