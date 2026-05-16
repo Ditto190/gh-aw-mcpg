@@ -73,6 +73,8 @@ pub const WRITE_OPERATIONS: &[&str] = &[
     "delete_release", // DELETE /repos/.../releases/{id}
     // Pre-emptive: gist deletion (gh gist delete)
     "delete_gist", // DELETE /gists/{gist_id}
+    // Discussion comment write (addDiscussionComment / updateDiscussionComment via GraphQL)
+    "discussion_comment_write", // creates or edits GitHub Discussion comments
 
 ];
 
@@ -477,6 +479,18 @@ mod tests {
         // is_write_operation delegates to is_lock_operation and is_unlock_operation
         assert!(is_write_operation("lock_issue"));
         assert!(is_write_operation("unlock_issue"));
+    }
+
+    #[test]
+    fn test_discussion_comment_write_is_write_operation() {
+        assert!(
+            is_write_operation("discussion_comment_write"),
+            "discussion_comment_write must be classified as a write operation"
+        );
+        assert!(
+            !is_read_write_operation("discussion_comment_write"),
+            "discussion_comment_write should not be in READ_WRITE_OPERATIONS"
+        );
     }
 
     #[test]

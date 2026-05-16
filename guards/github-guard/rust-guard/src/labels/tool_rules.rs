@@ -383,6 +383,15 @@ pub fn apply_tool_labels(
             integrity = writer_integrity(repo_id, ctx);
         }
 
+        // === Repository collaborators (repo-scoped, access-sensitive) ===
+        "list_repository_collaborators" => {
+            // Lists users with access to the repository; reveals who holds write/admin rights.
+            // S = S(repo) — access information inherits repository visibility
+            // I = reader (GitHub-controlled metadata; treated conservatively due to access sensitivity)
+            secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
+            integrity = reader_integrity(repo_id, ctx);
+        }
+
         // === Content Access ===
         "get_file_contents" => {
             secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
@@ -534,6 +543,16 @@ pub fn apply_tool_labels(
         | "pull_request_review_write" | "add_comment_to_pending_review"
         | "add_reply_to_pull_request_comment" => {
             // Write operations that return the created/modified resource.
+            // S = S(repo) — response contains repo-scoped content
+            // I = writer (agent-authored content)
+            secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
+            integrity = writer_integrity(repo_id, ctx);
+        }
+
+        // === Discussion comment write (repo-scoped) ===
+        "discussion_comment_write" => {
+            // Creates or edits GitHub Discussion comments via GraphQL mutations
+            // (addDiscussionComment / updateDiscussionComment).
             // S = S(repo) — response contains repo-scoped content
             // I = writer (agent-authored content)
             secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
@@ -879,5 +898,51 @@ mod tests {
         // SECRET (uppercase) in filename should match keyword check
         let result = check_file_secrecy("MY_SECRET_KEY", vec![], "octocat", "hello-world", "octocat/hello-world", &ctx);
         assert_eq!(result, private_label("octocat", "hello-world", "octocat/hello-world", &ctx));
+    }
+
+    #[test]
+    fn apply_tool_labels_discussion_comment_write_is_repo_scoped_write() {
+        let ctx = default_ctx();
+        let args = serde_json::json!({"owner": "octocat", "repo": "hello-world", "discussionId": "D_12345", "body": "Hello"});
+        let (secrecy, integrity, _) = super::apply_tool_labels(
+            "discussion_comment_write",
+            &args,
+            "octocat/hello-world",
+            vec![],
+            vec![],
+            String::new(),
+            &ctx,
+        );
+        let _ = secrecy; // secrecy inherits from repo visibility (backend unavailable in tests)
+        // integrity must be writer-level (non-empty)
+        assert!(!integrity.is_empty(), "discussion_comment_write must produce writer-level integrity");
+        assert!(
+            integrity.iter().any(|l| l.contains("approved")),
+            "discussion_comment_write integrity must contain an approved label, got: {:?}",
+            integrity
+        );
+    }
+
+    #[test]
+    fn apply_tool_labels_list_repository_collaborators_is_repo_scoped_read() {
+        let ctx = default_ctx();
+        let args = serde_json::json!({"owner": "octocat", "repo": "hello-world"});
+        let (secrecy, integrity, _) = super::apply_tool_labels(
+            "list_repository_collaborators",
+            &args,
+            "octocat/hello-world",
+            vec![],
+            vec![],
+            String::new(),
+            &ctx,
+        );
+        let _ = secrecy; // secrecy inherits from repo visibility (backend unavailable in tests)
+        // integrity must be reader-level (non-empty)
+        assert!(!integrity.is_empty(), "list_repository_collaborators must produce reader-level integrity");
+        assert!(
+            integrity.iter().any(|l| l.contains("unapproved")),
+            "list_repository_collaborators integrity must contain an unapproved label, got: {:?}",
+            integrity
+        );
     }
 }
