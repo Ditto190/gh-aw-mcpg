@@ -48,6 +48,22 @@ func mockUpstream(t *testing.T, status int, body interface{}) *httptest.Server {
 	}))
 }
 
+func assertJSONErrorResponse(t *testing.T, resp *http.Response, wantStatus int, wantCode, wantMessage string) {
+	t.Helper()
+
+	require.NotNil(t, resp)
+	assert.Equal(t, wantStatus, resp.StatusCode)
+	assert.Equal(t, "application/json", resp.Header.Get("Content-Type"))
+
+	var got struct {
+		Error   string `json:"error"`
+		Message string `json:"message"`
+	}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&got))
+	assert.Equal(t, wantCode, got.Error)
+	assert.Equal(t, wantMessage, got.Message)
+}
+
 // ─── ServeHTTP: health check ─────────────────────────────────────────────────
 
 func TestServeHTTP_HealthCheck(t *testing.T) {
@@ -112,8 +128,7 @@ func TestServeHTTP_UnknownRESTEndpointBlocked(t *testing.T) {
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, req)
 
-	assert.Equal(t, http.StatusForbidden, w.Code)
-	assert.Contains(t, w.Body.String(), "access denied")
+	assertJSONErrorResponse(t, w.Result(), http.StatusForbidden, "forbidden", "access denied: unrecognized endpoint")
 }
 
 // ─── ServeHTTP: /api/v3 GH-host prefix is stripped ───────────────────────────
@@ -456,7 +471,7 @@ func TestForwardAndReadBody_NetworkError(t *testing.T) {
 
 	assert.Nil(t, resp)
 	assert.Nil(t, body)
-	assert.Equal(t, http.StatusBadGateway, w.Code)
+	assertJSONErrorResponse(t, w.Result(), http.StatusBadGateway, "bad_gateway", "upstream request failed")
 }
 
 // ─── ServeHTTP: search query param is passed to args ─────────────────────────
