@@ -184,12 +184,12 @@ func (cb *circuitBreaker) RecordRateLimit(resetAt time.Time) {
 	defer cb.mu.Unlock()
 
 	cb.consecutiveErrors++
-	logCircuitBreaker.Printf("server %q recording rate-limit: consecutiveErrors=%d/%d, state=%s, hasResetAt=%v",
-		cb.serverID, cb.consecutiveErrors, cb.threshold, cb.state, !resetAt.IsZero())
 	cb.probeInFlight = false
 	if !resetAt.IsZero() {
 		cb.resetAt = resetAt
 	}
+	logCircuitBreaker.Printf("server %q recording rate-limit: consecutiveErrors=%d/%d, state=%s, hasResetAt=%v",
+		cb.serverID, cb.consecutiveErrors, cb.threshold, cb.state, !cb.resetAt.IsZero())
 
 	switch cb.state {
 	case circuitClosed:
@@ -217,6 +217,7 @@ func (cb *circuitBreaker) RecordRateLimit(resetAt time.Time) {
 
 	case circuitOpen:
 		// Already open — update reset time.
+		logCircuitBreaker.Printf("server %q recording rate-limit while already OPEN (consecutiveErrors=%d)", cb.serverID, cb.consecutiveErrors)
 		logger.LogWarn("backend", "server %q circuit breaker still OPEN; resets at %s",
 			cb.serverID, strutil.FormatFutureTime(cb.resetAt))
 	}
