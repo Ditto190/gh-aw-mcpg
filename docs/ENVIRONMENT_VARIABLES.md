@@ -112,4 +112,5 @@ These standard OpenTelemetry environment variables set defaults for the correspo
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP HTTP endpoint for trace export (e.g., `http://localhost:4318`). Tracing is disabled when empty. Sets default for `--otlp-endpoint`. | (disabled) |
+| `OTEL_EXPORTER_OTLP_HEADERS` | Comma-separated `key=value` HTTP headers for OTLP export requests (W3C Baggage format, e.g., `Authorization=Bearer token,X-Custom=value`). Used as fallback when `gateway.opentelemetry.headers` / `gateway.tracing.headers` is not set in config. | (none) |
 | `OTEL_SERVICE_NAME` | Service name reported in traces. Sets default for `--otlp-service-name`. | `mcp-gateway` |

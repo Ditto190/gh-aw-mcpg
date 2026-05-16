@@ -408,6 +408,7 @@ DEBUG_COLORS=0 DEBUG=* ./awmg --config config.toml
 - `MCP_GATEWAY_CA_CERT` - Path to CA certificate PEM file for client certificate verification; enables mutual TLS (mTLS) when set alongside `MCP_GATEWAY_TLS_CERT`/`MCP_GATEWAY_TLS_KEY` (sets default for `--tls-ca`)
 - `MCP_GATEWAY_HMAC_SECRET` - Shared HMAC-SHA256 secret for request signing and replay protection; when set, requests to MCP handlers must carry valid `X-MCP-Timestamp`, `X-MCP-Nonce`, and `X-MCP-Signature` headers (sets default for `--hmac-secret`)
 - `OTEL_EXPORTER_OTLP_ENDPOINT` - OTLP HTTP endpoint for trace export; sets default for `--otlp-endpoint`
+- `OTEL_EXPORTER_OTLP_HEADERS` - Comma-separated `key=value` OTLP export headers (W3C Baggage format); used as fallback when `gateway.opentelemetry.headers` / `gateway.tracing.headers` is not set in config
 - `OTEL_SERVICE_NAME` - Service name in traces; sets default for `--otlp-service-name`
 - `AWMG_BINARY_PATH` - Override binary path for integration tests
 - `AWMG_WASM_GUARD_PATH` - Override WASM guard path for proxy integration tests

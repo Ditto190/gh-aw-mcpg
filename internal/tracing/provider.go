@@ -22,6 +22,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -122,11 +123,24 @@ func parseOTLPHeaders(raw string) map[string]string {
 }
 
 // resolveHeaders parses the configured OTLP export headers string (or returns nil).
+// When no headers are configured via config, it falls back to the standard
+// OTEL_EXPORTER_OTLP_HEADERS environment variable (W3C Baggage format:
+// "key1=value1,key2=value2") per the OTel OTLP Exporter specification.
 func resolveHeaders(cfg *config.TracingConfig) map[string]string {
-	if cfg == nil || cfg.Headers == "" {
+	raw := ""
+	if cfg != nil {
+		raw = cfg.Headers
+	}
+	if raw == "" {
+		raw = os.Getenv("OTEL_EXPORTER_OTLP_HEADERS")
+		if raw != "" {
+			logTracing.Printf("Using OTEL_EXPORTER_OTLP_HEADERS env var for OTLP export headers")
+		}
+	}
+	if raw == "" {
 		return nil
 	}
-	return parseOTLPHeaders(cfg.Headers)
+	return parseOTLPHeaders(raw)
 }
 
 // resolveParentContext builds a context carrying the W3C remote parent span context
