@@ -22,6 +22,8 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -100,6 +102,10 @@ func resolveSampleRate(cfg *config.TracingConfig) float64 {
 // warnings and skipped to avoid invalid HTTP header field names.
 // Leading/trailing whitespace around keys and values is trimmed.
 func parseOTLPHeaders(raw string) map[string]string {
+	return parseOTLPHeadersWithDecoder(raw, false)
+}
+
+func parseOTLPHeadersWithDecoder(raw string, decodeValues bool) map[string]string {
 	headers := make(map[string]string)
 	for _, pair := range strings.Split(raw, ",") {
 		trimmed := strings.TrimSpace(pair)
@@ -116,17 +122,42 @@ func parseOTLPHeaders(raw string) map[string]string {
 			logTracing.Printf("Warning: skipping OTLP header pair with empty key")
 			continue
 		}
-		headers[key] = strings.TrimSpace(v)
+		value := strings.TrimSpace(v)
+		if decodeValues {
+			decoded, err := url.PathUnescape(value)
+			if err != nil {
+				logTracing.Printf("Warning: invalid percent-encoding in OTLP header value for key %q; using raw value", key)
+			} else {
+				value = decoded
+			}
+		}
+		headers[key] = value
 	}
 	return headers
 }
 
 // resolveHeaders parses the configured OTLP export headers string (or returns nil).
+// When no headers are configured via config, it falls back to the standard
+// OTEL_EXPORTER_OTLP_HEADERS environment variable (W3C Baggage format:
+// "key1=value1,key2=value2") per the OTel OTLP Exporter specification.
 func resolveHeaders(cfg *config.TracingConfig) map[string]string {
-	if cfg == nil || cfg.Headers == "" {
+	raw := ""
+	if cfg != nil {
+		raw = cfg.Headers
+	}
+	if raw == "" {
+		raw = os.Getenv("OTEL_EXPORTER_OTLP_HEADERS")
+		if raw != "" {
+			logTracing.Printf("Using OTEL_EXPORTER_OTLP_HEADERS env var for OTLP export headers")
+		}
+	}
+	if raw == "" {
 		return nil
 	}
-	return parseOTLPHeaders(cfg.Headers)
+	if cfg == nil || cfg.Headers == "" {
+		return parseOTLPHeadersWithDecoder(raw, true)
+	}
+	return parseOTLPHeaders(raw)
 }
 
 // resolveParentContext builds a context carrying the W3C remote parent span context

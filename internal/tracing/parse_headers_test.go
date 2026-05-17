@@ -4,6 +4,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/github/gh-aw-mcpg/internal/config"
 )
 
 // TestParseOTLPHeaders covers the parseOTLPHeaders helper with a range of inputs.
@@ -86,4 +89,63 @@ func TestParseOTLPHeaders(t *testing.T) {
 			assert.Equal(t, tt.expected, result)
 		})
 	}
+}
+
+// TestResolveHeaders_ConfigTakesPrecedence verifies that config headers
+// take precedence over the OTEL_EXPORTER_OTLP_HEADERS environment variable.
+func TestResolveHeaders_ConfigTakesPrecedence(t *testing.T) {
+	t.Setenv("OTEL_EXPORTER_OTLP_HEADERS", "Authorization=Bearer env-token")
+
+	cfg := &config.TracingConfig{
+		Headers: "Authorization=Bearer config-token",
+	}
+	headers := resolveHeaders(cfg)
+	require.NotNil(t, headers)
+	assert.Equal(t, "Bearer config-token", headers["Authorization"])
+}
+
+// TestResolveHeaders_FallsBackToEnvVar verifies that when config headers
+// are empty, the OTEL_EXPORTER_OTLP_HEADERS env var is used as a fallback.
+func TestResolveHeaders_FallsBackToEnvVar(t *testing.T) {
+	t.Setenv("OTEL_EXPORTER_OTLP_HEADERS", "Authorization=Bearer%20env-token,X-Custom=value")
+
+	cfg := &config.TracingConfig{
+		Headers: "",
+	}
+	headers := resolveHeaders(cfg)
+	require.NotNil(t, headers)
+	assert.Equal(t, "Bearer env-token", headers["Authorization"])
+	assert.Equal(t, "value", headers["X-Custom"])
+}
+
+// TestResolveHeaders_NilConfig_FallsBackToEnvVar verifies env var fallback
+// when the TracingConfig itself is nil.
+func TestResolveHeaders_NilConfig_FallsBackToEnvVar(t *testing.T) {
+	t.Setenv("OTEL_EXPORTER_OTLP_HEADERS", "Authorization=Bearer%20env-token")
+
+	headers := resolveHeaders(nil)
+	require.NotNil(t, headers)
+	assert.Equal(t, "Bearer env-token", headers["Authorization"])
+}
+
+// TestResolveHeaders_ConfigPreservesLiteralValue verifies that config headers
+// are parsed as literal header values rather than W3C-baggage-decoded values.
+func TestResolveHeaders_ConfigPreservesLiteralValue(t *testing.T) {
+	cfg := &config.TracingConfig{
+		Headers: "Authorization=Bearer%20config-token",
+	}
+
+	headers := resolveHeaders(cfg)
+	require.NotNil(t, headers)
+	assert.Equal(t, "Bearer%20config-token", headers["Authorization"])
+}
+
+// TestResolveHeaders_NoConfigNoEnvVar returns nil when neither config
+// nor env var provides headers.
+func TestResolveHeaders_NoConfigNoEnvVar(t *testing.T) {
+	t.Setenv("OTEL_EXPORTER_OTLP_HEADERS", "")
+
+	cfg := &config.TracingConfig{}
+	headers := resolveHeaders(cfg)
+	assert.Nil(t, headers)
 }
