@@ -46,15 +46,14 @@ func TestEnsureTracingConfig_WhenNotNil(t *testing.T) {
 	assert.Equal(t, "http://collector:4318", tc.Endpoint, "Endpoint should not be modified")
 }
 
-// TestEnsureTracingConfig_NilGateway verifies that ensureTracingConfig
-// does not panic and returns a usable TracingConfig when Gateway is nil.
-func TestEnsureTracingConfig_NilGateway(t *testing.T) {
+// TestEnsureTracingConfig_WithInitializedGateway verifies that callers must
+// initialize cfg.Gateway before calling ensureTracingConfig, and that with a
+// minimal Gateway in place the function returns a usable TracingConfig.
+func TestEnsureTracingConfig_WithInitializedGateway(t *testing.T) {
 	cfg := &config.Config{}
-	// Gateway is nil — this exercises a defensive path.
 	assert.NotPanics(t, func() {
-		// ensureTracingConfig reads cfg.Gateway.Tracing; if Gateway is nil it will panic.
-		// This test documents the expected pre-condition: Gateway must be non-nil before calling.
-		// We therefore set up a minimal Gateway to avoid a nil-dereference.
+		// ensureTracingConfig dereferences cfg.Gateway.Tracing, so callers must
+		// provide a non-nil Gateway before invoking it.
 		cfg.Gateway = &config.GatewayConfig{}
 		tc := ensureTracingConfig(cfg)
 		assert.NotNil(t, tc)
