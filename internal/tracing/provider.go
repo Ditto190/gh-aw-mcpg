@@ -22,6 +22,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -101,6 +102,10 @@ func resolveSampleRate(cfg *config.TracingConfig) float64 {
 // warnings and skipped to avoid invalid HTTP header field names.
 // Leading/trailing whitespace around keys and values is trimmed.
 func parseOTLPHeaders(raw string) map[string]string {
+	return parseOTLPHeadersWithDecoder(raw, false)
+}
+
+func parseOTLPHeadersWithDecoder(raw string, decodeValues bool) map[string]string {
 	headers := make(map[string]string)
 	for _, pair := range strings.Split(raw, ",") {
 		trimmed := strings.TrimSpace(pair)
@@ -117,7 +122,16 @@ func parseOTLPHeaders(raw string) map[string]string {
 			logTracing.Printf("Warning: skipping OTLP header pair with empty key")
 			continue
 		}
-		headers[key] = strings.TrimSpace(v)
+		value := strings.TrimSpace(v)
+		if decodeValues {
+			decoded, err := url.PathUnescape(value)
+			if err != nil {
+				logTracing.Printf("Warning: invalid percent-encoding in OTLP header value for key %q; using raw value", key)
+			} else {
+				value = decoded
+			}
+		}
+		headers[key] = value
 	}
 	return headers
 }
@@ -139,6 +153,9 @@ func resolveHeaders(cfg *config.TracingConfig) map[string]string {
 	}
 	if raw == "" {
 		return nil
+	}
+	if cfg == nil || cfg.Headers == "" {
+		return parseOTLPHeadersWithDecoder(raw, true)
 	}
 	return parseOTLPHeaders(raw)
 }

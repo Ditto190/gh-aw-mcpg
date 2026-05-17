@@ -107,7 +107,7 @@ func TestResolveHeaders_ConfigTakesPrecedence(t *testing.T) {
 // TestResolveHeaders_FallsBackToEnvVar verifies that when config headers
 // are empty, the OTEL_EXPORTER_OTLP_HEADERS env var is used as a fallback.
 func TestResolveHeaders_FallsBackToEnvVar(t *testing.T) {
-	t.Setenv("OTEL_EXPORTER_OTLP_HEADERS", "Authorization=Bearer env-token,X-Custom=value")
+	t.Setenv("OTEL_EXPORTER_OTLP_HEADERS", "Authorization=Bearer%20env-token,X-Custom=value")
 
 	cfg := &config.TracingConfig{
 		Headers: "",
@@ -121,11 +121,23 @@ func TestResolveHeaders_FallsBackToEnvVar(t *testing.T) {
 // TestResolveHeaders_NilConfig_FallsBackToEnvVar verifies env var fallback
 // when the TracingConfig itself is nil.
 func TestResolveHeaders_NilConfig_FallsBackToEnvVar(t *testing.T) {
-	t.Setenv("OTEL_EXPORTER_OTLP_HEADERS", "Authorization=Bearer env-token")
+	t.Setenv("OTEL_EXPORTER_OTLP_HEADERS", "Authorization=Bearer%20env-token")
 
 	headers := resolveHeaders(nil)
 	require.NotNil(t, headers)
 	assert.Equal(t, "Bearer env-token", headers["Authorization"])
+}
+
+// TestResolveHeaders_ConfigPreservesLiteralValue verifies that config headers
+// are parsed as literal header values rather than W3C-baggage-decoded values.
+func TestResolveHeaders_ConfigPreservesLiteralValue(t *testing.T) {
+	cfg := &config.TracingConfig{
+		Headers: "Authorization=Bearer%20config-token",
+	}
+
+	headers := resolveHeaders(cfg)
+	require.NotNil(t, headers)
+	assert.Equal(t, "Bearer%20config-token", headers["Authorization"])
 }
 
 // TestResolveHeaders_NoConfigNoEnvVar returns nil when neither config
