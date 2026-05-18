@@ -861,7 +861,7 @@ mod tests {
     }
 
     #[test]
-    fn test_is_rate_limit_error_detects_secondary_phrase() {
+    fn test_is_rate_limit_error_matches_rate_limit_substring() {
         assert!(is_rate_limit_error("Secondary Rate Limit exceeded"));
     }
 
