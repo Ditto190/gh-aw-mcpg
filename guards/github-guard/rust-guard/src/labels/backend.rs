@@ -570,7 +570,7 @@ fn extract_backend_error_text(response: &Value) -> Option<&str> {
 
 fn is_rate_limit_error(error_text: &str) -> bool {
     let lower = error_text.to_ascii_lowercase();
-    lower.contains("rate limit") || lower.contains("secondary rate limit")
+    lower.contains("rate limit")
 }
 
 fn extract_rate_reset_seconds(error_text: &str) -> Option<u64> {
@@ -578,20 +578,14 @@ fn extract_rate_reset_seconds(error_text: &str) -> Option<u64> {
     let start = error_text.find(marker)? + marker.len();
     let rest = &error_text[start..];
 
-    let mut digits = String::new();
-    for ch in rest.chars() {
-        if ch.is_ascii_digit() {
-            digits.push(ch);
-            continue;
-        }
-        break;
-    }
-
-    if digits.is_empty() {
+    let end = rest
+        .find(|ch: char| !ch.is_ascii_digit())
+        .unwrap_or(rest.len());
+    if end == 0 {
         return None;
     }
 
-    digits.parse::<u64>().ok()
+    rest[..end].parse::<u64>().ok()
 }
 
 #[cfg(test)]
@@ -888,6 +882,21 @@ mod tests {
             }),
             buffer,
         )
+    }
+
+    #[test]
+    fn test_is_rate_limit_error_matches_secondary_rate_limit() {
+        assert!(is_rate_limit_error("Secondary Rate Limit exceeded"));
+    }
+
+    #[test]
+    fn test_extract_rate_reset_seconds_parses_leading_digits_without_allocating() {
+        assert_eq!(
+            extract_rate_reset_seconds("failed: [rate reset in 42s]"),
+            Some(42)
+        );
+        assert_eq!(extract_rate_reset_seconds("failed: [rate reset in s]"), None);
+        assert_eq!(extract_rate_reset_seconds("failed: [rate reset in abc]"), None);
     }
 
     #[test]
