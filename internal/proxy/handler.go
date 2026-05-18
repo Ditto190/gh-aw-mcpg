@@ -60,6 +60,13 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// gh CLI probes /meta during initialization for feature detection.
+	// Treat it like GraphQL introspection metadata and pass through unfiltered.
+	if r.Method == http.MethodGet && rawPath == "/meta" {
+		h.passthrough(w, r, fullPath)
+		return
+	}
+
 	// Only filter read operations (GET + GraphQL POST to /graphql)
 	isGraphQL := IsGraphQLPath(rawPath)
 	isRead := r.Method == http.MethodGet || (r.Method == http.MethodPost && isGraphQL)

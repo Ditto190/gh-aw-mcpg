@@ -94,6 +94,29 @@ func TestServeHTTP_HealthCheck(t *testing.T) {
 	}
 }
 
+func TestServeHTTP_MetaPassthrough(t *testing.T) {
+	var receivedURL string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedURL = r.URL.RequestURI()
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, err := w.Write([]byte(`{"verifiable_password_authentication":true}`))
+		require.NoError(t, err)
+	}))
+	defer upstream.Close()
+
+	s := newTestServer(t, upstream.URL)
+	h := &proxyHandler{server: s}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v3/meta", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "/meta", receivedURL)
+	assert.Contains(t, w.Body.String(), "verifiable_password_authentication")
+}
+
 // ─── ServeHTTP: write operations (non-GraphQL POST/PUT/DELETE/PATCH) ─────────
 
 func TestServeHTTP_WriteOperationsPassthrough(t *testing.T) {
