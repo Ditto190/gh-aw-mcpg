@@ -50,6 +50,10 @@ Inside the container, the gateway starts in routed mode on `http://0.0.0.0:8000`
 - If you configure `payloadDir` / `MCP_GATEWAY_PAYLOAD_DIR`, use an absolute path (for example `/tmp/jq-payloads`)
 - If you configure `payloadDir`, you can also tune `payloadSizeThreshold` / `MCP_GATEWAY_PAYLOAD_SIZE_THRESHOLD` to control when payloads are written to disk (default: `524288` bytes)
 
+When running `awmg` directly (outside `docker run`), useful CLI flags include:
+- `--env <file>`: Load environment variables from a `.env` file before startup.
+- `-v`, `-vv`, `-vvv`: Increase verbosity (`info`, `debug`, `trace`).
+
 ## Guard Policies
 
 Guard policies enforce integrity filtering and private-data leaking at the gateway level, restricting what data agents can access and where they can write. Each server can have either an `allow-only` or a `write-sink` policy.

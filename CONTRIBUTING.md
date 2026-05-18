@@ -121,7 +121,7 @@ The MCP Gateway is a concurrent server; use this to validate thread safety when 
 
 ### Linting
 
-Run all linters (go vet, gofmt check, and golangci-lint):
+Run all linters (go vet, gofmt check, and golangci-lint if installed; v2.8.0 is the recommended version):
 ```bash
 make lint
 ```
@@ -131,7 +131,7 @@ This runs:
 - `gofmt` check for code formatting
 - `golangci-lint` for additional static analysis (misspell, unconvert)
 
-**Note**: `golangci-lint` is automatically installed by `make install`. If you see a warning about golangci-lint not being found, run `make install` first.
+**Note**: `make install` installs `golangci-lint` v2.8.0 only when `golangci-lint` is not already found on your PATH/GOPATH. If another version is already installed, `make lint` uses that existing binary.
 
 To run golangci-lint directly with all configured linters:
 ```bash
@@ -172,8 +172,8 @@ echo '{"mcpServers": {...}}' | ./awmg --config-stdin
 # Load environment file
 ./awmg --config config.toml --env .env
 
-# Increase verbosity
-./awmg --config config.toml -v
+# Increase verbosity (-v=info, -vv=debug, -vvv=trace)
+./awmg --config config.toml -vv
 
 # Launch MCP servers sequentially during startup
 ./awmg --config config.toml --sequential-launch
@@ -584,7 +584,7 @@ Required environment variables:
 3. **Add tests** for new functionality
 4. **Run linters and tests** before submitting:
    ```bash
-   make agent-finished  # format + build + lint + all tests (unit, integration, guards)
+   make agent-finished  # format + build + lint + all tests (unit, integration, rust-guard)
    ```
 5. **Update documentation** if you change behavior or add features
 6. **Keep changes minimal** - smaller PRs are easier to review
