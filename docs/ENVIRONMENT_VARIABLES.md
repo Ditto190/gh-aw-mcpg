@@ -41,6 +41,15 @@ When running locally (`run.sh`), these variables are optional (warnings shown if
 
 **Note:** `PORT`, `HOST`, and `MODE` are not read by the `awmg` binary directly. However, `run.sh` uses `HOST` (default: `0.0.0.0`), `MODE` (default: `--routed`), and falls back to `PORT` (when `MCP_GATEWAY_PORT` is unset) to set the bind address and routing mode. Use the `--listen` and `--routed`/`--unified` flags when running `awmg` directly.
 
+## Test / Development Overrides
+
+These variables are intended for local testing and development only:
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `AWMG_BINARY_PATH` | Override binary path used by integration tests (for example, to test a prebuilt `awmg` binary). | (disabled) |
+| `AWMG_WASM_GUARD_PATH` | Override WASM guard path used by proxy integration tests when default build output paths are unavailable. | (disabled) |
+
 ## Containerized Deployment Variables
 
 When using `run_containerized.sh`, these additional variables are available:
