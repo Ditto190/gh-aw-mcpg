@@ -371,6 +371,7 @@ pub fn label_response_items(
             // Limit items to prevent WASM memory exhaustion
             let items_limited = limit_items_with_log(all_items.as_slice(), "list_gists");
 
+            let gist_integrity = reader_integrity(scope_names::USER, ctx);
             for item in items_limited.iter().copied() {
                 let is_public = get_bool_or(item, "public", true);
                 let id = get_str_or(item, "id", "unknown");
@@ -387,7 +388,7 @@ pub fn label_response_items(
                     labels: ResourceLabels {
                         description: format!("gist:{}", id),
                         secrecy,
-                        integrity: reader_integrity(scope_names::USER, ctx),
+                        integrity: gist_integrity.clone(),
                     },
                 });
             }
@@ -398,14 +399,16 @@ pub fn label_response_items(
             let items = actual_response.as_array().or_else(|| response.as_array());
 
             if let Some(items) = items {
+                let notif_secrecy = private_user_label();
+                let notif_integrity = none_integrity("", ctx);
                 for item in items.iter() {
                     let id = get_str_or(item, "id", "unknown");
                     labeled_items.push(LabeledItem {
                         data: item.clone(),
                         labels: ResourceLabels {
                             description: format!("notification:{}", id),
-                            secrecy: private_user_label(),
-                            integrity: none_integrity("", ctx),
+                            secrecy: notif_secrecy.clone(),
+                            integrity: notif_integrity.clone(),
                         },
                     });
                 }
@@ -422,6 +425,7 @@ pub fn label_response_items(
             let (arg_owner, arg_repo, repo_full_name) = extract_repo_info(tool_args);
             let secrecy = repo_visibility_secrecy(&arg_owner, &arg_repo, &repo_full_name, ctx);
 
+            let release_integrity = merged_integrity(&repo_full_name, ctx);
             for item in items_limited.iter().copied() {
                 let tag = get_str_or(item, "tag_name", "unknown");
 
@@ -431,7 +435,7 @@ pub fn label_response_items(
                     labels: ResourceLabels {
                         description: format!("release:{}@{}", repo_full_name, tag),
                         secrecy: secrecy.clone(),
-                        integrity: merged_integrity(&repo_full_name, ctx),
+                        integrity: release_integrity.clone(),
                     },
                 });
             }
