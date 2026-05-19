@@ -185,6 +185,17 @@ func TestWalkDockerEnvArgs(t *testing.T) {
 		{index: 7, varName: "MISSING_VAR", value: "", found: false},
 	}, walked)
 	assert.Len(t, walked, 3)
-	assert.NotContains(t, walked, walkedArg{index: 3, varName: "EXPLICIT=value"})
-	assert.NotContains(t, walked, walkedArg{index: 9})
+}
+
+func TestWalkDockerEnvArgs_IgnoresExplicitAssignmentsAndTrailingFlag(t *testing.T) {
+	calls := 0
+
+	WalkDockerEnvArgs([]string{
+		"-e", "EXPLICIT=value",
+		"-e",
+	}, func(index int, varName, value string, found bool) {
+		calls++
+	})
+
+	assert.Zero(t, calls)
 }
