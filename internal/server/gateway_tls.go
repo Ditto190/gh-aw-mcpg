@@ -31,7 +31,7 @@ func LoadGatewayTLS(certPath, keyPath, caPath string) (*tls.Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to load server TLS certificate/key: %w", err)
 	}
-	logGatewayTLS.Print("server TLS key pair loaded")
+	logGatewayTLS.Printf("server TLS key pair loaded: certChainLen=%d", len(serverCert.Certificate))
 
 	cfg := &tls.Config{
 		Certificates: []tls.Certificate{serverCert},
@@ -48,12 +48,16 @@ func LoadGatewayTLS(certPath, keyPath, caPath string) (*tls.Config, error) {
 		if !caPool.AppendCertsFromPEM(caPEM) {
 			return nil, fmt.Errorf("failed to parse CA certificate from %s", caPath)
 		}
+		logGatewayTLS.Printf("CA certificate pool built: ca=%s", caPath)
 
 		// Require and verify client certificates signed by the provided CA.
 		cfg.ClientCAs = caPool
 		cfg.ClientAuth = tls.RequireAndVerifyClientCert
 		logGatewayTLS.Printf("mTLS enabled: client certificates required, CA=%s", caPath)
+	} else {
+		logGatewayTLS.Print("one-way TLS configured: client certificates not required")
 	}
 
+	logGatewayTLS.Printf("gateway TLS configuration ready: minVersion=%s, mtls=%v", tls.VersionName(cfg.MinVersion), caPath != "")
 	return cfg, nil
 }
