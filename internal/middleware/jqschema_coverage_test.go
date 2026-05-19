@@ -271,14 +271,18 @@ func TestWrapToolHandlerWithFilter_InvalidFilterFallsBack(t *testing.T) {
 	}
 
 	// Use a syntactically invalid filter. wrapToolHandler should log a warning
-	// and proceed as if no filter was set (filterCode == nil).
-	wrapped := WrapToolHandlerWithFilter(mockHandler, "test_tool", baseDir, "", 0, testGetSessionID, "(.invalid")
-	result, _, err := wrapped(context.Background(), &sdk.CallToolRequest{}, nil)
+	// and proceed as if no filter was set (filterCode == nil). Use a threshold
+	// large enough to keep this small payload inline so we can assert that the
+	// original data is returned unchanged.
+	wrapped := WrapToolHandlerWithFilter(mockHandler, "test_tool", baseDir, "", 1024, testGetSessionID, "(.invalid")
+	result, returnedData, err := wrapped(context.Background(), &sdk.CallToolRequest{}, nil)
 
-	// The call must succeed despite the invalid filter.
+	// The call must succeed despite the invalid filter, and the original
+	// unfiltered payload must be preserved.
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	assert.False(t, result.IsError)
+	assert.Equal(t, payload, returnedData)
 }
 
 // ---------------------------------------------------------------------------
