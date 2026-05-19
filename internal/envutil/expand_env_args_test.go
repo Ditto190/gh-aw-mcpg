@@ -186,4 +186,5 @@ func TestWalkDockerEnvArgs(t *testing.T) {
 	}, walked)
 	assert.Len(t, walked, 3)
 	assert.NotContains(t, walked, walkedArg{index: 3, varName: "EXPLICIT=value"})
+	assert.NotContains(t, walked, walkedArg{index: 9})
 }

@@ -46,7 +46,7 @@ func ExpandEnvArgs(args []string) []string {
 	for i := 0; i < len(args); i++ {
 		if expandedValue, ok := expandedValues[i]; ok {
 			result = append(result, "-e", expandedValue)
-			i++ // Skip the next arg since we already expanded the pair.
+			i++ // Skip the variable name; the loop increment advances past the "-e" pair.
 			continue
 		}
 
