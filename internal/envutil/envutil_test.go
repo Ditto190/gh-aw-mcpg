@@ -338,7 +338,15 @@ func TestGetEnvIntRaw(t *testing.T) {
 			if tt.setEnv {
 				t.Setenv(tt.envKey, tt.envValue)
 			} else {
-				os.Unsetenv(tt.envKey)
+				previousValue, hadPreviousValue := os.LookupEnv(tt.envKey)
+				t.Cleanup(func() {
+					if hadPreviousValue {
+						_ = os.Setenv(tt.envKey, previousValue)
+					} else {
+						_ = os.Unsetenv(tt.envKey)
+					}
+				})
+				_ = os.Unsetenv(tt.envKey)
 			}
 
 			got, ok, err := GetEnvIntRaw(tt.envKey)
