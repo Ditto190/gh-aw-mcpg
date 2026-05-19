@@ -32,6 +32,7 @@ const (
 	HTTPTransportSSE HTTPTransportType = "sse"
 	// HTTPTransportPlainJSON uses plain JSON-RPC 2.0 over HTTP POST (non-standard)
 	HTTPTransportPlainJSON HTTPTransportType = "plain-json"
+	sessionNotFoundMessage                   = "session not found"
 )
 
 // MCPProtocolVersion is the MCP protocol version used only by the plain JSON-RPC
@@ -86,7 +87,7 @@ func isSessionNotFoundError(err error) bool {
 	// TODO(tech-debt): remove this string-matching fallback once the plain JSON-RPC
 	// transport (HTTPTransportPlainJSON) is retired. The plain JSON-RPC path exists
 	// only for compatibility with backends that predate the 2024-11-05 MCP spec.
-	return strings.Contains(strings.ToLower(err.Error()), "session not found")
+	return strings.Contains(strings.ToLower(err.Error()), sessionNotFoundMessage)
 }
 
 // isSessionNotFoundHTTPResponse checks if an HTTP response indicates the backend session was not found.
@@ -95,7 +96,7 @@ func isSessionNotFoundHTTPResponse(statusCode int, body []byte) bool {
 	if statusCode != http.StatusNotFound {
 		return false
 	}
-	return strings.Contains(strings.ToLower(string(body)), "session not found")
+	return strings.Contains(strings.ToLower(string(body)), sessionNotFoundMessage)
 }
 
 // parseSSEResponse extracts JSON data from SSE-formatted response
