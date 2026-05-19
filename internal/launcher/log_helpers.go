@@ -38,11 +38,15 @@ func (l *Launcher) logLaunchStart(serverID, sessionID string, serverCfg *config.
 // logEnvPassthrough checks and logs environment variable passthrough status
 func (l *Launcher) logEnvPassthrough(args []string) {
 	envutil.WalkDockerEnvArgs(args, func(_ int, varName, value string, found bool) {
-		if found && value != "" {
+		if !found {
+			log.Printf("[LAUNCHER] ✗ WARNING: Env passthrough for %s requested but NOT FOUND in MCPG process", varName)
+			return
+		}
+		if value != "" {
 			log.Printf("[LAUNCHER] ✓ Env passthrough: %s=%s (from MCPG process)", varName, sanitize.TruncateSecret(value))
 			return
 		}
-		log.Printf("[LAUNCHER] ✗ WARNING: Env passthrough for %s requested but NOT FOUND in MCPG process", varName)
+		log.Printf("[LAUNCHER] ⚠️  Env passthrough for %s is empty in MCPG process", varName)
 	})
 }
 

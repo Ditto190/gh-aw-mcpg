@@ -184,4 +184,5 @@ func TestWalkDockerEnvArgs(t *testing.T) {
 		{index: 5, varName: "EMPTY_VAR", value: "", found: true},
 		{index: 7, varName: "MISSING_VAR", value: "", found: false},
 	}, walked)
+	assert.NotContains(t, walked, walkedArg{index: 3, varName: "EXPLICIT=value"})
 }
