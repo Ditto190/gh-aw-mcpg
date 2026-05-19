@@ -188,6 +188,18 @@ func TestLauncher_LogEnvPassthrough(t *testing.T) {
 			},
 		},
 		{
+			name: "passthrough empty variable value logs warning",
+			args: []string{"run", "-e", "EMPTY_VAR"},
+			setupEnv: func(t *testing.T) {
+				t.Setenv("EMPTY_VAR", "")
+			},
+			wantInLog: []string{
+				"WARNING",
+				"EMPTY_VAR",
+				"NOT FOUND",
+			},
+		},
+		{
 			name: "explicit value not passthrough",
 			args: []string{"run", "-e", "VAR=value"},
 			setupEnv: func(t *testing.T) {
