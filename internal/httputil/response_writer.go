@@ -13,20 +13,29 @@ type BaseResponseWriter struct {
 	http.ResponseWriter
 	// StatusCode holds the captured HTTP status code. It is set by WriteHeader
 	// and, if still zero when Write is first called, defaults to http.StatusOK.
-	StatusCode int
+	// Only the first call to WriteHeader or Write sets StatusCode, matching
+	// net/http semantics where only the first status sent is effective.
+	StatusCode  int
+	wroteHeader bool
 }
 
-// WriteHeader captures the status code and forwards it to the underlying writer.
+// WriteHeader captures the status code on first call and forwards it to the
+// underlying writer. Subsequent calls are forwarded but do not update StatusCode,
+// matching net/http semantics where only the first WriteHeader is effective.
 func (w *BaseResponseWriter) WriteHeader(code int) {
-	w.StatusCode = code
+	if !w.wroteHeader {
+		w.StatusCode = code
+		w.wroteHeader = true
+	}
 	w.ResponseWriter.WriteHeader(code)
 }
 
-// Write captures an implicit 200 status when called without a prior WriteHeader,
-// then delegates to the underlying writer.
+// Write captures an implicit 200 status on first call when no prior WriteHeader
+// was issued, then delegates to the underlying writer.
 func (w *BaseResponseWriter) Write(b []byte) (int, error) {
-	if w.StatusCode == 0 {
+	if !w.wroteHeader {
 		w.StatusCode = http.StatusOK
+		w.wroteHeader = true
 	}
 	return w.ResponseWriter.Write(b)
 }

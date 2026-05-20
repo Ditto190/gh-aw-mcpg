@@ -29,6 +29,17 @@ func TestBaseResponseWriter_WriteHeader(t *testing.T) {
 	assert.Equal(t, http.StatusCreated, rec.Code)
 }
 
+func TestBaseResponseWriter_WriteHeader_FirstCallWins(t *testing.T) {
+	rec := httptest.NewRecorder()
+	brw := &BaseResponseWriter{ResponseWriter: rec}
+
+	brw.WriteHeader(http.StatusCreated)
+	brw.WriteHeader(http.StatusInternalServerError)
+
+	// Only the first WriteHeader should be captured.
+	assert.Equal(t, http.StatusCreated, brw.StatusCode)
+}
+
 func TestBaseResponseWriter_Write_SetsImplicit200(t *testing.T) {
 	rec := httptest.NewRecorder()
 	brw := &BaseResponseWriter{ResponseWriter: rec}
@@ -51,6 +62,20 @@ func TestBaseResponseWriter_Write_PreservesExplicitStatus(t *testing.T) {
 	// StatusCode was already set via WriteHeader; Write must not overwrite it.
 	assert.Equal(t, http.StatusAccepted, brw.StatusCode)
 	assert.Equal(t, http.StatusAccepted, rec.Code)
+}
+
+func TestBaseResponseWriter_Write_LaterWriteHeaderDoesNotOverrideImplicit200(t *testing.T) {
+	rec := httptest.NewRecorder()
+	brw := &BaseResponseWriter{ResponseWriter: rec}
+
+	// Trigger implicit 200 via Write.
+	_, err := brw.Write([]byte("body"))
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, brw.StatusCode)
+
+	// A later WriteHeader must not change the captured status.
+	brw.WriteHeader(http.StatusInternalServerError)
+	assert.Equal(t, http.StatusOK, brw.StatusCode)
 }
 
 func TestBaseResponseWriter_Unwrap_ReturnsUnderlying(t *testing.T) {
