@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/github/gh-aw-mcpg/internal/config"
 	"github.com/github/gh-aw-mcpg/internal/launcher"
@@ -159,6 +160,57 @@ func TestHandleClose_SuccessfulShutdown(t *testing.T) {
 
 	// Verify shutdown state
 	assert.True(unifiedServer.IsShutdown())
+}
+
+// TestHandleClose_InvokesExitFuncInProductionMode tests that /close invokes
+// the configured exit func after draining HTTP requests when not in test mode.
+func TestHandleClose_InvokesExitFuncInProductionMode(t *testing.T) {
+	assert := assert.New(t)
+	require := require.New(t)
+
+	ctx := context.Background()
+	mockLauncher := launcher.New(ctx, &config.Config{})
+
+	unifiedServer := &UnifiedServer{
+		launcher:  mockLauncher,
+		sysServer: NewSysServer([]string{}),
+		ctx:       ctx,
+		testMode:  false, // Ensure ShouldExit() is true and goroutine path runs
+	}
+
+	httpShutdownCalled := make(chan struct{}, 1)
+	exitCalled := make(chan struct{}, 1)
+
+	unifiedServer.SetHTTPShutdown(func(context.Context) error {
+		httpShutdownCalled <- struct{}{}
+		return nil
+	})
+	unifiedServer.SetExitFunc(func() {
+		exitCalled <- struct{}{}
+	})
+
+	handler := handleClose(unifiedServer)
+
+	req := httptest.NewRequest(http.MethodPost, "/close", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	// Assert response returns immediately and correctly
+	assert.Equal(http.StatusOK, rec.Code)
+
+	// Assert goroutine performed HTTP drain first
+	select {
+	case <-httpShutdownCalled:
+	case <-time.After(2 * time.Second):
+		require.Fail("expected HTTP shutdown function to be called")
+	}
+
+	// Assert exit func branch is invoked (instead of os.Exit fallback)
+	select {
+	case <-exitCalled:
+	case <-time.After(2 * time.Second):
+		require.Fail("expected exit function to be called")
+	}
 }
 
 // TestHandleClose_Idempotency tests that multiple close requests are idempotent
