@@ -751,4 +751,92 @@ mod tests {
         let result = label_response_paths("unknown_tool", &json!({}), &json!({}), &ctx());
         assert!(result.is_none(), "unknown tool should produce no path labels");
     }
+
+    // === list_commits tests ===
+    // The sha field drives is_default_branch → merged-level integrity, which is a
+    // security-relevant decision. A regression here (e.g. treating all commits as
+    // default-branch) would over-elevate integrity labels. Both tests are self-contained
+    // and require no backend mocking.
+
+    #[test]
+    fn list_commits_default_branch_gets_merged_integrity() {
+        let tool_args = json!({"owner": "octocat", "repo": "hello-world", "sha": "main"});
+        let commit = json!({
+            "sha": "abc1234def5678",
+            "commit": {"message": "fix: a bug"},
+            "author": {"login": "octocat"},
+            "author_association": "OWNER"
+        });
+        let response = json!({
+            "content": [{
+                "type": "text",
+                "text": serde_json::to_string(&json!([commit])).expect("response should serialize")
+            }]
+        });
+
+        let result = label_response_paths("list_commits", &tool_args, &response, &ctx())
+            .expect("list_commits should produce path labels");
+
+        assert_eq!(result.labeled_paths.len(), 1);
+        assert_eq!(result.labeled_paths[0].path, "/0");
+        assert!(
+            result.items_path.is_none(),
+            "list_commits root array should have items_path = None, got {:?}",
+            result.items_path
+        );
+
+        // Default branch (main) → default_labels integrity must include a merged: label
+        let default_integrity = &result
+            .default_labels
+            .as_ref()
+            .expect("default_labels should be set")
+            .integrity;
+        let merged_label = format!("{}octocat/hello-world", label_constants::MERGED_PREFIX);
+        assert!(
+            default_integrity.contains(&merged_label),
+            "default-branch default_labels should have merged-level integrity; got {:?}",
+            default_integrity
+        );
+    }
+
+    #[test]
+    fn list_commits_feature_branch_public_repo_has_no_merged_integrity() {
+        let tool_args =
+            json!({"owner": "octocat", "repo": "hello-world", "sha": "feature/my-branch"});
+        let commit = json!({
+            "sha": "deadbeef12345678",
+            "commit": {"message": "wip: in progress"},
+            "author_association": "CONTRIBUTOR"
+        });
+        let response = json!({
+            "content": [{
+                "type": "text",
+                "text": serde_json::to_string(&json!([commit])).expect("response should serialize")
+            }]
+        });
+
+        let result = label_response_paths("list_commits", &tool_args, &response, &ctx())
+            .expect("list_commits should produce path labels");
+
+        assert_eq!(result.labeled_paths.len(), 1);
+        assert!(
+            result.items_path.is_none(),
+            "list_commits root array should have items_path = None"
+        );
+
+        // Non-default branch of public repo (is_repo_private returns None → false in
+        // test cfg) → default_labels integrity must NOT contain any merged: label.
+        let default_integrity = &result
+            .default_labels
+            .as_ref()
+            .expect("default_labels should be set")
+            .integrity;
+        assert!(
+            !default_integrity
+                .iter()
+                .any(|l| l.starts_with(label_constants::MERGED_PREFIX)),
+            "feature-branch commit on public repo should NOT have merged-level integrity; got {:?}",
+            default_integrity
+        );
+    }
 }
