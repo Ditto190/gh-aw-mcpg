@@ -117,13 +117,8 @@ type UnifiedServer struct {
 	// Health monitoring
 	healthMonitor *launcher.HealthMonitor
 
-	// tracer is cached at construction to avoid calling otel.Tracer on every request.
-	tracer oteltrace.Tracer
-}
-
-// getTracer returns the cached tracer if set, otherwise falls back to the global tracer.
-func (us *UnifiedServer) getTracer() oteltrace.Tracer {
-	return tracing.GetCachedOrGlobal(us.tracer)
+	// Cache tracer at construction to avoid calling otel.Tracer on every request.
+	tracing.CachedTracer
 }
 
 // NewUnified creates a new unified MCP server
@@ -165,7 +160,7 @@ func NewUnified(ctx context.Context, cfg *config.Config) (*UnifiedServer, error)
 		cfg:            cfg, // Store config for guard loading
 
 		// Cache tracer at construction to avoid calling otel.Tracer on every request.
-		tracer: tracing.Tracer(),
+		CachedTracer: tracing.CachedTracer{Tracer: tracing.Tracer()},
 	}
 
 	// Create MCP server with logger
@@ -385,7 +380,7 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 
 	// Start an OTEL span for the full tool call lifecycle (spans all phases 0–6)
 	// Attribute names follow MCP Gateway Specification §4.1.3.6
-	ctx, toolSpan := us.getTracer().Start(ctx, "mcp.tool_call",
+	ctx, toolSpan := us.GetTracer().Start(ctx, "mcp.tool_call",
 		oteltrace.WithAttributes(
 			attribute.String("mcp.server", serverID),
 			attribute.String("mcp.method", "tools/call"),
@@ -489,7 +484,7 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 	}
 
 	// **Phase 3: Execute the backend call**
-	execCtx, execSpan := us.getTracer().Start(ctx, "gateway.backend.execute",
+	execCtx, execSpan := us.GetTracer().Start(ctx, "gateway.backend.execute",
 		oteltrace.WithAttributes(
 			attribute.String("tool.name", toolName),
 			attribute.String("server.id", serverID),
