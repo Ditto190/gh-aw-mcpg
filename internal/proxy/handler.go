@@ -35,12 +35,7 @@ func writeDIFCForbidden(w http.ResponseWriter, message string) {
 // proxyHandler implements http.Handler and runs the DIFC pipeline on proxied requests.
 type proxyHandler struct {
 	server *Server
-	tracer oteltrace.Tracer
-}
-
-// getTracer returns the cached tracer if set, otherwise falls back to the global tracer.
-func (h *proxyHandler) getTracer() oteltrace.Tracer {
-	return tracing.GetCachedOrGlobal(h.tracer)
+	tracing.CachedTracer
 }
 
 func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -146,7 +141,7 @@ func (h *proxyHandler) handleWithDIFC(w http.ResponseWriter, r *http.Request, pa
 	backend := &restBackendCaller{server: s, clientAuth: r.Header.Get("Authorization")}
 
 	// Start a DIFC pipeline span covering all phases for this request
-	ctx, difcSpan := h.getTracer().Start(ctx, "proxy.difc_pipeline",
+	ctx, difcSpan := h.GetTracer().Start(ctx, "proxy.difc_pipeline",
 		oteltrace.WithAttributes(
 			attribute.String("tool.name", toolName),
 			semconv.URLPathKey.String(r.URL.Path),
@@ -202,7 +197,7 @@ func (h *proxyHandler) handleWithDIFC(w http.ResponseWriter, r *http.Request, pa
 	var resp *http.Response
 	var respBody []byte
 
-	fwdCtx, fwdSpan := h.getTracer().Start(ctx, "proxy.backend.forward",
+	fwdCtx, fwdSpan := h.GetTracer().Start(ctx, "proxy.backend.forward",
 		oteltrace.WithAttributes(
 			semconv.URLPathKey.String(path),
 			attribute.String("tool.name", toolName),
