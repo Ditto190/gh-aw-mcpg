@@ -119,10 +119,13 @@ func TestFetchAndFixSchema_HTTPError(t *testing.T) {
 
 // TestFetchAndFixSchema_NetworkError tests handling of network failures
 func TestFetchAndFixSchema_NetworkError(t *testing.T) {
-	// Use an invalid URL that will cause a network error
-	invalidURL := "http://invalid-host-that-does-not-exist-12345.com/schema.json"
+	// Start a server and immediately close it so connections are refused,
+	// guaranteeing a network error without relying on external DNS resolution.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	closedURL := server.URL + "/schema.json"
+	server.Close()
 
-	result, err := fetchAndFixSchema(invalidURL)
+	result, err := fetchAndFixSchema(closedURL)
 
 	assert.Error(t, err)
 	assert.Nil(t, result)
