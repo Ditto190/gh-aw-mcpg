@@ -226,4 +226,4 @@ func TestRandomHexFromReader(t *testing.T) {
 }
 
 // Ensure limitedReader satisfies io.Reader (compile-time check).
-var _ io.Reader = limitedReader{}
+var _ io.Reader = (*limitedReader)(nil)
