@@ -76,3 +76,16 @@ func TestResolveEndpoint_NilConfig(t *testing.T) {
 	got := resolveEndpoint(nil)
 	assert.Equal(t, "", got)
 }
+
+func TestResolveEndpoint_ParseErrorFallback(t *testing.T) {
+	// A control character makes url.Parse return an error, exercising the fallback.
+	cfg := &config.TracingConfig{Endpoint: "http://host\x7f:4318/path"}
+	got := resolveEndpoint(cfg)
+	assert.Equal(t, "http://host\x7f:4318/path/v1/traces", got)
+}
+
+func TestResolveEndpoint_ParseErrorFallbackAlreadyHasPath(t *testing.T) {
+	cfg := &config.TracingConfig{Endpoint: "http://host\x7f:4318/v1/traces/"}
+	got := resolveEndpoint(cfg)
+	assert.Equal(t, "http://host\x7f:4318/v1/traces", got)
+}

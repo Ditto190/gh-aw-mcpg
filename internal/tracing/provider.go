@@ -82,11 +82,14 @@ func resolveEndpoint(cfg *config.TracingConfig) string {
 
 	u, err := url.Parse(endpoint)
 	if err != nil {
-		// If unparseable, fall back to string append for best-effort
-		if !strings.HasSuffix(endpoint, "/v1/traces") {
-			endpoint = strings.TrimRight(endpoint, "/") + "/v1/traces"
+		// If unparseable, fall back to string append for best-effort.
+		// Normalize trailing slashes before the suffix check to avoid
+		// duplicating /v1/traces when input ends with "/v1/traces/".
+		normalized := strings.TrimRight(endpoint, "/")
+		if !strings.HasSuffix(normalized, "/v1/traces") {
+			normalized += "/v1/traces"
 		}
-		return endpoint
+		return normalized
 	}
 
 	// Normalize path and check whether /v1/traces is already the suffix
