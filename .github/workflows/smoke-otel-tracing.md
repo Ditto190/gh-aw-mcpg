@@ -36,6 +36,10 @@ steps:
     with:
       go-version-file: go.mod
       cache: true
+sandbox:
+  mcp:
+    container: "ghcr.io/github/gh-aw-mcpg"
+    version: "v0.3.11"
 safe-outputs:
   threat-detection:
     enabled: false
@@ -59,8 +63,9 @@ This workflow validates that the MCP Gateway correctly handles OpenTelemetry tra
 all key scenarios: provider initialization, span export, parent trace context propagation,
 HTTP backend authentication, and graceful shutdown with span flush.
 
-All tests run locally using Go unit tests and the compiled `awmg` binary — no external
-OTLP endpoint or Docker containers are required.
+Core validation still runs locally using Go unit tests and the compiled `awmg` binary.
+This workflow also exports traces to Sentry via `observability.otlp` when
+`GH_AW_OTEL_SENTRY_ENDPOINT` and `GH_AW_OTEL_SENTRY_AUTHORIZATION` are configured.
 
 ## Context
 
