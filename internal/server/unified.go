@@ -110,6 +110,7 @@ type UnifiedServer struct {
 	shutdownMu     sync.RWMutex
 	shutdownOnce   sync.Once
 	httpShutdownFn func(context.Context) error // Called during /close to drain in-flight HTTP requests
+	exitFunc       func()                      // Called during /close instead of os.Exit(0); allows deferred cleanup (e.g. tracing flush)
 
 	// Testing support - when true, skips os.Exit() call
 	testMode bool
@@ -808,6 +809,19 @@ func (us *UnifiedServer) SetHTTPShutdown(fn func(context.Context) error) {
 // GetHTTPShutdown returns the HTTP shutdown function, or nil if not set
 func (us *UnifiedServer) GetHTTPShutdown() func(context.Context) error {
 	return us.httpShutdownFn
+}
+
+// SetExitFunc sets the function to call when the /close endpoint wants to
+// terminate the process. This replaces the default os.Exit(0) so that deferred
+// cleanup (e.g. TracerProvider.Shutdown for flushing spans) can run via the
+// normal return path.
+func (us *UnifiedServer) SetExitFunc(fn func()) {
+	us.exitFunc = fn
+}
+
+// GetExitFunc returns the exit function, or nil if not set.
+func (us *UnifiedServer) GetExitFunc() func() {
+	return us.exitFunc
 }
 
 // IsDIFCEnabled returns whether DIFC is enabled

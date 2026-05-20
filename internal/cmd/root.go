@@ -398,6 +398,11 @@ func run(cmd *cobra.Command, args []string) error {
 	// in-flight requests before exiting (spec 5.1.3)
 	unifiedServer.SetHTTPShutdown(httpServer.Shutdown)
 
+	// Register exit function so /close handler cancels context instead of calling
+	// os.Exit(0). This allows deferred cleanup (TracerProvider.Shutdown) to flush
+	// buffered spans before the process terminates.
+	unifiedServer.SetExitFunc(cancel)
+
 	// Build net.Listener — optionally wrapping with TLS (ASI-07 Phase 1).
 	// Plain HTTP is still used when no TLS certificate is configured (backward compatible).
 	// Validate that TLS flags are consistent: cert+key must both be provided together,

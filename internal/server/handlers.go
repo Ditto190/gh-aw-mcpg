@@ -85,8 +85,15 @@ func handleClose(unifiedServer *UnifiedServer) http.Handler {
 					// Fallback: brief delay to ensure response is sent when no shutdown fn is set
 					time.Sleep(100 * time.Millisecond)
 				}
-				logger.LogInfo("shutdown", "Gateway process exiting with status 0")
-				os.Exit(0)
+				// Prefer exitFunc (context cancellation) so deferred cleanup
+				// (e.g. TracerProvider.Shutdown) runs before the process exits.
+				if exitFn := unifiedServer.GetExitFunc(); exitFn != nil {
+					logger.LogInfo("shutdown", "Gateway process exiting via context cancellation")
+					exitFn()
+				} else {
+					logger.LogInfo("shutdown", "Gateway process exiting with status 0")
+					os.Exit(0)
+				}
 			}()
 		}
 	})
