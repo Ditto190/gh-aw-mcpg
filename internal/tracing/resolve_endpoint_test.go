@@ -14,18 +14,23 @@ func TestResolveEndpoint_AppendsV1Traces(t *testing.T) {
 		want     string
 	}{
 		{
-			name:     "base URL without path",
+			name:     "URL without /v1/traces",
 			endpoint: "https://o123.ingest.us.sentry.io/api/456/envelope",
 			want:     "https://o123.ingest.us.sentry.io/api/456/envelope/v1/traces",
 		},
 		{
-			name:     "base URL with trailing slash",
+			name:     "URL with trailing slash",
 			endpoint: "https://o123.ingest.us.sentry.io/api/456/envelope/",
 			want:     "https://o123.ingest.us.sentry.io/api/456/envelope/v1/traces",
 		},
 		{
 			name:     "already has /v1/traces",
 			endpoint: "https://o123.ingest.us.sentry.io/api/456/envelope/v1/traces",
+			want:     "https://o123.ingest.us.sentry.io/api/456/envelope/v1/traces",
+		},
+		{
+			name:     "already has /v1/traces with trailing slash",
+			endpoint: "https://o123.ingest.us.sentry.io/api/456/envelope/v1/traces/",
 			want:     "https://o123.ingest.us.sentry.io/api/456/envelope/v1/traces",
 		},
 		{
@@ -37,6 +42,16 @@ func TestResolveEndpoint_AppendsV1Traces(t *testing.T) {
 			name:     "localhost with trailing slash",
 			endpoint: "http://localhost:4318/",
 			want:     "http://localhost:4318/v1/traces",
+		},
+		{
+			name:     "URL with query parameters preserved",
+			endpoint: "https://collector.example.com/ingest?token=abc",
+			want:     "https://collector.example.com/ingest/v1/traces?token=abc",
+		},
+		{
+			name:     "URL with fragment preserved",
+			endpoint: "https://collector.example.com/ingest#section",
+			want:     "https://collector.example.com/ingest/v1/traces#section",
 		},
 		{
 			name:     "empty endpoint",

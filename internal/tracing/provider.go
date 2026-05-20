@@ -79,11 +79,24 @@ func resolveEndpoint(cfg *config.TracingConfig) string {
 		return ""
 	}
 	endpoint := cfg.Endpoint
-	// Append /v1/traces if not already present (OTEL spec compliance)
-	if !strings.HasSuffix(endpoint, "/v1/traces") {
-		endpoint = strings.TrimRight(endpoint, "/") + "/v1/traces"
+
+	u, err := url.Parse(endpoint)
+	if err != nil {
+		// If unparseable, fall back to string append for best-effort
+		if !strings.HasSuffix(endpoint, "/v1/traces") {
+			endpoint = strings.TrimRight(endpoint, "/") + "/v1/traces"
+		}
+		return endpoint
 	}
-	return endpoint
+
+	// Normalize path and check whether /v1/traces is already the suffix
+	normalizedPath := strings.TrimRight(u.Path, "/")
+	if !strings.HasSuffix(normalizedPath, "/v1/traces") {
+		u.Path = normalizedPath + "/v1/traces"
+	} else {
+		u.Path = normalizedPath
+	}
+	return u.String()
 }
 
 // resolveServiceName returns the service name from config.
