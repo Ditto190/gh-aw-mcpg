@@ -18,7 +18,7 @@ When running locally (`run.sh`), these variables are optional (warnings shown if
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `MCP_GATEWAY_PORT` | Gateway listening port | `8000` |
+| `MCP_GATEWAY_PORT` | Port used by `run.sh` to build the `--listen` address; also read by `awmg --validate-env` for port-mapping checks | `8000` |
 | `MCP_GATEWAY_DOMAIN` | Gateway domain | `localhost` |
 | `MCP_GATEWAY_API_KEY` | Informational only — not read directly by the binary; must be referenced in your config via `"${MCP_GATEWAY_API_KEY}"` to enable authentication | (disabled) |
 | `MCP_GATEWAY_LOG_DIR` | Log file directory (sets default for `--log-dir` flag) | `/tmp/gh-aw/mcp-logs` |
