@@ -1,12 +1,34 @@
 package strutil
 
 import (
+	"bytes"
 	"encoding/hex"
+	"errors"
+	"io"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// errReader is an io.Reader that always returns an error.
+type errReader struct{ err error }
+
+func (e errReader) Read([]byte) (int, error) { return 0, e.err }
+
+// limitedReader returns exactly n bytes from buf then returns an error.
+type limitedReader struct {
+	buf []byte
+	err error
+}
+
+func (l limitedReader) Read(p []byte) (int, error) {
+	n := copy(p, l.buf)
+	if n < len(p) {
+		return n, l.err
+	}
+	return n, nil
+}
 
 func TestRandomHex(t *testing.T) {
 	tests := []struct {
@@ -129,3 +151,50 @@ func TestRandomHexWithFallback_NegativeFallsBack(t *testing.T) {
 	assert.NoError(t, err, "fallback should produce valid hex")
 	assert.Len(t, result, 32, "fallback should produce 32 hex chars (16 bytes)")
 }
+
+// TestRandomHexFromReader covers the internal randomHexFromReader helper which is the
+// testable core of RandomHex. Tests target all branches including the reader error path.
+func TestRandomHexFromReader(t *testing.T) {
+	t.Run("negative n returns error without reading", func(t *testing.T) {
+		result, err := randomHexFromReader(-1, errReader{err: errors.New("should not be called")})
+		require.Error(t, err)
+		assert.Empty(t, result)
+		assert.ErrorContains(t, err, "-1")
+	})
+
+	t.Run("reader error is propagated", func(t *testing.T) {
+		readErr := errors.New("simulated read failure")
+		result, err := randomHexFromReader(16, errReader{err: readErr})
+		require.Error(t, err)
+		assert.Empty(t, result)
+		assert.ErrorIs(t, err, readErr, "original error should be wrapped")
+		assert.ErrorContains(t, err, "16")
+	})
+
+	t.Run("zero bytes with successful reader returns empty string", func(t *testing.T) {
+		// For n=0, no read is attempted; use a reader that would signal EOF to confirm
+		// the zero-length path short-circuits before any read.
+		result, err := randomHexFromReader(0, bytes.NewReader([]byte{0xab, 0xcd}))
+		require.NoError(t, err)
+		assert.Empty(t, result)
+	})
+
+	t.Run("deterministic reader produces expected hex", func(t *testing.T) {
+		input := []byte{0xde, 0xad, 0xbe, 0xef}
+		result, err := randomHexFromReader(4, bytes.NewReader(input))
+		require.NoError(t, err)
+		assert.Equal(t, "deadbeef", result)
+	})
+
+	t.Run("correct output length for n bytes", func(t *testing.T) {
+		for _, n := range []int{1, 8, 16, 32} {
+			buf := make([]byte, n)
+			result, err := randomHexFromReader(n, bytes.NewReader(buf))
+			require.NoError(t, err)
+			assert.Len(t, result, 2*n, "expected %d hex chars for %d bytes", 2*n, n)
+		}
+	})
+}
+
+// Ensure limitedReader satisfies io.Reader (compile-time check).
+var _ io.Reader = limitedReader{}
