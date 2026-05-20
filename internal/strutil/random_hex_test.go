@@ -16,18 +16,47 @@ type errReader struct{ err error }
 
 func (e errReader) Read([]byte) (int, error) { return 0, e.err }
 
-// limitedReader returns exactly n bytes from buf then returns an error.
+// limitedReader returns bytes from buf across repeated reads, then returns err.
 type limitedReader struct {
 	buf []byte
 	err error
+	pos int
 }
 
-func (l limitedReader) Read(p []byte) (int, error) {
-	n := copy(p, l.buf)
+func (l *limitedReader) Read(p []byte) (int, error) {
+	if l.pos >= len(l.buf) {
+		return 0, l.err
+	}
+
+	n := copy(p, l.buf[l.pos:])
+	l.pos += n
 	if n < len(p) {
 		return n, l.err
 	}
 	return n, nil
+}
+
+func TestLimitedReader(t *testing.T) {
+	r := &limitedReader{
+		buf: []byte("abc"),
+		err: io.ErrUnexpectedEOF,
+	}
+
+	p := make([]byte, 2)
+
+	n, err := r.Read(p)
+	require.NoError(t, err)
+	assert.Equal(t, 2, n)
+	assert.Equal(t, []byte("ab"), p[:n])
+
+	n, err = r.Read(p)
+	require.ErrorIs(t, err, io.ErrUnexpectedEOF)
+	assert.Equal(t, 1, n)
+	assert.Equal(t, []byte("c"), p[:n])
+
+	n, err = r.Read(p)
+	require.ErrorIs(t, err, io.ErrUnexpectedEOF)
+	assert.Equal(t, 0, n)
 }
 
 func TestRandomHex(t *testing.T) {
