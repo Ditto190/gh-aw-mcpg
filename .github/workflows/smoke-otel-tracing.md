@@ -9,6 +9,11 @@ permissions:
   issues: read
   actions: read
 
+observability:
+  otlp:
+    endpoint: ${{ secrets.GH_AW_OTEL_SENTRY_ENDPOINT }}
+    headers: ${{ secrets.GH_AW_OTEL_SENTRY_AUTHORIZATION }}
+
 engine:
   id: copilot
 strict: false
