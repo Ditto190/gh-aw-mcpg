@@ -30,16 +30,16 @@ tools:
 runtimes:
   go:
     version: "1.25"
+sandbox:
+  mcp:
+    container: "ghcr.io/github/gh-aw-mcpg"
+    version: "v0.3.11"
 steps:
   - name: Set up Go
     uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6
     with:
       go-version-file: go.mod
       cache: true
-sandbox:
-  mcp:
-    container: "ghcr.io/github/gh-aw-mcpg"
-    version: "v0.3.11"
 safe-outputs:
   threat-detection:
     enabled: false
