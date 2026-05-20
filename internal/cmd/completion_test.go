@@ -258,21 +258,36 @@ func TestNewCompletionCmd_AllShellsProduceDifferentOutput(t *testing.T) {
 	}
 }
 
-// TestNewCompletionCmd_WorksWithTraverseHooksEnabled verifies that completion
-// succeeds when cobra.EnableTraverseRunHooks is active and a parent command has
-// a harmless PersistentPreRunE (matching the real root's preRun behaviour).
+// TestNewCompletionCmd_WorksWithTraverseHooksEnabled verifies that traverse hook
+// chaining (cobra.EnableTraverseRunHooks) works correctly: when the completion
+// subcommand has its own PersistentPreRunE, both the parent and child hooks must
+// run. Without EnableTraverseRunHooks the child hook would shadow the parent's,
+// so asserting both ran confirms traverse mode is active.
 func TestNewCompletionCmd_WorksWithTraverseHooksEnabled(t *testing.T) {
-	hookRan := false
+	// Explicitly enable traverse hooks and restore the previous value on cleanup.
+	prev := cobra.EnableTraverseRunHooks
+	cobra.EnableTraverseRunHooks = true
+	t.Cleanup(func() { cobra.EnableTraverseRunHooks = prev })
+
+	parentHookRan := false
 	root := &cobra.Command{
 		Use: "awmg",
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			// Simulate the real root's preRun: sets an env var, never errors.
-			hookRan = true
+			parentHookRan = true
 			return nil
 		},
 	}
 	root.AddGroup(&cobra.Group{ID: "utils", Title: "Utilities:"})
+
+	childHookRan := false
 	completion := newCompletionCmd()
+	// Add a child PersistentPreRunE so that, without traverse hooks, it would
+	// shadow the parent hook and parentHookRan would stay false.
+	completion.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		childHookRan = true
+		return nil
+	}
 	root.AddCommand(completion)
 
 	output := captureStdoutDuring(t, func() {
@@ -282,5 +297,6 @@ func TestNewCompletionCmd_WorksWithTraverseHooksEnabled(t *testing.T) {
 	})
 
 	assert.NotEmpty(t, output, "completion output must not be empty")
-	assert.True(t, hookRan, "parent PersistentPreRunE should run via traverse hooks")
+	assert.True(t, parentHookRan, "parent PersistentPreRunE should run via traverse hooks")
+	assert.True(t, childHookRan, "child PersistentPreRunE should also run")
 }
