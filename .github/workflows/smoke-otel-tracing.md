@@ -23,6 +23,7 @@ network:
   allowed:
     - defaults
     - go
+    - "*.ingest.us.sentry.io"
 tools:
   cache-memory: true
   bash: ["*"]
