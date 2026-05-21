@@ -149,4 +149,71 @@ func TestGenerateSelfSignedTLS(t *testing.T) {
 		validity := leaf.NotAfter.Sub(leaf.NotBefore)
 		assert.InDelta(t, 25*3600, validity.Seconds(), 3600, "cert validity should be ~25h (24h + 1h backdate)")
 	})
+
+	t.Run("returns error when directory cannot be created", func(t *testing.T) {
+		parent := t.TempDir()
+		dir := filepath.Join(parent, "not-a-directory")
+		require.NoError(t, os.WriteFile(dir, []byte("block directory creation"), 0644))
+
+		tlsCfg, err := GenerateSelfSignedTLS(dir)
+		require.Error(t, err, "should fail when the directory cannot be created")
+		assert.Nil(t, tlsCfg)
+		assert.ErrorContains(t, err, "failed to create TLS directory")
+	})
+
+	t.Run("server cert verifies against generated CA", func(t *testing.T) {
+		dir := t.TempDir()
+		tlsCfg, err := GenerateSelfSignedTLS(dir)
+		require.NoError(t, err)
+
+		caCertPEM, err := os.ReadFile(tlsCfg.CACertPath)
+		require.NoError(t, err)
+		caPool := x509.NewCertPool()
+		require.True(t, caPool.AppendCertsFromPEM(caCertPEM), "CA cert should be parseable PEM")
+
+		serverCert, err := x509.ParseCertificate(tlsCfg.Config.Certificates[0].Certificate[0])
+		require.NoError(t, err)
+
+		// Verify server cert chains to our CA
+		opts := x509.VerifyOptions{
+			DNSName: "localhost",
+			Roots:   caPool,
+		}
+		_, err = serverCert.Verify(opts)
+		assert.NoError(t, err, "server cert should verify against the generated CA")
+	})
+
+	t.Run("server cert has expected issuer fields", func(t *testing.T) {
+		dir := t.TempDir()
+		tlsCfg, err := GenerateSelfSignedTLS(dir)
+		require.NoError(t, err)
+
+		serverCert, err := x509.ParseCertificate(tlsCfg.Config.Certificates[0].Certificate[0])
+		require.NoError(t, err)
+
+		assert.Equal(t, "MCPG Proxy CA", serverCert.Issuer.CommonName)
+		require.NotEmpty(t, serverCert.Issuer.Organization)
+		assert.Equal(t, "MCPG Proxy", serverCert.Issuer.Organization[0])
+	})
+}
+
+// TestWritePEM_InvalidPath verifies that writePEM returns an error when the
+// parent directory does not exist.
+func TestWritePEM_InvalidPath(t *testing.T) {
+	// Use a path whose parent directory does not exist.
+	path := filepath.Join(t.TempDir(), "nonexistent-subdir", "file.pem")
+	err := writePEM(path, "CERTIFICATE", []byte("dummy"), 0644)
+	require.Error(t, err, "writePEM should fail when the parent directory does not exist")
+}
+
+// TestRandomSerial_ReturnsPositive verifies that randomSerial always generates
+// a positive integer (i.e. the serial number is never zero).
+func TestRandomSerial_ReturnsPositive(t *testing.T) {
+	for i := 0; i < 20; i++ {
+		serial, err := randomSerial()
+		require.NoError(t, err, "randomSerial should not fail")
+		assert.Positive(t, serial.Sign(), "serial should always be positive")
+		// 128-bit serial: must be less than 2^128
+		assert.LessOrEqual(t, serial.BitLen(), 128, "serial should fit in 128 bits")
+	}
 }
