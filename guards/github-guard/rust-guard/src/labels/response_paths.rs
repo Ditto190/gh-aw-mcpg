@@ -505,7 +505,9 @@ pub fn label_response_paths(
             if let Some(items) = items {
                 let limited_items = limit_items_with_log(items, "list_notifications");
                 let mut labeled_paths = Vec::with_capacity(limited_items.len());
+                // Hoist loop-invariant labels: Arc::clone is free.
                 let notif_secrecy: crate::SharedLabels = private_user_label().into();
+                let empty_integrity: crate::SharedLabels = vec![].into();
 
                 for (i, item) in limited_items.iter().enumerate() {
                     let id = get_str_or(item, "id", "unknown");
@@ -515,7 +517,7 @@ pub fn label_response_paths(
                         labels: crate::ResourceLabels {
                             description: format!("notification:{}", id),
                             secrecy: notif_secrecy.clone(),
-                            integrity: vec![].into(),
+                            integrity: empty_integrity.clone(),
                         },
                     });
                 }
@@ -525,7 +527,7 @@ pub fn label_response_paths(
                     default_labels: Some(crate::ResourceLabels {
                         description: "notification".to_string(),
                         secrecy: notif_secrecy,
-                        integrity: vec![].into(),
+                        integrity: empty_integrity,
                     }),
                     items_path: None, // Root array
                 });
@@ -539,24 +541,25 @@ pub fn label_response_paths(
             if let Some(items) = items {
                 let limited_items = limit_items_with_log(items, "list_gists");
                 let mut labeled_paths = Vec::with_capacity(limited_items.len());
+                // Hoist loop-invariant labels: Arc::clone is free.
                 let gist_integrity: crate::SharedLabels =
                     reader_integrity(scope_names::USER, ctx).into();
+                let public_gist_secrecy: crate::SharedLabels = vec![].into();
+                let private_gist_secrecy: crate::SharedLabels = private_user_label().into();
 
                 for (i, item) in limited_items.iter().enumerate() {
                     let is_public = get_bool_or(item, "public", true);
                     let id = get_str_or(item, "id", "unknown");
 
-                    let secrecy = if is_public {
-                        vec![]
-                    } else {
-                        private_user_label()
-                    };
-
                     labeled_paths.push(PathLabelEntry {
                         path: format!("/{}", i),
                         labels: crate::ResourceLabels {
                             description: format!("gist:{}", id),
-                            secrecy: secrecy.into(),
+                            secrecy: if is_public {
+                                public_gist_secrecy.clone()
+                            } else {
+                                private_gist_secrecy.clone()
+                            },
                             integrity: gist_integrity.clone(),
                         },
                     });
@@ -566,7 +569,7 @@ pub fn label_response_paths(
                     labeled_paths,
                     default_labels: Some(crate::ResourceLabels {
                         description: "gist".to_string(),
-                        secrecy: vec![].into(),
+                        secrecy: public_gist_secrecy,
                         integrity: gist_integrity,
                     }),
                     items_path: None, // Root array
