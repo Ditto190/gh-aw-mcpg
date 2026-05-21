@@ -1,6 +1,8 @@
 package httputil
 
 import (
+	"context"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -20,6 +22,20 @@ func ApplyGitHubAPIHeaders(req *http.Request, authHeader string) {
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("User-Agent", GitHubUserAgent)
+}
+
+// DoGitHubGET sends an authenticated GET request to the GitHub API and returns
+// the response. apiBaseURL is the API root (e.g. "https://api.github.com"),
+// path is the request path (e.g. "/repos/owner/repo"), and authHeader is the
+// full Authorization header value (e.g. "token xyz"). The caller is responsible
+// for closing the response body.
+func DoGitHubGET(ctx context.Context, apiBaseURL, path, authHeader string) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiBaseURL+path, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	ApplyGitHubAPIHeaders(req, authHeader)
+	return http.DefaultClient.Do(req)
 }
 
 // ParseRateLimitResetHeader parses the Unix-timestamp value of the

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
 	"sync"
 	"time"
 
@@ -293,18 +292,10 @@ func (g *guardBackendCaller) callCollaboratorPermission(ctx context.Context, arg
 
 	apiURL := envutil.DeriveGitHubAPIURL(envutil.DefaultGitHubAPIBaseURL)
 	path := fmt.Sprintf("/repos/%s/%s/collaborators/%s/permission", owner, repo, username)
-	url := apiURL + path
 
 	logUnified.Printf("get_collaborator_permission: GET %s (for %s/%s user %s)", path, owner, repo, username)
 
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
-	if err != nil {
-		logUnified.Printf("get_collaborator_permission: failed to create request for %s/%s user %s: %v", owner, repo, username, err)
-		return nil, fmt.Errorf("get_collaborator_permission: failed to create request: %w", err)
-	}
-	httputil.ApplyGitHubAPIHeaders(req, "token "+token)
-
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httputil.DoGitHubGET(ctx, apiURL, path, "token "+token)
 	if err != nil {
 		logUnified.Printf("get_collaborator_permission: REST call failed for %s/%s user %s: %v", owner, repo, username, err)
 		return nil, fmt.Errorf("get_collaborator_permission: REST call failed: %w", err)
