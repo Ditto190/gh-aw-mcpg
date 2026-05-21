@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"sync"
 	"time"
@@ -292,38 +291,34 @@ func (g *guardBackendCaller) callCollaboratorPermission(ctx context.Context, arg
 	}
 
 	apiURL := envutil.DeriveGitHubAPIURL(envutil.DefaultGitHubAPIBaseURL)
-	path := fmt.Sprintf("/repos/%s/%s/collaborators/%s/permission", owner, repo, username)
-	url := apiURL + path
+	result, err := mcp.FetchCollaboratorPermission(
+		ctx,
+		owner,
+		repo,
+		username,
+		func(ctx context.Context, apiPath string) (*http.Response, error) {
+			logUnified.Printf("get_collaborator_permission: GET %s (for %s/%s user %s)", apiPath, owner, repo, username)
+			req, err := http.NewRequestWithContext(ctx, "GET", apiURL+apiPath, nil)
+			if err != nil {
+				logUnified.Printf("get_collaborator_permission: failed to create request for %s/%s user %s: %v", owner, repo, username, err)
+				return nil, fmt.Errorf("failed to create request: %w", err)
+			}
+			httputil.ApplyGitHubAPIHeaders(req, "token "+token)
 
-	logUnified.Printf("get_collaborator_permission: GET %s (for %s/%s user %s)", path, owner, repo, username)
-
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				logUnified.Printf("get_collaborator_permission: REST call failed for %s/%s user %s: %v", owner, repo, username, err)
+				return nil, fmt.Errorf("REST call failed: %w", err)
+			}
+			return resp, nil
+		},
+		logUnified.Printf,
+	)
 	if err != nil {
-		logUnified.Printf("get_collaborator_permission: failed to create request for %s/%s user %s: %v", owner, repo, username, err)
-		return nil, fmt.Errorf("get_collaborator_permission: failed to create request: %w", err)
+		logUnified.Printf("get_collaborator_permission: request failed for %s/%s user %s: %v", owner, repo, username, err)
+		return nil, fmt.Errorf("get_collaborator_permission: %w", err)
 	}
-	httputil.ApplyGitHubAPIHeaders(req, "token "+token)
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		logUnified.Printf("get_collaborator_permission: REST call failed for %s/%s user %s: %v", owner, repo, username, err)
-		return nil, fmt.Errorf("get_collaborator_permission: REST call failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		logUnified.Printf("get_collaborator_permission: failed to read response body for %s/%s user %s: %v", owner, repo, username, err)
-		return nil, fmt.Errorf("get_collaborator_permission: failed to read response: %w", err)
-	}
-
-	if resp.StatusCode >= 400 {
-		logUnified.Printf("get_collaborator_permission: GitHub API returned %d for %s/%s user %s", resp.StatusCode, owner, repo, username)
-		return nil, fmt.Errorf("get_collaborator_permission: GitHub API returned %d", resp.StatusCode)
-	}
-
-	// Log the resulting permission level and wrap in MCP response format
-	return mcp.LogAndWrapCollaboratorPermission(body, owner, repo, username, resp.StatusCode, logUnified.Printf), nil
+	return result, nil
 }
 
 // getCircuitBreaker returns the circuit breaker for serverID, creating one with
