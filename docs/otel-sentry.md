@@ -59,7 +59,7 @@ In Sentry's trace detail view, expand a span and look under **Tags & Attributes*
 
 | Attribute | Type | Description | Appears On |
 |-----------|------|-------------|------------|
-| `gateway.tag` | string | Routing mode (`unified` or `routed`) | `gateway.request` |
+| `gateway.tag` | string | Handler log tag used for tracing (for example, `unified` in unified mode or `routed:<backendID>` in routed mode) | `gateway.request` |
 
 ### `http` group
 
