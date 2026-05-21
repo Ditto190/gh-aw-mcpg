@@ -151,15 +151,17 @@ func TestGenerateSelfSignedTLS(t *testing.T) {
 	})
 
 	t.Run("returns error when directory cannot be created", func(t *testing.T) {
-		// /dev/null is a character device, so any subdirectory under it cannot be created.
-		dir := "/dev/null/cannot-create-this"
+		parent := t.TempDir()
+		dir := filepath.Join(parent, "not-a-directory")
+		require.NoError(t, os.WriteFile(dir, []byte("block directory creation"), 0644))
+
 		tlsCfg, err := GenerateSelfSignedTLS(dir)
 		require.Error(t, err, "should fail when the directory cannot be created")
 		assert.Nil(t, tlsCfg)
 		assert.ErrorContains(t, err, "failed to create TLS directory")
 	})
 
-	t.Run("CA cert public key matches CA key in server cert issuer", func(t *testing.T) {
+	t.Run("server cert verifies against generated CA", func(t *testing.T) {
 		dir := t.TempDir()
 		tlsCfg, err := GenerateSelfSignedTLS(dir)
 		require.NoError(t, err)
