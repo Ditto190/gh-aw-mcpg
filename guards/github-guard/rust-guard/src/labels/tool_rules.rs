@@ -213,17 +213,17 @@ pub fn apply_tool_labels(
         "get_pull_request" | "pull_request_read" | "list_pull_requests" => {
             // I(PR) = merged if merged; otherwise approved/unapproved/contributor floor by evidence
             // S(PR) = S(repo)
+            //
+            // Extract once for desc; backend lookup is gated on single-PR tools below.
+            let pull_number = extract_number_as_string(tool_args, field_names::PULL_NUMBER)
+                .or_else(|| extract_number_as_string(tool_args, "pullNumber"));
+            if !owner.is_empty() && !repo.is_empty() {
+                if let Some(ref num) = pull_number {
+                    desc = format!("pr:{}/{}#{}", owner, repo, num);
+                }
+            }
             secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
             if matches!(tool_name, "get_pull_request" | "pull_request_read") {
-                // list_pull_requests never carries a PR number; only extract for single-PR reads
-                // to avoid an unnecessary JSON field scan on every list call.
-                let pull_number = extract_number_as_string(tool_args, field_names::PULL_NUMBER)
-                    .or_else(|| extract_number_as_string(tool_args, "pullNumber"));
-                if !owner.is_empty() && !repo.is_empty() {
-                    if let Some(ref num) = pull_number {
-                        desc = format!("pr:{}/{}#{}", owner, repo, num);
-                    }
-                }
                 if let Some(ref number) = pull_number {
                     if let Some(facts) =
                         super::backend::get_pull_request_facts(&owner, &repo, number)

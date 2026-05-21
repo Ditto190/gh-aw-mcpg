@@ -505,7 +505,6 @@ pub fn label_response_paths(
             if let Some(items) = items {
                 let limited_items = limit_items_with_log(items, "list_notifications");
                 let mut labeled_paths = Vec::with_capacity(limited_items.len());
-
                 // Hoist loop-invariant labels: Arc::clone is free.
                 let notif_secrecy: crate::SharedLabels = private_user_label().into();
                 let empty_integrity: crate::SharedLabels = vec![].into();
@@ -542,7 +541,6 @@ pub fn label_response_paths(
             if let Some(items) = items {
                 let limited_items = limit_items_with_log(items, "list_gists");
                 let mut labeled_paths = Vec::with_capacity(limited_items.len());
-
                 // Hoist loop-invariant labels: Arc::clone is free.
                 let gist_integrity: crate::SharedLabels =
                     reader_integrity(scope_names::USER, ctx).into();
