@@ -505,6 +505,7 @@ pub fn label_response_paths(
             if let Some(items) = items {
                 let limited_items = limit_items_with_log(items, "list_notifications");
                 let mut labeled_paths = Vec::with_capacity(limited_items.len());
+                let notif_secrecy: crate::SharedLabels = private_user_label().into();
 
                 for (i, item) in limited_items.iter().enumerate() {
                     let id = get_str_or(item, "id", "unknown");
@@ -513,7 +514,7 @@ pub fn label_response_paths(
                         path: format!("/{}", i),
                         labels: crate::ResourceLabels {
                             description: format!("notification:{}", id),
-                            secrecy: private_user_label().into(),
+                            secrecy: notif_secrecy.clone(),
                             integrity: vec![].into(),
                         },
                     });
@@ -523,7 +524,7 @@ pub fn label_response_paths(
                     labeled_paths,
                     default_labels: Some(crate::ResourceLabels {
                         description: "notification".to_string(),
-                        secrecy: private_user_label().into(),
+                        secrecy: notif_secrecy,
                         integrity: vec![].into(),
                     }),
                     items_path: None, // Root array
@@ -538,6 +539,8 @@ pub fn label_response_paths(
             if let Some(items) = items {
                 let limited_items = limit_items_with_log(items, "list_gists");
                 let mut labeled_paths = Vec::with_capacity(limited_items.len());
+                let gist_integrity: crate::SharedLabels =
+                    reader_integrity(scope_names::USER, ctx).into();
 
                 for (i, item) in limited_items.iter().enumerate() {
                     let is_public = get_bool_or(item, "public", true);
@@ -554,7 +557,7 @@ pub fn label_response_paths(
                         labels: crate::ResourceLabels {
                             description: format!("gist:{}", id),
                             secrecy: secrecy.into(),
-                            integrity: reader_integrity(scope_names::USER, ctx).into(),
+                            integrity: gist_integrity.clone(),
                         },
                     });
                 }
@@ -564,7 +567,7 @@ pub fn label_response_paths(
                     default_labels: Some(crate::ResourceLabels {
                         description: "gist".to_string(),
                         secrecy: vec![].into(),
-                        integrity: reader_integrity(scope_names::USER, ctx).into(),
+                        integrity: gist_integrity,
                     }),
                     items_path: None, // Root array
                 });
