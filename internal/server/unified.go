@@ -298,14 +298,7 @@ func (g *guardBackendCaller) callCollaboratorPermission(ctx context.Context, arg
 		username,
 		func(ctx context.Context, apiPath string) (*http.Response, error) {
 			logUnified.Printf("get_collaborator_permission: GET %s (for %s/%s user %s)", apiPath, owner, repo, username)
-			req, err := http.NewRequestWithContext(ctx, "GET", apiURL+apiPath, nil)
-			if err != nil {
-				logUnified.Printf("get_collaborator_permission: failed to create request for %s/%s user %s: %v", owner, repo, username, err)
-				return nil, fmt.Errorf("failed to create request: %w", err)
-			}
-			httputil.ApplyGitHubAPIHeaders(req, "token "+token)
-
-			resp, err := http.DefaultClient.Do(req)
+			resp, err := httputil.DoGitHubGET(ctx, apiURL, apiPath, "token "+token)
 			if err != nil {
 				logUnified.Printf("get_collaborator_permission: REST call failed for %s/%s user %s: %v", owner, repo, username, err)
 				return nil, fmt.Errorf("REST call failed: %w", err)

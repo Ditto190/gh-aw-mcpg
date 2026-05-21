@@ -1,6 +1,7 @@
 package httputil
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -308,6 +309,41 @@ func TestApplyGitHubAPIHeaders(t *testing.T) {
 		assert.Equal(t, "Bearer ghp_abc123", req.Header.Get("Authorization"))
 		assert.Equal(t, "application/vnd.github+json", req.Header.Get("Accept"))
 		assert.Equal(t, GitHubUserAgent, req.Header.Get("User-Agent"))
+	})
+}
+
+// TestDoGitHubGET verifies that DoGitHubGET sends a GET request with the correct
+// headers and URL to the upstream server.
+func TestDoGitHubGET(t *testing.T) {
+	t.Run("sends GET with GitHub headers", func(t *testing.T) {
+		var capturedMethod, capturedPath, capturedAuth, capturedAccept, capturedUA string
+		upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			capturedMethod = r.Method
+			capturedPath = r.URL.Path
+			capturedAuth = r.Header.Get("Authorization")
+			capturedAccept = r.Header.Get("Accept")
+			capturedUA = r.Header.Get("User-Agent")
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer upstream.Close()
+
+		resp, err := DoGitHubGET(context.Background(), upstream.URL, "/repos/owner/repo", "token ghp_test")
+		require.NoError(t, err)
+		require.NotNil(t, resp)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.MethodGet, capturedMethod)
+		assert.Equal(t, "/repos/owner/repo", capturedPath)
+		assert.Equal(t, "token ghp_test", capturedAuth)
+		assert.Equal(t, "application/vnd.github+json", capturedAccept)
+		assert.Equal(t, GitHubUserAgent, capturedUA)
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+	})
+
+	t.Run("returns error on invalid URL", func(t *testing.T) {
+		resp, err := DoGitHubGET(context.Background(), "://bad-url", "/path", "token x")
+		assert.Error(t, err)
+		assert.Nil(t, resp)
 	})
 }
 
