@@ -138,6 +138,7 @@ func init() {
 		gojq.WithFunction("walk_schema", 0, 0, func(v interface{}, _ []interface{}) interface{} {
 			return inferSchema(v)
 		}),
+		gojq.WithEnvironLoader(func() []string { return nil }), // no $ENV access needed
 	)
 	if jqSchemaCompileErr != nil {
 		log.Printf("FATAL: Failed to compile jq schema filter at init (application will not start): %v", jqSchemaCompileErr)
@@ -230,7 +231,7 @@ func runJqCode(
 
 	if err, ok := v.(error); ok {
 		if ctx.Err() != nil {
-			return nil, fmt.Errorf("%s execution failed: %w", executionPrefix, ctx.Err())
+			return nil, fmt.Errorf("%s execution failed (jq error: %v): %w", executionPrefix, err, ctx.Err())
 		}
 		var haltErr *gojq.HaltError
 		if errors.As(err, &haltErr) {
@@ -253,6 +254,16 @@ func runJqCode(
 
 // CompileToolResponseFilter parses and compiles a jq expression used to transform
 // tool response payloads.
+//
+// For future parameterized filters that need to incorporate per-call values such as
+// server IDs, session metadata, or user-controlled data, prefer gojq.WithVariables
+// at compile time and pass bindings as variadic arguments to code.RunWithContext:
+//
+//	code, _ := gojq.Compile(query, gojq.WithVariables([]string{"$serverID", "$sessionID"}))
+//	iter := code.RunWithContext(ctx, data, serverID, sessionID)
+//
+// This is injection-safe: variable values are bound at the Go level and never
+// interpolated into the jq expression string.
 func CompileToolResponseFilter(filter string) (*gojq.Code, error) {
 	query, err := gojq.Parse(filter)
 	if err != nil {
