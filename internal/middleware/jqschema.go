@@ -138,7 +138,7 @@ func init() {
 		gojq.WithFunction("walk_schema", 0, 0, func(v interface{}, _ []interface{}) interface{} {
 			return inferSchema(v)
 		}),
-		gojq.WithEnvironLoader(func() []string { return nil }), // no $ENV access needed
+		gojq.WithEnvironLoader(func() []string { return nil }), // explicitly disable $ENV access (defense-in-depth)
 	)
 	if jqSchemaCompileErr != nil {
 		log.Printf("FATAL: Failed to compile jq schema filter at init (application will not start): %v", jqSchemaCompileErr)
