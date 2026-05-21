@@ -12,6 +12,10 @@ import (
 // GitHubUserAgent is the User-Agent header value sent on all GitHub API requests.
 const GitHubUserAgent = "awmg/1.0"
 
+// defaultGitHubHTTPClient applies a finite timeout so outbound GitHub API
+// requests cannot hang indefinitely when no explicit context deadline is set.
+var defaultGitHubHTTPClient = &http.Client{Timeout: 30 * time.Second}
+
 // ApplyGitHubAPIHeaders sets the standard GitHub API request headers on req.
 // authHeader should be the full Authorization header value (e.g. "token xyz" or
 // "Bearer xyz"). When authHeader is empty no Authorization header is set, which
@@ -28,14 +32,15 @@ func ApplyGitHubAPIHeaders(req *http.Request, authHeader string) {
 // the response. apiBaseURL is the API root (e.g. "https://api.github.com"),
 // path is the request path (e.g. "/repos/owner/repo"), and authHeader is the
 // full Authorization header value (e.g. "token xyz"). The caller is responsible
-// for closing the response body.
+// for closing the response body. Request duration is bounded by whichever
+// happens first: ctx cancellation/deadline or the helper client timeout.
 func DoGitHubGET(ctx context.Context, apiBaseURL, path, authHeader string) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiBaseURL+path, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 	ApplyGitHubAPIHeaders(req, authHeader)
-	return http.DefaultClient.Do(req)
+	return defaultGitHubHTTPClient.Do(req)
 }
 
 // ParseRateLimitResetHeader parses the Unix-timestamp value of the
