@@ -43,16 +43,13 @@ func ConfigureGlobalCompilationCache(ctx context.Context, dir string) error {
 
 	globalCompilationCacheMu.Lock()
 	oldCache := globalCompilationCache
-	globalCompilationCache = cache
-	globalCompilationCacheMu.Unlock()
-
 	if oldCache == nil {
+		globalCompilationCache = cache
+		globalCompilationCacheMu.Unlock()
 		return nil
 	}
 
 	if err := oldCache.Close(ctx); err != nil {
-		globalCompilationCacheMu.Lock()
-		globalCompilationCache = oldCache
 		globalCompilationCacheMu.Unlock()
 
 		closeReplacementErr := cache.Close(ctx)
@@ -64,6 +61,8 @@ func ConfigureGlobalCompilationCache(ctx context.Context, dir string) error {
 		}
 		return fmt.Errorf("failed to close previous compilation cache: %w", err)
 	}
+	globalCompilationCache = cache
+	globalCompilationCacheMu.Unlock()
 
 	return nil
 }
@@ -185,7 +184,18 @@ func NewWasmGuardWithOptions(ctx context.Context, name string, wasmBytes []byte,
 		return nil, fmt.Errorf("failed to instantiate host functions: %w", err)
 	}
 
-	// Configure module options with stdout/stderr and stdin isolation
+	// Configure module options with stdout/stderr and stdin isolation.
+	stdoutWriter := io.Writer(os.Stderr)
+	stderrWriter := io.Writer(os.Stderr)
+	if opts != nil {
+		if opts.Stdout != nil {
+			stdoutWriter = opts.Stdout
+		}
+		if opts.Stderr != nil {
+			stderrWriter = opts.Stderr
+		}
+	}
+
 	// WithStdin prevents WASM from accidentally reading gateway's MCP protocol stdin
 	moduleConfig := wazero.NewModuleConfig().
 		WithName(func() string {
@@ -196,16 +206,8 @@ func NewWasmGuardWithOptions(ctx context.Context, name string, wasmBytes []byte,
 		}()).
 		WithStartFunctions().
 		WithStdin(strings.NewReader("")). // Isolate stdin
-		WithStdout(os.Stderr).            // Keep WASM stdout off gateway stdout (MCP stream)
-		WithStderr(os.Stderr)
-	if opts != nil {
-		if opts.Stdout != nil {
-			moduleConfig = moduleConfig.WithStdout(opts.Stdout)
-		}
-		if opts.Stderr != nil {
-			moduleConfig = moduleConfig.WithStderr(opts.Stderr)
-		}
-	}
+		WithStdout(stdoutWriter).         // Keep WASM stdout off gateway stdout (MCP stream)
+		WithStderr(stderrWriter)
 
 	// Compile and instantiate the WASM module
 	module, err := runtime.InstantiateWithConfig(ctx, wasmBytes, moduleConfig)
