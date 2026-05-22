@@ -43,14 +43,18 @@ func ConfigureGlobalCompilationCache(ctx context.Context, dir string) error {
 
 	globalCompilationCacheMu.Lock()
 	oldCache := globalCompilationCache
-	if oldCache == nil {
-		globalCompilationCache = cache
-		globalCompilationCacheMu.Unlock()
-		return nil
-	}
+	globalCompilationCache = cache
 	globalCompilationCacheMu.Unlock()
 
+	if oldCache == nil {
+		return nil
+	}
+
 	if err := oldCache.Close(ctx); err != nil {
+		globalCompilationCacheMu.Lock()
+		globalCompilationCache = oldCache
+		globalCompilationCacheMu.Unlock()
+
 		closeReplacementErr := cache.Close(ctx)
 		if closeReplacementErr != nil {
 			return errors.Join(
@@ -60,10 +64,6 @@ func ConfigureGlobalCompilationCache(ctx context.Context, dir string) error {
 		}
 		return fmt.Errorf("failed to close previous compilation cache: %w", err)
 	}
-
-	globalCompilationCacheMu.Lock()
-	globalCompilationCache = cache
-	globalCompilationCacheMu.Unlock()
 
 	return nil
 }
@@ -85,7 +85,7 @@ func CloseGlobalCompilationCache(ctx context.Context) error {
 
 // WasmGuardOptions configures optional settings for WASM guard creation
 type WasmGuardOptions struct {
-	// Stdout is the writer for WASM stdout output. Defaults to os.Stdout if nil.
+	// Stdout is the writer for WASM stdout output. Defaults to os.Stderr if nil.
 	Stdout io.Writer
 	// Stderr is the writer for WASM stderr output. Defaults to os.Stderr if nil.
 	Stderr io.Writer
@@ -152,7 +152,7 @@ func NewWasmGuardFromBytes(ctx context.Context, name string, wasmBytes []byte, b
 }
 
 // NewWasmGuardWithOptions creates a new WASM guard from WASM binary bytes with custom options
-// Options can be nil to use defaults (stdout/stderr go to os.Stdout/os.Stderr)
+// Options can be nil to use defaults (stdout/stderr go to os.Stderr/os.Stderr)
 func NewWasmGuardWithOptions(ctx context.Context, name string, wasmBytes []byte, backend BackendCaller, opts *WasmGuardOptions) (*WasmGuard, error) {
 	logWasm.Printf("Creating WASM guard from bytes: name=%s, size=%d", name, len(wasmBytes))
 
@@ -195,7 +195,9 @@ func NewWasmGuardWithOptions(ctx context.Context, name string, wasmBytes []byte,
 			return name
 		}()).
 		WithStartFunctions().
-		WithStdin(strings.NewReader("")) // Isolate stdin
+		WithStdin(strings.NewReader("")). // Isolate stdin
+		WithStdout(os.Stderr).            // Keep WASM stdout off gateway stdout (MCP stream)
+		WithStderr(os.Stderr)
 	if opts != nil {
 		if opts.Stdout != nil {
 			moduleConfig = moduleConfig.WithStdout(opts.Stdout)

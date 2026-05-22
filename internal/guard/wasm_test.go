@@ -67,6 +67,25 @@ var blockingGuardWasm = []byte{
 	0x0a, 0x09, 0x01, 0x07, 0x00, 0x03, 0x40, 0x0c, 0x00, 0x0b, 0x0b,
 }
 
+// directMemoryFallbackGuardWasm exports label_response and memory, but not
+// alloc/dealloc. This forces tryCallWasmFunction onto the direct memory path.
+var directMemoryFallbackGuardWasm = []byte{
+	0x00, 0x61, 0x73, 0x6d, // magic
+	0x01, 0x00, 0x00, 0x00, // version
+	// type section: (func (param i32 i32 i32 i32) (result i32))
+	0x01, 0x09, 0x01, 0x60, 0x04, 0x7f, 0x7f, 0x7f, 0x7f, 0x01, 0x7f,
+	// function section: one function of type 0
+	0x03, 0x02, 0x01, 0x00,
+	// memory section: one memory with min=1 page
+	0x05, 0x03, 0x01, 0x00, 0x01,
+	// export section: export function "label_response" and memory "memory"
+	0x07, 0x1b, 0x02,
+	0x0e, 0x6c, 0x61, 0x62, 0x65, 0x6c, 0x5f, 0x72, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x00, 0x00,
+	0x06, 0x6d, 0x65, 0x6d, 0x6f, 0x72, 0x79, 0x02, 0x00,
+	// code section: return 0
+	0x0a, 0x06, 0x01, 0x04, 0x00, 0x41, 0x00, 0x0b,
+}
+
 // mockBackendCaller is a test implementation of BackendCaller
 type mockBackendCaller struct {
 	called   bool
@@ -1085,6 +1104,42 @@ func TestWasmMemoryLayout(t *testing.T) {
 	})
 }
 
+func TestTryCallWasmFunctionDirectMemoryFallback(t *testing.T) {
+	ctx := context.Background()
+	runtime := wazero.NewRuntime(ctx)
+	defer func() {
+		require.NoError(t, runtime.Close(ctx))
+	}()
+
+	module, err := runtime.InstantiateWithConfig(ctx, directMemoryFallbackGuardWasm, wazero.NewModuleConfig().WithName("direct-memory-fallback"))
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, module.Close(ctx))
+	})
+
+	g := &WasmGuard{
+		name:   "direct-memory-fallback",
+		module: module,
+	}
+
+	fn := module.ExportedFunction("label_response")
+	require.NotNil(t, fn)
+
+	mem := module.Memory()
+	require.NotNil(t, mem)
+	initialMemSize := mem.Size()
+
+	inputJSON := bytes.Repeat([]byte("x"), 1*1024*1024)
+	outputSize := uint32(4 * 1024 * 1024)
+
+	result, requiredSize, err := g.tryCallWasmFunction(ctx, fn, mem, inputJSON, outputSize)
+	require.NoError(t, err)
+	assert.Empty(t, result)
+	assert.Zero(t, requiredSize)
+	assert.True(t, g.warnedDirectMemoryPath, "expected direct memory fallback warning state to be set")
+	assert.Greater(t, mem.Size(), initialMemSize, "expected memory to grow for large direct-memory buffers")
+}
+
 func TestErrorCodeSentinel(t *testing.T) {
 	t.Run("error sentinel value is max uint32", func(t *testing.T) {
 		// From code: stack[0] = uint64(^uint32(0)) // Max uint32 represents error
@@ -1185,7 +1240,7 @@ func TestIsWasmTrap(t *testing.T) {
 		assert.False(t, isWasmTrap(errors.New("some error")))
 	})
 
-	t.Run("wrapped error containing wasm error is a trap", func(t *testing.T) {
+	t.Run("wrapped error containing wasm error is a trap (verified with wazero v1.11.0)", func(t *testing.T) {
 		err := errors.New("WASM function call failed: wasm error: unreachable")
 		assert.True(t, isWasmTrap(err))
 	})
