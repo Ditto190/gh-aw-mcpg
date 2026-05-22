@@ -239,6 +239,36 @@ func TestFetchCollaboratorPermission(t *testing.T) {
 		require.Error(t, err)
 		assert.ErrorContains(t, err, "GitHub API returned 404")
 	})
+
+	t.Run("returns error when fetch returns nil response without error", func(t *testing.T) {
+		_, err := FetchCollaboratorPermission(
+			context.Background(),
+			"org",
+			"repo",
+			"user",
+			func(ctx context.Context, apiPath string) (*http.Response, error) {
+				return nil, nil
+			},
+			func(format string, args ...interface{}) {},
+		)
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "nil response returned without error")
+	})
+
+	t.Run("returns error when response body is nil", func(t *testing.T) {
+		_, err := FetchCollaboratorPermission(
+			context.Background(),
+			"org",
+			"repo",
+			"user",
+			func(ctx context.Context, apiPath string) (*http.Response, error) {
+				return &http.Response{StatusCode: http.StatusOK, Body: nil}, nil
+			},
+			func(format string, args ...interface{}) {},
+		)
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "response body is nil")
+	})
 }
 
 type failingReadCloser struct{}
