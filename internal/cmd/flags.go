@@ -61,6 +61,14 @@ func registerAllFlags(cmd *cobra.Command) {
 	debugLog.Print("Flag group registration complete")
 }
 
+// applyFlagOrEnv sets *field to val when the named flag was explicitly set
+// via the CLI, or when val differs from defaultVal (env-var override).
+func applyFlagOrEnv[T comparable](cmd *cobra.Command, flagName string, field *T, val T, defaultVal T) {
+	if cmd.Flags().Changed(flagName) || val != defaultVal {
+		*field = val
+	}
+}
+
 // registerFlagCompletions registers custom completion functions for flags
 func registerFlagCompletions(cmd *cobra.Command) {
 	debugLog.Print("Registering flag completion functions")
