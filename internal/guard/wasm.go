@@ -340,9 +340,9 @@ func (g *WasmGuard) hostCallBackend(ctx context.Context, m api.Module, stack []u
 		// Signal buffer-too-small with required size protocol:
 		// return -2 and (if possible) write required size (u32 LE) to resultPtr.
 		if resultSize >= 4 {
-			required := make([]byte, 4)
-			binary.LittleEndian.PutUint32(required, uint32(len(resultJSON)))
-			if !m.Memory().Write(resultPtr, required) {
+			var required [4]byte
+			binary.LittleEndian.PutUint32(required[:], uint32(len(resultJSON)))
+			if !m.Memory().Write(resultPtr, required[:]) {
 				logWasm.Printf("Failed to write required size to WASM memory")
 			}
 		}
