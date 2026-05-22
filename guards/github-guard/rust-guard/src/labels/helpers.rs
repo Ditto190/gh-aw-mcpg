@@ -2616,6 +2616,107 @@ mod tests {
         assert_eq!(path, "");
     }
 
+    #[test]
+    fn test_extract_items_array_graphql_repository_issues() {
+        let response = serde_json::json!({
+            "data": { "repository": { "issues": { "nodes": [{"number": 1}] } } }
+        });
+        let (items, path) = extract_items_array(&response);
+        assert!(items.is_some());
+        assert_eq!(items.unwrap().len(), 1);
+        assert_eq!(path, "/data/repository/issues/nodes");
+    }
+
+    #[test]
+    fn test_extract_items_array_graphql_repository_pull_requests() {
+        let response = serde_json::json!({
+            "data": { "repository": { "pullRequests": { "nodes": [{"number": 42}] } } }
+        });
+        let (items, path) = extract_items_array(&response);
+        assert!(items.is_some());
+        assert_eq!(path, "/data/repository/pullRequests/nodes");
+    }
+
+    #[test]
+    fn test_extract_items_array_graphql_repository_discussions() {
+        let response = serde_json::json!({
+            "data": { "repository": { "discussions": { "nodes": [{"id": "D_1"}] } } }
+        });
+        let (items, path) = extract_items_array(&response);
+        assert!(items.is_some());
+        assert_eq!(path, "/data/repository/discussions/nodes");
+    }
+
+    #[test]
+    fn test_extract_items_array_graphql_search_nodes() {
+        let response = serde_json::json!({
+            "data": { "search": { "nodes": [{"number": 7}, {"number": 8}] } }
+        });
+        let (items, path) = extract_items_array(&response);
+        assert!(items.is_some());
+        assert_eq!(items.unwrap().len(), 2);
+        assert_eq!(path, "/data/search/nodes");
+    }
+
+    #[test]
+    fn test_extract_items_array_graphql_empty_nodes() {
+        let response = serde_json::json!({
+            "data": { "repository": { "issues": { "nodes": [] } } }
+        });
+        let (items, path) = extract_items_array(&response);
+        assert!(items.is_some());
+        assert_eq!(items.unwrap().len(), 0);
+        assert_eq!(path, "/data/repository/issues/nodes");
+    }
+
+    #[test]
+    fn test_extract_repo_from_github_url_api_github_com() {
+        assert_eq!(
+            extract_repo_from_github_url("https://api.github.com/repos/octocat/hello-world/issues"),
+            Some("octocat/hello-world".to_string())
+        );
+    }
+
+    #[test]
+    fn test_extract_repo_from_github_url_github_com() {
+        assert_eq!(
+            extract_repo_from_github_url("https://github.com/octocat/hello-world"),
+            Some("octocat/hello-world".to_string())
+        );
+    }
+
+    #[test]
+    fn test_extract_repo_from_github_url_ghes_api_v3() {
+        assert_eq!(
+            extract_repo_from_github_url("https://github.mycompany.com/api/v3/repos/myorg/myrepo/issues"),
+            Some("myorg/myrepo".to_string())
+        );
+    }
+
+    #[test]
+    fn test_extract_repo_from_github_url_ghec() {
+        assert_eq!(
+            extract_repo_from_github_url("https://api.mycompany.ghe.com/repos/myorg/myrepo/pulls"),
+            Some("myorg/myrepo".to_string())
+        );
+    }
+
+    #[test]
+    fn test_extract_repo_from_github_url_no_match() {
+        assert_eq!(
+            extract_repo_from_github_url("https://example.com/no-repos-path"),
+            None
+        );
+    }
+
+    #[test]
+    fn test_extract_repo_from_github_url_http_fallback() {
+        assert_eq!(
+            extract_repo_from_github_url("http://api.github.com/repos/octocat/hello-world/issues"),
+            Some("octocat/hello-world".to_string())
+        );
+    }
+
     // -------------------------------------------------------------------------
     // integrity_level_rank — mixed-case and unknown-input coverage
     // -------------------------------------------------------------------------
