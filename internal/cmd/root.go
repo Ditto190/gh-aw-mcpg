@@ -252,29 +252,10 @@ func run(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Apply payload directory flag (if different from default, it was explicitly set)
-	if cmd.Flags().Changed("payload-dir") {
-		cfg.Gateway.PayloadDir = payloadDir
-	} else if payloadDir != "" && payloadDir != config.DefaultPayloadDir {
-		// Environment variable was set
-		cfg.Gateway.PayloadDir = payloadDir
-	}
-
-	// Apply payload path prefix: CLI flag takes priority, then env-derived non-empty value.
-	if cmd.Flags().Changed("payload-path-prefix") {
-		cfg.Gateway.PayloadPathPrefix = payloadPathPrefix
-	} else if payloadPathPrefix != "" {
-		// envutil.GetEnvString returned a non-empty value from MCP_GATEWAY_PAYLOAD_PATH_PREFIX
-		cfg.Gateway.PayloadPathPrefix = payloadPathPrefix
-	}
-
-	// Apply payload size threshold flag (if different from default, it was explicitly set)
-	if cmd.Flags().Changed("payload-size-threshold") {
-		cfg.Gateway.PayloadSizeThreshold = payloadSizeThreshold
-	} else if payloadSizeThreshold != config.DefaultPayloadSizeThreshold {
-		// Environment variable was set
-		cfg.Gateway.PayloadSizeThreshold = payloadSizeThreshold
-	}
+	// Apply payload flags: CLI flag takes priority; otherwise apply if env var overrides the default.
+	applyFlagOrEnv(cmd, "payload-dir", &cfg.Gateway.PayloadDir, payloadDir, config.DefaultPayloadDir)
+	applyFlagOrEnv(cmd, "payload-path-prefix", &cfg.Gateway.PayloadPathPrefix, payloadPathPrefix, "")
+	applyFlagOrEnv(cmd, "payload-size-threshold", &cfg.Gateway.PayloadSizeThreshold, payloadSizeThreshold, config.DefaultPayloadSizeThreshold)
 
 	if sequentialLaunch {
 		log.Println("Sequential server launching enabled")
