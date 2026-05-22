@@ -1107,9 +1107,9 @@ func TestWasmMemoryLayout(t *testing.T) {
 func TestTryCallWasmFunctionDirectMemoryFallback(t *testing.T) {
 	ctx := context.Background()
 	runtime := wazero.NewRuntime(ctx)
-	defer func() {
+	t.Cleanup(func() {
 		require.NoError(t, runtime.Close(ctx))
-	}()
+	})
 
 	module, err := runtime.InstantiateWithConfig(ctx, directMemoryFallbackGuardWasm, wazero.NewModuleConfig().WithName("direct-memory-fallback"))
 	require.NoError(t, err)
@@ -1132,12 +1132,17 @@ func TestTryCallWasmFunctionDirectMemoryFallback(t *testing.T) {
 	inputJSON := bytes.Repeat([]byte("x"), 1*1024*1024)
 	outputSize := uint32(4 * 1024 * 1024)
 
+	g.mu.Lock()
 	result, requiredSize, err := g.tryCallWasmFunction(ctx, fn, mem, inputJSON, outputSize)
+	warnedDirectMemoryPath := g.warnedDirectMemoryPath
+	finalMemSize := mem.Size()
+	g.mu.Unlock()
+
 	require.NoError(t, err)
 	assert.Empty(t, result)
 	assert.Zero(t, requiredSize)
-	assert.True(t, g.warnedDirectMemoryPath, "expected direct memory fallback warning state to be set")
-	assert.Greater(t, mem.Size(), initialMemSize, "expected memory to grow for large direct-memory buffers")
+	assert.True(t, warnedDirectMemoryPath, "expected direct memory fallback warning state to be set")
+	assert.Greater(t, finalMemSize, initialMemSize, "expected memory to grow for large direct-memory buffers")
 }
 
 func TestErrorCodeSentinel(t *testing.T) {
