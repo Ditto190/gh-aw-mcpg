@@ -142,8 +142,9 @@ pub fn invoke_backend(
     if result < 0 {
         if result == -2 {
             log_warn("<<< call_backend buffer too small; caller should retry with a larger buffer");
+        } else {
+            log_error(&format!("<<< call_backend FAILED with code {}", result));
         }
-        log_error(&format!("<<< call_backend FAILED with code {}", result));
         Err(result)
     } else {
         log_info(&format!("<<< call_backend returned {} bytes", result));
