@@ -87,8 +87,11 @@ func CloseGlobalCompilationCache(ctx context.Context) error {
 		logWasm.Print("Global compilation cache is nil, nothing to close")
 		return nil
 	}
+	if err := cache.Close(ctx); err != nil {
+		return err
+	}
 	logWasm.Print("Global compilation cache closed")
-	return cache.Close(ctx)
+	return nil
 }
 
 // WasmGuardOptions configures optional settings for WASM guard creation
