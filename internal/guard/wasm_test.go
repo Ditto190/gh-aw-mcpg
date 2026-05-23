@@ -67,8 +67,95 @@ var blockingGuardWasm = []byte{
 	0x0a, 0x09, 0x01, 0x07, 0x00, 0x03, 0x40, 0x0c, 0x00, 0x0b, 0x0b,
 }
 
-// directMemoryFallbackGuardWasm exports label_response and memory, but not
+// WASM fixtures used by tests in this file.
+// directMemoryFallbackGuardWasm (defined below) exports label_response and memory, but not
 // alloc/dealloc. This forces tryCallWasmFunction onto the direct memory path.
+//
+// alwaysNeg2GuardWasm exports "label_agent" and "memory", and always returns
+// -2 (buffer too small) with no hint. Used to test the buffer-doubling retry
+// path that eventually hits the 16MB maximum.
+//
+// (module
+//
+//	(type (func (param i32 i32 i32 i32) (result i32)))
+//	(func (type 0) i32.const -2)
+//	(memory 1)
+//	(export "label_agent" (func 0))
+//	(export "memory" (memory 0)))
+var alwaysNeg2GuardWasm = []byte{
+	0x00, 0x61, 0x73, 0x6d, // magic
+	0x01, 0x00, 0x00, 0x00, // version
+	// type section: (func (param i32 i32 i32 i32) (result i32))
+	0x01, 0x09, 0x01, 0x60, 0x04, 0x7f, 0x7f, 0x7f, 0x7f, 0x01, 0x7f,
+	// function section: one function of type 0
+	0x03, 0x02, 0x01, 0x00,
+	// memory section: one memory with min=1 page
+	0x05, 0x03, 0x01, 0x00, 0x01,
+	// export section: "label_agent" (func 0) and "memory" (mem 0)
+	0x07, 0x18, 0x02,
+	0x0b, 0x6c, 0x61, 0x62, 0x65, 0x6c, 0x5f, 0x61, 0x67, 0x65, 0x6e, 0x74, 0x00, 0x00,
+	0x06, 0x6d, 0x65, 0x6d, 0x6f, 0x72, 0x79, 0x02, 0x00,
+	// code section: i32.const -2, end
+	0x0a, 0x06, 0x01, 0x04, 0x00, 0x41, 0x7e, 0x0b,
+}
+
+// retryWithHint5MBGuardWasm exports "label_agent" and "memory". It writes a
+// 5MB hint (5242880 as LE uint32) to outputPtr and returns -2 when outputSize
+// is less than 5MB; once outputSize is ≥ 5MB it returns 0 (empty success).
+// This tests the hint-based retry path in callWasmFunction.
+//
+// (module
+//
+//	(type (func (param i32 i32 i32 i32) (result i32)))
+//	(func (type 0)
+//	  (if (i32.lt_u (local.get 3) (i32.const 5242880))
+//	    (then (i32.store (local.get 2) (i32.const 5242880))
+//	          (return (i32.const -2))))
+//	  i32.const 0)
+//	(memory 1)
+//	(export "label_agent" (func 0))
+//	(export "memory" (memory 0)))
+var retryWithHint5MBGuardWasm = []byte{
+	0x00, 0x61, 0x73, 0x6d, // magic
+	0x01, 0x00, 0x00, 0x00, // version
+	// type section: (func (param i32 i32 i32 i32) (result i32))
+	0x01, 0x09, 0x01, 0x60, 0x04, 0x7f, 0x7f, 0x7f, 0x7f, 0x01, 0x7f,
+	// function section: one function of type 0
+	0x03, 0x02, 0x01, 0x00,
+	// memory section: one memory with min=1 page
+	0x05, 0x03, 0x01, 0x00, 0x01,
+	// export section: "label_agent" (func 0) and "memory" (mem 0)
+	0x07, 0x18, 0x02,
+	0x0b, 0x6c, 0x61, 0x62, 0x65, 0x6c, 0x5f, 0x61, 0x67, 0x65, 0x6e, 0x74, 0x00, 0x00,
+	0x06, 0x6d, 0x65, 0x6d, 0x6f, 0x72, 0x79, 0x02, 0x00,
+	// code section body:
+	//   if (local.get 3) < 5242880:
+	//     i32.store align=2 offset=0 (local.get 2) 5242880
+	//     return i32.const -2
+	//   end
+	//   i32.const 0
+	0x0a, 0x1e, 0x01, 0x1c, 0x00,
+	0x20, 0x03, 0x41, 0x80, 0x80, 0xc0, 0x02, 0x49, 0x04, 0x40,
+	0x20, 0x02, 0x41, 0x80, 0x80, 0xc0, 0x02, 0x36, 0x02, 0x00,
+	0x41, 0x7e, 0x0f, 0x0b, 0x41, 0x00, 0x0b,
+}
+
+// funcNoMemoryGuardWasm exports "label_agent" (returns 0) but has NO memory
+// export. Used to test the "WASM module has no memory" error path.
+var funcNoMemoryGuardWasm = []byte{
+	0x00, 0x61, 0x73, 0x6d, // magic
+	0x01, 0x00, 0x00, 0x00, // version
+	// type section: (func (param i32 i32 i32 i32) (result i32))
+	0x01, 0x09, 0x01, 0x60, 0x04, 0x7f, 0x7f, 0x7f, 0x7f, 0x01, 0x7f,
+	// function section: one function of type 0
+	0x03, 0x02, 0x01, 0x00,
+	// export section: "label_agent" (func 0) only — no memory export and no memory section
+	0x07, 0x0f, 0x01,
+	0x0b, 0x6c, 0x61, 0x62, 0x65, 0x6c, 0x5f, 0x61, 0x67, 0x65, 0x6e, 0x74, 0x00, 0x00,
+	// code section: i32.const 0, end
+	0x0a, 0x06, 0x01, 0x04, 0x00, 0x41, 0x00, 0x0b,
+}
+
 var directMemoryFallbackGuardWasm = []byte{
 	0x00, 0x61, 0x73, 0x6d, // magic
 	0x01, 0x00, 0x00, 0x00, // version
@@ -1075,7 +1162,115 @@ func TestMockBackendCaller(t *testing.T) {
 }
 
 func TestBufferRetryLogic(t *testing.T) {
-	t.Skip("TODO: implement buffer retry behavior test against callWasmFunction/tryCallWasmFunction")
+	// helper instantiates a module for the retry-logic tests.
+	setupModule := func(t *testing.T, wasmBytes []byte, moduleName string) (*WasmGuard, func()) {
+		t.Helper()
+		ctx := context.Background()
+		rt := wazero.NewRuntime(ctx)
+		mod, err := rt.InstantiateWithConfig(ctx, wasmBytes, wazero.NewModuleConfig().WithName(moduleName))
+		require.NoError(t, err)
+		g := &WasmGuard{name: moduleName, module: mod}
+		cleanup := func() {
+			require.NoError(t, mod.Close(ctx))
+			require.NoError(t, rt.Close(ctx))
+		}
+		return g, cleanup
+	}
+
+	t.Run("function not exported from module", func(t *testing.T) {
+		// minimalGuardWasm has no exports at all; ExportedFunction returns nil.
+		ctx := context.Background()
+		rt := wazero.NewRuntime(ctx)
+		t.Cleanup(func() { require.NoError(t, rt.Close(ctx)) })
+		mod, err := rt.InstantiateWithConfig(ctx, minimalGuardWasm, wazero.NewModuleConfig().WithName("minimal-retry"))
+		require.NoError(t, err)
+		t.Cleanup(func() { require.NoError(t, mod.Close(ctx)) })
+		g := &WasmGuard{name: "minimal-retry", module: mod}
+
+		g.mu.Lock()
+		_, callErr := g.callWasmFunction(ctx, "label_agent", []byte(`{}`))
+		g.mu.Unlock()
+
+		require.Error(t, callErr)
+		assert.Contains(t, callErr.Error(), "not exported from WASM module")
+	})
+
+	t.Run("module has no memory", func(t *testing.T) {
+		// funcNoMemoryGuardWasm exports label_agent but has no memory section.
+		g, cleanup := setupModule(t, funcNoMemoryGuardWasm, "no-memory-retry")
+		defer cleanup()
+
+		g.mu.Lock()
+		_, callErr := g.callWasmFunction(context.Background(), "label_agent", []byte(`{}`))
+		g.mu.Unlock()
+
+		require.Error(t, callErr)
+		assert.Contains(t, callErr.Error(), "WASM module has no memory")
+	})
+
+	t.Run("input too large returns error immediately", func(t *testing.T) {
+		// alwaysNeg2GuardWasm exports label_agent + memory; the input-size check
+		// fires before any WASM call.
+		g, cleanup := setupModule(t, alwaysNeg2GuardWasm, "input-too-large-retry")
+		defer cleanup()
+
+		// 8MB + 1 byte exceeds the 8MB max-input limit.
+		hugeInput := make([]byte, 8*1024*1024+1)
+
+		g.mu.Lock()
+		_, callErr := g.callWasmFunction(context.Background(), "label_agent", hugeInput)
+		g.mu.Unlock()
+
+		require.Error(t, callErr)
+		assert.Contains(t, callErr.Error(), "input too large")
+	})
+
+	t.Run("buffer doubling exhausted causes exceeds-maximum error", func(t *testing.T) {
+		// alwaysNeg2GuardWasm always returns -2 with no hint, so callWasmFunction
+		// doubles the buffer on each retry: 4MB → 8MB → 16MB → would need 32MB,
+		// which exceeds the 16MB cap.
+		g, cleanup := setupModule(t, alwaysNeg2GuardWasm, "always-neg2-retry")
+		defer cleanup()
+
+		g.mu.Lock()
+		_, callErr := g.callWasmFunction(context.Background(), "label_agent", []byte(`{}`))
+		g.mu.Unlock()
+
+		require.Error(t, callErr)
+		assert.Contains(t, callErr.Error(), "exceeds maximum")
+	})
+
+	t.Run("size hint triggers one retry then succeeds", func(t *testing.T) {
+		// retryWithHint5MBGuardWasm returns -2 with a 5MB hint on the first call
+		// (when outputSize < 5MB), then succeeds with empty output on the retry.
+		g, cleanup := setupModule(t, retryWithHint5MBGuardWasm, "hint-retry")
+		defer cleanup()
+
+		g.mu.Lock()
+		result, callErr := g.callWasmFunction(context.Background(), "label_agent", []byte(`{}`))
+		g.mu.Unlock()
+
+		require.NoError(t, callErr)
+		assert.Empty(t, result)
+	})
+
+	t.Run("failed guard refuses call immediately", func(t *testing.T) {
+		// A guard marked as failed due to a prior trap must reject all future calls.
+		g, cleanup := setupModule(t, alwaysNeg2GuardWasm, "failed-guard-retry")
+		defer cleanup()
+
+		sentinel := fmt.Errorf("previous trap sentinel")
+		g.failed = true
+		g.failedErr = sentinel
+
+		g.mu.Lock()
+		_, callErr := g.callWasmFunction(context.Background(), "label_agent", []byte(`{}`))
+		g.mu.Unlock()
+
+		require.Error(t, callErr)
+		assert.ErrorIs(t, callErr, sentinel)
+		assert.Contains(t, callErr.Error(), "unavailable after a previous trap")
+	})
 }
 
 func TestWasmMemoryLayout(t *testing.T) {
