@@ -241,7 +241,7 @@ func TestApplyFlagOrEnv(t *testing.T) {
 	// setupCmd creates a cobra command with a single --target string flag.
 	setupCmd := func(t *testing.T) *cobra.Command {
 		t.Helper()
-		cmd := &cobra.Command{Use: "test", RunE: func(*cobra.Command, []string) error { return nil }}
+		cmd := newTestCmd()
 		cmd.Flags().String("target", "", "test flag")
 		return cmd
 	}
@@ -276,7 +276,7 @@ func TestApplyFlagOrEnv(t *testing.T) {
 	})
 
 	t.Run("works with int type", func(t *testing.T) {
-		cmd := &cobra.Command{Use: "test", RunE: func(*cobra.Command, []string) error { return nil }}
+		cmd := newTestCmd()
 		cmd.Flags().Int("port", 0, "port number")
 		require.NoError(t, cmd.Flags().Set("port", "8080"))
 
@@ -287,7 +287,7 @@ func TestApplyFlagOrEnv(t *testing.T) {
 	})
 
 	t.Run("works with bool type", func(t *testing.T) {
-		cmd := &cobra.Command{Use: "test", RunE: func(*cobra.Command, []string) error { return nil }}
+		cmd := newTestCmd()
 		cmd.Flags().Bool("verbose", false, "verbose output")
 		require.NoError(t, cmd.Flags().Set("verbose", "true"))
 
