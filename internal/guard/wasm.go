@@ -29,14 +29,17 @@ var globalCompilationCache = wazero.NewCompilationCache()
 
 func newCompilationCache(dir string) (wazero.CompilationCache, error) {
 	if dir == "" {
+		logWasm.Print("Creating in-memory compilation cache")
 		return wazero.NewCompilationCache(), nil
 	}
+	logWasm.Printf("Creating disk-backed compilation cache: dir=%s", dir)
 	return wazero.NewCompilationCacheWithDir(dir)
 }
 
 // ConfigureGlobalCompilationCache replaces the process-level compilation cache.
 // This should be called during process startup before any guards are created.
 func ConfigureGlobalCompilationCache(ctx context.Context, dir string) error {
+	logWasm.Printf("Configuring global compilation cache: dir=%q", dir)
 	cache, err := newCompilationCache(dir)
 	if err != nil {
 		return err
@@ -47,6 +50,7 @@ func ConfigureGlobalCompilationCache(ctx context.Context, dir string) error {
 	if oldCache == nil {
 		globalCompilationCache = cache
 		globalCompilationCacheMu.Unlock()
+		logWasm.Print("Global compilation cache set (no previous cache)")
 		return nil
 	}
 
@@ -65,6 +69,7 @@ func ConfigureGlobalCompilationCache(ctx context.Context, dir string) error {
 	globalCompilationCache = cache
 	globalCompilationCacheMu.Unlock()
 
+	logWasm.Print("Global compilation cache replaced successfully")
 	return nil
 }
 
@@ -74,13 +79,19 @@ func ConfigureGlobalCompilationCache(ctx context.Context, dir string) error {
 // Calling it while guards are still active or calling it more than once leads
 // to undefined behavior. It is not safe to call concurrently.
 func CloseGlobalCompilationCache(ctx context.Context) error {
+	logWasm.Print("Closing global compilation cache")
 	globalCompilationCacheMu.Lock()
 	cache := globalCompilationCache
 	globalCompilationCacheMu.Unlock()
 	if cache == nil {
+		logWasm.Print("Global compilation cache is nil, nothing to close")
 		return nil
 	}
-	return cache.Close(ctx)
+	if err := cache.Close(ctx); err != nil {
+		return err
+	}
+	logWasm.Print("Global compilation cache closed")
+	return nil
 }
 
 // WasmGuardOptions configures optional settings for WASM guard creation
@@ -250,6 +261,7 @@ func NewWasmGuardWithOptions(ctx context.Context, name string, wasmBytes []byte,
 
 // instantiateHostFunctions creates the host functions that the WASM module can call
 func (g *WasmGuard) instantiateHostFunctions(ctx context.Context) error {
+	logWasm.Printf("Instantiating WASM host functions: guard=%s", g.name)
 	// Create a host module with functions the guard can call
 	_, err := g.runtime.NewHostModuleBuilder("env").
 		// call_backend: allows guards to call MCP tools on the backend
@@ -273,7 +285,11 @@ func (g *WasmGuard) instantiateHostFunctions(ctx context.Context) error {
 		Export("host_log").
 		Instantiate(ctx)
 
-	return err
+	if err != nil {
+		return err
+	}
+	logWasm.Printf("WASM host functions instantiated: guard=%s (call_backend, host_log)", g.name)
+	return nil
 }
 
 // hostCallBackend is called by the WASM module to make backend MCP calls
