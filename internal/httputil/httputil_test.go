@@ -310,6 +310,18 @@ func TestApplyGitHubAPIHeaders(t *testing.T) {
 		assert.Equal(t, "application/vnd.github+json", req.Header.Get("Accept"))
 		assert.Equal(t, GitHubUserAgent, req.Header.Get("User-Agent"))
 	})
+
+	t.Run("does not panic when request URL is nil", func(t *testing.T) {
+		req := &http.Request{Method: http.MethodGet, Header: make(http.Header)}
+
+		require.NotPanics(t, func() {
+			ApplyGitHubAPIHeaders(req, "token my-secret")
+		})
+
+		assert.Equal(t, "token my-secret", req.Header.Get("Authorization"))
+		assert.Equal(t, "application/vnd.github+json", req.Header.Get("Accept"))
+		assert.Equal(t, GitHubUserAgent, req.Header.Get("User-Agent"))
+	})
 }
 
 // TestDoGitHubGET verifies that DoGitHubGET sends a GET request with the correct
