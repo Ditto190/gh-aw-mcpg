@@ -21,7 +21,11 @@ var defaultGitHubHTTPClient = &http.Client{Timeout: 30 * time.Second}
 // "Bearer xyz"). When authHeader is empty no Authorization header is set, which
 // is appropriate when the caller has already decided that no auth is available.
 func ApplyGitHubAPIHeaders(req *http.Request, authHeader string) {
-	logHTTP.Printf("Applying GitHub API headers: method=%s, path=%s, hasAuth=%v", req.Method, req.URL.Path, authHeader != "")
+	path := "<nil>"
+	if req.URL != nil {
+		path = req.URL.Path
+	}
+	logHTTP.Printf("Applying GitHub API headers: method=%q, path=%q, hasAuth=%v", req.Method, path, authHeader != "")
 	if authHeader != "" {
 		req.Header.Set("Authorization", authHeader)
 	}
@@ -36,19 +40,19 @@ func ApplyGitHubAPIHeaders(req *http.Request, authHeader string) {
 // for closing the response body. Request duration is bounded by whichever
 // happens first: ctx cancellation/deadline or the helper client timeout.
 func DoGitHubGET(ctx context.Context, apiBaseURL, path, authHeader string) (*http.Response, error) {
-	logHTTP.Printf("GitHub GET: baseURL=%s, path=%s, hasAuth=%v", apiBaseURL, path, authHeader != "")
+	logHTTP.Printf("GitHub GET: baseURL=%q, path=%q, hasAuth=%v", apiBaseURL, path, authHeader != "")
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiBaseURL+path, nil)
 	if err != nil {
-		logHTTP.Printf("Failed to create GitHub GET request: path=%s, err=%v", path, err)
+		logHTTP.Printf("Failed to create GitHub GET request: path=%q, err=%v", path, err)
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 	ApplyGitHubAPIHeaders(req, authHeader)
 	resp, err := defaultGitHubHTTPClient.Do(req)
 	if err != nil {
-		logHTTP.Printf("GitHub GET request failed: path=%s, err=%v", path, err)
+		logHTTP.Printf("GitHub GET request failed: path=%q, err=%v", path, err)
 		return nil, err
 	}
-	logHTTP.Printf("GitHub GET response: path=%s, status=%d", path, resp.StatusCode)
+	logHTTP.Printf("GitHub GET response: path=%q, status=%d", path, resp.StatusCode)
 	return resp, nil
 }
 
