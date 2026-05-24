@@ -125,14 +125,14 @@ func TestValidateToolResponseFilters_DirectCall(t *testing.T) {
 // — they are always reached via validateStandardServerConfig.
 func TestValidateServerAuth_DirectCall(t *testing.T) {
 	tests := []struct {
-		name        string
-		auth        *AuthConfig
-		serverType  string
-		serverName  string
-		jsonPath    string
-		setupEnv    map[string]string
-		wantErr     bool
-		errSubstr   string
+		name       string
+		auth       *AuthConfig
+		serverType string
+		serverName string
+		jsonPath   string
+		setupEnv   map[string]string
+		wantErr    bool
+		errSubstr  string
 	}{
 		{
 			name:       "nil auth is always valid regardless of server type",
