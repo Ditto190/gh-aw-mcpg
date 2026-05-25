@@ -431,7 +431,8 @@ pub fn apply_tool_labels(
         "search_commits" => {
             // Commit search can expose private commit history
             // S(commits) = inherits from repo secrecy
-            // I(commits) = approved - commits from repository
+            // I(commits) = writer-level integrity for the resolved repository scope,
+            // mirroring other repo-scoped search reads (for example, search_code)
             let (s_owner, s_repo, s_repo_id) = resolve_search_scope(tool_args, &owner, &repo);
             if !s_repo_id.is_empty() {
                 desc = format!("search_commits:{}", s_repo_id);

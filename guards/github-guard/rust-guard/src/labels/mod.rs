@@ -568,10 +568,7 @@ mod tests {
 
         assert_eq!(desc, "search_commits:github/copilot");
         assert_eq!(secrecy, vec![] as Vec<String>);
-        assert!(
-            integrity == writer_integrity("github/copilot", &ctx)
-                || integrity == none_integrity("github/copilot", &ctx)
-        );
+        assert_eq!(integrity, writer_integrity("github/copilot", &ctx));
     }
 
     #[test]
@@ -703,6 +700,12 @@ mod tests {
         assert_eq!(ff_secrecy, base_secrecy);
         assert_eq!(ff_integrity, base_integrity);
         assert_eq!(ff_desc, base_desc);
+        assert_eq!(ff_secrecy, Vec::<String>::new());
+        assert!(
+            ff_integrity == writer_integrity("github/copilot", &ctx)
+                || ff_integrity == none_integrity("github/copilot", &ctx)
+        );
+        assert!(ff_desc.is_empty());
     }
 
     #[test]
