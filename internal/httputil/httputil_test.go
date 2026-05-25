@@ -387,7 +387,7 @@ func TestDoGitHubGET(t *testing.T) {
 		defer upstream.Close()
 
 		resp, err := DoGitHubGET(ctx, upstream.URL, "/path", "token x")
-		assert.Error(t, err)
+		assert.ErrorIs(t, err, context.Canceled)
 		assert.Nil(t, resp)
 	})
 }
