@@ -25,7 +25,8 @@ var (
 )
 
 const (
-	jsonTimestampLayout = "2006-01-02T15:04:05.000Z07:00"
+	logTimestampLayout  = "2006-01-02T15:04:05.000Z07:00"
+	jsonTimestampLayout = logTimestampLayout
 	rpcMessageSchemaV2  = "rpc-message/v2"
 	difcSchemaV2        = "difc-filtered/v2"
 )
