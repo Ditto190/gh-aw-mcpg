@@ -21,8 +21,6 @@
 //	logger.LogRPCResponse(logger.RPCDirectionInbound, "github", responsePayload, nil)
 package logger
 
-import "strings"
-
 // RPCMessageType represents the direction of an RPC message
 type RPCMessageType string
 
@@ -41,7 +39,7 @@ func (t RPCMessageType) JSONLEvent() string {
 	case RPCMessageResponse:
 		return "rpc_response"
 	default:
-		return "rpc_" + strings.ToLower(string(t))
+		return "rpc_unknown"
 	}
 }
 
