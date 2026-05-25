@@ -443,6 +443,9 @@ pub fn apply_tool_labels(
             } else {
                 secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
                 integrity = writer_integrity(repo_id, ctx);
+                if !repo_id.is_empty() {
+                    baseline_scope = Cow::Borrowed(repo_id);
+                }
             }
         }
 
