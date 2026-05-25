@@ -13,6 +13,12 @@ var logSys = logger.New("sys:container")
 // containerIndicators lists the cgroup path substrings that indicate a container environment.
 var containerIndicators = []string{"docker", "containerd", "kubepods", "lxc"}
 
+// defaultCgroupPaths are the cgroup files checked for container indicators, in order.
+var defaultCgroupPaths = []string{"/proc/1/cgroup", "/proc/self/cgroup"}
+
+// dockerEnvPath is the Docker-specific sentinel file checked by Method 1.
+const dockerEnvPath = "/.dockerenv"
+
 // IsRunningInContainer detects if the current process is running inside a container.
 func IsRunningInContainer() bool {
 	detected, _ := DetectContainerID()
@@ -22,15 +28,22 @@ func IsRunningInContainer() bool {
 // DetectContainerID detects if the current process is running inside a container
 // and attempts to extract the container ID from cgroup entries.
 // It returns (isContainer, containerID). The containerID may be empty even when
-// a container is detected (e.g., via /.dockerenv or environment variable).
+// a container is detected (e.g., via dockerEnvPath or environment variable).
 func DetectContainerID() (bool, string) {
+	return detectContainerIDWithPaths(dockerEnvPath, defaultCgroupPaths)
+}
+
+// detectContainerIDWithPaths is the testable implementation of DetectContainerID.
+// dockerEnv is the path of the Docker sentinel file; cgroupPaths is the ordered
+// list of cgroup files to probe for container indicators.
+func detectContainerIDWithPaths(dockerEnv string, cgroupPaths []string) (bool, string) {
 	logSys.Print("Detecting container environment")
 
-	// Method 1: Check for /.dockerenv file (Docker-specific)
-	if _, err := os.Stat("/.dockerenv"); err == nil {
-		logSys.Print("Container detected via /.dockerenv")
+	// Method 1: Check for Docker sentinel file.
+	if _, err := os.Stat(dockerEnv); err == nil {
+		logSys.Printf("Container detected via %s", dockerEnv)
 		// Still try to extract container ID from cgroup
-		if id := extractContainerIDFromCgroup(); id != "" {
+		if id := extractContainerIDFromCgroupFiles(cgroupPaths); id != "" {
 			return true, id
 		}
 		return true, ""
@@ -39,7 +52,7 @@ func DetectContainerID() (bool, string) {
 	// Method 2: Check cgroup files for container indicators.
 	// Try /proc/1/cgroup first, then fall back to /proc/self/cgroup for setups
 	// where PID 1 doesn't reflect the current process's cgroup (e.g., host PID namespace).
-	for _, cgroupPath := range []string{"/proc/1/cgroup", "/proc/self/cgroup"} {
+	for _, cgroupPath := range cgroupPaths {
 		data, err := os.ReadFile(cgroupPath)
 		if err != nil {
 			continue
@@ -69,7 +82,13 @@ func DetectContainerID() (bool, string) {
 // extractContainerIDFromCgroup reads cgroup files and tries to extract a container ID.
 // It checks /proc/1/cgroup first, then falls back to /proc/self/cgroup.
 func extractContainerIDFromCgroup() string {
-	for _, cgroupPath := range []string{"/proc/1/cgroup", "/proc/self/cgroup"} {
+	return extractContainerIDFromCgroupFiles(defaultCgroupPaths)
+}
+
+// extractContainerIDFromCgroupFiles reads the given cgroup files in order and
+// returns the first container ID found, or "" if none is extractable.
+func extractContainerIDFromCgroupFiles(paths []string) string {
+	for _, cgroupPath := range paths {
 		data, err := os.ReadFile(cgroupPath)
 		if err != nil {
 			continue
