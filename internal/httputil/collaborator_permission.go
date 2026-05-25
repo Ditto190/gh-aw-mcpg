@@ -6,7 +6,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+
+	"github.com/github/gh-aw-mcpg/internal/logger"
 )
+
+var logCollab = logger.New("mcp:collaborator_permission")
 
 // ParseCollaboratorPermissionArgs extracts and validates the owner, repo, and
 // username fields from an args map for a get_collaborator_permission call.
@@ -17,6 +21,7 @@ func ParseCollaboratorPermissionArgs(argsMap map[string]interface{}) (owner, rep
 	repo, _ = argsMap["repo"].(string)
 	username, _ = argsMap["username"].(string)
 	if owner == "" || repo == "" || username == "" {
+		logCollab.Printf("ParseCollaboratorPermissionArgs: missing required fields: owner=%q, repo=%q, username=%q", owner, repo, username)
 		err = fmt.Errorf("get_collaborator_permission: missing owner/repo/username")
 	}
 	return
@@ -64,9 +69,11 @@ func FetchCollaboratorPermission(
 	logPrintf func(format string, args ...interface{}),
 ) (interface{}, error) {
 	apiPath := fmt.Sprintf("/repos/%s/%s/collaborators/%s/permission", owner, repo, username)
+	logCollab.Printf("FetchCollaboratorPermission: owner=%s, repo=%s, username=%s, apiPath=%s", owner, repo, username, apiPath)
 
 	resp, err := fetch(ctx, apiPath)
 	if err != nil {
+		logCollab.Printf("FetchCollaboratorPermission: fetch error: %v", err)
 		return nil, err
 	}
 	if resp == nil {
@@ -82,7 +89,9 @@ func FetchCollaboratorPermission(
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
+	logCollab.Printf("FetchCollaboratorPermission: response received: status=%d, bodyLen=%d", resp.StatusCode, len(body))
 	if resp.StatusCode >= 400 {
+		logCollab.Printf("FetchCollaboratorPermission: GitHub API error: status=%d, owner=%s, repo=%s, username=%s", resp.StatusCode, owner, repo, username)
 		return nil, fmt.Errorf("GitHub API returned %d", resp.StatusCode)
 	}
 

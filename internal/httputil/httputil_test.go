@@ -357,6 +357,43 @@ func TestDoGitHubGET(t *testing.T) {
 		assert.Error(t, err)
 		assert.Nil(t, resp)
 	})
+
+	t.Run("returns error when HTTP transport fails", func(t *testing.T) {
+		// Start a server that immediately closes the connection to force a transport error.
+		upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Hijack the connection and close it without sending a response.
+			hj, ok := w.(http.Hijacker)
+			if !ok {
+				http.Error(w, "hijack not supported", http.StatusInternalServerError)
+				return
+			}
+			conn, _, err := hj.Hijack()
+			if err != nil {
+				http.Error(w, "hijack failed", http.StatusInternalServerError)
+				return
+			}
+			conn.Close()
+		}))
+		defer upstream.Close()
+
+		resp, err := DoGitHubGET(context.Background(), upstream.URL, "/path", "token x")
+		assert.Error(t, err)
+		assert.Nil(t, resp)
+	})
+
+	t.Run("returns error on cancelled context", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel() // cancel immediately before the request is made
+
+		upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer upstream.Close()
+
+		resp, err := DoGitHubGET(ctx, upstream.URL, "/path", "token x")
+		assert.ErrorIs(t, err, context.Canceled)
+		assert.Nil(t, resp)
+	})
 }
 
 func TestWriteErrorResponse(t *testing.T) {
