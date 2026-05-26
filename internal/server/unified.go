@@ -380,7 +380,8 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 		oteltrace.WithSpanKind(oteltrace.SpanKindInternal),
 	)
 	// httpStatusCode tracks the conceptual HTTP status of the proxied response (spec §4.1.3.6).
-	// It starts at 200 and is updated to 500 (error) or 403 (access denied) before each exit.
+	// It starts at 200 and is updated to 500 (error), 403 (access denied), or 429 (budget
+	// exhaustion) before each exit.
 	httpStatusCode := 200
 	defer func() {
 		toolSpan.SetAttributes(semconv.HTTPResponseStatusCodeKey.Int(httpStatusCode))
@@ -645,8 +646,8 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 }
 
 // enforceToolCallLimit applies the configured per-session budget for toolName on
-// the given server, incrementing successful in-budget attempts and returning an
-// error without incrementing when the session has exhausted its limit.
+// the given server, incrementing the call counter for in-budget attempts and
+// returning an error without incrementing when the session has exhausted its limit.
 func (us *UnifiedServer) enforceToolCallLimit(sessionID, serverID, toolName string) error {
 	us.sessionMu.RLock()
 	session := us.sessions[sessionID]

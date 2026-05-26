@@ -393,7 +393,6 @@ func (us *UnifiedServer) ensureGuardInitialized(
 		DIFCMode:         mode,
 		NormalizedPolicy: normalizedPolicy,
 		ToolCallLimits:   toolCallLimits,
-		ToolCallCounts:   make(map[string]int),
 	}
 	us.sessionMu.Unlock()
 
@@ -404,14 +403,15 @@ func (us *UnifiedServer) ensureGuardInitialized(
 }
 
 // copyToolCallLimits returns a defensive copy of tool-call-limits so per-session
-// counters cannot be affected by later config mutations.
+// counters cannot be affected by later config mutations. Keys are trimmed of
+// surrounding whitespace to match the normalization applied during validation.
 func copyToolCallLimits(input map[string]int) map[string]int {
 	if len(input) == 0 {
 		return nil
 	}
 	out := make(map[string]int, len(input))
 	for toolName, limit := range input {
-		out[toolName] = limit
+		out[strings.TrimSpace(toolName)] = limit
 	}
 	return out
 }
