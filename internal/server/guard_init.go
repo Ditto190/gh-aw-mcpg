@@ -382,12 +382,18 @@ func (us *UnifiedServer) ensureGuardInitialized(
 	if session.GuardInit == nil {
 		session.GuardInit = make(map[string]*GuardSessionState)
 	}
+	var toolCallLimits map[string]int
+	if policy.AllowOnly != nil {
+		toolCallLimits = copyToolCallLimits(policy.AllowOnly.ToolCallLimits)
+	}
 	session.GuardInit[serverID] = &GuardSessionState{
 		Initialized:      true,
 		PolicyHash:       policyHash,
 		PolicySource:     source,
 		DIFCMode:         mode,
 		NormalizedPolicy: normalizedPolicy,
+		ToolCallLimits:   toolCallLimits,
+		ToolCallCounts:   make(map[string]int),
 	}
 	us.sessionMu.Unlock()
 
@@ -395,6 +401,17 @@ func (us *UnifiedServer) ensureGuardInitialized(
 		sessionID, source, mode, normalizedPolicy)
 
 	return mode, nil
+}
+
+func copyToolCallLimits(input map[string]int) map[string]int {
+	if len(input) == 0 {
+		return nil
+	}
+	out := make(map[string]int, len(input))
+	for toolName, limit := range input {
+		out[toolName] = limit
+	}
+	return out
 }
 
 // getTrustedBots returns the configured list of additional trusted bot usernames,
