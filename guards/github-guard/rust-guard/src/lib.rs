@@ -47,6 +47,10 @@ fn safe_preview(s: &str, max_bytes: usize) -> &str {
     &s[..end]
 }
 
+fn should_fallback_to_single_item_label(response: &Value) -> bool {
+    !response.is_array()
+}
+
 /// Global policy context for WASM runtime entry points.
 ///
 /// `label_agent` stores the parsed policy here; `label_resource` and
@@ -951,6 +955,10 @@ pub extern "C" fn label_response(
                     integrity: integrity.into(),
                 },
             });
+        } else if !should_fallback_to_single_item_label(&actual_response) {
+            log_info("    no fine-grained items for top-level array response, skipping fallback label");
+            log_info("<<< label_response returning 0 (top-level array passthrough)");
+            return 0;
         } else {
             log_info("    no fine-grained items, creating fallback single-item label");
 
@@ -1081,6 +1089,16 @@ pub extern "C" fn dealloc(ptr: u32, size: u32) {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn top_level_array_responses_skip_single_item_fallback() {
+        assert!(!should_fallback_to_single_item_label(&json!([{"id": 1}])));
+    }
+
+    #[test]
+    fn singleton_object_responses_use_single_item_fallback() {
+        assert!(should_fallback_to_single_item_label(&json!({"id": 1})));
+    }
 
     #[test]
     fn parse_scope_accepts_owner_wildcard_array_entry() {

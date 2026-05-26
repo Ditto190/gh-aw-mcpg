@@ -388,6 +388,26 @@ func TestHandleWithDIFC_JSONArrayResponse(t *testing.T) {
 	// so the original responseData is written
 }
 
+func TestHandleWithDIFC_IssueCommentsArrayResponse(t *testing.T) {
+	upstreamBody := []interface{}{
+		map[string]interface{}{"id": 1, "body": "first"},
+		map[string]interface{}{"id": 2, "body": "second"},
+	}
+	upstream := mockUpstream(t, http.StatusOK, upstreamBody)
+	defer upstream.Close()
+
+	s := newTestServer(t, upstream.URL)
+	h := &proxyHandler{server: s}
+
+	req := httptest.NewRequest(http.MethodGet, "/repos/org/repo/issues/7/comments", nil)
+	w := httptest.NewRecorder()
+	h.handleWithDIFC(w, req, "/repos/org/repo/issues/7/comments", "issue_read",
+		map[string]interface{}{"owner": "org", "repo": "repo", "issue_number": "7", "method": "get_comments"}, nil)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.JSONEq(t, `[{"id":1,"body":"first"},{"id":2,"body":"second"}]`, w.Body.String())
+}
+
 // ─── handleWithDIFC: GraphQL query passes through DIFC ───────────────────────
 
 func TestHandleWithDIFC_GraphQLBody(t *testing.T) {
