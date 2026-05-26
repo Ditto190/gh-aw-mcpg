@@ -305,6 +305,92 @@ struct LabelResponseOutput {
     items: Vec<LabeledItem>,
 }
 
+fn apply_singleton_fallback_if_needed(
+    input: &LabelResponseInput,
+    ctx: &PolicyContext,
+    labeled_items: &mut Vec<LabeledItem>,
+) -> bool {
+    if !labeled_items.is_empty() {
+        return false;
+    }
+
+    // Extract repo info from tool args (same logic as label_resource)
+    let (_, _, repo_id) = extract_repo_info(&input.tool_args);
+    let baseline_scope = infer_scope_for_baseline(&input.tool_name, &input.tool_args, &repo_id);
+
+    // Server-generated metadata (pagination errors, empty search results) contains
+    // no repository data — pass through with approved integrity so the agent can
+    // see instructional messages and empty-result confirmations.
+    let actual_response = labels::extract_mcp_response(&input.tool_result);
+    let is_server_metadata = labels::is_mcp_text_wrapper(&actual_response)
+        || (labels::is_search_result_wrapper(&actual_response)
+            && labels::search_result_total_count(&actual_response) == Some(0));
+
+    if is_server_metadata {
+        let scope = if baseline_scope.is_empty() {
+            scope_names::GITHUB
+        } else {
+            &baseline_scope
+        };
+        // Use writer_integrity which goes through normalize_scope to match
+        // the policy scope token (e.g., "github" for owner-scoped policies).
+        let integrity = labels::writer_integrity(scope, ctx);
+        let desc = format!("metadata:{}", input.tool_name);
+
+        log_info(&format!(
+            "    server metadata (text message or empty search), integrity={:?}",
+            integrity
+        ));
+
+        labeled_items.push(LabeledItem {
+            data: input.tool_result.clone(),
+            labels: ResourceLabels {
+                description: desc,
+                secrecy: vec![].into(),
+                integrity: integrity.into(),
+            },
+        });
+        return false;
+    }
+
+    if !should_fallback_to_single_item_label(&actual_response) {
+        log_info("    no fine-grained items for top-level array response, skipping fallback label");
+        return true;
+    }
+
+    log_info("    no fine-grained items, creating fallback single-item label");
+
+    // Use apply_tool_labels to get proper labels for this tool
+    let desc = format!("resource:{}", input.tool_name);
+    let (secrecy, integrity, final_desc) = labels::apply_tool_labels(
+        &input.tool_name,
+        &input.tool_args,
+        &repo_id,
+        vec![], // default secrecy
+        vec![], // default integrity
+        desc,
+        ctx,
+    );
+
+    let integrity = labels::ensure_integrity_baseline(&baseline_scope, integrity, ctx);
+
+    log_info(&format!(
+        "    fallback labels: secrecy={:?}, integrity={:?}",
+        secrecy, integrity
+    ));
+
+    labeled_items.push(LabeledItem {
+        data: input.tool_result.clone(),
+        labels: ResourceLabels {
+            description: final_desc,
+            secrecy: secrecy.into(),
+            integrity: integrity.into(),
+        },
+    });
+
+    false
+}
+
 fn infer_scope_for_baseline<'a>(
     tool_name: &str,
     tool_args: &Value,
@@ -917,79 +1003,11 @@ pub extern "C" fn label_response(
         labels::label_response_items(&input.tool_name, &input.tool_args, &input.tool_result, &ctx);
 
     // If no items were generated, wrap entire response as single item with computed labels
-    // This ensures single-item responses (like get_file_contents) are properly labeled
-    if labeled_items.is_empty() {
-        // Extract repo info from tool args (same logic as label_resource)
-        let (_, _, repo_id) = extract_repo_info(&input.tool_args);
-        let baseline_scope = infer_scope_for_baseline(&input.tool_name, &input.tool_args, &repo_id);
-
-        // Server-generated metadata (pagination errors, empty search results) contains
-        // no repository data — pass through with approved integrity so the agent can
-        // see instructional messages and empty-result confirmations.
-        let actual_response = labels::extract_mcp_response(&input.tool_result);
-        let is_server_metadata = labels::is_mcp_text_wrapper(&actual_response)
-            || (labels::is_search_result_wrapper(&actual_response)
-                && labels::search_result_total_count(&actual_response) == Some(0));
-
-        if is_server_metadata {
-            let scope = if baseline_scope.is_empty() {
-                scope_names::GITHUB
-            } else {
-                &baseline_scope
-            };
-            // Use writer_integrity which goes through normalize_scope to match
-            // the policy scope token (e.g., "github" for owner-scoped policies).
-            let integrity = labels::writer_integrity(scope, &ctx);
-            let desc = format!("metadata:{}", input.tool_name);
-
-            log_info(&format!(
-                "    server metadata (text message or empty search), integrity={:?}",
-                integrity
-            ));
-
-            labeled_items.push(LabeledItem {
-                data: input.tool_result.clone(),
-                labels: ResourceLabels {
-                    description: desc,
-                    secrecy: vec![].into(),
-                    integrity: integrity.into(),
-                },
-            });
-        } else if !should_fallback_to_single_item_label(&actual_response) {
-            log_info("    no fine-grained items for top-level array response, skipping fallback label");
-            log_info("<<< label_response returning 0 (top-level array passthrough)");
-            return 0;
-        } else {
-            log_info("    no fine-grained items, creating fallback single-item label");
-
-            // Use apply_tool_labels to get proper labels for this tool
-            let desc = format!("resource:{}", input.tool_name);
-            let (secrecy, integrity, final_desc) = labels::apply_tool_labels(
-                &input.tool_name,
-                &input.tool_args,
-                &repo_id,
-                vec![], // default secrecy
-                vec![], // default integrity
-                desc,
-                &ctx,
-            );
-
-            let integrity = labels::ensure_integrity_baseline(&baseline_scope, integrity, &ctx);
-
-            log_info(&format!(
-                "    fallback labels: secrecy={:?}, integrity={:?}",
-                secrecy, integrity
-            ));
-
-            labeled_items.push(LabeledItem {
-                data: input.tool_result.clone(),
-                labels: ResourceLabels {
-                    description: final_desc,
-                    secrecy: secrecy.into(),
-                    integrity: integrity.into(),
-                },
-            });
-        }
+    // when appropriate. This ensures single-item responses (like get_file_contents)
+    // are properly labeled while preserving unlabeled top-level array passthrough.
+    if apply_singleton_fallback_if_needed(&input, &ctx, &mut labeled_items) {
+        log_info("<<< label_response returning 0 (top-level array passthrough)");
+        return 0;
     }
 
     log_info(&format!(
@@ -1098,6 +1116,33 @@ mod tests {
     #[test]
     fn singleton_object_responses_use_single_item_fallback() {
         assert!(should_fallback_to_single_item_label(&json!({"id": 1})));
+    }
+
+    #[test]
+    fn label_response_control_flow_skips_fallback_for_unlabeled_top_level_array() {
+        let input = LabelResponseInput {
+            tool_name: "issue_read".to_string(),
+            tool_args: json!({
+                "owner": "org",
+                "repo": "repo",
+                "issue_number": "7",
+                "method": "get_comments"
+            }),
+            tool_result: json!([
+                {"id": 1, "body": "first"},
+                {"id": 2, "body": "second"}
+            ]),
+        };
+
+        let mut labeled_items = Vec::new();
+        let should_return_zero = apply_singleton_fallback_if_needed(
+            &input,
+            &PolicyContext::default(),
+            &mut labeled_items,
+        );
+
+        assert!(should_return_zero);
+        assert!(labeled_items.is_empty());
     }
 
     #[test]

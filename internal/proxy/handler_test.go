@@ -390,13 +390,27 @@ func TestHandleWithDIFC_JSONArrayResponse(t *testing.T) {
 
 func TestHandleWithDIFC_IssueCommentsArrayResponse(t *testing.T) {
 	upstreamBody := []interface{}{
-		map[string]interface{}{"id": 1, "body": "first"},
-		map[string]interface{}{"id": 2, "body": "second"},
+		map[string]interface{}{"id": float64(1), "body": "first"},
+		map[string]interface{}{"id": float64(2), "body": "second"},
 	}
 	upstream := mockUpstream(t, http.StatusOK, upstreamBody)
 	defer upstream.Close()
 
-	s := newTestServer(t, upstream.URL)
+	// Simulate the legacy singleton fallback behavior from the guard: the entire
+	// top-level array is emitted as one labeled collection item.
+	g := &stubGuard{
+		labelResourceResult: publicResource(),
+		labelResourceOp:     difc.OperationRead,
+		labelResponseData: &difc.CollectionLabeledData{
+			Items: []difc.LabeledItem{
+				{
+					Data:   upstreamBody,
+					Labels: publicResource(),
+				},
+			},
+		},
+	}
+	s := newTestServerWithStub(t, upstream.URL, g, difc.EnforcementFilter)
 	h := &proxyHandler{server: s}
 
 	req := httptest.NewRequest(http.MethodGet, "/repos/org/repo/issues/7/comments", nil)
