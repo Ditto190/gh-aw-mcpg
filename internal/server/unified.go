@@ -644,6 +644,9 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 	return callResult, finalResult, nil
 }
 
+// enforceToolCallLimit applies the configured per-session budget for toolName on
+// the given server, incrementing successful in-budget attempts and returning an
+// error without incrementing when the session has exhausted its limit.
 func (us *UnifiedServer) enforceToolCallLimit(sessionID, serverID, toolName string) error {
 	us.sessionMu.RLock()
 	session := us.sessions[sessionID]

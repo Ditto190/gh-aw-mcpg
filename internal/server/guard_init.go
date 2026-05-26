@@ -403,6 +403,8 @@ func (us *UnifiedServer) ensureGuardInitialized(
 	return mode, nil
 }
 
+// copyToolCallLimits returns a defensive copy of tool-call-limits so per-session
+// counters cannot be affected by later config mutations.
 func copyToolCallLimits(input map[string]int) map[string]int {
 	if len(input) == 0 {
 		return nil
