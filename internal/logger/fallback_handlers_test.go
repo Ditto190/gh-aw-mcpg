@@ -36,8 +36,11 @@ func TestHandleMarkdownLoggerError_UsesFallback(t *testing.T) {
 }
 
 func TestHandleToolsLoggerError_UsesFallback(t *testing.T) {
-	logger, err := handleToolsLoggerError(assert.AnError, "/tmp/logs", "tools.json")
-
+	var logger *ToolsLogger
+	var err error
+	_ = captureStdLog(t, func() {
+		logger, err = handleToolsLoggerError(assert.AnError, "/tmp/logs", "tools.json")
+	})
 	require.NoError(t, err)
 	require.NotNil(t, logger)
 	assert.True(t, logger.useFallback)
