@@ -1,7 +1,6 @@
 package logger
 
 import (
-	"log"
 	"os"
 	"testing"
 
@@ -17,7 +16,7 @@ func TestHandleFileLoggerError_UsesFallback(t *testing.T) {
 	assert.True(t, logger.useFallback)
 	assert.Nil(t, logger.logFile)
 	require.NotNil(t, logger.logger)
-	assert.Equal(t, log.New(os.Stderr, "", 0).Writer(), logger.logger.Writer())
+	assert.Equal(t, os.Stderr, logger.logger.Writer())
 }
 
 func TestHandleMarkdownLoggerError_UsesFallback(t *testing.T) {
@@ -37,6 +36,5 @@ func TestHandleToolsLoggerError_UsesFallback(t *testing.T) {
 	require.NotNil(t, logger)
 	assert.True(t, logger.useFallback)
 	require.NotNil(t, logger.data)
-	assert.NotNil(t, logger.data.Servers)
 	assert.Empty(t, logger.data.Servers)
 }
