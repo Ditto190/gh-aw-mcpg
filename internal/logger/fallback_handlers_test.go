@@ -9,8 +9,11 @@ import (
 )
 
 func TestHandleFileLoggerError_UsesFallback(t *testing.T) {
-	logger, err := handleFileLoggerError(assert.AnError, "/tmp/logs", "test.log")
-
+	var logger *FileLogger
+	var err error
+	_ = captureStdLog(t, func() {
+		logger, err = handleFileLoggerError(assert.AnError, "/tmp/logs", "test.log")
+	})
 	require.NoError(t, err)
 	require.NotNil(t, logger)
 	assert.True(t, logger.useFallback)
