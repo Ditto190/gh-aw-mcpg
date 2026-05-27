@@ -56,6 +56,7 @@ func New(ctx context.Context, cfg *config.Config) *Launcher {
 	logLauncher.Printf("Creating new launcher with %d configured servers", len(cfg.Servers))
 
 	inContainer := sys.IsRunningInContainer()
+	logLauncher.Printf("Container detection: runningInContainer=%v", inContainer)
 	if inContainer {
 		log.Println("[LAUNCHER] Detected running inside a container")
 	}
@@ -112,6 +113,7 @@ func (l *Launcher) getServerConfig(serverID string) (*config.ServerConfig, error
 		logger.LogErrorToServer(serverID, "backend", "Backend server not found in config: %s", serverID)
 		return nil, fmt.Errorf("server '%s': %w", serverID, ErrServerNotFound)
 	}
+	logLauncher.Printf("Server config found: serverID=%s, type=%s", serverID, cfg.Type)
 	return cfg, nil
 }
 
@@ -349,10 +351,12 @@ func (l *Launcher) clearServerForRestart(serverID string) {
 
 // GetServerState returns the observed runtime state for a single server.
 func (l *Launcher) GetServerState(serverID string) ServerState {
+	logLauncher.Printf("GetServerState: serverID=%s", serverID)
 	l.mu.RLock()
 	defer l.mu.RUnlock()
 
 	if errMsg, hasErr := l.serverErrors[serverID]; hasErr {
+		logLauncher.Printf("Server state: serverID=%s, status=error, lastError=%s", serverID, errMsg)
 		return ServerState{
 			Status:    "error",
 			LastError: errMsg,
@@ -360,11 +364,13 @@ func (l *Launcher) GetServerState(serverID string) ServerState {
 	}
 
 	if startedAt, ok := l.serverStartTimes[serverID]; ok {
+		logLauncher.Printf("Server state: serverID=%s, status=running, startedAt=%v", serverID, startedAt)
 		return ServerState{
 			Status:    "running",
 			StartedAt: startedAt,
 		}
 	}
 
+	logLauncher.Printf("Server state: serverID=%s, status=stopped", serverID)
 	return ServerState{Status: "stopped"}
 }
