@@ -23,8 +23,11 @@ func TestHandleFileLoggerError_UsesFallback(t *testing.T) {
 }
 
 func TestHandleMarkdownLoggerError_UsesFallback(t *testing.T) {
-	logger, err := handleMarkdownLoggerError(assert.AnError, "/tmp/logs", "test.md")
-
+	var logger *MarkdownLogger
+	var err error
+	_ = captureStdLog(t, func() {
+		logger, err = handleMarkdownLoggerError(assert.AnError, "/tmp/logs", "test.md")
+	})
 	require.NoError(t, err)
 	require.NotNil(t, logger)
 	assert.True(t, logger.useFallback)
