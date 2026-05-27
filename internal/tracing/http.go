@@ -48,7 +48,7 @@ func WrapHTTPHandler(next http.Handler, spanName string, extraAttrs ...attribute
 		logTracing.Printf("Handling request: span=%s, method=%s, path=%s, remoteParent=%v", spanName, r.Method, r.URL.Path, hasRemoteParent)
 
 		route := r.Pattern
-		if method, path, ok := strings.Cut(route, " "); ok && method == r.Method {
+		if method, path, ok := strings.Cut(route, " "); ok && strings.EqualFold(method, r.Method) {
 			route = path
 		}
 		if route == "" {

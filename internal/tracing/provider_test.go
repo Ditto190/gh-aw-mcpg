@@ -362,6 +362,7 @@ func TestWrapHTTPHandler_UsesHTTPRouteWhenPatternAvailable(t *testing.T) {
 			foundRoute = true
 		}
 		if attr.Key == semconv.URLPathKey {
+			assert.Equal(t, "/mcp/github", attr.Value.AsString())
 			foundPath = true
 		}
 	}
