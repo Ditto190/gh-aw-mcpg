@@ -48,17 +48,21 @@ func WrapHTTPHandler(next http.Handler, spanName string, extraAttrs ...attribute
 		logTracing.Printf("Handling request: span=%s, method=%s, path=%s, remoteParent=%v", spanName, r.Method, r.URL.Path, hasRemoteParent)
 
 		route := r.Pattern
-		if method, path, ok := strings.Cut(route, " "); ok && strings.EqualFold(method, r.Method) {
-			route = path
-		}
-		if route == "" {
-			route = r.URL.Path
+		if method, path, ok := strings.Cut(route, " "); ok {
+			if strings.EqualFold(method, r.Method) {
+				route = path
+			} else {
+				route = ""
+			}
 		}
 
 		attrs := append([]attribute.KeyValue{
 			semconv.HTTPRequestMethodKey.String(r.Method),
-			semconv.HTTPRouteKey.String(route),
+			semconv.URLPathKey.String(r.URL.Path),
 		}, extraAttrs...)
+		if route != "" {
+			attrs = append(attrs, semconv.HTTPRouteKey.String(route))
+		}
 
 		ctx, span := t.Start(ctx, spanName,
 			oteltrace.WithAttributes(attrs...),

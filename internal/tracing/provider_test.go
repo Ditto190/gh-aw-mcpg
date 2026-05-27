@@ -367,7 +367,44 @@ func TestWrapHTTPHandler_UsesHTTPRouteWhenPatternAvailable(t *testing.T) {
 		}
 	}
 	assert.True(t, foundRoute, "http.route attribute must be present")
-	assert.False(t, foundPath, "url.path attribute should not be present when route template exists")
+	assert.True(t, foundPath, "url.path attribute must be present")
+}
+
+// TestWrapHTTPHandler_UsesURLPathWhenPatternUnavailable verifies url.path is
+// always captured and http.route is omitted when no route template is available.
+func TestWrapHTTPHandler_UsesURLPathWhenPatternUnavailable(t *testing.T) {
+	ctx := context.Background()
+
+	provider, err := tracing.InitProvider(ctx, nil)
+	require.NoError(t, err)
+	defer provider.Shutdown(ctx)
+
+	_, exporter, cleanup := newInMemoryProvider(t)
+	defer cleanup()
+
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/unmatched/path", nil)
+	rr := httptest.NewRecorder()
+	tracing.WrapHTTPHandler(inner, "test.route.fallback").ServeHTTP(rr, req)
+
+	spans := exporter.GetSpans()
+	require.Len(t, spans, 1, "expected exactly one span")
+
+	var foundRoute, foundPath bool
+	for _, attr := range spans[0].Attributes {
+		if attr.Key == semconv.HTTPRouteKey {
+			foundRoute = true
+		}
+		if attr.Key == semconv.URLPathKey {
+			assert.Equal(t, "/unmatched/path", attr.Value.AsString())
+			foundPath = true
+		}
+	}
+	assert.False(t, foundRoute, "http.route attribute should be omitted when route template is unavailable")
+	assert.True(t, foundPath, "url.path attribute must be present")
 }
 
 // TestInitProvider_WithHeaders verifies that OTLP export headers are forwarded

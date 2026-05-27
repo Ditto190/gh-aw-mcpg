@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"sync"
@@ -28,6 +29,9 @@ import (
 var logUnified = logger.New("server:unified")
 
 const wasmGuardsDirEnvVar = "MCP_GATEWAY_WASM_GUARDS_DIR"
+const rateLimitExceededStatus = "rate limit exceeded"
+
+var errRateLimitExceeded = errors.New(rateLimitExceededStatus)
 
 // MCPProtocolVersion is the MCP protocol version supported by this gateway
 const MCPProtocolVersion = mcp.MCPProtocolVersion
@@ -517,7 +521,11 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 	if rateLimited, resetAt := isRateLimitToolResult(backendResult); rateLimited {
 		cb.RecordRateLimit(resetAt)
 		execSpan.SetAttributes(tracing.RateLimitHit.Bool(true))
-		execSpan.SetStatus(codes.Error, "rate limit exceeded")
+		toolSpan.SetAttributes(tracing.RateLimitHit.Bool(true))
+		execSpan.RecordError(errRateLimitExceeded)
+		toolSpan.RecordError(errRateLimitExceeded)
+		execSpan.SetStatus(codes.Error, rateLimitExceededStatus)
+		toolSpan.SetStatus(codes.Error, rateLimitExceededStatus)
 		httpStatusCode = 429
 		// Preserve the original backend error text so the agent sees the actual upstream
 		// rate-limit details. ErrCircuitOpen is only returned when cb.Allow() rejects
