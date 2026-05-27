@@ -22,7 +22,7 @@ When running locally (`run.sh`), these variables are optional (warnings shown if
 | `MCP_GATEWAY_DOMAIN` | Gateway domain | `localhost` |
 | `MCP_GATEWAY_API_KEY` | Informational only — not read directly by the binary; must be referenced in your config via `"${MCP_GATEWAY_API_KEY}"` to enable authentication | (disabled) |
 | `MCP_GATEWAY_LOG_DIR` | Log file directory (sets default for `--log-dir` flag) | `/tmp/gh-aw/mcp-logs` |
-| `MCP_GATEWAY_WASM_CACHE_DIR` | Disk-backed wazero compilation cache directory (sets default for `--wasm-cache-dir`; defaults to `<log-dir>/wazero-cache`) | `/tmp/gh-aw/mcp-logs/wazero-cache` |
+| `MCP_GATEWAY_WASM_CACHE_DIR` | Disk-backed wazero compilation cache directory (sets default for `--wasm-cache-dir`; defaults to `<parent-of-log-dir>/wazero-cache`, a sibling of the log directory) | `/tmp/gh-aw/wazero-cache` |
 | `MCP_GATEWAY_PAYLOAD_DIR` | Large payload storage directory (sets default for `--payload-dir` flag). Must be an absolute path. | `/tmp/jq-payloads` |
 | `MCP_GATEWAY_PAYLOAD_PATH_PREFIX` | Path prefix for remapping payloadPath returned to clients (sets default for `--payload-path-prefix` flag) | (empty - use actual filesystem path) |
 | `MCP_GATEWAY_PAYLOAD_SIZE_THRESHOLD` | Size threshold in bytes for payload storage (sets default for `--payload-size-threshold` flag) | `524288` |
