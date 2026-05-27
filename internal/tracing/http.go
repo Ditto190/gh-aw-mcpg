@@ -4,6 +4,7 @@ package tracing
 
 import (
 	"net/http"
+	"strings"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -25,7 +26,7 @@ type statusResponseWriter struct {
 
 // WrapHTTPHandler wraps an http.Handler with an OpenTelemetry server span.
 // A span named spanName is created for every request, with
-// http.request.method and url.path set automatically. Extra attrs are merged in.
+// http.request.method and http.route set automatically. Extra attrs are merged in.
 //
 // Incoming W3C traceparent/tracestate headers are extracted so that an
 // agent-originated trace is continued; if no such headers are present a fresh
@@ -46,9 +47,17 @@ func WrapHTTPHandler(next http.Handler, spanName string, extraAttrs ...attribute
 		hasRemoteParent := oteltrace.SpanContextFromContext(ctx).IsRemote()
 		logTracing.Printf("Handling request: span=%s, method=%s, path=%s, remoteParent=%v", spanName, r.Method, r.URL.Path, hasRemoteParent)
 
+		route := r.Pattern
+		if method, path, ok := strings.Cut(route, " "); ok && method == r.Method {
+			route = path
+		}
+		if route == "" {
+			route = r.URL.Path
+		}
+
 		attrs := append([]attribute.KeyValue{
 			semconv.HTTPRequestMethodKey.String(r.Method),
-			semconv.URLPathKey.String(r.URL.Path),
+			semconv.HTTPRouteKey.String(route),
 		}, extraAttrs...)
 
 		ctx, span := t.Start(ctx, spanName,

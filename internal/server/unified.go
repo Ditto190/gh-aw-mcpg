@@ -400,7 +400,7 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 			toolName, serverID)
 		httpStatusCode = 403
 		deniedErr := fmt.Errorf("tool %q is not in the allowed-tools list for this server", toolName)
-		toolSpan.RecordError(deniedErr)
+		toolSpan.RecordError(deniedErr, oteltrace.WithStackTrace(true))
 		toolSpan.SetStatus(codes.Error, "tool not allowed")
 		return mcp.NewErrorCallToolResult(deniedErr)
 	}
@@ -420,7 +420,7 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 	}
 	if err := us.enforceToolCallLimit(sessionID, serverID, toolName); err != nil {
 		httpStatusCode = 429
-		toolSpan.RecordError(err)
+		toolSpan.RecordError(err, oteltrace.WithStackTrace(true))
 		toolSpan.SetStatus(codes.Error, "tool call limit reached")
 		return mcp.NewErrorCallToolResult(err)
 	}
@@ -472,7 +472,7 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 			// Non-read operation - block the request
 			logger.LogWarn("difc", "Access DENIED for agent %s to %s: %s", agentID, resource.Description, result.Reason)
 			detailedErr := difc.FormatViolationError(result, agentLabels.Secrecy, agentLabels.Integrity, resource)
-			toolSpan.RecordError(detailedErr)
+			toolSpan.RecordError(detailedErr, oteltrace.WithStackTrace(true))
 			toolSpan.SetStatus(codes.Error, "access denied: "+result.Reason)
 			httpStatusCode = 403
 			return mcp.NewErrorCallToolResult(detailedErr)
@@ -494,7 +494,7 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 	// Check the circuit breaker before calling the backend.
 	cb := us.getCircuitBreaker(serverID)
 	if err := cb.Allow(); err != nil {
-		execSpan.RecordError(err)
+		execSpan.RecordError(err, oteltrace.WithStackTrace(true))
 		execSpan.SetStatus(codes.Error, "circuit breaker open")
 		httpStatusCode = 429
 		return mcp.NewErrorCallToolResult(err)
@@ -507,7 +507,7 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 		// breaker state unchanged so genuine rate-limit history is preserved.
 		// Use a generic error message for trace recording to avoid leaking internal details
 		// to trace backends; the full error is returned to the caller and logged separately.
-		execSpan.RecordError(fmt.Errorf("tool execution failed"))
+		execSpan.RecordError(fmt.Errorf("tool execution failed"), oteltrace.WithStackTrace(true))
 		execSpan.SetStatus(codes.Error, "tool execution failed")
 		httpStatusCode = 500
 		return mcp.NewErrorCallToolResult(err)
@@ -517,6 +517,7 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 	if rateLimited, resetAt := isRateLimitToolResult(backendResult); rateLimited {
 		cb.RecordRateLimit(resetAt)
 		execSpan.SetAttributes(tracing.RateLimitHit.Bool(true))
+		execSpan.SetStatus(codes.Error, "rate limit exceeded")
 		httpStatusCode = 429
 		// Preserve the original backend error text so the agent sees the actual upstream
 		// rate-limit details. ErrCircuitOpen is only returned when cb.Allow() rejects

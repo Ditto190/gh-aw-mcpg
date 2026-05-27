@@ -134,6 +134,7 @@ func InitProvider(ctx context.Context, cfg *config.TracingConfig) (*Provider, er
 	res, err := resource.New(ctx,
 		resource.WithTelemetrySDK(),
 		resource.WithSchemaURL(semconv.SchemaURL),
+		resource.WithContainer(),
 		resource.WithAttributes(
 			semconv.ServiceName(serviceName),
 			semconv.ServiceVersion(version.Get()),
