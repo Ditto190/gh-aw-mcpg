@@ -516,8 +516,7 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 		cb.RecordRateLimit(resetAt)
 		execSpan.SetAttributes(tracing.RateLimitHit.Bool(true))
 		toolSpan.SetAttributes(tracing.RateLimitHit.Bool(true))
-		tracing.RecordSpanError(execSpan, errRateLimitExceeded, rateLimitExceededStatus)
-		tracing.RecordSpanError(toolSpan, errRateLimitExceeded, rateLimitExceededStatus)
+		tracing.RecordSpanErrorOnAll(errRateLimitExceeded, rateLimitExceededStatus, execSpan, toolSpan)
 		httpStatusCode = 429
 		// Preserve the original backend error text so the agent sees the actual upstream
 		// rate-limit details. ErrCircuitOpen is only returned when cb.Allow() rejects
