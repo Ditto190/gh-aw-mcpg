@@ -206,8 +206,7 @@ pub fn label_response_items(
                                 repo_visibility_secrecy_for_repo_id(repo_full_name, ctx).into()
                             } else {
                                 secrecy_shared.clone()
-                            }
-                            ,
+                            },
                             integrity: integrity.into(),
                         },
                     });
@@ -291,8 +290,7 @@ pub fn label_response_items(
                             repo_visibility_secrecy_for_repo_id(&repo_full_name, ctx).into()
                         } else {
                             secrecy_shared.clone()
-                        }
-                        ,
+                        },
                         integrity: integrity.into(),
                     },
                 });
