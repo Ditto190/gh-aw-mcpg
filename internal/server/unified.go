@@ -473,8 +473,7 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 		// Non-read operation - block the request
 		logger.LogWarn("difc", "Access DENIED for agent %s to %s: %s", agentID, resource.Description, result.Reason)
 		detailedErr := difc.FormatViolationError(result, agentLabels.Secrecy, agentLabels.Integrity, resource)
-		toolSpan.RecordError(detailedErr, oteltrace.WithStackTrace(true))
-		toolSpan.SetStatus(codes.Error, "access denied: "+result.Reason)
+		tracing.RecordSpanError(toolSpan, detailedErr, "access denied: "+result.Reason)
 		httpStatusCode = 403
 		return mcp.NewErrorCallToolResult(detailedErr)
 	}
