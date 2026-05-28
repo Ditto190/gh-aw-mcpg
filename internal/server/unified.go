@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"go.opentelemetry.io/otel/codes"
 	semconv "go.opentelemetry.io/otel/semconv/v1.27.0"
 	oteltrace "go.opentelemetry.io/otel/trace"
 
@@ -404,8 +403,7 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 			toolName, serverID)
 		httpStatusCode = 403
 		deniedErr := fmt.Errorf("tool %q is not in the allowed-tools list for this server", toolName)
-		toolSpan.RecordError(deniedErr, oteltrace.WithStackTrace(true))
-		toolSpan.SetStatus(codes.Error, "tool not allowed")
+		tracing.RecordSpanError(toolSpan, deniedErr, "tool not allowed")
 		return mcp.NewErrorCallToolResult(deniedErr)
 	}
 
@@ -424,8 +422,7 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 	}
 	if err := us.enforceToolCallLimit(sessionID, serverID, toolName); err != nil {
 		httpStatusCode = 429
-		toolSpan.RecordError(err, oteltrace.WithStackTrace(true))
-		toolSpan.SetStatus(codes.Error, "tool call limit reached")
+		tracing.RecordSpanError(toolSpan, err, "tool call limit reached")
 		return mcp.NewErrorCallToolResult(err)
 	}
 
@@ -476,8 +473,7 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 			// Non-read operation - block the request
 			logger.LogWarn("difc", "Access DENIED for agent %s to %s: %s", agentID, resource.Description, result.Reason)
 			detailedErr := difc.FormatViolationError(result, agentLabels.Secrecy, agentLabels.Integrity, resource)
-			toolSpan.RecordError(detailedErr, oteltrace.WithStackTrace(true))
-			toolSpan.SetStatus(codes.Error, "access denied: "+result.Reason)
+			tracing.RecordSpanError(toolSpan, detailedErr, "access denied: "+result.Reason)
 			httpStatusCode = 403
 			return mcp.NewErrorCallToolResult(detailedErr)
 		}
@@ -498,8 +494,7 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 	// Check the circuit breaker before calling the backend.
 	cb := us.getCircuitBreaker(serverID)
 	if err := cb.Allow(); err != nil {
-		execSpan.RecordError(err, oteltrace.WithStackTrace(true))
-		execSpan.SetStatus(codes.Error, "circuit breaker open")
+		tracing.RecordSpanError(execSpan, err, "circuit breaker open")
 		httpStatusCode = 429
 		return mcp.NewErrorCallToolResult(err)
 	}
@@ -511,8 +506,7 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 		// breaker state unchanged so genuine rate-limit history is preserved.
 		// Use a generic error message for trace recording to avoid leaking internal details
 		// to trace backends; the full error is returned to the caller and logged separately.
-		execSpan.RecordError(fmt.Errorf("tool execution failed"), oteltrace.WithStackTrace(true))
-		execSpan.SetStatus(codes.Error, "tool execution failed")
+		tracing.RecordSpanError(execSpan, fmt.Errorf("tool execution failed"), "tool execution failed")
 		httpStatusCode = 500
 		return mcp.NewErrorCallToolResult(err)
 	}
@@ -522,10 +516,8 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 		cb.RecordRateLimit(resetAt)
 		execSpan.SetAttributes(tracing.RateLimitHit.Bool(true))
 		toolSpan.SetAttributes(tracing.RateLimitHit.Bool(true))
-		execSpan.RecordError(errRateLimitExceeded)
-		toolSpan.RecordError(errRateLimitExceeded)
-		execSpan.SetStatus(codes.Error, rateLimitExceededStatus)
-		toolSpan.SetStatus(codes.Error, rateLimitExceededStatus)
+		tracing.RecordSpanError(execSpan, errRateLimitExceeded, rateLimitExceededStatus)
+		tracing.RecordSpanError(toolSpan, errRateLimitExceeded, rateLimitExceededStatus)
 		httpStatusCode = 429
 		// Preserve the original backend error text so the agent sees the actual upstream
 		// rate-limit details. ErrCircuitOpen is only returned when cb.Allow() rejects

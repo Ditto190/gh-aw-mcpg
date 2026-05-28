@@ -810,6 +810,22 @@ func TestWrapHTTPHandler_5xxSetsSpanStatusError(t *testing.T) {
 	assert.Equal(t, codes.Error, span.Status.Code, "5xx must set span status to Error")
 	assert.NotEmpty(t, span.Status.Description, "5xx must provide a non-empty status description")
 
+	var foundException, foundStackTrace bool
+	for _, event := range span.Events {
+		if event.Name != "exception" {
+			continue
+		}
+		foundException = true
+		for _, attr := range event.Attributes {
+			if attr.Key == "exception.stacktrace" {
+				assert.NotEmpty(t, attr.Value.AsString(), "recorded exception should include stacktrace")
+				foundStackTrace = true
+			}
+		}
+	}
+	assert.True(t, foundException, "5xx should record an exception event")
+	assert.True(t, foundStackTrace, "5xx exception event should include stacktrace")
+
 	var found bool
 	for _, attr := range span.Attributes {
 		if attr.Key == semconv.HTTPResponseStatusCodeKey {
