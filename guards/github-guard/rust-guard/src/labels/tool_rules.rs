@@ -449,6 +449,12 @@ pub fn apply_tool_labels(
             // I = project:org - maintained by org admins
             integrity = project_github_label(ctx);
         }
+        "list_issue_fields" => {
+            // Org-level custom issue field definitions (field names/types/allowed values)
+            // S = inherits from org
+            // I = project:org - maintained by org admins
+            integrity = project_github_label(ctx);
+        }
 
         // === User Search ===
         "search_users" => {
