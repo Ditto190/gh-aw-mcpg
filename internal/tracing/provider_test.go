@@ -810,6 +810,22 @@ func TestWrapHTTPHandler_5xxSetsSpanStatusError(t *testing.T) {
 	assert.Equal(t, codes.Error, span.Status.Code, "5xx must set span status to Error")
 	assert.NotEmpty(t, span.Status.Description, "5xx must provide a non-empty status description")
 
+	var foundException, foundStackTrace bool
+	for _, event := range span.Events {
+		if event.Name != "exception" {
+			continue
+		}
+		foundException = true
+		for _, attr := range event.Attributes {
+			if attr.Key == "exception.stacktrace" {
+				assert.NotEmpty(t, attr.Value.AsString(), "recorded exception should include stacktrace")
+				foundStackTrace = true
+			}
+		}
+	}
+	assert.True(t, foundException, "5xx should record an exception event")
+	assert.True(t, foundStackTrace, "5xx exception event should include stacktrace")
+
 	var found bool
 	for _, attr := range span.Attributes {
 		if attr.Key == semconv.HTTPResponseStatusCodeKey {
@@ -818,4 +834,32 @@ func TestWrapHTTPHandler_5xxSetsSpanStatusError(t *testing.T) {
 		}
 	}
 	assert.True(t, found, "http.response.status_code attribute must be present on the span")
+}
+
+func TestWrapHTTPHandler_Unknown5xxUsesFallbackStatusDescription(t *testing.T) {
+	ctx := context.Background()
+
+	provider, err := tracing.InitProvider(ctx, nil)
+	require.NoError(t, err)
+	defer provider.Shutdown(ctx)
+
+	_, exporter, cleanup := newInMemoryProvider(t)
+	defer cleanup()
+
+	req := httptest.NewRequest(http.MethodPost, "/mcp", nil)
+	rr := httptest.NewRecorder()
+
+	const unknown5xx = 599
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(unknown5xx)
+	})
+
+	tracing.WrapHTTPHandler(inner, "test.unknown5xx").ServeHTTP(rr, req)
+
+	spans := exporter.GetSpans()
+	require.Len(t, spans, 1, "expected exactly one span")
+	span := spans[0]
+
+	assert.Equal(t, codes.Error, span.Status.Code, "unknown 5xx must set span status to Error")
+	assert.Equal(t, "HTTP 599", span.Status.Description, "unknown 5xx should use HTTP <code> fallback description")
 }

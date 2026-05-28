@@ -3,12 +3,13 @@
 package tracing
 
 import (
+	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/propagation"
 	semconv "go.opentelemetry.io/otel/semconv/v1.27.0"
 	oteltrace "go.opentelemetry.io/otel/trace"
@@ -76,7 +77,11 @@ func WrapHTTPHandler(next http.Handler, spanName string, extraAttrs ...attribute
 		defer func() {
 			span.SetAttributes(semconv.HTTPResponseStatusCodeKey.Int(srw.StatusCode))
 			if srw.StatusCode >= 500 {
-				span.SetStatus(codes.Error, http.StatusText(srw.StatusCode))
+				msg := http.StatusText(srw.StatusCode)
+				if msg == "" {
+					msg = fmt.Sprintf("HTTP %d", srw.StatusCode)
+				}
+				RecordSpanError(span, errors.New(msg), msg)
 			}
 		}()
 		next.ServeHTTP(srw, r.WithContext(ctx))
