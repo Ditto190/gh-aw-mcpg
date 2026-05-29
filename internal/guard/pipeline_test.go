@@ -35,7 +35,10 @@ func (g *pipelineGuard) LabelResponse(_ context.Context, _ string, _ interface{}
 	return g.labelResponseData, g.labelResponseErr
 }
 
-// newPipelineInput builds a PipelineInput with default safe values for tests.
+// newPipelineInput builds a PipelineInput populated with default safe values for pipeline
+// unit tests. If g is non-nil it is used as the Guard; otherwise a pipelineGuard stub is
+// created that returns a bare labeled resource for the given operation type. Callers that
+// need custom Guard behavior (e.g. labeling errors) should pass their own stub as g.
 func newPipelineInput(g Guard, op difc.OperationType, mode difc.EnforcementMode) PipelineInput {
 	resource := difc.NewLabeledResource("test-resource")
 
