@@ -28,8 +28,8 @@ func TestDeriveAPIFromServerURL_HTTPSchemeAndEdgeCases(t *testing.T) {
 		expected  string
 	}{
 		{
-			// http scheme is explicitly allowed (lines 91-94 only reject
-			// schemes that are neither "http" nor "https").
+			// http scheme is explicitly allowed; schemes other than "http" and
+			// "https" are rejected.
 			// GHEC tenant: prepend "copilot-api." subdomain.
 			name:      "http scheme GHEC tenant derives copilot-api subdomain",
 			serverURL: "http://mycompany.ghe.com",
