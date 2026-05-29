@@ -213,7 +213,7 @@ func TestFetchCollaboratorPermissionHelper(t *testing.T) {
 			func(ctx context.Context, apiPath string) (*http.Response, error) {
 				return &http.Response{
 					StatusCode: http.StatusOK,
-					Body:       &failingReadCloserHelper{},
+					Body:       &failingReadCloser{},
 				}, nil
 			},
 			func(format string, args ...interface{}) {},
@@ -271,12 +271,12 @@ func TestFetchCollaboratorPermissionHelper(t *testing.T) {
 	})
 }
 
-type failingReadCloserHelper struct{}
+type failingReadCloser struct{}
 
-func (f *failingReadCloserHelper) Read(_ []byte) (int, error) {
+func (f *failingReadCloser) Read(_ []byte) (int, error) {
 	return 0, fmt.Errorf("read failed")
 }
 
-func (f *failingReadCloserHelper) Close() error {
+func (f *failingReadCloser) Close() error {
 	return nil
 }
