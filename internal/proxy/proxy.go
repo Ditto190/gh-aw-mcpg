@@ -346,6 +346,7 @@ func (s *Server) upstreamHost() string {
 
 	host, _, _ := strings.Cut(strings.TrimLeft(s.githubAPIURL, "/"), "/")
 	return host
+}
 
 // forwardToGitHub sends a request to the upstream GitHub API.
 // clientAuth is the Authorization header from the inbound client request;
