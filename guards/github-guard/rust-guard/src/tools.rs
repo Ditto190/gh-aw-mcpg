@@ -415,8 +415,13 @@ mod tests {
     }
 
     #[test]
-    fn test_sub_issue_management_tools_are_read_write_operations() {
-        for op in &["add_sub_issue", "remove_sub_issue", "reprioritize_sub_issue"] {
+    fn test_sub_issue_tools_are_read_write_operations() {
+        for op in &[
+            "sub_issue_write",
+            "add_sub_issue",
+            "remove_sub_issue",
+            "reprioritize_sub_issue",
+        ] {
             assert!(
                 is_read_write_operation(op),
                 "{} must be classified as a read-write operation",
