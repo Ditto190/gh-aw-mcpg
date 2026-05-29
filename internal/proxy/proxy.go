@@ -334,11 +334,18 @@ func (r *restBackendCaller) CallTool(ctx context.Context, toolName string, args 
 // proxy.backend.forward span.
 func (s *Server) upstreamHost() string {
 	u, err := url.Parse(s.githubAPIURL)
-	if err != nil || u.Host == "" {
-		return s.githubAPIURL
+	if err == nil && u.Host != "" {
+		return u.Hostname()
 	}
-	return u.Hostname()
-}
+
+	// Handle scheme-less config values like "api.github.com" or "api.github.com/api/v3".
+	u, err = url.Parse("https://" + strings.TrimLeft(s.githubAPIURL, "/"))
+	if err == nil && u.Host != "" {
+		return u.Hostname()
+	}
+
+	host, _, _ := strings.Cut(strings.TrimLeft(s.githubAPIURL, "/"), "/")
+	return host
 
 // forwardToGitHub sends a request to the upstream GitHub API.
 // clientAuth is the Authorization header from the inbound client request;
