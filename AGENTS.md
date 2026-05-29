@@ -231,7 +231,7 @@ golangci-lint run --enable=gosec,testifylint,errcheck --timeout=5m
 - Test actual server behavior and CLI flags
 - Run with: `make test-integration`
 
-**All Tests**: `make test-all` runs both unit and integration tests; builds binary if not present
+**All Tests**: `make test-all` runs both unit and integration tests; always builds the binary first
 
 ## Common Tasks
 
