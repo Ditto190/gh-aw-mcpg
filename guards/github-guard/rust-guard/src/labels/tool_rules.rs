@@ -557,6 +557,7 @@ pub fn apply_tool_labels(
         // Issue/PR writes
         "create_issue"
         | "issue_write"
+        | "issue_write_ff_remote_mcp_issue_fields"
         | "sub_issue_write"
         | "add_issue_comment"
         | "create_pull_request"
@@ -903,6 +904,37 @@ mod tests {
             );
             assert!(secrecy.is_empty(), "{op}: public repo should have empty secrecy");
         }
+    }
+
+    #[test]
+    fn apply_tool_labels_issue_write_ff_matches_issue_write() {
+        let ctx = default_ctx();
+        let tool_args = serde_json::json!({ "owner": "github", "repo": "copilot", "issue_number": 42 });
+        let repo_id = "github/copilot";
+
+        let issue_write_labels = super::apply_tool_labels(
+            "issue_write",
+            &tool_args,
+            repo_id,
+            vec![],
+            vec![],
+            String::new(),
+            &ctx,
+        );
+        let issue_write_ff_labels = super::apply_tool_labels(
+            "issue_write_ff_remote_mcp_issue_fields",
+            &tool_args,
+            repo_id,
+            vec![],
+            vec![],
+            String::new(),
+            &ctx,
+        );
+
+        assert_eq!(
+            issue_write_ff_labels, issue_write_labels,
+            "issue_write FF variant must match issue_write labels and description"
+        );
     }
 
     #[test]
