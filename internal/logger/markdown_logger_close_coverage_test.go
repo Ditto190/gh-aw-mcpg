@@ -27,8 +27,8 @@ func TestMarkdownLogger_Close_FooterWriteError(t *testing.T) {
 	require.NoError(t, f.Close())
 
 	// Close() should still return without panic, handling the write error gracefully.
-closeErr := ml.Close()
-require.ErrorIs(t, closeErr, os.ErrClosed, "Close() should return the closeLogFile error after footer write failure")
+	closeErr := ml.Close()
+	require.ErrorIs(t, closeErr, os.ErrClosed, "Close() should return the closeLogFile error after footer write failure")
 }
 
 // TestMarkdownLogger_Close_NilLogFile covers the ml.logFile == nil branch:
@@ -137,11 +137,11 @@ func TestFileLogger_Log_SyncError(t *testing.T) {
 	// Close the file so Sync() will fail.
 	require.NoError(t, f.Close())
 
-output := captureStdLog(t, func() {
-	fl.Log(LogLevelInfo, "test", "sync will fail")
-})
-assert.Contains(t, output, "WARNING: Failed to sync log file")
-assert.Contains(t, output, os.ErrClosed.Error())
+	output := captureStdLog(t, func() {
+		fl.Log(LogLevelInfo, "test", "sync will fail")
+	})
+	assert.Contains(t, output, "WARNING: Failed to sync log file")
+	assert.Contains(t, output, os.ErrClosed.Error())
 }
 
 // TestLogger_Print_Disabled covers the early-return branch in Logger.Print()
