@@ -10,8 +10,8 @@ use super::constants::{field_names, scope_names, SENSITIVE_FILE_KEYWORDS, SENSIT
 use super::helpers::{
     author_association_floor_from_str,
     elevate_via_collaborator_permission, ensure_integrity_baseline,
-    extract_number_as_string, extract_repo_info, extract_repo_info_from_search_query,
-    format_repo_id, is_any_trusted_actor, is_default_branch_commit_context,
+    extract_number_as_string, extract_repo_info_from_search_query,
+    format_repo_id, get_string_field, is_any_trusted_actor, is_default_branch_commit_context,
     is_default_branch_ref, max_integrity,
     merged_integrity, policy_private_scope_label, private_user_label, project_github_label,
     reader_integrity, writer_integrity, PolicyContext,
@@ -122,7 +122,8 @@ pub fn apply_tool_labels(
     mut desc: String,
     ctx: &PolicyContext,
 ) -> (Vec<String>, Vec<String>, String) {
-    let (owner, repo, _) = extract_repo_info(tool_args);
+    let owner = get_string_field(tool_args, field_names::OWNER);
+    let repo = get_string_field(tool_args, field_names::REPO);
     let mut baseline_scope: Cow<'_, str> = Cow::Borrowed(repo_id);
     let repo_private = if owner.is_empty() || repo.is_empty() {
         None
