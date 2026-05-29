@@ -139,13 +139,7 @@ func (h *proxyHandler) handleWithDIFC(w http.ResponseWriter, r *http.Request, pa
 	backend := &restBackendCaller{server: s, clientAuth: r.Header.Get("Authorization")}
 
 	// Start a DIFC pipeline span covering all phases for this request
-	ctx, difcSpan := h.GetTracer().Start(ctx, "proxy.difc_pipeline",
-		oteltrace.WithAttributes(
-			tracing.GenAIToolName.String(toolName),
-			semconv.URLPathKey.String(r.URL.Path),
-		),
-		oteltrace.WithSpanKind(oteltrace.SpanKindInternal),
-	)
+	ctx, difcSpan := tracing.StartDIFCPipelineSpan(ctx, h.GetTracer(), toolName, r.URL.Path)
 	defer difcSpan.End()
 
 	if !s.guardInitialized {

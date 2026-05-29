@@ -9,8 +9,6 @@ import (
 	"sync"
 	"time"
 
-	oteltrace "go.opentelemetry.io/otel/trace"
-
 	"github.com/github/gh-aw-mcpg/internal/config"
 	"github.com/github/gh-aw-mcpg/internal/difc"
 	"github.com/github/gh-aw-mcpg/internal/envutil"
@@ -374,14 +372,7 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 
 	// Start an OTEL span for the full tool call lifecycle (spans all phases 0–6)
 	// Attribute names follow the OpenTelemetry gen_ai semantic conventions
-	ctx, toolSpan := us.GetTracer().Start(ctx, "mcp.tool_call",
-		oteltrace.WithAttributes(
-			tracing.GenAIAgentID.String(serverID),
-			tracing.MCPMethod.String("tools/call"),
-			tracing.GenAIToolName.String(toolName),
-		),
-		oteltrace.WithSpanKind(oteltrace.SpanKindInternal),
-	)
+	ctx, toolSpan := tracing.StartToolCallSpan(ctx, us.GetTracer(), serverID, toolName)
 	// httpStatusCode tracks the conceptual HTTP status of the proxied response (spec §4.1.3.6).
 	// It starts at 200 and is updated to 500 (error), 403 (access denied), or 429 (budget
 	// exhaustion) before each exit.
@@ -464,13 +455,7 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 	})
 
 	// **Phase 3: Execute the backend call**
-	execCtx, execSpan := us.GetTracer().Start(ctx, "gateway.backend.execute",
-		oteltrace.WithAttributes(
-			tracing.GenAIToolName.String(toolName),
-			tracing.GenAIAgentID.String(serverID),
-		),
-		oteltrace.WithSpanKind(oteltrace.SpanKindClient),
-	)
+	execCtx, execSpan := tracing.StartBackendExecuteSpan(ctx, us.GetTracer(), serverID, toolName)
 	defer execSpan.End()
 
 	// Check the circuit breaker before calling the backend.
