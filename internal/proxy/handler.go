@@ -11,7 +11,6 @@ import (
 	"time"
 
 	semconv "go.opentelemetry.io/otel/semconv/v1.27.0"
-	oteltrace "go.opentelemetry.io/otel/trace"
 
 	"github.com/github/gh-aw-mcpg/internal/difc"
 	"github.com/github/gh-aw-mcpg/internal/guard"
@@ -139,13 +138,7 @@ func (h *proxyHandler) handleWithDIFC(w http.ResponseWriter, r *http.Request, pa
 	backend := &restBackendCaller{server: s, clientAuth: r.Header.Get("Authorization")}
 
 	// Start a DIFC pipeline span covering all phases for this request
-	ctx, difcSpan := h.GetTracer().Start(ctx, "proxy.difc_pipeline",
-		oteltrace.WithAttributes(
-			tracing.GenAIToolName.String(toolName),
-			semconv.URLPathKey.String(r.URL.Path),
-		),
-		oteltrace.WithSpanKind(oteltrace.SpanKindInternal),
-	)
+	ctx, difcSpan := tracing.StartDIFCPipelineSpan(ctx, h.GetTracer(), toolName, r.URL.Path)
 	defer difcSpan.End()
 
 	if !s.guardInitialized {
@@ -196,13 +189,7 @@ func (h *proxyHandler) handleWithDIFC(w http.ResponseWriter, r *http.Request, pa
 	var resp *http.Response
 	var respBody []byte
 
-	fwdCtx, fwdSpan := h.GetTracer().Start(ctx, "proxy.backend.forward",
-		oteltrace.WithAttributes(
-			semconv.URLPathKey.String(path),
-			tracing.GenAIToolName.String(toolName),
-		),
-		oteltrace.WithSpanKind(oteltrace.SpanKindClient),
-	)
+	fwdCtx, fwdSpan := tracing.StartProxyForwardSpan(ctx, h.GetTracer(), toolName, path)
 	if graphQLBody != nil {
 		resp, respBody = h.forwardAndReadBody(w, fwdCtx, http.MethodPost, path, bytes.NewReader(graphQLBody), "application/json", clientAuth)
 	} else {
