@@ -1,4 +1,4 @@
-package httputil
+package proxy
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 	"github.com/github/gh-aw-mcpg/internal/logger"
 )
 
-var logCollab = logger.New("httputil:collaborator_permission")
+var logCollab = logger.New("proxy:collaborator_permission")
 
 // ParseCollaboratorPermissionArgs extracts and validates the owner, repo, and
 // username fields from an args map for a get_collaborator_permission call.

@@ -20,6 +20,7 @@ import (
 	"github.com/github/gh-aw-mcpg/internal/launcher"
 	"github.com/github/gh-aw-mcpg/internal/logger"
 	"github.com/github/gh-aw-mcpg/internal/mcp"
+	"github.com/github/gh-aw-mcpg/internal/proxy"
 	"github.com/github/gh-aw-mcpg/internal/tracing"
 	"github.com/github/gh-aw-mcpg/internal/version"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -284,7 +285,7 @@ func (g *guardBackendCaller) callCollaboratorPermission(ctx context.Context, arg
 		return nil, fmt.Errorf("get_collaborator_permission: unexpected args type: %T", args)
 	}
 
-	owner, repo, username, err := httputil.ParseCollaboratorPermissionArgs(argsMap)
+	owner, repo, username, err := proxy.ParseCollaboratorPermissionArgs(argsMap)
 	if err != nil {
 		logUnified.Printf("get_collaborator_permission: missing required args (owner=%q repo=%q username=%q)", owner, repo, username)
 		return nil, err
@@ -297,7 +298,7 @@ func (g *guardBackendCaller) callCollaboratorPermission(ctx context.Context, arg
 	}
 
 	apiURL := envutil.DeriveGitHubAPIURL(envutil.DefaultGitHubAPIBaseURL)
-	result, err := httputil.FetchCollaboratorPermission(
+	result, err := proxy.FetchCollaboratorPermission(
 		ctx,
 		owner,
 		repo,

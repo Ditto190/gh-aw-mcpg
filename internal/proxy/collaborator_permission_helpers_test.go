@@ -1,4 +1,4 @@
-package httputil
+package proxy
 
 import (
 	"context"
@@ -167,7 +167,7 @@ func TestLogAndWrapCollaboratorPermission(t *testing.T) {
 	})
 }
 
-func TestFetchCollaboratorPermission(t *testing.T) {
+func TestFetchCollaboratorPermissionHelper(t *testing.T) {
 	t.Run("successfully fetches and wraps response", func(t *testing.T) {
 		var gotPath string
 		result, err := FetchCollaboratorPermission(
@@ -213,7 +213,7 @@ func TestFetchCollaboratorPermission(t *testing.T) {
 			func(ctx context.Context, apiPath string) (*http.Response, error) {
 				return &http.Response{
 					StatusCode: http.StatusOK,
-					Body:       &failingReadCloser{},
+					Body:       &failingReadCloserHelper{},
 				}, nil
 			},
 			func(format string, args ...interface{}) {},
@@ -271,12 +271,12 @@ func TestFetchCollaboratorPermission(t *testing.T) {
 	})
 }
 
-type failingReadCloser struct{}
+type failingReadCloserHelper struct{}
 
-func (f *failingReadCloser) Read(_ []byte) (int, error) {
+func (f *failingReadCloserHelper) Read(_ []byte) (int, error) {
 	return 0, fmt.Errorf("read failed")
 }
 
-func (f *failingReadCloser) Close() error {
+func (f *failingReadCloserHelper) Close() error {
 	return nil
 }
