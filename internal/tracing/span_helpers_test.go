@@ -47,8 +47,19 @@ func TestRecordSpanError_SetsStatusAndRecordsEvent(t *testing.T) {
 	assert.Equal(t, "Error", recorded.Status.Code.String(), "span status should be Error")
 	assert.Equal(t, "test failure", recorded.Status.Description)
 
-	require.NotEmpty(t, recorded.Events, "span should have at least one event")
-	assert.Equal(t, "exception", recorded.Events[0].Name)
+	var foundStackTrace bool
+	for _, event := range recorded.Events {
+		if event.Name != "exception" {
+			continue
+		}
+		for _, attr := range event.Attributes {
+			if attr.Key == "exception.stacktrace" {
+				assert.NotEmpty(t, attr.Value.AsString(), "exception event should include stacktrace")
+				foundStackTrace = true
+			}
+		}
+	}
+	assert.True(t, foundStackTrace, "exception event should include stacktrace")
 }
 
 func TestRecordSpanErrorOnAll_RecordsOnAllSpans(t *testing.T) {
