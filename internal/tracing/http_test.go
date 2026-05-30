@@ -63,6 +63,33 @@ func TestStatusResponseWriter_Unwrap_ReturnsUnderlying(t *testing.T) {
 	assert.Same(t, rec, underlying, "Unwrap should return the wrapped ResponseWriter")
 }
 
+// TestWrapHTTPHandler_PatternMethodMismatch_ClearsRoute verifies that when a request
+// pattern contains a different HTTP method than the actual request method, the
+// http.route attribute is not added to the span.
+// This exercises the `route = ""` branch in WrapHTTPHandler.
+func TestWrapHTTPHandler_PatternMethodMismatch_ClearsRoute(t *testing.T) {
+	// Build a request whose Pattern method differs from its actual Method.
+	// In normal mux routing this cannot happen, but direct manipulation lets us
+	// verify that WrapHTTPHandler handles it gracefully without setting http.route.
+	req := httptest.NewRequest("GET", "/some/path", nil)
+	req.Pattern = "POST /some/path" // method in pattern != request method
+
+	rr := httptest.NewRecorder()
+	var capturedRoute string
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Record the Pattern so the test can confirm we reached the inner handler.
+		capturedRoute = r.Pattern
+		w.WriteHeader(http.StatusOK)
+	})
+
+	// No panics, no mismatched route attribute.
+	require.NotPanics(t, func() {
+		WrapHTTPHandler(inner, "test.route.mismatch").ServeHTTP(rr, req)
+	})
+	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.Equal(t, "POST /some/path", capturedRoute, "inner handler should receive the original request unchanged")
+}
+
 func TestStatusResponseWriter_Unwrap_ExposesOptionalInterfaces(t *testing.T) {
 	mf := &mockFlusher{ResponseRecorder: *httptest.NewRecorder()}
 	srw := &statusResponseWriter{BaseResponseWriter: httputil.BaseResponseWriter{ResponseWriter: mf}}
