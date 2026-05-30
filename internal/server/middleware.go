@@ -31,6 +31,17 @@ type mcpHandlerConfig struct {
 	hmacSecret     string
 }
 
+func buildDefaultHandlerConfig(unifiedServer *UnifiedServer, apiKey, hmacSecret string, sessionTimeout time.Duration, handlerLog *logger.Logger, logTag string) mcpHandlerConfig {
+	return mcpHandlerConfig{
+		handlerLog:     handlerLog,
+		sessionTimeout: sessionTimeout,
+		logTag:         logTag,
+		unifiedServer:  unifiedServer,
+		apiKey:         apiKey,
+		hmacSecret:     hmacSecret,
+	}
+}
+
 // WithOTELTracing wraps an http.Handler with an OpenTelemetry span for each request.
 // The span covers the full HTTP handler lifecycle and includes session ID, HTTP path,
 // and method as span attributes. The span context is propagated into the request context

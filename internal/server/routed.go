@@ -151,14 +151,7 @@ func CreateHTTPServerForRoutedMode(addr string, unifiedServer *UnifiedServer, ap
 				return serverCache.getOrCreate(backendID, sessionID, func() *sdk.Server {
 					return createFilteredServer(unifiedServer, backendID)
 				})
-			}, mcpHandlerConfig{
-				handlerLog:     logRouted,
-				sessionTimeout: sessionTimeout,
-				logTag:         "routed:" + backendID,
-				unifiedServer:  unifiedServer,
-				apiKey:         apiKey,
-				hmacSecret:     hmacSecret,
-			})
+			}, buildDefaultHandlerConfig(unifiedServer, apiKey, hmacSecret, sessionTimeout, logRouted, "routed:"+backendID))
 
 			// Mount the handler at both /mcp/<server> and /mcp/<server>/
 			mux.Handle(route+"/", finalHandler)
