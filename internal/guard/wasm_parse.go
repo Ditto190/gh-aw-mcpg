@@ -365,9 +365,9 @@ func parseDIFCTagsFromAny(raw any) []difc.Tag {
 		return nil
 	}
 	tags := make([]difc.Tag, 0, len(items))
-	for _, t := range items {
-		if s, ok := t.(string); ok {
-			tags = append(tags, difc.Tag(s))
+	for _, item := range items {
+		if tagStr, ok := item.(string); ok {
+			tags = append(tags, difc.Tag(tagStr))
 		}
 	}
 	return tags
