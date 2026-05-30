@@ -211,6 +211,24 @@ type restBackendCaller struct {
 	clientAuth string
 }
 
+// extractOwnerRepoNumber reads owner, repo, and a numeric resource identifier
+// from tool arguments, accepting either string or float64 JSON number inputs for
+// the identifier.
+func extractOwnerRepoNumber(argsMap map[string]interface{}, ownerKey, repoKey, numberKey, toolName string) (owner, repo, number string, err error) {
+	owner, _ = argsMap[ownerKey].(string)
+	repo, _ = argsMap[repoKey].(string)
+	number, _ = argsMap[numberKey].(string)
+	if number == "" {
+		if n, ok := argsMap[numberKey].(float64); ok {
+			number = fmt.Sprintf("%d", int(n))
+		}
+	}
+	if owner == "" || repo == "" || number == "" {
+		err = fmt.Errorf("%s: missing %s/%s/%s", toolName, ownerKey, repoKey, numberKey)
+	}
+	return
+}
+
 func (r *restBackendCaller) CallTool(ctx context.Context, toolName string, args interface{}) (interface{}, error) {
 	argsMap, ok := args.(map[string]interface{})
 	if !ok {
@@ -223,30 +241,16 @@ func (r *restBackendCaller) CallTool(ctx context.Context, toolName string, args 
 	)
 	switch toolName {
 	case "pull_request_read":
-		owner, _ := argsMap["owner"].(string)
-		repo, _ := argsMap["repo"].(string)
-		number, _ := argsMap["pullNumber"].(string)
-		if number == "" {
-			if n, ok := argsMap["pullNumber"].(float64); ok {
-				number = fmt.Sprintf("%d", int(n))
-			}
-		}
-		if owner == "" || repo == "" || number == "" {
-			return nil, fmt.Errorf("pull_request_read: missing owner/repo/pullNumber")
+		owner, repo, number, err := extractOwnerRepoNumber(argsMap, "owner", "repo", "pullNumber", toolName)
+		if err != nil {
+			return nil, err
 		}
 		apiPath = fmt.Sprintf("/repos/%s/%s/pulls/%s", owner, repo, number)
 
 	case "issue_read":
-		owner, _ := argsMap["owner"].(string)
-		repo, _ := argsMap["repo"].(string)
-		number, _ := argsMap["issue_number"].(string)
-		if number == "" {
-			if n, ok := argsMap["issue_number"].(float64); ok {
-				number = fmt.Sprintf("%d", int(n))
-			}
-		}
-		if owner == "" || repo == "" || number == "" {
-			return nil, fmt.Errorf("issue_read: missing owner/repo/issue_number")
+		owner, repo, number, err := extractOwnerRepoNumber(argsMap, "owner", "repo", "issue_number", toolName)
+		if err != nil {
+			return nil, err
 		}
 		apiPath = fmt.Sprintf("/repos/%s/%s/issues/%s", owner, repo, number)
 
