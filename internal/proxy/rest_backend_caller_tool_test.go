@@ -42,7 +42,7 @@ func extractContentText(t *testing.T, result interface{}) string {
 	return text
 }
 
-func TestExtractOwnerRepoNumber(t *testing.T) {
+func TestRestBackendCaller_ExtractOwnerRepoNumber(t *testing.T) {
 	tests := []struct {
 		name       string
 		args       map[string]interface{}

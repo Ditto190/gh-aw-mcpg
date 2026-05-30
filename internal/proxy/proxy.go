@@ -211,6 +211,9 @@ type restBackendCaller struct {
 	clientAuth string
 }
 
+// extractOwnerRepoNumber reads owner, repo, and a numeric resource identifier
+// from tool arguments, accepting either string or float64 JSON number inputs for
+// the identifier.
 func extractOwnerRepoNumber(argsMap map[string]interface{}, ownerKey, repoKey, numberKey, toolName string) (owner, repo, number string, err error) {
 	owner, _ = argsMap[ownerKey].(string)
 	repo, _ = argsMap[repoKey].(string)
