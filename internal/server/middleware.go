@@ -31,14 +31,21 @@ type mcpHandlerConfig struct {
 	hmacSecret     string
 }
 
-func buildDefaultHandlerConfig(unifiedServer *UnifiedServer, apiKey, hmacSecret string, sessionTimeout time.Duration, handlerLog *logger.Logger, logTag string) mcpHandlerConfig {
+type defaultHandlerConfigOptions struct {
+	handlerLog *logger.Logger
+	logTag     string
+	apiKey     string
+	hmacSecret string
+}
+
+func buildDefaultHandlerConfig(unifiedServer *UnifiedServer, sessionTimeout time.Duration, opts defaultHandlerConfigOptions) mcpHandlerConfig {
 	return mcpHandlerConfig{
-		handlerLog:     handlerLog,
+		handlerLog:     opts.handlerLog,
 		sessionTimeout: sessionTimeout,
-		logTag:         logTag,
+		logTag:         opts.logTag,
 		unifiedServer:  unifiedServer,
-		apiKey:         apiKey,
-		hmacSecret:     hmacSecret,
+		apiKey:         opts.apiKey,
+		hmacSecret:     opts.hmacSecret,
 	}
 }
 

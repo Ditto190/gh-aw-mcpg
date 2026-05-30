@@ -11,7 +11,12 @@ func TestBuildDefaultHandlerConfig(t *testing.T) {
 	unifiedServer := &UnifiedServer{}
 	sessionTimeout := 15 * time.Minute
 
-	cfg := buildDefaultHandlerConfig(unifiedServer, "test-api-key", "test-hmac-secret", sessionTimeout, logSDK, "unified")
+	cfg := buildDefaultHandlerConfig(unifiedServer, sessionTimeout, defaultHandlerConfigOptions{
+		handlerLog: logSDK,
+		logTag:     "unified",
+		apiKey:     "test-api-key",
+		hmacSecret: "test-hmac-secret",
+	})
 
 	require.Same(t, logSDK, cfg.handlerLog)
 	require.Equal(t, sessionTimeout, cfg.sessionTimeout)
