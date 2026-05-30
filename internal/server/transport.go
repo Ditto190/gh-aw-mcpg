@@ -32,14 +32,12 @@ func CreateHTTPServerForMCP(addr string, unifiedServer *UnifiedServer, apiKey, h
 			}
 
 			return unifiedServer.server
-		}, mcpHandlerConfig{
-			handlerLog:     logTransport,
-			sessionTimeout: sessionTimeout,
-			logTag:         "unified",
-			unifiedServer:  unifiedServer,
-			apiKey:         apiKey,
-			hmacSecret:     hmacSecret,
-		})
+		}, buildDefaultHandlerConfig(unifiedServer, sessionTimeout, defaultHandlerConfigOptions{
+			handlerLog: logTransport,
+			logTag:     "unified",
+			apiKey:     apiKey,
+			hmacSecret: hmacSecret,
+		}))
 
 		// Mount handler at /mcp endpoint (logging is done in the callback above)
 		mux.Handle("/mcp/", finalHandler)
