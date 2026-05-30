@@ -155,10 +155,14 @@ func TestResolveHeaders_NoConfigNoEnvVar(t *testing.T) {
 // This exercises the url.PathUnescape error branch in parseOTLPHeadersWithDecoder.
 func TestParseOTLPHeadersWithDecoder_InvalidPercentEncoding(t *testing.T) {
 	// %GZ is not valid percent-encoding; url.PathUnescape will return an error.
-	result := parseOTLPHeadersWithDecoder("X-Token=Bearer%GZvalue,X-Other=ok", true)
+	var result map[string]string
+	require.NotPanics(t, func() {
+		// %GZ is not valid percent-encoding; url.PathUnescape will return an error.
+		result = parseOTLPHeadersWithDecoder("X-Token=Bearer%GZvalue,X-Other=ok", true)
+	})
 	// The raw (un-decoded) value must be used when decoding fails.
 	assert.Equal(t, "Bearer%GZvalue", result["X-Token"], "raw value should be preserved on decode failure")
-	assert.Equal(t, "ok", result["X-Other"], "valid pairs must still be decoded correctly")
+	assert.Equal(t, "ok", result["X-Other"], "valid pairs must still be parsed correctly")
 }
 
 // TestParseOTLPHeadersWithDecoder_ValidPercentEncoding verifies that well-formed
