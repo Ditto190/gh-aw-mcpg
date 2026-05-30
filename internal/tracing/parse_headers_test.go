@@ -149,3 +149,32 @@ func TestResolveHeaders_NoConfigNoEnvVar(t *testing.T) {
 	headers := resolveHeaders(cfg)
 	assert.Nil(t, headers)
 }
+
+// TestParseOTLPHeadersWithDecoder_InvalidPercentEncoding verifies that when
+// percent-decoding fails the raw value is used unchanged and no panic occurs.
+// This exercises the url.PathUnescape error branch in parseOTLPHeadersWithDecoder.
+func TestParseOTLPHeadersWithDecoder_InvalidPercentEncoding(t *testing.T) {
+	// %GZ is not valid percent-encoding; url.PathUnescape will return an error.
+	var result map[string]string
+	require.NotPanics(t, func() {
+		// %GZ is not valid percent-encoding; url.PathUnescape will return an error.
+		result = parseOTLPHeadersWithDecoder("X-Token=Bearer%GZvalue,X-Other=ok", true)
+	})
+	// The raw (un-decoded) value must be used when decoding fails.
+	assert.Equal(t, "Bearer%GZvalue", result["X-Token"], "raw value should be preserved on decode failure")
+	assert.Equal(t, "ok", result["X-Other"], "valid pairs must still be parsed correctly")
+}
+
+// TestParseOTLPHeadersWithDecoder_ValidPercentEncoding verifies that well-formed
+// percent-encoded values are decoded when decodeValues is true.
+func TestParseOTLPHeadersWithDecoder_ValidPercentEncoding(t *testing.T) {
+	result := parseOTLPHeadersWithDecoder("Authorization=Bearer%20my-token", true)
+	assert.Equal(t, "Bearer my-token", result["Authorization"])
+}
+
+// TestParseOTLPHeadersWithDecoder_NoDecoding verifies that percent-encoded values
+// are preserved as-is when decodeValues is false.
+func TestParseOTLPHeadersWithDecoder_NoDecoding(t *testing.T) {
+	result := parseOTLPHeadersWithDecoder("Authorization=Bearer%20my-token", false)
+	assert.Equal(t, "Bearer%20my-token", result["Authorization"])
+}
