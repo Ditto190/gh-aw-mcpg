@@ -540,13 +540,11 @@ func formatErrorContext(ve *jsonschema.ValidationError, prefix string) string {
 		added[key] = true
 	}
 
-	addFromKeyword := func(kw string) {
-		if k, lines := detailForKeyword(kw); k != "" {
-			addDetail(k, lines...)
+	addFromKeyword := func(keyword string) {
+		if key, lines := detailForKeyword(keyword); key != "" {
+			addDetail(key, lines...)
 		}
 	}
-
-	// Primary path: classify by the terminal keyword in the schema location path.
 	switch keyword {
 	case "additionalProperties", "type", "enum", "required", "pattern", "oneOf":
 		addFromKeyword(keyword)

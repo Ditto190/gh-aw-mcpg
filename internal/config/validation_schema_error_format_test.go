@@ -93,6 +93,13 @@ func TestFormatErrorContext(t *testing.T) {
 			wantContains: []string{"Value format is incorrect", "  Details:"},
 		},
 		{
+			name:         "range inferred from keyword location minimum",
+			message:      "validation failed",
+			keywordLoc:   "/properties/mcpServers/additionalProperties/properties/retries/minimum",
+			prefix:       "  ",
+			wantContains: []string{"outside the allowed range", "Adjust the value", "  Details:"},
+		},
+		{
 			name:         "minimum constraint violation",
 			message:      "value must be >= 1",
 			prefix:       "",
@@ -187,6 +194,21 @@ func TestFormatErrorContext(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestDetailForKeyword(t *testing.T) {
+	t.Run("known keyword returns details", func(t *testing.T) {
+		key, lines := detailForKeyword("additionalProperties")
+		assert.Equal(t, "additionalProperties", key)
+		require.Len(t, lines, 2)
+		assert.Contains(t, lines[0], "Configuration contains field(s)")
+	})
+
+	t.Run("unknown keyword returns empty values", func(t *testing.T) {
+		key, lines := detailForKeyword("unknown")
+		assert.Empty(t, key)
+		assert.Nil(t, lines)
+	})
 }
 
 // TestFormatValidationErrorRecursive tests the formatValidationErrorRecursive function
