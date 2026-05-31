@@ -62,13 +62,12 @@ func TestCopyToolCallLimits(t *testing.T) {
 // defensive copy — mutations to the copy do not affect the original.
 func TestCopyToolCallLimits_IsolatesFromOriginal(t *testing.T) {
 	original := map[string]int{"get_file": 10, "create_issue": 5}
-	copy := copyToolCallLimits(original)
-	require.NotNil(t, copy)
+	copied := copyToolCallLimits(original)
+	require.NotNil(t, copied)
 
 	// Mutate the copy.
-	copy["get_file"] = 999
-	copy["new_tool"] = 1
-
+	copied["get_file"] = 999
+	copied["new_tool"] = 1
 	// Original must be unchanged.
 	assert.Equal(t, 10, original["get_file"], "original should not be mutated")
 	assert.NotContains(t, original, "new_tool", "original should not gain new keys")
