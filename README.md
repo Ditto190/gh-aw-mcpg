@@ -84,6 +84,8 @@ The gateway supports OpenTelemetry distributed tracing. Set these variables to e
 | `OTEL_EXPORTER_OTLP_HEADERS` | Comma-separated `key=value` headers for OTLP export (W3C Baggage format); used as fallback when not set in config |
 | `OTEL_SERVICE_NAME` | Service name reported in traces (default: `mcp-gateway`) |
 
+Use `--otlp-sample-rate <float>` to control trace sampling (range `0.0`–`1.0`, default `1.0`).
+
 See [`docs/ENVIRONMENT_VARIABLES.md`](docs/ENVIRONMENT_VARIABLES.md) for full details.
 
 ## Guard Policies
