@@ -477,8 +477,11 @@ func formatValidationErrorRecursive(ve *jsonschema.ValidationError, sb *strings.
 	}
 }
 
-// detailForKeyword returns the addDetail key and detail lines for a known
-// JSON Schema keyword. It returns "", nil for unknown keywords.
+// detailForKeyword returns the addDetail arguments (key and detail lines) for a
+// recognised JSON Schema keyword. Returns "", nil for unknown keywords.
+// This is used by formatErrorContext to centralise the guidance text so it is
+// only written in one place and always stays in sync between the keyword-location
+// switch and the message-fallback checks.
 func detailForKeyword(keyword string) (string, []string) {
 	switch keyword {
 	case "additionalProperties":
@@ -516,9 +519,8 @@ func detailForKeyword(keyword string) (string, []string) {
 			"Details: Configuration doesn't match any of the expected formats",
 			"  → Review the structure and ensure it matches one of the valid configuration types",
 		}
-	default:
-		return "", nil
 	}
+	return "", nil
 }
 
 // formatErrorContext provides additional context about what caused the validation error
@@ -543,7 +545,6 @@ func formatErrorContext(ve *jsonschema.ValidationError, prefix string) string {
 			addDetail(key, lines...)
 		}
 	}
-
 	switch keyword {
 	case "additionalProperties", "type", "enum", "required", "pattern", "oneOf":
 		addFromKeyword(keyword)
@@ -551,37 +552,26 @@ func formatErrorContext(ve *jsonschema.ValidationError, prefix string) string {
 		addFromKeyword("range")
 	}
 
-	// For additional properties errors, explain what's wrong
+	// Fallback path: classify by message content when keyword location is absent
+	// or does not carry enough information.
 	if strings.Contains(msg, "additionalProperties") || strings.Contains(msg, "additional property") {
 		addFromKeyword("additionalProperties")
 	}
-
-	// For type errors, show the mismatch
 	if strings.Contains(msg, "expected") && (strings.Contains(msg, "but got") || strings.Contains(msg, "type")) {
 		addFromKeyword("type")
 	}
-
-	// For enum errors (invalid values from a set of allowed values)
 	if strings.Contains(msg, "value must be one of") || strings.Contains(msg, "must be one of") {
 		addFromKeyword("enum")
 	}
-
-	// For missing required properties
 	if strings.Contains(msg, "missing properties") || strings.Contains(msg, "required") {
 		addFromKeyword("required")
 	}
-
-	// For pattern validation failures (regex patterns)
 	if strings.Contains(msg, "does not match pattern") || strings.Contains(msg, "pattern") {
 		addFromKeyword("pattern")
 	}
-
-	// For minimum/maximum constraint violations
 	if strings.Contains(msg, "must be >=") || strings.Contains(msg, "must be <=") || strings.Contains(msg, "minimum") || strings.Contains(msg, "maximum") {
 		addFromKeyword("range")
 	}
-
-	// For oneOf errors (typically type selection issues)
 	if strings.Contains(msg, "doesn't validate with any of") || strings.Contains(msg, "oneOf") {
 		addFromKeyword("oneOf")
 	}
