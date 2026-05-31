@@ -47,16 +47,21 @@ func stdinFromString(t *testing.T, input string, f func()) {
 // TestLoadFromStdin_StdinReadError covers the io.ReadAll error path (lines 298-300).
 // When os.Stdin is a closed file, reading returns an error immediately.
 func TestLoadFromStdin_StdinReadError(t *testing.T) {
-	r, _, err := os.Pipe()
+	r, w, err := os.Pipe()
 	require.NoError(t, err)
 
 	oldStdin := os.Stdin
 	os.Stdin = r
+	defer func() { os.Stdin = oldStdin }()
+
+	require.NoError(t, w.Close())
 	require.NoError(t, r.Close()) // close the read end before reading
 
 	_, loadErr := LoadFromStdin()
-	os.Stdin = oldStdin
 
+	require.Error(t, loadErr)
+	assert.ErrorContains(t, loadErr, "failed to read stdin")
+}
 	require.Error(t, loadErr)
 	assert.ErrorContains(t, loadErr, "failed to read stdin")
 }
