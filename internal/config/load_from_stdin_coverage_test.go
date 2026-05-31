@@ -62,9 +62,6 @@ func TestLoadFromStdin_StdinReadError(t *testing.T) {
 	require.Error(t, loadErr)
 	assert.ErrorContains(t, loadErr, "failed to read stdin")
 }
-	require.Error(t, loadErr)
-	assert.ErrorContains(t, loadErr, "failed to read stdin")
-}
 
 // TestLoadFromStdin_ValidateStringPatternsError covers the validateStringPatterns error
 // path (lines 338-340). A whitespace-only entrypoint passes JSON schema validation
@@ -157,6 +154,7 @@ func TestLoadFromStdin_ValidateCustomSchemasError_ReservedHttpKey(t *testing.T) 
 // path for invalid OpenTelemetry configuration. An all-zero W3C traceId is a valid
 // 32-character lowercase hex string that passes JSON schema validation but is rejected
 // by validateOpenTelemetryConfig because W3C Trace Context forbids an all-zero trace-id.
+func TestLoadFromStdin_ValidateGatewayConfigError_AllZeroTraceId(t *testing.T) {
 	jsonConfig := `{
 		"mcpServers": {
 			"test": {
