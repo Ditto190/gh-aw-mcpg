@@ -150,26 +150,52 @@ func TestResolveHeaders_NoConfigNoEnvVar(t *testing.T) {
 	assert.Nil(t, headers)
 }
 
-// TestParseOTLPHeadersWithDecoder_InvalidPercentEncoding verifies that when
-// percent-decoding fails the raw value is used unchanged and no panic occurs.
-// This exercises the url.PathUnescape error branch in parseOTLPHeadersWithDecoder.
-func TestParseOTLPHeadersWithDecoder_InvalidPercentEncoding(t *testing.T) {
-	// %GZ is not valid percent-encoding; url.PathUnescape will return an error.
-	var result map[string]string
-	require.NotPanics(t, func() {
-		// %GZ is not valid percent-encoding; url.PathUnescape will return an error.
-		result = parseOTLPHeadersWithDecoder("X-Token=Bearer%GZvalue,X-Other=ok", true)
-	})
-	// The raw (un-decoded) value must be used when decoding fails.
-	assert.Equal(t, "Bearer%GZvalue", result["X-Token"], "raw value should be preserved on decode failure")
-	assert.Equal(t, "ok", result["X-Other"], "valid pairs must still be parsed correctly")
-}
+// TestParseOTLPHeadersWithDecoder_DecodeValues exercises the decodeValues=true
+// path, including the invalid percent-encoding fallback.
+func TestParseOTLPHeadersWithDecoder_DecodeValues(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected map[string]string
+	}{
+		{
+			name:  "valid percent-encoded value is decoded",
+			input: "Authorization=Bearer%20token,X-Custom=val%3Dwithin",
+			expected: map[string]string{
+				"Authorization": "Bearer token",
+				"X-Custom":      "val=within",
+			},
+		},
+		{
+			name:  "invalid percent-encoding falls back to raw value",
+			input: "Authorization=Bearer%20token,X-Bad=%ZZ",
+			expected: map[string]string{
+				"Authorization": "Bearer token",
+				"X-Bad":         "%ZZ",
+			},
+		},
+		{
+			name:  "lone percent sign is invalid and falls back to raw value",
+			input: "X-Token=value%",
+			expected: map[string]string{
+				"X-Token": "value%",
+			},
+		},
+		{
+			name:  "unencoded value with no percent signs is preserved",
+			input: "Authorization=Bearer plain-token",
+			expected: map[string]string{
+				"Authorization": "Bearer plain-token",
+			},
+		},
+	}
 
-// TestParseOTLPHeadersWithDecoder_ValidPercentEncoding verifies that well-formed
-// percent-encoded values are decoded when decodeValues is true.
-func TestParseOTLPHeadersWithDecoder_ValidPercentEncoding(t *testing.T) {
-	result := parseOTLPHeadersWithDecoder("Authorization=Bearer%20my-token", true)
-	assert.Equal(t, "Bearer my-token", result["Authorization"])
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := parseOTLPHeadersWithDecoder(tt.input, true)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
 }
 
 // TestParseOTLPHeadersWithDecoder_NoDecoding verifies that percent-encoded values
@@ -177,4 +203,16 @@ func TestParseOTLPHeadersWithDecoder_ValidPercentEncoding(t *testing.T) {
 func TestParseOTLPHeadersWithDecoder_NoDecoding(t *testing.T) {
 	result := parseOTLPHeadersWithDecoder("Authorization=Bearer%20my-token", false)
 	assert.Equal(t, "Bearer%20my-token", result["Authorization"])
+}
+
+// TestResolveHeaders_EnvVar_InvalidPercentEncoding verifies that invalid
+// percent-encoding in OTEL_EXPORTER_OTLP_HEADERS falls back to the raw value.
+func TestResolveHeaders_EnvVar_InvalidPercentEncoding(t *testing.T) {
+	t.Setenv("OTEL_EXPORTER_OTLP_HEADERS", "Authorization=Bearer%20token,X-Bad=%ZZ")
+
+	headers := resolveHeaders(nil)
+	require.NotNil(t, headers)
+	assert.Equal(t, "Bearer token", headers["Authorization"])
+	// Invalid percent-encoding falls back to the raw value.
+	assert.Equal(t, "%ZZ", headers["X-Bad"])
 }
