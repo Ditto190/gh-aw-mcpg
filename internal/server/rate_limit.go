@@ -12,9 +12,11 @@ import (
 func extractRateLimitErrorText(result interface{}) string {
 	m, ok := result.(map[string]interface{})
 	if !ok {
+		logCircuitBreaker.Print("extractRateLimitErrorText: result is not a map, using default message")
 		return "rate limit exceeded"
 	}
 	contents, _ := m["content"].([]interface{})
+	logCircuitBreaker.Printf("extractRateLimitErrorText: scanning %d content items for error text", len(contents))
 	for _, c := range contents {
 		cm, ok := c.(map[string]interface{})
 		if !ok {
@@ -24,6 +26,7 @@ func extractRateLimitErrorText(result interface{}) string {
 			return text
 		}
 	}
+	logCircuitBreaker.Print("extractRateLimitErrorText: no text content found, using default message")
 	return "rate limit exceeded"
 }
 
@@ -47,6 +50,7 @@ func isRateLimitToolResult(result interface{}) (bool, time.Time) {
 	}
 
 	contents, _ := m["content"].([]interface{})
+	logCircuitBreaker.Printf("Inspecting error tool result for rate limit: contentItems=%d", len(contents))
 	for _, c := range contents {
 		cm, ok := c.(map[string]interface{})
 		if !ok {
@@ -81,6 +85,7 @@ func parseRateLimitResetFromText(text string) time.Time {
 	lower := strings.ToLower(text)
 	idx := strings.Index(lower, "rate reset in ")
 	if idx < 0 {
+		logCircuitBreaker.Print("parseRateLimitResetFromText: no reset time pattern found in text")
 		return time.Time{}
 	}
 	rest := text[idx+len("rate reset in "):]
