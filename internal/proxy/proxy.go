@@ -360,9 +360,17 @@ func (s *Server) forwardToGitHub(ctx context.Context, method, path string, body 
 	url := s.githubAPIURL + path
 	pathOnly, query, hasQuery := strings.Cut(path, "?")
 	if IsGraphQLPath(pathOnly) {
-		graphqlURL := s.githubAPIURL + "/graphql"
+		var graphqlURL string
 		if strings.HasSuffix(s.githubAPIURL, "/api/v3") {
+			// GHES: strip /api/v3, GraphQL lives at /api/graphql
 			graphqlURL = strings.TrimSuffix(s.githubAPIURL, "/api/v3") + "/api/graphql"
+		} else if strings.HasSuffix(pathOnly, "/api/graphql") {
+			// GHE Cloud data residency (e.g. copilot-api.sj.ghe.com):
+			// the client already sent /api/graphql — use the same path on upstream
+			graphqlURL = s.githubAPIURL + "/api/graphql"
+		} else {
+			// github.com: GraphQL lives at /graphql
+			graphqlURL = s.githubAPIURL + "/graphql"
 		}
 		url = graphqlURL
 		if hasQuery {

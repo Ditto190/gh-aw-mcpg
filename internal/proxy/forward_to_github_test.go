@@ -186,6 +186,21 @@ func TestForwardToGitHub_GraphQLPathRouting(t *testing.T) {
 			wantServerPath: "/api/graphql?ref=main&query=foo",
 		},
 		{
+			// GHE Cloud data residency (e.g. copilot-api.sj.ghe.com) has no /api/v3
+			// suffix but the gh CLI sends GraphQL requests to /api/graphql.
+			// forwardToGitHub must forward to base/api/graphql, not base/graphql.
+			name:           "GHE Cloud data residency api/graphql path routes to base/api/graphql",
+			apiURLSuffix:   "",
+			requestPath:    "/api/graphql",
+			wantServerPath: "/api/graphql",
+		},
+		{
+			name:           "GHE Cloud data residency api/graphql with query string preserves query",
+			apiURLSuffix:   "",
+			requestPath:    "/api/graphql?foo=bar",
+			wantServerPath: "/api/graphql?foo=bar",
+		},
+		{
 			// Non-GraphQL paths are forwarded unchanged regardless of API URL format.
 			name:           "non-graphql REST path is not rewritten",
 			apiURLSuffix:   "/api/v3",

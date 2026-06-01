@@ -235,8 +235,9 @@ func TestServeHTTP_GraphQLPreservesQueryString(t *testing.T) {
 		wantPath string
 	}{
 		{name: "graphql path", path: "/graphql?foo=bar", wantPath: "/graphql?foo=bar"},
-		{name: "ghes api graphql path", path: "/api/graphql", wantPath: "/graphql"},
-		{name: "ghes api graphql path with query", path: "/api/graphql?foo=bar", wantPath: "/graphql?foo=bar"},
+		// /api/graphql is treated as GHE Cloud data residency — path is preserved, not normalised to /graphql.
+		{name: "ghes api graphql path", path: "/api/graphql", wantPath: "/api/graphql"},
+		{name: "ghes api graphql path with query", path: "/api/graphql?foo=bar", wantPath: "/api/graphql?foo=bar"},
 		{name: "gh host prefixed graphql path", path: "/api/v3/graphql", wantPath: "/graphql"},
 		{name: "gh host prefixed graphql path with query", path: "/api/v3/graphql?foo=bar", wantPath: "/graphql?foo=bar"},
 	}
