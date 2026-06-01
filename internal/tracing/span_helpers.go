@@ -6,7 +6,7 @@ import (
 	"context"
 
 	"go.opentelemetry.io/otel/codes"
-	semconv "go.opentelemetry.io/otel/semconv/v1.27.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.34.0"
 	oteltrace "go.opentelemetry.io/otel/trace"
 )
 
