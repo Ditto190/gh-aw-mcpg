@@ -147,6 +147,7 @@ pub fn label_response_paths(
                 } else {
                     vec![]
                 };
+                let default_secrecy_shared: crate::SharedLabels = default_secrecy.into();
 
                 let limited_items = limit_items_with_log(items, "list_pull_requests");
                 let mut labeled_paths = Vec::with_capacity(limited_items.len());
@@ -191,11 +192,10 @@ pub fn label_response_paths(
                         labels: crate::ResourceLabels {
                             description: format!("pr:{}#{}", repo_for_labels, pr_number),
                             secrecy: if tool_name == "search_pull_requests" {
-                                repo_visibility_secrecy_for_repo_id(repo_for_labels, ctx)
+                                repo_visibility_secrecy_for_repo_id(repo_for_labels, ctx).into()
                             } else {
-                                default_secrecy.clone()
-                            }
-                            .into(),
+                                default_secrecy_shared.clone()
+                            },
                             integrity: integrity.into(),
                         },
                     });
@@ -205,7 +205,7 @@ pub fn label_response_paths(
                     labeled_paths,
                     default_labels: Some(crate::ResourceLabels {
                         description: "pull_request".to_string(),
-                        secrecy: default_secrecy.into(),
+                        secrecy: default_secrecy_shared.clone(),
                         integrity: if default_repo_private {
                             writer_integrity(&default_repo, ctx)
                         } else {
@@ -261,6 +261,7 @@ pub fn label_response_paths(
                 } else {
                     vec![]
                 };
+                let default_secrecy_shared: crate::SharedLabels = default_secrecy.into();
 
                 let limited_items = limit_items_with_log(items, "list_issues");
                 let mut labeled_paths = Vec::with_capacity(limited_items.len());
@@ -291,11 +292,10 @@ pub fn label_response_paths(
                         labels: crate::ResourceLabels {
                             description: format!("issue:{}#{}", repo_for_labels, issue_number),
                             secrecy: if tool_name == "search_issues" {
-                                repo_visibility_secrecy_for_repo_id(repo_for_labels, ctx)
+                                repo_visibility_secrecy_for_repo_id(repo_for_labels, ctx).into()
                             } else {
-                                default_secrecy.clone()
-                            }
-                            .into(),
+                                default_secrecy_shared.clone()
+                            },
                             integrity: integrity.into(),
                         },
                     });
@@ -305,7 +305,7 @@ pub fn label_response_paths(
                     labeled_paths,
                     default_labels: Some(crate::ResourceLabels {
                         description: "issue".to_string(),
-                        secrecy: default_secrecy.into(),
+                        secrecy: default_secrecy_shared.clone(),
                         integrity: if default_repo_private {
                             writer_integrity(&default_repo, ctx)
                         } else {
@@ -739,6 +739,32 @@ mod tests {
     }
 
     #[test]
+    fn list_pull_requests_item_secrecy_matches_default_labels() {
+        let tool_args = json!({"owner": "octocat", "repo": "hello-world"});
+        let response = json!({
+            "content": [{
+                "type": "text",
+                "text": serde_json::to_string(&json!([{
+                    "number": 1,
+                    "base": {"repo": {"full_name": "octocat/hello-world"}},
+                    "head": {"repo": {"full_name": "octocat/hello-world"}}
+                }]))
+                .expect("response should serialize")
+            }]
+        });
+
+        let result = label_response_paths("list_pull_requests", &tool_args, &response, &ctx())
+            .expect("should produce path labels");
+        let default_labels = result
+            .default_labels
+            .as_ref()
+            .expect("default_labels should be present");
+
+        assert_eq!(result.labeled_paths.len(), 1);
+        assert_eq!(result.labeled_paths[0].labels.secrecy, default_labels.secrecy);
+    }
+
+    #[test]
     fn search_issues_uses_repo_qualifier_from_query_scope() {
         let tool_args = json!({"query": "is:issue repo:octocat/hello-world bug"});
         let response = json!({
@@ -759,6 +785,31 @@ mod tests {
             result.labeled_paths[0].labels.description,
             "issue:octocat/hello-world#42"
         );
+    }
+
+    #[test]
+    fn list_issues_item_secrecy_matches_default_labels() {
+        let tool_args = json!({"owner": "octocat", "repo": "hello-world"});
+        let response = json!({
+            "content": [{
+                "type": "text",
+                "text": serde_json::to_string(&json!([{
+                    "number": 42,
+                    "repository_url": "https://api.github.com/repos/octocat/hello-world"
+                }]))
+                .expect("response should serialize")
+            }]
+        });
+
+        let result = label_response_paths("list_issues", &tool_args, &response, &ctx())
+            .expect("should produce path labels");
+        let default_labels = result
+            .default_labels
+            .as_ref()
+            .expect("default_labels should be present");
+
+        assert_eq!(result.labeled_paths.len(), 1);
+        assert_eq!(result.labeled_paths[0].labels.secrecy, default_labels.secrecy);
     }
 
     #[test]
