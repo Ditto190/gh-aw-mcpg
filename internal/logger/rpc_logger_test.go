@@ -384,7 +384,7 @@ func TestLogRPCRequest(t *testing.T) {
 
 	// Log an RPC request
 	payload := []byte(`{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`)
-	LogRPCRequest(RPCDirectionOutbound, "github", "tools/list", payload)
+	LogRPCRequest(RPCDirectionOutbound, "github", "tools/list", payload, nil, nil)
 
 	// Close loggers to flush
 	CloseGlobalLogger()
@@ -420,7 +420,7 @@ func TestLogRPCResponse(t *testing.T) {
 	// Log an RPC response with error
 	payload := []byte(`{"jsonrpc":"2.0","id":1,"error":{"code":-32600,"message":"Invalid request"}}`)
 	err := errors.New("backend connection failed")
-	LogRPCResponse(RPCDirectionInbound, "github", payload, err)
+	LogRPCResponse(RPCDirectionInbound, "github", payload, err, nil, nil)
 
 	// Close loggers to flush
 	CloseGlobalLogger()
@@ -457,7 +457,7 @@ func TestLogRPCRequestWithSecrets(t *testing.T) {
 
 	// Log an RPC request with a secret
 	payload := []byte(`{"jsonrpc":"2.0","id":1,"method":"authenticate","params":{"token":"ghp_1234567890123456789012345678901234567890"}}`)
-	LogRPCRequest(RPCDirectionInbound, "client", "authenticate", payload)
+	LogRPCRequest(RPCDirectionInbound, "client", "authenticate", payload, nil, nil)
 
 	// Close loggers to flush
 	CloseGlobalLogger()
@@ -497,7 +497,7 @@ func TestLogRPCRequestPayloadTruncation(t *testing.T) {
 	// Create a large payload (> 10KB for text, > 512 chars for markdown)
 	largeData := strings.Repeat("x", 12*1024) // 12KB of x's
 	payload := []byte(`{"jsonrpc":"2.0","id":1,"method":"test","params":{"data":"` + largeData + `"}}`)
-	LogRPCRequest(RPCDirectionOutbound, "backend", "test", payload)
+	LogRPCRequest(RPCDirectionOutbound, "backend", "test", payload, nil, nil)
 
 	// Close loggers to flush
 	CloseGlobalLogger()
@@ -524,7 +524,7 @@ func TestLogRPCRequestPayloadTruncation(t *testing.T) {
 		"Markdown log should not contain more than 512 chars of data after truncation")
 }
 
-func TestLogRPCRequestWithAgentSnapshot(t *testing.T) {
+func TestLogRPCRequest_WithAgentSnapshot(t *testing.T) {
 	tmpDir := t.TempDir()
 	logDir := filepath.Join(tmpDir, "logs")
 
@@ -538,7 +538,7 @@ func TestLogRPCRequestWithAgentSnapshot(t *testing.T) {
 	agentIntegrity := []string{"trusted"}
 
 	payload := []byte(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{}}`)
-	LogRPCRequestWithAgentSnapshot(RPCDirectionOutbound, "github", "tools/call", payload, agentSecrecy, agentIntegrity)
+	LogRPCRequest(RPCDirectionOutbound, "github", "tools/call", payload, agentSecrecy, agentIntegrity)
 
 	CloseGlobalLogger()
 	CloseJSONLLogger()
@@ -560,7 +560,7 @@ func TestLogRPCRequestWithAgentSnapshot(t *testing.T) {
 	assert.ElementsMatch(t, agentIntegrity, entry.AgentIntegrity, "AgentIntegrity tags should be recorded")
 }
 
-func TestLogRPCResponseWithAgentSnapshot(t *testing.T) {
+func TestLogRPCResponse_WithAgentSnapshot(t *testing.T) {
 	tmpDir := t.TempDir()
 	logDir := filepath.Join(tmpDir, "logs")
 
@@ -574,7 +574,7 @@ func TestLogRPCResponseWithAgentSnapshot(t *testing.T) {
 	agentIntegrity := []string{"approved", "merged"}
 
 	payload := []byte(`{"jsonrpc":"2.0","id":1,"result":{"tools":[]}}`)
-	LogRPCResponseWithAgentSnapshot(RPCDirectionInbound, "github", payload, nil, agentSecrecy, agentIntegrity)
+	LogRPCResponse(RPCDirectionInbound, "github", payload, nil, agentSecrecy, agentIntegrity)
 
 	CloseGlobalLogger()
 	CloseJSONLLogger()
@@ -595,7 +595,7 @@ func TestLogRPCResponseWithAgentSnapshot(t *testing.T) {
 	assert.ElementsMatch(t, agentIntegrity, entry.AgentIntegrity, "AgentIntegrity tags should be recorded")
 }
 
-func TestLogRPCRequestWithAgentSnapshot_EmptyTags(t *testing.T) {
+func TestLogRPCRequest_EmptyAgentSnapshotTags(t *testing.T) {
 	tmpDir := t.TempDir()
 	logDir := filepath.Join(tmpDir, "logs")
 
@@ -606,7 +606,7 @@ func TestLogRPCRequestWithAgentSnapshot_EmptyTags(t *testing.T) {
 	defer CloseJSONLLogger()
 
 	payload := []byte(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`)
-	LogRPCRequestWithAgentSnapshot(RPCDirectionOutbound, "github", "tools/list", payload, nil, nil)
+	LogRPCRequest(RPCDirectionOutbound, "github", "tools/list", payload, nil, nil)
 
 	CloseGlobalLogger()
 	CloseJSONLLogger()
@@ -706,7 +706,7 @@ func TestLogRPCResponse_NoError(t *testing.T) {
 	defer CloseJSONLLogger()
 
 	payload := []byte(`{"jsonrpc":"2.0","id":1,"result":{}}`)
-	LogRPCResponse(RPCDirectionInbound, "backend", payload, nil)
+	LogRPCResponse(RPCDirectionInbound, "backend", payload, nil, nil, nil)
 
 	CloseGlobalLogger()
 	CloseJSONLLogger()
