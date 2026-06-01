@@ -915,10 +915,9 @@ func TestForwardToGitHub_RewritesGraphQLPathForDotComAPIBase(t *testing.T) {
 		wantQuery string
 	}{
 		{name: "plain graphql endpoint", path: "/graphql", wantPath: "/graphql"},
-		// /api/graphql is treated as GHE Cloud data residency — path is preserved, not normalised to /graphql.
-		{name: "ghes api graphql endpoint", path: "/api/graphql", wantPath: "/api/graphql"},
+		{name: "ghes api graphql endpoint", path: "/api/graphql", wantPath: "/graphql"},
 		{name: "gh host prefixed graphql endpoint", path: "/api/v3/graphql", wantPath: "/graphql"},
-		{name: "graphql endpoint with query string", path: "/api/graphql?foo=bar", wantPath: "/api/graphql", wantQuery: "foo=bar"},
+		{name: "graphql endpoint with query string", path: "/api/graphql?foo=bar", wantPath: "/graphql", wantQuery: "foo=bar"},
 	}
 
 	for _, tt := range tests {
