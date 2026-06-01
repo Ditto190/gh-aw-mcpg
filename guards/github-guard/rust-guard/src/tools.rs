@@ -14,7 +14,7 @@ pub const WRITE_OPERATIONS: &[&str] = &[
     "add_reply_to_pull_request_comment",
     "archive_repository", // gh repo archive — blocked: repo settings change unsupported
     "assign_copilot_to_issue",
-    "cancel_workflow_run", // gh run cancel — cancels an in-progress workflow run
+    "cancel_workflow_run", // gh run cancel       — cancels an in-progress workflow run
     "create_branch",
     "create_gist",
     "create_issue",
@@ -34,7 +34,7 @@ pub const WRITE_OPERATIONS: &[&str] = &[
     "discussion_comment_write", // creates or edits GitHub Discussion comments
     "dismiss_notification",
     "edit_release",              // PATCH /repos/.../releases/{id}
-    "edit_repository",           // gh repo edit — can change visibility and security settings
+    "edit_repository",           // gh repo edit — can change visibility, security settings
     "enable_toolset", // Dynamically enables additional toolsets, expanding the agent's capability set
     "enable_workflow", // gh workflow enable
     "force_cancel_workflow_run", // gh run cancel --force — force-cancels a workflow run
@@ -46,11 +46,11 @@ pub const WRITE_OPERATIONS: &[&str] = &[
     "pin_issue", // gh issue pin
     "projects_write",
     "push_files",
-    "rename_repository", // gh repo rename — blocked: breaks clone URLs and integrations
+    "rename_repository", // gh repo rename    — blocked: breaks clone URLs and integrations
     "request_copilot_review",
     "rerun_failed_jobs",   // gh run rerun --failed — reruns only failed jobs
-    "rerun_workflow_job",  // gh run rerun --job — reruns a specific job
-    "rerun_workflow_run",  // gh run rerun — reruns a completed workflow run
+    "rerun_workflow_job",  // gh run rerun --job  — reruns a specific job
+    "rerun_workflow_run",  // gh run rerun        — reruns a completed workflow run
     "revert_pull_request", // gh pr revert — creates revert branch + PR
     "run_workflow",        // deprecated alias for actions_run_trigger (POST workflow dispatch)
     "set_secret",          // gh secret set
@@ -58,7 +58,7 @@ pub const WRITE_OPERATIONS: &[&str] = &[
     "star_repository",
     "sync_fork",            // gh repo sync
     "transfer_issue",       // gh issue transfer
-    "transfer_repository",  // gh repo transfer — blocked: repo ownership transfer is irreversible
+    "transfer_repository",  // gh repo transfer  — blocked: repo ownership transfer is irreversible
     "unarchive_repository", // gh repo unarchive — blocked: symmetric to archive_repository
     "unpin_issue",          // gh issue unpin
     "unstar_repository",
@@ -68,10 +68,11 @@ pub const WRITE_OPERATIONS: &[&str] = &[
 
 /// Read-write operations that both read and modify data
 pub const READ_WRITE_OPERATIONS: &[&str] = &[
+    // Keep sorted for binary_search correctness.
     "add_pull_request_review_comment", // POST /repos/.../pulls/{number}/comments
-    "add_sub_issue",                   // POST /repos/.../issues/{number}/sub_issues
-    "create_agent_task",               // gh agent-task create — blocked as unsupported
-    "create_pull_request_review",      // POST /repos/.../pulls/{number}/reviews
+    "add_sub_issue",                   // POST  /repos/.../issues/{number}/sub_issues
+    "create_agent_task", // gh agent-task create — creates a Copilot coding-agent job (branch + PR); blocked as unsupported
+    "create_pull_request_review", // POST /repos/.../pulls/{number}/reviews
     "delete_pending_pull_request_review", // DELETE /repos/.../pulls/{number}/reviews/{id}
     "issue_write",
     "issue_write_ff_remote_mcp_issue_fields", // feature-flag variant of issue_write
@@ -80,11 +81,11 @@ pub const READ_WRITE_OPERATIONS: &[&str] = &[
     "remove_sub_issue",               // DELETE/POST — remove sub-issue link
     "reprioritize_sub_issue",         // PATCH — reorder sub-issues
     "request_pull_request_reviewers", // POST /repos/.../pulls/{number}/requested_reviewers
-    "resolve_review_thread",          // PUT /graphql — resolveReviewThread
+    "resolve_review_thread",          // PUT  /graphql — resolveReviewThread
     "set_issue_fields", // GraphQL — sets custom field values on a specific repository issue
     "sub_issue_write",
     "submit_pending_pull_request_review", // POST /repos/.../pulls/{number}/reviews/{id}/events
-    "unresolve_review_thread",            // PUT /graphql — unresolveReviewThread
+    "unresolve_review_thread",            // PUT  /graphql — unresolveReviewThread
     "update_gist",
     "update_issue_assignees", // PATCH — modifies issue assignees
     "update_issue_body",      // PATCH — modifies issue body
