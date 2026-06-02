@@ -280,61 +280,62 @@ func TestFormatErrorContextDeduplication(t *testing.T) {
 		"deduplication: 'Configuration contains field(s)' should appear exactly once even when matched by both keyword and message fallback")
 }
 
+func TestDetailForKeyword(t *testing.T) {
 	tests := []struct {
-		name            string
-		keyword         string
-		wantKey         string
-		wantLinesLen    int
+		name              string
+		keyword           string
+		wantKey           string
+		wantLinesLen      int
 		wantLine0Contains string
 	}{
 		{
-			name:               "additionalProperties returns field details",
-			keyword:            "additionalProperties",
-			wantKey:            "additionalProperties",
-			wantLinesLen:       2,
-			wantLine0Contains:  "Configuration contains field(s)",
+			name:              "additionalProperties returns field details",
+			keyword:           "additionalProperties",
+			wantKey:           "additionalProperties",
+			wantLinesLen:      2,
+			wantLine0Contains: "Configuration contains field(s)",
 		},
 		{
-			name:               "type returns type mismatch details",
-			keyword:            "type",
-			wantKey:            "type",
-			wantLinesLen:       2,
-			wantLine0Contains:  "Type mismatch",
+			name:              "type returns type mismatch details",
+			keyword:           "type",
+			wantKey:           "type",
+			wantLinesLen:      2,
+			wantLine0Contains: "Type mismatch",
 		},
 		{
-			name:               "enum returns invalid value details",
-			keyword:            "enum",
-			wantKey:            "enum",
-			wantLinesLen:       2,
-			wantLine0Contains:  "Invalid value",
+			name:              "enum returns invalid value details",
+			keyword:           "enum",
+			wantKey:           "enum",
+			wantLinesLen:      2,
+			wantLine0Contains: "Invalid value",
 		},
 		{
-			name:               "required returns missing fields details",
-			keyword:            "required",
-			wantKey:            "required",
-			wantLinesLen:       2,
-			wantLine0Contains:  "Required field(s) are missing",
+			name:              "required returns missing fields details",
+			keyword:           "required",
+			wantKey:           "required",
+			wantLinesLen:      2,
+			wantLine0Contains: "Required field(s) are missing",
 		},
 		{
-			name:               "pattern returns value format details",
-			keyword:            "pattern",
-			wantKey:            "pattern",
-			wantLinesLen:       2,
-			wantLine0Contains:  "Value format is incorrect",
+			name:              "pattern returns value format details",
+			keyword:           "pattern",
+			wantKey:           "pattern",
+			wantLinesLen:      2,
+			wantLine0Contains: "Value format is incorrect",
 		},
 		{
-			name:               "range returns out-of-range details",
-			keyword:            "range",
-			wantKey:            "range",
-			wantLinesLen:       2,
-			wantLine0Contains:  "Value is outside the allowed range",
+			name:              "range returns out-of-range details",
+			keyword:           "range",
+			wantKey:           "range",
+			wantLinesLen:      2,
+			wantLine0Contains: "Value is outside the allowed range",
 		},
 		{
-			name:               "oneOf returns no-matching-format details",
-			keyword:            "oneOf",
-			wantKey:            "oneOf",
-			wantLinesLen:       2,
-			wantLine0Contains:  "doesn't match any of the expected formats",
+			name:              "oneOf returns no-matching-format details",
+			keyword:           "oneOf",
+			wantKey:           "oneOf",
+			wantLinesLen:      2,
+			wantLine0Contains: "doesn't match any of the expected formats",
 		},
 		{
 			name:    "unknown keyword returns empty key and nil lines",
