@@ -100,6 +100,7 @@ args = ["run", "--rm", "-e", "GITHUB_PERSONAL_ACCESS_TOKEN", "-e", "NO_COLOR=1",
 - **Note**: In JSON stdin format, the `command` field is not supported - stdio servers must use `container` field
 - **Note**: In JSON stdin format, `args` is optional and provides extra Docker runtime arguments inserted before the container image name
 - **Note**: In JSON stdin format, stdio servers also support optional `entrypoint`, `entrypointArgs`, and `mounts` fields; HTTP servers support optional `connectTimeout`
+- **Note**: JSON stdin accepts legacy snake_case timeout aliases `connect_timeout` and `tool_timeout` for backward compatibility (prefer `connectTimeout` and `toolTimeout`)
 - **Note**: For the full JSON stdin field list and complete TOML examples (including `gateway.keepalive_interval`, top-level `sequential_launch`, and `guards_mode`), see `docs/CONFIGURATION.md` and `config.example.toml`
 - **Note**: For the full gateway field list (including `trusted_bots`, `rate_limit_threshold`, `rate_limit_cooldown`, and all server fields), see [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md)
 - Port range validation: 1-65535
@@ -417,6 +418,7 @@ DEBUG_COLORS=0 DEBUG=* ./awmg --config config.toml
 - `OTEL_EXPORTER_OTLP_ENDPOINT` - OTLP HTTP endpoint for trace export; sets default for `--otlp-endpoint`
 - `OTEL_EXPORTER_OTLP_HEADERS` - Comma-separated `key=value` OTLP export headers (W3C Baggage format); used as fallback when `gateway.opentelemetry.headers` / `gateway.tracing.headers` is not set in config
 - `OTEL_SERVICE_NAME` - Service name in traces; sets default for `--otlp-service-name`
+- `TAVILY_API_KEY` - Tavily API key; when unset, integration tests that use it are automatically skipped
 - `AWMG_BINARY_PATH` - Override binary path for integration tests
 - `AWMG_WASM_GUARD_PATH` - Override WASM guard path for proxy integration tests
 - `RUNNING_IN_CONTAINER` - Set to `"true"` to force container detection when `/.dockerenv` and cgroup detection are unavailable

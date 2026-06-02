@@ -57,6 +57,7 @@ Inside the container, the gateway starts in routed mode on `http://0.0.0.0:8000`
 
 When running `awmg` directly (outside `docker run`), useful CLI flags include:
 - `--config-stdin`: Read JSON config from stdin (required when piping config, e.g. `cat config.json | awmg --config-stdin --routed`).
+  - For backward compatibility, JSON stdin also accepts legacy snake_case server timeout aliases: `connect_timeout` and `tool_timeout` (prefer `connectTimeout` and `toolTimeout`).
 - `--env <file>`: Load environment variables from a `.env` file before startup.
 - `-v`, `-vv`, `-vvv`: Increase verbosity (`info`, `debug`, `trace`).
 - A complete reference for all environment variables — including guard policy, TLS, tracing, authentication tokens, and containerized deployment — is in [docs/ENVIRONMENT_VARIABLES.md](docs/ENVIRONMENT_VARIABLES.md).
