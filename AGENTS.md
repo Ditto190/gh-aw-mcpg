@@ -99,7 +99,7 @@ args = ["run", "--rm", "-e", "GITHUB_PERSONAL_ACCESS_TOKEN", "-e", "NO_COLOR=1",
 - **Containerization Requirement**: TOML stdio servers must use `command = "docker"` per [MCP Gateway Specification Section 3.2.1](https://github.com/github/gh-aw/blob/main/docs/src/content/docs/reference/mcp-gateway.md#321-containerization-requirement)
 - **Note**: In JSON stdin format, the `command` field is not supported - stdio servers must use `container` field
 - **Note**: In JSON stdin format, `args` is optional and provides extra Docker runtime arguments inserted before the container image name
-- **Note**: In JSON stdin format, stdio servers also support optional `entrypoint`, `entrypointArgs`, and `mounts` fields; HTTP servers support optional `connectTimeout`
+- **Note**: In JSON stdin format, stdio servers also support optional `entrypoint`, `entrypointArgs`, and `mounts` fields; HTTP servers support optional `connectTimeout` and `toolTimeout`
 - **Note**: JSON stdin accepts legacy snake_case timeout aliases `connect_timeout` and `tool_timeout` for backward compatibility (prefer `connectTimeout` and `toolTimeout`)
 - **Note**: For the full JSON stdin field list and complete TOML examples (including `gateway.keepalive_interval`, top-level `sequential_launch`, and `guards_mode`), see `docs/CONFIGURATION.md` and `config.example.toml`
 - **Note**: For the full gateway field list (including `trusted_bots`, `rate_limit_threshold`, `rate_limit_cooldown`, and all server fields), see [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md)
