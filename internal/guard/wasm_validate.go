@@ -3,10 +3,12 @@ package guard
 import (
 	"fmt"
 	"strings"
+
+	"github.com/github/gh-aw-mcpg/internal/config"
 )
 
-// AllowedIntegrityLevels is the single source of truth for valid integrity-level values.
-var AllowedIntegrityLevels = []string{"none", "unapproved", "approved", "merged"}
+// AllowedIntegrityLevels is derived from the canonical integrity levels in config.
+var AllowedIntegrityLevels = config.AllIntegrityLevels()
 
 var allowedIntegrityLevelSet = func() map[string]struct{} {
 	m := make(map[string]struct{}, len(AllowedIntegrityLevels))

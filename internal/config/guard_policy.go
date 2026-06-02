@@ -17,6 +17,14 @@ const (
 	IntegrityMerged     = "merged"
 )
 
+var allIntegrityLevels = []string{IntegrityNone, IntegrityUnapproved, IntegrityApproved, IntegrityMerged}
+
+// AllIntegrityLevels returns the canonical ordered list of all valid integrity-level values.
+// The returned slice is a defensive copy and safe for callers to modify.
+func AllIntegrityLevels() []string {
+	return append([]string(nil), allIntegrityLevels...)
+}
+
 var validMinIntegrityValues = map[string]struct{}{
 	IntegrityNone:       {},
 	IntegrityUnapproved: {},
