@@ -29,7 +29,9 @@
             },
             {
               "type": "string",
-              "enum": [""]
+              "enum": [
+                ""
+              ]
             }
           ]
         }
@@ -37,7 +39,10 @@
       "additionalProperties": false
     }
   },
-  "required": ["mcpServers", "gateway"],
+  "required": [
+    "mcpServers",
+    "gateway"
+  ],
   "additionalProperties": false,
   "definitions": {
     "mcpServerConfig": {
@@ -61,7 +66,9 @@
       "properties": {
         "type": {
           "type": "string",
-          "enum": ["stdio"],
+          "enum": [
+            "stdio"
+          ],
           "description": "Transport type for the MCP server. For containerized servers, use 'stdio'.",
           "default": "stdio"
         },
@@ -115,10 +122,24 @@
           "items": {
             "type": "string"
           },
-          "default": ["*"]
+          "default": [
+            "*"
+          ]
+        },
+        "toolTimeout": {
+          "type": "integer",
+          "description": "Per-server maximum time (seconds) to wait for a single tool invocation. Overrides the global gateway.toolTimeout for this server. Minimum: 10.",
+          "minimum": 10
+        },
+        "tool_timeout": {
+          "type": "integer",
+          "description": "Legacy snake_case alias for toolTimeout. Prefer toolTimeout.",
+          "minimum": 10
         }
       },
-      "required": ["container"],
+      "required": [
+        "container"
+      ],
       "additionalProperties": false
     },
     "httpServerConfig": {
@@ -127,7 +148,9 @@
       "properties": {
         "type": {
           "type": "string",
-          "enum": ["http"],
+          "enum": [
+            "http"
+          ],
           "description": "Transport type for the MCP server. For HTTP servers, use 'http'."
         },
         "url": {
@@ -151,7 +174,9 @@
           "items": {
             "type": "string"
           },
-          "default": ["*"]
+          "default": [
+            "*"
+          ]
         },
         "env": {
           "type": "object",
@@ -172,7 +197,9 @@
           "properties": {
             "type": {
               "type": "string",
-              "enum": ["github-oidc"],
+              "enum": [
+                "github-oidc"
+              ],
               "description": "Authentication type. Currently only 'github-oidc' is supported, which acquires short-lived JWTs from the GitHub Actions OIDC endpoint."
             },
             "audience": {
@@ -181,11 +208,36 @@
               "format": "uri"
             }
           },
-          "required": ["type"],
+          "required": [
+            "type"
+          ],
           "additionalProperties": false
+        },
+        "connectTimeout": {
+          "type": "integer",
+          "description": "Per-transport timeout (in seconds) for connecting to HTTP backends. Default: 30 seconds.",
+          "minimum": 1
+        },
+        "connect_timeout": {
+          "type": "integer",
+          "description": "Legacy snake_case alias for connectTimeout. Prefer connectTimeout.",
+          "minimum": 1
+        },
+        "toolTimeout": {
+          "type": "integer",
+          "description": "Per-server maximum time (seconds) to wait for a single tool invocation. Overrides the global gateway.toolTimeout for this server. Minimum: 10.",
+          "minimum": 10
+        },
+        "tool_timeout": {
+          "type": "integer",
+          "description": "Legacy snake_case alias for toolTimeout. Prefer toolTimeout.",
+          "minimum": 10
         }
       },
-      "required": ["type", "url"],
+      "required": [
+        "type",
+        "url"
+      ],
       "additionalProperties": false
     },
     "customServerConfig": {
@@ -198,7 +250,9 @@
           "description": "Custom server type name. Must not be 'stdio' or 'http'. Must be registered in customSchemas."
         }
       },
-      "required": ["type"],
+      "required": [
+        "type"
+      ],
       "additionalProperties": true
     },
     "gatewayConfig": {
@@ -228,7 +282,10 @@
           "oneOf": [
             {
               "type": "string",
-              "enum": ["localhost", "host.docker.internal"]
+              "enum": [
+                "localhost",
+                "host.docker.internal"
+              ]
             },
             {
               "type": "string",
@@ -284,7 +341,11 @@
           "description": "Optional OpenTelemetry configuration for emitting distributed tracing spans for MCP calls. When configured, the gateway exports OTLP/HTTP traces to the specified collector endpoint."
         }
       },
-      "required": ["port", "domain", "apiKey"],
+      "required": [
+        "port",
+        "domain",
+        "apiKey"
+      ],
       "additionalProperties": false
     },
     "opentelemetryConfig": {
@@ -328,7 +389,9 @@
           "default": "mcp-gateway"
         }
       },
-      "required": ["endpoint"],
+      "required": [
+        "endpoint"
+      ],
       "additionalProperties": false
     }
   },
@@ -353,8 +416,14 @@
         "data-server": {
           "container": "ghcr.io/example/data-mcp:latest",
           "entrypoint": "/custom/entrypoint.sh",
-          "entrypointArgs": ["--config", "/app/config.json"],
-          "mounts": ["/host/data:/container/data:ro", "/host/config:/container/config:rw"],
+          "entrypointArgs": [
+            "--config",
+            "/app/config.json"
+          ],
+          "mounts": [
+            "/host/data:/container/data:ro",
+            "/host/config:/container/config:rw"
+          ],
           "type": "stdio"
         }
       },
@@ -369,7 +438,10 @@
       "mcpServers": {
         "local-server": {
           "container": "ghcr.io/example/python-mcp:latest",
-          "entrypointArgs": ["--config", "/app/config.json"],
+          "entrypointArgs": [
+            "--config",
+            "/app/config.json"
+          ],
           "type": "stdio"
         },
         "remote-server": {
