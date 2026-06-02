@@ -22,7 +22,7 @@ func TestRegisterTracingFlags_DefaultsFromEnv(t *testing.T) {
 	var sampleRate float64
 
 	registerTracingFlags(
-		cmd.Flags(),
+		cmd,
 		&endpoint,
 		&service,
 		&sampleRate,
