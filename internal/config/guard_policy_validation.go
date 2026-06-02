@@ -102,16 +102,14 @@ func NormalizeGuardPolicy(policy *GuardPolicy) (*NormalizedGuardPolicy, error) {
 		return nil, fmt.Errorf("policy must include allow-only")
 	}
 
-	integrity := strings.ToLower(strings.TrimSpace(policy.AllowOnly.MinIntegrity))
-	if _, ok := validMinIntegrityValues[integrity]; !ok {
-		return nil, fmt.Errorf("allow-only.min-integrity must be one of: %s", strings.Join(allowedGuardPolicyIntegrityLevels, ", "))
+	integrity, err := validateAndNormalizeIntegrityField("allow-only.min-integrity", policy.AllowOnly.MinIntegrity, false)
+	if err != nil {
+		return nil, err
 	}
 
 	normalized := &NormalizedGuardPolicy{MinIntegrity: integrity}
 
 	logGuardPolicy.Printf("Normalizing guard policy: integrity=%s, reposType=%T", integrity, policy.AllowOnly.Repos)
-
-	var err error
 
 	normalized.ToolCallLimits, err = normalizeToolCallLimits(policy.AllowOnly.ToolCallLimits)
 	if err != nil {
@@ -146,26 +144,23 @@ func NormalizeGuardPolicy(policy *GuardPolicy) (*NormalizedGuardPolicy, error) {
 
 	// Validate and normalize disapproval-integrity (optional; empty means feature
 	// uses Rust-side default of "none" when endorsement/disapproval is evaluated).
-	if v := strings.ToLower(strings.TrimSpace(policy.AllowOnly.DisapprovalIntegrity)); v != "" {
-		if _, ok := validMinIntegrityValues[v]; !ok {
-			return nil, fmt.Errorf("allow-only.disapproval-integrity must be one of: %s", strings.Join(allowedGuardPolicyIntegrityLevels, ", "))
-		}
-		normalized.DisapprovalIntegrity = v
+	normalized.DisapprovalIntegrity, err = validateAndNormalizeIntegrityField("allow-only.disapproval-integrity", policy.AllowOnly.DisapprovalIntegrity, true)
+	if err != nil {
+		return nil, err
 	}
 
 	// Validate and normalize endorser-min-integrity (optional; empty means feature
 	// uses Rust-side default of "approved" when evaluating reactor eligibility).
-	if v := strings.ToLower(strings.TrimSpace(policy.AllowOnly.EndorserMinIntegrity)); v != "" {
-		if _, ok := validMinIntegrityValues[v]; !ok {
-			return nil, fmt.Errorf("allow-only.endorser-min-integrity must be one of: %s", strings.Join(allowedGuardPolicyIntegrityLevels, ", "))
-		}
-		normalized.EndorserMinIntegrity = v
+	normalized.EndorserMinIntegrity, err = validateAndNormalizeIntegrityField("allow-only.endorser-min-integrity", policy.AllowOnly.EndorserMinIntegrity, true)
+	if err != nil {
+		return nil, err
 	}
 
 	// Pass through promotion-label and demotion-label as-is (validated by Rust guard).
 	if v := strings.TrimSpace(policy.AllowOnly.PromotionLabel); v != "" {
 		normalized.PromotionLabel = v
 	}
+
 	if v := strings.TrimSpace(policy.AllowOnly.DemotionLabel); v != "" {
 		normalized.DemotionLabel = v
 	}
@@ -207,6 +202,17 @@ func NormalizeGuardPolicy(policy *GuardPolicy) (*NormalizedGuardPolicy, error) {
 	default:
 		return nil, fmt.Errorf("allow-only.repos must be 'all', 'public', or a non-empty array of repo scope strings")
 	}
+}
+
+func validateAndNormalizeIntegrityField(fieldPath, raw string, optional bool) (string, error) {
+	v := strings.ToLower(strings.TrimSpace(raw))
+	if v == "" && optional {
+		return "", nil
+	}
+	if _, ok := validMinIntegrityValues[v]; !ok {
+		return "", fmt.Errorf("%s must be one of: %s", fieldPath, strings.Join(allowedGuardPolicyIntegrityLevels, ", "))
+	}
+	return v, nil
 }
 
 func normalizeAndValidateScopeArray(scopes []interface{}) ([]string, error) {
