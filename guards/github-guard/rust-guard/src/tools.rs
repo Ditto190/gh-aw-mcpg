@@ -137,36 +137,19 @@ pub fn is_unlock_operation(tool_name: &str) -> bool {
 
 /// Tools that are unconditionally blocked regardless of agent integrity.
 ///
-/// These operations are too dangerous or unsupported to ever permit via an agent.
-/// Entries here should also appear in `WRITE_OPERATIONS` or `READ_WRITE_OPERATIONS`
-/// so the tool is still subject to all normal write-path checks before being denied.
+/// Keep sorted for `binary_search` correctness (see `blocked_tools_are_sorted` test).
+/// Entries here should also appear in `WRITE_OPERATIONS` or `READ_WRITE_OPERATIONS`.
 pub const BLOCKED_TOOLS: &[&str] = &[
-    "transfer_repository",  // irreversible ownership transfer
     "archive_repository",   // repo settings change; unsupported
-    "unarchive_repository", // symmetric to archive_repository
-    "rename_repository",    // breaks clone URLs and integrations
     "create_agent_task",    // unsupported agent-task creation
+    "rename_repository",    // breaks clone URLs and integrations
+    "transfer_repository",  // irreversible ownership transfer
+    "unarchive_repository", // symmetric to archive_repository
 ];
 
-/// Check if a tool is unconditionally blocked (always denied regardless of agent integrity).
-///
-/// Blocked tools are listed here when the operation is considered too dangerous
-/// to ever permit via an agent, even if the agent would otherwise satisfy the
-/// integrity requirements for a normal write operation.
-///
-/// Current entries:
-/// - `transfer_repository`: repository ownership transfer is irreversible and
-///   must never be performed by an automated agent.
-/// - `archive_repository`: archives a repository, restricting contributions; unsupported as an
-///   agent operation.
-/// - `unarchive_repository`: re-enables contributions to a previously archived repository;
-///   symmetric to `archive_repository` and equally unsupported.
-/// - `rename_repository`: renames a repository, breaking all clone URLs, webhooks, and external
-///   references; unsupported as an agent operation.
-/// - `create_agent_task`: creates a Copilot coding-agent job that opens a branch and PR;
-///   unsupported as a directly invocable agent operation.
+/// Returns `true` if `tool_name` is in [`BLOCKED_TOOLS`] — denied regardless of agent integrity.
 pub fn is_blocked_tool(tool_name: &str) -> bool {
-    BLOCKED_TOOLS.contains(&tool_name)
+    BLOCKED_TOOLS.binary_search(&tool_name).is_ok()
 }
 
 #[cfg(test)]
@@ -202,6 +185,17 @@ mod tests {
             READ_WRITE_OPERATIONS,
             sorted.as_slice(),
             "READ_WRITE_OPERATIONS must be kept in sorted order for binary_search correctness"
+        );
+    }
+
+    #[test]
+    fn blocked_tools_are_sorted() {
+        let mut sorted = BLOCKED_TOOLS.to_vec();
+        sorted.sort_unstable();
+        assert_eq!(
+            BLOCKED_TOOLS,
+            sorted.as_slice(),
+            "BLOCKED_TOOLS must be kept in sorted order for binary_search correctness"
         );
     }
 
