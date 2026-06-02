@@ -1270,3 +1270,56 @@ func TestNormalizeGuardPolicyPromotionDemotionLabels(t *testing.T) {
 		assert.Equal(t, "agent-blocked", got.AllowOnly.DemotionLabel)
 	})
 }
+
+func TestValidateAndNormalizeIntegrityField(t *testing.T) {
+	tests := []struct {
+		name            string
+		fieldPath       string
+		raw             string
+		optional        bool
+		want            string
+		wantErrContains string
+	}{
+		{
+			name:      "required integrity trims and lowercases",
+			fieldPath: "allow-only.min-integrity",
+			raw:       "  ApProVed ",
+			optional:  false,
+			want:      "approved",
+		},
+		{
+			name:      "optional empty is allowed",
+			fieldPath: "allow-only.disapproval-integrity",
+			raw:       "   ",
+			optional:  true,
+			want:      "",
+		},
+		{
+			name:            "required empty is rejected",
+			fieldPath:       "allow-only.min-integrity",
+			raw:             " ",
+			optional:        false,
+			wantErrContains: "allow-only.min-integrity must be one of",
+		},
+		{
+			name:            "invalid optional value is rejected",
+			fieldPath:       "allow-only.endorser-min-integrity",
+			raw:             "invalid",
+			optional:        true,
+			wantErrContains: "allow-only.endorser-min-integrity must be one of",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := validateAndNormalizeIntegrityField(tt.fieldPath, tt.raw, tt.optional)
+			if tt.wantErrContains != "" {
+				require.Error(t, err)
+				assert.ErrorContains(t, err, tt.wantErrContains)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
