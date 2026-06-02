@@ -43,7 +43,7 @@ func TestResolveWasmCacheDir(t *testing.T) {
 		assert.Equal(t, "/tmp/custom-cache", resolveWasmCacheDir(true, "   ", "/tmp/logs"))
 	})
 
-	t.Run("whitespace-only flag and unset env uses log-dir default", func(t *testing.T) {
+	t.Run("whitespace-only flag and empty env var uses log-dir default", func(t *testing.T) {
 		t.Setenv(wasmCacheDirEnvVar, "")
 		assert.Equal(t, defaultWasmCacheDir("/my/logdir"), resolveWasmCacheDir(true, "  ", "/my/logdir"))
 	})
