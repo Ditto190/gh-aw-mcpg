@@ -7,13 +7,8 @@ import (
 	"github.com/github/gh-aw-mcpg/internal/config"
 )
 
-// AllowedIntegrityLevels is derived from the canonical integrity constants in config.
-var AllowedIntegrityLevels = []string{
-	config.IntegrityNone,
-	config.IntegrityUnapproved,
-	config.IntegrityApproved,
-	config.IntegrityMerged,
-}
+// AllowedIntegrityLevels is derived from the canonical integrity levels in config.
+var AllowedIntegrityLevels = config.AllIntegrityLevels()
 
 var allowedIntegrityLevelSet = func() map[string]struct{} {
 	m := make(map[string]struct{}, len(AllowedIntegrityLevels))

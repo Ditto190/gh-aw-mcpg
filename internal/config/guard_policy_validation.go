@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-var allowedGuardPolicyIntegrityLevels = AllIntegrityLevels
+var allowedGuardPolicyIntegrityLevels = AllIntegrityLevels()
 
 // ValidateGuardPolicy validates AllowOnly or WriteSink policy input.
 func ValidateGuardPolicy(policy *GuardPolicy) error {

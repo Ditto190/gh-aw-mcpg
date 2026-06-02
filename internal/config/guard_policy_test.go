@@ -9,6 +9,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestAllIntegrityLevelsReturnsCopy(t *testing.T) {
+	levels := AllIntegrityLevels()
+	require.Equal(t, []string{IntegrityNone, IntegrityUnapproved, IntegrityApproved, IntegrityMerged}, levels)
+
+	levels[0] = "mutated"
+
+	assert.Equal(t, IntegrityNone, AllIntegrityLevels()[0])
+}
+
 // TestNormalizeGuardPolicy tests NormalizeGuardPolicy with all branch paths.
 func TestNormalizeGuardPolicy(t *testing.T) {
 	tests := []struct {
