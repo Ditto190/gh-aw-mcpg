@@ -284,9 +284,9 @@ func TestPaginateAllHelper(t *testing.T) {
 	})
 }
 
-// TestCallParamMethod_UnmarshalError tests that callParamMethod returns an error
+// TestCallParamMethod_MarshalParamsError tests that callParamMethod returns an error
 // when rawParams cannot be marshalled (e.g. a channel value).
-func TestCallParamMethod_UnmarshalError(t *testing.T) {
+func TestCallParamMethod_MarshalParamsError(t *testing.T) {
 	// Set a non-nil session so requireSession() passes, allowing us to reach unmarshalParams.
 	c := &Connection{session: &sdk.ClientSession{}}
 	resp, err := callParamMethod(c, make(chan int), func(_ struct{}) (interface{}, error) {
