@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -281,6 +282,48 @@ func TestPaginateAllHelper(t *testing.T) {
 		assert.ErrorContains(t, err, itemKind)
 		assert.ErrorContains(t, err, fmt.Sprintf("%d", paginateAllMaxPages))
 	})
+}
+
+// TestCallParamMethod_MarshalParamsError tests that callParamMethod returns an error
+// when rawParams cannot be marshalled (e.g. a channel value).
+func TestCallParamMethod_MarshalParamsError(t *testing.T) {
+	// Set a non-nil session so requireSession() passes, allowing us to reach unmarshalParams.
+	c := &Connection{session: &sdk.ClientSession{}}
+	resp, err := callParamMethod(c, make(chan int), func(_ struct{}) (interface{}, error) {
+		return nil, nil
+	})
+	require.Error(t, err)
+	assert.Nil(t, resp)
+}
+
+// TestListMCPItems_PaginateError tests that listMCPItems propagates errors from paginateAll.
+func TestListMCPItems_PaginateError(t *testing.T) {
+	// Set a non-nil session so requireSession() passes.
+	c := &Connection{session: &sdk.ClientSession{}}
+	fetchErr := errors.New("backend fetch failed")
+	resp, err := listMCPItems(
+		c,
+		"Tools",
+		func(_ string) (paginatedPage[string], error) {
+			return paginatedPage[string]{}, fetchErr
+		},
+		func(items []string) []string { return items },
+	)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, fetchErr)
+	assert.Nil(t, resp)
+}
+
+// TestCallParamMethod_FnError tests that callParamMethod propagates errors from fn.
+func TestCallParamMethod_FnError(t *testing.T) {
+	c := &Connection{session: &sdk.ClientSession{}}
+	fnErr := errors.New("fn execution failed")
+	resp, err := callParamMethod(c, nil, func(_ struct{}) (interface{}, error) {
+		return nil, fnErr
+	})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, fnErr)
+	assert.Nil(t, resp)
 }
 
 // TestPaginateAllMaxPagesConstant verifies the safety constant has expected value.
