@@ -338,8 +338,8 @@ pub fn label_response_paths(
                 } else {
                     String::new()
                 };
-                let default_secrecy =
-                    repo_visibility_secrecy(&arg_owner, &arg_repo, &default_repo, ctx);
+                let default_secrecy: crate::SharedLabels =
+                    repo_visibility_secrecy(&arg_owner, &arg_repo, &default_repo, ctx).into();
                 let repo_private = if !arg_owner.is_empty() && !arg_repo.is_empty() {
                     match super::backend::is_repo_private(&arg_owner, &arg_repo) {
                         Some(value) => value,
@@ -351,8 +351,6 @@ pub fn label_response_paths(
 
                 // Commits on default branch (main/master) get merged-level integrity
                 let is_default_branch = is_default_branch_ref(sha);
-                let default_secrecy_shared: crate::SharedLabels = default_secrecy.clone().into();
-
                 let limited_items = limit_items_with_log(items, "list_commits");
                 let mut labeled_paths = Vec::with_capacity(limited_items.len());
 
@@ -380,7 +378,7 @@ pub fn label_response_paths(
                         path: format!("/{}", i),
                         labels: crate::ResourceLabels {
                             description: format!("commit:{}@{}", repo_for_labels, short_sha),
-                            secrecy: default_secrecy_shared.clone(),
+                            secrecy: default_secrecy.clone(),
                             integrity: integrity.into(),
                         },
                     });
@@ -390,7 +388,7 @@ pub fn label_response_paths(
                     labeled_paths,
                     default_labels: Some(crate::ResourceLabels {
                         description: "commit".to_string(),
-                        secrecy: default_secrecy.into(),
+                        secrecy: default_secrecy,
                         integrity: if is_default_branch {
                             merged_integrity(&default_repo, ctx)
                         } else if repo_private {
@@ -904,5 +902,99 @@ mod tests {
             "feature-branch commit on public repo should NOT have merged-level integrity; got {:?}",
             default_integrity
         );
+    }
+
+    #[test]
+    fn list_project_items_missing_repo_fails_secure_and_forwards_items_path() {
+        let tool_args = json!({"owner": "octocat"});
+        let response = json!({
+            "items": [{
+                "type": "ISSUE",
+                "content": {
+                    "author_association": "CONTRIBUTOR"
+                }
+            }]
+        });
+
+        let result = label_response_paths("list_project_items", &tool_args, &response, &ctx())
+            .expect("list_project_items should produce path labels");
+
+        assert_eq!(result.items_path, Some("/items"));
+        assert_eq!(result.labeled_paths.len(), 1);
+
+        let entry = &result.labeled_paths[0];
+        assert_eq!(entry.path, "/items/0");
+        assert_eq!(entry.labels.description, "project-item:issue");
+        assert_eq!(
+            entry.labels.secrecy,
+            policy_private_scope_label("octocat", "", "", &ctx()),
+            "missing repo context should fail secure"
+        );
+        assert_eq!(
+            entry.labels.integrity,
+            author_association_floor_from_str("octocat", Some("CONTRIBUTOR"), &ctx()),
+            "missing repo context should fall back to owner-scoped association integrity"
+        );
+    }
+
+    #[test]
+    fn list_project_items_draft_issue_gets_writer_integrity_and_empty_secrecy() {
+        let tool_args = json!({"owner": "octocat"});
+        let response = json!({
+            "items": [{
+                "type": "DRAFT_ISSUE",
+                "title": "todo item"
+            }]
+        });
+
+        let result = label_response_paths("list_project_items", &tool_args, &response, &ctx())
+            .expect("list_project_items should produce path labels");
+
+        assert_eq!(result.labeled_paths.len(), 1);
+        let entry = &result.labeled_paths[0];
+        assert_eq!(entry.labels.description, "project-item:draft_issue");
+        assert!(entry.labels.secrecy.is_empty(), "draft issue should have empty secrecy");
+        assert_eq!(
+            entry.labels.integrity,
+            writer_integrity("octocat", &ctx()),
+            "draft issue should use owner-scoped writer integrity"
+        );
+    }
+
+    #[test]
+    fn projects_list_alias_matches_list_project_items() {
+        let tool_args = json!({"owner": "octocat"});
+        let response = json!({
+            "items": [{
+                "type": "PULL_REQUEST",
+                "content": {
+                    "repository_url": "https://api.github.com/repos/octocat/hello-world",
+                    "author_association": "MEMBER"
+                }
+            }]
+        });
+
+        let list_project_items =
+            label_response_paths("list_project_items", &tool_args, &response, &ctx())
+                .expect("list_project_items should produce path labels");
+        let projects_list = label_response_paths("projects_list", &tool_args, &response, &ctx())
+            .expect("projects_list should produce path labels");
+
+        assert_eq!(
+            list_project_items.items_path, projects_list.items_path,
+            "alias should preserve items_path"
+        );
+        assert_eq!(
+            list_project_items.labeled_paths.len(),
+            projects_list.labeled_paths.len(),
+            "alias should produce the same number of labeled paths"
+        );
+
+        let left = &list_project_items.labeled_paths[0];
+        let right = &projects_list.labeled_paths[0];
+        assert_eq!(left.path, right.path);
+        assert_eq!(left.labels.description, right.labels.description);
+        assert_eq!(left.labels.secrecy, right.labels.secrecy);
+        assert_eq!(left.labels.integrity, right.labels.integrity);
     }
 }
