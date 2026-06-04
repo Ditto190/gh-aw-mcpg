@@ -1469,7 +1469,16 @@ func TestDisableStandaloneSSECanary(t *testing.T) {
 		require.NoError(t, err, "Initial connect should succeed")
 		defer session.Close()
 
-		time.Sleep(200 * time.Millisecond)
+		if disableStandaloneSSE {
+			// Give the SDK a brief window to start any unexpected standalone GET.
+			time.Sleep(500 * time.Millisecond)
+			return sseGETs.Load()
+		}
+
+		// When DisableStandaloneSSE is false, wait for the SDK to actually issue the GET
+		// (a fixed sleep can be flaky on slow CI).
+		require.Eventually(t, func() bool { return sseGETs.Load() > 0 }, 2*time.Second, 10*time.Millisecond,
+			"timed out waiting for standalone SSE GET")
 		return sseGETs.Load()
 	}
 
