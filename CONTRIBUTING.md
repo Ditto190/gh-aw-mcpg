@@ -5,7 +5,7 @@ Thank you for your interest in contributing to MCP Gateway! This document provid
 ## Prerequisites
 
 1. **Docker** installed and running
-2. **Go 1.25.0** (see [installation instructions](https://go.dev/dl/))
+2. **Go 1.25.0 or later** (see [installation instructions](https://go.dev/dl/))
 3. **Make** for running build commands
 
 ## Getting Started
@@ -24,7 +24,7 @@ Thank you for your interest in contributing to MCP Gateway! This document provid
    ```
 
    This will:
-   - Verify Go installation (and warn if version doesn't match 1.25.0)
+   - Verify Go installation (and warn if the version is older than 1.25)
    - Install golangci-lint if not present
    - Download and verify Go module dependencies
 
@@ -58,6 +58,9 @@ make build
 ```
 
 This creates the `awmg` binary in the project root.
+
+> [!NOTE]
+> `make build` runs `go mod tidy` before `go build`. In network-restricted environments, ensure required modules are already cached or use direct `go build -o awmg .` when appropriate.
 
 List all available Make targets:
 ```bash
