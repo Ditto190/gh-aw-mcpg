@@ -314,6 +314,30 @@ func TestListMCPItems_PaginateError(t *testing.T) {
 	assert.Nil(t, resp)
 }
 
+// TestListSDKItems_NilSession verifies that listSDKItems checks session availability
+// before calling the SDK list function.
+func TestListSDKItems_NilSession(t *testing.T) {
+	conn := newTestConnection(t)
+	listCalled := false
+
+	_, err := listSDKItems(
+		conn,
+		"tools",
+		func(_ string) (string, error) {
+			listCalled = true
+			return "unused", nil
+		},
+		func(_ string) paginatedPage[string] {
+			return paginatedPage[string]{Items: []string{"a"}}
+		},
+		func(items []string) []string { return items },
+	)
+
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "SDK session not available")
+	assert.False(t, listCalled, "list should not be called when session is unavailable")
+}
+
 // TestCallParamMethod_FnError tests that callParamMethod propagates errors from fn.
 func TestCallParamMethod_FnError(t *testing.T) {
 	c := &Connection{session: &sdk.ClientSession{}}

@@ -128,3 +128,23 @@ func listMCPItems[Item any, Result any](
 	}
 	return marshalToResponse(buildResult(items))
 }
+
+// listSDKItems adapts cursor-based SDK list calls to listMCPItems.
+func listSDKItems[Item any, SDKResult any, Result any](
+	c *Connection,
+	kind string,
+	list func(cursor string) (SDKResult, error),
+	toPage func(SDKResult) paginatedPage[Item],
+	buildResult func([]Item) Result,
+) (*Response, error) {
+	return listMCPItems(c, kind,
+		func(cursor string) (paginatedPage[Item], error) {
+			result, err := list(cursor)
+			if err != nil {
+				return paginatedPage[Item]{}, err
+			}
+			return toPage(result), nil
+		},
+		buildResult,
+	)
+}
