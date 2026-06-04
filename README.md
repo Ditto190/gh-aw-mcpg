@@ -177,7 +177,7 @@ See **[docs/CONFIGURATION.md](docs/CONFIGURATION.md)** for the complete mapping 
 
 ## Gateway Configuration
 
-Key gateway-level configuration fields (set under `[gateway]` in TOML or `"gateway"` in JSON):
+Key configuration fields (gateway-level under `[gateway]` in TOML / `"gateway"` in JSON, plus top-level JSON stdin fields):
 
 | Field | Description |
 |-------|-------------|
