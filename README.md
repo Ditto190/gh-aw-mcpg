@@ -186,6 +186,7 @@ Key gateway-level configuration fields (set under `[gateway]` in TOML or `"gatew
 | `payload_dir` / `payloadDir` | Directory for large payload storage (must be absolute path) |
 | `payload_size_threshold` / `payloadSizeThreshold` | Size threshold in bytes for payload storage (default: `524288`) |
 | `trusted_bots` / `trustedBots` | Additional bot usernames to treat as trusted with "approved" integrity. Additive to the built-in trusted bot list. Non-empty array when present. Example: `["my-bot[bot]"]` |
+| `customSchemas` (JSON stdin top-level) | Map custom server `type` names to HTTPS JSON schema URLs for custom server validation |
 
 For the full gateway field list (including rate limiting, tracing, keepalive, and more), see **[docs/CONFIGURATION.md](docs/CONFIGURATION.md)**.
 

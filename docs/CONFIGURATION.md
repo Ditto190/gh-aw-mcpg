@@ -174,6 +174,7 @@ Run `./awmg --help` for full CLI options. Key flags:
 - **`tool_response_filters`** (optional): Per-tool jq expressions that transform tool response data before it is returned to the agent and before large-payload preview/schema processing runs
   - Map key: tool name; map value: jq expression string
   - Expressions are validated at startup (compile check); invalid jq causes startup/config validation failure
+  - JSON key name is intentionally snake_case: `tool_response_filters` (there is no `toolResponseFilters` alias)
   - Example:
     ```json
     "tool_response_filters": {
@@ -189,6 +190,35 @@ Run `./awmg --help` for full CLI options. Key flags:
   - References a guard defined in the top-level `[guards]` section
   - Enables per-server DIFC guard assignment independent of `guard-policies`
   - Example: `guard = "github"` (uses the guard named `github` from `[guards.github]`)
+  - Worked example (TOML):
+    ```toml
+    [guards.github]
+    type = "wasm"
+    path = "guards/github-guard/github_guard.wasm"
+
+    [servers.github]
+    command = "docker"
+    args = ["run", "--rm", "-i", "ghcr.io/github/github-mcp-server:latest"]
+    guard = "github"
+    ```
+  - Worked example (JSON stdin):
+    ```json
+    {
+      "guards": {
+        "github": {
+          "type": "wasm",
+          "path": "guards/github-guard/github_guard.wasm"
+        }
+      },
+      "mcpServers": {
+        "github": {
+          "type": "stdio",
+          "container": "ghcr.io/github/github-mcp-server:latest",
+          "guard": "github"
+        }
+      }
+    }
+    ```
 
 - **`connectTimeout`** (preferred JSON) / **`connect_timeout`** (legacy JSON alias, HTTP servers only): Per-transport connection timeout in seconds for connecting to HTTP backends. The gateway tries streamable HTTP, then SSE, then plain JSON-RPC over HTTP POST in sequence; this timeout applies to each attempt. It does **not** set the end-to-end `tools/call` execution timeout. Default: `30`.
 
@@ -197,9 +227,9 @@ Run `./awmg --help` for full CLI options. Key flags:
   - Example (stdin JSON): `"toolTimeout": 600` on an HTTP MCP server that may take up to 10 minutes
   - Example (TOML): `tool_timeout = 600` under a `[servers.my-server]` section
 
-- **`rate_limit_threshold`** (optional, TOML/JSON file configs only): Number of consecutive rate-limit errors from this backend that will trip the circuit breaker (transition CLOSED → OPEN). When OPEN, requests are immediately rejected until the breaker is eligible to transition to HALF-OPEN again; this is normally controlled by `rate_limit_cooldown`, but if the gateway knows an upstream rate-limit reset time (for example from response headers or parsed tool error text), that reset time takes precedence. **Not available in JSON stdin format.** Default: `3`.
+- **`rate_limit_threshold`** (optional, TOML config only): Number of consecutive rate-limit errors from this backend that will trip the circuit breaker (transition CLOSED → OPEN). When OPEN, requests are immediately rejected until the breaker is eligible to transition to HALF-OPEN again; this is normally controlled by `rate_limit_cooldown`, but if the gateway knows an upstream rate-limit reset time (for example from response headers or parsed tool error text), that reset time takes precedence. **Not available in JSON stdin format.** Default: `3`.
 
-- **`rate_limit_cooldown`** (optional, TOML/JSON file configs only): Default number of seconds before the circuit breaker allows a single probe request (transition OPEN → HALF-OPEN). If the gateway knows an upstream rate-limit reset time, it uses that reset time instead of this cooldown to decide when to probe again. If the probe succeeds the circuit closes; if rate-limited again it re-opens. **Not available in JSON stdin format.** Default: `60`.
+- **`rate_limit_cooldown`** (optional, TOML config only): Default number of seconds before the circuit breaker allows a single probe request (transition OPEN → HALF-OPEN). If the gateway knows an upstream rate-limit reset time, it uses that reset time instead of this cooldown to decide when to probe again. If the probe succeeds the circuit closes; if rate-limited again it re-opens. **Not available in JSON stdin format.** Default: `60`.
 
 - **`working_directory`** (optional, TOML format only): Working directory for the server process
   - **Note**: This field is parsed and stored but not yet implemented in the launcher; it has no runtime effect currently
@@ -418,7 +448,7 @@ The gateway supports OpenTelemetry tracing via a nested configuration block. For
 | `traceId` (JSON) / `trace_id` (TOML) | Parent trace ID (32-char lowercase hex, W3C format) to link gateway spans into a pre-existing trace. Supports `${VAR}` expansion. | (none) |
 | `spanId` (JSON) / `span_id` (TOML) | Parent span ID (16-char lowercase hex, W3C format). Ignored without `traceId`. Supports `${VAR}` expansion. | (none) |
 | `serviceName` (JSON) / `service_name` (TOML) | The `service.name` resource attribute reported in traces. | `mcp-gateway` |
-| `sample_rate` (TOML only) | Fraction of traces sampled and exported (0.0–1.0). TOML/CLI only — not available in JSON stdin. Gateway extension, not in spec §4.1.3.6. | `1.0` |
+| `sample_rate` (TOML) / `sampleRate` (JSON stdin) | Fraction of traces sampled and exported (0.0–1.0). Also available via CLI `--otlp-sample-rate`. Gateway extension, not in spec §4.1.3.6. | `1.0` |
 
 **TOML example:**
 
