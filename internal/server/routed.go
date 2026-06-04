@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
 	"sync"
@@ -162,7 +161,7 @@ func CreateHTTPServerForRoutedMode(addr string, unifiedServer *UnifiedServer, ap
 			// Mount the handler at both /mcp/<server> and /mcp/<server>/
 			mux.Handle(route+"/", finalHandler)
 			mux.Handle(route, finalHandler)
-			log.Printf("Registered route: %s", route)
+			logRouted.Printf("Registered route: %s", route)
 		}
 	})
 }
@@ -183,7 +182,7 @@ func createFilteredServer(unifiedServer *UnifiedServer, backendID string) *sdk.S
 	// Get tools for this backend from the unified server
 	tools := unifiedServer.GetToolsForBackend(backendID)
 
-	log.Printf("Creating filtered server for %s with %d tools", backendID, len(tools))
+	logRouted.Printf("Creating filtered server for %s with %d tools", backendID, len(tools))
 	logRouted.Printf("Backend %s has %d tools available", backendID, len(tools))
 
 	// Register each tool (without prefix) using the unified server's handlers
@@ -194,7 +193,7 @@ func createFilteredServer(unifiedServer *UnifiedServer, backendID string) *sdk.S
 		// Get the unified server's handler for this tool
 		handler := unifiedServer.GetToolHandler(backendID, toolInfo.Name)
 		if handler == nil {
-			log.Printf("WARNING: No handler found for %s___%s", backendID, toolInfo.Name)
+			logRouted.Printf("WARNING: No handler found for %s___%s", backendID, toolInfo.Name)
 			continue
 		}
 
@@ -205,7 +204,7 @@ func createFilteredServer(unifiedServer *UnifiedServer, backendID string) *sdk.S
 			Description: toolInfo.Description,
 			InputSchema: toolInfo.InputSchema, // Include schema for clients
 		}, func(ctx context.Context, req *sdk.CallToolRequest, _ interface{}) (*sdk.CallToolResult, interface{}, error) {
-			log.Printf("[ROUTED] Calling unified handler for: %s", toolNameCopy)
+			logRouted.Printf("[ROUTED] Calling unified handler for: %s", toolNameCopy)
 			return handler(ctx, req, nil)
 		})
 	}
