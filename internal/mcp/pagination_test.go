@@ -318,6 +318,7 @@ func TestListMCPItems_PaginateError(t *testing.T) {
 // before calling the SDK list function.
 func TestListSDKItems_NilSession(t *testing.T) {
 	conn := newTestConnection(t)
+	conn.session = nil
 	listCalled := false
 
 	_, err := listSDKItems(
@@ -325,7 +326,7 @@ func TestListSDKItems_NilSession(t *testing.T) {
 		"tools",
 		func(_ string) (string, error) {
 			listCalled = true
-			return "unused", nil
+			return "", nil
 		},
 		func(_ string) paginatedPage[string] {
 			return paginatedPage[string]{Items: []string{"a"}}
