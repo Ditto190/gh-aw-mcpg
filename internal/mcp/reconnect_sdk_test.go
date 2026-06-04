@@ -160,37 +160,42 @@ func TestReconnectSDKTransport_StreamableConnectFail(t *testing.T) {
 // callSDKMethod returns an error that is not a session-not-found error,
 // callSDKMethodWithReconnect returns it directly without attempting reconnection.
 func TestCallSDKMethodWithReconnect_NoReconnectOnNonSessionError(t *testing.T) {
+	var initCount atomic.Int32
+
 	// Start a simple server to create a real streamable connection.
 	srv := newStreamableMCPTestServer(t, func(w http.ResponseWriter, method string, req map[string]interface{}) {
-		if method == "initialize" {
+		switch method {
+		case "initialize":
+			initCount.Add(1)
 			writeInitializeResponse(w, "session-1", req)
-			return
-		}
-		if method == "notifications/initialized" {
+		case "notifications/initialized":
 			w.WriteHeader(http.StatusAccepted)
-			return
+		case "tools/list":
+			// Return a non-session error for a supported SDK method call.
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]interface{}{ //nolint:errcheck
+				"jsonrpc": "2.0",
+				"id":      req["id"],
+				"error":   map[string]interface{}{"code": -32603, "message": "internal server error"},
+			})
+		default:
+			w.WriteHeader(http.StatusNotFound)
 		}
-		// Return a server error for any real method call.
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{ //nolint:errcheck
-			"jsonrpc": "2.0",
-			"id":      req["id"],
-			"error":   map[string]interface{}{"code": -32603, "message": "internal server error"},
-		})
 	})
 	defer srv.Close()
 
 	conn := newStreamableConn(t, srv.URL)
 	require.Equal(t, HTTPTransportStreamable, conn.httpTransportType)
+	require.Equal(t, int32(1), initCount.Load(), "expected one initialize during initial connect")
 
-	// callSDKMethod for an unsupported method returns a non-session-not-found error.
-	result, err := conn.callSDKMethodWithReconnect("unsupported/method", nil)
+	result, err := conn.callSDKMethodWithReconnect("tools/list", nil)
 
 	require.Error(t, err)
 	assert.Nil(t, result)
-	assert.ErrorContains(t, err, "unsupported method")
+	assert.ErrorContains(t, err, "internal server error")
 	// Verify the error is NOT a session-not-found error (reconnect should not have been attempted).
 	assert.False(t, isSessionNotFoundError(err))
+	assert.Equal(t, int32(1), initCount.Load(), "reconnect should not have been attempted")
 }
 
 // TestCallSDKMethodWithReconnect_SessionNotFound_ReconnectFails verifies the full
@@ -303,11 +308,12 @@ func TestCallSDKMethodWithReconnect_SessionNotFound_ReconnectSucceeds(t *testing
 // callSDKMethod call succeeds, callSDKMethodWithReconnect returns the result without
 // attempting a reconnect (the reconnect branch is not taken).
 func TestCallSDKMethodWithReconnect_Success_NoReconnect(t *testing.T) {
-	var reconnectAttempts atomic.Int32
+	var initCount atomic.Int32
 
 	srv := newStreamableMCPTestServer(t, func(w http.ResponseWriter, method string, req map[string]interface{}) {
 		switch method {
 		case "initialize":
+			initCount.Add(1)
 			writeInitializeResponse(w, "session-1", req)
 		case "notifications/initialized":
 			w.WriteHeader(http.StatusAccepted)
@@ -325,12 +331,13 @@ func TestCallSDKMethodWithReconnect_Success_NoReconnect(t *testing.T) {
 	defer srv.Close()
 
 	conn := newStreamableConn(t, srv.URL)
+	require.Equal(t, int32(1), initCount.Load(), "expected one initialize during initial connect")
 
 	result, err := conn.callSDKMethodWithReconnect("tools/list", nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
-	assert.Equal(t, int32(0), reconnectAttempts.Load(), "reconnect should not have been attempted")
+	assert.Equal(t, int32(1), initCount.Load(), "reconnect should not have been attempted")
 
 	var body struct {
 		Tools []interface{} `json:"tools"`
@@ -435,7 +442,8 @@ func TestListPrompts_WithSession(t *testing.T) {
 	assert.Equal(t, "summarise", body.Prompts[0].Name)
 }
 
-// TestReadResource_WithSession verifies that readResource succeeds with a real SDK session.
+// TestReadResource_WithSession verifies that readResource propagates server errors
+// through a real SDK session.
 func TestReadResource_WithSession(t *testing.T) {
 	srv := newStreamableMCPTestServer(t, func(w http.ResponseWriter, method string, req map[string]interface{}) {
 		switch method {
@@ -448,15 +456,7 @@ func TestReadResource_WithSession(t *testing.T) {
 			json.NewEncoder(w).Encode(map[string]interface{}{ //nolint:errcheck
 				"jsonrpc": "2.0",
 				"id":      req["id"],
-				"result": map[string]interface{}{
-					"contents": []interface{}{
-						map[string]interface{}{
-							"uri":      "file:///test.txt",
-							"mimeType": "text/plain",
-							"text":     "hello world",
-						},
-					},
-				},
+				"error":   map[string]interface{}{"code": -32602, "message": "invalid resource uri"},
 			})
 		default:
 			w.WriteHeader(http.StatusNotFound)
@@ -468,22 +468,13 @@ func TestReadResource_WithSession(t *testing.T) {
 
 	result, err := conn.callSDKMethod("resources/read", map[string]interface{}{"uri": "file:///test.txt"})
 
-	require.NoError(t, err)
-	require.NotNil(t, result)
-
-	var body struct {
-		Contents []struct {
-			URI  string `json:"uri"`
-			Text string `json:"text"`
-		} `json:"contents"`
-	}
-	require.NoError(t, json.Unmarshal(result.Result, &body))
-	require.Len(t, body.Contents, 1)
-	assert.Equal(t, "file:///test.txt", body.Contents[0].URI)
-	assert.Equal(t, "hello world", body.Contents[0].Text)
+	require.Error(t, err)
+	assert.Nil(t, result)
+	assert.ErrorContains(t, err, "invalid resource uri")
 }
 
-// TestGetPrompt_WithSession verifies that getPrompt succeeds with a real SDK session.
+// TestGetPrompt_WithSession verifies that getPrompt propagates server errors
+// through a real SDK session.
 func TestGetPrompt_WithSession(t *testing.T) {
 	srv := newStreamableMCPTestServer(t, func(w http.ResponseWriter, method string, req map[string]interface{}) {
 		switch method {
@@ -496,18 +487,7 @@ func TestGetPrompt_WithSession(t *testing.T) {
 			json.NewEncoder(w).Encode(map[string]interface{}{ //nolint:errcheck
 				"jsonrpc": "2.0",
 				"id":      req["id"],
-				"result": map[string]interface{}{
-					"description": "Summarise a document",
-					"messages": []interface{}{
-						map[string]interface{}{
-							"role": "user",
-							"content": map[string]interface{}{
-								"type": "text",
-								"text": "Please summarise the following document.",
-							},
-						},
-					},
-				},
+				"error":   map[string]interface{}{"code": -32602, "message": "prompt not found"},
 			})
 		default:
 			w.WriteHeader(http.StatusNotFound)
@@ -522,19 +502,9 @@ func TestGetPrompt_WithSession(t *testing.T) {
 		"arguments": map[string]string{},
 	})
 
-	require.NoError(t, err)
-	require.NotNil(t, result)
-
-	var body struct {
-		Description string `json:"description"`
-		Messages    []struct {
-			Role string `json:"role"`
-		} `json:"messages"`
-	}
-	require.NoError(t, json.Unmarshal(result.Result, &body))
-	assert.Equal(t, "Summarise a document", body.Description)
-	require.Len(t, body.Messages, 1)
-	assert.Equal(t, "user", body.Messages[0].Role)
+	require.Error(t, err)
+	assert.Nil(t, result)
+	assert.ErrorContains(t, err, "prompt not found")
 }
 
 // TestServerInfo_WithSession verifies that ServerInfo returns the server name and version
@@ -581,7 +551,7 @@ func TestServerInfo_WithSession(t *testing.T) {
 	assert.Equal(t, "2.3.4", version)
 }
 
-// TestServerInfo_NoSession verifies that ServerInfo returns nil when no SDK session
+// TestServerInfo_NoSession verifies that ServerInfo returns empty strings when no SDK session
 // is available (e.g. for a plain JSON-RPC connection that never established a session).
 func TestServerInfo_NoSession(t *testing.T) {
 	conn := newTestConnection(t)
