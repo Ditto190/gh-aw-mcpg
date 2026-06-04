@@ -31,13 +31,12 @@ func (c *Connection) callSDKMethod(method string, params interface{}) (*Response
 
 func (c *Connection) listTools() (*Response, error) {
 	logConn.Printf("listTools: listing tools from serverID=%s", c.serverID)
-	return listMCPItems(c, "tools",
-		func(cursor string) (paginatedPage[*sdk.Tool], error) {
-			result, err := c.getSDKSession().ListTools(c.ctx, &sdk.ListToolsParams{Cursor: cursor})
-			if err != nil {
-				return paginatedPage[*sdk.Tool]{}, err
-			}
-			return paginatedPage[*sdk.Tool]{Items: result.Tools, NextCursor: result.NextCursor}, nil
+	return listSDKItems(c, "tools",
+		func(cursor string) (*sdk.ListToolsResult, error) {
+			return c.getSDKSession().ListTools(c.ctx, &sdk.ListToolsParams{Cursor: cursor})
+		},
+		func(result *sdk.ListToolsResult) paginatedPage[*sdk.Tool] {
+			return paginatedPage[*sdk.Tool]{Items: result.Tools, NextCursor: result.NextCursor}
 		},
 		func(items []*sdk.Tool) *sdk.ListToolsResult {
 			return &sdk.ListToolsResult{Tools: items}
@@ -62,13 +61,12 @@ func (c *Connection) callTool(params interface{}) (*Response, error) {
 
 func (c *Connection) listResources() (*Response, error) {
 	logConn.Printf("listResources: listing resources from serverID=%s", c.serverID)
-	return listMCPItems(c, "resources",
-		func(cursor string) (paginatedPage[*sdk.Resource], error) {
-			result, err := c.getSDKSession().ListResources(c.ctx, &sdk.ListResourcesParams{Cursor: cursor})
-			if err != nil {
-				return paginatedPage[*sdk.Resource]{}, err
-			}
-			return paginatedPage[*sdk.Resource]{Items: result.Resources, NextCursor: result.NextCursor}, nil
+	return listSDKItems(c, "resources",
+		func(cursor string) (*sdk.ListResourcesResult, error) {
+			return c.getSDKSession().ListResources(c.ctx, &sdk.ListResourcesParams{Cursor: cursor})
+		},
+		func(result *sdk.ListResourcesResult) paginatedPage[*sdk.Resource] {
+			return paginatedPage[*sdk.Resource]{Items: result.Resources, NextCursor: result.NextCursor}
 		},
 		func(items []*sdk.Resource) *sdk.ListResourcesResult {
 			return &sdk.ListResourcesResult{Resources: items}
@@ -90,13 +88,12 @@ func (c *Connection) readResource(params interface{}) (*Response, error) {
 
 func (c *Connection) listPrompts() (*Response, error) {
 	logConn.Printf("listPrompts: listing prompts from serverID=%s", c.serverID)
-	return listMCPItems(c, "prompts",
-		func(cursor string) (paginatedPage[*sdk.Prompt], error) {
-			result, err := c.getSDKSession().ListPrompts(c.ctx, &sdk.ListPromptsParams{Cursor: cursor})
-			if err != nil {
-				return paginatedPage[*sdk.Prompt]{}, err
-			}
-			return paginatedPage[*sdk.Prompt]{Items: result.Prompts, NextCursor: result.NextCursor}, nil
+	return listSDKItems(c, "prompts",
+		func(cursor string) (*sdk.ListPromptsResult, error) {
+			return c.getSDKSession().ListPrompts(c.ctx, &sdk.ListPromptsParams{Cursor: cursor})
+		},
+		func(result *sdk.ListPromptsResult) paginatedPage[*sdk.Prompt] {
+			return paginatedPage[*sdk.Prompt]{Items: result.Prompts, NextCursor: result.NextCursor}
 		},
 		func(items []*sdk.Prompt) *sdk.ListPromptsResult {
 			return &sdk.ListPromptsResult{Prompts: items}
