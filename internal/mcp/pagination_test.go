@@ -336,7 +336,7 @@ func TestListSDKItems_NilSession(t *testing.T) {
 			return fakeListResult{}, nil
 		},
 		func(result fakeListResult) paginatedPage[fakeItem] {
-			return paginatedPage[fakeItem]{Items: result.Items, NextCursor: result.NextCursor}
+			return paginatedPage[fakeItem](result)
 		},
 		func(items []fakeItem) []fakeItem { return items },
 	)
