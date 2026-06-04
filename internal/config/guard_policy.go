@@ -26,7 +26,8 @@ func AllIntegrityLevels() []string {
 }
 
 // NormalizeIntegrityLevel trims and lowercases an integrity-level string and
-// validates it against the canonical set.
+// validates it against the canonical set. If optional is true, an empty value
+// is allowed and returns an empty string.
 func NormalizeIntegrityLevel(raw string, optional bool) (string, error) {
 	normalized := strings.ToLower(strings.TrimSpace(raw))
 	if normalized == "" && optional {
