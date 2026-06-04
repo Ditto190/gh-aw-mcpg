@@ -1023,7 +1023,6 @@ mod tests {
         assert_eq!(result.labeled_paths.len(), 1);
 
         // Non-default branch → writer integrity, NOT merged integrity.
-        let merged_label = format!("{}octocat/hello", label_constants::MERGED_PREFIX);
         let item_integrity = &result.labeled_paths[0].labels.integrity;
         assert!(
             !item_integrity
