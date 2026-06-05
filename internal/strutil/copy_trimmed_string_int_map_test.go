@@ -117,7 +117,7 @@ func TestCopyTrimmedStringIntMap_IsDefensiveCopy(t *testing.T) {
 	assert.Equal(t, 999, copied["key"], "copy should not be affected by changes to original")
 }
 
-func TestCopyTrimmedStringIntMap_NilNotSameAsEmpty(t *testing.T) {
+func TestCopyTrimmedStringIntMap_NilAndEmptyReturnNil(t *testing.T) {
 	t.Parallel()
 
 	// Both nil and empty input produce nil output
