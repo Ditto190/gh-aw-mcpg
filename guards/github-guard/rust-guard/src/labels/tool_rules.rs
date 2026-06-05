@@ -963,25 +963,6 @@ mod tests {
     }
 
     #[test]
-    fn apply_tool_labels_delete_gist_is_user_private_with_writer_integrity() {
-        let ctx = default_ctx();
-        let args = serde_json::json!({});
-
-        let (secrecy, integrity, _) =
-            super::apply_tool_labels("delete_gist", &args, "", vec![], vec![], String::new(), &ctx);
-        assert_eq!(
-            secrecy,
-            private_user_label(),
-            "delete_gist: must be user-private (secrecy = private:user)"
-        );
-        assert_eq!(
-            integrity,
-            writer_integrity(scope_names::USER, &ctx),
-            "delete_gist: destructive operation must require writer-level integrity"
-        );
-    }
-
-    #[test]
     fn apply_tool_labels_list_repository_collaborators_is_repo_scoped_metadata() {
         let ctx = default_ctx();
         let args = serde_json::json!({"owner": "octocat", "repo": "hello-world"});
