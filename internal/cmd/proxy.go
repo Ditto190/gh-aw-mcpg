@@ -33,6 +33,8 @@ var tlsTrustEnvKeys = []string{
 	"REQUESTS_CA_BUNDLE",
 }
 
+const proxyShutdownTimeout = 5 * time.Second
+
 // Proxy subcommand flag variables
 var (
 	proxyGuardWasm      string
@@ -318,10 +320,12 @@ func runProxy(cmd *cobra.Command, args []string) error {
 	log.Println("Shutting down proxy...")
 	logger.LogInfo("shutdown", "Proxy shutting down")
 
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), proxyShutdownTimeout)
 	defer shutdownCancel()
 	if err := httpServer.Shutdown(shutdownCtx); err != nil {
 		log.Printf("HTTP server shutdown error: %v", err)
+		logger.LogError("shutdown", "HTTP server shutdown error: %v", err)
+		return err
 	}
 
 	return nil
