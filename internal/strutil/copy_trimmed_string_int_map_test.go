@@ -105,16 +105,16 @@ func TestCopyTrimmedStringIntMap_IsDefensiveCopy(t *testing.T) {
 	t.Parallel()
 
 	original := map[string]int{"key": 1}
-	copy := CopyTrimmedStringIntMap(original)
-	require.NotNil(t, copy)
+	copied := CopyTrimmedStringIntMap(original)
+	require.NotNil(t, copied)
 
 	// Modifying the copy should not affect the original
-	copy["key"] = 999
+	copied["key"] = 999
 	assert.Equal(t, 1, original["key"], "original map should not be affected by changes to copy")
 
 	// Modifying the original should not affect the copy
 	original["key"] = 42
-	assert.Equal(t, 999, copy["key"], "copy should not be affected by changes to original")
+	assert.Equal(t, 999, copied["key"], "copy should not be affected by changes to original")
 }
 
 func TestCopyTrimmedStringIntMap_NilNotSameAsEmpty(t *testing.T) {
