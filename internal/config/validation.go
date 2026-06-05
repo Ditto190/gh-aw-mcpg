@@ -197,14 +197,13 @@ func validateCustomServerConfig(name string, server *StdinServerConfig, customSc
 	serverType := server.Type
 
 	// Check if custom type is registered
-	if customSchemas == nil {
-		logValidation.Printf("Custom type not registered: name=%s, type=%s (no customSchemas)", name, serverType)
-		return rules.UnsupportedType("type", serverType, jsonPath, "Custom server type '"+serverType+"' is not registered in customSchemas. Add the custom type to the customSchemas field or use a standard type ('stdio' or 'http')")
-	}
-
 	schemaValue, exists := customSchemas[serverType]
 	if !exists {
-		logValidation.Printf("Custom type not registered: name=%s, type=%s", name, serverType)
+		noCustomSchemasSuffix := ""
+		if customSchemas == nil {
+			noCustomSchemasSuffix = " (no customSchemas)"
+		}
+		logValidation.Printf("Custom type not registered: name=%s, type=%s%s", name, serverType, noCustomSchemasSuffix)
 		return rules.UnsupportedType("type", serverType, jsonPath, "Custom server type '"+serverType+"' is not registered in customSchemas. Add the custom type to the customSchemas field or use a standard type ('stdio' or 'http')")
 	}
 
