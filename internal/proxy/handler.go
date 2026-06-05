@@ -368,6 +368,7 @@ func (h *proxyHandler) writeEmptyResponse(w http.ResponseWriter, resp *http.Resp
 	default:
 		empty = "[]" // safe default for nil or unknown types
 	}
+	logHandler.Printf("writeEmptyResponse: shape=%s, status=%d", empty, resp.StatusCode)
 	httputil.WriteJSONResponse(w, resp.StatusCode, json.RawMessage(empty))
 }
 
@@ -378,17 +379,21 @@ func (h *proxyHandler) forwardAndReadBody(
 	w http.ResponseWriter, ctx context.Context,
 	method, path string, body io.Reader, contentType, clientAuth string,
 ) (*http.Response, []byte) {
+	logHandler.Printf("forwardAndReadBody: %s %s", method, path)
 	resp, err := h.server.forwardToGitHub(ctx, method, path, body, contentType, clientAuth)
 	if err != nil {
+		logHandler.Printf("forwardAndReadBody: upstream request failed: method=%s path=%s err=%v", method, path, err)
 		httputil.WriteErrorResponse(w, http.StatusBadGateway, "bad_gateway", "upstream request failed")
 		return nil, nil
 	}
 	defer resp.Body.Close()
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
+		logHandler.Printf("forwardAndReadBody: body read failed: method=%s path=%s status=%d err=%v", method, path, resp.StatusCode, err)
 		httputil.WriteErrorResponse(w, http.StatusBadGateway, "bad_gateway", "failed to read upstream response")
 		return nil, nil
 	}
+	logHandler.Printf("forwardAndReadBody: %s %s → status=%d bodyLen=%d", method, path, resp.StatusCode, len(respBody))
 	return resp, respBody
 }
 
