@@ -128,9 +128,9 @@ func PositiveInteger(value int, fieldName, jsonPath string) *ValidationError {
 		log.Printf("Positive integer validation failed: %s=%d is not positive", fieldName, value)
 		return &ValidationError{
 			Field:      fieldName,
-			Message:    fmt.Sprintf("%s must be a positive integer, got %d (spec §4.1.3.3)", fieldName, value),
+			Message:    fmt.Sprintf("%s must be a positive integer (>= 1), got %d", fieldName, value),
 			JSONPath:   jsonPath,
-			Suggestion: fmt.Sprintf("Use a positive integer for %s (e.g., 524288)", fieldName),
+			Suggestion: fmt.Sprintf("Use a positive integer (>= 1) for %s", fieldName),
 		}
 	}
 	return nil
