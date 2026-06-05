@@ -252,7 +252,7 @@ func fixSchemaBytes(schemaBytes []byte) ([]byte, error) {
 			if props, ok := otelConfig["properties"].(map[string]interface{}); ok {
 				headersAction := ensureProperty(props, "headers", map[string]interface{}{
 					"type":        "string",
-					"description": "Comma-separated key=value HTTP headers for OTLP export requests. Supports variable expressions using '${VARIABLE_NAME}' syntax.",
+					"description": "Comma-separated key=value HTTP headers for OTLP export requests. Supports ${VAR} expansion.",
 					"minLength":   1,
 				})
 				logSchema.Printf("%s headers field in opentelemetryConfig", headersAction)
