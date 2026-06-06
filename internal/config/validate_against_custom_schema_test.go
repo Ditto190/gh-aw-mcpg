@@ -348,8 +348,12 @@ func TestValidateAgainstCustomSchema_CacheHitWrongType(t *testing.T) {
 	}))
 	defer mockServer.Close()
 
+	// Use a unique URL (including a path) so it doesn't collide with other tests' cache entries.
+	schemaURL := mockServer.URL + "/cache-hit-wrong-type"
+	t.Cleanup(func() { customSchemaCache.Delete(schemaURL) })
+
 	// Seed the cache with a non-*jsonschema.Schema value at this URL.
-	customSchemaCache.Store(mockServer.URL, "unexpected-string-value")
+	customSchemaCache.Store(schemaURL, "unexpected-string-value")
 
 	server := &StdinServerConfig{
 		Type:      "mytype",
@@ -357,7 +361,7 @@ func TestValidateAgainstCustomSchema_CacheHitWrongType(t *testing.T) {
 	}
 
 	// The wrong-type cache hit should be ignored; the schema should be re-fetched.
-	err := validateAgainstCustomSchema("test-server", server, mockServer.URL, "mcpServers.test-server")
+	err := validateAgainstCustomSchema("test-server", server, schemaURL, "mcpServers.test-server")
 
 	require.NoError(t, err, "validation should succeed after ignoring the wrong-type cache entry")
 	assert.Equal(t, int32(1), requestCount.Load(), "schema should be fetched once after ignoring the bad cache entry")
