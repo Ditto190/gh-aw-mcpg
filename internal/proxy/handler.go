@@ -393,7 +393,7 @@ func (h *proxyHandler) forwardAndReadBody(
 		httputil.WriteErrorResponse(w, http.StatusBadGateway, "bad_gateway", "failed to read upstream response")
 		return nil, nil
 	}
-	logHandler.Printf("forwardAndReadBody: %s %s → status=%d bodyLen=%d", method, path, resp.StatusCode, len(respBody))
+	logHandler.Printf("forwardAndReadBody: %s %s -> status=%d bodyLen=%d", method, path, resp.StatusCode, len(respBody))
 	return resp, respBody
 }
 
