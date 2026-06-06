@@ -249,7 +249,7 @@ args = [
 # - Always use --rm to clean up containers after exit
 # - Use -i for interactive mode (required for stdin/stdout communication)
 # - Set NO_COLOR=1 and TERM=dumb for better compatibility
-# - Use ${VAR_NAME} syntax to reference environment variables in JSON stdin format only
+# - Use ${VAR_NAME} syntax to reference environment variables in JSON stdin and in TOML's [gateway.opentelemetry] section
 # - TOML does not support ${VAR_NAME} expansion in server args/env fields; use absolute paths instead
 # - The [gateway.opentelemetry] section supports ${VAR_NAME} expansion; the legacy [gateway.tracing] section does not
 #

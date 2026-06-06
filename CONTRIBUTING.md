@@ -687,7 +687,7 @@ When the release workflow is triggered, it automatically:
 ### Core Features
 
 - JSON stdin configuration with `${VAR}` variable expansion
-- TOML configuration loaded from file (`${VAR}` expansion supported only in `[gateway.opentelemetry]` section fields: `endpoint`, `traceId`, `spanId`, `headers`)
+- TOML configuration loaded from file (`${VAR}` expansion supported only in `[gateway.opentelemetry]` section fields: `endpoint`, `trace_id`, `span_id`, `headers`)
 - Stdio transport for backend servers (containerized via Docker)
 - Docker container launching
 - Routed mode: Each backend at `/mcp/{serverID}`
