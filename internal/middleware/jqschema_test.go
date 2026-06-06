@@ -1747,6 +1747,14 @@ func TestWrapToolHandler_JsonNumberData(t *testing.T) {
 	assert.Equal(t, "number", meta["payloadSchema"], "schema for json.Number data should be 'number'")
 }
 
+// panicOnMarshalBool is a test helper used to ensure json.Marshal(data) is not called
+// when the WrapToolHandler fast path fires.
+type panicOnMarshalBool bool
+
+func (panicOnMarshalBool) MarshalJSON() ([]byte, error) {
+	panic("unexpected json.Marshal(data) on fast path")
+}
+
 // TestWrapToolHandler_FastPath_SkipsMarshal verifies the fast-path optimisation:
 // when the handler returns a result whose first content item is a TextContent whose
 // byte length is clearly within the threshold (i.e. threshold - fastPathOverheadBound),
