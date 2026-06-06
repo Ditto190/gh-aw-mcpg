@@ -89,12 +89,13 @@ func TestPortRange(t *testing.T) {
 
 func TestTimeoutPositive(t *testing.T) {
 	tests := []struct {
-		name      string
-		timeout   int
-		fieldName string
-		jsonPath  string
-		shouldErr bool
-		errMsg    string
+		name       string
+		timeout    int
+		fieldName  string
+		jsonPath   string
+		shouldErr  bool
+		errMsg     string
+		suggestion string
 	}{
 		{
 			name:      "valid timeout 30",
@@ -118,20 +119,22 @@ func TestTimeoutPositive(t *testing.T) {
 			shouldErr: false,
 		},
 		{
-			name:      "invalid timeout 0",
-			timeout:   0,
-			fieldName: "startupTimeout",
-			jsonPath:  "gateway.startupTimeout",
-			shouldErr: true,
-			errMsg:    "startupTimeout must be at least 1",
+			name:       "invalid timeout 0",
+			timeout:    0,
+			fieldName:  "startupTimeout",
+			jsonPath:   "gateway.startupTimeout",
+			shouldErr:  true,
+			errMsg:     "startupTimeout must be at least 1",
+			suggestion: "Use a positive number of seconds (e.g., 30)",
 		},
 		{
-			name:      "invalid negative timeout",
-			timeout:   -10,
-			fieldName: "toolTimeout",
-			jsonPath:  "gateway.toolTimeout",
-			shouldErr: true,
-			errMsg:    "toolTimeout must be at least 1",
+			name:       "invalid negative timeout",
+			timeout:    -10,
+			fieldName:  "toolTimeout",
+			jsonPath:   "gateway.toolTimeout",
+			shouldErr:  true,
+			errMsg:     "toolTimeout must be at least 1",
+			suggestion: "Use a positive number of seconds (e.g., 30)",
 		},
 	}
 
@@ -144,6 +147,7 @@ func TestTimeoutPositive(t *testing.T) {
 				assert.Contains(t, err.Message, tt.errMsg, "Error message should contain expected text")
 				assert.Equal(t, tt.jsonPath, err.JSONPath, "JSONPath should match")
 				assert.Equal(t, tt.fieldName, err.Field, "Field name should match")
+				assert.Equal(t, tt.suggestion, err.Suggestion, "Suggestion should match")
 			} else {
 				require.NoError(t, validationErrAsError(err), "Unexpected validation error")
 			}
