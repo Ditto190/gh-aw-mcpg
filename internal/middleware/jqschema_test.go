@@ -1769,7 +1769,7 @@ func TestWrapToolHandler_FastPath_SkipsMarshal(t *testing.T) {
 		"content": []interface{}{
 			map[string]interface{}{"type": "text", "text": innerText},
 		},
-		"isError": false,
+		"isError": panicOnMarshalBool(false),
 	}
 
 	mockHandler := func(ctx context.Context, req *sdk.CallToolRequest, args interface{}) (*sdk.CallToolResult, interface{}, error) {
