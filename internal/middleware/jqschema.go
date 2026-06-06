@@ -607,11 +607,42 @@ func wrapToolHandler(
 		// This optimisation is only applied when the threshold is large enough to
 		// absorb the overhead margin (sizeThreshold > fastPathOverheadBound), so it
 		// does not affect exact-byte-count test scenarios with small thresholds.
-		if len(result.Content) > 0 && sizeThreshold > fastPathOverheadBound {
-			if tc, ok := result.Content[0].(*sdk.TextContent); ok && len(tc.Text) <= sizeThreshold-fastPathOverheadBound {
-				logMiddleware.Printf("fast-path: content_text_len=%d within threshold-%d=%d, skipping json.Marshal: tool=%s, queryID=%s",
-					len(tc.Text), fastPathOverheadBound, sizeThreshold-fastPathOverheadBound, toolName, queryID)
-				return result, data, nil
+		if sizeThreshold > fastPathOverheadBound && len(result.Content) > 0 {
+			if tc, ok := result.Content[0].(*sdk.TextContent); ok {
+				if env, ok := data.(map[string]interface{}); ok {
+					// Only apply fast path when the backing payload is the simple one-text-item MCP envelope.
+					if len(env) <= 2 {
+						onlyKnownKeys := true
+						for k := range env {
+							if k != "content" && k != "isError" {
+								onlyKnownKeys = false
+								break
+							}
+						}
+						if onlyKnownKeys {
+							var first map[string]interface{}
+							switch c := env["content"].(type) {
+							case []interface{}:
+								if len(c) == 1 {
+									first, _ = c[0].(map[string]interface{})
+								}
+							case []map[string]interface{}:
+								if len(c) == 1 {
+									first = c[0]
+								}
+							}
+							if first != nil {
+								if itemType, _ := first["type"].(string); itemType == "text" {
+									if text, _ := first["text"].(string); text == tc.Text && len(text) <= sizeThreshold-fastPathOverheadBound {
+										logMiddleware.Printf("fast-path: content_text_len=%d within threshold-%d=%d, skipping json.Marshal: tool=%s, queryID=%s",
+											len(text), fastPathOverheadBound, sizeThreshold-fastPathOverheadBound, toolName, queryID)
+										return result, data, nil
+									}
+								}
+							}
+						}
+					}
+				}
 			}
 		}
 
