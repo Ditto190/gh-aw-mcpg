@@ -46,6 +46,14 @@ tools:
 sandbox:
   mcp:
     container: "ghcr.io/github/gh-aw-mcpg"
+    version: "local"
+pre-agent-steps:
+  - name: Build MCP Gateway from source
+    env:
+      BUILD_VERSION: ${{ github.sha }}
+    run: |
+      docker build -t ghcr.io/github/gh-aw-mcpg:local \
+        --build-arg VERSION="$BUILD_VERSION" .
 steps:
   # ── Build the gateway container image from source ──────────────────
   - name: Build MCP Gateway image
