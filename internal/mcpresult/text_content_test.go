@@ -332,17 +332,17 @@ func TestExtractTextContent(t *testing.T) {
 			name: "complex scenario with non-map items, empty texts, and all types",
 			result: map[string]interface{}{
 				"content": []interface{}{
-					"non-map string",                                                     // skipped (not a map)
-					nil,                                                                  // skipped (not a map)
-					map[string]interface{}{"type": "text", "text": ""},                  // skipped (empty text)
-					map[string]interface{}{"type": "image", "text": "img data"},         // skipped (image)
-					map[string]interface{}{"type": "text", "text": "result: "},          // kept
-					map[string]interface{}{"type": "", "text": "ok"},                    // kept (empty type = text)
-					map[string]interface{}{"text": "compat"},                            // kept (no type = text)
-					map[string]interface{}{"type": "resource", "text": "skip"},          // skipped
-					map[string]interface{}{"type": "custom", "text": " appended"},       // kept (unknown = text)
-					map[string]interface{}{"type": "audio", "text": "skip audio"},       // skipped
-					map[string]interface{}{"type": "text", "text": " final"},            // kept
+					"non-map string", // skipped (not a map)
+					nil,              // skipped (not a map)
+					map[string]interface{}{"type": "text", "text": ""},            // skipped (empty text)
+					map[string]interface{}{"type": "image", "text": "img data"},   // skipped (image)
+					map[string]interface{}{"type": "text", "text": "result: "},    // kept
+					map[string]interface{}{"type": "", "text": "ok"},              // kept (empty type = text)
+					map[string]interface{}{"text": "compat"},                      // kept (no type = text)
+					map[string]interface{}{"type": "resource", "text": "skip"},    // skipped
+					map[string]interface{}{"type": "custom", "text": " appended"}, // kept (unknown = text)
+					map[string]interface{}{"type": "audio", "text": "skip audio"}, // skipped
+					map[string]interface{}{"type": "text", "text": " final"},      // kept
 				},
 			},
 			want: "result: okcompat appended final",
