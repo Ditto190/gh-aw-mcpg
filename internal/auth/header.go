@@ -99,7 +99,7 @@ func ParseAuthHeader(authHeader string) (apiKey string, agentID string, error er
 
 	// Per MCP spec 7.1: Authorization header contains API key directly
 	// Use the entire header value as both API key and agent/session ID
-	log.Print("Using plain API key format (MCP spec 7.1)")
+	log.Print("Using plain agent ID format (MCP spec 7.1)")
 	return authHeader, authHeader, nil
 }
 
@@ -174,7 +174,7 @@ func ExtractSessionID(authHeader string) string {
 	}
 
 	// Plain format (per spec 7.1 - API key is session ID)
-	log.Print("Using plain API key as session ID")
+	log.Print("Using plain agent ID as session ID")
 	return authHeader
 }
 
@@ -210,12 +210,12 @@ func IsMalformedHeader(header string) bool {
 // Per spec §7.3, the gateway SHOULD generate a random API key on startup
 // if none is provided. Returns a 32-byte hex-encoded string (64 chars).
 func GenerateRandomAPIKey() (string, error) {
-	logAPIKey.Print("Generating random API key")
+	logAPIKey.Print("Generating random agent ID")
 	key, err := strutil.RandomHex(32)
 	if err != nil {
-		logAPIKey.Printf("Random API key generation failed: %v", err)
-		return "", fmt.Errorf("failed to generate random API key: %w", err)
+		logAPIKey.Printf("Random agent ID generation failed: %v", err)
+		return "", fmt.Errorf("failed to generate random agent ID: %w", err)
 	}
-	logAPIKey.Print("Random API key generated successfully")
+	logAPIKey.Print("Random agent ID generated successfully")
 	return key, nil
 }

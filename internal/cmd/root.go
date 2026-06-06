@@ -276,7 +276,7 @@ func run(cmd *cobra.Command, args []string) error {
 	if cfg.GetAgentID() == "" {
 		randomKey, err := auth.GenerateRandomAPIKey()
 		if err != nil {
-			return fmt.Errorf("failed to generate random API key: %w", err)
+			return fmt.Errorf("failed to generate random agent ID: %w", err)
 		}
 		cfg.Gateway.AgentID = randomKey
 		cfg.Gateway.APIKey = randomKey
