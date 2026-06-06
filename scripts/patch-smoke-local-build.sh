@@ -26,23 +26,6 @@ cd "$REPO_ROOT"
 PATCHED=0
 SKIPPED=0
 
-# The step YAML to inject after "Download container images"
-read -r -d '' BUILD_STEP << 'STEP' || true
-      - name: Build MCP Gateway from source (local)
-        env:
-          BUILD_VERSION: ${{ github.sha }}
-        run: |
-          # Install Rust with WASM target for the guard
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable -t wasm32-wasip1
-          source "$HOME/.cargo/env"
-          # Build WASM guard
-          make -C guards/github-guard build
-          # Build gateway Docker image, overwriting the pulled :latest
-          docker build -t ghcr.io/github/gh-aw-mcpg:latest \
-            --build-arg VERSION="$BUILD_VERSION" .
-          echo "✓ Built local gateway image from $(git rev-parse --short HEAD)"
-STEP
-
 for lockfile in .github/workflows/smoke-*.lock.yml; do
     [ -f "$lockfile" ] || continue
 
@@ -60,33 +43,15 @@ for lockfile in .github/workflows/smoke-*.lock.yml; do
         continue
     fi
 
-    # Find the "Download container images" step and inject our build step after it.
-    # The download step is a single long line starting with:
-    #   - name: Download container images
-    #     run: bash "${RUNNER_TEMP}/gh-aw/actions/download_docker_images.sh" ...
-    #
-    # We inject our build step immediately after the download run line.
-    
-    tmpfile=$(mktemp)
-    awk -v build_step="$BUILD_STEP" '
-    /name: Download container images/ { found=1 }
-    found && /^      - name:/ && !/Download container images/ {
-        # We have reached the NEXT step after download — inject before it
-        print build_step
-        found=0
-    }
-    { print }
-    END { if (found) print build_step }
-    ' "$lockfile" > "$tmpfile"
+    # Use Python for reliable multi-line insertion with correct indentation.
+    python3 "$REPO_ROOT/scripts/_inject_local_build.py" "$lockfile"
 
-    if diff -q "$lockfile" "$tmpfile" > /dev/null 2>&1; then
-        echo "SKIP $lockfile (no insertion point found)"
-        rm "$tmpfile"
-        SKIPPED=$((SKIPPED + 1))
-    else
-        mv "$tmpfile" "$lockfile"
+    if [ $? -eq 0 ]; then
         echo "PATCHED $lockfile"
         PATCHED=$((PATCHED + 1))
+    else
+        echo "SKIP $lockfile (no insertion point found)"
+        SKIPPED=$((SKIPPED + 1))
     fi
 done
 
