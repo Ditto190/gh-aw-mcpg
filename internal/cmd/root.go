@@ -451,7 +451,8 @@ func run(cmd *cobra.Command, args []string) error {
 			return httpServer.Serve(listener)
 		},
 	); err != nil {
-		debugLog.Printf("Graceful shutdown completed with error: %v", err)
+		debugLog.Printf("Server exited with error: %v", err)
+		return err
 	}
 
 	return nil
