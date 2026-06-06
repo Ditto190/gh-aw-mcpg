@@ -1,6 +1,7 @@
 package server
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -109,7 +110,7 @@ func authMiddleware(apiKey string, next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		// Spec 7.1: Authorization header must contain API key directly.
-		if authHeader != apiKey {
+		if len(authHeader) != len(apiKey) || subtle.ConstantTimeCompare([]byte(authHeader), []byte(apiKey)) != 1 {
 			rejectRequest(w, r, http.StatusUnauthorized, "unauthorized", "invalid API key", "auth", "authentication_failed", "invalid_api_key")
 			return
 		}
