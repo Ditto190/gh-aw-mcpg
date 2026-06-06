@@ -52,3 +52,4 @@ func serveAndWait(
 		return serveErr
 	}
 	return nil
+}
