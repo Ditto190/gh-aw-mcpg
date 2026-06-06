@@ -13,15 +13,20 @@ import (
 // again.  t.Cleanup restores the originals after the test.
 func resetSchemaState(t *testing.T) {
 	t.Helper()
-	origOnce := schemaOnce
 	origBytes := embeddedSchemaBytes
 	origCached := cachedSchema
 	origErr := schemaErr
+	origDone := origCached != nil || origErr != nil
 	t.Cleanup(func() {
-		schemaOnce = origOnce
 		embeddedSchemaBytes = origBytes
 		cachedSchema = origCached
 		schemaErr = origErr
+
+		// Avoid copying sync.Once (copylocks); restore only whether it had already run.
+		schemaOnce = sync.Once{}
+		if origDone {
+			schemaOnce.Do(func() {})
+		}
 	})
 	schemaOnce = sync.Once{}
 	cachedSchema = nil
