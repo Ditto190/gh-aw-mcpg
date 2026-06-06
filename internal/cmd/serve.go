@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"errors"
-	"log"
 	"net/http"
 	"time"
 )
