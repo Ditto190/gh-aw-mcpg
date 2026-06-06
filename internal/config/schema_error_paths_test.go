@@ -155,8 +155,7 @@ func TestFixSchemaBytes_TypeValueNotObject(t *testing.T) {
 
 // TestGetOrCompileSchema_FixSchemaError covers the path where fixSchemaBytes returns
 // an error (because embeddedSchemaBytes is malformed JSON).
-// (validation_schema.go lines ~369-373; also covers validateJSONSchema line ~417-419
-// as a side effect because validateJSONSchema propagates this error)
+// (validation_schema.go lines ~369-373)
 func TestGetOrCompileSchema_FixSchemaError(t *testing.T) {
 	resetSchemaState(t)
 	embeddedSchemaBytes = []byte("{{{ not valid json at all")
