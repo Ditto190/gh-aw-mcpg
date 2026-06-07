@@ -50,12 +50,14 @@ func buildFilteredItemLogEntry(serverID, toolName string, detail difc.FilteredIt
 	// Data is interface{} from JSON parsing — typically map[string]interface{}.
 	if m, ok := detail.Item.Data.(map[string]interface{}); ok {
 		entry.AuthorAssociation = strutil.GetStringFromMap(m, "author_association", "authorAssociation")
+		userLoginFound := false
 		if user, ok := m["user"].(map[string]interface{}); ok {
 			if login, ok := user["login"].(string); ok {
 				entry.AuthorLogin = login
+				userLoginFound = true
 			}
 		}
-		if entry.AuthorLogin == "" {
+		if !userLoginFound {
 			if author, ok := m["author"].(map[string]interface{}); ok {
 				if login, ok := author["login"].(string); ok {
 					entry.AuthorLogin = login

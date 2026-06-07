@@ -373,13 +373,6 @@ func IsValidAllowOnlyReposValue(repos interface{}) bool {
 	case []interface{}:
 		_, err := normalizeAndValidateScopeArray(value)
 		return err == nil
-	case []string:
-		generic := make([]interface{}, len(value))
-		for i := range value {
-			generic[i] = value[i]
-		}
-		_, err := normalizeAndValidateScopeArray(generic)
-		return err == nil
 	default:
 		return false
 	}
