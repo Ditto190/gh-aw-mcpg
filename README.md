@@ -247,6 +247,8 @@ For the full gateway field list (including rate limiting, tracing, keepalive, an
 - `mode`: active DIFC enforcement mode.
 - `timestamp`: snapshot generation time in UTC (`time.RFC3339`).
 
+> Security note: `/reflect` is intentionally unauthenticated for local/runtime debugging and operational introspection. It exposes active agent IDs and current DIFC labels, so operators should only expose the gateway/proxy on trusted networks.
+
 Supported MCP methods: `tools/list`, `tools/call` (proxied to backend servers), plus standard lifecycle methods (`initialize`, etc.) handled natively by the MCP SDK.
 
 ## Proxy Mode

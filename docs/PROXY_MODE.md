@@ -65,7 +65,7 @@ Write operations (PUT, POST, DELETE, PATCH) pass through unmodified.
 Proxy mode exposes an unauthenticated DIFC reflection endpoint:
 
 - `GET /reflect`
-- `GET /api/v3/reflect` (GH_HOST-prefixed path; normalized to `/reflect`)
+- `GET /api/v3/reflect` (`GH_HOST` style REST base path used by `gh` against GHES/proxy targets; normalized to `/reflect`)
 
 Response schema:
 
@@ -83,7 +83,7 @@ Response schema:
 ```
 
 - `agents`: map of known agent IDs to current DIFC labels.
-- `secrecy`/`integrity`: sorted label arrays (empty when no labels are present).
+- `secrecy`/`integrity`: sorted label arrays in ascending lexicographic order (empty when no labels are present).
 - `mode`: current DIFC enforcement mode.
 - `timestamp`: snapshot creation time in UTC (`time.RFC3339`).
 
