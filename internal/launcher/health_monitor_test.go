@@ -198,7 +198,7 @@ func TestHealthMonitor_SuccessfulRestartResetCounter(t *testing.T) {
 	defer mockServer.Close()
 
 	servers := map[string]*config.ServerConfig{
-		"good-server": {Type: "http", URL: mockServer.URL},
+		"good-server": {Type: "http", URL: mockServer.URL, ConnectTimeout: 1},
 	}
 	l := newTestLauncher(servers)
 
