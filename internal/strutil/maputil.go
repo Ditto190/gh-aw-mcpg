@@ -6,7 +6,7 @@ package strutil
 // matching non-empty string value is found, when the map is nil, or when no
 // keys are provided.
 //
-// With a single key the behaviour is identical to a plain map type-assertion:
+// With a single key the behaviour is equivalent to `v, _ := m[key].(string)`:
 //
 //	GetStringFromMap(m, "owner")
 //
