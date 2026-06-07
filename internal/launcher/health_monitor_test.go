@@ -137,7 +137,7 @@ func TestHealthMonitor_RespectsContextCancellation(t *testing.T) {
 }
 
 // TestClearServerForRestart_WithExistingConnection tests that clearServerForRestart
-// closes and removes a connection that is stored in l.connections.
+// removes a connection that is stored in l.connections.
 func TestClearServerForRestart_WithExistingConnection(t *testing.T) {
 	require := require.New(t)
 	assert := assert.New(t)
@@ -185,6 +185,7 @@ func TestHealthMonitor_ErrorStateReachesMaxFailures(t *testing.T) {
 		"bad-server": {Type: "stdio", Command: "nonexistent-binary-xyz"},
 	}
 	l := newTestLauncher(servers)
+	defer l.Close()
 	l.recordError("bad-server", "process crashed")
 
 	hm := NewHealthMonitor(l, time.Hour)
@@ -207,6 +208,7 @@ func TestHealthMonitor_SuccessfulRestartResetsFailureCounter(t *testing.T) {
 		"http-srv": {Type: "http", URL: mockServer.URL},
 	}
 	l := newTestLauncher(servers)
+	defer l.Close()
 
 	// Simulate the server in error state with a non-zero failure count.
 	l.recordError("http-srv", "connection refused")
