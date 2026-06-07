@@ -63,6 +63,12 @@ func TestGetStringFromMap(t *testing.T) {
 		assert.Equal(t, "", GetStringFromMap(m, "html_url", "htmlUrl"))
 	})
 
+	t.Run("variadic: skips non-string first key and returns second", func(t *testing.T) {
+		t.Parallel()
+		m := map[string]interface{}{"html_url": 99, "htmlUrl": "https://second.com"}
+		assert.Equal(t, "https://second.com", GetStringFromMap(m, "html_url", "htmlUrl"))
+	})
+
 	t.Run("no keys returns empty string", func(t *testing.T) {
 		t.Parallel()
 		m := map[string]interface{}{"owner": "octo"}
