@@ -202,7 +202,7 @@ func IsMalformedHeader(header string) bool {
 }
 
 // GenerateRandomAgentID generates a cryptographically random agent ID.
-// Per spec §7.3, the gateway SHOULD generate a random API key on startup
+// Per spec §7.3, the gateway SHOULD generate a random agent ID on startup
 // if none is provided. Returns a 32-byte hex-encoded string (64 chars).
 func GenerateRandomAgentID() (string, error) {
 	logAPIKey.Print("Generating random agent ID")
