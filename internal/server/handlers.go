@@ -112,6 +112,10 @@ func registerCommonEndpoints(mux *http.ServeMux, unifiedServer *UnifiedServer, a
 	healthHandler := HandleHealth(unifiedServer)
 	mux.Handle("/health", withResponseLogging(healthHandler))
 
+	// Reflect endpoint exposes a live DIFC label snapshot.
+	reflectHandler := HandleReflect(unifiedServer)
+	mux.Handle("/reflect", withResponseLogging(reflectHandler))
+
 	// Close endpoint for graceful shutdown (spec 5.1.3)
 	closeHandler := handleClose(unifiedServer)
 	finalCloseHandler := applyAuthIfConfigured(apiKey, closeHandler.ServeHTTP)

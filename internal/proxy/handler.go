@@ -53,6 +53,12 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Reflect endpoint exposes a live DIFC label snapshot.
+	if r.Method == http.MethodGet && rawPath == "/reflect" {
+		httputil.WriteJSONResponse(w, http.StatusOK, difc.BuildReflectResponse(h.server.DIFCComponents))
+		return
+	}
+
 	// gh CLI probes /meta during initialization for feature detection.
 	// Treat it like GraphQL introspection metadata and pass through unfiltered.
 	if r.Method == http.MethodGet && rawPath == "/meta" {
