@@ -87,7 +87,10 @@ func applyIfConfigured(key string, handler http.HandlerFunc, middleware func(str
 //
 // For header parsing logic, see internal/auth package which provides:
 //   - ParseAuthHeader() for extracting API keys and agent IDs
-//   - ValidateAgentID() for key validation
+//   - IsMalformedHeader() for malformed header detection
+//
+// This middleware validates credentials by directly comparing parsed API key
+// values to the configured key.
 func authMiddleware(apiKey string, next http.HandlerFunc) http.HandlerFunc {
 	logAuth.Printf("Initialized auth middleware")
 	return func(w http.ResponseWriter, r *http.Request) {
