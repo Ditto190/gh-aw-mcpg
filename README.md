@@ -225,6 +225,27 @@ For the full gateway field list (including rate limiting, tracing, keepalive, an
 - `POST /mcp/{serverID}` — Routed mode (default): JSON-RPC request to specific server
 - `POST /mcp` — Unified mode: JSON-RPC request routed to configured servers
 - `GET /health` — Health check; returns JSON `{"status":"healthy" | "unhealthy","specVersion":"...","gatewayVersion":"...","servers":{...}}`
+- `GET /reflect` — Unauthenticated DIFC label snapshot for all known agents (gateway and proxy mode)
+
+### `GET /reflect` response schema
+
+```json
+{
+  "agents": {
+    "<agent-id>": {
+      "secrecy": ["<tag>"],
+      "integrity": ["<tag>"]
+    }
+  },
+  "mode": "strict|filter|propagate",
+  "timestamp": "RFC3339 UTC timestamp"
+}
+```
+
+- `agents`: map keyed by agent ID with current DIFC labels.
+- `secrecy`/`integrity`: sorted arrays of label tags (empty array when none).
+- `mode`: active DIFC enforcement mode.
+- `timestamp`: snapshot generation time in UTC (`time.RFC3339`).
 
 Supported MCP methods: `tools/list`, `tools/call` (proxied to backend servers), plus standard lifecycle methods (`initialize`, etc.) handled natively by the MCP SDK.
 

@@ -60,6 +60,33 @@ gh CLI  →  awmg proxy (localhost:8443, TLS)  →  api.github.com
 
 Write operations (PUT, POST, DELETE, PATCH) pass through unmodified.
 
+## Reflect Endpoint
+
+Proxy mode exposes an unauthenticated DIFC reflection endpoint:
+
+- `GET /reflect`
+- `GET /api/v3/reflect` (GH_HOST-prefixed path; normalized to `/reflect`)
+
+Response schema:
+
+```json
+{
+  "agents": {
+    "<agent-id>": {
+      "secrecy": ["<tag>"],
+      "integrity": ["<tag>"]
+    }
+  },
+  "mode": "strict|filter|propagate",
+  "timestamp": "RFC3339 UTC timestamp"
+}
+```
+
+- `agents`: map of known agent IDs to current DIFC labels.
+- `secrecy`/`integrity`: sorted label arrays (empty when no labels are present).
+- `mode`: current DIFC enforcement mode.
+- `timestamp`: snapshot creation time in UTC (`time.RFC3339`).
+
 ## Flags
 
 | Flag | Default | Description |
