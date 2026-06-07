@@ -53,3 +53,20 @@ func TestReflectEndpoint_BothModes_NoAuthRequired(t *testing.T) {
 		})
 	}
 }
+
+func TestReflectEndpoint_EmptyRegistry(t *testing.T) {
+	us, err := NewUnified(context.Background(), &config.Config{Servers: map[string]*config.ServerConfig{}})
+	require.NoError(t, err)
+	t.Cleanup(func() { us.Close() })
+
+	httpServer := CreateHTTPServerForMCP(":0", us, "", "")
+	req := httptest.NewRequest(http.MethodGet, "/reflect", nil)
+	w := httptest.NewRecorder()
+	httpServer.Handler.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+
+	var got difc.ReflectResponse
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&got))
+	assert.Empty(t, got.Agents)
+}
