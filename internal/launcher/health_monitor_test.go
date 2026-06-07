@@ -139,11 +139,10 @@ func TestHealthMonitor_RespectsContextCancellation(t *testing.T) {
 	}
 }
 
-// TestHealthMonitor_LogsErrorWhenMaxFailuresReached verifies that the monitor
-// emits a "reached max restart attempts" error log and does not further
-// increment the counter when a restart failure pushes the counter to exactly
-// maxConsecutiveRestartFailures.
-func TestHealthMonitor_LogsErrorWhenMaxFailuresReached(t *testing.T) {
+// TestHealthMonitor_MaxFailuresThresholdReached verifies that when a restart failure
+// increments the counter to exactly maxConsecutiveRestartFailures, the counter
+// is capped at the threshold and the server remains in an error state.
+func TestHealthMonitor_MaxFailuresThresholdReached(t *testing.T) {
 	servers := map[string]*config.ServerConfig{
 		"bad-server": {Type: "stdio", Command: "nonexistent-binary-xyz"},
 	}
