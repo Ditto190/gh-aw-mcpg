@@ -117,7 +117,8 @@ func (us *UnifiedServer) getSessionKeys() []string {
 }
 
 // extractSessionIDFromRequest extracts the session ID from the X-Agent-ID and
-// Authorization headers of an HTTP request. Returns "" if neither header is present.
+// Authorization headers of an HTTP request. Returns "" if neither header is present
+// or if the provided header value is malformed.
 func extractSessionIDFromRequest(r *http.Request) string {
 	return auth.ExtractSessionIDFromHeaders(
 		r.Header.Get("X-Agent-ID"),
