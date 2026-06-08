@@ -572,7 +572,7 @@ docker run --rm -i \
 
 The container uses `run_containerized.sh` as the entrypoint, which:
 - Requires the `-i` flag for JSON configuration via stdin
-- Requires `MCP_GATEWAY_PORT`, `MCP_GATEWAY_DOMAIN`, `MCP_GATEWAY_AGENT_ID` env vars (the agent ID is a deployment gate; reference it in your JSON config via `"gateway": {"agentId": "${MCP_GATEWAY_AGENT_ID}"}` to enable authentication)
+- Requires `MCP_GATEWAY_PORT`, `MCP_GATEWAY_DOMAIN`, and `MCP_GATEWAY_AGENT_ID` env vars (`MCP_GATEWAY_API_KEY` is accepted as a deprecated fallback; the agent ID is a deployment gate, so reference it in your JSON config via `"gateway": {"agentId": "${MCP_GATEWAY_AGENT_ID}"}` to enable authentication)
 - Queries the Docker daemon API version (falls back to 1.44)
 - Validates Docker socket, port mapping, and environment before starting
 
