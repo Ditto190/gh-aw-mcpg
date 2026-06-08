@@ -119,9 +119,9 @@ func TestServeHTTP_MetaPassthrough(t *testing.T) {
 }
 
 func TestServeHTTP_RateLimitPassthrough(t *testing.T) {
-	var receivedURL string
+	receivedURLCh := make(chan string, 1)
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		receivedURL = r.URL.RequestURI()
+		receivedURLCh <- r.URL.RequestURI()
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, err := w.Write([]byte(`{"resources":{"core":{"limit":5000}}}`))
@@ -136,6 +136,7 @@ func TestServeHTTP_RateLimitPassthrough(t *testing.T) {
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, req)
 
+	receivedURL := <-receivedURLCh
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, "/rate_limit", receivedURL)
 	assert.Contains(t, w.Body.String(), "core")
