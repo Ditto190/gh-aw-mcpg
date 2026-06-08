@@ -620,18 +620,16 @@ func TestFetchAndFixSchema_LargeSchema(t *testing.T) {
 }
 
 func TestFetchAndFixSchema_TooLargeSchema(t *testing.T) {
-	chunk := strings.Repeat("a", 1024)
+	originalTimeout := schemaHTTPClientTimeout
+	schemaHTTPClientTimeout = 5 * time.Second
+	t.Cleanup(func() {
+		schemaHTTPClientTimeout = originalTimeout
+	})
+
+	payload := strings.Repeat("a", maxSchemaFetchBytes+1)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		remaining := maxSchemaFetchBytes + 1
-		for remaining > 0 {
-			toWrite := len(chunk)
-			if remaining < toWrite {
-				toWrite = remaining
-			}
-			_, _ = io.WriteString(w, chunk[:toWrite])
-			remaining -= toWrite
-		}
+		_, _ = io.WriteString(w, payload)
 	}))
 	defer server.Close()
 
