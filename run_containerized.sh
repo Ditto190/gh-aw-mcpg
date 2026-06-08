@@ -356,7 +356,7 @@ build_command_args() {
 }
 
 # Run proxy mode — lightweight path that skips gateway-specific checks
-# (no Docker socket, no stdin config, no MCP_GATEWAY_PORT/DOMAIN/AGENT_ID needed)
+# (no Docker socket, no stdin config, no MCP_GATEWAY_PORT/MCP_GATEWAY_DOMAIN/MCP_GATEWAY_AGENT_ID needed)
 run_proxy_mode() {
     log_info "Starting MCP Gateway in proxy mode..."
 
