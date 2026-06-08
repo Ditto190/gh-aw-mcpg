@@ -43,7 +43,7 @@ func BuildReflectResponse(components DIFCComponents) ReflectResponse {
 	} else {
 		logReflect.Print("No agent registry configured, returning empty agents map")
 	}
-	logReflect.Printf("Reflect response built: mode=%s, reflectedAgents=%d", components.Mode, len(agents))
+	logReflect.Printf("Reflect response built: mode=%s, reflectedAgents=%d", components.Mode.String(), len(agents))
 	return ReflectResponse{
 		Agents:    agents,
 		Mode:      components.Mode.String(),
