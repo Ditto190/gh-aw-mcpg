@@ -23,10 +23,10 @@ import (
 
 var logHandler = logger.New("proxy:handler")
 
-// writeToResultOrEmpty calls ToResult on the labeled data. On success it returns
+// toResultOrWriteEmpty calls ToResult on the labeled data. On success it returns
 // (result, true). On error it logs the failure, writes an empty-shaped response,
 // and returns (nil, false) so the caller can return early.
-func (h *proxyHandler) writeToResultOrEmpty(w http.ResponseWriter, resp *http.Response, responseData interface{}, labeled difc.LabeledData) (interface{}, bool) {
+func (h *proxyHandler) toResultOrWriteEmpty(w http.ResponseWriter, resp *http.Response, responseData interface{}, labeled difc.LabeledData) (interface{}, bool) {
 	result, err := labeled.ToResult()
 	if err != nil {
 		logHandler.Printf("[DIFC] Phase 5 ToResult failed: %v", err)
@@ -286,7 +286,7 @@ func (h *proxyHandler) handleWithDIFC(w http.ResponseWriter, r *http.Request, pa
 				finalData = rebuildGraphQLResponse(responseData, filtered)
 			} else {
 				var ok bool
-				finalData, ok = h.writeToResultOrEmpty(w, resp, responseData, filtered)
+				finalData, ok = h.toResultOrWriteEmpty(w, resp, responseData, filtered)
 				if !ok {
 					return
 				}
@@ -301,7 +301,7 @@ func (h *proxyHandler) handleWithDIFC(w http.ResponseWriter, r *http.Request, pa
 				useOriginalBody = true
 			} else {
 				var ok bool
-				finalData, ok = h.writeToResultOrEmpty(w, resp, responseData, labeledData)
+				finalData, ok = h.toResultOrWriteEmpty(w, resp, responseData, labeledData)
 				if !ok {
 					return
 				}
