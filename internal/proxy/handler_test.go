@@ -221,8 +221,8 @@ func TestServeHTTP_UnknownRESTEndpointPassthroughWithEmptyLabels(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, "/v1/unknown/endpoint", receivedURL)
 	assert.JSONEq(t, `{"status":"ok"}`, w.Body.String())
-	assert.Empty(t, reg.GetOrCreate("proxy").GetSecrecyTags())
-	assert.Empty(t, reg.GetOrCreate("proxy").GetIntegrityTags(), "empty integrity labels should drop existing integrity in propagate mode")
+	assert.Empty(t, reg.GetOrCreate(proxyAgentID).GetSecrecyTags())
+	assert.Empty(t, reg.GetOrCreate(proxyAgentID).GetIntegrityTags(), "empty integrity labels should drop existing integrity in propagate mode")
 
 	require.NoError(t, logger.CloseAllLoggers())
 
@@ -272,7 +272,7 @@ func TestServeHTTP_ReflectReturnsAllAgents(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			s := newTestServer(t, "http://unused")
 			s.Mode = difc.EnforcementPropagate
-			s.AgentRegistry.Register("proxy", []difc.Tag{"repo:github/private-repo"}, []difc.Tag{"approved"})
+			s.AgentRegistry.Register(proxyAgentID, []difc.Tag{"repo:github/private-repo"}, []difc.Tag{"approved"})
 			s.AgentRegistry.Register("abc123def456", nil, []difc.Tag{"unapproved"})
 
 			h := &proxyHandler{server: s}
