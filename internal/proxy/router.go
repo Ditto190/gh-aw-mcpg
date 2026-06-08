@@ -53,7 +53,7 @@ func emptyExtractArgs(_ []string) map[string]interface{} {
 }
 
 // repoArgsExtractor is a shared extractArgs closure for owner+repo-only routes.
-var repoArgsExtractor = func(m []string) map[string]interface{} {
+func repoArgsExtractor(m []string) map[string]interface{} {
 	return repoArgs(m[1], m[2])
 }
 
