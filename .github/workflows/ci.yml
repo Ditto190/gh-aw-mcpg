@@ -2,15 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
   pull_request:
-    paths:
-      - '**.go'
-      - 'go.mod'
-      - 'go.sum'
-      - 'Makefile'
-      - '.github/workflows/ci.yml'
-      - 'guards/**'
   workflow_dispatch:
 
 jobs:
