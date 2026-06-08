@@ -572,7 +572,7 @@ docker run --rm -i \
 
 The container uses `run_containerized.sh` as the entrypoint, which:
 - Requires the `-i` flag for JSON configuration via stdin
-- Requires `MCP_GATEWAY_PORT`, `MCP_GATEWAY_DOMAIN`, `MCP_GATEWAY_AGENT_ID` env vars (the agent ID is a deployment gate; reference it in your JSON config via `"gateway": {"agentId": "${MCP_GATEWAY_AGENT_ID}"}` to enable authentication)
+- Requires `MCP_GATEWAY_PORT` and `MCP_GATEWAY_DOMAIN`, plus an agent gate value via `MCP_GATEWAY_AGENT_ID` (`MCP_GATEWAY_API_KEY` is only a deprecated alias that `run_containerized.sh` maps to `MCP_GATEWAY_AGENT_ID`; reference `"gateway": {"agentId": "${MCP_GATEWAY_AGENT_ID}"}` in your JSON config to enable authentication)
 - Queries the Docker daemon API version (falls back to 1.44)
 - Validates Docker socket, port mapping, and environment before starting
 
@@ -595,7 +595,7 @@ docker run --rm -i \
 Required environment variables:
 - `MCP_GATEWAY_PORT` - Server port (must match port mapping)
 - `MCP_GATEWAY_DOMAIN` - Domain name for the gateway
-- `MCP_GATEWAY_AGENT_ID` - Checked by `run_containerized.sh` as a deployment gate; must be referenced in your JSON config via `"gateway": {"agentId": "${MCP_GATEWAY_AGENT_ID}"}` to enable authentication (`MCP_GATEWAY_API_KEY` is accepted as a deprecated fallback)
+- `MCP_GATEWAY_AGENT_ID` - Checked by `run_containerized.sh` as a deployment gate; must be referenced in your JSON config via `"gateway": {"agentId": "${MCP_GATEWAY_AGENT_ID}"}` to enable authentication (`MCP_GATEWAY_API_KEY` is only a deprecated alias mapped to this value)
 
 **Note:** The `DOCKER_API_VERSION` is set automatically by `run_containerized.sh` using the Docker daemon's current API version (falls back to `1.44` for all architectures if detection fails).
 
