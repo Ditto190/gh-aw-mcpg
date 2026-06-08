@@ -11,7 +11,6 @@ import (
 
 	"github.com/github/gh-aw-mcpg/internal/httputil"
 	"github.com/github/gh-aw-mcpg/internal/logger"
-	"github.com/github/gh-aw-mcpg/internal/strutil"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -105,7 +104,7 @@ func (c *filteredServerCache) getOrCreate(backendID, sessionID string, creator f
 		}
 	}
 
-	logRouted.Printf("[CACHE] Creating new filtered server: backend=%s, session=%s", backendID, strutil.TruncateSessionID(sessionID))
+	logRouted.Printf("[CACHE] Creating new filtered server: backend=%s, session=%s", backendID, truncateSessionID(sessionID))
 	server := creator()
 	c.servers[key] = &filteredServerEntry{server: server, lastUsed: now}
 	return server
@@ -214,5 +213,5 @@ func truncateCacheKeyForLog(key string) string {
 		return key
 	}
 
-	return fmt.Sprintf("%s/%s", backendID, strutil.TruncateSessionID(sessionID))
+	return fmt.Sprintf("%s/%s", backendID, truncateSessionID(sessionID))
 }
