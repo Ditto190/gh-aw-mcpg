@@ -8,193 +8,271 @@ import (
 )
 
 func TestDeepCloneJSON(t *testing.T) {
+	t.Parallel()
+
 	t.Run("nil input returns nil", func(t *testing.T) {
-		assert.Nil(t, DeepCloneJSON(nil))
+		t.Parallel()
+		result := DeepCloneJSON(nil)
+		assert.Nil(t, result)
 	})
 
-	t.Run("scalar types are returned as-is", func(t *testing.T) {
-		tests := []struct {
-			name  string
-			input interface{}
-		}{
-			{"string", "hello"},
-			{"empty string", ""},
-			{"integer", 42},
-			{"float64", 3.14},
-			{"bool true", true},
-			{"bool false", false},
-			{"zero int", 0},
-		}
-		for _, tt := range tests {
-			t.Run(tt.name, func(t *testing.T) {
-				assert.Equal(t, tt.input, DeepCloneJSON(tt.input))
-			})
-		}
+	t.Run("string returns same value", func(t *testing.T) {
+		t.Parallel()
+		result := DeepCloneJSON("hello")
+		assert.Equal(t, "hello", result)
 	})
 
-	t.Run("empty map returns new empty map", func(t *testing.T) {
+	t.Run("float64 returns same value", func(t *testing.T) {
+		t.Parallel()
+		result := DeepCloneJSON(float64(3.14))
+		assert.Equal(t, float64(3.14), result)
+	})
+
+	t.Run("bool true returns same value", func(t *testing.T) {
+		t.Parallel()
+		result := DeepCloneJSON(true)
+		assert.Equal(t, true, result)
+	})
+
+	t.Run("bool false returns same value", func(t *testing.T) {
+		t.Parallel()
+		result := DeepCloneJSON(false)
+		assert.Equal(t, false, result)
+	})
+
+	t.Run("empty map returns empty map", func(t *testing.T) {
+		t.Parallel()
 		input := map[string]interface{}{}
 		result := DeepCloneJSON(input)
-		require.NotNil(t, result)
-		assert.Equal(t, map[string]interface{}{}, result)
+		cloned, ok := result.(map[string]interface{})
+		require.True(t, ok, "result should be map[string]interface{}")
+		assert.Empty(t, cloned)
 	})
 
-	t.Run("empty slice returns new empty slice", func(t *testing.T) {
-		input := []interface{}{}
-		result := DeepCloneJSON(input)
-		require.NotNil(t, result)
-		assert.Equal(t, []interface{}{}, result)
-	})
-
-	t.Run("flat map is cloned correctly", func(t *testing.T) {
+	t.Run("flat map with primitive values", func(t *testing.T) {
+		t.Parallel()
 		input := map[string]interface{}{
 			"name":   "alice",
 			"age":    float64(30),
 			"active": true,
 		}
 		result := DeepCloneJSON(input)
-		assert.Equal(t, input, result)
+		cloned, ok := result.(map[string]interface{})
+		require.True(t, ok, "result should be map[string]interface{}")
+		assert.Equal(t, input, cloned)
 	})
 
-	t.Run("flat slice is cloned correctly", func(t *testing.T) {
-		input := []interface{}{"a", "b", "c"}
+	t.Run("flat map clone is independent from original", func(t *testing.T) {
+		t.Parallel()
+		input := map[string]interface{}{
+			"key": "original",
+		}
 		result := DeepCloneJSON(input)
-		assert.Equal(t, input, result)
+		cloned, ok := result.(map[string]interface{})
+		require.True(t, ok)
+
+		cloned["key"] = "modified"
+		assert.Equal(t, "original", input["key"], "original map should not be affected by clone modification")
 	})
 
-	t.Run("map with nested map is deep cloned", func(t *testing.T) {
+	t.Run("nested map deep clones nested maps", func(t *testing.T) {
+		t.Parallel()
 		input := map[string]interface{}{
 			"outer": map[string]interface{}{
 				"inner": "value",
 			},
 		}
 		result := DeepCloneJSON(input)
-		assert.Equal(t, input, result)
-
-		// Mutating the nested clone does not affect original
-		clone := result.(map[string]interface{})
-		clone["outer"].(map[string]interface{})["inner"] = "modified"
-		assert.Equal(t, "value", input["outer"].(map[string]interface{})["inner"],
-			"original nested map should not be affected by clone mutation")
+		cloned, ok := result.(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, input, cloned)
 	})
 
-	t.Run("map with slice value is deep cloned", func(t *testing.T) {
+	t.Run("nested map clone is independent from original", func(t *testing.T) {
+		t.Parallel()
 		input := map[string]interface{}{
-			"items": []interface{}{"x", "y"},
+			"outer": map[string]interface{}{
+				"inner": "original",
+			},
 		}
 		result := DeepCloneJSON(input)
-		assert.Equal(t, input, result)
+		cloned, ok := result.(map[string]interface{})
+		require.True(t, ok)
 
-		// Mutating the cloned slice does not affect original
-		clone := result.(map[string]interface{})
-		clone["items"].([]interface{})[0] = "modified"
-		assert.Equal(t, "x", input["items"].([]interface{})[0],
-			"original slice should not be affected by clone mutation")
+		innerClone, ok := cloned["outer"].(map[string]interface{})
+		require.True(t, ok)
+		innerClone["inner"] = "modified"
+
+		innerOrig := input["outer"].(map[string]interface{})
+		assert.Equal(t, "original", innerOrig["inner"], "original nested map should not be affected")
 	})
 
-	t.Run("slice of maps is deep cloned", func(t *testing.T) {
+	t.Run("empty slice returns empty slice", func(t *testing.T) {
+		t.Parallel()
+		input := []interface{}{}
+		result := DeepCloneJSON(input)
+		cloned, ok := result.([]interface{})
+		require.True(t, ok, "result should be []interface{}")
+		assert.Empty(t, cloned)
+	})
+
+	t.Run("flat slice with primitive values", func(t *testing.T) {
+		t.Parallel()
+		input := []interface{}{"a", float64(1), true, nil}
+		result := DeepCloneJSON(input)
+		cloned, ok := result.([]interface{})
+		require.True(t, ok, "result should be []interface{}")
+		assert.Equal(t, input, cloned)
+	})
+
+	t.Run("flat slice clone is independent from original", func(t *testing.T) {
+		t.Parallel()
+		input := []interface{}{"original", float64(42)}
+		result := DeepCloneJSON(input)
+		cloned, ok := result.([]interface{})
+		require.True(t, ok)
+
+		cloned[0] = "modified"
+		assert.Equal(t, "original", input[0], "original slice should not be affected by clone modification")
+	})
+
+	t.Run("nested slice deep clones nested slices", func(t *testing.T) {
+		t.Parallel()
 		input := []interface{}{
-			map[string]interface{}{"key": "val1"},
-			map[string]interface{}{"key": "val2"},
+			[]interface{}{"a", "b"},
+			[]interface{}{float64(1), float64(2)},
 		}
 		result := DeepCloneJSON(input)
-		assert.Equal(t, input, result)
-
-		// Mutating a map inside the cloned slice does not affect original
-		clone := result.([]interface{})
-		clone[0].(map[string]interface{})["key"] = "modified"
-		assert.Equal(t, "val1", input[0].(map[string]interface{})["key"],
-			"original map in slice should not be affected by clone mutation")
+		cloned, ok := result.([]interface{})
+		require.True(t, ok)
+		assert.Equal(t, input, cloned)
 	})
 
-	t.Run("slice of slices is deep cloned", func(t *testing.T) {
+	t.Run("nested slice clone is independent from original", func(t *testing.T) {
+		t.Parallel()
 		input := []interface{}{
-			[]interface{}{1, 2},
-			[]interface{}{3, 4},
+			[]interface{}{"original"},
 		}
 		result := DeepCloneJSON(input)
-		assert.Equal(t, input, result)
+		cloned, ok := result.([]interface{})
+		require.True(t, ok)
 
-		// Mutating a nested slice in the clone does not affect original
-		clone := result.([]interface{})
-		clone[0].([]interface{})[0] = 99
-		assert.Equal(t, 1, input[0].([]interface{})[0],
-			"original nested slice should not be affected by clone mutation")
+		innerClone, ok := cloned[0].([]interface{})
+		require.True(t, ok)
+		innerClone[0] = "modified"
+
+		innerOrig := input[0].([]interface{})
+		assert.Equal(t, "original", innerOrig[0], "original nested slice should not be affected")
 	})
 
-	t.Run("deeply nested structure is fully cloned", func(t *testing.T) {
+	t.Run("map containing slices", func(t *testing.T) {
+		t.Parallel()
+		input := map[string]interface{}{
+			"items": []interface{}{"x", "y", "z"},
+			"count": float64(3),
+		}
+		result := DeepCloneJSON(input)
+		cloned, ok := result.(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, input, cloned)
+
+		// Verify independence of nested slice
+		clonedItems, ok := cloned["items"].([]interface{})
+		require.True(t, ok)
+		clonedItems[0] = "modified"
+
+		origItems := input["items"].([]interface{})
+		assert.Equal(t, "x", origItems[0], "original slice inside map should not be affected")
+	})
+
+	t.Run("slice containing maps", func(t *testing.T) {
+		t.Parallel()
+		input := []interface{}{
+			map[string]interface{}{"name": "alice", "score": float64(95)},
+			map[string]interface{}{"name": "bob", "score": float64(87)},
+		}
+		result := DeepCloneJSON(input)
+		cloned, ok := result.([]interface{})
+		require.True(t, ok)
+		assert.Equal(t, input, cloned)
+
+		// Verify independence of nested map
+		clonedMap, ok := cloned[0].(map[string]interface{})
+		require.True(t, ok)
+		clonedMap["name"] = "charlie"
+
+		origMap := input[0].(map[string]interface{})
+		assert.Equal(t, "alice", origMap["name"], "original map inside slice should not be affected")
+	})
+
+	t.Run("deeply nested structure", func(t *testing.T) {
+		t.Parallel()
 		input := map[string]interface{}{
 			"level1": map[string]interface{}{
 				"level2": map[string]interface{}{
-					"level3": "deep-value",
+					"level3": []interface{}{
+						map[string]interface{}{
+							"leaf": "value",
+						},
+					},
 				},
 			},
 		}
 		result := DeepCloneJSON(input)
-		assert.Equal(t, input, result)
+		cloned, ok := result.(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, input, cloned)
 
-		// Mutate deep level of clone, original must be unchanged
-		clone := result.(map[string]interface{})
-		l2 := clone["level1"].(map[string]interface{})
-		l3 := l2["level2"].(map[string]interface{})
-		l3["level3"] = "mutated"
+		// Verify deep independence
+		l1 := cloned["level1"].(map[string]interface{})
+		l2 := l1["level2"].(map[string]interface{})
+		l3 := l2["level3"].([]interface{})
+		leaf := l3[0].(map[string]interface{})
+		leaf["leaf"] = "modified"
 
-		origL2 := input["level1"].(map[string]interface{})
-		origL3 := origL2["level2"].(map[string]interface{})
-		assert.Equal(t, "deep-value", origL3["level3"],
-			"original deep value should not be affected")
+		origL1 := input["level1"].(map[string]interface{})
+		origL2 := origL1["level2"].(map[string]interface{})
+		origL3 := origL2["level3"].([]interface{})
+		origLeaf := origL3[0].(map[string]interface{})
+		assert.Equal(t, "value", origLeaf["leaf"], "deeply nested original should not be affected")
 	})
 
-	t.Run("cloned map is independent: original mutation does not affect clone", func(t *testing.T) {
-		input := map[string]interface{}{"k": "v"}
-		clone := DeepCloneJSON(input)
-		input["k"] = "changed"
-		assert.Equal(t, "v", clone.(map[string]interface{})["k"],
-			"clone should not reflect changes to original")
-	})
-
-	t.Run("cloned slice is independent: original mutation does not affect clone", func(t *testing.T) {
-		input := []interface{}{"a", "b"}
-		clone := DeepCloneJSON(input)
-		input[0] = "changed"
-		assert.Equal(t, "a", clone.([]interface{})[0],
-			"clone should not reflect changes to original slice")
-	})
-
-	t.Run("map with nil value is cloned correctly", func(t *testing.T) {
+	t.Run("map with null value", func(t *testing.T) {
+		t.Parallel()
 		input := map[string]interface{}{
-			"key":   "value",
-			"empty": nil,
+			"key": nil,
 		}
 		result := DeepCloneJSON(input)
-		assert.Equal(t, input, result)
-		assert.Nil(t, result.(map[string]interface{})["empty"])
+		cloned, ok := result.(map[string]interface{})
+		require.True(t, ok)
+		assert.Nil(t, cloned["key"])
 	})
 
-	t.Run("mixed types in map are preserved", func(t *testing.T) {
+	t.Run("slice with null element", func(t *testing.T) {
+		t.Parallel()
+		input := []interface{}{nil, "value", nil}
+		result := DeepCloneJSON(input)
+		cloned, ok := result.([]interface{})
+		require.True(t, ok)
+		assert.Nil(t, cloned[0])
+		assert.Equal(t, "value", cloned[1])
+		assert.Nil(t, cloned[2])
+	})
+
+	t.Run("map preserves all key-value pairs", func(t *testing.T) {
+		t.Parallel()
 		input := map[string]interface{}{
-			"str":    "hello",
-			"num":    float64(42),
-			"bool":   true,
-			"null":   nil,
-			"nested": map[string]interface{}{"x": 1},
-			"list":   []interface{}{1, 2, 3},
+			"a": "alpha",
+			"b": float64(2),
+			"c": true,
+			"d": nil,
+			"e": []interface{}{"x"},
+			"f": map[string]interface{}{"nested": "yes"},
 		}
 		result := DeepCloneJSON(input)
-		assert.Equal(t, input, result)
-	})
-
-	t.Run("cloned map has correct length", func(t *testing.T) {
-		input := map[string]interface{}{"a": 1, "b": 2, "c": 3}
-		result := DeepCloneJSON(input)
-		clone := result.(map[string]interface{})
-		assert.Len(t, clone, 3)
-	})
-
-	t.Run("cloned slice has correct length", func(t *testing.T) {
-		input := []interface{}{10, 20, 30, 40}
-		result := DeepCloneJSON(input)
-		clone := result.([]interface{})
-		assert.Len(t, clone, 4)
+		cloned, ok := result.(map[string]interface{})
+		require.True(t, ok)
+		assert.Len(t, cloned, len(input))
+		assert.Equal(t, input, cloned)
 	})
 }
