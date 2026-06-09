@@ -204,6 +204,7 @@ func GetOrLaunchForSession(l *Launcher, serverID, sessionID string) (*mcp.Connec
 	// already-fetched config to avoid acquiring the config read-lock twice.
 	if serverCfg.Type == "http" {
 		logLauncher.Printf("HTTP backend detected, using stateless connection: serverID=%s", serverID)
+		logger.LogDebugToServer(serverID, "backend", "GetOrLaunch called for server: %s", serverID)
 		return getOrLaunchWithConfig(l, serverID, serverCfg)
 	}
 
