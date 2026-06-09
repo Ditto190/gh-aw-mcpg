@@ -117,19 +117,11 @@ func (l *Launcher) getServerConfig(serverID string) (*config.ServerConfig, error
 	return cfg, nil
 }
 
-// GetOrLaunch returns an existing connection or launches a new one
-func GetOrLaunch(l *Launcher, serverID string) (*mcp.Connection, error) {
-	logger.LogDebugToServer(serverID, "backend", "GetOrLaunch called for server: %s", serverID)
-
-	// Look up config before entering GetOrCreate. GetOrCreate takes a read lock
-	// first, upgrading to a write lock only on a cache miss; doing this
-	// read-only check up front avoids holding any lock while validating the
-	// server ID.
-	serverCfg, err := l.getServerConfig(serverID)
-	if err != nil {
-		return nil, err
-	}
-
+// getOrLaunchWithConfig is the internal implementation shared by GetOrLaunch and
+// GetOrLaunchForSession. It accepts a pre-fetched serverCfg so callers that
+// already hold the config (e.g. GetOrLaunchForSession for HTTP backends) do not
+// need to acquire the config read-lock a second time.
+func getOrLaunchWithConfig(l *Launcher, serverID string, serverCfg *config.ServerConfig) (*mcp.Connection, error) {
 	return syncutil.GetOrCreate(&l.mu, l.connections, serverID, func() (*mcp.Connection, error) {
 		logLauncher.Printf("Connection not found in cache, launching new: serverID=%s", serverID)
 		logLauncher.Printf("Retrieved server config: serverID=%s, type=%s", serverID, serverCfg.Type)
@@ -181,6 +173,22 @@ func GetOrLaunch(l *Launcher, serverID string) (*mcp.Connection, error) {
 	})
 }
 
+// GetOrLaunch returns an existing connection or launches a new one
+func GetOrLaunch(l *Launcher, serverID string) (*mcp.Connection, error) {
+	logger.LogDebugToServer(serverID, "backend", "GetOrLaunch called for server: %s", serverID)
+
+	// Look up config before entering GetOrCreate. GetOrCreate takes a read lock
+	// first, upgrading to a write lock only on a cache miss; doing this
+	// read-only check up front avoids holding any lock while validating the
+	// server ID.
+	serverCfg, err := l.getServerConfig(serverID)
+	if err != nil {
+		return nil, err
+	}
+
+	return getOrLaunchWithConfig(l, serverID, serverCfg)
+}
+
 // GetOrLaunchForSession returns a session-aware connection or launches a new one
 // This is used for stateful stdio backends that require persistent connections
 func GetOrLaunchForSession(l *Launcher, serverID, sessionID string) (*mcp.Connection, error) {
@@ -192,10 +200,12 @@ func GetOrLaunchForSession(l *Launcher, serverID, sessionID string) (*mcp.Connec
 		return nil, err
 	}
 
-	// For HTTP backends, use the regular GetOrLaunch (stateless)
+	// For HTTP backends, use the stateless connection pool, reusing the
+	// already-fetched config to avoid acquiring the config read-lock twice.
 	if serverCfg.Type == "http" {
 		logLauncher.Printf("HTTP backend detected, using stateless connection: serverID=%s", serverID)
-		return GetOrLaunch(l, serverID)
+		logger.LogDebugToServer(serverID, "backend", "GetOrLaunch called for server: %s", serverID)
+		return getOrLaunchWithConfig(l, serverID, serverCfg)
 	}
 
 	logLauncher.Printf("Checking session pool: serverID=%s, sessionID=%s", serverID, sessionID)
