@@ -5,12 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
-	"sync"
 	"time"
 
 	"github.com/github/gh-aw-mcpg/internal/httputil"
 	"github.com/github/gh-aw-mcpg/internal/logger"
+	"github.com/github/gh-aw-mcpg/internal/syncutil"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -30,85 +29,10 @@ func rejectIfShutdown(unifiedServer *UnifiedServer, next http.Handler, logNamesp
 	})
 }
 
-// filteredServerCacheMaxSize is the maximum number of entries the filteredServerCache
-// will hold. When the cache is full, the least-recently-used entry is evicted to make room.
+// filteredServerCacheMaxSize is the maximum number of entries the filtered
+// server cache will hold. When the cache is full, the least-recently-used entry
+// is evicted to make room.
 const filteredServerCacheMaxSize = 1000
-
-// filteredServerCache caches filtered server instances per (backend, session) key.
-// Entries are evicted after the configured TTL to prevent unbounded memory growth
-// in long-running deployments with many sessions. A max-size cap provides an additional
-// safety guard against an unbounded number of unique sessions.
-type filteredServerCache struct {
-	servers map[string]*filteredServerEntry
-	ttl     time.Duration
-	maxSize int
-	mu      sync.RWMutex
-}
-
-type filteredServerEntry struct {
-	server   *sdk.Server
-	lastUsed time.Time
-}
-
-// newFilteredServerCache creates a new server cache with the given entry TTL.
-func newFilteredServerCache(ttl time.Duration) *filteredServerCache {
-	logRouted.Printf("[CACHE] Creating filtered server cache: ttl=%s, maxSize=%d", ttl, filteredServerCacheMaxSize)
-	return &filteredServerCache{
-		servers: make(map[string]*filteredServerEntry),
-		ttl:     ttl,
-		maxSize: filteredServerCacheMaxSize,
-	}
-}
-
-// getOrCreate returns a cached server or creates a new one.
-// Expired entries are lazily evicted on each call. When the cache has reached its
-// maximum size, the least-recently-used entry is evicted to make room.
-func (c *filteredServerCache) getOrCreate(backendID, sessionID string, creator func() *sdk.Server) *sdk.Server {
-	key := fmt.Sprintf("%s/%s", backendID, sessionID)
-	now := time.Now()
-
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	// Lazy eviction of expired entries
-	for k, entry := range c.servers {
-		if now.Sub(entry.lastUsed) > c.ttl {
-			logRouted.Printf("[CACHE] Evicting expired server: key=%s (idle %s)", truncateCacheKeyForLog(k), now.Sub(entry.lastUsed).Round(time.Second))
-			delete(c.servers, k)
-		}
-	}
-
-	if entry, ok := c.servers[key]; ok {
-		entry.lastUsed = now
-		logRouted.Printf("[CACHE] Cache hit: key=%s", truncateCacheKeyForLog(key))
-		return entry.server
-	}
-
-	// When at capacity after TTL eviction, evict the least-recently-used entry
-	// to bound memory growth reliably. This may interrupt an active session for
-	// the evicted (backend, session) pair, but is preferable to unbounded growth.
-	if len(c.servers) >= c.maxSize {
-		lruKey := ""
-		var lruTime time.Time
-		first := true
-		for k, entry := range c.servers {
-			if first || entry.lastUsed.Before(lruTime) {
-				lruKey = k
-				lruTime = entry.lastUsed
-				first = false
-			}
-		}
-		if lruKey != "" {
-			logRouted.Printf("[CACHE] Max size reached (%d), evicting LRU entry: key=%s (idle %s)", c.maxSize, truncateCacheKeyForLog(lruKey), now.Sub(lruTime).Round(time.Second))
-			delete(c.servers, lruKey)
-		}
-	}
-
-	logRouted.Printf("[CACHE] Creating new filtered server: backend=%s, session=%s", backendID, truncateSessionID(sessionID))
-	server := creator()
-	c.servers[key] = &filteredServerEntry{server: server, lastUsed: now}
-	return server
-}
 
 // CreateHTTPServerForRoutedMode creates an HTTP server for routed mode
 // In routed mode, each backend is accessible at /mcp/<server>
@@ -129,7 +53,8 @@ func CreateHTTPServerForRoutedMode(addr string, unifiedServer *UnifiedServer, ap
 		// TTL matches the SDK SessionTimeout so cache entries expire with sessions.
 		// Long-running agentic workflows (e.g. >30 min GitHub Actions jobs) need this
 		// to be at least as long as the workflow to avoid spurious "session not found" errors.
-		serverCache := newFilteredServerCache(sessionTimeout)
+		logRouted.Printf("[CACHE] Creating filtered server cache: ttl=%s, maxSize=%d", sessionTimeout, filteredServerCacheMaxSize)
+		serverCache := syncutil.NewTTLCache[string, *sdk.Server](sessionTimeout, filteredServerCacheMaxSize)
 
 		// Create a proxy for each backend server
 		for _, serverID := range allBackends {
@@ -143,10 +68,12 @@ func CreateHTTPServerForRoutedMode(addr string, unifiedServer *UnifiedServer, ap
 					return nil
 				}
 
-				// Return a cached filtered proxy server for this backend and session
-				// This ensures the same server instance is reused for all requests in a session
+				// Return a cached filtered proxy server for this backend and session.
+				// This ensures the same server instance is reused for all requests in a session.
 				sessionID := SessionIDFromContext(r.Context())
-				return serverCache.getOrCreate(backendID, sessionID, func() *sdk.Server {
+				cacheKey := fmt.Sprintf("%s/%s", backendID, sessionID)
+				return serverCache.GetOrCreate(cacheKey, func() *sdk.Server {
+					logRouted.Printf("[CACHE] Creating new filtered server: backend=%s, session=%s", backendID, truncateSessionID(sessionID))
 					return createFilteredServer(unifiedServer, backendID)
 				})
 			}, buildDefaultHandlerConfig(unifiedServer, sessionTimeout, defaultHandlerConfigOptions{
@@ -203,15 +130,4 @@ func createFilteredServer(unifiedServer *UnifiedServer, backendID string) *sdk.S
 	}
 
 	return server
-}
-
-// truncateCacheKeyForLog returns a log-safe version of a cache key of the form
-// "backendID/sessionID" by truncating the session ID portion.
-func truncateCacheKeyForLog(key string) string {
-	backendID, sessionID, found := strings.Cut(key, "/")
-	if !found {
-		return key
-	}
-
-	return fmt.Sprintf("%s/%s", backendID, truncateSessionID(sessionID))
 }
