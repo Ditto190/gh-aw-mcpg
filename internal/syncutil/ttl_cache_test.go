@@ -86,7 +86,7 @@ func TestTTLCache_TTLEviction(t *testing.T) {
 	clk.Advance(200 * time.Millisecond)
 
 	cache.GetOrCreate("other", func() int { return 99 }) // triggers lazy eviction
-	assert.Equal(t, 0, cache.Len()-1, "evicted entry should be removed; only 'other' remains")
+	assert.Equal(t, 1, cache.Len(), "evicted entry should be removed; only 'other' remains")
 
 	// Accessing the evicted key again must create a new entry.
 	cache.GetOrCreate("key", func() int { createCount++; return 2 })
@@ -204,7 +204,7 @@ func TestTTLCache_ConcurrentAccess(t *testing.T) {
 	}
 	wg.Wait()
 
-	assert.LessOrEqual(t, int32(10), createCount.Load(), "at most 10 unique keys")
+	assert.LessOrEqual(t, createCount.Load(), int32(10), "at most 10 unique keys")
 }
 
 // TestTTLCache_MaxSizeOne verifies edge behaviour when maxSize is 1.
