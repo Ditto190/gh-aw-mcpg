@@ -2909,6 +2909,20 @@ mod tests {
     }
 
     #[test]
+    fn test_extract_repo_scope_partial_args_repo_only_fallback_to_query() {
+        let tool_args = serde_json::json!({
+            "repo": "myrepo",
+            "query": "repo:otherorg/otherrepo is:open"
+        });
+
+        let (owner, repo, repo_id) = extract_repo_scope_with_query_fallback(&tool_args);
+
+        assert_eq!(owner, "otherorg");
+        assert_eq!(repo, "otherrepo");
+        assert_eq!(repo_id, "otherorg/otherrepo");
+    }
+
+    #[test]
     fn test_extract_repo_scope_empty_when_neither_args_nor_query_has_repo() {
         let tool_args = serde_json::json!({
             "query": "is:open label:bug"
