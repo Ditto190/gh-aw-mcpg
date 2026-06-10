@@ -364,7 +364,7 @@ pub fn label_response_paths(
                     };
 
                     let commit_sha = get_str_or(item, "sha", "unknown");
-                    let short_sha = &commit_sha[..std::cmp::min(7, commit_sha.len())];
+                    let short_sha = short_sha(&commit_sha);
 
                     let integrity = commit_integrity(
                         item,
