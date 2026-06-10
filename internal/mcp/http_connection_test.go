@@ -205,7 +205,7 @@ func TestNewHTTPConnection_InvalidURL(t *testing.T) {
 				assert.Error(t, err, "Expected error for invalid URL")
 				assert.Nil(t, conn, "Connection should be nil on error")
 			} else {
-				assert.NoError(t, err, "Should not error")
+				require.NoError(t, err, "Should not error")
 				assert.NotNil(t, conn, "Connection should not be nil")
 				if conn != nil {
 					conn.Close()
