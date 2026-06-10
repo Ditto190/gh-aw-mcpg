@@ -52,10 +52,12 @@ func newTTLCacheWithClock[K comparable, V any](ttl time.Duration, maxSize int, n
 // the cache has reached its capacity after TTL eviction, the LRU entry is
 // removed to make room.
 func (c *TTLCache[K, V]) GetOrCreate(key K, create func() V) V {
+	if c.maxSize <= 0 {
+		return create()
+	}
 	now := c.nowFn()
 	c.mu.Lock()
 	defer c.mu.Unlock()
-
 	// Lazy eviction of expired entries.
 	if c.ttl > 0 {
 		for k, entry := range c.entries {
