@@ -349,22 +349,34 @@ func TestGetOrLaunch_RaceConditionDoubleCheck(t *testing.T) {
 	// Use a real HTTP test server that responds to JSON-RPC initialize quickly
 	// to avoid deadlocking on the write lock while waiting for TCP connect.
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var req struct {
-			ID     interface{} `json:"id"`
-			Method string      `json:"method"`
+		switch r.Method {
+		case http.MethodGet:
+			// Minimal SSE semantics for SDK transport probes.
+			w.Header().Set("Content-Type", "text/event-stream")
+			w.WriteHeader(http.StatusOK)
+			return
+		case http.MethodPost:
+			var req struct {
+				ID interface{} `json:"id"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&req)
+			resp := map[string]interface{}{
+				"jsonrpc": "2.0",
+				"id":      req.ID,
+				"result": map[string]interface{}{
+					"protocolVersion": "2024-11-05",
+					"capabilities":    map[string]interface{}{"tools": map[string]interface{}{"listChanged": true}},
+					"serverInfo":      map[string]interface{}{"name": "race-test", "version": "1.0.0"},
+				},
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Mcp-Session-Id", "test-session")
+			_ = json.NewEncoder(w).Encode(resp)
+			return
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
 		}
-		json.NewDecoder(r.Body).Decode(&req)
-		resp := map[string]interface{}{
-			"jsonrpc": "2.0",
-			"id":      req.ID,
-			"result": map[string]interface{}{
-				"protocolVersion": "2024-11-05",
-				"capabilities":    map[string]interface{}{"tools": map[string]interface{}{"listChanged": true}},
-				"serverInfo":      map[string]interface{}{"name": "race-test", "version": "1.0.0"},
-			},
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
 	}))
 	defer mockServer.Close()
 
