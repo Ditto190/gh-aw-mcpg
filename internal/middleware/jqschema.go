@@ -15,6 +15,7 @@ import (
 
 	"github.com/github/gh-aw-mcpg/internal/logger"
 	"github.com/github/gh-aw-mcpg/internal/mcp"
+	"github.com/github/gh-aw-mcpg/internal/mcpresult"
 	"github.com/github/gh-aw-mcpg/internal/strutil"
 	"github.com/itchyny/gojq"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -409,14 +410,16 @@ func rewriteEnvelopeTextPayload(data interface{}, filteredText string) (interfac
 			rewrittenMap[key] = value
 		}
 
+		items, ok := mcpresult.NormalizeContentItems(contentValue)
+		if !ok || len(items) == 0 {
+			return nil, false
+		}
+
 		switch content := contentValue.(type) {
 		case []map[string]interface{}:
-			if len(content) == 0 {
-				return nil, false
-			}
 			rewrittenContent := append([]map[string]interface{}(nil), content...)
-			firstItem := make(map[string]interface{}, len(rewrittenContent[0]))
-			for key, value := range rewrittenContent[0] {
+			firstItem := make(map[string]interface{}, len(items[0]))
+			for key, value := range items[0] {
 				firstItem[key] = value
 			}
 			firstItem["text"] = filteredText
@@ -424,9 +427,6 @@ func rewriteEnvelopeTextPayload(data interface{}, filteredText string) (interfac
 			rewrittenMap["content"] = rewrittenContent
 			return rewrittenMap, true
 		case []interface{}:
-			if len(content) == 0 {
-				return nil, false
-			}
 			rewrittenContent := append([]interface{}(nil), content...)
 			firstItem, ok := rewrittenContent[0].(map[string]interface{})
 			if !ok {
@@ -622,15 +622,16 @@ func wrapToolHandler(
 							}
 						}
 						if onlyKnownKeys {
+							items, ok := mcpresult.NormalizeContentItems(env["content"])
 							var first map[string]interface{}
 							switch c := env["content"].(type) {
 							case []interface{}:
-								if len(c) == 1 {
-									first, _ = c[0].(map[string]interface{})
+								if len(c) == 1 && ok && len(items) == 1 {
+									first = items[0]
 								}
 							case []map[string]interface{}:
-								if len(c) == 1 {
-									first = c[0]
+								if len(c) == 1 && ok && len(items) == 1 {
+									first = items[0]
 								}
 							}
 							if first != nil {
