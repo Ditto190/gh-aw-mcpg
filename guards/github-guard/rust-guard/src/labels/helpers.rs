@@ -1229,7 +1229,10 @@ const GRAPHQL_SINGLE_OBJECT_FIELDS: &[&str] = &[
 /// shorter than 7 characters.
 #[inline]
 pub(crate) fn short_sha(sha: &str) -> &str {
-    &sha[..sha.len().min(7)]
+    match sha.char_indices().nth(7) {
+        Some((idx, _)) => &sha[..idx],
+        None => sha,
+    }
 }
 
 /// Generate JSON Pointer path for an item index in a collection
