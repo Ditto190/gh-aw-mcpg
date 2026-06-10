@@ -57,9 +57,11 @@ func (c *TTLCache[K, V]) GetOrCreate(key K, create func() V) V {
 	defer c.mu.Unlock()
 
 	// Lazy eviction of expired entries.
-	for k, entry := range c.entries {
-		if now.Sub(entry.lastUsed) > c.ttl {
-			delete(c.entries, k)
+	if c.ttl > 0 {
+		for k, entry := range c.entries {
+			if now.Sub(entry.lastUsed) > c.ttl {
+				delete(c.entries, k)
+			}
 		}
 	}
 
