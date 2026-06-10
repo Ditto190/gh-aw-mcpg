@@ -1,3 +1,5 @@
+//go:build !tty_stub
+
 // Package tty provides utilities for TTY (terminal) detection.
 package tty
 
