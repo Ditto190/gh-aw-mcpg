@@ -61,7 +61,7 @@ func DeepCloneJSON(v interface{}) interface{} {
 // With multiple keys the function returns the first non-empty match, which is
 // useful for maps that may use either snake_case or camelCase field names:
 //
-// GetStringFromMap(m, "html_url", "htmlUrl")
+//	GetStringFromMap(m, "html_url", "htmlUrl")
 func GetStringFromMap(m map[string]interface{}, keys ...string) string {
 	for _, k := range keys {
 		if v, ok := m[k]; ok {
