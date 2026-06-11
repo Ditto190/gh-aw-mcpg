@@ -29,8 +29,9 @@ func (c *Connection) callSDKMethod(method string, params interface{}) (*Response
 	}
 }
 
+// listTools fetches all tools from the backend via paginated SDK calls.
+// See also: listResources, listPrompts — these three follow the same structure.
 func (c *Connection) listTools() (*Response, error) {
-	logConn.Printf("listTools: listing tools from serverID=%s", c.serverID)
 	return listSDKItems(c, "tools",
 		func(cursor string) (*sdk.ListToolsResult, error) {
 			return c.getSDKSession().ListTools(c.ctx, &sdk.ListToolsParams{Cursor: cursor})
@@ -59,8 +60,9 @@ func (c *Connection) callTool(params interface{}) (*Response, error) {
 	})
 }
 
+// listResources fetches all resources from the backend via paginated SDK calls.
+// See also: listTools, listPrompts — these three follow the same structure.
 func (c *Connection) listResources() (*Response, error) {
-	logConn.Printf("listResources: listing resources from serverID=%s", c.serverID)
 	return listSDKItems(c, "resources",
 		func(cursor string) (*sdk.ListResourcesResult, error) {
 			return c.getSDKSession().ListResources(c.ctx, &sdk.ListResourcesParams{Cursor: cursor})
@@ -86,8 +88,9 @@ func (c *Connection) readResource(params interface{}) (*Response, error) {
 	})
 }
 
+// listPrompts fetches all prompts from the backend via paginated SDK calls.
+// See also: listTools, listResources — these three follow the same structure.
 func (c *Connection) listPrompts() (*Response, error) {
-	logConn.Printf("listPrompts: listing prompts from serverID=%s", c.serverID)
 	return listSDKItems(c, "prompts",
 		func(cursor string) (*sdk.ListPromptsResult, error) {
 			return c.getSDKSession().ListPrompts(c.ctx, &sdk.ListPromptsParams{Cursor: cursor})
