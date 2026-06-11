@@ -3069,4 +3069,50 @@ mod tests {
         assert_eq!(repo, "");
         assert_eq!(repo_id, "");
     }
+
+    // -------------------------------------------------------------------------
+    // MinIntegrity::from_policy_str
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_from_policy_str_known_levels() {
+        assert_eq!(MinIntegrity::from_policy_str("none"), Some(MinIntegrity::None));
+        assert_eq!(MinIntegrity::from_policy_str("unapproved"), Some(MinIntegrity::Unapproved));
+        assert_eq!(MinIntegrity::from_policy_str("approved"), Some(MinIntegrity::Approved));
+        assert_eq!(MinIntegrity::from_policy_str("merged"), Some(MinIntegrity::Merged));
+    }
+
+    #[test]
+    fn test_from_policy_str_case_insensitive() {
+        assert_eq!(MinIntegrity::from_policy_str("NONE"), Some(MinIntegrity::None));
+        assert_eq!(MinIntegrity::from_policy_str("Unapproved"), Some(MinIntegrity::Unapproved));
+        assert_eq!(MinIntegrity::from_policy_str("APPROVED"), Some(MinIntegrity::Approved));
+        assert_eq!(MinIntegrity::from_policy_str("Merged"), Some(MinIntegrity::Merged));
+    }
+
+    #[test]
+    fn test_from_policy_str_whitespace_trimmed() {
+        assert_eq!(MinIntegrity::from_policy_str("  none  "), Some(MinIntegrity::None));
+        assert_eq!(MinIntegrity::from_policy_str(" MERGED "), Some(MinIntegrity::Merged));
+    }
+
+    #[test]
+    fn test_from_policy_str_unrecognised_returns_none() {
+        assert_eq!(MinIntegrity::from_policy_str("unknown"), None);
+        assert_eq!(MinIntegrity::from_policy_str(""), None);
+        assert_eq!(MinIntegrity::from_policy_str("  "), None);
+    }
+
+    #[test]
+    fn test_from_policy_str_roundtrips_with_as_str() {
+        for level in &[
+            MinIntegrity::None,
+            MinIntegrity::Unapproved,
+            MinIntegrity::Approved,
+            MinIntegrity::Merged,
+        ] {
+            assert_eq!(MinIntegrity::from_policy_str(level.as_str()), Some(*level));
+        }
+    }
+
 }
