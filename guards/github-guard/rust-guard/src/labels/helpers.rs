@@ -2211,6 +2211,12 @@ mod tests {
     }
 
     #[test]
+    fn test_extract_repo_from_item_url_fallback() {
+        let item = serde_json::json!({ "url": "https://api.github.com/repos/owner/repo/issues/1" });
+        assert_eq!(extract_repo_from_item(&item), "owner/repo");
+    }
+
+    #[test]
     fn test_extract_repo_from_item_returns_empty_when_no_repo_info() {
         let item = serde_json::json!({ "id": 42, "title": "something" });
         assert_eq!(extract_repo_from_item(&item), "");
