@@ -13,6 +13,13 @@ import (
 
 var logHandlers = logger.New("server:handlers")
 
+// HandleReflect returns an http.HandlerFunc that handles the /reflect endpoint.
+func HandleReflect(unifiedServer *UnifiedServer) http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		httputil.WriteReflectResponse(w, unifiedServer.DIFCComponents)
+	}
+}
+
 // shutdownErrorJSON is the pre-formatted JSON response for shutdown errors
 // Used by middleware to return HTTP 503 during graceful shutdown (spec 5.1.3)
 const shutdownErrorJSON = `{"error":"Gateway is shutting down"}`
