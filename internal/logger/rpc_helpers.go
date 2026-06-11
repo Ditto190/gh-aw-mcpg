@@ -5,12 +5,15 @@
 // Functions in this file:
 //
 // - truncateAndSanitize: Combines secret sanitization with length truncation
+// - LogMarshaledForDebug: Marshals a value and dispatches to success/failure callbacks
 //
 // These helpers are used by the RPC logging system to safely and efficiently
 // process message payloads before logging them.
 package logger
 
 import (
+	"encoding/json"
+
 	"github.com/github/gh-aw-mcpg/internal/logger/sanitize"
 	"github.com/github/gh-aw-mcpg/internal/strutil"
 )
@@ -22,4 +25,15 @@ func truncateAndSanitize(payload string, maxLength int) string {
 
 	// Then truncate if needed
 	return strutil.Truncate(sanitized, maxLength)
+}
+
+// LogMarshaledForDebug marshals value for debug logging and dispatches to the
+// provided callbacks for success or marshal failure paths.
+func LogMarshaledForDebug(value interface{}, onMarshalSuccess func(string), onMarshalFailure func(error)) {
+	resultJSON, err := json.Marshal(value)
+	if err != nil {
+		onMarshalFailure(err)
+		return
+	}
+	onMarshalSuccess(string(resultJSON))
 }
