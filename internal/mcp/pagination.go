@@ -76,14 +76,16 @@ const paginateAllMaxPages = 100
 // return the items for that page, the cursor for the next page (empty when done),
 // and any error. PaginateAll stops as soon as a page returns an empty next-cursor.
 //
-// maxPages caps the total number of fetch calls to prevent runaway loops. Returns
-// an error if the cap is reached or if the same cursor is returned twice (cycle).
+// maxPages caps the total number of fetch calls to prevent runaway loops. It must
+// be a positive integer; a value of 0 or negative disables the cap (no page limit),
+// which should only be used in tests or when the caller enforces its own limit.
+// Returns an error if the cap is reached or if the same cursor is returned twice (cycle).
 func PaginateAll[T any](maxPages int, fetch func(cursor string) ([]T, string, error)) ([]T, error) {
 	var all []T
 	cursor := ""
 	seenCursors := make(map[string]struct{})
 	for pageCount := 0; ; pageCount++ {
-		if pageCount >= maxPages {
+		if maxPages > 0 && pageCount >= maxPages {
 			return nil, fmt.Errorf("pagination exceeded %d-page limit", maxPages)
 		}
 		items, nextCursor, err := fetch(cursor)

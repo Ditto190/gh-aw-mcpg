@@ -270,7 +270,7 @@ func TestSafeinputsHTTPBackend(t *testing.T) {
 		// requests won't have a session ID at all).
 		if sessionID != "" && sessionID != serverIssuedSessionID {
 			// Any session ID that is NOT the server-issued one and is not empty was
-			// synthesised by the client — that is the behaviour we're removing.
+			// synthesized by the client — that is the behaviour we're removing.
 			initializeRequestSentSessionID = true
 			t.Errorf("Request #%d carries a synthetic client-generated session ID %q; "+
 				"only the server-issued ID %q should be used",
