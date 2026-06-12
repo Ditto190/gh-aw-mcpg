@@ -552,7 +552,7 @@ func (c *Connection) initializeHTTPSession() (string, error) {
 	// define a session ID on the initialize request — the server assigns it in the
 	// response.  Sending a synthetic ID could cause some backends to misinterpret
 	// the request as resuming an existing (and unknown) session.
-	result, err := c.executeHTTPRequest(context.Background(), "initialize", initParams, requestID, nil)
+	result, err := c.executeHTTPRequest(c.ctx, "initialize", initParams, requestID, nil)
 	if err != nil {
 		return "", err
 	}

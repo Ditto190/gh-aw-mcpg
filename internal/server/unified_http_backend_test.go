@@ -157,6 +157,8 @@ func TestHTTPBackendInitializationSpecCompliant(t *testing.T) {
 					{"name": "spec_tool", "description": "A spec-compliant tool", "inputSchema": map[string]interface{}{"type": "object"}},
 				},
 			})
+		default:
+			jsonRPCError(w, http.StatusOK, id, -32601, "Method not found")
 		}
 	}))
 	defer specServer.Close()
