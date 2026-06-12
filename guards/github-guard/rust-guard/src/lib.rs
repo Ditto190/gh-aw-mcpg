@@ -583,16 +583,12 @@ fn parse_scope(scope: ReposValue) -> Result<Vec<PolicyScopeEntry>, String> {
 }
 
 fn parse_integrity(value: &str) -> Result<MinIntegrity, String> {
-    match value {
-        policy_integrity::NONE => Ok(MinIntegrity::None),
-        policy_integrity::UNAPPROVED => Ok(MinIntegrity::Unapproved),
-        policy_integrity::APPROVED => Ok(MinIntegrity::Approved),
-        policy_integrity::MERGED => Ok(MinIntegrity::Merged),
-        _ => Err(format!(
+    MinIntegrity::from_policy_str(value).ok_or_else(|| {
+        format!(
             "AllowOnly.min-integrity must be one of {}",
             policy_integrity::ORDER_LOW_TO_HIGH_PIPED
-        )),
-    }
+        )
+    })
 }
 
 fn scope_string(scope_kind: ScopeKind, owner: Option<&str>, repo: Option<&str>) -> String {
@@ -1536,6 +1532,13 @@ mod tests {
         assert_eq!(parse_integrity("unapproved"), Ok(MinIntegrity::Unapproved));
         assert_eq!(parse_integrity("approved"), Ok(MinIntegrity::Approved));
         assert_eq!(parse_integrity("merged"), Ok(MinIntegrity::Merged));
+    }
+
+    #[test]
+    fn parse_integrity_accepts_mixed_case() {
+        assert_eq!(parse_integrity("None"), Ok(MinIntegrity::None));
+        assert_eq!(parse_integrity("APPROVED"), Ok(MinIntegrity::Approved));
+        assert_eq!(parse_integrity("  merged  "), Ok(MinIntegrity::Merged));
     }
 
     #[test]
