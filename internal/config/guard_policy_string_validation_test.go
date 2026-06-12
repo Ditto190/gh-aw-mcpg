@@ -190,7 +190,6 @@ func TestValidateStringArrayField(t *testing.T) {
 }
 
 // TestIsValidAllowOnlyReposValue covers all branches of IsValidAllowOnlyReposValue.
-// (guard_policy_validation.go:368)
 func TestIsValidAllowOnlyReposValue(t *testing.T) {
 	tests := []struct {
 		name  string
