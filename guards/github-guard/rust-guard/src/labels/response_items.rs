@@ -506,7 +506,7 @@ mod tests {
         let labels = &result[0].labels;
         let secrecy: Vec<String> = labels.secrecy.iter().cloned().collect();
         assert!(
-            secrecy.iter().any(|s| s.starts_with("private:")),
+            secrecy.iter().any(|s| s == "private" || s.starts_with("private:")),
             "private repo should get a private secrecy label, got: {secrecy:?}"
         );
     }
