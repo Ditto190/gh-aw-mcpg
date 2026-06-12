@@ -333,7 +333,12 @@ func run(cmd *cobra.Command, args []string) error {
 			sampleRate = tracingCfg.GetSampleRate()
 			serviceName = tracingCfg.ServiceName
 		}
-		if endpoint != "" {
+		// When GH_AW_OTLP_ENDPOINTS is set, InitProvider uses fan-out mode and
+		// tracingCfg.Endpoint may be empty; fall back to the env var for logging.
+		if endpoint == "" {
+			endpoint = os.Getenv("GH_AW_OTLP_ENDPOINTS")
+		}
+		if tracingProvider.IsEnabled() {
 			logger.StartupInfo("OpenTelemetry tracing enabled: endpoint=%s, service=%s, sampleRate=%.2f",
 				endpoint, serviceName, sampleRate)
 		} else {
