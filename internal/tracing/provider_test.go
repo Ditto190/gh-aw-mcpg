@@ -26,6 +26,7 @@ import (
 // TestInitProvider_IsEnabled_Noop verifies that IsEnabled returns false for a noop provider.
 func TestInitProvider_IsEnabled_Noop(t *testing.T) {
 	ctx := context.Background()
+	t.Setenv("GH_AW_OTLP_ENDPOINTS", "")
 	provider, err := tracing.InitProvider(ctx, nil)
 	require.NoError(t, err)
 	defer provider.Shutdown(ctx)
@@ -35,6 +36,7 @@ func TestInitProvider_IsEnabled_Noop(t *testing.T) {
 // TestInitProvider_IsEnabled_SDK verifies that IsEnabled returns true when a real exporter is active.
 func TestInitProvider_IsEnabled_SDK(t *testing.T) {
 	ctx := context.Background()
+	t.Setenv("GH_AW_OTLP_ENDPOINTS", "")
 	cfg := &config.TracingConfig{
 		Endpoint:    "http://localhost:14318",
 		ServiceName: "test",

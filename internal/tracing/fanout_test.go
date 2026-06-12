@@ -131,7 +131,8 @@ func TestFanoutExporter_Shutdown_ContinuesOnError(t *testing.T) {
 	assert.Equal(t, 1, ok.shutdowns, "healthy exporter should still be shut down")
 }
 
-// TestFanoutExporter_ExportSpans_Empty verifies no-op on empty span slice.
+// TestFanoutExporter_ExportSpans_Empty verifies that ExportSpans with a nil/empty
+// span slice is forwarded to the underlying exporter (which may be a no-op internally).
 func TestFanoutExporter_ExportSpans_Empty(t *testing.T) {
 	ctx := context.Background()
 	a := &stubExporter{}

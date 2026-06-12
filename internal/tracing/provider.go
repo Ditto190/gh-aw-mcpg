@@ -19,6 +19,7 @@ package tracing
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -148,6 +149,7 @@ func InitProvider(ctx context.Context, cfg *config.TracingConfig) (*Provider, er
 
 	// Build one OTLP HTTP exporter per active endpoint.
 	exporters := make([]sdktrace.SpanExporter, 0, len(activeEndpoints))
+	var constructionErrs []error
 	for _, ep := range activeEndpoints {
 		opts := []otlptracehttp.Option{
 			otlptracehttp.WithEndpointURL(ep),
@@ -159,12 +161,13 @@ func InitProvider(ctx context.Context, cfg *config.TracingConfig) (*Provider, er
 		exp, err := otlptracehttp.New(ctx, opts...)
 		if err != nil {
 			logTracing.Printf("Warning: failed to create OTLP exporter for endpoint %s: %v; skipping", ep, err)
+			constructionErrs = append(constructionErrs, fmt.Errorf("endpoint %s: %w", ep, err))
 			continue
 		}
 		exporters = append(exporters, exp)
 	}
 	if len(exporters) == 0 {
-		return nil, fmt.Errorf("failed to create any OTLP trace exporters")
+		return nil, fmt.Errorf("failed to create any OTLP trace exporters: %w", errors.Join(constructionErrs...))
 	}
 	logTracing.Printf("OTLP HTTP trace exporter(s) created: %d", len(exporters))
 

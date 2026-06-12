@@ -3,6 +3,7 @@ package tracing
 import (
 	"context"
 	"errors"
+	"sync"
 
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
@@ -24,28 +25,50 @@ func newFanoutExporter(exporters []sdktrace.SpanExporter) sdktrace.SpanExporter 
 	return &fanoutExporter{exporters: exporters}
 }
 
-// ExportSpans exports spans to each underlying exporter in order. Export
-// continues to the next exporter even if the current one returns an error so
-// that a single backend failure does not prevent delivery to the others. All
-// errors are joined and returned.
+// ExportSpans exports spans to each underlying exporter concurrently. All
+// exporters are invoked in parallel so that a slow or hung backend cannot
+// delay delivery to the others. Errors from all exporters are collected and
+// joined before returning.
 func (f *fanoutExporter) ExportSpans(ctx context.Context, spans []sdktrace.ReadOnlySpan) error {
-	var errs []error
+	var (
+		wg   sync.WaitGroup
+		mu   sync.Mutex
+		errs []error
+	)
 	for _, exp := range f.exporters {
-		if err := exp.ExportSpans(ctx, spans); err != nil {
-			errs = append(errs, err)
-		}
+		wg.Add(1)
+		go func(e sdktrace.SpanExporter) {
+			defer wg.Done()
+			if err := e.ExportSpans(ctx, spans); err != nil {
+				mu.Lock()
+				errs = append(errs, err)
+				mu.Unlock()
+			}
+		}(exp)
 	}
+	wg.Wait()
 	return errors.Join(errs...)
 }
 
-// Shutdown shuts down each underlying exporter in order, collecting any
+// Shutdown shuts down each underlying exporter concurrently, collecting any
 // errors. All errors are joined and returned.
 func (f *fanoutExporter) Shutdown(ctx context.Context) error {
-	var errs []error
+	var (
+		wg   sync.WaitGroup
+		mu   sync.Mutex
+		errs []error
+	)
 	for _, exp := range f.exporters {
-		if err := exp.Shutdown(ctx); err != nil {
-			errs = append(errs, err)
-		}
+		wg.Add(1)
+		go func(e sdktrace.SpanExporter) {
+			defer wg.Done()
+			if err := e.Shutdown(ctx); err != nil {
+				mu.Lock()
+				errs = append(errs, err)
+				mu.Unlock()
+			}
+		}(exp)
 	}
+	wg.Wait()
 	return errors.Join(errs...)
 }

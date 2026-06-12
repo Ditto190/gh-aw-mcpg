@@ -335,10 +335,11 @@ func run(cmd *cobra.Command, args []string) error {
 		}
 		if tracingProvider.IsEnabled() {
 			// When GH_AW_OTLP_ENDPOINTS is set, InitProvider uses fan-out mode and
-			// tracingCfg.Endpoint may be empty; use the env var as display value.
-			displayEndpoint := endpoint
+			// it takes precedence over the primary endpoint; use the env var as the
+			// display value to accurately reflect what is actually receiving spans.
+			displayEndpoint := os.Getenv("GH_AW_OTLP_ENDPOINTS")
 			if displayEndpoint == "" {
-				displayEndpoint = os.Getenv("GH_AW_OTLP_ENDPOINTS")
+				displayEndpoint = endpoint
 			}
 			logger.StartupInfo("OpenTelemetry tracing enabled: endpoint=%s, service=%s, sampleRate=%.2f",
 				displayEndpoint, serviceName, sampleRate)
