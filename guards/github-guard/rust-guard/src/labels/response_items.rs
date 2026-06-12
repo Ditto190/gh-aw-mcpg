@@ -457,3 +457,57 @@ pub fn label_response_items(
 
     labeled_items
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::labels::helpers::PolicyContext;
+    use serde_json::json;
+
+    fn default_ctx() -> PolicyContext {
+        PolicyContext::default()
+    }
+
+    /// Unknown tool names fall through to `_ => {}` and return an empty vec.
+    #[test]
+    fn unknown_tool_returns_empty() {
+        let ctx = default_ctx();
+        let result = label_response_items(
+            "no_such_tool",
+            &json!({}),
+            &json!({"some": "data"}),
+            &ctx,
+        );
+        assert!(result.is_empty());
+    }
+
+    /// isError=true responses are skipped immediately, regardless of tool name.
+    #[test]
+    fn error_response_is_skipped() {
+        let ctx = default_ctx();
+        let result = label_response_items(
+            "search_repositories",
+            &json!({}),
+            &json!({"isError": true, "items": [{"full_name": "org/repo", "private": false}]}),
+            &ctx,
+        );
+        assert!(result.is_empty());
+    }
+
+    /// A private repository in search results gets a private:owner/repo secrecy label.
+    #[test]
+    fn search_repositories_private_repo_gets_private_label() {
+        let ctx = default_ctx();
+        let response = json!({
+            "items": [{"full_name": "org/secret", "private": true}]
+        });
+        let result = label_response_items("search_repositories", &json!({}), &response, &ctx);
+        assert_eq!(result.len(), 1);
+        let labels = &result[0].labels;
+        let secrecy: Vec<String> = labels.secrecy.iter().cloned().collect();
+        assert!(
+            secrecy.iter().any(|s| s == "private" || s.starts_with("private:")),
+            "private repo should get a private secrecy label, got: {secrecy:?}"
+        );
+    }
+}
