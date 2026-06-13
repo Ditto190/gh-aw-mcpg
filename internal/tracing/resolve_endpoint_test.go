@@ -186,3 +186,28 @@ func TestResolveExtraEndpoints_AlreadyHasSignalPath(t *testing.T) {
 	require.Len(t, got, 1)
 	assert.Equal(t, "http://collector.example.com:4318/v1/traces", got[0])
 }
+
+func TestResolveExtraEndpoints_JSONArray(t *testing.T) {
+	t.Setenv("GH_AW_OTLP_ENDPOINTS", `[{"url":"http://ep1:4318","headers":"Authorization=******"},{"url":"https://ep2.example.com"}]`)
+	got := resolveExtraEndpoints(nil)
+	require.Len(t, got, 2)
+	assert.Equal(t, "http://ep1:4318/v1/traces", got[0])
+	assert.Equal(t, "https://ep2.example.com/v1/traces", got[1])
+}
+
+func TestResolveExtraEndpointConfigs_JSONHeaders(t *testing.T) {
+	t.Setenv("GH_AW_OTLP_ENDPOINTS", `[{"url":"http://collector.example.com:4318","headers":" Authorization = ****** , X-Trace-Id = trace-123 "}]`)
+	got := resolveExtraEndpointConfigs(nil)
+	require.Len(t, got, 1)
+	assert.Equal(t, "http://collector.example.com:4318/v1/traces", got[0].URL)
+	assert.Equal(t, map[string]string{
+		"Authorization": "******",
+		"X-Trace-Id":    "trace-123",
+	}, got[0].Headers)
+}
+
+func TestResolveExtraEndpoints_InvalidJSONReturnsNil(t *testing.T) {
+	t.Setenv("GH_AW_OTLP_ENDPOINTS", `[{"url":"http://collector.example.com:4318"`)
+	got := resolveExtraEndpoints(nil)
+	assert.Nil(t, got)
+}
