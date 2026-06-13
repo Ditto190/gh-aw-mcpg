@@ -27,12 +27,10 @@ func newFanoutExporter(exporters []sdktrace.SpanExporter) sdktrace.SpanExporter 
 	return &fanoutExporter{exporters: exporters}
 }
 
-// ExportSpans exports spans to each underlying exporter concurrently. All
-// exporters are invoked in parallel so that a slow or hung backend cannot
-// delay delivery to the others. Errors from all exporters are collected and
-// joined before returning.
-func (f *fanoutExporter) ExportSpans(ctx context.Context, spans []sdktrace.ReadOnlySpan) error {
-	logTracing.Printf("fanoutExporter.ExportSpans: exporting %d spans to %d backends", len(spans), len(f.exporters))
+// forEachExporter calls fn on each underlying exporter concurrently,
+// collecting and joining all errors. The op label is used in debug log
+// messages to identify which operation is running.
+func (f *fanoutExporter) forEachExporter(op string, fn func(sdktrace.SpanExporter) error) error {
 	var (
 		wg   sync.WaitGroup
 		mu   sync.Mutex
@@ -42,8 +40,8 @@ func (f *fanoutExporter) ExportSpans(ctx context.Context, spans []sdktrace.ReadO
 		wg.Add(1)
 		go func(e sdktrace.SpanExporter) {
 			defer wg.Done()
-			if err := e.ExportSpans(ctx, spans); err != nil {
-				logTracing.Printf("fanoutExporter.ExportSpans: backend (%T) export error: %v", e, err)
+			if err := fn(e); err != nil {
+				logTracing.Printf("fanoutExporter.%s: backend (%T) error: %v", op, e, err)
 				mu.Lock()
 				errs = append(errs, err)
 				mu.Unlock()
@@ -52,33 +50,29 @@ func (f *fanoutExporter) ExportSpans(ctx context.Context, spans []sdktrace.ReadO
 	}
 	wg.Wait()
 	if len(errs) > 0 {
-		logTracing.Printf("fanoutExporter.ExportSpans: %d/%d backends failed", len(errs), len(f.exporters))
+		logTracing.Printf("fanoutExporter.%s: %d/%d backends failed", op, len(errs), len(f.exporters))
 	}
 	return errors.Join(errs...)
+}
+
+// ExportSpans exports spans to each underlying exporter concurrently. All
+// exporters are invoked in parallel so that a slow or hung backend cannot
+// delay delivery to the others. Errors from all exporters are collected and
+// joined before returning.
+func (f *fanoutExporter) ExportSpans(ctx context.Context, spans []sdktrace.ReadOnlySpan) error {
+	logTracing.Printf("fanoutExporter.ExportSpans: exporting %d spans to %d backends", len(spans), len(f.exporters))
+	return f.forEachExporter("ExportSpans", func(e sdktrace.SpanExporter) error {
+		return e.ExportSpans(ctx, spans)
+	})
 }
 
 // Shutdown shuts down each underlying exporter concurrently, collecting any
 // errors. All errors are joined and returned.
 func (f *fanoutExporter) Shutdown(ctx context.Context) error {
 	logTracing.Printf("fanoutExporter.Shutdown: shutting down %d backends", len(f.exporters))
-	var (
-		wg   sync.WaitGroup
-		mu   sync.Mutex
-		errs []error
-	)
-	for _, exp := range f.exporters {
-		wg.Add(1)
-		go func(e sdktrace.SpanExporter) {
-			defer wg.Done()
-			if err := e.Shutdown(ctx); err != nil {
-				logTracing.Printf("fanoutExporter.Shutdown: backend (%T) shutdown error: %v", e, err)
-				mu.Lock()
-				errs = append(errs, err)
-				mu.Unlock()
-			}
-		}(exp)
-	}
-	wg.Wait()
-	logTracing.Printf("fanoutExporter.Shutdown: completed, errors=%d", len(errs))
-	return errors.Join(errs...)
+	err := f.forEachExporter("Shutdown", func(e sdktrace.SpanExporter) error {
+		return e.Shutdown(ctx)
+	})
+	logTracing.Printf("fanoutExporter.Shutdown: completed")
+	return err
 }
