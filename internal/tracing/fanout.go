@@ -43,7 +43,7 @@ func (f *fanoutExporter) ExportSpans(ctx context.Context, spans []sdktrace.ReadO
 		go func(e sdktrace.SpanExporter) {
 			defer wg.Done()
 			if err := e.ExportSpans(ctx, spans); err != nil {
-				logTracing.Printf("fanoutExporter.ExportSpans: backend export error: %v", err)
+				logTracing.Printf("fanoutExporter.ExportSpans: backend (%T) export error: %v", e, err)
 				mu.Lock()
 				errs = append(errs, err)
 				mu.Unlock()
