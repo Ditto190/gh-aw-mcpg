@@ -53,7 +53,7 @@ func TestFanoutExporter_forEachExporter_CallsAllAndJoinsErrors(t *testing.T) {
 	wantErr := errors.New("callback failed")
 	var calls atomic.Int32
 
-	err := exp.forEachExporter(func(sdktrace.SpanExporter) error {
+	err := exp.forEachExporter("test", func(sdktrace.SpanExporter) error {
 		call := calls.Add(1)
 		if call%2 == 0 {
 			return wantErr
