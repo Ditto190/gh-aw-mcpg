@@ -2,6 +2,7 @@ package tracing_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -641,6 +642,48 @@ func TestInitProvider_WithHeaders(t *testing.T) {
 				t.Fatal("timed out waiting for OTLP export request — headers test is non-deterministic")
 			}
 		})
+	}
+}
+
+func TestInitProvider_WithJSONExtraEndpointHeaders(t *testing.T) {
+	ctx := context.Background()
+
+	received := make(chan http.Header, 1)
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case received <- r.Header.Clone():
+		default:
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+
+	payload, err := json.Marshal([]map[string]string{
+		{
+			"url":     ts.URL,
+			"headers": "Authorization=******,X-Trace-Id=trace-123",
+		},
+	})
+	require.NoError(t, err)
+	t.Setenv("GH_AW_OTLP_ENDPOINTS", string(payload))
+
+	provider, err := tracing.InitProvider(ctx, &config.TracingConfig{ServiceName: "test-json-headers"})
+	require.NoError(t, err)
+	require.NotNil(t, provider)
+
+	_, span := provider.Tracer().Start(ctx, "json-header-test-span")
+	span.End()
+
+	shutdownCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	_ = provider.Shutdown(shutdownCtx)
+
+	select {
+	case headers := <-received:
+		assert.Equal(t, "******", headers.Get("Authorization"))
+		assert.Equal(t, "trace-123", headers.Get("X-Trace-Id"))
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for OTLP export request for JSON extra endpoint headers")
 	}
 }
 

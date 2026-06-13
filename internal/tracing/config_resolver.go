@@ -3,6 +3,7 @@ package tracing
 import (
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"net/url"
 	"os"
 	"strings"
@@ -146,33 +147,97 @@ func resolveHeaders(cfg *config.TracingConfig) map[string]string {
 // same signal-path rules as resolveEndpoint. Empty and whitespace-only entries
 // are skipped. Returns nil when the variable is unset or yields no valid URLs.
 func resolveExtraEndpoints(cfg *config.TracingConfig) []string {
-	raw := os.Getenv("GH_AW_OTLP_ENDPOINTS")
+	endpointConfigs := resolveExtraEndpointConfigs(cfg)
+	endpoints := make([]string, 0, len(endpointConfigs))
+	for _, endpoint := range endpointConfigs {
+		endpoints = append(endpoints, endpoint.URL)
+	}
+	if len(endpoints) == 0 {
+		return nil
+	}
+	return endpoints
+}
+
+type extraEndpointConfig struct {
+	URL     string
+	Headers map[string]string
+}
+
+type extraEndpointJSONConfig struct {
+	URL     string `json:"url"`
+	Headers string `json:"headers"`
+}
+
+func resolveExtraEndpointConfigs(cfg *config.TracingConfig) []extraEndpointConfig {
+	raw := strings.TrimSpace(os.Getenv("GH_AW_OTLP_ENDPOINTS"))
 	if raw == "" {
 		return nil
 	}
+
 	signalPath := ""
 	if cfg != nil {
 		signalPath = cfg.SignalPath
 	}
-	var endpoints []string
-	for _, ep := range strings.Split(raw, ",") {
-		ep = strings.TrimSpace(ep)
-		if ep == "" {
-			continue
-		}
-		normalized := resolveEndpoint(&config.TracingConfig{
-			Endpoint:   ep,
-			SignalPath: signalPath,
-		})
-		if normalized != "" {
-			endpoints = append(endpoints, normalized)
-		}
+
+	var endpoints []extraEndpointConfig
+	if strings.HasPrefix(raw, "[") {
+		endpoints = resolveJSONExtraEndpoints(raw, signalPath)
+	} else {
+		endpoints = resolveCommaSeparatedExtraEndpoints(raw, signalPath)
 	}
 	if len(endpoints) == 0 {
 		return nil
 	}
 	logTracing.Printf("GH_AW_OTLP_ENDPOINTS: resolved %d extra endpoint(s)", len(endpoints))
 	return endpoints
+}
+
+func resolveCommaSeparatedExtraEndpoints(raw, signalPath string) []extraEndpointConfig {
+	var endpoints []extraEndpointConfig
+	for _, ep := range strings.Split(raw, ",") {
+		normalized := normalizeExtraEndpoint(ep, signalPath)
+		if normalized == "" {
+			continue
+		}
+		endpoints = append(endpoints, extraEndpointConfig{URL: normalized})
+	}
+	return endpoints
+}
+
+func resolveJSONExtraEndpoints(raw, signalPath string) []extraEndpointConfig {
+	var parsed []extraEndpointJSONConfig
+	if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
+		logTracing.Printf("Warning: failed to parse GH_AW_OTLP_ENDPOINTS as JSON array: %v", err)
+		return nil
+	}
+
+	endpoints := make([]extraEndpointConfig, 0, len(parsed))
+	for _, endpoint := range parsed {
+		normalized := normalizeExtraEndpoint(endpoint.URL, signalPath)
+		if normalized == "" {
+			continue
+		}
+
+		resolved := extraEndpointConfig{URL: normalized}
+		if endpoint.Headers != "" {
+			if headers := parseOTLPHeadersWithDecoder(endpoint.Headers, true); len(headers) > 0 {
+				resolved.Headers = headers
+			}
+		}
+		endpoints = append(endpoints, resolved)
+	}
+	return endpoints
+}
+
+func normalizeExtraEndpoint(endpoint, signalPath string) string {
+	ep := strings.TrimSpace(endpoint)
+	if ep == "" {
+		return ""
+	}
+	return resolveEndpoint(&config.TracingConfig{
+		Endpoint:   ep,
+		SignalPath: signalPath,
+	})
 }
 
 // resolveParentContext builds a context carrying the W3C remote parent span context

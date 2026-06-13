@@ -104,7 +104,7 @@ func registerPropagator() {
 // The returned Provider must be shut down on application exit to flush buffered spans.
 func InitProvider(ctx context.Context, cfg *config.TracingConfig) (*Provider, error) {
 	endpoint := resolveEndpoint(cfg)
-	extraEndpoints := resolveExtraEndpoints(cfg)
+	extraEndpoints := resolveExtraEndpointConfigs(cfg)
 	serviceName := resolveServiceName(cfg)
 	sampleRate := resolveSampleRate(cfg)
 
@@ -116,11 +116,11 @@ func InitProvider(ctx context.Context, cfg *config.TracingConfig) (*Provider, er
 	// Determine the active set of endpoints:
 	//   - GH_AW_OTLP_ENDPOINTS takes precedence (fan-out to all listed endpoints).
 	//   - Falls back to the single endpoint from config/OTEL_EXPORTER_OTLP_ENDPOINT.
-	var activeEndpoints []string
+	var activeEndpoints []extraEndpointConfig
 	if len(extraEndpoints) > 0 {
 		activeEndpoints = extraEndpoints
 	} else if endpoint != "" {
-		activeEndpoints = []string{endpoint}
+		activeEndpoints = []extraEndpointConfig{{URL: endpoint}}
 	}
 
 	if len(activeEndpoints) == 0 {
@@ -138,7 +138,7 @@ func InitProvider(ctx context.Context, cfg *config.TracingConfig) (*Provider, er
 			len(activeEndpoints), serviceName, sampleRate)
 	} else {
 		logTracing.Printf("Initializing OTLP tracing: endpoint=%s, service=%s, sampleRate=%.2f",
-			activeEndpoints[0], serviceName, sampleRate)
+			activeEndpoints[0].URL, serviceName, sampleRate)
 	}
 
 	// Resolve shared headers applied to all exporters.
@@ -151,17 +151,18 @@ func InitProvider(ctx context.Context, cfg *config.TracingConfig) (*Provider, er
 	exporters := make([]sdktrace.SpanExporter, 0, len(activeEndpoints))
 	var constructionErrs []error
 	for _, ep := range activeEndpoints {
+		exporterHeaders := mergeOTLPHeaders(headers, ep.Headers)
 		opts := []otlptracehttp.Option{
-			otlptracehttp.WithEndpointURL(ep),
+			otlptracehttp.WithEndpointURL(ep.URL),
 			otlptracehttp.WithTimeout(10 * time.Second),
 		}
-		if headers != nil {
-			opts = append(opts, otlptracehttp.WithHeaders(headers))
+		if exporterHeaders != nil {
+			opts = append(opts, otlptracehttp.WithHeaders(exporterHeaders))
 		}
 		exp, err := otlptracehttp.New(ctx, opts...)
 		if err != nil {
-			logTracing.Printf("Warning: failed to create OTLP exporter for endpoint %s: %v; skipping", ep, err)
-			constructionErrs = append(constructionErrs, fmt.Errorf("endpoint %s: %w", ep, err))
+			logTracing.Printf("Warning: failed to create OTLP exporter for endpoint %s: %v; skipping", ep.URL, err)
+			constructionErrs = append(constructionErrs, fmt.Errorf("endpoint %s: %w", ep.URL, err))
 			continue
 		}
 		exporters = append(exporters, exp)
@@ -238,6 +239,21 @@ func GetCachedOrGlobal(cached trace.Tracer) trace.Tracer {
 		return cached
 	}
 	return Tracer()
+}
+
+func mergeOTLPHeaders(shared, specific map[string]string) map[string]string {
+	if len(shared) == 0 && len(specific) == 0 {
+		return nil
+	}
+
+	merged := make(map[string]string, len(shared)+len(specific))
+	for key, value := range shared {
+		merged[key] = value
+	}
+	for key, value := range specific {
+		merged[key] = value
+	}
+	return merged
 }
 
 // CachedTracer holds an optional pre-initialized tracer and falls back to the
