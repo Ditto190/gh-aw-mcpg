@@ -46,6 +46,7 @@ func TestPaginateAllExported(t *testing.T) {
 		}
 
 		fetch := func(cursor string) ([]int, string, error) {
+			require.Less(t, callCount, len(cursors), "unexpected extra fetch call")
 			assert.Equal(t, cursors[callCount], cursor)
 			r := responses[callCount]
 			callCount++
