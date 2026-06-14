@@ -28,7 +28,7 @@ import (
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	semconv "go.opentelemetry.io/otel/semconv/v1.34.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.41.0"
 	"go.opentelemetry.io/otel/trace"
 	"go.opentelemetry.io/otel/trace/noop"
 
@@ -44,9 +44,10 @@ var logTracing = logger.New("tracing:provider")
 
 // Provider wraps an OpenTelemetry TracerProvider and provides a Shutdown method.
 type Provider struct {
-	tp     trace.TracerProvider
-	sdk    *sdktrace.TracerProvider // non-nil only when OTLP is configured
-	tracer trace.Tracer
+	tp       trace.TracerProvider
+	sdk      *sdktrace.TracerProvider // non-nil only when OTLP is configured
+	tracer   trace.Tracer
+	resource *resource.Resource // resource used when building the SDK provider
 }
 
 // Tracer returns the tracer for the MCP gateway instrumentation scope.
@@ -57,6 +58,12 @@ func (p *Provider) Tracer() trace.Tracer {
 // IsEnabled reports whether the provider has a real SDK (non-noop) exporter active.
 func (p *Provider) IsEnabled() bool {
 	return p.sdk != nil
+}
+
+// Resource returns the OTel resource associated with this provider, or nil if
+// the provider is a noop (no OTLP endpoint configured).
+func (p *Provider) Resource() *resource.Resource {
+	return p.resource
 }
 
 // Shutdown flushes and shuts down the tracer provider.
@@ -175,10 +182,13 @@ func InitProvider(ctx context.Context, cfg *config.TracingConfig) (*Provider, er
 	// Wrap in a fan-out exporter (returns the single exporter directly when only one).
 	exporter := newFanoutExporter(exporters)
 
-	// Build resource with service name, version, and SDK metadata
+	// Build resource with service name, version, and SDK metadata.
+	// resource.WithTelemetrySDK(), resource.WithHost(), resource.WithProcessPID(), and
+	// resource.WithContainer() are built-in detectors that use semconv/v1.41.0 internally
+	// (matching the SDK v1.44.0 pin). Using the same semconv version here avoids the
+	// "conflicting Schema URL" error that previously caused all resource attributes to be lost.
 	res, err := resource.New(ctx,
 		resource.WithTelemetrySDK(),
-		resource.WithSchemaURL(semconv.SchemaURL),
 		resource.WithContainer(),
 		resource.WithAttributes(
 			semconv.ServiceName(serviceName),
@@ -188,9 +198,14 @@ func InitProvider(ctx context.Context, cfg *config.TracingConfig) (*Provider, er
 		resource.WithHost(),
 	)
 	if err != nil {
-		// Non-fatal: proceed with empty resource
+		// Non-fatal: fall back to a minimal resource that always preserves service identity
+		// so that spans remain attributable even if full detection fails.
 		logTracing.Printf("Warning: failed to create OTEL resource: %v", err)
-		res = resource.Empty()
+		res = resource.NewWithAttributes(
+			semconv.SchemaURL,
+			semconv.ServiceName(serviceName),
+			semconv.ServiceVersion(version.Get()),
+		)
 	}
 
 	// Select sampler based on configured rate
@@ -220,9 +235,10 @@ func InitProvider(ctx context.Context, cfg *config.TracingConfig) (*Provider, er
 	logTracing.Printf("OTLP tracing initialized successfully")
 
 	return &Provider{
-		tp:     sdkTP,
-		sdk:    sdkTP,
-		tracer: tracer,
+		tp:       sdkTP,
+		sdk:      sdkTP,
+		tracer:   tracer,
+		resource: res,
 	}, nil
 }
 

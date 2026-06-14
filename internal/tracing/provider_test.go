@@ -16,7 +16,7 @@ import (
 	"go.opentelemetry.io/otel/propagation"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
-	semconv "go.opentelemetry.io/otel/semconv/v1.34.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.41.0"
 	"go.opentelemetry.io/otel/trace"
 	"go.opentelemetry.io/otel/trace/noop"
 
@@ -226,6 +226,45 @@ func TestInitProvider_WithEndpoint_ReturnsSdkProvider(t *testing.T) {
 	// Shutdown may fail if it tries to flush to the non-existent endpoint,
 	// but the provider itself should handle it gracefully (no panic)
 	_ = provider.Shutdown(shutdownCtx)
+}
+
+// TestInitProvider_ResourceContainsServiceName verifies that the OTel resource
+// built by InitProvider always includes a non-empty service.name attribute.
+// This guards against the semconv schema-URL conflict that previously caused
+// resource.New to return an empty resource, stripping all identity attributes.
+func TestInitProvider_ResourceContainsServiceName(t *testing.T) {
+	ctx := context.Background()
+	t.Setenv("GH_AW_OTLP_ENDPOINTS", "")
+
+	const wantServiceName = "mcp-gateway-test"
+	cfg := &config.TracingConfig{
+		Endpoint:    "http://localhost:14318", // non-existent, but valid URL
+		ServiceName: wantServiceName,
+		SampleRate:  ptrFloat64(1.0),
+	}
+
+	provider, err := tracing.InitProvider(ctx, cfg)
+	require.NoError(t, err)
+	require.NotNil(t, provider)
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+		defer cancel()
+		_ = provider.Shutdown(shutdownCtx)
+	}()
+
+	res := provider.Resource()
+	require.NotNil(t, res, "SDK provider must have a non-nil resource")
+
+	// Find service.name in the resource attributes.
+	var gotServiceName string
+	for _, attr := range res.Attributes() {
+		if attr.Key == semconv.ServiceNameKey {
+			gotServiceName = attr.Value.AsString()
+			break
+		}
+	}
+	assert.Equal(t, wantServiceName, gotServiceName,
+		"resource must contain service.name=%q; got %q", wantServiceName, gotServiceName)
 }
 
 func TestTracer_ReturnsNonNil(t *testing.T) {
