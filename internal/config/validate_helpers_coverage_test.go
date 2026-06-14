@@ -114,10 +114,9 @@ func TestValidateToolResponseFilters_DirectCall(t *testing.T) {
 			wantErr:  false,
 		},
 		{
-			// $undefinedVar | . parses successfully (valid jq syntax) but fails at the
-			// gojq.Compile step because the variable $undefinedVar is never bound.
-			// This covers the `return fmt.Errorf` inside the Compile error-check at
-			// validation.go:138 — the only remaining uncovered statement.
+			// $undefinedVar | .field parses successfully but fails at gojq.Compile because
+			// the variable is never bound. This ensures the compile-error path in
+			// validateToolResponseFilters is exercised (distinct from parse errors).
 			name: "filter with undefined variable fails at compile step not parse step",
 			filters: map[string]string{
 				"my_tool": "$undefinedVar | .field",
