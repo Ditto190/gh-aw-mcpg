@@ -74,11 +74,12 @@ func StartDIFCPipelineSpan(ctx context.Context, tracer oteltrace.Tracer, toolNam
 
 // StartProxyForwardSpan starts the backend forward child span for the proxy handler.
 // It is a client-kind span that covers the HTTP request forwarded to the upstream API.
-func StartProxyForwardSpan(ctx context.Context, tracer oteltrace.Tracer, toolName, urlPath string) (context.Context, oteltrace.Span) {
+func StartProxyForwardSpan(ctx context.Context, tracer oteltrace.Tracer, toolName, urlPath, serverAddress string) (context.Context, oteltrace.Span) {
 	logTracing.Printf("Starting proxy forward span: toolName=%s, urlPath=%s", toolName, urlPath)
 	return tracer.Start(ctx, "proxy.backend.forward",
 		oteltrace.WithAttributes(
 			semconv.URLPathKey.String(urlPath),
+			semconv.ServerAddressKey.String(serverAddress),
 			GenAIToolName.String(toolName),
 		),
 		oteltrace.WithSpanKind(oteltrace.SpanKindClient),
