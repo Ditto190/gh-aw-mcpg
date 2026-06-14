@@ -795,7 +795,7 @@ func TestRedactURL(t *testing.T) {
 func BenchmarkSanitizeString_NoSecrets(b *testing.B) {
 	input := `{"method":"tools/call","tool":"github___search_code","args":{"query":"MCP","repo":"org/repo"}}`
 	b.ReportAllocs()
-	for range b.N {
+	for i := 0; i < b.N; i++ {
 		_ = SanitizeString(input)
 	}
 }
@@ -803,7 +803,7 @@ func BenchmarkSanitizeString_NoSecrets(b *testing.B) {
 func BenchmarkSanitizeString_WithSecret(b *testing.B) {
 	input := `token=ghp_1234567890123456789012345678901234567890`
 	b.ReportAllocs()
-	for range b.N {
+	for i := 0; i < b.N; i++ {
 		_ = SanitizeString(input)
 	}
 }
@@ -811,7 +811,7 @@ func BenchmarkSanitizeString_WithSecret(b *testing.B) {
 func BenchmarkSanitizeJSON_Compact(b *testing.B) {
 	input := []byte(`{"session":"abc123","tool":"github___get_file_contents","result":{"content":"hello world","path":"README.md"}}`)
 	b.ReportAllocs()
-	for range b.N {
+	for i := 0; i < b.N; i++ {
 		_ = SanitizeJSON(input)
 	}
 }
@@ -819,7 +819,7 @@ func BenchmarkSanitizeJSON_Compact(b *testing.B) {
 func BenchmarkSanitizeJSON_WithPrettyPrint(b *testing.B) {
 	input := []byte("{\n  \"session\": \"abc123\",\n  \"tool\": \"github___get_file_contents\",\n  \"result\": {\n    \"content\": \"hello world\",\n    \"path\": \"README.md\"\n  }\n}")
 	b.ReportAllocs()
-	for range b.N {
+	for i := 0; i < b.N; i++ {
 		_ = SanitizeJSON(input)
 	}
 }
