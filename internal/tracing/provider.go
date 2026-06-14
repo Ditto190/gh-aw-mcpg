@@ -198,14 +198,21 @@ func InitProvider(ctx context.Context, cfg *config.TracingConfig) (*Provider, er
 		resource.WithHost(),
 	)
 	if err != nil {
-		// Non-fatal: fall back to a minimal resource that always preserves service identity
-		// so that spans remain attributable even if full detection fails.
 		logTracing.Printf("Warning: failed to create OTEL resource: %v", err)
-		res = resource.NewWithAttributes(
+		serviceResource := resource.NewWithAttributes(
 			semconv.SchemaURL,
 			semconv.ServiceName(serviceName),
 			semconv.ServiceVersion(version.Get()),
 		)
+		// resource.New can return a best-effort resource alongside an error.
+		// Preserve detected attributes and only ensure service identity exists.
+		merged, mergeErr := resource.Merge(res, serviceResource)
+		if mergeErr != nil {
+			logTracing.Printf("Warning: failed to merge OTEL resource fallback: %v", mergeErr)
+			res = serviceResource
+		} else {
+			res = merged
+		}
 	}
 
 	// Select sampler based on configured rate

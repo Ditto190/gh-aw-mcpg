@@ -231,7 +231,8 @@ func TestInitProvider_WithEndpoint_ReturnsSdkProvider(t *testing.T) {
 // TestInitProvider_ResourceContainsServiceName verifies that the OTel resource
 // built by InitProvider always includes a non-empty service.name attribute.
 // This guards against the semconv schema-URL conflict that previously caused
-// resource.New to return an empty resource, stripping all identity attributes.
+// resource.New to return an error and the old fallback path to use resource.Empty(),
+// stripping all identity attributes.
 func TestInitProvider_ResourceContainsServiceName(t *testing.T) {
 	ctx := context.Background()
 	t.Setenv("GH_AW_OTLP_ENDPOINTS", "")
@@ -263,7 +264,7 @@ func TestInitProvider_ResourceContainsServiceName(t *testing.T) {
 			break
 		}
 	}
-	assert.Equal(t, wantServiceName, gotServiceName,
+	assert.Equalf(t, wantServiceName, gotServiceName,
 		"resource must contain service.name=%q; got %q", wantServiceName, gotServiceName)
 }
 
