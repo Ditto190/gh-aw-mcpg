@@ -288,25 +288,15 @@ func TestSanitizeJSONWithInvalidJSON(t *testing.T) {
 }
 
 func TestSanitizeJSONWithValidJSONButUnmarshalError(t *testing.T) {
-	// json.Valid returns true for numbers like 1e309, but json.Unmarshal fails
-	// when trying to decode them into interface{} because they overflow float64.
-	// This covers the defensive error path in SanitizeJSON (lines 118-126).
+	// json.Valid and json.Compact both accept numbers like 1e309 (valid JSON
+	// syntax), even though json.Unmarshal would fail with float64 overflow.
+	// SanitizeJSON uses json.Compact, so this input should pass through as-is.
 	overflowJSON := `{"key": 1e309}`
 
 	result := SanitizeJSON([]byte(overflowJSON))
 
-	// Should still return valid JSON (wrapped with error marker)
-	var payloadObj map[string]interface{}
-	err := json.Unmarshal(result, &payloadObj)
-	require.NoError(t, err, "Result should be valid JSON even when Unmarshal fails internally")
-
-	// Should have the "failed to parse JSON" error marker
-	assert.Equal(t, "failed to parse JSON", payloadObj["_error"], "Expected _error field with 'failed to parse JSON'")
-
-	// Should preserve the sanitized content in _raw field
-	rawValue, ok := payloadObj["_raw"].(string)
-	require.True(t, ok, "_raw field should be a string")
-	assert.Contains(t, rawValue, "1e309", "Expected _raw field to contain original content")
+	// json.Compact preserves the number without error — result is compacted JSON
+	assert.Equal(t, `{"key":1e309}`, string(result), "Should return compacted JSON for syntactically valid input")
 }
 
 func TestSanitizeStringMultipleSecretsInSameString(t *testing.T) {
