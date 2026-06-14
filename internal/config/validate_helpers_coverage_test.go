@@ -102,6 +102,31 @@ func TestValidateToolResponseFilters_DirectCall(t *testing.T) {
 			wantErr:   true,
 			errSubstr: "custom.path contains an empty tool name",
 		},
+		{
+			// $ENV.KEY is valid jq syntax and compiles successfully, but calling it
+			// forces gojq to invoke the WithEnvironLoader closure during compilation.
+			// This covers the `return nil` inside the env-loader function literal at
+			// validation.go:136 (the only statement not reached by other test cases).
+			name: "filter using $ENV calls the env loader during compilation",
+			filters: map[string]string{
+				"my_tool": "$ENV.SOME_VARIABLE",
+			},
+			jsonPath: "mcpServers.myserver.tool_response_filters",
+			wantErr:  false,
+		},
+		{
+			// $undefinedVar | . parses successfully (valid jq syntax) but fails at the
+			// gojq.Compile step because the variable $undefinedVar is never bound.
+			// This covers the `return fmt.Errorf` inside the Compile error-check at
+			// validation.go:138 — the only remaining uncovered statement.
+			name: "filter with undefined variable fails at compile step not parse step",
+			filters: map[string]string{
+				"my_tool": "$undefinedVar | .field",
+			},
+			jsonPath:  "mcpServers.myserver.tool_response_filters",
+			wantErr:   true,
+			errSubstr: "my_tool contains an invalid jq expression",
+		},
 	}
 
 	for _, tt := range tests {
