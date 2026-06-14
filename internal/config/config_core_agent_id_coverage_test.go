@@ -46,6 +46,7 @@ func TestEffectiveAgentID(t *testing.T) {
 			name: "non-explicit non-empty AgentID returns AgentID",
 			gateway: &GatewayConfig{
 				AgentID:         "derived-agent",
+				APIKey:          "legacy-key",
 				agentIDExplicit: false,
 			},
 			want: "derived-agent",
