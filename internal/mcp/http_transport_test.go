@@ -1314,6 +1314,10 @@ func TestMaxRetriesSentinelCanary(t *testing.T) {
 	var sseGETs atomic.Int64
 	// firstSSEDone is signalled once the initial SSE GET has been served.
 	firstSSEDone := make(chan struct{}, 1)
+	// initializeDone is closed after the initialize response is sent so the first
+	// standalone SSE GET cannot race ahead and fail Connect before the handshake
+	// completes under slower/race-enabled scheduling.
+	initializeDone := make(chan struct{})
 
 	// Backend that:
 	//  - Handles the MCP initialize POST (so Connect succeeds)
@@ -1328,12 +1332,17 @@ func TestMaxRetriesSentinelCanary(t *testing.T) {
 			w.Header().Set("Content-Type", "text/event-stream")
 			w.Header().Set("Cache-Control", "no-cache")
 			w.WriteHeader(http.StatusOK)
-			// Close immediately without sending any event or id -- no "progress"
-			// is recorded, so retriesWithoutProgress will increment on each call.
+			if flusher, ok := w.(http.Flusher); ok {
+				flusher.Flush()
+			}
+			// Close without sending any event or id after initialize completes --
+			// no "progress" is recorded, so retriesWithoutProgress will increment
+			// if the SDK retries.
 			if n == 1 {
 				// Signal that the initial SSE GET has been processed.
 				firstSSEDone <- struct{}{}
 			}
+			<-initializeDone
 		case http.MethodPost:
 			var req map[string]interface{}
 			_ = json.NewDecoder(r.Body).Decode(&req)
@@ -1350,6 +1359,7 @@ func TestMaxRetriesSentinelCanary(t *testing.T) {
 				}
 				w.Header().Set("Content-Type", "application/json")
 				_ = json.NewEncoder(w).Encode(resp)
+				close(initializeDone)
 				return
 			}
 			w.WriteHeader(http.StatusOK)
