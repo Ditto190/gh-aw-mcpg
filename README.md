@@ -226,6 +226,7 @@ For the full gateway field list (including rate limiting, tracing, keepalive, an
 - `POST /mcp/{serverID}` — Routed mode (default): JSON-RPC request to specific server
 - `POST /mcp` — Unified mode: JSON-RPC request routed to configured servers
 - `GET /health` — Health check; returns JSON `{"status":"healthy" | "unhealthy","specVersion":"...","gatewayVersion":"...","servers":{...}}`
+- `POST /close` — Graceful shutdown; terminates all backend servers and exits the process (auth-protected when agent ID is configured; not HMAC-protected)
 - `GET /reflect` — Unauthenticated DIFC label snapshot for all known agents (gateway and proxy mode)
 
 ### `GET /reflect` response schema
