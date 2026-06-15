@@ -9,8 +9,10 @@ import (
 )
 
 // GenAI semantic convention attribute keys.
-// These are aliases for the official OpenTelemetry gen_ai semconv constants
-// (semconv/v1.41.0), re-exported here for convenience.
+// Most are aliases for the official OpenTelemetry gen_ai semconv constants
+// (semconv/v1.41.0), re-exported here for convenience. GenAISystem is the
+// exception: it was removed in semconv/v1.41.0 and is defined as a raw
+// attribute.Key to preserve wire compatibility.
 const (
 	// GenAISystem identifies the GenAI system family for MCP spans.
 	// gen_ai.system was removed from semconv/v1.41.0; the key string is preserved for compatibility.
