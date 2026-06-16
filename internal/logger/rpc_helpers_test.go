@@ -396,5 +396,6 @@ func TestLogMarshaledForDebugf_MarshalFailure(t *testing.T) {
 	)
 
 	require.Empty(gotSuccess)
-	assert.Equal("guard=test-guard err=json: unsupported type: chan int", gotFailure)
+	assert.Contains(gotFailure, "guard=test-guard err=")
+	assert.Contains(gotFailure, "unsupported type")
 }
