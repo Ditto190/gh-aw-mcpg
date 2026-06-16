@@ -149,10 +149,12 @@ func TestRunLabelAgentForAgent_Success(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	assert.Equal(t, difc.EnforcementFilter, mode)
-	// agent should have been created in the registry with the applied labels
+	// agent should have been created in the registry and have the returned labels applied
 	labels, ok := registry.Get("agent-1")
 	require.True(t, ok, "agent should be registered")
 	require.NotNil(t, labels)
+	assert.Contains(t, labels.GetSecrecyTags(), difc.Tag("private:org/repo"))
+	assert.Contains(t, labels.GetIntegrityTags(), difc.Tag("approved"))
 }
 
 func TestRunLabelAgentForAgent_PropagatesError(t *testing.T) {
