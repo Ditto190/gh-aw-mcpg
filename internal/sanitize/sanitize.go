@@ -167,17 +167,15 @@ func SanitizeArgs(args []string) []string {
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 
-		// Check if this is an environment variable value after a -e flag
+		// Check if this is an environment variable value after a -e flag.
 		// Format: -e VAR=VALUE
-		if i > 0 && args[i-1] == "-e" && strings.Contains(arg, "=") {
-			// Split on first = to get VAR and VALUE.
-			// strings.SplitN with n=2 always returns exactly 2 parts when "=" is present.
-			parts := strings.SplitN(arg, "=", 2)
-			sanitized[i] = parts[0] + "=" + TruncateSecret(parts[1])
-		} else {
-			// Pass through unchanged
-			sanitized[i] = arg
+		if i > 0 && args[i-1] == "-e" {
+			if varName, varValue, ok := strings.Cut(arg, "="); ok {
+				sanitized[i] = varName + "=" + TruncateSecret(varValue)
+				continue
+			}
 		}
+		sanitized[i] = arg
 	}
 	return sanitized
 }
