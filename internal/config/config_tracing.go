@@ -2,6 +2,10 @@
 // This file defines the tracing configuration for OpenTelemetry OTLP export.
 package config
 
+import "github.com/github/gh-aw-mcpg/internal/logger"
+
+var logTracingCfg = logger.New("config:config_tracing")
+
 // DefaultTracingSampleRate is the default sample rate for tracing (100% sampling).
 const DefaultTracingSampleRate = 1.0
 
@@ -76,6 +80,7 @@ func init() {
 	RegisterDefaults(func(cfg *Config) {
 		if cfg.Gateway != nil && cfg.Gateway.Tracing != nil {
 			if cfg.Gateway.Tracing.ServiceName == "" {
+				logTracingCfg.Printf("Applying default tracing service name: %s", DefaultTracingServiceName)
 				cfg.Gateway.Tracing.ServiceName = DefaultTracingServiceName
 			}
 		}
@@ -87,6 +92,8 @@ func init() {
 			return
 		}
 		otel := stdinCfg.Gateway.OpenTelemetry
+		logTracingCfg.Printf("Converting OpenTelemetry config from stdin: hasEndpoint=%v, hasServiceName=%v, hasTraceID=%v",
+			otel.Endpoint != "", otel.ServiceName != "", otel.TraceID != "")
 		if cfg.Gateway == nil {
 			cfg.Gateway = &GatewayConfig{}
 		}
@@ -98,6 +105,7 @@ func init() {
 			ServiceName: otel.ServiceName,
 		}
 		if cfg.Gateway.Tracing.ServiceName == "" {
+			logTracingCfg.Printf("OpenTelemetry service name not configured, applying default: %s", DefaultTracingServiceName)
 			cfg.Gateway.Tracing.ServiceName = DefaultTracingServiceName
 		}
 	})
