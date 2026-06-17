@@ -189,7 +189,7 @@ validate_port_mapping() {
     local network_mode
     network_mode=$(docker inspect --format '{{.HostConfig.NetworkMode}}' "$container_id" 2>/dev/null || echo "")
     if [ "$network_mode" = "host" ]; then
-        log_info "Host network mode detected: port $port is directly accessible on the host (no mapping required)"
+        log_info "Host network mode detected: skipping port-mapping validation for port $port (published ports are discarded in host mode)"
         return 0
     fi
 
