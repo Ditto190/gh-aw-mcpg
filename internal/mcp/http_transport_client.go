@@ -64,7 +64,7 @@ func buildHTTPClientWithHeaders(baseClient *http.Client, headers map[string]stri
 }
 
 // oidcRoundTripper is an http.RoundTripper that dynamically acquires a GitHub Actions
-// OIDC token and injects it as an Authorization: ****** on every outgoing request.
+// OIDC token and injects it as an Authorization header carrying the acquired OIDC credential on every outgoing request.
 // It wraps an inner transport (typically a headerInjectingRoundTripper for static headers)
 // and overrides any Authorization header set by that inner layer.
 type oidcRoundTripper struct {
@@ -85,7 +85,7 @@ func (rt *oidcRoundTripper) RoundTrip(req *http.Request) (*http.Response, error)
 }
 
 // buildHTTPClientWithOIDC returns a copy of baseClient whose transport dynamically
-// injects a GitHub Actions OIDC token as Authorization: ****** every request.
+// injects a GitHub Actions OIDC token as an Authorization header carrying the acquired OIDC credential on every request.
 // Static headers (from buildHTTPClientWithHeaders) are applied first, then the OIDC
 // token overwrites the Authorization header.
 func buildHTTPClientWithOIDC(baseClient *http.Client, provider *oidc.Provider, audience string) *http.Client {

@@ -137,9 +137,9 @@ func TestSysServer_ConcurrentAccess(t *testing.T) {
 	server := NewSysServer([]string{"github", "slack", "jira"})
 
 	var wg sync.WaitGroup
-	const goroutines = 10
+	const numGoroutines = 10
 
-	for range goroutines {
+	for range numGoroutines {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -149,7 +149,7 @@ func TestSysServer_ConcurrentAccess(t *testing.T) {
 		}()
 	}
 
-	for range goroutines {
+	for range numGoroutines {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
