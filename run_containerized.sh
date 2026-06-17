@@ -184,6 +184,15 @@ validate_port_mapping() {
         return 0
     fi
 
+    # Host networking: ports are shared directly with the host; no port-mapping entry
+    # appears in NetworkSettings.Ports for host-networked containers.
+    local network_mode
+    network_mode=$(docker inspect --format '{{.HostConfig.NetworkMode}}' "$container_id" 2>/dev/null || echo "")
+    if [ "$network_mode" = "host" ]; then
+        log_info "Host network mode detected: skipping port-mapping validation for port $port (published ports are discarded in host mode)"
+        return 0
+    fi
+
     local port_mapping=$(docker inspect --format '{{json .NetworkSettings.Ports}}' "$container_id" 2>/dev/null || echo "{}")
 
     if ! echo "$port_mapping" | grep -q "\"${port}/tcp\""; then
