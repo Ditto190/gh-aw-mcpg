@@ -10,7 +10,7 @@ import (
 )
 
 func TestIsMalformedHeader(t *testing.T) {
-	assert := assert.New(t)
+	t.Parallel()
 
 	tests := []struct {
 		name   string
@@ -80,15 +80,17 @@ func TestIsMalformedHeader(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			got := IsMalformedHeader(tt.header)
-			assert.Equal(tt.want, got)
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
 
 func TestTruncateSecret(t *testing.T) {
-	assert := assert.New(t)
+	t.Parallel()
 
 	tests := []struct {
 		name  string
@@ -143,16 +145,17 @@ func TestTruncateSecret(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			got := sanitize.TruncateSecret(tt.input)
-			assert.Equal(tt.want, got)
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
 
 func TestParseAuthHeader(t *testing.T) {
-	assert := assert.New(t)
-	require := require.New(t)
+	t.Parallel()
 
 	tests := []struct {
 		name        string
@@ -238,26 +241,42 @@ func TestParseAuthHeader(t *testing.T) {
 			wantAgentID: "my-token ",
 			wantErr:     nil,
 		},
+		{
+			name:        "Bearer with empty token",
+			authHeader:  "Bearer ",
+			wantAPIKey:  "",
+			wantAgentID: "",
+			wantErr:     nil,
+		},
+		{
+			name:        "Agent with empty value",
+			authHeader:  "Agent ",
+			wantAPIKey:  "",
+			wantAgentID: "",
+			wantErr:     nil,
+		},
 	}
 
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			gotAPIKey, gotAgentID, gotErr := ParseAuthHeader(tt.authHeader)
 
 			if tt.wantErr != nil {
-				require.ErrorIs(gotErr, tt.wantErr)
+				require.ErrorIs(t, gotErr, tt.wantErr)
 			} else {
-				require.NoError(gotErr)
+				require.NoError(t, gotErr)
 			}
 
-			assert.Equal(tt.wantAPIKey, gotAPIKey)
-			assert.Equal(tt.wantAgentID, gotAgentID)
+			assert.Equal(t, tt.wantAPIKey, gotAPIKey)
+			assert.Equal(t, tt.wantAgentID, gotAgentID)
 		})
 	}
 }
 
 func TestValidateAgentID(t *testing.T) {
-	assert := assert.New(t)
+	t.Parallel()
 
 	tests := []struct {
 		name     string
@@ -316,15 +335,17 @@ func TestValidateAgentID(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			got := ValidateAgentID(tt.provided, tt.expected)
-			assert.Equal(tt.want, got)
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
 
 func TestExtractAgentID(t *testing.T) {
-	assert := assert.New(t)
+	t.Parallel()
 
 	tests := []struct {
 		name       string
@@ -364,15 +385,17 @@ func TestExtractAgentID(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			got := ExtractAgentID(tt.authHeader)
-			assert.Equal(tt.want, got)
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
 
 func TestExtractSessionID(t *testing.T) {
-	assert := assert.New(t)
+	t.Parallel()
 
 	tests := []struct {
 		name       string
@@ -437,37 +460,63 @@ func TestExtractSessionID(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			got := ExtractSessionID(tt.authHeader)
-			assert.Equal(tt.want, got)
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
 
 func TestExtractSessionIDFromHeaders(t *testing.T) {
+	t.Parallel()
+
 	t.Run("X-Agent-ID takes precedence over Authorization", func(t *testing.T) {
+		t.Parallel()
 		got := ExtractSessionIDFromHeaders("agent-explicit", "auth-token")
 		assert.Equal(t, "agent-explicit", got)
 	})
 
 	t.Run("falls back to Authorization when X-Agent-ID missing", func(t *testing.T) {
+		t.Parallel()
 		got := ExtractSessionIDFromHeaders("", "auth-token")
 		assert.Equal(t, "auth-token", got)
 	})
 
 	t.Run("malformed X-Agent-ID returns empty", func(t *testing.T) {
+		t.Parallel()
 		got := ExtractSessionIDFromHeaders("bad\x00id", "auth-token")
 		assert.Equal(t, "", got)
 	})
 
 	t.Run("malformed Authorization returns empty when X-Agent-ID missing", func(t *testing.T) {
+		t.Parallel()
 		got := ExtractSessionIDFromHeaders("", "bad\x00token")
 		assert.Equal(t, "", got)
+	})
+
+	t.Run("both headers empty returns empty string", func(t *testing.T) {
+		t.Parallel()
+		got := ExtractSessionIDFromHeaders("", "")
+		assert.Equal(t, "", got)
+	})
+
+	t.Run("valid X-Agent-ID takes precedence over malformed Authorization", func(t *testing.T) {
+		t.Parallel()
+		got := ExtractSessionIDFromHeaders("valid-agent", "bad\x00token")
+		assert.Equal(t, "valid-agent", got)
+	})
+
+	t.Run("X-Agent-ID takes precedence over Bearer Authorization", func(t *testing.T) {
+		t.Parallel()
+		got := ExtractSessionIDFromHeaders("agent-id", "Bearer auth-token")
+		assert.Equal(t, "agent-id", got)
 	})
 }
 
 func TestStripAuthScheme(t *testing.T) {
-	assert := assert.New(t)
+	t.Parallel()
 
 	tests := []struct {
 		name        string
@@ -518,14 +567,30 @@ func TestStripAuthScheme(t *testing.T) {
 			wantValue:   "",
 			wantMatched: false,
 		},
+		{
+			name:        "Bearer with empty token",
+			authHeader:  "Bearer ",
+			wantScheme:  "Bearer",
+			wantValue:   "",
+			wantMatched: true,
+		},
+		{
+			name:        "Agent with empty value",
+			authHeader:  "Agent ",
+			wantScheme:  "Agent",
+			wantValue:   "",
+			wantMatched: true,
+		},
 	}
 
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			scheme, value, matched := stripAuthScheme(tt.authHeader)
-			assert.Equal(tt.wantScheme, scheme)
-			assert.Equal(tt.wantValue, value)
-			assert.Equal(tt.wantMatched, matched)
+			assert.Equal(t, tt.wantScheme, scheme)
+			assert.Equal(t, tt.wantValue, value)
+			assert.Equal(t, tt.wantMatched, matched)
 		})
 	}
 }
