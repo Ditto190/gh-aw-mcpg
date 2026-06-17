@@ -1,14 +1,10 @@
 package tracing
 
 import (
-	"context"
-	"encoding/hex"
 	"encoding/json"
 	"net/url"
 	"os"
 	"strings"
-
-	"go.opentelemetry.io/otel/trace"
 
 	"github.com/github/gh-aw-mcpg/internal/config"
 )
@@ -238,59 +234,4 @@ func normalizeExtraEndpoint(endpoint, signalPath string) string {
 		Endpoint:   ep,
 		SignalPath: signalPath,
 	})
-}
-
-// resolveParentContext builds a context carrying the W3C remote parent span context
-// from the configured traceId and spanId (spec §4.1.3.6).
-// If traceId is absent, or either ID is malformed, the original context is returned unchanged.
-// A missing spanId is replaced with a random span ID so the traceparent is still valid.
-func resolveParentContext(ctx context.Context, cfg *config.TracingConfig) context.Context {
-	if cfg == nil || cfg.TraceID == "" {
-		return ctx
-	}
-
-	traceIDBytes, err := hex.DecodeString(cfg.TraceID)
-	if err != nil || len(traceIDBytes) != 16 {
-		logTracing.Printf("Warning: invalid traceId '%s'; skipping W3C parent context", cfg.TraceID)
-		return ctx
-	}
-	var traceID trace.TraceID
-	copy(traceID[:], traceIDBytes)
-
-	var spanID trace.SpanID
-	if cfg.SpanID != "" {
-		spanIDBytes, err := hex.DecodeString(cfg.SpanID)
-		if err != nil || len(spanIDBytes) != 8 {
-			logTracing.Printf("Warning: invalid spanId '%s'; generating a random span ID", cfg.SpanID)
-			// Fall through to generate a random span ID below
-		} else {
-			copy(spanID[:], spanIDBytes)
-		}
-	}
-
-	// When spanId is all-zeros (absent or invalid), generate a random span ID.
-	// A valid SpanContext requires a non-zero SpanID (W3C Trace Context spec).
-	// T-OTEL-008: when only traceId is provided, a random spanId is generated.
-	if spanID == (trace.SpanID{}) {
-		generatedID, genErr := generateRandomSpanID()
-		if genErr != nil {
-			logTracing.Printf("Warning: failed to generate random span ID: %v; skipping W3C parent context", genErr)
-			return ctx
-		}
-		spanID = generatedID
-		logTracing.Printf("Generated random spanId for W3C parent context")
-	}
-
-	sc := trace.NewSpanContext(trace.SpanContextConfig{
-		TraceID:    traceID,
-		SpanID:     spanID,
-		TraceFlags: trace.FlagsSampled,
-		Remote:     true,
-	})
-	if !sc.IsValid() {
-		logTracing.Printf("Warning: constructed parent SpanContext is not valid; skipping W3C parent context")
-		return ctx
-	}
-	logTracing.Printf("W3C parent context resolved: traceId=%s, spanId=%s", traceID, spanID)
-	return trace.ContextWithRemoteSpanContext(ctx, sc)
 }
