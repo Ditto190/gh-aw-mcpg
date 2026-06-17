@@ -78,6 +78,10 @@ var (
 // Filters compiled by CompileToolResponseFilter are stored on first call and reused
 // on subsequent calls with the same expression, avoiding redundant parse+compile work
 // when multiple tools share identical filter expressions.
+//
+// The cache is unbounded and grows with the number of unique filter expressions.
+// In practice this is bounded by the number of distinct filter strings in the
+// gateway configuration, which is typically small (one per tool).
 var filterCodeCache sync.Map
 
 // init compiles the jq schema filter at startup for better performance and validation.
@@ -231,8 +235,13 @@ func runJqCode(
 // session metadata, or user-controlled data, use CompileToolResponseFilterWithVars instead.
 func CompileToolResponseFilter(filter string) (*gojq.Code, error) {
 	if cached, ok := filterCodeCache.Load(filter); ok {
+		code, ok := cached.(*gojq.Code)
+		if !ok {
+			// Should never happen; the cache only stores *gojq.Code values.
+			return nil, fmt.Errorf("internal error: unexpected cached value type for filter (len=%d)", len(filter))
+		}
 		logMiddleware.Printf("CompileToolResponseFilter: cache hit, len=%d", len(filter))
-		return cached.(*gojq.Code), nil
+		return code, nil
 	}
 
 	logMiddleware.Printf("CompileToolResponseFilter: parsing jq filter expression, len=%d", len(filter))
