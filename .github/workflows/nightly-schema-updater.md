@@ -41,6 +41,10 @@ safe-outputs:
   missing-tool:
     create-issue: true
 
+engine:
+  id: copilot
+  model: gpt-5.4
+
 timeout-minutes: 15
 ---
 
