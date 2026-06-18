@@ -864,7 +864,7 @@ func TestInitProvider_InvalidSampleRate(t *testing.T) {
 	}
 }
 
-// TestParentContext_InvalidSpanID verifies that resolveParentContext falls through to
+// TestParentContext_InvalidSpanID verifies that ParentContext falls through to
 // generating a random span ID when the configured spanId is not valid hex, and still
 // returns an enriched context (per spec T-OTEL-008).
 func TestParentContext_InvalidSpanID(t *testing.T) {
@@ -909,7 +909,7 @@ func TestParentContext_InvalidSpanID(t *testing.T) {
 	}
 }
 
-// TestParentContext_AllZerosTraceID verifies that resolveParentContext returns the
+// TestParentContext_AllZerosTraceID verifies that ParentContext returns the
 // original context unchanged when the traceId is all zeros (produces an invalid SpanContext).
 func TestParentContext_AllZerosTraceID(t *testing.T) {
 	ctx := context.Background()

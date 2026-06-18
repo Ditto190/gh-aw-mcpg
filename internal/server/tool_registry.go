@@ -357,19 +357,16 @@ func (us *UnifiedServer) registerSysTool(name, description string, inputSchema m
 	us.toolsMu.Unlock()
 }
 
-// callSysServer is a helper that calls a sys tool by marshaling the tool name,
-// delegating to sysServer.HandleRequest, and returning the result.
-// This consolidates the common pattern used by sys tool handlers.
+// callSysServer is a helper that directly dispatches sys tools to SysServer.
 func (us *UnifiedServer) callSysServer(toolName string) (interface{}, error) {
-	params, _ := json.Marshal(map[string]interface{}{
-		"name":      toolName,
-		"arguments": map[string]interface{}{},
-	})
-	result, err := us.sysServer.HandleRequest("tools/call", json.RawMessage(params))
-	if err != nil {
-		return nil, err
+	switch toolName {
+	case "sys_init":
+		return us.sysServer.SysInit()
+	case "sys_list_servers":
+		return us.sysServer.ListServers()
+	default:
+		return nil, fmt.Errorf("unknown tool: %s", toolName)
 	}
-	return result, nil
 }
 
 func (us *UnifiedServer) callAndLogSysTool(sessionID, operationName, sysToolName string) (*sdk.CallToolResult, interface{}, error) {
@@ -385,48 +382,6 @@ func (us *UnifiedServer) callAndLogSysTool(sessionID, operationName, sysToolName
 
 // registerSysTools registers built-in sys tools
 func (us *UnifiedServer) registerSysTools() error {
-	// Create sys_init handler
-	sysInitHandler := func(ctx context.Context, req *sdk.CallToolRequest, args interface{}) (*sdk.CallToolResult, interface{}, error) {
-		// Extract arguments from the request params
-		toolArgs, err := mcp.ParseToolArguments(req)
-		if err != nil {
-			logger.LogError("client", "Failed to unmarshal sys_init arguments, error=%v", err)
-			return mcp.NewErrorCallToolResult(err)
-		}
-
-		// Extract token from args
-		token := ""
-		if t, ok := toolArgs["token"].(string); ok {
-			token = t
-		}
-
-		// Get session ID from context
-		sessionID := us.getSessionID(ctx)
-		if sessionID == "" {
-			logger.LogError("client", "MCP session initialization failed: no session ID provided")
-			return mcp.NewErrorCallToolResult(fmt.Errorf("no session ID provided"))
-		}
-
-		logger.LogInfo("client", "MCP session initialization started, session=%s, has_token=%v", sessionID, token != "")
-
-		// Create session
-		us.sessionMu.Lock()
-		us.sessions[sessionID] = NewSession(sessionID, token)
-		us.sessionMu.Unlock()
-
-		// Ensure session directory exists in payload mount point
-		if err := us.ensureSessionDirectory(sessionID); err != nil {
-			logger.LogWarn("client", "Failed to create session directory for session=%s: %v", sessionID, err)
-			// Don't fail session initialization if directory creation fails
-			// Payloads will attempt to create the directory when needed
-		}
-
-		logger.LogInfo("client", "MCP session initialized successfully, session=%s, available_servers=%v", sessionID, us.launcher.ServerIDs())
-
-		// Call sys_init
-		return us.callAndLogSysTool(sessionID, "session initialization", "sys_init")
-	}
-
 	// Register sys_init tool using helper
 	us.registerSysTool(
 		"sys___init",
@@ -440,22 +395,8 @@ func (us *UnifiedServer) registerSysTools() error {
 				},
 			},
 		},
-		sysInitHandler,
+		us.sysInitHandler,
 	)
-
-	// Create sys_list_servers handler
-	sysListHandler := func(ctx context.Context, req *sdk.CallToolRequest, args interface{}) (*sdk.CallToolResult, interface{}, error) {
-		sessionID := us.getSessionID(ctx)
-		logger.LogInfo("client", "MCP sys_list_servers request, session=%s", sessionID)
-
-		// Check session is initialized
-		if err := us.requireSession(ctx); err != nil {
-			logger.LogError("client", "MCP sys_list_servers failed: session not initialized, session=%s", sessionID)
-			return mcp.NewErrorCallToolResult(err)
-		}
-
-		return us.callAndLogSysTool(sessionID, "sys_list_servers", "sys_list_servers")
-	}
 
 	// Register sys_list_servers tool using helper
 	us.registerSysTool(
@@ -465,7 +406,7 @@ func (us *UnifiedServer) registerSysTools() error {
 			"type":       "object",
 			"properties": map[string]interface{}{},
 		},
-		sysListHandler,
+		us.sysListServersHandler,
 	)
 
 	logUnified.Printf("Registered 2 sys tools")

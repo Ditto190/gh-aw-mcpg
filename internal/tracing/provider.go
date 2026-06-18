@@ -19,6 +19,7 @@ package tracing
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"time"
@@ -294,5 +295,48 @@ func (ct CachedTracer) GetTracer() trace.Tracer {
 // from the configured traceId and spanId (spec §4.1.3.6).
 // Exported for use at startup to build the root span's parent context.
 func ParentContext(ctx context.Context, cfg *config.TracingConfig) context.Context {
-	return resolveParentContext(ctx, cfg)
+	if cfg == nil || cfg.TraceID == "" {
+		return ctx
+	}
+
+	traceIDBytes, err := hex.DecodeString(cfg.TraceID)
+	if err != nil || len(traceIDBytes) != 16 {
+		logTracing.Printf("Warning: invalid traceId '%s'; skipping W3C parent context", cfg.TraceID)
+		return ctx
+	}
+	var traceID trace.TraceID
+	copy(traceID[:], traceIDBytes)
+
+	var spanID trace.SpanID
+	if cfg.SpanID != "" {
+		spanIDBytes, err := hex.DecodeString(cfg.SpanID)
+		if err != nil || len(spanIDBytes) != 8 {
+			logTracing.Printf("Warning: invalid spanId '%s'; generating a random span ID", cfg.SpanID)
+		} else {
+			copy(spanID[:], spanIDBytes)
+		}
+	}
+
+	if spanID == (trace.SpanID{}) {
+		generatedID, genErr := generateRandomSpanID()
+		if genErr != nil {
+			logTracing.Printf("Warning: failed to generate random span ID: %v; skipping W3C parent context", genErr)
+			return ctx
+		}
+		spanID = generatedID
+		logTracing.Printf("Generated random spanId for W3C parent context")
+	}
+
+	sc := trace.NewSpanContext(trace.SpanContextConfig{
+		TraceID:    traceID,
+		SpanID:     spanID,
+		TraceFlags: trace.FlagsSampled,
+		Remote:     true,
+	})
+	if !sc.IsValid() {
+		logTracing.Printf("Warning: constructed parent SpanContext is not valid; skipping W3C parent context")
+		return ctx
+	}
+	logTracing.Printf("W3C parent context resolved: traceId=%s, spanId=%s", traceID, spanID)
+	return trace.ContextWithRemoteSpanContext(ctx, sc)
 }
