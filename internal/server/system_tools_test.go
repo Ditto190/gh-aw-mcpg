@@ -144,8 +144,8 @@ func TestSysServer_ConcurrentAccess(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			result, err := server.SysInit()
-			require.NoError(t, err)
-			require.NotNil(t, result)
+			assert.NoError(t, err)
+			assert.NotNil(t, result)
 		}()
 	}
 
