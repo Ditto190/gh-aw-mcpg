@@ -372,11 +372,11 @@ func TestFindParentField(t *testing.T) {
 			want:  "field",
 		},
 		{
-			// Exercises the parenDepth++ branch: the field's argument list
-			// contains a nested call like func(x), so the outer ) increments
-			// parenDepth before the inner ( decrements it back.
+			// Exercises the parenDepth++ branch: parentheses inside a string
+			// literal within the argument list cause nested parenDepth changes
+			// while scanning backward to the field name.
 			name:  "nested parentheses in field arguments",
-			query: `field(func(x)) { nodes { y } }`,
+			query: `field(arg:"func(x)") { nodes { y } }`,
 			want:  "field",
 		},
 		{
