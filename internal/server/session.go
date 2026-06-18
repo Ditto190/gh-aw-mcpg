@@ -167,7 +167,7 @@ func (us *UnifiedServer) sysInitHandler(ctx context.Context, req *sdk.CallToolRe
 
 func (us *UnifiedServer) sysListServersHandler(ctx context.Context, _ *sdk.CallToolRequest, _ interface{}) (*sdk.CallToolResult, interface{}, error) {
 	sessionID := us.getSessionID(ctx)
-	logger.LogInfo("client", "MCP sys_list_servers request, session=%s", sessionID)
+	logger.LogInfo("client", "MCP sys_list_servers request, session=%s", truncateSessionID(sessionID))
 
 	if err := us.requireSession(ctx); err != nil {
 		logger.LogError("client", "MCP sys_list_servers failed: session not initialized, session=%s", sessionID)
