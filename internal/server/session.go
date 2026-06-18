@@ -161,7 +161,7 @@ func (us *UnifiedServer) sysInitHandler(ctx context.Context, req *sdk.CallToolRe
 		logger.LogWarn("client", "Failed to create session directory for session=%s: %v", sessionID, err)
 	}
 
-	logger.LogInfo("client", "MCP session initialized successfully, session=%s, available_servers=%v", sessionID, us.launcher.ServerIDs())
+	logger.LogInfo("client", "MCP session initialized successfully, session=%s, available_servers=%v", truncateSessionID(sessionID), us.launcher.ServerIDs())
 	return us.callAndLogSysTool(sessionID, "session initialization", "sys_init")
 }
 
