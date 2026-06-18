@@ -66,6 +66,7 @@ type AllowOnlyPolicy struct {
 	MinIntegrity         string         `toml:"min-integrity" json:"min-integrity"`
 	ToolCallLimits       map[string]int `toml:"tool-call-limits" json:"tool-call-limits,omitempty"`
 	BlockedUsers         []string       `toml:"blocked-users" json:"blocked-users,omitempty"`
+	RefusalLabels        []string       `toml:"refusal-labels" json:"refusal-labels,omitempty"`
 	ApprovalLabels       []string       `toml:"approval-labels" json:"approval-labels,omitempty"`
 	TrustedUsers         []string       `toml:"trusted-users" json:"trusted-users,omitempty"`
 	EndorsementReactions []string       `toml:"endorsement-reactions" json:"endorsement-reactions,omitempty"`
@@ -83,6 +84,7 @@ type NormalizedGuardPolicy struct {
 	MinIntegrity         string         `json:"min-integrity"`
 	ToolCallLimits       map[string]int `json:"tool-call-limits,omitempty"`
 	BlockedUsers         []string       `json:"blocked-users,omitempty"`
+	RefusalLabels        []string       `json:"refusal-labels,omitempty"`
 	ApprovalLabels       []string       `json:"approval-labels,omitempty"`
 	TrustedUsers         []string       `json:"trusted-users,omitempty"`
 	EndorsementReactions []string       `json:"endorsement-reactions,omitempty"`
@@ -202,6 +204,12 @@ func (p *AllowOnlyPolicy) UnmarshalJSON(data []byte) error {
 			if err := json.Unmarshal(value, &p.BlockedUsers); err != nil {
 				return fmt.Errorf("invalid allow-only.blocked-users: %w", err)
 			}
+		case "refusal-labels":
+			refusalLabels, err := unmarshalStringListOrExpression(value)
+			if err != nil {
+				return fmt.Errorf("invalid allow-only.refusal-labels: %w", err)
+			}
+			p.RefusalLabels = refusalLabels
 		case "approval-labels":
 			if err := json.Unmarshal(value, &p.ApprovalLabels); err != nil {
 				return fmt.Errorf("invalid allow-only.approval-labels: %w", err)
@@ -256,6 +264,7 @@ func (p AllowOnlyPolicy) MarshalJSON() ([]byte, error) {
 		MinIntegrity         string         `json:"min-integrity"`
 		ToolCallLimits       map[string]int `json:"tool-call-limits,omitempty"`
 		BlockedUsers         []string       `json:"blocked-users,omitempty"`
+		RefusalLabels        []string       `json:"refusal-labels,omitempty"`
 		ApprovalLabels       []string       `json:"approval-labels,omitempty"`
 		TrustedUsers         []string       `json:"trusted-users,omitempty"`
 		EndorsementReactions []string       `json:"endorsement-reactions,omitempty"`
@@ -267,6 +276,39 @@ func (p AllowOnlyPolicy) MarshalJSON() ([]byte, error) {
 	}
 
 	return json.Marshal(serializedAllowOnly(p))
+}
+
+func unmarshalStringListOrExpression(raw json.RawMessage) ([]string, error) {
+	var values []string
+	if err := json.Unmarshal(raw, &values); err == nil {
+		return values, nil
+	}
+
+	var expression string
+	if err := json.Unmarshal(raw, &expression); err != nil {
+		return nil, fmt.Errorf("expected array of strings or comma/newline-delimited expression")
+	}
+
+	parts := strings.FieldsFunc(expression, func(r rune) bool {
+		return r == ',' || r == '\n'
+	})
+	if len(parts) == 0 {
+		return nil, fmt.Errorf("must include at least one label")
+	}
+
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed == "" {
+			continue
+		}
+		result = append(result, trimmed)
+	}
+	if len(result) == 0 {
+		return nil, fmt.Errorf("must include at least one label")
+	}
+
+	return result, nil
 }
 
 // WriteSinkAcceptRules documents the mapping from allow-only repos configuration

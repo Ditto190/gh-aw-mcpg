@@ -35,8 +35,8 @@ pub const WRITE_OPERATIONS: &[&str] = &[
     "discussion_comment_write", // creates or edits GitHub Discussion comments
     "dismiss_notification",
     "edit_discussion", // gh discussion edit   — edits title/body/labels of a discussion
-    "edit_release",              // PATCH /repos/.../releases/{id}
-    "edit_repository",           // gh repo edit — can change visibility, security settings
+    "edit_release",    // PATCH /repos/.../releases/{id}
+    "edit_repository", // gh repo edit — can change visibility, security settings
     "enable_toolset", // Dynamically enables additional toolsets, expanding the agent's capability set
     "enable_workflow", // gh workflow enable
     "force_cancel_workflow_run", // gh run cancel --force — force-cancels a workflow run

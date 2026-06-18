@@ -334,6 +334,44 @@ func TestNormalizeGuardPolicyBlockedAndApproval(t *testing.T) {
 	})
 }
 
+func TestNormalizeGuardPolicyRefusalLabels(t *testing.T) {
+	t.Run("refusal-labels propagated to normalized policy", func(t *testing.T) {
+		policy := &GuardPolicy{AllowOnly: &AllowOnlyPolicy{
+			Repos:         "public",
+			MinIntegrity:  "none",
+			RefusalLabels: []string{"unsafe", "security-blocked"},
+		}}
+
+		got, err := NormalizeGuardPolicy(policy)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"unsafe", "security-blocked"}, got.RefusalLabels)
+	})
+
+	t.Run("refusal-labels case-insensitive deduplication", func(t *testing.T) {
+		policy := &GuardPolicy{AllowOnly: &AllowOnlyPolicy{
+			Repos:         "public",
+			MinIntegrity:  "none",
+			RefusalLabels: []string{"Unsafe", "unsafe", "UNSAFE"},
+		}}
+
+		got, err := NormalizeGuardPolicy(policy)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"Unsafe"}, got.RefusalLabels)
+	})
+
+	t.Run("empty refusal-labels entry returns error", func(t *testing.T) {
+		policy := &GuardPolicy{AllowOnly: &AllowOnlyPolicy{
+			Repos:         "public",
+			MinIntegrity:  "none",
+			RefusalLabels: []string{"unsafe", ""},
+		}}
+
+		_, err := NormalizeGuardPolicy(policy)
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "refusal-labels entries must not be empty")
+	})
+}
+
 // TestNormalizeGuardPolicyTrustedUsers tests NormalizeGuardPolicy with trusted-users.
 func TestNormalizeGuardPolicyTrustedUsers(t *testing.T) {
 	t.Run("trusted-users propagated to normalized policy", func(t *testing.T) {
@@ -731,6 +769,25 @@ func TestAllowOnlyPolicyUnmarshalJSON(t *testing.T) {
 			check: func(t *testing.T, p *AllowOnlyPolicy) {
 				assert.Equal(t, []string{"evil-bot", "bad-actor"}, p.BlockedUsers)
 			},
+		},
+		{
+			name: "refusal-labels parsed correctly",
+			json: `{"repos":"public","min-integrity":"none","refusal-labels":["unsafe","blocked"]}`,
+			check: func(t *testing.T, p *AllowOnlyPolicy) {
+				assert.Equal(t, []string{"unsafe", "blocked"}, p.RefusalLabels)
+			},
+		},
+		{
+			name: "refusal-labels expression parsed correctly",
+			json: `{"repos":"public","min-integrity":"none","refusal-labels":"unsafe, blocked\nneeds-triage"}`,
+			check: func(t *testing.T, p *AllowOnlyPolicy) {
+				assert.Equal(t, []string{"unsafe", "blocked", "needs-triage"}, p.RefusalLabels)
+			},
+		},
+		{
+			name:    "empty refusal-labels expression rejected",
+			json:    `{"repos":"public","min-integrity":"none","refusal-labels":"   "}`,
+			wantErr: "invalid allow-only.refusal-labels: must include at least one label",
 		},
 		{
 			name: "tool-call-limits parsed correctly",

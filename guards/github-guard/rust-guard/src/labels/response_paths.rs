@@ -7,11 +7,11 @@
 //! Returns JSON paths like `/items/0`, `/items/1` pointing to labeled objects
 //! in the response, rather than cloning the entire data.
 
-use std::borrow::Cow;
 use super::constants::{field_names, label_constants, scope_names};
 use super::extract_mcp_response;
 use super::helpers::*;
 use serde_json::Value;
+use std::borrow::Cow;
 
 /// Path-based label for response items (RFC 6901 JSON Pointer)
 #[derive(Debug, Clone)]
@@ -53,7 +53,10 @@ pub fn label_response_paths(
             let (items_opt, items_key) =
                 if let Some(arr) = actual_response.get("items").and_then(|v| v.as_array()) {
                     (Some(arr), "items")
-                } else if let Some(arr) = actual_response.get("repositories").and_then(|v| v.as_array()) {
+                } else if let Some(arr) = actual_response
+                    .get("repositories")
+                    .and_then(|v| v.as_array())
+                {
                     (Some(arr), "repositories")
                 } else {
                     (None, "items")
@@ -103,13 +106,19 @@ pub fn label_response_paths(
                         secrecy: vec![].into(),
                         integrity: none_integrity("", ctx).into(),
                     }),
-                    items_path: Some(match items_key { "repositories" => "/repositories", _ => "/items" }),
+                    items_path: Some(match items_key {
+                        "repositories" => "/repositories",
+                        _ => "/items",
+                    }),
                 });
             }
         }
 
         // === Pull Requests - label by merged state ===
-        "list_pull_requests" | "search_pull_requests" | "pull_request_read" | "get_pull_request" => {
+        "list_pull_requests"
+        | "search_pull_requests"
+        | "pull_request_read"
+        | "get_pull_request" => {
             // Skip per-item labeling for pull_request_read sub-methods that return
             // non-PR objects (e.g. get_check_runs, get_files, get_reviews).
             // Resource-level labels from tool_rules provide correct PR integrity.
@@ -120,102 +129,107 @@ pub fn label_response_paths(
             if tool_name == "pull_request_read" && !method.is_empty() && method != "get" {
                 // Fall through — use resource-level labels
             } else {
-            let (items, items_path) = extract_items_array(&actual_response);
+                let (items, items_path) = extract_items_array(&actual_response);
 
-            if let Some(items) = items {
-                // Empty search results are server metadata — let lib.rs handle
-                // them with properly-scoped writer_integrity via the metadata fallback.
-                if items.is_empty() && is_search_result_wrapper(&actual_response) {
-                    return None;
-                }
-                // Try tool_args first, fall back to extracting from first item
-                let (arg_owner, arg_repo, arg_repo_full) = extract_repo_scope_with_query_fallback(tool_args);
-                let default_repo_private = if !arg_owner.is_empty() && !arg_repo.is_empty() {
-                    super::backend::is_repo_private(&arg_owner, &arg_repo).unwrap_or(false)
-                } else {
-                    false
-                };
-                let default_repo = if !arg_repo_full.is_empty() {
-                    arg_repo_full
-                } else if let Some(first) = items.first() {
-                    extract_repo_from_item(first)
-                } else {
-                    String::new()
-                };
-                let default_secrecy = if tool_name == "list_pull_requests" || tool_name == "pull_request_read" || tool_name == "get_pull_request" {
-                    repo_visibility_secrecy(&arg_owner, &arg_repo, &default_repo, ctx)
-                } else {
-                    vec![]
-                };
-                let default_secrecy_shared: crate::SharedLabels = default_secrecy.into();
-
-                let limited_items = limit_items_with_log(items, "list_pull_requests");
-                let mut labeled_paths = Vec::with_capacity(limited_items.len());
-
-                for (i, item) in limited_items.iter().enumerate() {
-                    // Extract repo from each item (may differ for search results)
-                    let item_repo = extract_repo_from_item(item);
-                    let repo_for_labels = if item_repo.is_empty() {
-                        &default_repo
+                if let Some(items) = items {
+                    // Empty search results are server metadata — let lib.rs handle
+                    // them with properly-scoped writer_integrity via the metadata fallback.
+                    if items.is_empty() && is_search_result_wrapper(&actual_response) {
+                        return None;
+                    }
+                    // Try tool_args first, fall back to extracting from first item
+                    let (arg_owner, arg_repo, arg_repo_full) =
+                        extract_repo_scope_with_query_fallback(tool_args);
+                    let default_repo_private = if !arg_owner.is_empty() && !arg_repo.is_empty() {
+                        super::backend::is_repo_private(&arg_owner, &arg_repo).unwrap_or(false)
                     } else {
-                        &item_repo
+                        false
                     };
-
-                    let base_repo = item
-                        .get("base")
-                        .and_then(|b| b.get("repo"))
-                        .and_then(|r| r.get(field_names::FULL_NAME))
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("");
-                    let head_repo = item
-                        .get("head")
-                        .and_then(|h| h.get("repo"))
-                        .and_then(|r| r.get(field_names::FULL_NAME))
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("");
-                    let is_forked = if !base_repo.is_empty() && !head_repo.is_empty() {
-                        Some(!base_repo.eq_ignore_ascii_case(head_repo))
+                    let default_repo = if !arg_repo_full.is_empty() {
+                        arg_repo_full
+                    } else if let Some(first) = items.first() {
+                        extract_repo_from_item(first)
                     } else {
-                        None
+                        String::new()
                     };
+                    let default_secrecy = if tool_name == "list_pull_requests"
+                        || tool_name == "pull_request_read"
+                        || tool_name == "get_pull_request"
+                    {
+                        repo_visibility_secrecy(&arg_owner, &arg_repo, &default_repo, ctx)
+                    } else {
+                        vec![]
+                    };
+                    let default_secrecy_shared: crate::SharedLabels = default_secrecy.into();
 
-                    let item_repo_private = repo_visibility_private_for_repo_id(repo_for_labels)
-                        .unwrap_or(default_repo_private);
+                    let limited_items = limit_items_with_log(items, "list_pull_requests");
+                    let mut labeled_paths = Vec::with_capacity(limited_items.len());
 
-                    let pr_number = extract_resource_number(item, "pr", repo_for_labels);
-                    let integrity =
-                        pr_integrity(item, repo_for_labels, item_repo_private, is_forked, ctx);
-                    let path = make_item_path(&items_path, i);
+                    for (i, item) in limited_items.iter().enumerate() {
+                        // Extract repo from each item (may differ for search results)
+                        let item_repo = extract_repo_from_item(item);
+                        let repo_for_labels = if item_repo.is_empty() {
+                            &default_repo
+                        } else {
+                            &item_repo
+                        };
 
-                    labeled_paths.push(PathLabelEntry {
-                        path,
-                        labels: crate::ResourceLabels {
-                            description: format!("pr:{}#{}", repo_for_labels, pr_number),
-                            secrecy: if tool_name == "search_pull_requests" {
-                                repo_visibility_secrecy_for_repo_id(repo_for_labels, ctx).into()
-                            } else {
-                                default_secrecy_shared.clone()
+                        let base_repo = item
+                            .get("base")
+                            .and_then(|b| b.get("repo"))
+                            .and_then(|r| r.get(field_names::FULL_NAME))
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("");
+                        let head_repo = item
+                            .get("head")
+                            .and_then(|h| h.get("repo"))
+                            .and_then(|r| r.get(field_names::FULL_NAME))
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("");
+                        let is_forked = if !base_repo.is_empty() && !head_repo.is_empty() {
+                            Some(!base_repo.eq_ignore_ascii_case(head_repo))
+                        } else {
+                            None
+                        };
+
+                        let item_repo_private =
+                            repo_visibility_private_for_repo_id(repo_for_labels)
+                                .unwrap_or(default_repo_private);
+
+                        let pr_number = extract_resource_number(item, "pr", repo_for_labels);
+                        let integrity =
+                            pr_integrity(item, repo_for_labels, item_repo_private, is_forked, ctx);
+                        let path = make_item_path(&items_path, i);
+
+                        labeled_paths.push(PathLabelEntry {
+                            path,
+                            labels: crate::ResourceLabels {
+                                description: format!("pr:{}#{}", repo_for_labels, pr_number),
+                                secrecy: if tool_name == "search_pull_requests" {
+                                    repo_visibility_secrecy_for_repo_id(repo_for_labels, ctx).into()
+                                } else {
+                                    default_secrecy_shared.clone()
+                                },
+                                integrity: integrity.into(),
                             },
-                            integrity: integrity.into(),
-                        },
+                        });
+                    }
+
+                    return Some(PathLabelResult {
+                        labeled_paths,
+                        default_labels: Some(crate::ResourceLabels {
+                            description: "pull_request".to_string(),
+                            secrecy: default_secrecy_shared.clone(),
+                            integrity: if default_repo_private {
+                                writer_integrity(&default_repo, ctx)
+                            } else {
+                                none_integrity(&default_repo, ctx)
+                            }
+                            .into(),
+                        }),
+                        items_path: (!items_path.is_empty()).then_some(items_path),
                     });
                 }
-
-                return Some(PathLabelResult {
-                    labeled_paths,
-                    default_labels: Some(crate::ResourceLabels {
-                        description: "pull_request".to_string(),
-                        secrecy: default_secrecy_shared.clone(),
-                        integrity: if default_repo_private {
-                            writer_integrity(&default_repo, ctx)
-                        } else {
-                            none_integrity(&default_repo, ctx)
-                        }
-                        .into(),
-                    }),
-                    items_path: (!items_path.is_empty()).then_some(items_path),
-                });
-            }
             } // end else (non-sub-method)
         }
 
@@ -230,88 +244,89 @@ pub fn label_response_paths(
             if tool_name == "issue_read" && !method.is_empty() && method != "get" {
                 // Fall through — use resource-level labels
             } else {
-            let (items, items_path) = extract_items_array(&actual_response);
+                let (items, items_path) = extract_items_array(&actual_response);
 
-            if let Some(items) = items {
-                // Empty search results are server metadata — let lib.rs handle
-                // them with properly-scoped writer_integrity via the metadata fallback.
-                if items.is_empty() && is_search_result_wrapper(&actual_response) {
-                    return None;
-                }
-                // Try tool_args first, fall back to extracting from first item
-                let (arg_owner, arg_repo, arg_repo_full) = extract_repo_scope_with_query_fallback(tool_args);
-                let default_repo_private = if !arg_owner.is_empty() && !arg_repo.is_empty() {
-                    super::backend::is_repo_private(&arg_owner, &arg_repo).unwrap_or(false)
-                } else {
-                    false
-                };
-                let default_repo = if !arg_repo_full.is_empty() {
-                    arg_repo_full
-                } else if let Some(first) = items.first() {
-                    extract_repo_from_item(first)
-                } else {
-                    String::new()
-                };
-                let default_secrecy = if tool_name == "list_issues" || tool_name == "issue_read" || tool_name == "get_issue" {
-                    repo_visibility_secrecy(&arg_owner, &arg_repo, &default_repo, ctx)
-                } else {
-                    vec![]
-                };
-                let default_secrecy_shared: crate::SharedLabels = default_secrecy.into();
-
-                let limited_items = limit_items_with_log(items, "list_issues");
-                let mut labeled_paths = Vec::with_capacity(limited_items.len());
-
-                for (i, item) in limited_items.iter().enumerate() {
-                    // Extract repo from each item (may differ for search results)
-                    let item_repo = extract_repo_from_item(item);
-                    let repo_for_labels = if item_repo.is_empty() {
-                        &default_repo
+                if let Some(items) = items {
+                    // Empty search results are server metadata — let lib.rs handle
+                    // them with properly-scoped writer_integrity via the metadata fallback.
+                    if items.is_empty() && is_search_result_wrapper(&actual_response) {
+                        return None;
+                    }
+                    // Try tool_args first, fall back to extracting from first item
+                    let (arg_owner, arg_repo, arg_repo_full) =
+                        extract_repo_scope_with_query_fallback(tool_args);
+                    let default_repo_private = if !arg_owner.is_empty() && !arg_repo.is_empty() {
+                        super::backend::is_repo_private(&arg_owner, &arg_repo).unwrap_or(false)
                     } else {
-                        &item_repo
+                        false
                     };
+                    let default_repo = if !arg_repo_full.is_empty() {
+                        arg_repo_full
+                    } else if let Some(first) = items.first() {
+                        extract_repo_from_item(first)
+                    } else {
+                        String::new()
+                    };
+                    let default_secrecy = if tool_name == "list_issues"
+                        || tool_name == "issue_read"
+                        || tool_name == "get_issue"
+                    {
+                        repo_visibility_secrecy(&arg_owner, &arg_repo, &default_repo, ctx)
+                    } else {
+                        vec![]
+                    };
+                    let default_secrecy_shared: crate::SharedLabels = default_secrecy.into();
 
-                    let item_repo_private = repo_visibility_private_for_repo_id(repo_for_labels)
-                        .unwrap_or(default_repo_private);
+                    let limited_items = limit_items_with_log(items, "list_issues");
+                    let mut labeled_paths = Vec::with_capacity(limited_items.len());
 
-                    let issue_number = extract_resource_number(item, "issue", repo_for_labels);
-                    let integrity = issue_integrity(
-                        item,
-                        repo_for_labels,
-                        item_repo_private,
-                        ctx,
-                    );
-                    let path = make_item_path(&items_path, i);
+                    for (i, item) in limited_items.iter().enumerate() {
+                        // Extract repo from each item (may differ for search results)
+                        let item_repo = extract_repo_from_item(item);
+                        let repo_for_labels = if item_repo.is_empty() {
+                            &default_repo
+                        } else {
+                            &item_repo
+                        };
 
-                    labeled_paths.push(PathLabelEntry {
-                        path,
-                        labels: crate::ResourceLabels {
-                            description: format!("issue:{}#{}", repo_for_labels, issue_number),
-                            secrecy: if tool_name == "search_issues" {
-                                repo_visibility_secrecy_for_repo_id(repo_for_labels, ctx).into()
-                            } else {
-                                default_secrecy_shared.clone()
+                        let item_repo_private =
+                            repo_visibility_private_for_repo_id(repo_for_labels)
+                                .unwrap_or(default_repo_private);
+
+                        let issue_number = extract_resource_number(item, "issue", repo_for_labels);
+                        let integrity =
+                            issue_integrity(item, repo_for_labels, item_repo_private, ctx);
+                        let path = make_item_path(&items_path, i);
+
+                        labeled_paths.push(PathLabelEntry {
+                            path,
+                            labels: crate::ResourceLabels {
+                                description: format!("issue:{}#{}", repo_for_labels, issue_number),
+                                secrecy: if tool_name == "search_issues" {
+                                    repo_visibility_secrecy_for_repo_id(repo_for_labels, ctx).into()
+                                } else {
+                                    default_secrecy_shared.clone()
+                                },
+                                integrity: integrity.into(),
                             },
-                            integrity: integrity.into(),
-                        },
+                        });
+                    }
+
+                    return Some(PathLabelResult {
+                        labeled_paths,
+                        default_labels: Some(crate::ResourceLabels {
+                            description: "issue".to_string(),
+                            secrecy: default_secrecy_shared.clone(),
+                            integrity: if default_repo_private {
+                                writer_integrity(&default_repo, ctx)
+                            } else {
+                                none_integrity(&default_repo, ctx)
+                            }
+                            .into(),
+                        }),
+                        items_path: (!items_path.is_empty()).then_some(items_path),
                     });
                 }
-
-                return Some(PathLabelResult {
-                    labeled_paths,
-                    default_labels: Some(crate::ResourceLabels {
-                        description: "issue".to_string(),
-                        secrecy: default_secrecy_shared.clone(),
-                        integrity: if default_repo_private {
-                            writer_integrity(&default_repo, ctx)
-                        } else {
-                            none_integrity(&default_repo, ctx)
-                        }
-                        .into(),
-                    }),
-                    items_path: (!items_path.is_empty()).then_some(items_path),
-                });
-            }
             } // end else (non-sub-method)
         }
 
@@ -590,38 +605,39 @@ pub fn label_response_paths(
                 for (i, item) in limited_items.iter().enumerate() {
                     let item_type = get_str_or(item, "type", "");
 
-                    let (secrecy, integrity) =
-                        if matches!(item_type, "ISSUE" | "PULL_REQUEST") {
-                            // Issues and PRs carry a `content` sub-object with
-                            // `repository_url` (for repo scope) and
-                            // `author_association` (for integrity level).
-                            let content = item.get("content").unwrap_or(item);
-                            let item_repo = extract_repo_from_item(content);
-                            let secrecy = if item_repo.is_empty() {
-                                // Fail secure: if we cannot determine the repo for this
-                                // item, treat it as private within the owner scope rather
-                                // than defaulting to public.
-                                policy_private_scope_label(&arg_owner, "", "", ctx)
-                            } else {
-                                repo_visibility_secrecy_for_repo_id(&item_repo, ctx)
-                            };
-                            let association =
-                                get_str_or(content, "author_association", "");
-                            let integrity_scope =
-                                if item_repo.is_empty() { &arg_owner } else { &item_repo };
-                            let integrity = author_association_floor_from_str(
-                                integrity_scope,
-                                Some(association),
-                                ctx,
-                            );
-                            (secrecy, integrity)
+                    let (secrecy, integrity) = if matches!(item_type, "ISSUE" | "PULL_REQUEST") {
+                        // Issues and PRs carry a `content` sub-object with
+                        // `repository_url` (for repo scope) and
+                        // `author_association` (for integrity level).
+                        let content = item.get("content").unwrap_or(item);
+                        let item_repo = extract_repo_from_item(content);
+                        let secrecy = if item_repo.is_empty() {
+                            // Fail secure: if we cannot determine the repo for this
+                            // item, treat it as private within the owner scope rather
+                            // than defaulting to public.
+                            policy_private_scope_label(&arg_owner, "", "", ctx)
                         } else {
-                            // DRAFT_ISSUE or unrecognised type: no underlying repo context.
-                            // Use org-scoped approved integrity (adding items to a project
-                            // requires org membership, regardless of the creator's identity).
-                            let integrity = writer_integrity(&arg_owner, ctx);
-                            (vec![], integrity)
+                            repo_visibility_secrecy_for_repo_id(&item_repo, ctx)
                         };
+                        let association = get_str_or(content, "author_association", "");
+                        let integrity_scope = if item_repo.is_empty() {
+                            &arg_owner
+                        } else {
+                            &item_repo
+                        };
+                        let integrity = author_association_floor_from_str(
+                            integrity_scope,
+                            Some(association),
+                            ctx,
+                        );
+                        (secrecy, integrity)
+                    } else {
+                        // DRAFT_ISSUE or unrecognised type: no underlying repo context.
+                        // Use org-scoped approved integrity (adding items to a project
+                        // requires org membership, regardless of the creator's identity).
+                        let integrity = writer_integrity(&arg_owner, ctx);
+                        (vec![], integrity)
+                    };
 
                     labeled_paths.push(PathLabelEntry {
                         path: make_item_path(&items_path, i),
@@ -756,7 +772,10 @@ mod tests {
             .expect("default_labels should be present");
 
         assert_eq!(result.labeled_paths.len(), 1);
-        assert_eq!(result.labeled_paths[0].labels.secrecy, default_labels.secrecy);
+        assert_eq!(
+            result.labeled_paths[0].labels.secrecy,
+            default_labels.secrecy
+        );
     }
 
     #[test]
@@ -804,13 +823,19 @@ mod tests {
             .expect("default_labels should be present");
 
         assert_eq!(result.labeled_paths.len(), 1);
-        assert_eq!(result.labeled_paths[0].labels.secrecy, default_labels.secrecy);
+        assert_eq!(
+            result.labeled_paths[0].labels.secrecy,
+            default_labels.secrecy
+        );
     }
 
     #[test]
     fn unknown_tool_returns_none() {
         let result = label_response_paths("unknown_tool", &json!({}), &json!({}), &ctx());
-        assert!(result.is_none(), "unknown tool should produce no path labels");
+        assert!(
+            result.is_none(),
+            "unknown tool should produce no path labels"
+        );
     }
 
     // === list_commits tests ===
@@ -950,7 +975,10 @@ mod tests {
         assert_eq!(result.labeled_paths.len(), 1);
         let entry = &result.labeled_paths[0];
         assert_eq!(entry.labels.description, "project-item:draft_issue");
-        assert!(entry.labels.secrecy.is_empty(), "draft issue should have empty secrecy");
+        assert!(
+            entry.labels.secrecy.is_empty(),
+            "draft issue should have empty secrecy"
+        );
         assert_eq!(
             entry.labels.integrity,
             writer_integrity("octocat", &ctx()),
@@ -1002,8 +1030,7 @@ mod tests {
 
     #[test]
     fn get_file_contents_non_default_branch_gets_writer_integrity() {
-        let tool_args =
-            json!({"owner": "octocat", "repo": "hello", "ref": "feature/my-branch"});
+        let tool_args = json!({"owner": "octocat", "repo": "hello", "ref": "feature/my-branch"});
         let items = json!([{"name": "src/main.rs", "content": "Zm4gbWFpbigpIHt9"}]);
         let response = json!({
             "content": [{
@@ -1026,10 +1053,7 @@ mod tests {
             "non-default-branch file should NOT have merged integrity; got {:?}",
             item_integrity
         );
-        let writer_label = format!(
-            "{}octocat/hello",
-            label_constants::WRITER_PREFIX
-        );
+        let writer_label = format!("{}octocat/hello", label_constants::WRITER_PREFIX);
         assert!(
             item_integrity.contains(&writer_label),
             "non-default-branch file should have writer integrity; got {:?}",

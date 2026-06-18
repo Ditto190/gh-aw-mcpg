@@ -106,7 +106,7 @@ func buildStrictLabelAgentPayload(policy interface{}) (map[string]interface{}, e
 	// Validate that the allow-only object contains only known keys.
 	for k := range allowOnly {
 		switch k {
-		case "repos", "min-integrity", "integrity", "blocked-users", "approval-labels", "trusted-users",
+		case "repos", "min-integrity", "integrity", "blocked-users", "refusal-labels", "approval-labels", "trusted-users",
 			"endorsement-reactions", "disapproval-reactions", "disapproval-integrity", "endorser-min-integrity":
 			// valid allow-only keys
 		default:
@@ -127,6 +127,15 @@ func buildStrictLabelAgentPayload(policy interface{}) (map[string]interface{}, e
 		if err := config.ValidateStringArrayField("blocked-users", blockedUsersRaw, false); err != nil {
 			return nil, err
 		}
+	}
+
+	// Validate refusal-labels if present: array of non-empty strings or comma/newline string expression.
+	if refusalLabelsRaw, ok := allowOnly["refusal-labels"]; ok {
+		normalizedRefusalLabels, err := normalizeLabelListField("refusal-labels", refusalLabelsRaw)
+		if err != nil {
+			return nil, err
+		}
+		allowOnly["refusal-labels"] = normalizedRefusalLabels
 	}
 
 	// Validate approval-labels if present: must be an array of non-empty strings.
@@ -177,6 +186,45 @@ func buildStrictLabelAgentPayload(policy interface{}) (map[string]interface{}, e
 
 	logWasm.Printf("buildStrictLabelAgentPayload: policy validated successfully, repos=%v, min-integrity=%v", reposRaw, integrityRaw)
 	return payload, nil
+}
+
+func normalizeLabelListField(field string, raw interface{}) ([]interface{}, error) {
+	if arr, ok := raw.([]interface{}); ok {
+		if err := config.ValidateStringArrayField(field, arr, false); err != nil {
+			return nil, err
+		}
+		out := make([]interface{}, 0, len(arr))
+		for _, entry := range arr {
+			out = append(out, strings.TrimSpace(entry.(string)))
+		}
+		return out, nil
+	}
+
+	s, ok := raw.(string)
+	if !ok {
+		return nil, fmt.Errorf("invalid %s value: expected array of strings or comma/newline-delimited string", field)
+	}
+
+	parts := strings.FieldsFunc(s, func(r rune) bool {
+		return r == ',' || r == '\n'
+	})
+	if len(parts) == 0 {
+		return nil, fmt.Errorf("invalid %s value: must include at least one non-empty label", field)
+	}
+
+	out := make([]interface{}, 0, len(parts))
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed == "" {
+			continue
+		}
+		out = append(out, trimmed)
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("invalid %s value: must include at least one non-empty label", field)
+	}
+
+	return out, nil
 }
 
 // BuildLabelAgentPayload constructs the label_agent input payload from the given guard policy
