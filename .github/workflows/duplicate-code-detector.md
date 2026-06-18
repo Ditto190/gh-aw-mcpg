@@ -8,9 +8,7 @@ permissions:
   contents: read
   issues: read
   pull-requests: read
-engine:
-  id: copilot
-  model: sonnet-6x
+engine: copilot
 network:
   allowed:
     - defaults
