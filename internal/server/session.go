@@ -174,7 +174,7 @@ func (us *UnifiedServer) sysListServersHandler(ctx context.Context, _ *sdk.CallT
 		return mcp.NewErrorCallToolResult(err)
 	}
 
-	return us.callAndLogSysTool(sessionID, "sys_list_servers", "sys_list_servers")
+	return us.callAndLogSysTool(truncateSessionID(sessionID), "sys_list_servers", "sys_list_servers")
 }
 
 // getSessionKeys returns a list of active session IDs for debugging
