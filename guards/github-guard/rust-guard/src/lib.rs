@@ -454,6 +454,8 @@ struct AllowOnlyPolicy {
     min_integrity: String,
     #[serde(rename = "blocked-users", default)]
     blocked_users: Vec<String>,
+    #[serde(rename = "refusal-labels", default)]
+    refusal_labels: Vec<String>,
     #[serde(rename = "approval-labels", default)]
     approval_labels: Vec<String>,
     #[serde(rename = "trusted-users", default)]
@@ -683,6 +685,7 @@ pub extern "C" fn label_agent(
         scopes,
         trusted_bots,
         blocked_users: policy.blocked_users,
+        refusal_labels: policy.refusal_labels,
         approval_labels: policy.approval_labels,
         trusted_users: policy.trusted_users,
         endorsement_reactions: policy.endorsement_reactions,

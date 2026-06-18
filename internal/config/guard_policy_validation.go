@@ -112,9 +112,13 @@ func NormalizeGuardPolicy(policy *GuardPolicy) (*NormalizedGuardPolicy, error) {
 		return nil, err
 	}
 
-	// Validate and normalize blocked-users, approval-labels, trusted-users.
+	// Validate and normalize blocked-users, refusal-labels, approval-labels, trusted-users.
 	// Dedup uses lowercased keys; original trimmed values are stored.
 	normalized.BlockedUsers, err = normalizeStringSlice("blocked-users", policy.AllowOnly.BlockedUsers, strings.ToLower, false)
+	if err != nil {
+		return nil, err
+	}
+	normalized.RefusalLabels, err = normalizeStringSlice("refusal-labels", policy.AllowOnly.RefusalLabels, strings.ToLower, false)
 	if err != nil {
 		return nil, err
 	}

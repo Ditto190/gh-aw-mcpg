@@ -5,17 +5,18 @@
 
 use serde_json::Value;
 
-use std::borrow::Cow;
-use super::constants::{field_names, scope_names, SENSITIVE_FILE_KEYWORDS, SENSITIVE_FILE_PATTERNS};
-use super::helpers::{
-    author_association_floor_from_str,
-    elevate_via_collaborator_permission, ensure_integrity_baseline,
-    extract_number_as_string, extract_repo_info_from_search_query,
-    format_repo_id, get_string_field, is_any_trusted_actor, is_default_branch_commit_context,
-    is_default_branch_ref, max_integrity,
-    merged_integrity, policy_private_scope_label, private_user_label, project_github_label,
-    reader_integrity, short_sha, writer_integrity, PolicyContext,
+use super::constants::{
+    field_names, scope_names, SENSITIVE_FILE_KEYWORDS, SENSITIVE_FILE_PATTERNS,
 };
+use super::helpers::{
+    author_association_floor_from_str, elevate_via_collaborator_permission,
+    ensure_integrity_baseline, extract_number_as_string, extract_repo_info_from_search_query,
+    format_repo_id, get_string_field, is_any_trusted_actor, is_default_branch_commit_context,
+    is_default_branch_ref, max_integrity, merged_integrity, policy_private_scope_label,
+    private_user_label, project_github_label, reader_integrity, short_sha, writer_integrity,
+    PolicyContext,
+};
+use std::borrow::Cow;
 
 fn apply_repo_visibility_secrecy(
     owner: &str,
@@ -59,11 +60,7 @@ fn private_writer_integrity(
 ///
 /// Extracts the repo scope from the search query first; if the query lacks a
 /// `repo:` qualifier, falls back to the `owner`/`repo` fields in `tool_args`.
-fn resolve_search_scope(
-    tool_args: &Value,
-    owner: &str,
-    repo: &str,
-) -> (String, String, String) {
+fn resolve_search_scope(tool_args: &Value, owner: &str, repo: &str) -> (String, String, String) {
     let query = tool_args
         .get("query")
         .and_then(|v| v.as_str())
@@ -72,7 +69,11 @@ fn resolve_search_scope(
     if !q_repo_id.is_empty() {
         (q_owner, q_repo, q_repo_id)
     } else if !owner.is_empty() && !repo.is_empty() {
-        (owner.to_string(), repo.to_string(), format_repo_id(owner, repo))
+        (
+            owner.to_string(),
+            repo.to_string(),
+            format_repo_id(owner, repo),
+        )
     } else {
         (String::new(), String::new(), String::new())
     }
@@ -101,7 +102,12 @@ fn resolve_author_integrity(
         }
         let resource_id = format!("{}/{}#{}", owner, repo, resource_num);
         floor = elevate_via_collaborator_permission(
-            login, repo_id, resource_label, &resource_id, floor, ctx,
+            login,
+            repo_id,
+            resource_label,
+            &resource_id,
+            floor,
+            ctx,
         );
     }
 
@@ -736,8 +742,8 @@ fn check_file_secrecy(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::helpers::PolicyContext;
+    use super::*;
 
     fn default_ctx() -> PolicyContext {
         PolicyContext::default()
@@ -750,64 +756,151 @@ mod tests {
     #[test]
     fn check_file_secrecy_env_file_triggers_private() {
         let ctx = default_ctx();
-        let result = check_file_secrecy(".env", vec![], "octocat", "hello-world", "octocat/hello-world", &ctx);
-        assert_eq!(result, private_label("octocat", "hello-world", "octocat/hello-world", &ctx));
+        let result = check_file_secrecy(
+            ".env",
+            vec![],
+            "octocat",
+            "hello-world",
+            "octocat/hello-world",
+            &ctx,
+        );
+        assert_eq!(
+            result,
+            private_label("octocat", "hello-world", "octocat/hello-world", &ctx)
+        );
     }
 
     #[test]
     fn check_file_secrecy_dotenv_extension_triggers_private() {
         let ctx = default_ctx();
-        let result = check_file_secrecy("deploy/config.env", vec![], "octocat", "hello-world", "octocat/hello-world", &ctx);
-        assert_eq!(result, private_label("octocat", "hello-world", "octocat/hello-world", &ctx));
+        let result = check_file_secrecy(
+            "deploy/config.env",
+            vec![],
+            "octocat",
+            "hello-world",
+            "octocat/hello-world",
+            &ctx,
+        );
+        assert_eq!(
+            result,
+            private_label("octocat", "hello-world", "octocat/hello-world", &ctx)
+        );
     }
 
     #[test]
     fn check_file_secrecy_pem_file_triggers_private() {
         let ctx = default_ctx();
-        let result = check_file_secrecy("certs/server.pem", vec![], "octocat", "hello-world", "octocat/hello-world", &ctx);
-        assert_eq!(result, private_label("octocat", "hello-world", "octocat/hello-world", &ctx));
+        let result = check_file_secrecy(
+            "certs/server.pem",
+            vec![],
+            "octocat",
+            "hello-world",
+            "octocat/hello-world",
+            &ctx,
+        );
+        assert_eq!(
+            result,
+            private_label("octocat", "hello-world", "octocat/hello-world", &ctx)
+        );
     }
 
     #[test]
     fn check_file_secrecy_rsa_key_triggers_private() {
         let ctx = default_ctx();
-        let result = check_file_secrecy(".ssh/id_rsa", vec![], "octocat", "hello-world", "octocat/hello-world", &ctx);
-        assert_eq!(result, private_label("octocat", "hello-world", "octocat/hello-world", &ctx));
+        let result = check_file_secrecy(
+            ".ssh/id_rsa",
+            vec![],
+            "octocat",
+            "hello-world",
+            "octocat/hello-world",
+            &ctx,
+        );
+        assert_eq!(
+            result,
+            private_label("octocat", "hello-world", "octocat/hello-world", &ctx)
+        );
     }
 
     #[test]
     fn check_file_secrecy_workflow_file_triggers_private() {
         let ctx = default_ctx();
-        let result = check_file_secrecy(".github/workflows/ci.yml", vec![], "octocat", "hello-world", "octocat/hello-world", &ctx);
-        assert_eq!(result, private_label("octocat", "hello-world", "octocat/hello-world", &ctx));
+        let result = check_file_secrecy(
+            ".github/workflows/ci.yml",
+            vec![],
+            "octocat",
+            "hello-world",
+            "octocat/hello-world",
+            &ctx,
+        );
+        assert_eq!(
+            result,
+            private_label("octocat", "hello-world", "octocat/hello-world", &ctx)
+        );
     }
 
     #[test]
     fn check_file_secrecy_secrets_json_triggers_private() {
         let ctx = default_ctx();
-        let result = check_file_secrecy("config/secrets.json", vec![], "octocat", "hello-world", "octocat/hello-world", &ctx);
-        assert_eq!(result, private_label("octocat", "hello-world", "octocat/hello-world", &ctx));
+        let result = check_file_secrecy(
+            "config/secrets.json",
+            vec![],
+            "octocat",
+            "hello-world",
+            "octocat/hello-world",
+            &ctx,
+        );
+        assert_eq!(
+            result,
+            private_label("octocat", "hello-world", "octocat/hello-world", &ctx)
+        );
     }
 
     #[test]
     fn check_file_secrecy_password_file_triggers_private() {
         let ctx = default_ctx();
-        let result = check_file_secrecy("db_password.txt", vec![], "octocat", "hello-world", "octocat/hello-world", &ctx);
-        assert_eq!(result, private_label("octocat", "hello-world", "octocat/hello-world", &ctx));
+        let result = check_file_secrecy(
+            "db_password.txt",
+            vec![],
+            "octocat",
+            "hello-world",
+            "octocat/hello-world",
+            &ctx,
+        );
+        assert_eq!(
+            result,
+            private_label("octocat", "hello-world", "octocat/hello-world", &ctx)
+        );
     }
 
     #[test]
     fn check_file_secrecy_token_file_triggers_private() {
         let ctx = default_ctx();
-        let result = check_file_secrecy("auth_token", vec![], "octocat", "hello-world", "octocat/hello-world", &ctx);
-        assert_eq!(result, private_label("octocat", "hello-world", "octocat/hello-world", &ctx));
+        let result = check_file_secrecy(
+            "auth_token",
+            vec![],
+            "octocat",
+            "hello-world",
+            "octocat/hello-world",
+            &ctx,
+        );
+        assert_eq!(
+            result,
+            private_label("octocat", "hello-world", "octocat/hello-world", &ctx)
+        );
     }
 
     #[test]
     fn check_file_secrecy_normal_source_file_returns_default() {
         let ctx = default_ctx();
         let default = vec!["private:octocat/hello-world".to_string()];
-        let result = check_file_secrecy("src/main.rs", default.clone(), "octocat", "hello-world", "octocat/hello-world", &ctx);
+        let result = check_file_secrecy(
+            "src/main.rs",
+            default.clone(),
+            "octocat",
+            "hello-world",
+            "octocat/hello-world",
+            &ctx,
+        );
         assert_eq!(result, default);
     }
 
@@ -815,7 +908,14 @@ mod tests {
     fn check_file_secrecy_readme_returns_default() {
         let ctx = default_ctx();
         let default = vec!["private:octocat/hello-world".to_string()];
-        let result = check_file_secrecy("README.md", default.clone(), "octocat", "hello-world", "octocat/hello-world", &ctx);
+        let result = check_file_secrecy(
+            "README.md",
+            default.clone(),
+            "octocat",
+            "hello-world",
+            "octocat/hello-world",
+            &ctx,
+        );
         assert_eq!(result, default);
     }
 
@@ -823,16 +923,36 @@ mod tests {
     fn check_file_secrecy_case_insensitive_env() {
         let ctx = default_ctx();
         // .ENV (uppercase) should still match
-        let result = check_file_secrecy("config/.ENV", vec![], "octocat", "hello-world", "octocat/hello-world", &ctx);
-        assert_eq!(result, private_label("octocat", "hello-world", "octocat/hello-world", &ctx));
+        let result = check_file_secrecy(
+            "config/.ENV",
+            vec![],
+            "octocat",
+            "hello-world",
+            "octocat/hello-world",
+            &ctx,
+        );
+        assert_eq!(
+            result,
+            private_label("octocat", "hello-world", "octocat/hello-world", &ctx)
+        );
     }
 
     #[test]
     fn check_file_secrecy_case_insensitive_keyword() {
         let ctx = default_ctx();
         // SECRET (uppercase) in filename should match keyword check
-        let result = check_file_secrecy("MY_SECRET_KEY", vec![], "octocat", "hello-world", "octocat/hello-world", &ctx);
-        assert_eq!(result, private_label("octocat", "hello-world", "octocat/hello-world", &ctx));
+        let result = check_file_secrecy(
+            "MY_SECRET_KEY",
+            vec![],
+            "octocat",
+            "hello-world",
+            "octocat/hello-world",
+            &ctx,
+        );
+        assert_eq!(
+            result,
+            private_label("octocat", "hello-world", "octocat/hello-world", &ctx)
+        );
     }
 
     #[test]
@@ -851,7 +971,10 @@ mod tests {
         let _ = secrecy; // secrecy inherits from repo visibility (backend unavailable in tests)
         let expected_writer_integrity = writer_integrity("octocat/hello-world", &ctx);
         // integrity must be writer-level (non-empty)
-        assert!(!integrity.is_empty(), "discussion_comment_write must produce writer-level integrity");
+        assert!(
+            !integrity.is_empty(),
+            "discussion_comment_write must produce writer-level integrity"
+        );
         assert!(
             integrity.iter().any(|l| expected_writer_integrity.contains(l)),
             "discussion_comment_write integrity must contain a writer-level approved label, got: {:?}",
@@ -866,22 +989,17 @@ mod tests {
         let repo_id = "octocat/hello-world";
         let expected_writer_integrity = writer_integrity(repo_id, &ctx);
         for op in &["create_discussion", "edit_discussion"] {
-            let (secrecy, integrity, _) = super::apply_tool_labels(
-                op,
-                &args,
-                repo_id,
-                vec![],
-                vec![],
-                String::new(),
-                &ctx,
-            );
+            let (secrecy, integrity, _) =
+                super::apply_tool_labels(op, &args, repo_id, vec![], vec![], String::new(), &ctx);
             let _ = secrecy; // secrecy inherits from repo visibility (backend unavailable in tests)
             assert!(
                 !integrity.is_empty(),
                 "{op} must produce writer-level integrity"
             );
             assert!(
-                integrity.iter().any(|l| expected_writer_integrity.contains(l)),
+                integrity
+                    .iter()
+                    .any(|l| expected_writer_integrity.contains(l)),
                 "{op} integrity must contain a writer-level approved label, got: {:?}",
                 integrity
             );
@@ -891,7 +1009,8 @@ mod tests {
     #[test]
     fn apply_tool_labels_issue_comment_edit_delete_is_repo_scoped_write() {
         let ctx = default_ctx();
-        let tool_args = serde_json::json!({ "owner": "github", "repo": "copilot", "comment_id": 42 });
+        let tool_args =
+            serde_json::json!({ "owner": "github", "repo": "copilot", "comment_id": 42 });
         let repo_id = "github/copilot";
 
         for op in &["update_issue_comment", "delete_issue_comment"] {
@@ -909,14 +1028,18 @@ mod tests {
                 writer_integrity(repo_id, &ctx),
                 "{op} must have writer integrity"
             );
-            assert!(secrecy.is_empty(), "{op}: public repo should have empty secrecy");
+            assert!(
+                secrecy.is_empty(),
+                "{op}: public repo should have empty secrecy"
+            );
         }
     }
 
     #[test]
     fn apply_tool_labels_issue_write_ff_matches_issue_write() {
         let ctx = default_ctx();
-        let tool_args = serde_json::json!({ "owner": "github", "repo": "copilot", "issue_number": 42 });
+        let tool_args =
+            serde_json::json!({ "owner": "github", "repo": "copilot", "issue_number": 42 });
         let repo_id = "github/copilot";
 
         let issue_write_labels = super::apply_tool_labels(
@@ -947,7 +1070,8 @@ mod tests {
     #[test]
     fn apply_tool_labels_release_management_is_repo_scoped_write() {
         let ctx = default_ctx();
-        let tool_args = serde_json::json!({ "owner": "github", "repo": "copilot", "tag_name": "v1.0.0" });
+        let tool_args =
+            serde_json::json!({ "owner": "github", "repo": "copilot", "tag_name": "v1.0.0" });
         let repo_id = "github/copilot";
 
         for op in &["create_release", "edit_release", "delete_release"] {
@@ -965,7 +1089,10 @@ mod tests {
                 writer_integrity(repo_id, &ctx),
                 "{op} must have writer integrity"
             );
-            assert!(secrecy.is_empty(), "{op}: public repo should have empty secrecy");
+            assert!(
+                secrecy.is_empty(),
+                "{op}: public repo should have empty secrecy"
+            );
         }
     }
 
@@ -985,8 +1112,7 @@ mod tests {
         let _ = secrecy; // secrecy inherits from repo visibility (backend unavailable in tests)
         let expected_integrity = super::reader_integrity("octocat/hello-world", &ctx);
         assert_eq!(
-            integrity,
-            expected_integrity,
+            integrity, expected_integrity,
             "list_repository_collaborators must produce reader-level integrity"
         );
     }
@@ -1000,9 +1126,8 @@ mod tests {
         let expected_integrity = writer_integrity(repo_id, &ctx);
 
         for tool in &["list_secret_scanning_alerts", "get_secret_scanning_alert"] {
-            let (secrecy, integrity, _) = super::apply_tool_labels(
-                tool, &args, repo_id, vec![], vec![], String::new(), &ctx,
-            );
+            let (secrecy, integrity, _) =
+                super::apply_tool_labels(tool, &args, repo_id, vec![], vec![], String::new(), &ctx);
             assert_eq!(
                 secrecy, expected_secrecy,
                 "{tool}: expected private secrecy label",
@@ -1028,9 +1153,8 @@ mod tests {
             "list_dependabot_alerts",
             "get_dependabot_alert",
         ] {
-            let (secrecy, integrity, _) = super::apply_tool_labels(
-                tool, &args, repo_id, vec![], vec![], String::new(), &ctx,
-            );
+            let (secrecy, integrity, _) =
+                super::apply_tool_labels(tool, &args, repo_id, vec![], vec![], String::new(), &ctx);
             assert_eq!(
                 secrecy, expected_secrecy,
                 "{tool}: expected private secrecy label",
@@ -1049,7 +1173,13 @@ mod tests {
         let repo_id = "octocat/hello-world";
 
         let (secrecy, integrity, _) = super::apply_tool_labels(
-            "get_job_logs", &args, repo_id, vec![], vec![], String::new(), &ctx,
+            "get_job_logs",
+            &args,
+            repo_id,
+            vec![],
+            vec![],
+            String::new(),
+            &ctx,
         );
         assert_eq!(
             secrecy,
@@ -1074,7 +1204,13 @@ mod tests {
         let repo_id = "octocat/hello-world";
 
         let (secrecy, integrity, _) = super::apply_tool_labels(
-            "actions_get", &args, repo_id, vec![], vec![], String::new(), &ctx,
+            "actions_get",
+            &args,
+            repo_id,
+            vec![],
+            vec![],
+            String::new(),
+            &ctx,
         );
         assert_eq!(
             secrecy,
@@ -1099,7 +1235,13 @@ mod tests {
         let repo_id = "octocat/hello-world";
 
         let (_, integrity, _) = super::apply_tool_labels(
-            "actions_get", &args, repo_id, vec![], vec![], String::new(), &ctx,
+            "actions_get",
+            &args,
+            repo_id,
+            vec![],
+            vec![],
+            String::new(),
+            &ctx,
         );
         assert_eq!(
             integrity,
@@ -1117,17 +1259,14 @@ mod tests {
         let expected_integrity = reader_integrity(scope_names::USER, &ctx);
 
         for tool in &["list_gists", "get_gist", "create_gist", "update_gist"] {
-            let (secrecy, integrity, _) = super::apply_tool_labels(
-                tool, &args, "", vec![], vec![], String::new(), &ctx,
-            );
+            let (secrecy, integrity, _) =
+                super::apply_tool_labels(tool, &args, "", vec![], vec![], String::new(), &ctx);
             assert_eq!(
-                secrecy,
-                expected_secrecy,
+                secrecy, expected_secrecy,
                 "{tool}: gist operations must be user-private (secrecy = private:user)",
             );
             assert_eq!(
-                integrity,
-                expected_integrity,
+                integrity, expected_integrity,
                 "{tool}: gist operations must have user-scoped reader integrity",
             );
         }
@@ -1139,7 +1278,13 @@ mod tests {
         let args = serde_json::json!({});
 
         let (secrecy, integrity, _) = super::apply_tool_labels(
-            "delete_gist", &args, "", vec![], vec![], String::new(), &ctx,
+            "delete_gist",
+            &args,
+            "",
+            vec![],
+            vec![],
+            String::new(),
+            &ctx,
         );
         assert_eq!(
             secrecy,

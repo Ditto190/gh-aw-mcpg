@@ -705,6 +705,40 @@ func TestBuildStrictLabelAgentPayloadExtended(t *testing.T) {
 		assert.Contains(t, allowOnly, "approval-labels")
 	})
 
+	t.Run("valid refusal-labels in allow-only succeeds", func(t *testing.T) {
+		policy := map[string]interface{}{
+			"allow-only": map[string]interface{}{
+				"repos":           "public",
+				"min-integrity":   "none",
+				"refusal-labels":  []interface{}{"unsafe", "needs-triage"},
+				"approval-labels": []interface{}{"approved"},
+			},
+		}
+
+		result, err := buildStrictLabelAgentPayload(policy)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		allowOnly := result["allow-only"].(map[string]interface{})
+		assert.Contains(t, allowOnly, "refusal-labels")
+	})
+
+	t.Run("refusal-labels expression string is normalized", func(t *testing.T) {
+		policy := map[string]interface{}{
+			"allow-only": map[string]interface{}{
+				"repos":          "public",
+				"min-integrity":  "none",
+				"refusal-labels": "unsafe, blocked\nneeds-review",
+			},
+		}
+
+		result, err := buildStrictLabelAgentPayload(policy)
+		require.NoError(t, err)
+		allowOnly := result["allow-only"].(map[string]interface{})
+		refusalLabels, ok := allowOnly["refusal-labels"].([]interface{})
+		require.True(t, ok)
+		assert.Equal(t, []interface{}{"unsafe", "blocked", "needs-review"}, refusalLabels)
+	})
+
 	t.Run("blocked-users and approval-labels together with trusted-bots succeeds", func(t *testing.T) {
 		policy := map[string]interface{}{
 			"allow-only": map[string]interface{}{
@@ -830,6 +864,21 @@ func TestBuildStrictLabelAgentPayloadExtended(t *testing.T) {
 		_, err := buildStrictLabelAgentPayload(policy)
 		require.Error(t, err)
 		assert.ErrorContains(t, err, "approval-labels")
+		assert.ErrorContains(t, err, "non-empty string")
+	})
+
+	t.Run("refusal-labels with non-string entry returns error", func(t *testing.T) {
+		policy := map[string]interface{}{
+			"allow-only": map[string]interface{}{
+				"repos":          "public",
+				"min-integrity":  "none",
+				"refusal-labels": []interface{}{"unsafe", 99},
+			},
+		}
+
+		_, err := buildStrictLabelAgentPayload(policy)
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "refusal-labels")
 		assert.ErrorContains(t, err, "non-empty string")
 	})
 
