@@ -20,7 +20,7 @@
 //   - ToolsLogger writes a one-time header and closes the file immediately after
 //     opening, so its setup function owns that lifecycle step.
 //   - FileLogger, MarkdownLogger, and RPCLogger each open a persistent file and
-//     wire up different formatters or rotate strategies.
+//     wire up different formatters.
 //
 // The per-type functions are bundled via the loggerFactory[T] generic defined in
 // common.go, which handles the shared open-file / call-setup / call-onError flow.
