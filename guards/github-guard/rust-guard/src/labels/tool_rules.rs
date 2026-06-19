@@ -1415,17 +1415,8 @@ mod tests {
                 String::new(),
                 &ctx,
             );
-            // Mirror the corresponding standalone tool: ui_get issue_types/issue_fields
-            // should produce the same integrity as list_issue_types/list_issue_fields.
-            let (_, expected_integrity, _) = super::apply_tool_labels(
-                standalone,
-                &args,
-                repo_id,
-                vec![],
-                vec![],
-                String::new(),
-                &ctx,
-            );
+            // Org-level metadata should be treated as GitHub-controlled.
+            let expected_integrity = project_github_label(&ctx);
             assert_eq!(
                 integrity, expected_integrity,
                 "ui_get method={method}: expected same integrity as {standalone}",
