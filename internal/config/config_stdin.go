@@ -505,20 +505,13 @@ func convertStdinServerConfig(name string, server *StdinServerConfig, customSche
 		logConfig.Printf("Configured HTTP MCP server: name=%s, url=%s", name, server.URL)
 		log.Printf("[CONFIG] Configured HTTP MCP server: %s -> %s", name, server.URL)
 		serverCfg := &ServerConfig{
-			Type:                "http",
-			URL:                 server.URL,
-			Headers:             server.Headers,
-			Tools:               server.Tools,
-			ToolResponseFilters: server.ToolResponseFilters,
-			Registry:            server.Registry,
-			GuardPolicies:       server.GuardPolicies,
-			Guard:               server.Guard,
+			Type:    "http",
+			URL:     server.URL,
+			Headers: server.Headers,
 		}
+		applyCommonServerConfigFields(serverCfg, server)
 		if server.ConnectTimeout != nil {
 			serverCfg.ConnectTimeout = *server.ConnectTimeout
-		}
-		if server.ToolTimeout != nil {
-			serverCfg.ToolTimeout = *server.ToolTimeout
 		}
 		if server.ConnectTimeout != nil || server.ToolTimeout != nil {
 			var connectTimeout any
@@ -603,20 +596,26 @@ func buildStdioServerConfig(name string, server *StdinServerConfig) *ServerConfi
 	logConfig.Printf("Configured stdio MCP server: name=%s, container=%s", name, server.Container)
 
 	serverCfg := &ServerConfig{
-		Type:                "stdio",
-		Command:             "docker",
-		Args:                args,
-		Env:                 make(map[string]string),
-		Tools:               server.Tools,
-		ToolResponseFilters: server.ToolResponseFilters,
-		Registry:            server.Registry,
-		GuardPolicies:       server.GuardPolicies,
-		Guard:               server.Guard,
+		Type:    "stdio",
+		Command: "docker",
+		Args:    args,
+		Env:     make(map[string]string),
 	}
-	if server.ToolTimeout != nil {
-		serverCfg.ToolTimeout = *server.ToolTimeout
-	}
+	applyCommonServerConfigFields(serverCfg, server)
 	return serverCfg
+}
+
+// applyCommonServerConfigFields sets the ServerConfig fields that are shared
+// between HTTP and stdio server configurations.
+func applyCommonServerConfigFields(cfg *ServerConfig, src *StdinServerConfig) {
+	cfg.Tools = src.Tools
+	cfg.ToolResponseFilters = src.ToolResponseFilters
+	cfg.Registry = src.Registry
+	cfg.GuardPolicies = src.GuardPolicies
+	cfg.Guard = src.Guard
+	if src.ToolTimeout != nil {
+		cfg.ToolTimeout = *src.ToolTimeout
+	}
 }
 
 // normalizeLocalType normalizes "local" type to "stdio" for backward compatibility.
