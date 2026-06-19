@@ -375,9 +375,8 @@ pub fn apply_tool_labels(
                     secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
                     integrity = writer_integrity(repo_id, ctx);
                 }
-                // Org-level type/field definitions (GitHub-controlled metadata)
-                // S = inherits from org; I = approved:github
                 "issue_types" | "issue_fields" => {
+                    baseline_scope = Cow::Borrowed(scope_names::GITHUB);
                     integrity = project_github_label(ctx);
                 }
                 // Access-sensitive membership/reviewer data
