@@ -317,8 +317,8 @@ func TestHandlePrePhaseError_ReturnsDetailedViolationForDeniedError(t *testing.T
 	}
 
 	denied, detailedErr := HandlePrePhaseError(fmt.Errorf("wrapped: %w", deniedErr))
-	require.Same(t, deniedErr, denied)
-	require.Error(t, detailedErr)
+	assert.Same(t, deniedErr, denied)
+	assert.Error(t, detailedErr)
 	assert.Contains(t, detailedErr.Error(), "DIFC Violation:")
 	assert.Contains(t, detailedErr.Error(), "secrecy violation")
 }
