@@ -114,6 +114,8 @@ func validateStandardServerConfig(name string, server *StdinServerConfig, jsonPa
 	return nil
 }
 
+// validateToolResponseFilters validates tool response filters without permitting jq
+// variables, preserving the historical runtime behavior by delegating with nil varNames.
 func validateToolResponseFilters(filters map[string]string, jsonPath string) error {
 	return validateToolResponseFiltersWithVars(filters, jsonPath, nil)
 }

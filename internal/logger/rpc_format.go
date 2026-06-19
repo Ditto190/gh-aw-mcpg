@@ -25,7 +25,8 @@ import (
 
 // truncateAndSanitize truncates the payload to max length and sanitizes secrets.
 func truncateAndSanitize(payload string, maxLength int) string {
-	return strutil.Truncate(sanitize.SanitizeString(payload), maxLength)
+	sanitized := sanitize.SanitizeString(payload)
+	return strutil.Truncate(sanitized, maxLength)
 }
 
 // LogMarshaledForDebug marshals value for debug logging and dispatches to the
