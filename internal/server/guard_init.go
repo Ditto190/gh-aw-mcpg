@@ -311,12 +311,10 @@ func (us *UnifiedServer) ensureGuardInitialized(
 	// Multiple guards may contribute labels for the same agent; each guard's
 	// label_agent output is additive so that later guards do not overwrite
 	// labels set by earlier ones.
-	mode, labelAgentResult, err := guard.RunLabelAgentInit(
+	mode, labelAgentResult, err := guard.RunLabelAgentForAgent(
 		ctx,
 		g,
-		policy,
-		trustedBots,
-		nil,
+		labelAgentPayload,
 		backendCaller,
 		us.Capabilities,
 		us.AgentRegistry,
