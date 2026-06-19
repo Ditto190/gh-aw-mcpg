@@ -208,13 +208,12 @@ func TestWrapToolHandler_SchemaGenerationError_CanceledContext(t *testing.T) {
 
 	// When applyJqSchema fails (lines 724-726), lines 729-734 return the original
 	// result and data rather than a PayloadMetadata struct.
-	_, isMetadata := data.(PayloadMetadata)
-	if isMetadata {
-		// gojq completed before checking the cancelled context (fast execution).
-		// In this case the schema was generated successfully and we got metadata —
-		// the schema-error path was not triggered. This is a valid fast-execution
-		// outcome; skip the remaining assertions.
-		t.Skip("gojq completed before context check; schema error path not triggered (fast execution)")
+	meta, ok := data.(PayloadMetadata)
+	if ok {
+		// Schema generation succeeded despite the canceled context; validate basic metadata fields.
+		assert.NotEmpty(t, meta.PayloadPath)
+		assert.NotNil(t, meta.PayloadSchema)
+		return
 	}
 
 	// Schema generation failed → original result returned.
