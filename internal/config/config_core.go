@@ -501,6 +501,14 @@ func LoadFromFile(path string) (*Config, error) {
 		return nil, err
 	}
 
+	// Validate gateway.port when explicitly set in TOML so documented port bounds
+	// are enforced consistently across TOML and JSON config paths.
+	if md.IsDefined("gateway", "port") {
+		if err := PortRange(cfg.Gateway.Port, "gateway.port"); err != nil {
+			return nil, err
+		}
+	}
+
 	// Validate payload_size_threshold per spec §4.1.3.3 when explicitly set in TOML.
 	if md.IsDefined("gateway", "payload_size_threshold") {
 		if err := PositiveInteger(cfg.Gateway.PayloadSizeThreshold, "payload_size_threshold", "gateway.payload_size_threshold"); err != nil {

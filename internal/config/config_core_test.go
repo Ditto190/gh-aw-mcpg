@@ -202,6 +202,28 @@ args = ["run", "--rm", "-i", "ghcr.io/github/github-mcp-server:latest"]
 	assert.Equal(t, 60, cfg.Gateway.ToolTimeout)
 }
 
+func TestLoadFromFile_InvalidGatewayPort(t *testing.T) {
+	path := writeTempTOML(t, `
+[gateway]
+port = 99999
+
+[servers.github]
+command = "docker"
+args = ["run", "--rm", "-i", "ghcr.io/github/github-mcp-server:latest"]
+`)
+
+	cfg, err := LoadFromFile(path)
+	require.Error(t, err)
+	assert.Nil(t, cfg)
+	assert.ErrorContains(t, err, "port must be between 1 and 65535")
+}
+
+func TestLoadFromFile_ExampleConfig(t *testing.T) {
+	cfg, err := LoadFromFile(filepath.Join("..", "..", "config.example.toml"))
+	require.NoError(t, err)
+	require.NotNil(t, cfg)
+}
+
 // TestLoadFromFile_ServerFields verifies that all ServerConfig fields are parsed correctly.
 func TestLoadFromFile_ServerFields(t *testing.T) {
 	path := writeTempTOML(t, `
