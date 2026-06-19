@@ -125,6 +125,7 @@ func CloseGlobalCompilationCache(ctx context.Context) error {
 	logWasm.Print("Closing global compilation cache")
 	globalCompilationCacheMu.Lock()
 	cache := globalCompilationCache
+	globalCompilationCache = nil
 	globalCompilationCacheMu.Unlock()
 	if cache == nil {
 		logWasm.Print("Global compilation cache is nil, nothing to close")
