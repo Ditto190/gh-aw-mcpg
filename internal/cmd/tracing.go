@@ -80,7 +80,7 @@ func shutdownTracingProviderWithTimeout(tracingProvider *tracing.Provider, warnf
 	}
 }
 
-func logTracingWarning(format string, args ...any) {
+func logTracingWarnf(format string, args ...any) {
 	log.Printf("Warning: "+format, args...)
 }
 

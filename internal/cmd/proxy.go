@@ -177,13 +177,13 @@ func runProxy(cmd *cobra.Command, args []string) error {
 			SampleRate:  &proxyOTLPSampleRate,
 		}
 	}
-	tracingWarnf := logTracingWarning
+	// Provider enablement logging remains tied to explicit proxy flag configuration.
 	_, cleanupTracing := setupCommandTracing(
 		ctx,
 		tracingCfg,
 		"failed to initialize tracing provider: %v",
-		tracingWarnf,
-		tracingWarnf,
+		logTracingWarnf,
+		logTracingWarnf,
 	)
 	defer cleanupTracing()
 	if tracingCfg != nil {
