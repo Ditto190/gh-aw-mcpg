@@ -624,6 +624,7 @@ pub fn apply_tool_labels(
         | "actions_run_trigger"
         | "run_workflow"
         | "delete_workflow_run_logs"
+        | "delete_workflow_run"
         | "cancel_workflow_run"
         | "force_cancel_workflow_run"
         | "rerun_workflow_run"
@@ -639,7 +640,8 @@ pub fn apply_tool_labels(
         | "delete_issue_comment"
         | "create_release"
         | "edit_release"
-        | "delete_release" => {
+        | "delete_release"
+        | "delete_release_asset" => {
             secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
             integrity = writer_integrity(repo_id, ctx);
         }
@@ -686,11 +688,13 @@ pub fn apply_tool_labels(
         // === User SSH/GPG key management (account-scoped writes) ===
         // Pre-emptive synthetic guard entries for CLI-only operations:
         //   `gh ssh-key add`  → POST /user/keys and /user/ssh_signing_keys
+        //   `gh ssh-key delete` → DELETE /user/keys/{id}
         //   `gh gpg-key add`  → POST /user/gpg_keys
-        // Adding auth/signing keys is a high-risk account-level write operation.
+        //   `gh gpg-key delete` → DELETE /user/gpg_keys/{id}
+        // Managing auth/signing keys is a high-risk account-level write operation.
         // S = private:user (user-account-scoped sensitive data)
         // I = writer(user) (requires authenticated account write access)
-        "add_gpg_key" | "add_ssh_key" => {
+        "add_gpg_key" | "add_ssh_key" | "delete_gpg_key" | "delete_ssh_key" => {
             secrecy = private_user_label();
             baseline_scope = Cow::Borrowed(scope_names::USER);
             integrity = writer_integrity(scope_names::USER, ctx);
@@ -1104,7 +1108,12 @@ mod tests {
             serde_json::json!({ "owner": "github", "repo": "copilot", "tag_name": "v1.0.0" });
         let repo_id = "github/copilot";
 
-        for op in &["create_release", "edit_release", "delete_release"] {
+        for op in &[
+            "create_release",
+            "edit_release",
+            "delete_release",
+            "delete_release_asset",
+        ] {
             let (secrecy, integrity, _desc) = super::apply_tool_labels(
                 op,
                 &tool_args,
@@ -1124,6 +1133,32 @@ mod tests {
                 "{op}: public repo should have empty secrecy"
             );
         }
+    }
+
+    #[test]
+    fn apply_tool_labels_delete_workflow_run_is_repo_scoped_write() {
+        let ctx = default_ctx();
+        let tool_args = serde_json::json!({ "owner": "github", "repo": "copilot", "run_id": 42 });
+        let repo_id = "github/copilot";
+
+        let (secrecy, integrity, _desc) = super::apply_tool_labels(
+            "delete_workflow_run",
+            &tool_args,
+            repo_id,
+            vec![],
+            vec![],
+            String::new(),
+            &ctx,
+        );
+        assert_eq!(
+            integrity,
+            writer_integrity(repo_id, &ctx),
+            "delete_workflow_run must have writer integrity"
+        );
+        assert!(
+            secrecy.is_empty(),
+            "delete_workflow_run: public repo should have empty secrecy"
+        );
     }
 
     #[test]
@@ -1481,13 +1516,13 @@ mod tests {
     }
 
     #[test]
-    fn apply_tool_labels_add_gpg_key_and_add_ssh_key_are_user_private_writes() {
+    fn apply_tool_labels_user_key_management_is_user_private_write() {
         let ctx = default_ctx();
         let args = serde_json::json!({});
         let expected_secrecy = private_user_label();
         let expected_integrity = writer_integrity(scope_names::USER, &ctx);
 
-        for tool in &["add_gpg_key", "add_ssh_key"] {
+        for tool in &["add_gpg_key", "add_ssh_key", "delete_gpg_key", "delete_ssh_key"] {
             let (secrecy, integrity, _) = super::apply_tool_labels(
                 tool,
                 &args,
