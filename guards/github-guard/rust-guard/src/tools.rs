@@ -29,9 +29,13 @@ pub const WRITE_OPERATIONS: &[&str] = &[
     "delete_deploy_key",
     "delete_file",
     "delete_gist",              // DELETE /gists/{gist_id}
+    "delete_gpg_key",           // gh gpg-key delete — removes a user GPG signing key
     "delete_issue_comment",     // DELETE /repos/.../issues/comments/{id}
     "delete_project_item",      // deprecated alias for projects_write (deleteProjectV2Item)
     "delete_release",           // DELETE /repos/.../releases/{id}
+    "delete_release_asset",     // gh release delete-asset — deletes a release asset
+    "delete_ssh_key",           // gh ssh-key delete — removes a user SSH auth/signing key
+    "delete_workflow_run",      // gh run delete — deletes a workflow run record
     "delete_workflow_run_logs", // deprecated alias for actions_run_trigger (DELETE run logs)
     "disable_workflow",         // gh workflow disable
     "discussion_comment_write", // creates or edits GitHub Discussion comments
@@ -277,6 +281,7 @@ mod tests {
     #[test]
     fn test_workflow_run_cancel_rerun_are_write_operations() {
         for op in &[
+            "delete_workflow_run",
             "cancel_workflow_run",
             "force_cancel_workflow_run",
             "rerun_workflow_run",
@@ -300,6 +305,10 @@ mod tests {
             "delete_deploy_key",
             "add_gpg_key",
             "add_ssh_key",
+            "delete_gpg_key",
+            "delete_ssh_key",
+            "delete_release_asset",
+            "delete_workflow_run",
         ] {
             assert!(
                 is_write_operation(op),
@@ -357,6 +366,8 @@ mod tests {
             "create_release",
             "edit_release",
             "delete_release",
+            "delete_release_asset",
+            "upload_release_asset",
             "delete_gist",
         ] {
             assert!(
