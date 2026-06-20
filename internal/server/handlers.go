@@ -108,10 +108,10 @@ func handleClose(unifiedServer *UnifiedServer) http.Handler {
 	})
 }
 
-// registerCommonEndpoints registers shared HTTP endpoints that are common to both routed and unified modes
-// This includes OAuth discovery, health check, and close endpoints
+// registerCommonEndpoints registers shared HTTP endpoints that are common to both routed and unified modes.
+// This includes OAuth discovery, health check, reflect, and close endpoints.
 func registerCommonEndpoints(mux *http.ServeMux, unifiedServer *UnifiedServer, apiKey string) {
-	logHandlers.Printf("Registering common endpoints: auth_enabled=%t", apiKey != "")
+	logHandlers.Printf("Registering common endpoints: close_auth_enabled=%t", apiKey != "")
 
 	// OAuth discovery endpoints - return 404 since we don't use OAuth
 	// Standard path for OAuth discovery (per RFC 8414)
