@@ -367,6 +367,7 @@ mod tests {
             "edit_release",
             "delete_release",
             "delete_release_asset",
+            "upload_release_asset",
             "delete_gist",
         ] {
             assert!(

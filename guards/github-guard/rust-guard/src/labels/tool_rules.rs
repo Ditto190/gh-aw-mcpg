@@ -641,7 +641,8 @@ pub fn apply_tool_labels(
         | "create_release"
         | "edit_release"
         | "delete_release"
-        | "delete_release_asset" => {
+        | "delete_release_asset"
+        | "upload_release_asset" => {
             secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
             integrity = writer_integrity(repo_id, ctx);
         }
@@ -1113,6 +1114,7 @@ mod tests {
             "edit_release",
             "delete_release",
             "delete_release_asset",
+            "upload_release_asset",
         ] {
             let (secrecy, integrity, _desc) = super::apply_tool_labels(
                 op,
