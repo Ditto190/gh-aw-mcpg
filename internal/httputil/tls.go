@@ -5,7 +5,7 @@ import (
 )
 
 // MinTLSVersion is the minimum TLS version enforced across all gateway listeners
-// and clients. Centralising this constant ensures a single point of change if
+// and clients. Centralizing this constant ensures a single point of change if
 // the policy is tightened (e.g., to tls.VersionTLS13).
 const MinTLSVersion = tls.VersionTLS12
 
