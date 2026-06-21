@@ -297,6 +297,31 @@ list_code_scanning_alerts = "map("
 	assert.ErrorContains(t, err, "invalid jq expression")
 }
 
+func TestLoadFromFile_ToolResponseFilter_InvalidJqExpressionMatchesStdinValidation(t *testing.T) {
+	path := writeTempTOML(t, `
+[servers.github]
+command = "docker"
+args = ["run", "--rm", "-i", "ghcr.io/github/github-mcp-server:latest"]
+
+[servers.github.tool_response_filters]
+list_code_scanning_alerts = "map("
+`)
+
+	_, tomlErr := LoadFromFile(path)
+	require.Error(t, tomlErr)
+
+	stdinErr := validateStandardServerConfig("github", &StdinServerConfig{
+		Type:      "stdio",
+		Container: "ghcr.io/github/github-mcp-server:latest",
+		ToolResponseFilters: map[string]string{
+			"list_code_scanning_alerts": "map(",
+		},
+	}, "servers.github")
+	require.Error(t, stdinErr)
+
+	assert.EqualError(t, stdinErr, tomlErr.Error())
+}
+
 // TestLoadFromFile_ToolResponseFilter_WhitespaceOnlyValue verifies that a
 // whitespace-only filter value is rejected as empty.
 func TestLoadFromFile_ToolResponseFilter_WhitespaceOnlyValue(t *testing.T) {
