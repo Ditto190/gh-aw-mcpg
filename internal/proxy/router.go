@@ -78,7 +78,17 @@ func extractOwnerRepoNumber(argsMap map[string]interface{}, ownerKey, repoKey, n
 	number = strutil.GetStringFromMap(argsMap, numberKey)
 	if number == "" {
 		if n, ok := argsMap[numberKey].(float64); ok {
-			number = fmt.Sprintf("%d", int(n))
+			const maxInt64AsFloat = float64(int64(^uint64(0) >> 1))
+			if n < 0 || n > maxInt64AsFloat {
+				err = fmt.Errorf("%s: invalid %s (out of range)", toolName, numberKey)
+				return
+			}
+			i := int64(n)
+			if n != float64(i) {
+				err = fmt.Errorf("%s: invalid %s (expected integer)", toolName, numberKey)
+				return
+			}
+			number = fmt.Sprintf("%d", i)
 		}
 	}
 	if owner == "" || repo == "" || number == "" {
