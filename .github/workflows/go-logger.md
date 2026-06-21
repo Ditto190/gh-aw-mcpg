@@ -75,6 +75,8 @@ Add meaningful debug logging calls to Go files in the `internal/` directory foll
 3. **No side effects** - Logger arguments must NOT compute anything or cause side effects
 4. **Follow logger naming convention** - Use `pkg:filename` pattern (e.g., `server:routed`)
 5. **Reuse existing loggers** - If a file already has a logger declaration, preserve it and add new logging calls
+6. **Cap exploration aggressively** - Inspect at most 3 candidate files before choosing 1 target; do not rank the entire repository
+7. **Never widen scope to fix unrelated failures** - If repo-wide checks fail in untouched files, note the blocker and keep your change focused
 
 ## Logger Guidelines from AGENTS.md
 
@@ -174,6 +176,8 @@ From the list of Go files:
 3. Avoid trivial files with just simple functions
 4. **Select exactly 1 file** for this PR - focus deeply on a single file for quality
 5. **Check if the file already has a logger** - if it does, reuse it rather than creating a new one
+6. **Exclude already-processed files from cache-memory before exploring new candidates**
+7. **Stop searching as soon as you have 1 strong candidate** - do not perform repository-wide surveys once a file is selected
 
 ### 3. Analyze the Selected File
 
@@ -211,27 +215,32 @@ For the selected file:
 
 ### 5. Validate Changes
 
-After adding logging to the selected files, **validate your changes** before creating a PR:
+After adding logging to the selected file, **validate your changes** before creating a PR:
 
-1. **Build the project to ensure no compilation errors:**
+1. **Record whether repo-wide verification is already broken before your edit.**
+   - If a repo-wide check fails in untouched files, treat it as a pre-existing blocker.
+   - Do **not** modify or delete unrelated files just to make global checks pass.
+
+2. **Run targeted validation for the package you changed first:**
+   ```bash
+   go test ./path/to/package
+   go vet ./path/to/package
+   ```
+   This should be your default validation path for a focused logging change.
+
+3. **Build the project to ensure your change did not introduce compilation errors:**
    ```bash
    go build -o awmg
    ```
    This will compile the Go code and catch any syntax errors or import issues.
 
-2. **Run tests to ensure no regressions:**
+4. **Run repo-wide tests only when they were green before your change, or when a failure clearly points to your edited file:**
    ```bash
    go test ./...
    ```
-   This validates that your changes don't break existing functionality.
+   If this fails only because of an unrelated pre-existing issue, keep your logging change focused and report the blocker instead of fixing unrelated code.
 
-3. **Run vet to check for common mistakes:**
-   ```bash
-   go vet ./...
-   ```
-   This catches potential issues in your code.
-
-4. **Test the binary with debug logging enabled:**
+5. **Test the binary with debug logging enabled** if the build succeeded and the file's code path is practical to exercise:
    ```bash
    DEBUG=* ./awmg --config config.toml
    ```
@@ -301,9 +310,11 @@ Before creating the PR, verify:
 - [ ] Logging messages are meaningful and helpful
 - [ ] No duplicate logging with existing logs
 - [ ] Import statements are properly formatted
+- [ ] Repository exploration stopped after choosing a single target file
+- [ ] No unrelated files were changed to satisfy broken baseline checks
 - [ ] Changes validated with `go build -o awmg` (no compilation errors)
-- [ ] Tests pass with `go test ./...`
-- [ ] Code checked with `go vet ./...`
+- [ ] Relevant package checks pass (`go test` / `go vet`)
+- [ ] Repo-wide checks were only used when baseline failures were related to this change
 
 ## Important Notes
 
