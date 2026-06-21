@@ -328,6 +328,7 @@ list_code_scanning_alerts = "map("
 		return s
 	}
 	assert.Equal(t, stripPathPrefix(stdinErr.Error()), stripPathPrefix(tomlErr.Error()))
+}
 
 // TestLoadFromFile_ToolResponseFilter_WhitespaceOnlyValue verifies that a
 // whitespace-only filter value is rejected as empty.

@@ -452,7 +452,10 @@ func validateGatewayConfig(gateway *StdinGatewayConfig) error {
 }
 
 func validateGatewayPayloadSizeThreshold(value int, fieldName, jsonPath string) error {
-	return PositiveInteger(value, fieldName, jsonPath)
+	if ve := PositiveInteger(value, fieldName, jsonPath); ve != nil {
+		return ve
+	}
+	return nil
 }
 
 // validateTrustedBots checks that the trusted_bots/trustedBots list conforms to spec §4.1.3.4:
