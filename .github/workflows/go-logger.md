@@ -221,10 +221,12 @@ After adding logging to the selected file, **validate your changes** before crea
    - If a repo-wide check fails in untouched files, treat it as a pre-existing blocker.
    - Do **not** modify or delete unrelated files just to make global checks pass.
 
-2. **Run targeted validation for the package you changed first:**
+2. **Run targeted validation for the package you changed first.**
+   Derive the package path from the directory containing the edited file
+   (e.g., if you edited `internal/launcher/pool.go`, the package path is `./internal/launcher`):
    ```bash
-   go test ./path/to/package
-   go vet ./path/to/package
+   go test ./internal/<package-of-edited-file>
+   go vet ./internal/<package-of-edited-file>
    ```
    This should be your default validation path for a focused logging change.
 
