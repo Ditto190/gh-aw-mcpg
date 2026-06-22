@@ -91,5 +91,5 @@ func (us *UnifiedServer) sysInitHandler(ctx context.Context, req *sdk.CallToolRe
 	}
 
 	logger.LogInfo("client", "MCP session initialized successfully, session=%s, available_servers=%v", truncateSessionID(sessionID), us.launcher.ServerIDs())
-	return us.callAndLogSysTool(sessionID, "session initialization", "sys_init")
+	return us.callAndLogSysTool(truncateSessionID(sessionID), "session initialization", "sys_init")
 }
