@@ -186,6 +186,11 @@ type WasmGuard struct {
 	// warnedDirectMemoryPath ensures we emit the allocator-fallback warning at
 	// most once per guard instance. It is accessed only while mu is held.
 	warnedDirectMemoryPath bool
+
+	// backendCallCount tracks the number of call_backend invocations for the
+	// current guard function execution. It is reset at the start of each
+	// callWasmGuardFunction call and accessed only while mu is held.
+	backendCallCount int
 }
 
 // NewWasmGuard creates a new WASM guard from a WASM binary file
@@ -213,7 +218,9 @@ func NewWasmGuardWithOptions(ctx context.Context, name string, wasmBytes []byte,
 	logWasm.Printf("Creating WASM guard from bytes: name=%s, size=%d", name, len(wasmBytes))
 
 	// Select compilation cache: explicit opt-out, injected cache, or shared global.
-	runtimeConfig := wazero.NewRuntimeConfigCompiler().WithCloseOnContextDone(true)
+	runtimeConfig := wazero.NewRuntimeConfigCompiler().
+		WithCloseOnContextDone(true).
+		WithMemoryLimitPages(512) // 32 MiB hard cap; accommodates max input/output buffers + overhead
 	if opts != nil && opts.DisableCompilationCache {
 		// Caller explicitly disabled caching
 	} else if opts != nil && opts.CompilationCache != nil {
@@ -254,13 +261,12 @@ func NewWasmGuardWithOptions(ctx context.Context, name string, wasmBytes []byte,
 	}
 
 	// WithStdin prevents WASM from accidentally reading gateway's MCP protocol stdin
+	guardName := name
+	if guardName == "" {
+		guardName = "guard"
+	}
 	moduleConfig := wazero.NewModuleConfig().
-		WithName(func() string {
-			if name == "" {
-				return "guard"
-			}
-			return name
-		}()).
+		WithName(guardName).
 		// WithStartFunctions with no args suppresses automatic _start execution
 		// so guard loading cannot block on stdin or perform unexpected I/O.
 		WithStartFunctions().
@@ -358,6 +364,14 @@ func (g *WasmGuard) hostCallBackend(ctx context.Context, m api.Module, stack []u
 		setResult(-1)
 	}
 
+	// Enforce per-invocation call limit to prevent runaway backend exhaustion.
+	g.backendCallCount++
+	if g.backendCallCount > maxBackendCallsPerInvocation {
+		logWasm.Printf("Backend call limit exceeded: guard=%s, count=%d, max=%d", g.name, g.backendCallCount, maxBackendCallsPerInvocation)
+		setError()
+		return
+	}
+
 	// Read tool name from WASM memory
 	toolNameBytes, ok := m.Memory().Read(toolNamePtr, toolNameLen)
 	if !ok {
@@ -436,6 +450,11 @@ const (
 	logLevelError = 3
 )
 
+// maxBackendCallsPerInvocation limits the number of times a WASM guard may call
+// call_backend within a single label_agent/label_resource/label_response execution.
+// Prevents runaway backend exhaustion from buggy or malicious guards.
+const maxBackendCallsPerInvocation = 50
+
 // hostLog is called by the WASM module to send log messages to the gateway
 func (g *WasmGuard) hostLog(ctx context.Context, m api.Module, stack []uint64) {
 	level := uint32(stack[0])
@@ -490,6 +509,7 @@ func (g *WasmGuard) callWasmGuardFunction(ctx context.Context, funcName string, 
 	defer g.mu.Unlock()
 
 	g.backend = backend
+	g.backendCallCount = 0 // reset per-invocation backend call counter
 
 	inputJSON, err := json.Marshal(inputData)
 	if err != nil {
