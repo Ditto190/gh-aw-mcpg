@@ -106,6 +106,7 @@ func buildDIFCSingleItemFilteredError(detail difc.FilteredItemDetail) error {
 	if detail.Reason != "" {
 		msg = fmt.Sprintf("%s (%s)", msg, detail.Reason)
 	}
+	logDifcLog.Printf("buildDIFCSingleItemFilteredError: description=%s, policy=%s, reason=%s", desc, policyLabel, detail.Reason)
 	return fmt.Errorf("%s", msg)
 }
 
@@ -182,6 +183,7 @@ func difcPolicyLabel(items []difc.FilteredItemDetail) string {
 			integrityCount++
 		}
 	}
+	logDifcLog.Printf("difcPolicyLabel: total=%d, secrecyViolations=%d, integrityViolations=%d", len(items), secrecyCount, integrityCount)
 	switch {
 	case secrecyCount > 0 && integrityCount == 0:
 		return "secrecy policy"
