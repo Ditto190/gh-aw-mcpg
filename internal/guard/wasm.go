@@ -218,7 +218,7 @@ func NewWasmGuardWithOptions(ctx context.Context, name string, wasmBytes []byte,
 	logWasm.Printf("Creating WASM guard from bytes: name=%s, size=%d", name, len(wasmBytes))
 
 	// Select compilation cache: explicit opt-out, injected cache, or shared global.
-runtimeConfig := wazero.NewRuntimeConfigCompiler().
+	runtimeConfig := wazero.NewRuntimeConfigCompiler().
 		WithCloseOnContextDone(true).
 		WithMemoryLimitPages(512) // 32 MiB hard cap; accommodates max input/output buffers + overhead
 	if opts != nil && opts.DisableCompilationCache {
