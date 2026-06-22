@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"strings"
@@ -77,21 +78,22 @@ func extractOwnerRepoNumber(argsMap map[string]interface{}, ownerKey, repoKey, n
 	repo = strutil.GetStringFromMap(argsMap, repoKey)
 	number = strutil.GetStringFromMap(argsMap, numberKey)
 	if number == "" {
-		if n, ok := argsMap[numberKey].(float64); ok {
-			logRouter.Printf("extractOwnerRepoNumber: %s provided as float64=%v, parsing as integer for tool=%s", numberKey, n, toolName)
-			const maxInt64AsFloat = float64(int64(^uint64(0) >> 1))
-			if n < 0 || n > maxInt64AsFloat {
-				logRouter.Printf("extractOwnerRepoNumber: %s float64=%v out of int64 range [0,%v] for tool=%s", numberKey, n, maxInt64AsFloat, toolName)
-				err = fmt.Errorf("%s: invalid %s (out of range)", toolName, numberKey)
+		rawVal := argsMap[numberKey]
+		switch rawVal.(type) {
+		case float64, json.Number:
+			s, ok := strutil.InterfaceToIntString(rawVal)
+			if !ok {
+				logRouter.Printf("extractOwnerRepoNumber: %s=%v is not a valid integer for tool=%s", numberKey, rawVal, toolName)
+				err = fmt.Errorf("%s: invalid %s (out of range or not an integer)", toolName, numberKey)
 				return
 			}
-			i := int64(n)
-			if n != float64(i) {
-				logRouter.Printf("extractOwnerRepoNumber: %s float64=%v is not a whole number for tool=%s", numberKey, n, toolName)
-				err = fmt.Errorf("%s: invalid %s (expected integer)", toolName, numberKey)
+			if len(s) > 0 && s[0] == '-' {
+				logRouter.Printf("extractOwnerRepoNumber: %s=%v is negative for tool=%s", numberKey, rawVal, toolName)
+				err = fmt.Errorf("%s: invalid %s (must be non-negative)", toolName, numberKey)
 				return
 			}
-			number = fmt.Sprintf("%d", i)
+			logRouter.Printf("extractOwnerRepoNumber: %s provided as numeric=%v, parsing as integer for tool=%s", numberKey, rawVal, toolName)
+			number = s
 		}
 	}
 	if owner == "" || repo == "" || number == "" {

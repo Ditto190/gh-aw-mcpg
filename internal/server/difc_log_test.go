@@ -334,7 +334,7 @@ func TestBuildFilteredItemLogEntry_NumberEdgeCases(t *testing.T) {
 		wantNumber string
 	}{
 		{name: "zero float64", data: map[string]interface{}{"number": float64(0)}, wantNumber: "0"},
-		{name: "decimal float64 truncates", data: map[string]interface{}{"number": float64(123.9)}, wantNumber: "123"},
+		{name: "decimal float64 returns empty", data: map[string]interface{}{"number": float64(123.9)}, wantNumber: ""},
 		{name: "nil number returns empty", data: map[string]interface{}{"number": nil}, wantNumber: ""},
 		{name: "int number returns empty", data: map[string]interface{}{"number": 42}, wantNumber: ""},
 	}
