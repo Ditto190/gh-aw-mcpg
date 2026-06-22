@@ -106,12 +106,14 @@ func (l *Logger) Enabled() bool {
 
 // emit writes message to stderr (with color + time diff) and to the file logger.
 // The caller must have already checked l.enabled.
-func (l *Logger) emit(message string) {
+func (l *Logger) emit(messageFn func() string) {
 	l.mu.Lock()
 	now := time.Now()
 	diff := now.Sub(l.lastLog)
 	l.lastLog = now
 	l.mu.Unlock()
+
+	message := messageFn()
 
 	// Write to stderr with colors and time diff
 	if l.color != "" {
@@ -132,7 +134,9 @@ func (l *Logger) Printf(format string, args ...any) {
 	if !l.enabled {
 		return
 	}
-	l.emit(fmt.Sprintf(format, args...))
+	l.emit(func() string {
+		return fmt.Sprintf(format, args...)
+	})
 }
 
 // Print prints a message if the logger is enabled.
@@ -143,7 +147,9 @@ func (l *Logger) Print(args ...any) {
 	if !l.enabled {
 		return
 	}
-	l.emit(fmt.Sprint(args...))
+	l.emit(func() string {
+		return fmt.Sprint(args...)
+	})
 }
 
 // computeEnabled computes whether a namespace matches the DEBUG patterns

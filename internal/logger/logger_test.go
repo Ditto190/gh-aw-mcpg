@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -25,6 +26,31 @@ func captureStderr(f func()) string {
 	var buf bytes.Buffer
 	buf.ReadFrom(r)
 	return buf.String()
+}
+
+type sleepingStringer struct {
+	delay time.Duration
+	value string
+}
+
+func (s sleepingStringer) String() string {
+	time.Sleep(s.delay)
+	return s.value
+}
+
+func extractLoggedDuration(t *testing.T, output string) time.Duration {
+	t.Helper()
+
+	idx := strings.LastIndex(output, "+")
+	require.NotEqual(t, -1, idx, "log output should contain a time diff")
+
+	durationText := strings.TrimSpace(output[idx+1:])
+	durationText = strings.ReplaceAll(durationText, "µs", "us")
+
+	duration, err := time.ParseDuration(durationText)
+	require.NoError(t, err, "log output should end with a parseable duration")
+
+	return duration
 }
 
 func TestNew(t *testing.T) {
@@ -255,6 +281,46 @@ func TestLogger_TimeDiff(t *testing.T) {
 	// Second log should show time diff with a time unit
 	assert.Regexp(t, `\+\d+(\.\d+)?(ns|µs|ms|s|m|h)`, output2,
 		"Second log should show time diff with unit")
+}
+
+func TestLogger_TimeDiffExcludesFormattingCost(t *testing.T) {
+	t.Setenv("DEBUG", "*")
+
+	tests := []struct {
+		name string
+		log  func(*Logger, sleepingStringer)
+	}{
+		{
+			name: "Printf",
+			log: func(logger *Logger, arg sleepingStringer) {
+				logger.Printf("%v", arg)
+			},
+		},
+		{
+			name: "Print",
+			log: func(logger *Logger, arg sleepingStringer) {
+				logger.Print(arg)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logger := New("test:format-cost")
+			logger.lastLog = time.Now()
+
+			output := captureStderr(func() {
+				tt.log(logger, sleepingStringer{
+					delay: 50 * time.Millisecond,
+					value: "slow message",
+				})
+			})
+
+			assert.Contains(t, output, "slow message")
+			assert.Less(t, extractLoggedDuration(t, output), 20*time.Millisecond,
+				"time diff should be captured before message formatting runs")
+		})
+	}
 }
 
 func TestColorSelection(t *testing.T) {
