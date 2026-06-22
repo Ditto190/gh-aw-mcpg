@@ -104,21 +104,14 @@ func (l *Logger) Enabled() bool {
 	return l.enabled
 }
 
-// Printf prints a formatted message if the logger is enabled.
-// A newline is always added at the end.
-// Time diff since last log is displayed like the debug npm package.
-// Also writes to the file logger in text-only format.
-func (l *Logger) Printf(format string, args ...any) {
-	if !l.enabled {
-		return
-	}
+// emit writes message to stderr (with color + time diff) and to the file logger.
+// The caller must have already checked l.enabled.
+func (l *Logger) emit(message string) {
 	l.mu.Lock()
 	now := time.Now()
 	diff := now.Sub(l.lastLog)
 	l.lastLog = now
 	l.mu.Unlock()
-
-	message := fmt.Sprintf(format, args...)
 
 	// Write to stderr with colors and time diff
 	if l.color != "" {
@@ -131,6 +124,17 @@ func (l *Logger) Printf(format string, args ...any) {
 	LogDebug(l.namespace, "%s", message)
 }
 
+// Printf prints a formatted message if the logger is enabled.
+// A newline is always added at the end.
+// Time diff since last log is displayed like the debug npm package.
+// Also writes to the file logger in text-only format.
+func (l *Logger) Printf(format string, args ...any) {
+	if !l.enabled {
+		return
+	}
+	l.emit(fmt.Sprintf(format, args...))
+}
+
 // Print prints a message if the logger is enabled.
 // A newline is always added at the end.
 // Time diff since last log is displayed like the debug npm package.
@@ -139,23 +143,7 @@ func (l *Logger) Print(args ...any) {
 	if !l.enabled {
 		return
 	}
-	l.mu.Lock()
-	now := time.Now()
-	diff := now.Sub(l.lastLog)
-	l.lastLog = now
-	l.mu.Unlock()
-
-	message := fmt.Sprint(args...)
-
-	// Write to stderr with colors and time diff
-	if l.color != "" {
-		fmt.Fprintf(os.Stderr, "%s%s%s %s +%s\n", l.color, l.namespace, colorReset, message, strutil.FormatDuration(diff))
-	} else {
-		fmt.Fprintf(os.Stderr, "%s %s +%s\n", l.namespace, message, strutil.FormatDuration(diff))
-	}
-
-	// Also write to file logger in text-only format (no colors, no time diff)
-	LogDebug(l.namespace, "%s", message)
+	l.emit(fmt.Sprint(args...))
 }
 
 // computeEnabled computes whether a namespace matches the DEBUG patterns
