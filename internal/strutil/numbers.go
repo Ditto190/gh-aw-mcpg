@@ -26,11 +26,13 @@ func InterfaceToIntString(v interface{}) (string, bool) {
 		}
 		return fmt.Sprintf("%d", i), true
 	case json.Number:
-		// Validate that the json.Number represents a valid integer.
-		if _, err := n.Int64(); err != nil {
+		// Validate that the json.Number represents a valid integer and convert to
+		// a canonical decimal string (avoids non-canonical forms like "00123").
+		i, err := n.Int64()
+		if err != nil {
 			return "", false // non-integer or out-of-range json.Number
 		}
-		return n.String(), true
+		return fmt.Sprintf("%d", i), true
 	}
 	return "", false
 }

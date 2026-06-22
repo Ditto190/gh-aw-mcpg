@@ -102,6 +102,61 @@ func TestRestBackendCaller_ExtractOwnerRepoNumber(t *testing.T) {
 			toolName:  "pull_request_read",
 			wantErr:   "pull_request_read: missing owner/repo/pullNumber",
 		},
+		{
+			name: "float64 non-integer returns invalid error",
+			args: map[string]interface{}{
+				"owner":        "myorg",
+				"repo":         "myrepo",
+				"issue_number": float64(1.5),
+			},
+			numberKey: "issue_number",
+			toolName:  "issue_read",
+			wantErr:   "issue_read: invalid issue_number (out of range or not an integer)",
+		},
+		{
+			name: "float64 negative returns invalid error",
+			args: map[string]interface{}{
+				"owner":        "myorg",
+				"repo":         "myrepo",
+				"issue_number": float64(-1),
+			},
+			numberKey: "issue_number",
+			toolName:  "issue_read",
+			wantErr:   "issue_read: invalid issue_number (must be non-negative)",
+		},
+		{
+			name: "float64 out-of-range returns invalid error",
+			args: map[string]interface{}{
+				"owner":        "myorg",
+				"repo":         "myrepo",
+				"issue_number": float64(1e20),
+			},
+			numberKey: "issue_number",
+			toolName:  "issue_read",
+			wantErr:   "issue_read: invalid issue_number (out of range or not an integer)",
+		},
+		{
+			name: "json.Number non-integer returns invalid error",
+			args: map[string]interface{}{
+				"owner":        "myorg",
+				"repo":         "myrepo",
+				"issue_number": json.Number("1.5"),
+			},
+			numberKey: "issue_number",
+			toolName:  "issue_read",
+			wantErr:   "issue_read: invalid issue_number (out of range or not an integer)",
+		},
+		{
+			name: "json.Number negative returns invalid error",
+			args: map[string]interface{}{
+				"owner":        "myorg",
+				"repo":         "myrepo",
+				"issue_number": json.Number("-1"),
+			},
+			numberKey: "issue_number",
+			toolName:  "issue_read",
+			wantErr:   "issue_read: invalid issue_number (must be non-negative)",
+		},
 	}
 
 	for _, tt := range tests {

@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"strings"
@@ -77,8 +78,21 @@ func extractOwnerRepoNumber(argsMap map[string]interface{}, ownerKey, repoKey, n
 	repo = strutil.GetStringFromMap(argsMap, repoKey)
 	number = strutil.GetStringFromMap(argsMap, numberKey)
 	if number == "" {
-		if s, ok := strutil.InterfaceToIntString(argsMap[numberKey]); ok {
-			logRouter.Printf("extractOwnerRepoNumber: %s provided as numeric=%v, parsing as integer for tool=%s", numberKey, argsMap[numberKey], toolName)
+		rawVal := argsMap[numberKey]
+		switch rawVal.(type) {
+		case float64, json.Number:
+			s, ok := strutil.InterfaceToIntString(rawVal)
+			if !ok {
+				logRouter.Printf("extractOwnerRepoNumber: %s=%v is not a valid integer for tool=%s", numberKey, rawVal, toolName)
+				err = fmt.Errorf("%s: invalid %s (out of range or not an integer)", toolName, numberKey)
+				return
+			}
+			if len(s) > 0 && s[0] == '-' {
+				logRouter.Printf("extractOwnerRepoNumber: %s=%v is negative for tool=%s", numberKey, rawVal, toolName)
+				err = fmt.Errorf("%s: invalid %s (must be non-negative)", toolName, numberKey)
+				return
+			}
+			logRouter.Printf("extractOwnerRepoNumber: %s provided as numeric=%v, parsing as integer for tool=%s", numberKey, rawVal, toolName)
 			number = s
 		}
 	}

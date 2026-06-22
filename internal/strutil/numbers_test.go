@@ -47,7 +47,7 @@ func TestInterfaceToIntString(t *testing.T) {
 
 	t.Run("float64 out of int64 range returns false", func(t *testing.T) {
 		t.Parallel()
-		// 1e20 exceeds int64 max; round-trip check catches the overflow
+		// 1e20 exceeds int64 max; explicit out-of-range guard rejects it
 		s, ok := InterfaceToIntString(float64(1e20))
 		assert.False(t, ok)
 		assert.Equal(t, "", s)
@@ -58,6 +58,13 @@ func TestInterfaceToIntString(t *testing.T) {
 		s, ok := InterfaceToIntString(json.Number("999"))
 		assert.True(t, ok)
 		assert.Equal(t, "999", s)
+	})
+
+	t.Run("json.Number leading zeros canonicalized", func(t *testing.T) {
+		t.Parallel()
+		s, ok := InterfaceToIntString(json.Number("00123"))
+		assert.True(t, ok)
+		assert.Equal(t, "123", s)
 	})
 
 	t.Run("json.Number large value within int64", func(t *testing.T) {
