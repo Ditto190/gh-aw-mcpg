@@ -80,6 +80,19 @@ func TestRestBackendCaller_ExtractOwnerRepoNumber(t *testing.T) {
 			wantNumber: "7",
 		},
 		{
+			name: "json.Number number",
+			args: map[string]interface{}{
+				"owner":        "myorg",
+				"repo":         "myrepo",
+				"issue_number": json.Number("99"),
+			},
+			numberKey:  "issue_number",
+			toolName:   "issue_read",
+			wantOwner:  "myorg",
+			wantRepo:   "myrepo",
+			wantNumber: "99",
+		},
+		{
 			name: "missing values",
 			args: map[string]interface{}{
 				"owner":      "myorg",

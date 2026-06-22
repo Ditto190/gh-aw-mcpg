@@ -65,13 +65,8 @@ func buildFilteredItemLogEntry(serverID, toolName string, detail difc.FilteredIt
 			}
 		}
 		entry.HTMLURL = strutil.GetStringFromMap(m, "html_url", "htmlUrl")
-		if n, ok := m["number"]; ok {
-			switch v := n.(type) {
-			case float64:
-				entry.Number = fmt.Sprintf("%d", int64(v))
-			case json.Number:
-				entry.Number = v.String()
-			}
+		if s, ok := strutil.InterfaceToIntString(m["number"]); ok {
+			entry.Number = s
 		}
 		entry.SHA = strutil.GetStringFromMap(m, "sha")
 		logDifcLog.Printf("Filtered item metadata: author=%s, number=%s, url=%s", entry.AuthorLogin, entry.Number, entry.HTMLURL)
