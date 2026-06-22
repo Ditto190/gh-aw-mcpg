@@ -1986,14 +1986,15 @@ pub fn commit_integrity(
     is_default_branch: bool,
     ctx: &PolicyContext,
 ) -> Vec<String> {
+    let sha = item
+        .get("sha")
+        .and_then(|v| v.as_str())
+        .unwrap_or("unknown");
+    let short_sha = short_sha(sha);
+
     // Step 1: Check if author is in blocked_users — takes precedence over all other rules.
     let author_login = extract_author_login(item);
     if !author_login.is_empty() && is_blocked_user(author_login, ctx) {
-        let sha = item
-            .get("sha")
-            .and_then(|v| v.as_str())
-            .unwrap_or("unknown");
-        let short_sha = short_sha(sha);
         crate::log_info(&format!(
             "[integrity] commit:{}@{} → blocked (author '{}' in blocked-users)",
             repo_full_name, short_sha, author_login
@@ -2021,11 +2022,6 @@ pub fn commit_integrity(
     // Collaborator permission fallback for public repos (handles owners/admins
     // whose author_association is missing or "NONE").
     if !repo_private {
-        let sha = item
-            .get("sha")
-            .and_then(|v| v.as_str())
-            .unwrap_or("unknown");
-        let short_sha = short_sha(sha);
         integrity = elevate_via_collaborator_permission(
             author_login,
             repo_full_name,
@@ -2398,6 +2394,63 @@ mod tests {
             let s = level.as_str();
             assert_eq!(MinIntegrity::from_policy_str(s), Some(level));
         }
+    }
+
+    // =========================================================================
+    // Tests for is_default_branch_commit_context / looks_like_commit_sha
+    // =========================================================================
+
+    #[test]
+    fn test_is_default_branch_commit_context_empty_ref_is_default() {
+        assert!(is_default_branch_commit_context("get_commit", ""));
+        assert!(is_default_branch_commit_context("list_commits", ""));
+    }
+
+    #[test]
+    fn test_is_default_branch_commit_context_main_master_head_are_default() {
+        for branch in &["main", "master", "HEAD", "Main", "MASTER"] {
+            assert!(
+                is_default_branch_commit_context("list_commits", branch),
+                "{branch} should be default-branch context"
+            );
+        }
+    }
+
+    #[test]
+    fn test_is_default_branch_commit_context_get_commit_with_sha_is_default() {
+        let sha40 = "a590b228c2e258907f503759c31c75bbfcd78a36";
+        assert!(is_default_branch_commit_context("get_commit", sha40));
+        assert!(is_default_branch_commit_context("get_commit", "abc1234"));
+    }
+
+    #[test]
+    fn test_is_default_branch_commit_context_list_commits_with_sha_is_not_default() {
+        let sha40 = "a590b228c2e258907f503759c31c75bbfcd78a36";
+        assert!(!is_default_branch_commit_context("list_commits", sha40));
+    }
+
+    #[test]
+    fn test_is_default_branch_commit_context_non_hex_sha_not_treated_as_commit() {
+        assert!(!is_default_branch_commit_context(
+            "get_commit",
+            "feature/my-branch"
+        ));
+        assert!(!is_default_branch_commit_context(
+            "get_commit",
+            "v1.0.0-release"
+        ));
+    }
+
+    #[test]
+    fn test_is_default_branch_commit_context_too_short_sha_not_treated_as_commit() {
+        assert!(!is_default_branch_commit_context("get_commit", "abc12"));
+        assert!(!is_default_branch_commit_context("get_commit", "abc123"));
+    }
+
+    #[test]
+    fn test_is_default_branch_commit_context_too_long_sha_not_treated_as_commit() {
+        let long_sha = "a590b228c2e258907f503759c31c75bbfcd78a361";
+        assert!(!is_default_branch_commit_context("get_commit", long_sha));
     }
 
     // =========================================================================
