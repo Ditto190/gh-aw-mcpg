@@ -1343,6 +1343,11 @@ func TestMaxRetriesSentinelCanary(t *testing.T) {
 				firstSSEDone <- struct{}{}
 			}
 			<-initializeDone
+			// Give the SDK time to process the initialize response and consider
+			// the session established before we close the SSE stream. Under the
+			// race detector, goroutine scheduling jitter can cause the SSE close
+			// to propagate before Connect returns the session.
+			time.Sleep(100 * time.Millisecond)
 		case http.MethodPost:
 			var req map[string]interface{}
 			_ = json.NewDecoder(r.Body).Decode(&req)
