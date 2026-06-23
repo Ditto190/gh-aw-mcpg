@@ -25,7 +25,7 @@ func newMinimalUnifiedServerForGuardTest(cfg *config.Config) *UnifiedServer {
 // TestRegisterGuard_NoServerInConfig registers a noop guard when the serverID is
 // absent from cfg.Servers (the outer else branch at line 664).
 func TestRegisterGuard_NoServerInConfig(t *testing.T) {
-	t.Setenv(wasmGuardsDirEnvVar, "")
+	t.Setenv(guard.WASMGuardsDirEnvVar, "")
 
 	cfg := &config.Config{
 		Servers: map[string]*config.ServerConfig{
@@ -42,7 +42,7 @@ func TestRegisterGuard_NoServerInConfig(t *testing.T) {
 
 // TestRegisterGuard_NilServersMap registers a noop guard when cfg.Servers is nil.
 func TestRegisterGuard_NilServersMap(t *testing.T) {
-	t.Setenv(wasmGuardsDirEnvVar, "")
+	t.Setenv(guard.WASMGuardsDirEnvVar, "")
 
 	cfg := &config.Config{Servers: nil}
 	us := newMinimalUnifiedServerForGuardTest(cfg)
@@ -56,7 +56,7 @@ func TestRegisterGuard_NilServersMap(t *testing.T) {
 // TestRegisterGuard_EmptyGuardField registers a noop guard when the server exists
 // in config but its Guard field is empty (line 664 – no guard name set).
 func TestRegisterGuard_EmptyGuardField(t *testing.T) {
-	t.Setenv(wasmGuardsDirEnvVar, "")
+	t.Setenv(guard.WASMGuardsDirEnvVar, "")
 
 	cfg := &config.Config{
 		Servers: map[string]*config.ServerConfig{
@@ -76,7 +76,7 @@ func TestRegisterGuard_EmptyGuardField(t *testing.T) {
 // TestRegisterGuard_GuardConfigType_Noop exercises the "noop"/"" case inside
 // createGuardFromConfig (line 770-771), called via the Guard config path.
 func TestRegisterGuard_GuardConfigType_Noop(t *testing.T) {
-	t.Setenv(wasmGuardsDirEnvVar, "")
+	t.Setenv(guard.WASMGuardsDirEnvVar, "")
 
 	cfg := &config.Config{
 		Servers: map[string]*config.ServerConfig{
@@ -97,7 +97,7 @@ func TestRegisterGuard_GuardConfigType_Noop(t *testing.T) {
 // TestRegisterGuard_GuardConfigType_Empty exercises the empty-string type case
 // inside createGuardFromConfig, which also creates a NoopGuard.
 func TestRegisterGuard_GuardConfigType_Empty(t *testing.T) {
-	t.Setenv(wasmGuardsDirEnvVar, "")
+	t.Setenv(guard.WASMGuardsDirEnvVar, "")
 
 	cfg := &config.Config{
 		Servers: map[string]*config.ServerConfig{
@@ -121,7 +121,7 @@ func TestRegisterGuard_GuardConfigType_Empty(t *testing.T) {
 // config specifies type="wasm" but has no path set.  createGuardFromConfig returns
 // an error and registerGuard falls back to a noop guard (line 652-653).
 func TestRegisterGuard_GuardConfigType_WasmEmptyPath(t *testing.T) {
-	t.Setenv(wasmGuardsDirEnvVar, "")
+	t.Setenv(guard.WASMGuardsDirEnvVar, "")
 
 	cfg := &config.Config{
 		Servers: map[string]*config.ServerConfig{
@@ -146,7 +146,7 @@ func TestRegisterGuard_GuardConfigType_WasmEmptyPath(t *testing.T) {
 // line 658 where the Guard name is not in cfg.Guards.  CreateGuard("unknown") fails
 // and the guard falls back to noop (line 660-661).
 func TestRegisterGuard_GuardNameSet_NoGuardConfig_UnknownType(t *testing.T) {
-	t.Setenv(wasmGuardsDirEnvVar, "")
+	t.Setenv(guard.WASMGuardsDirEnvVar, "")
 
 	cfg := &config.Config{
 		Servers: map[string]*config.ServerConfig{
@@ -166,7 +166,7 @@ func TestRegisterGuard_GuardNameSet_NoGuardConfig_UnknownType(t *testing.T) {
 // where the Guard name is not in cfg.Guards but IS registered via RegisterGuardType.
 // The guard returned by the factory should be registered.
 func TestRegisterGuard_GuardNameSet_NoGuardConfig_RegisteredType(t *testing.T) {
-	t.Setenv(wasmGuardsDirEnvVar, "")
+	t.Setenv(guard.WASMGuardsDirEnvVar, "")
 
 	const guardTypeName = "test-registered-guard-type"
 
@@ -197,7 +197,7 @@ func TestRegisterGuard_GuardNameSet_NoGuardConfig_RegisteredType(t *testing.T) {
 // server's resolved guard policy is a write-sink policy (lines 633-636), a
 // WriteSinkGuard is registered instead of a noop guard.
 func TestRegisterGuard_WriteSinkPolicy_CreatesWriteSinkGuard(t *testing.T) {
-	t.Setenv(wasmGuardsDirEnvVar, "")
+	t.Setenv(guard.WASMGuardsDirEnvVar, "")
 
 	cfg := &config.Config{
 		Servers: map[string]*config.ServerConfig{
@@ -224,7 +224,7 @@ func TestRegisterGuard_WriteSinkPolicy_CreatesWriteSinkGuard(t *testing.T) {
 // TestRegisterGuard_WriteSinkPolicy_MultipleAcceptPatterns ensures write-sink guard
 // creation works correctly with multiple accept patterns.
 func TestRegisterGuard_WriteSinkPolicy_MultipleAcceptPatterns(t *testing.T) {
-	t.Setenv(wasmGuardsDirEnvVar, "")
+	t.Setenv(guard.WASMGuardsDirEnvVar, "")
 
 	cfg := &config.Config{
 		Servers: map[string]*config.ServerConfig{
@@ -253,7 +253,7 @@ func TestRegisterGuard_WriteSinkPolicy_MultipleAcceptPatterns(t *testing.T) {
 // NOTE: The guard must be non-noop because requireGuardPolicyIfGuardEnabled
 // short-circuits for noop guards without validating the policy (by design).
 func TestRegisterGuard_InvalidPolicy_ReturnsError(t *testing.T) {
-	t.Setenv(wasmGuardsDirEnvVar, "")
+	t.Setenv(guard.WASMGuardsDirEnvVar, "")
 
 	// Register a non-noop guard type so the policy validation path is reached.
 	const guardType = "test-non-noop-for-invalid-policy"
@@ -289,7 +289,7 @@ func TestRegisterGuard_InvalidPolicy_ReturnsError(t *testing.T) {
 // MCP_GATEWAY_WASM_GUARDS_DIR env var is empty (the default), no WASM discovery
 // occurs and the function falls through to the guard config path.
 func TestRegisterGuard_WasmDirNotSet_UsesConfigGuard(t *testing.T) {
-	t.Setenv(wasmGuardsDirEnvVar, "")
+	t.Setenv(guard.WASMGuardsDirEnvVar, "")
 
 	cfg := &config.Config{
 		Servers: map[string]*config.ServerConfig{
@@ -310,7 +310,7 @@ func TestRegisterGuard_WasmDirNotSet_UsesConfigGuard(t *testing.T) {
 // function falls through to the guard config path without error (line 738-739).
 func TestRegisterGuard_WasmDirSet_ServerSubdirMissing(t *testing.T) {
 	rootDir := t.TempDir()
-	t.Setenv(wasmGuardsDirEnvVar, rootDir)
+	t.Setenv(guard.WASMGuardsDirEnvVar, rootDir)
 
 	cfg := &config.Config{
 		Servers: map[string]*config.ServerConfig{
@@ -332,7 +332,7 @@ func TestRegisterGuard_WasmDirSet_ServerSubdirMissing(t *testing.T) {
 // check the guard config, eventually ending with a noop.
 func TestRegisterGuard_WasmDirSet_InvalidWasmFile_FallsBackToConfigGuard(t *testing.T) {
 	rootDir := t.TempDir()
-	t.Setenv(wasmGuardsDirEnvVar, rootDir)
+	t.Setenv(guard.WASMGuardsDirEnvVar, rootDir)
 
 	// Create a WASM file with invalid content so NewWasmGuard fails
 	serverDir := filepath.Join(rootDir, "github")
@@ -364,7 +364,7 @@ func TestRegisterGuard_WasmDirSet_InvalidWasmFile_FallsBackToConfigGuard(t *test
 // is logged as a WARNING and registerGuard continues with the guard config path.
 func TestRegisterGuard_WasmDirSet_ReadDirError_WarnsAndContinues(t *testing.T) {
 	rootDir := t.TempDir()
-	t.Setenv(wasmGuardsDirEnvVar, rootDir)
+	t.Setenv(guard.WASMGuardsDirEnvVar, rootDir)
 
 	// Write a *file* at the server directory path to force ReadDir to fail
 	serverPath := filepath.Join(rootDir, "github")
@@ -392,7 +392,7 @@ func TestRegisterGuard_WasmDirSet_ReadDirError_WarnsAndContinues(t *testing.T) {
 // A "noop" guard from config is returned by createGuardFromConfig, and since it is
 // "noop", requireGuardPolicyIfGuardEnabled returns it without policy validation.
 func TestRegisterGuard_GuardConfigFound_NoopType_GlobalAllowOnlyPolicy(t *testing.T) {
-	t.Setenv(wasmGuardsDirEnvVar, "")
+	t.Setenv(guard.WASMGuardsDirEnvVar, "")
 
 	cfg := &config.Config{
 		Servers: map[string]*config.ServerConfig{
@@ -421,7 +421,7 @@ func TestRegisterGuard_GuardConfigFound_NoopType_GlobalAllowOnlyPolicy(t *testin
 // nil – hasGuardCfg will be false so the registered-type path (line 658) is taken.
 // Since the guard name is not registered, it falls back to noop.
 func TestRegisterGuard_GuardNameSet_NilGuardsMap(t *testing.T) {
-	t.Setenv(wasmGuardsDirEnvVar, "")
+	t.Setenv(guard.WASMGuardsDirEnvVar, "")
 
 	cfg := &config.Config{
 		Servers: map[string]*config.ServerConfig{

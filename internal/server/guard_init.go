@@ -46,7 +46,7 @@ func (us *UnifiedServer) registerGuard(serverID string) error {
 	// Check if a per-server WASM guard exists in MCP_GATEWAY_WASM_GUARDS_DIR.
 	// If found and loadable, it takes precedence over config-defined guards.
 	if wasmPath, found, err := guard.FindServerWASMGuardFile(serverID); err != nil {
-		logger.LogWarnToServer(serverID, "difc", "Failed to discover WASM guard from %s: %v", wasmGuardsDirEnvVar, err)
+		logger.LogWarnToServer(serverID, "difc", "Failed to discover WASM guard from %s: %v", guard.WASMGuardsDirEnvVar, err)
 	} else if found {
 		ctx := context.Background()
 		loadedGuard, loadErr := guard.NewWasmGuard(ctx, serverID, wasmPath, nil)
@@ -159,11 +159,11 @@ func (us *UnifiedServer) logServerGuardPolicies(serverID string) {
 func (us *UnifiedServer) logWASMGuardsDirConfiguration() {
 	guardsRootDir := guard.GetWASMGuardsRootDir()
 	if guardsRootDir == "" {
-		logger.LogInfo("difc", "%s is not set", wasmGuardsDirEnvVar)
+		logger.LogInfo("difc", "%s is not set", guard.WASMGuardsDirEnvVar)
 		return
 	}
 
-	logger.LogInfo("difc", "%s=%s", wasmGuardsDirEnvVar, guardsRootDir)
+	logger.LogInfo("difc", "%s=%s", guard.WASMGuardsDirEnvVar, guardsRootDir)
 }
 
 // createGuardFromConfig creates a guard instance from a guard configuration

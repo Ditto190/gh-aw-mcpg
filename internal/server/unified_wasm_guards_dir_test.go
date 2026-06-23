@@ -12,7 +12,7 @@ import (
 
 func TestFindServerWASMGuardFile(t *testing.T) {
 	t.Run("returns not found when env var is unset", func(t *testing.T) {
-		t.Setenv(wasmGuardsDirEnvVar, "")
+		t.Setenv(guard.WASMGuardsDirEnvVar, "")
 
 		path, found, err := guard.FindServerWASMGuardFile("github")
 		require.NoError(t, err)
@@ -22,7 +22,7 @@ func TestFindServerWASMGuardFile(t *testing.T) {
 
 	t.Run("returns not found when server subdirectory does not exist", func(t *testing.T) {
 		rootDir := t.TempDir()
-		t.Setenv(wasmGuardsDirEnvVar, rootDir)
+		t.Setenv(guard.WASMGuardsDirEnvVar, rootDir)
 
 		path, found, err := guard.FindServerWASMGuardFile("github")
 		require.NoError(t, err)
@@ -32,7 +32,7 @@ func TestFindServerWASMGuardFile(t *testing.T) {
 
 	t.Run("returns first wasm file found in server subdirectory", func(t *testing.T) {
 		rootDir := t.TempDir()
-		t.Setenv(wasmGuardsDirEnvVar, rootDir)
+		t.Setenv(guard.WASMGuardsDirEnvVar, rootDir)
 
 		serverDir := filepath.Join(rootDir, "github")
 		require.NoError(t, os.MkdirAll(serverDir, 0o755))
@@ -49,7 +49,7 @@ func TestFindServerWASMGuardFile(t *testing.T) {
 
 	t.Run("returns error when server subdirectory path is not readable as a directory", func(t *testing.T) {
 		rootDir := t.TempDir()
-		t.Setenv(wasmGuardsDirEnvVar, rootDir)
+		t.Setenv(guard.WASMGuardsDirEnvVar, rootDir)
 
 		serverPath := filepath.Join(rootDir, "github")
 		require.NoError(t, os.WriteFile(serverPath, []byte("not-a-directory"), 0o644))

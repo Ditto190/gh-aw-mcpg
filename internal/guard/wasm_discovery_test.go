@@ -44,7 +44,7 @@ func TestGetWASMGuardsRootDir(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Setenv(wasmGuardsDirEnvVar, tt.envVal)
+			t.Setenv(WASMGuardsDirEnvVar, tt.envVal)
 			assert.Equal(t, tt.want, GetWASMGuardsRootDir())
 		})
 	}
@@ -52,11 +52,11 @@ func TestGetWASMGuardsRootDir(t *testing.T) {
 
 func TestFindServerWASMGuardFile(t *testing.T) {
 	t.Run("returns empty when env var is not set", func(t *testing.T) {
-		old, ok := os.LookupEnv(wasmGuardsDirEnvVar)
-		require.NoError(t, os.Unsetenv(wasmGuardsDirEnvVar))
+		old, ok := os.LookupEnv(WASMGuardsDirEnvVar)
+		require.NoError(t, os.Unsetenv(WASMGuardsDirEnvVar))
 		t.Cleanup(func() {
 			if ok {
-				_ = os.Setenv(wasmGuardsDirEnvVar, old)
+				_ = os.Setenv(WASMGuardsDirEnvVar, old)
 			}
 		})
 		path, found, err := FindServerWASMGuardFile("myserver")
@@ -66,7 +66,7 @@ func TestFindServerWASMGuardFile(t *testing.T) {
 	})
 
 	t.Run("returns empty when env var contains only whitespace", func(t *testing.T) {
-		t.Setenv(wasmGuardsDirEnvVar, "   ")
+		t.Setenv(WASMGuardsDirEnvVar, "   ")
 		path, found, err := FindServerWASMGuardFile("myserver")
 		require.NoError(t, err)
 		assert.False(t, found)
@@ -75,7 +75,7 @@ func TestFindServerWASMGuardFile(t *testing.T) {
 
 	t.Run("returns empty when server directory does not exist", func(t *testing.T) {
 		rootDir := t.TempDir()
-		t.Setenv(wasmGuardsDirEnvVar, rootDir)
+		t.Setenv(WASMGuardsDirEnvVar, rootDir)
 		path, found, err := FindServerWASMGuardFile("no-such-server")
 		require.NoError(t, err)
 		assert.False(t, found)
@@ -86,7 +86,7 @@ func TestFindServerWASMGuardFile(t *testing.T) {
 		rootDir := t.TempDir()
 		serverDir := filepath.Join(rootDir, "myserver")
 		require.NoError(t, os.MkdirAll(serverDir, 0o755))
-		t.Setenv(wasmGuardsDirEnvVar, rootDir)
+		t.Setenv(WASMGuardsDirEnvVar, rootDir)
 		path, found, err := FindServerWASMGuardFile("myserver")
 		require.NoError(t, err)
 		assert.False(t, found)
@@ -99,7 +99,7 @@ func TestFindServerWASMGuardFile(t *testing.T) {
 		require.NoError(t, os.MkdirAll(serverDir, 0o755))
 		require.NoError(t, os.WriteFile(filepath.Join(serverDir, "readme.txt"), []byte("readme"), 0o644))
 		require.NoError(t, os.WriteFile(filepath.Join(serverDir, "data.json"), []byte("{}"), 0o644))
-		t.Setenv(wasmGuardsDirEnvVar, rootDir)
+		t.Setenv(WASMGuardsDirEnvVar, rootDir)
 		path, found, err := FindServerWASMGuardFile("myserver")
 		require.NoError(t, err)
 		assert.False(t, found)
@@ -112,7 +112,7 @@ func TestFindServerWASMGuardFile(t *testing.T) {
 		require.NoError(t, os.MkdirAll(serverDir, 0o755))
 		wasmPath := filepath.Join(serverDir, "policy.wasm")
 		require.NoError(t, os.WriteFile(wasmPath, []byte{0x00, 0x61, 0x73, 0x6d}, 0o644))
-		t.Setenv(wasmGuardsDirEnvVar, rootDir)
+		t.Setenv(WASMGuardsDirEnvVar, rootDir)
 		path, found, err := FindServerWASMGuardFile("myserver")
 		require.NoError(t, err)
 		assert.True(t, found)
@@ -125,7 +125,7 @@ func TestFindServerWASMGuardFile(t *testing.T) {
 		require.NoError(t, os.MkdirAll(serverDir, 0o755))
 		wasmPath := filepath.Join(serverDir, "policy.WASM")
 		require.NoError(t, os.WriteFile(wasmPath, []byte{0x00, 0x61, 0x73, 0x6d}, 0o644))
-		t.Setenv(wasmGuardsDirEnvVar, rootDir)
+		t.Setenv(WASMGuardsDirEnvVar, rootDir)
 		path, found, err := FindServerWASMGuardFile("myserver")
 		require.NoError(t, err)
 		assert.True(t, found)
@@ -137,7 +137,7 @@ func TestFindServerWASMGuardFile(t *testing.T) {
 		serverDir := filepath.Join(rootDir, "myserver")
 		// A directory named "guard.wasm" should not be returned as a match.
 		require.NoError(t, os.MkdirAll(filepath.Join(serverDir, "guard.wasm"), 0o755))
-		t.Setenv(wasmGuardsDirEnvVar, rootDir)
+		t.Setenv(WASMGuardsDirEnvVar, rootDir)
 		path, found, err := FindServerWASMGuardFile("myserver")
 		require.NoError(t, err)
 		assert.False(t, found)
@@ -152,7 +152,7 @@ func TestFindServerWASMGuardFile(t *testing.T) {
 		firstWasm := filepath.Join(serverDir, "aaa.wasm")
 		require.NoError(t, os.WriteFile(firstWasm, []byte{0x00, 0x61, 0x73, 0x6d}, 0o644))
 		require.NoError(t, os.WriteFile(filepath.Join(serverDir, "bbb.wasm"), []byte{0x00, 0x61, 0x73, 0x6d}, 0o644))
-		t.Setenv(wasmGuardsDirEnvVar, rootDir)
+		t.Setenv(WASMGuardsDirEnvVar, rootDir)
 		path, found, err := FindServerWASMGuardFile("myserver")
 		require.NoError(t, err)
 		assert.True(t, found)
@@ -167,7 +167,7 @@ func TestFindServerWASMGuardFile(t *testing.T) {
 		require.NoError(t, os.WriteFile(filepath.Join(serverDir, "bbb-readme.txt"), []byte("readme"), 0o644))
 		wasmPath := filepath.Join(serverDir, "ccc-policy.wasm")
 		require.NoError(t, os.WriteFile(wasmPath, []byte{0x00, 0x61, 0x73, 0x6d}, 0o644))
-		t.Setenv(wasmGuardsDirEnvVar, rootDir)
+		t.Setenv(WASMGuardsDirEnvVar, rootDir)
 		path, found, err := FindServerWASMGuardFile("myserver")
 		require.NoError(t, err)
 		assert.True(t, found)
@@ -179,7 +179,7 @@ func TestFindServerWASMGuardFile(t *testing.T) {
 		// Create a regular file where a server directory is expected.
 		serverFile := filepath.Join(rootDir, "myserver")
 		require.NoError(t, os.WriteFile(serverFile, []byte("not a directory"), 0o644))
-		t.Setenv(wasmGuardsDirEnvVar, rootDir)
+		t.Setenv(WASMGuardsDirEnvVar, rootDir)
 		path, found, err := FindServerWASMGuardFile("myserver")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "myserver")
@@ -193,7 +193,7 @@ func TestFindServerWASMGuardFile(t *testing.T) {
 		require.NoError(t, os.MkdirAll(serverDir, 0o755))
 		wasmPath := filepath.Join(serverDir, "policy.wasm")
 		require.NoError(t, os.WriteFile(wasmPath, []byte{0x00, 0x61, 0x73, 0x6d}, 0o644))
-		t.Setenv(wasmGuardsDirEnvVar, "  "+rootDir+"  ")
+		t.Setenv(WASMGuardsDirEnvVar, "  "+rootDir+"  ")
 		path, found, err := FindServerWASMGuardFile("myserver")
 		require.NoError(t, err)
 		assert.True(t, found)
@@ -207,7 +207,7 @@ func TestFindServerWASMGuardFile(t *testing.T) {
 		require.NoError(t, os.MkdirAll(serverDir, 0o755))
 		wasmPath := filepath.Join(serverDir, "guard.wasm")
 		require.NoError(t, os.WriteFile(wasmPath, []byte{0x00, 0x61, 0x73, 0x6d}, 0o644))
-		t.Setenv(wasmGuardsDirEnvVar, rootDir)
+		t.Setenv(WASMGuardsDirEnvVar, rootDir)
 		path, found, err := FindServerWASMGuardFile(serverID)
 		require.NoError(t, err)
 		assert.True(t, found)
