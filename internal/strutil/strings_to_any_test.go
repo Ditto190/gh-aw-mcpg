@@ -9,9 +9,9 @@ import (
 func TestStringsToAny(t *testing.T) {
 	t.Parallel()
 
-	t.Run("nil input returns empty slice", func(t *testing.T) {
+	t.Run("nil input returns empty (non-nil) slice", func(t *testing.T) {
 		t.Parallel()
-		assert.Empty(t, StringsToAny(nil))
+		assert.Equal(t, []interface{}{}, StringsToAny(nil))
 	})
 
 	t.Run("empty input returns empty slice", func(t *testing.T) {
