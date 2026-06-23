@@ -15,6 +15,7 @@ import (
 	"github.com/github/gh-aw-mcpg/internal/mcp"
 	"github.com/github/gh-aw-mcpg/internal/mcpresult"
 	"github.com/github/gh-aw-mcpg/internal/strutil"
+	"github.com/github/gh-aw-mcpg/internal/urlutil"
 	"github.com/itchyny/gojq"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -549,6 +550,7 @@ func wrapToolHandler(
 		}
 
 		result, data = tryApplyToolResponseFilter(ctx, filterCode, result, data, toolName, queryID)
+		auditObservedURLDomains(toolName, data)
 
 		// Fast path: when the handler (or filter) sets a text content item, its byte
 		// length is a reliable lower bound for json.Marshal(data). The outer JSON
@@ -753,4 +755,24 @@ func ShouldApplyMiddleware(toolName string) bool {
 	applies := !strings.HasPrefix(toolName, "sys___")
 	logMiddleware.Printf("ShouldApplyMiddleware: tool=%s, applies=%v", toolName, applies)
 	return applies
+}
+
+func auditObservedURLDomains(toolName string, data any) {
+	if !logger.URLDomainAuditEnabled() || data == nil {
+		return
+	}
+	serverID := parseServerIDFromToolName(toolName)
+	domains := urlutil.ExtractURLDomainsFromValue(data)
+	if len(domains) == 0 {
+		return
+	}
+	logger.LogObservedURLDomains(serverID, domains)
+}
+
+func parseServerIDFromToolName(toolName string) string {
+	serverID, _, ok := strings.Cut(toolName, "___")
+	if !ok || serverID == "" {
+		return toolName
+	}
+	return serverID
 }

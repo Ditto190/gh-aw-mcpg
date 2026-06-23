@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/github/gh-aw-mcpg/internal/mcp"
+	"github.com/github/gh-aw-mcpg/internal/urlutil"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -1878,4 +1879,36 @@ func TestWrapToolHandler_FastPath_FallsThroughAtBoundary(t *testing.T) {
 	// With threshold 0, every payload exceeds the threshold; metadata must be returned.
 	_, isMetadata := data.(PayloadMetadata)
 	assert.True(t, isMetadata, "threshold 0 must always trigger storage, not fast-path")
+}
+
+func TestExtractURLDomains(t *testing.T) {
+	assert.Equal(t,
+		[]string{"docs.example.com", "example.com"},
+		urlutil.ExtractURLDomains(`See https://Example.com/a and http://docs.example.com:8080/x plus https://example.com/b`),
+	)
+	// Case-insensitive scheme matching.
+	assert.Equal(t,
+		[]string{"example.com"},
+		urlutil.ExtractURLDomains(`HTTPS://example.com/path`),
+	)
+	// Trailing punctuation from prose must be stripped.
+	assert.Equal(t,
+		[]string{"example.com"},
+		urlutil.ExtractURLDomains(`See https://example.com, and (https://example.com) for details.`),
+	)
+}
+
+func TestExtractURLDomainsFromValue(t *testing.T) {
+	payload := map[string]any{
+		"summary": "Sources: https://example.com/a and https://news.ycombinator.com/item?id=1",
+		"items": []any{
+			map[string]any{"url": "http://EXAMPLE.com/b"},
+			map[string]any{"url": "https://golang.org/doc"},
+		},
+	}
+
+	assert.Equal(t,
+		[]string{"example.com", "golang.org", "news.ycombinator.com"},
+		urlutil.ExtractURLDomainsFromValue(payload),
+	)
 }

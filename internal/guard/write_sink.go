@@ -5,6 +5,7 @@ import (
 
 	"github.com/github/gh-aw-mcpg/internal/difc"
 	"github.com/github/gh-aw-mcpg/internal/logger"
+	"github.com/github/gh-aw-mcpg/internal/urlutil"
 )
 
 var logWriteSink = logger.New("guard:write-sink")
@@ -84,8 +85,9 @@ func (g *WriteSinkGuard) LabelAgent(_ context.Context, _ interface{}, _ BackendC
 // whose secrecy tags are a subset of the accept set can write successfully.
 // By leaving the resource integrity empty, the second check also passes
 // because the agent has all zero of the (empty) required integrity tags.
-func (g *WriteSinkGuard) LabelResource(_ context.Context, toolName string, _ interface{}, _ BackendCaller, _ *difc.Capabilities) (*difc.LabeledResource, difc.OperationType, error) {
+func (g *WriteSinkGuard) LabelResource(_ context.Context, toolName string, toolArgs interface{}, _ BackendCaller, _ *difc.Capabilities) (*difc.LabeledResource, difc.OperationType, error) {
 	logWriteSink.Printf("LabelResource: tool=%s, operation=write, accept_tags=%d", toolName, len(g.acceptTags))
+	g.auditURLsInBody(toolName, toolArgs)
 
 	resource := &difc.LabeledResource{
 		Description: "write-sink (" + toolName + ")",
@@ -94,6 +96,18 @@ func (g *WriteSinkGuard) LabelResource(_ context.Context, toolName string, _ int
 	}
 
 	return resource, difc.OperationWrite, nil
+}
+
+func (g *WriteSinkGuard) auditURLsInBody(toolName string, args interface{}) {
+	if !logger.URLDomainAuditEnabled() || args == nil {
+		return
+	}
+	domains := urlutil.ExtractURLDomainsFromValue(args)
+	if len(domains) == 0 {
+		return
+	}
+	logger.LogDebug("write-sink", "URL domains in write body: tool=%s domains=%v", toolName, domains)
+	logger.LogObservedURLDomains("write-sink", domains)
 }
 
 // LabelResponse returns nil; the write-sink does not perform fine-grained
