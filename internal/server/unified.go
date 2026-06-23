@@ -23,7 +23,6 @@ import (
 
 var logUnified = logger.New("server:unified")
 
-const wasmGuardsDirEnvVar = "MCP_GATEWAY_WASM_GUARDS_DIR"
 const rateLimitExceededStatus = "rate limit exceeded"
 
 var errRateLimitExceeded = errors.New(rateLimitExceededStatus)

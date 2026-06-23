@@ -23,7 +23,7 @@ var logWasm = logger.New("guard:wasm")
 
 var globalCompilationCacheMu sync.Mutex
 
-const wasmGuardsDirEnvVar = "MCP_GATEWAY_WASM_GUARDS_DIR"
+const WASMGuardsDirEnvVar = "MCP_GATEWAY_WASM_GUARDS_DIR"
 
 // globalCompilationCache is a process-level compilation cache shared across all
 // WasmGuard instances. wazero's cache is goroutine-safe and eliminates redundant
@@ -32,7 +32,7 @@ var globalCompilationCache = wazero.NewCompilationCache()
 
 // GetWASMGuardsRootDir returns the trimmed value of MCP_GATEWAY_WASM_GUARDS_DIR.
 func GetWASMGuardsRootDir() string {
-	return strings.TrimSpace(os.Getenv(wasmGuardsDirEnvVar))
+	return strings.TrimSpace(os.Getenv(WASMGuardsDirEnvVar))
 }
 
 // FindServerWASMGuardFile discovers the first .wasm file for a server under
@@ -40,7 +40,7 @@ func GetWASMGuardsRootDir() string {
 func FindServerWASMGuardFile(serverID string) (string, bool, error) {
 	guardsRootDir := GetWASMGuardsRootDir()
 	if guardsRootDir == "" {
-		logWasm.Printf("Skipping WASM guard discovery: %s is not set", wasmGuardsDirEnvVar)
+		logWasm.Printf("Skipping WASM guard discovery: %s is not set", WASMGuardsDirEnvVar)
 		return "", false, nil
 	}
 
