@@ -8,9 +8,10 @@ import (
 )
 
 // urlPattern requires a non-empty hostname candidate and then captures the rest
-// of the URL until common delimiter characters. Matches are still validated with
+// of the URL until common delimiter characters. The (?i) flag makes the scheme
+// match case-insensitive (e.g. "HTTPS://"). Matches are still validated with
 // url.Parse before hostname extraction.
-var urlPattern = regexp.MustCompile(`https?://[^\s/"'<>]+[^\s"'<>]*`)
+var urlPattern = regexp.MustCompile(`(?i)https?://[^\s/"'<>]+[^\s"'<>]*`)
 
 // ExtractURLDomainsFromValue recursively extracts unique URL hostnames from string leaves.
 func ExtractURLDomainsFromValue(value any) []string {
@@ -58,6 +59,12 @@ func ExtractURLDomains(text string) []string {
 
 	domainSet := make(map[string]struct{})
 	for _, match := range matches {
+		// Strip trailing punctuation that may appear when a URL is embedded in
+		// prose (e.g. "https://example.com," or "https://example.com)"). These
+		// characters are valid inside a URL so the regex cannot exclude them
+		// blindly; trimming them from the tail of each candidate is the safest
+		// heuristic.
+		match = strings.TrimRight(match, ".,;:!?)]}\"'")
 		parsed, err := url.Parse(match)
 		if err != nil {
 			continue

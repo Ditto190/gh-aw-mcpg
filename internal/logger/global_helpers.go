@@ -52,7 +52,7 @@ func withMutexLock(mu *sync.Mutex, fn func() error) error {
 }
 
 // closableLogger is a constraint for types that have a Close method.
-// This is satisfied by *FileLogger, *JSONLLogger, *MarkdownLogger, *ServerFileLogger, and *ToolsLogger.
+// This is satisfied by *FileLogger, *JSONLLogger, *MarkdownLogger, *ObservedURLDomainsLogger, *ServerFileLogger, and *ToolsLogger.
 type closableLogger interface {
 	*FileLogger | *JSONLLogger | *MarkdownLogger | *ServerFileLogger | *ToolsLogger | *ObservedURLDomainsLogger
 	Close() error
