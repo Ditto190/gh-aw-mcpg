@@ -9,6 +9,7 @@ import (
 
 	"github.com/github/gh-aw-mcpg/internal/difc"
 	"github.com/github/gh-aw-mcpg/internal/logger"
+	"github.com/github/gh-aw-mcpg/internal/urlutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -91,7 +92,7 @@ func TestWriteSinkExtractURLDomainsFromValue(t *testing.T) {
 		},
 	}
 
-	assert.Equal(t, []string{"docs.github.com", "example.com"}, extractURLDomainsFromValue(args))
+	assert.Equal(t, []string{"docs.github.com", "example.com"}, urlutil.ExtractURLDomainsFromValue(args))
 }
 
 func TestWriteSinkGuard_LabelResource_AuditsURLs(t *testing.T) {

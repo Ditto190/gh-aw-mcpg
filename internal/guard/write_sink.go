@@ -2,17 +2,13 @@ package guard
 
 import (
 	"context"
-	"net/url"
-	"regexp"
-	"sort"
-	"strings"
 
 	"github.com/github/gh-aw-mcpg/internal/difc"
 	"github.com/github/gh-aw-mcpg/internal/logger"
+	"github.com/github/gh-aw-mcpg/internal/urlutil"
 )
 
 var logWriteSink = logger.New("guard:write-sink")
-var writeSinkURLPattern = regexp.MustCompile(`https?://[^\s"'<>]+`)
 
 // WriteSinkGuard is a guard for write-only output channels (e.g., safe-outputs).
 //
@@ -106,75 +102,12 @@ func (g *WriteSinkGuard) auditURLsInBody(toolName string, args interface{}) {
 	if !logger.URLDomainAuditEnabled() || args == nil {
 		return
 	}
-	domains := extractURLDomainsFromValue(args)
+	domains := urlutil.ExtractURLDomainsFromValue(args)
 	if len(domains) == 0 {
 		return
 	}
 	logger.LogDebug("safe-outputs", "URL domains in write body: tool=%s domains=%v", toolName, domains)
 	logger.LogObservedURLDomains("write-sink", domains)
-}
-
-func extractURLDomainsFromValue(value any) []string {
-	domainSet := make(map[string]struct{})
-	collectURLDomains(value, domainSet)
-	if len(domainSet) == 0 {
-		return nil
-	}
-	domains := make([]string, 0, len(domainSet))
-	for domain := range domainSet {
-		domains = append(domains, domain)
-	}
-	sort.Strings(domains)
-	return domains
-}
-
-func collectURLDomains(value any, domains map[string]struct{}) {
-	switch v := value.(type) {
-	case string:
-		for _, domain := range extractURLDomains(v) {
-			domains[domain] = struct{}{}
-		}
-	case map[string]any:
-		for _, child := range v {
-			collectURLDomains(child, domains)
-		}
-	case []any:
-		for _, child := range v {
-			collectURLDomains(child, domains)
-		}
-	case []map[string]any:
-		for _, child := range v {
-			collectURLDomains(child, domains)
-		}
-	}
-}
-
-func extractURLDomains(text string) []string {
-	matches := writeSinkURLPattern.FindAllString(text, -1)
-	if len(matches) == 0 {
-		return nil
-	}
-	domainSet := make(map[string]struct{})
-	for _, match := range matches {
-		parsed, err := url.Parse(match)
-		if err != nil {
-			continue
-		}
-		host := strings.ToLower(parsed.Hostname())
-		if host == "" {
-			continue
-		}
-		domainSet[host] = struct{}{}
-	}
-	if len(domainSet) == 0 {
-		return nil
-	}
-	domains := make([]string, 0, len(domainSet))
-	for domain := range domainSet {
-		domains = append(domains, domain)
-	}
-	sort.Strings(domains)
-	return domains
 }
 
 // LabelResponse returns nil; the write-sink does not perform fine-grained

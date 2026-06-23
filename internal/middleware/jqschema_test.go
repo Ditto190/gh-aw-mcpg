@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/github/gh-aw-mcpg/internal/mcp"
+	"github.com/github/gh-aw-mcpg/internal/urlutil"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -1883,7 +1884,7 @@ func TestWrapToolHandler_FastPath_FallsThroughAtBoundary(t *testing.T) {
 func TestExtractURLDomains(t *testing.T) {
 	assert.Equal(t,
 		[]string{"docs.example.com", "example.com"},
-		extractURLDomains(`See https://Example.com/a and http://docs.example.com:8080/x plus https://example.com/b`),
+		urlutil.ExtractURLDomains(`See https://Example.com/a and http://docs.example.com:8080/x plus https://example.com/b`),
 	)
 }
 
@@ -1898,6 +1899,6 @@ func TestExtractURLDomainsFromValue(t *testing.T) {
 
 	assert.Equal(t,
 		[]string{"example.com", "golang.org", "news.ycombinator.com"},
-		extractURLDomainsFromValue(payload),
+		urlutil.ExtractURLDomainsFromValue(payload),
 	)
 }
