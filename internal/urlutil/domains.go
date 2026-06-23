@@ -7,9 +7,10 @@ import (
 	"strings"
 )
 
-// urlPattern is intentionally permissive; each match is validated with url.Parse
-// before hostname extraction so malformed or punctuated candidates are discarded.
-var urlPattern = regexp.MustCompile(`https?://[^\s"'<>]+`)
+// urlPattern requires a non-empty hostname candidate and then captures the rest
+// of the URL until common delimiter characters. Matches are still validated with
+// url.Parse before hostname extraction.
+var urlPattern = regexp.MustCompile(`https?://[^\s/"'<>]+[^\s"'<>]*`)
 
 // ExtractURLDomainsFromValue recursively extracts unique URL hostnames from string leaves.
 func ExtractURLDomainsFromValue(value any) []string {

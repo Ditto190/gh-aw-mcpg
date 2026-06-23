@@ -761,13 +761,18 @@ func auditObservedURLDomains(toolName string, data any) {
 	if !logger.URLDomainAuditEnabled() || data == nil {
 		return
 	}
-	serverID, _, ok := strings.Cut(toolName, "___")
-	if !ok || serverID == "" {
-		serverID = toolName
-	}
+	serverID := parseServerIDFromToolName(toolName)
 	domains := urlutil.ExtractURLDomainsFromValue(data)
 	if len(domains) == 0 {
 		return
 	}
 	logger.LogObservedURLDomains(serverID, domains)
+}
+
+func parseServerIDFromToolName(toolName string) string {
+	serverID, _, ok := strings.Cut(toolName, "___")
+	if !ok || serverID == "" {
+		return toolName
+	}
+	return serverID
 }

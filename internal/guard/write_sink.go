@@ -85,9 +85,9 @@ func (g *WriteSinkGuard) LabelAgent(_ context.Context, _ interface{}, _ BackendC
 // whose secrecy tags are a subset of the accept set can write successfully.
 // By leaving the resource integrity empty, the second check also passes
 // because the agent has all zero of the (empty) required integrity tags.
-func (g *WriteSinkGuard) LabelResource(_ context.Context, toolName string, args interface{}, _ BackendCaller, _ *difc.Capabilities) (*difc.LabeledResource, difc.OperationType, error) {
+func (g *WriteSinkGuard) LabelResource(_ context.Context, toolName string, toolArgs interface{}, _ BackendCaller, _ *difc.Capabilities) (*difc.LabeledResource, difc.OperationType, error) {
 	logWriteSink.Printf("LabelResource: tool=%s, operation=write, accept_tags=%d", toolName, len(g.acceptTags))
-	g.auditURLsInBody(toolName, args)
+	g.auditURLsInBody(toolName, toolArgs)
 
 	resource := &difc.LabeledResource{
 		Description: "write-sink (" + toolName + ")",
