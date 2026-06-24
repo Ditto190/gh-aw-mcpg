@@ -152,8 +152,10 @@ func TestFetchSchema_Timeout(t *testing.T) {
 	assert.ErrorContains(t, err, "failed to fetch schema from")
 }
 
-// TestFetchSchema_InvalidJSON tests that invalid JSON response bytes are returned as-is
-// (JSON parsing happens downstream by the caller)
+// TestFetchSchema_InvalidJSON tests that invalid JSON response bytes are returned as-is.
+// JSON parsing is the caller's responsibility: validateAgainstCustomSchema calls
+// jsonschema.UnmarshalJSON on the result, and validateJSONSchema does the same via
+// getOrCompileSchema. Those callers will produce an appropriate error for bad JSON.
 func TestFetchSchema_InvalidJSON(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)

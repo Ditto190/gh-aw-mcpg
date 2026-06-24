@@ -121,8 +121,10 @@ func TestFormatErrorContext(t *testing.T) {
 			wantContains: []string{"doesn't match any of the expected formats"},
 		},
 		{
-			name:           "unrecognized error kind returns empty string",
-			errorKind:      &kind.Group{},
+			name: "unrecognized error kind returns empty string",
+			// kind.Not is a real ErrorKind not handled by the formatErrorContext switch,
+			// so it represents the "no context hint" path.
+			errorKind:      &kind.Not{},
 			prefix:         "",
 			wantNotContain: []string{"Details:"},
 		},
@@ -256,7 +258,8 @@ func TestFormatValidationErrorRecursive(t *testing.T) {
 		result := sb.String()
 		assert.Contains(t, result, "Location: mcpServers.github")
 		assert.Contains(t, result, "Error:")
-		// Verify the Required kind is localized correctly (missing property 'container')
+		// Verify the Required kind is localized correctly (English: includes the missing property name).
+		// schemaErrPrinter uses language.English, so "container" will appear in the output.
 		assert.Contains(t, result, "container", "Error should include the missing property name")
 		// Root level (depth=0) adds a trailing newline
 		assert.True(t, strings.HasSuffix(result, "\n"), "Root level error should end with newline")
