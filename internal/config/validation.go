@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -264,7 +265,7 @@ func validateAgainstCustomSchema(name string, server *StdinServerConfig, schemaU
 	logValidation.Printf("Custom schema fetched successfully: name=%s, size=%d bytes", name, len(schemaJSON))
 
 	// Parse the schema JSON into a document
-	schemaDoc, parseErr := jsonschema.UnmarshalJSON(strings.NewReader(string(schemaJSON)))
+	schemaDoc, parseErr := jsonschema.UnmarshalJSON(bytes.NewReader(schemaJSON))
 	if parseErr != nil {
 		return SchemaValidationError(server.Type,
 			fmt.Sprintf("failed to parse custom schema: %v", parseErr),

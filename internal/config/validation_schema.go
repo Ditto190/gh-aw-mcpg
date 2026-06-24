@@ -2,6 +2,7 @@ package config
 
 import (
 	_ "embed"
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -55,8 +56,8 @@ var schemaFetchRetryDelay = time.Second
 // so tests can shorten it to avoid long waits when testing timeout behaviour.
 var schemaHTTPClientTimeout = 10 * time.Second
 
-// errPrinter is used to format localized error messages from ValidationError kinds.
-var errPrinter = message.NewPrinter(language.English)
+// schemaErrPrinter is used to format localized error messages from ValidationError kinds.
+var schemaErrPrinter = message.NewPrinter(language.English)
 
 var (
 	// Compile regex patterns from schema for additional validation
@@ -172,7 +173,7 @@ func getOrCompileSchema() (*jsonschema.Schema, error) {
 		logSchema.Print("Compiling JSON schema for the first time")
 
 		// Parse the embedded schema bytes into a JSON document
-		schemaDoc, parseErr := jsonschema.UnmarshalJSON(strings.NewReader(string(embeddedSchemaBytes)))
+		schemaDoc, parseErr := jsonschema.UnmarshalJSON(bytes.NewReader(embeddedSchemaBytes))
 		if parseErr != nil {
 			schemaErr = fmt.Errorf("failed to process embedded schema: %w", parseErr)
 			logSchema.Printf("Schema compilation failed: %v", schemaErr)
@@ -224,7 +225,7 @@ func validateJSONSchema(data []byte) error {
 
 	// Parse the configuration using jsonschema.UnmarshalJSON for proper number handling
 	parseStart := time.Now()
-	configObj, parseErr := jsonschema.UnmarshalJSON(strings.NewReader(string(data)))
+	configObj, parseErr := jsonschema.UnmarshalJSON(bytes.NewReader(data))
 	if parseErr != nil {
 		return fmt.Errorf("failed to parse configuration JSON: %w", parseErr)
 	}
@@ -275,7 +276,7 @@ func formatValidationErrorRecursive(ve *jsonschema.ValidationError, sb *strings.
 		location = "<root>"
 	}
 	fmt.Fprintf(sb, "%sLocation: %s\n", indent, location)
-	fmt.Fprintf(sb, "%sError: %s\n", indent, ve.ErrorKind.LocalizedString(errPrinter))
+	fmt.Fprintf(sb, "%sError: %s\n", indent, ve.ErrorKind.LocalizedString(schemaErrPrinter))
 
 	// Add detailed context based on the error kind
 	context := formatErrorContext(ve, indent)

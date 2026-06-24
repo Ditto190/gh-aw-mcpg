@@ -256,6 +256,8 @@ func TestFormatValidationErrorRecursive(t *testing.T) {
 		result := sb.String()
 		assert.Contains(t, result, "Location: mcpServers.github")
 		assert.Contains(t, result, "Error:")
+		// Verify the Required kind is localized correctly (missing property 'container')
+		assert.Contains(t, result, "container", "Error should include the missing property name")
 		// Root level (depth=0) adds a trailing newline
 		assert.True(t, strings.HasSuffix(result, "\n"), "Root level error should end with newline")
 	})
