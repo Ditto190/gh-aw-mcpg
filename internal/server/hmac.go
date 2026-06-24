@@ -41,16 +41,22 @@ type nonceCache struct {
 }
 
 func newNonceCache() *nonceCache {
+	logHMAC.Printf("Creating nonce cache: maxAgeSecs=%d, nonceTTL=%s", hmacMaxAgeSecs, nonceTTL)
 	return &nonceCache{entries: make(map[string]time.Time)}
 }
 
 // evictExpired removes entries whose deadline has passed.
 // Caller must hold c.mu.
 func (c *nonceCache) evictExpired(now time.Time) {
+	evicted := 0
 	for n, deadline := range c.entries {
 		if now.After(deadline) {
 			delete(c.entries, n)
+			evicted++
 		}
+	}
+	if evicted > 0 {
+		logHMAC.Printf("Nonce cache eviction: evicted=%d, remaining=%d", evicted, len(c.entries))
 	}
 }
 
@@ -70,6 +76,7 @@ func (c *nonceCache) checkAndSet(nonce string) bool {
 		return false
 	}
 	c.entries[nonce] = now.Add(nonceTTL)
+	logHMAC.Printf("Nonce registered: cacheSize=%d", len(c.entries))
 	return true
 }
 
