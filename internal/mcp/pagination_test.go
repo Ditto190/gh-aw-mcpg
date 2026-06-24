@@ -377,8 +377,8 @@ func TestPaginateAllHelper(t *testing.T) {
 		items, err := paginateAll("server1", "Tools", fetch)
 
 		require.Error(t, err)
-		assert.ErrorContains(t, err, "more than")
-		assert.ErrorContains(t, err, "pages")
+		assert.ErrorContains(t, err, "exceeded")
+		assert.ErrorContains(t, err, "page limit")
 		assert.Nil(t, items)
 	})
 
