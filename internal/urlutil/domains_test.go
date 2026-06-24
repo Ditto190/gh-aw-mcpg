@@ -80,6 +80,11 @@ func TestExtractURLDomains(t *testing.T) {
 			want:  []string{"example.com"},
 		},
 		{
+			name:  "trailing colon stripped",
+			input: "URL: https://example.com: end",
+			want:  []string{"example.com"},
+		},
+		{
 			name:  "trailing exclamation stripped",
 			input: "Go to https://example.com!",
 			want:  []string{"example.com"},
