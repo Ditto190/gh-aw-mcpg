@@ -80,6 +80,9 @@ func paginateAll[T any](
 	if err != nil {
 		return nil, fmt.Errorf("list%s: backend serverID=%s: %w", itemKind, serverID, err)
 	}
+	if result == nil {
+		result = []T{}
+	}
 	logConn.Printf("list%s: received %d %s total from serverID=%s", itemKind, len(result), itemKind, serverID)
 	return result, nil
 }

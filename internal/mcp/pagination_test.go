@@ -246,6 +246,7 @@ func TestPaginateAllHelper(t *testing.T) {
 		items, err := paginateAll("server1", "Tools", fetch)
 
 		require.NoError(t, err)
+		assert.NotNil(t, items)
 		assert.Empty(t, items)
 	})
 
