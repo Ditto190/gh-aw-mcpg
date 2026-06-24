@@ -387,17 +387,20 @@ pub fn has_approval_label(item: &Value, ctx: &PolicyContext) -> bool {
     first_matching_approval_label(item, ctx).is_some()
 }
 
-/// Return the first matching approval label name from an item, if any.
-fn first_matching_approval_label<'a>(item: &'a Value, ctx: &PolicyContext) -> Option<&'a str> {
-    if ctx.approval_labels.is_empty() {
+/// Return the first item label that matches any entry in `label_list` (case-insensitive).
+/// Returns `None` immediately when `label_list` is empty (feature disabled).
+fn first_matching_label<'a>(item: &'a Value, label_list: &[String]) -> Option<&'a str> {
+    if label_list.is_empty() {
         return None;
     }
-    let label_names = extract_github_label_names(item);
-    label_names.into_iter().find(|name| {
-        ctx.approval_labels
-            .iter()
-            .any(|al| al.eq_ignore_ascii_case(name))
-    })
+    extract_github_label_names(item)
+        .into_iter()
+        .find(|name| label_list.iter().any(|l| l.eq_ignore_ascii_case(name)))
+}
+
+/// Return the first matching approval label name from an item, if any.
+fn first_matching_approval_label<'a>(item: &'a Value, ctx: &PolicyContext) -> Option<&'a str> {
+    first_matching_label(item, &ctx.approval_labels)
 }
 
 /// Check whether a content item carries at least one label from the configured
@@ -409,15 +412,7 @@ pub fn has_refusal_label(item: &Value, ctx: &PolicyContext) -> bool {
 
 /// Return the first matching refusal label name from an item, if any.
 fn first_matching_refusal_label<'a>(item: &'a Value, ctx: &PolicyContext) -> Option<&'a str> {
-    if ctx.refusal_labels.is_empty() {
-        return None;
-    }
-    let label_names = extract_github_label_names(item);
-    label_names.into_iter().find(|name| {
-        ctx.refusal_labels
-            .iter()
-            .any(|rl| rl.eq_ignore_ascii_case(name))
-    })
+    first_matching_label(item, &ctx.refusal_labels)
 }
 
 /// Apply approval-label promotion: if the item carries a configured approval label,
@@ -3658,5 +3653,97 @@ mod tests {
         ] {
             assert_eq!(MinIntegrity::from_policy_str(level.as_str()), Some(*level));
         }
+    }
+
+    // =========================================================================
+    // Tests for label-checking helpers
+    // =========================================================================
+
+    #[test]
+    fn test_has_approval_label_matches_case_insensitively() {
+        let ctx = PolicyContext {
+            approval_labels: vec!["approved".to_string()],
+            ..Default::default()
+        };
+        let item = serde_json::json!({"labels": [{"name": "APPROVED"}]});
+        assert!(has_approval_label(&item, &ctx));
+    }
+
+    #[test]
+    fn test_has_approval_label_no_match_returns_false() {
+        let ctx = PolicyContext {
+            approval_labels: vec!["approved".to_string()],
+            ..Default::default()
+        };
+        let item = serde_json::json!({"labels": [{"name": "other-label"}]});
+        assert!(!has_approval_label(&item, &ctx));
+    }
+
+    #[test]
+    fn test_has_approval_label_empty_list_returns_false() {
+        let ctx = PolicyContext::default();
+        let item = serde_json::json!({"labels": [{"name": "approved"}]});
+        assert!(!has_approval_label(&item, &ctx));
+    }
+
+    #[test]
+    fn test_has_approval_label_no_labels_field_returns_false() {
+        let ctx = PolicyContext {
+            approval_labels: vec!["approved".to_string()],
+            ..Default::default()
+        };
+        let item = serde_json::json!({"number": 1, "title": "no labels field"});
+        assert!(!has_approval_label(&item, &ctx));
+    }
+
+    #[test]
+    fn test_has_refusal_label_matches_case_insensitively() {
+        let ctx = PolicyContext {
+            refusal_labels: vec!["spam".to_string()],
+            ..Default::default()
+        };
+        let item = serde_json::json!({"labels": [{"name": "SPAM"}]});
+        assert!(has_refusal_label(&item, &ctx));
+    }
+
+    #[test]
+    fn test_has_refusal_label_empty_list_returns_false() {
+        let ctx = PolicyContext::default();
+        let item = serde_json::json!({"labels": [{"name": "spam"}]});
+        assert!(!has_refusal_label(&item, &ctx));
+    }
+
+    #[test]
+    fn test_has_promotion_label_matches_case_insensitively() {
+        let ctx = PolicyContext {
+            promotion_label: "trusted".to_string(),
+            ..Default::default()
+        };
+        let item = serde_json::json!({"labels": [{"name": "TRUSTED"}]});
+        assert!(has_promotion_label(&item, &ctx));
+    }
+
+    #[test]
+    fn test_has_promotion_label_empty_string_returns_false() {
+        let ctx = PolicyContext::default();
+        let item = serde_json::json!({"labels": [{"name": "trusted"}]});
+        assert!(!has_promotion_label(&item, &ctx));
+    }
+
+    #[test]
+    fn test_has_demotion_label_matches_case_insensitively() {
+        let ctx = PolicyContext {
+            demotion_label: "needs-review".to_string(),
+            ..Default::default()
+        };
+        let item = serde_json::json!({"labels": [{"name": "NEEDS-REVIEW"}]});
+        assert!(has_demotion_label(&item, &ctx));
+    }
+
+    #[test]
+    fn test_has_demotion_label_empty_string_returns_false() {
+        let ctx = PolicyContext::default();
+        let item = serde_json::json!({"labels": [{"name": "needs-review"}]});
+        assert!(!has_demotion_label(&item, &ctx));
     }
 }
