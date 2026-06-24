@@ -73,13 +73,13 @@ func TestFormatErrorContext(t *testing.T) {
 			wantContains: []string{"Value format is incorrect", "specific format or pattern"},
 		},
 		{
-			name:         "minimum error kind triggers range detail",
+			name:         "minProperties error kind triggers range detail",
 			errorKind:    &kind.MinProperties{Got: 0, Want: 1},
 			prefix:       "  ",
 			wantContains: []string{"outside the allowed range", "Adjust the value", "  Details:"},
 		},
 		{
-			name:         "maximum error kind triggers range detail",
+			name:         "maxProperties error kind triggers range detail",
 			errorKind:    &kind.MaxProperties{Got: 100000, Want: 65535},
 			prefix:       "  ",
 			wantContains: []string{"outside the allowed range", "  Details:"},

@@ -1,8 +1,8 @@
 package config
 
 import (
-	_ "embed"
 	"bytes"
+	_ "embed"
 	"errors"
 	"fmt"
 	"io"
