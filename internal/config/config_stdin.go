@@ -489,8 +489,7 @@ func convertStdinServerConfig(name string, server *StdinServerConfig, customSche
 		return nil, err
 	}
 
-	// server.Type has been normalized to "stdio", "http", or a custom type by
-	// validateServerConfigWithCustomSchemas above; no re-normalization is needed here.
+	// server.Type has been normalized (empty and "local" -> "stdio") by validateServerConfigWithCustomSchemas above.
 	serverType := server.Type
 
 	logStdin.Printf("Converting server %q: type=%s", name, serverType)
