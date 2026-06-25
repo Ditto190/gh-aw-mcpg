@@ -1,0 +1,118 @@
+package config
+
+import (
+	"fmt"
+	"strings"
+)
+
+// Documentation URL constants
+const (
+	ConfigSpecURL = "https://github.com/github/gh-aw/blob/main/docs/src/content/docs/reference/mcp-gateway.md"
+	SchemaURL     = "https://raw.githubusercontent.com/github/gh-aw/v0.80.9/docs/public/schemas/mcp-gateway-config.schema.json"
+)
+
+// ValidationError represents a configuration validation error with context.
+// It provides detailed information about what went wrong during configuration
+// validation, including the field that failed, a human-readable message,
+// the JSON path to the error location, and a suggestion for how to fix it.
+//
+// This error type implements the error interface and formats itself with
+// helpful context when Error() is called, including the JSON path and
+// suggestion if available.
+type ValidationError struct {
+	Field      string
+	Message    string
+	JSONPath   string
+	Suggestion string
+}
+
+func (e *ValidationError) Error() string {
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("Configuration error at %s: %s", e.JSONPath, e.Message))
+	if e.Suggestion != "" {
+		sb.WriteString(fmt.Sprintf("\nSuggestion: %s", e.Suggestion))
+	}
+	return sb.String()
+}
+
+// UnsupportedType creates a ValidationError for unsupported type values
+func UnsupportedType(fieldName, actualType, jsonPath, suggestion string) *ValidationError {
+	logValidation.Printf("Validation error: unsupported type at %s.%s, type=%s", jsonPath, fieldName, actualType)
+	return &ValidationError{
+		Field:      fieldName,
+		Message:    fmt.Sprintf("unsupported server type '%s'", actualType),
+		JSONPath:   fmt.Sprintf("%s.%s", jsonPath, fieldName),
+		Suggestion: suggestion,
+	}
+}
+
+// UndefinedVariable creates a ValidationError for undefined environment variables
+func UndefinedVariable(varName, jsonPath string) *ValidationError {
+	return &ValidationError{
+		Field:      "env variable",
+		Message:    fmt.Sprintf("undefined environment variable referenced: %s", varName),
+		JSONPath:   jsonPath,
+		Suggestion: fmt.Sprintf("Set the environment variable %s before starting the gateway", varName),
+	}
+}
+
+// MissingRequired creates a ValidationError for missing required fields
+func MissingRequired(fieldName, serverType, jsonPath, suggestion string) *ValidationError {
+	return &ValidationError{
+		Field:      fieldName,
+		Message:    fmt.Sprintf("'%s' is required for %s servers", fieldName, serverType),
+		JSONPath:   jsonPath,
+		Suggestion: suggestion,
+	}
+}
+
+// UnsupportedField creates a ValidationError for unsupported fields
+func UnsupportedField(fieldName, message, jsonPath, suggestion string) *ValidationError {
+	return &ValidationError{
+		Field:      fieldName,
+		Message:    message,
+		JSONPath:   jsonPath,
+		Suggestion: suggestion,
+	}
+}
+
+// AppendConfigDocsFooter appends standard documentation links to an error message
+func AppendConfigDocsFooter(sb *strings.Builder) {
+	sb.WriteString("\n\nPlease check your configuration against the MCP Gateway specification at:")
+	sb.WriteString("\n" + ConfigSpecURL)
+	sb.WriteString("\n\nJSON Schema reference:")
+	sb.WriteString("\n" + SchemaURL)
+}
+
+// InvalidPattern creates a ValidationError for values that don't match a required pattern.
+// Used by validation_schema.go for container, mount, URL, and other pattern validations.
+func InvalidPattern(fieldName, value, jsonPath, suggestion string) *ValidationError {
+	return &ValidationError{
+		Field:      fieldName,
+		Message:    fmt.Sprintf("%s '%s' does not match required pattern", fieldName, value),
+		JSONPath:   jsonPath,
+		Suggestion: suggestion,
+	}
+}
+
+// InvalidValue creates a ValidationError for field values that violate a constraint.
+// The message describes the specific constraint violation.
+func InvalidValue(fieldName, message, jsonPath, suggestion string) *ValidationError {
+	return &ValidationError{
+		Field:      fieldName,
+		Message:    message,
+		JSONPath:   jsonPath,
+		Suggestion: suggestion,
+	}
+}
+
+// SchemaValidationError creates a ValidationError for custom schema validation failures.
+// Used by validation.go for the various stages of custom schema fetching, parsing, and validation.
+func SchemaValidationError(serverType, message, jsonPath, suggestion string) *ValidationError {
+	return &ValidationError{
+		Field:      "type",
+		Message:    fmt.Sprintf("%s for server type '%s'", message, serverType),
+		JSONPath:   jsonPath,
+		Suggestion: suggestion,
+	}
+}

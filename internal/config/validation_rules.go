@@ -3,97 +3,14 @@ package config
 import (
 	"fmt"
 	"strings"
-
-	"github.com/github/gh-aw-mcpg/internal/logger"
 )
-
-var logRules = logger.New("config:rules")
-
-// Documentation URL constants
-const (
-	ConfigSpecURL = "https://github.com/github/gh-aw/blob/main/docs/src/content/docs/reference/mcp-gateway.md"
-	SchemaURL     = "https://raw.githubusercontent.com/github/gh-aw/v0.80.9/docs/public/schemas/mcp-gateway-config.schema.json"
-)
-
-// ValidationError represents a configuration validation error with context.
-// It provides detailed information about what went wrong during configuration
-// validation, including the field that failed, a human-readable message,
-// the JSON path to the error location, and a suggestion for how to fix it.
-//
-// This error type implements the error interface and formats itself with
-// helpful context when Error() is called, including the JSON path and
-// suggestion if available.
-type ValidationError struct {
-	Field      string
-	Message    string
-	JSONPath   string
-	Suggestion string
-}
-
-func (e *ValidationError) Error() string {
-	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("Configuration error at %s: %s", e.JSONPath, e.Message))
-	if e.Suggestion != "" {
-		sb.WriteString(fmt.Sprintf("\nSuggestion: %s", e.Suggestion))
-	}
-	return sb.String()
-}
-
-// UnsupportedType creates a ValidationError for unsupported type values
-func UnsupportedType(fieldName, actualType, jsonPath, suggestion string) *ValidationError {
-	logRules.Printf("Validation error: unsupported type at %s.%s, type=%s", jsonPath, fieldName, actualType)
-	return &ValidationError{
-		Field:      fieldName,
-		Message:    fmt.Sprintf("unsupported server type '%s'", actualType),
-		JSONPath:   fmt.Sprintf("%s.%s", jsonPath, fieldName),
-		Suggestion: suggestion,
-	}
-}
-
-// UndefinedVariable creates a ValidationError for undefined environment variables
-func UndefinedVariable(varName, jsonPath string) *ValidationError {
-	return &ValidationError{
-		Field:      "env variable",
-		Message:    fmt.Sprintf("undefined environment variable referenced: %s", varName),
-		JSONPath:   jsonPath,
-		Suggestion: fmt.Sprintf("Set the environment variable %s before starting the gateway", varName),
-	}
-}
-
-// MissingRequired creates a ValidationError for missing required fields
-func MissingRequired(fieldName, serverType, jsonPath, suggestion string) *ValidationError {
-	return &ValidationError{
-		Field:      fieldName,
-		Message:    fmt.Sprintf("'%s' is required for %s servers", fieldName, serverType),
-		JSONPath:   jsonPath,
-		Suggestion: suggestion,
-	}
-}
-
-// UnsupportedField creates a ValidationError for unsupported fields
-func UnsupportedField(fieldName, message, jsonPath, suggestion string) *ValidationError {
-	return &ValidationError{
-		Field:      fieldName,
-		Message:    message,
-		JSONPath:   jsonPath,
-		Suggestion: suggestion,
-	}
-}
-
-// AppendConfigDocsFooter appends standard documentation links to an error message
-func AppendConfigDocsFooter(sb *strings.Builder) {
-	sb.WriteString("\n\nPlease check your configuration against the MCP Gateway specification at:")
-	sb.WriteString("\n" + ConfigSpecURL)
-	sb.WriteString("\n\nJSON Schema reference:")
-	sb.WriteString("\n" + SchemaURL)
-}
 
 // PortRange validates that a port is in the valid range (1-65535)
 // Returns nil if valid, *ValidationError if invalid
 func PortRange(port int, jsonPath string) *ValidationError {
-	logRules.Printf("Validating port range: port=%d, jsonPath=%s", port, jsonPath)
+	logValidation.Printf("Validating port range: port=%d, jsonPath=%s", port, jsonPath)
 	if port < 1 || port > 65535 {
-		logRules.Printf("Port validation failed: port=%d out of range", port)
+		logValidation.Printf("Port validation failed: port=%d out of range", port)
 		return &ValidationError{
 			Field:      "port",
 			Message:    fmt.Sprintf("port must be between 1 and 65535, got %d", port),
@@ -119,9 +36,9 @@ func TimeoutPositive(timeout int, fieldName, jsonPath string) *ValidationError {
 // PositiveInteger validates that a value is at least 1.
 // Returns nil if valid, *ValidationError if invalid.
 func PositiveInteger(value int, fieldName, jsonPath string) *ValidationError {
-	logRules.Printf("Validating positive integer: field=%s, value=%d, jsonPath=%s", fieldName, value, jsonPath)
+	logValidation.Printf("Validating positive integer: field=%s, value=%d, jsonPath=%s", fieldName, value, jsonPath)
 	if value < 1 {
-		logRules.Printf("Positive integer validation failed: %s=%d is not positive", fieldName, value)
+		logValidation.Printf("Positive integer validation failed: %s=%d is not positive", fieldName, value)
 		return &ValidationError{
 			Field:      fieldName,
 			Message:    fmt.Sprintf("%s must be a positive integer (>= 1), got %d", fieldName, value),
@@ -135,9 +52,9 @@ func PositiveInteger(value int, fieldName, jsonPath string) *ValidationError {
 // TimeoutMinimum validates that a timeout value is at least min.
 // Returns nil if valid, *ValidationError if below the minimum.
 func TimeoutMinimum(timeout, min int, fieldName, jsonPath string) *ValidationError {
-	logRules.Printf("Validating timeout minimum: field=%s, value=%d, min=%d, jsonPath=%s", fieldName, timeout, min, jsonPath)
+	logValidation.Printf("Validating timeout minimum: field=%s, value=%d, min=%d, jsonPath=%s", fieldName, timeout, min, jsonPath)
 	if timeout < min {
-		logRules.Printf("Timeout minimum validation failed: %s=%d is below minimum %d", fieldName, timeout, min)
+		logValidation.Printf("Timeout minimum validation failed: %s=%d is below minimum %d", fieldName, timeout, min)
 		return &ValidationError{
 			Field:      fieldName,
 			Message:    fmt.Sprintf("%s must be at least %d, got %d", fieldName, min, timeout),
@@ -151,9 +68,9 @@ func TimeoutMinimum(timeout, min int, fieldName, jsonPath string) *ValidationErr
 // TimeoutRange validates that a timeout value is within [min, max] (inclusive).
 // Returns nil if valid, *ValidationError if outside the range.
 func TimeoutRange(timeout, min, max int, fieldName, jsonPath string) *ValidationError {
-	logRules.Printf("Validating timeout range: field=%s, value=%d, min=%d, max=%d, jsonPath=%s", fieldName, timeout, min, max, jsonPath)
+	logValidation.Printf("Validating timeout range: field=%s, value=%d, min=%d, max=%d, jsonPath=%s", fieldName, timeout, min, max, jsonPath)
 	if timeout < min || timeout > max {
-		logRules.Printf("Timeout range validation failed: %s=%d is outside [%d, %d]", fieldName, timeout, min, max)
+		logValidation.Printf("Timeout range validation failed: %s=%d is outside [%d, %d]", fieldName, timeout, min, max)
 		suggestedTimeout := min + (max-min)/2
 		return &ValidationError{
 			Field:      fieldName,
@@ -172,10 +89,10 @@ func TimeoutRange(timeout, min, max int, fieldName, jsonPath string) *Validation
 // - Container path MUST be an absolute path
 // - Mode MUST be either "ro" (read-only) or "rw" (read-write)
 func MountFormat(mount, jsonPath string, index int) *ValidationError {
-	logRules.Printf("Validating mount format: mount=%s, jsonPath=%s, index=%d", mount, jsonPath, index)
+	logValidation.Printf("Validating mount format: mount=%s, jsonPath=%s, index=%d", mount, jsonPath, index)
 	parts := strings.Split(mount, ":")
 	if len(parts) != 3 {
-		logRules.Printf("Mount format validation failed: invalid part count=%d", len(parts))
+		logValidation.Printf("Mount format validation failed: invalid part count=%d", len(parts))
 		return &ValidationError{
 			Field:      "mounts",
 			Message:    fmt.Sprintf("invalid mount format '%s' (expected 'source:dest:mode')", mount),
@@ -260,9 +177,9 @@ func NonEmptyString(value, fieldName, jsonPath string) *ValidationError {
 // Pattern: ^(/|[A-Za-z]:\\)
 // Returns nil if valid, *ValidationError if invalid
 func AbsolutePath(value, fieldName, jsonPath string) *ValidationError {
-	logRules.Printf("Validating absolute path: field=%s, value=%s, jsonPath=%s", fieldName, value, jsonPath)
+	logValidation.Printf("Validating absolute path: field=%s, value=%s, jsonPath=%s", fieldName, value, jsonPath)
 	if value == "" {
-		logRules.Printf("Absolute path validation failed: %s is empty", fieldName)
+		logValidation.Printf("Absolute path validation failed: %s is empty", fieldName)
 		return &ValidationError{
 			Field:      fieldName,
 			Message:    fmt.Sprintf("%s cannot be empty", fieldName),
@@ -273,7 +190,7 @@ func AbsolutePath(value, fieldName, jsonPath string) *ValidationError {
 
 	// Check for Unix absolute path (starts with /)
 	if strings.HasPrefix(value, "/") {
-		logRules.Printf("Valid Unix absolute path: %s", value)
+		logValidation.Printf("Valid Unix absolute path: %s", value)
 		return nil
 	}
 
@@ -282,48 +199,15 @@ func AbsolutePath(value, fieldName, jsonPath string) *ValidationError {
 	if len(value) >= 3 &&
 		((value[0] >= 'A' && value[0] <= 'Z') || (value[0] >= 'a' && value[0] <= 'z')) &&
 		value[1] == ':' && value[2] == '\\' {
-		logRules.Printf("Valid Windows absolute path: %s", value)
+		logValidation.Printf("Valid Windows absolute path: %s", value)
 		return nil
 	}
 
-	logRules.Printf("Absolute path validation failed: %s=%s is not absolute", fieldName, value)
+	logValidation.Printf("Absolute path validation failed: %s=%s is not absolute", fieldName, value)
 	return &ValidationError{
 		Field:      fieldName,
 		Message:    fmt.Sprintf("%s must be an absolute path, got '%s'", fieldName, value),
 		JSONPath:   jsonPath,
 		Suggestion: "Use an absolute path: Unix paths start with '/' (e.g., '/tmp/payloads'), Windows paths start with a drive letter (e.g., 'C:\\payloads')",
-	}
-}
-
-// InvalidPattern creates a ValidationError for values that don't match a required pattern.
-// Used by validation_schema.go for container, mount, URL, and other pattern validations.
-func InvalidPattern(fieldName, value, jsonPath, suggestion string) *ValidationError {
-	return &ValidationError{
-		Field:      fieldName,
-		Message:    fmt.Sprintf("%s '%s' does not match required pattern", fieldName, value),
-		JSONPath:   jsonPath,
-		Suggestion: suggestion,
-	}
-}
-
-// InvalidValue creates a ValidationError for field values that violate a constraint.
-// The message describes the specific constraint violation.
-func InvalidValue(fieldName, message, jsonPath, suggestion string) *ValidationError {
-	return &ValidationError{
-		Field:      fieldName,
-		Message:    message,
-		JSONPath:   jsonPath,
-		Suggestion: suggestion,
-	}
-}
-
-// SchemaValidationError creates a ValidationError for custom schema validation failures.
-// Used by validation.go for the various stages of custom schema fetching, parsing, and validation.
-func SchemaValidationError(serverType, message, jsonPath, suggestion string) *ValidationError {
-	return &ValidationError{
-		Field:      "type",
-		Message:    fmt.Sprintf("%s for server type '%s'", message, serverType),
-		JSONPath:   jsonPath,
-		Suggestion: suggestion,
 	}
 }
