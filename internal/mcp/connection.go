@@ -315,6 +315,25 @@ func (c *Connection) ServerInfo() (name, version string) {
 	return initResult.ServerInfo.Name, initResult.ServerInfo.Version
 }
 
+// BackendHasPromptsCapability reports whether the backend declared prompt support
+// in its MCP initialize response. Only SDK-based connections (streamable, SSE, stdio)
+// expose this information; plain JSON-RPC connections always return false because
+// their initialize response is not parsed into a typed capability struct.
+//
+// Callers should skip prompts/list on backends where this returns false to avoid
+// issuing an unsupported request that could corrupt an SDK session via an EOF response.
+func (c *Connection) BackendHasPromptsCapability() bool {
+	sess := c.getSDKSession()
+	if sess == nil {
+		return false
+	}
+	initResult := sess.InitializeResult()
+	if initResult == nil || initResult.Capabilities == nil {
+		return false
+	}
+	return initResult.Capabilities.Prompts != nil
+}
+
 // withReconnectLock acquires the session write lock, logs the reconnect attempt, runs
 // reconnect, logs the result, and wraps any error with a consistent message.
 // transportName is included in the debug log to identify which transport is reconnecting
@@ -401,8 +420,10 @@ func (c *Connection) reconnectSDKTransport() error {
 
 // callSDKMethodWithReconnect calls the SDK method and, if the session has expired,
 // reconnects and retries exactly once before propagating the error.
-func (c *Connection) callSDKMethodWithReconnect(method string, params interface{}) (*Response, error) {
-	result, err := c.callSDKMethod(method, params)
+// ctx is the per-request context (e.g. carrying a tool-timeout deadline) and is
+// forwarded to callSDKMethod so that cancellations and deadlines are respected.
+func (c *Connection) callSDKMethodWithReconnect(ctx context.Context, method string, params interface{}) (*Response, error) {
+	result, err := c.callSDKMethod(ctx, method, params)
 	if err != nil && isSessionNotFoundError(err) {
 		logConn.Printf("Session not found error from SDK (serverID=%s), attempting reconnect", c.serverID)
 		if reconnErr := c.reconnectSDKTransport(); reconnErr != nil {
@@ -411,7 +432,7 @@ func (c *Connection) callSDKMethodWithReconnect(method string, params interface{
 			// Return the original session-not-found error so the caller sees a meaningful message.
 			return result, err
 		}
-		result, err = c.callSDKMethod(method, params)
+		result, err = c.callSDKMethod(ctx, method, params)
 	}
 	return result, err
 }
@@ -449,12 +470,14 @@ func (c *Connection) SendRequestWithServerID(ctx context.Context, method string,
 		if c.httpTransportType == HTTPTransportPlainJSON {
 			result, err = c.sendHTTPRequest(ctx, method, params)
 		} else {
-			// For streamable and SSE transports, use SDK session methods
-			result, err = c.callSDKMethodWithReconnect(method, params)
+			// For streamable and SSE transports, use SDK session methods.
+			// ctx is forwarded so per-request deadlines (e.g. tool timeout) are enforced.
+			result, err = c.callSDKMethodWithReconnect(ctx, method, params)
 		}
 	} else {
-		// Handle stdio connections using SDK client
-		result, err = c.callSDKMethod(method, params)
+		// Handle stdio connections using SDK client.
+		// ctx is forwarded so per-request deadlines (e.g. tool timeout) are enforced.
+		result, err = c.callSDKMethod(ctx, method, params)
 	}
 
 	return logInboundRPCResponseFromResult(serverID, result, err, loggingSnapshot)
