@@ -320,6 +320,10 @@ func (c *Connection) ServerInfo() (name, version string) {
 // expose this information; plain JSON-RPC connections always return false because
 // their initialize response is not parsed into a typed capability struct.
 //
+// In the MCP specification, a nil Capabilities.Prompts field means the server did not
+// include a "prompts" entry in its capabilities object — i.e. it explicitly does not
+// support prompts. A non-nil value (even an empty struct) signals prompt support.
+//
 // Callers should skip prompts/list on backends where this returns false to avoid
 // issuing an unsupported request that could corrupt an SDK session via an EOF response.
 func (c *Connection) BackendHasPromptsCapability() bool {

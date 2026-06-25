@@ -343,7 +343,7 @@ func (us *UnifiedServer) registerToolsFromBackend(serverID string) error {
 
 	// Register prompts from this backend. Prompt support is optional; failures are
 	// logged but do not cause tool registration to fail.
-	if err := us.registerPromptsFromBackend(serverID, conn); err != nil {
+	if err := us.registerPromptsFromBackend(context.Background(), serverID, conn); err != nil {
 		logger.LogWarn("backend", "Failed to register prompts from %s (non-fatal): %v", serverID, err)
 	}
 
@@ -354,7 +354,7 @@ func (us *UnifiedServer) registerToolsFromBackend(serverID string) error {
 // naming, mirroring the tool registration convention. Prompt capability is optional in the MCP
 // spec; backends that do not support prompts/list will return an error that is treated as a
 // graceful skip rather than a hard failure.
-func (us *UnifiedServer) registerPromptsFromBackend(serverID string, conn *mcp.Connection) error {
+func (us *UnifiedServer) registerPromptsFromBackend(ctx context.Context, serverID string, conn *mcp.Connection) error {
 	// Only call prompts/list on backends that explicitly declared prompt support in
 	// their initialize response. For SDK-based connections (streamable, SSE, stdio),
 	// an unsupported prompts/list request can return EOF which the SDK interprets as
@@ -367,7 +367,7 @@ func (us *UnifiedServer) registerPromptsFromBackend(serverID string, conn *mcp.C
 	}
 
 	// List prompts from backend
-	result, err := conn.SendRequestWithServerID(context.Background(), "prompts/list", nil, serverID)
+	result, err := conn.SendRequestWithServerID(ctx, "prompts/list", nil, serverID)
 	if err != nil {
 		// Many backends do not implement prompts — treat as a graceful skip.
 		logUnified.Printf("Backend %s does not support prompts/list (skipping): %v", serverID, err)
@@ -439,7 +439,7 @@ func (us *UnifiedServer) registerPromptsFromBackend(serverID string, conn *mcp.C
 			return &promptResult, nil
 		})
 
-		logUnified.Printf("Registered prompt: %s-%s", serverID, promptNameCopy)
+		logUnified.Printf("Registered prompt: %s___%s", serverID, promptNameCopy)
 	}
 
 	logUnified.Printf("Registered %d prompts from %s: %s", len(listResult.Prompts), serverID, strings.Join(promptNames, ", "))
