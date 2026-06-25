@@ -118,8 +118,7 @@ pub fn label_response_items(
             } else {
                 // Handle array, {items: [...]}, {pull_requests: [...]}, GraphQL nested, GraphQL single, or REST single object.
                 // Work directly with &[Value] slices to avoid allocating a Vec<&Value>.
-                let single_item_buf;
-                let graphql_single_buf;
+                // Use std::slice::from_ref for single-object branches so no clone is needed.
                 let items: &[Value] = if let Some(arr) = actual_response.as_array() {
                     arr.as_slice()
                 } else if let Some(items_arr) =
@@ -134,15 +133,13 @@ pub fn label_response_items(
                 } else if let Some(nodes) = extract_graphql_nodes(&actual_response) {
                     nodes.as_slice()
                 } else if let Some(obj) = extract_graphql_single_object(&actual_response) {
-                    graphql_single_buf = [obj.clone()];
-                    &graphql_single_buf
+                    std::slice::from_ref(obj)
                 } else if actual_response.is_object()
                     && !is_graphql_wrapper(&actual_response)
                     && !is_search_result_wrapper(&actual_response)
                     && !is_mcp_text_wrapper(&actual_response)
                 {
-                    single_item_buf = [actual_response.as_ref().clone()];
-                    &single_item_buf
+                    std::slice::from_ref(actual_response.as_ref())
                 } else {
                     &[]
                 };
@@ -245,8 +242,7 @@ pub fn label_response_items(
             } else {
                 // Handle single issue, array of issues, {issues: [...]}, GraphQL nested, or GraphQL single object.
                 // Work directly with &[Value] slices to avoid allocating a Vec<&Value>.
-                let single_item_buf;
-                let graphql_single_buf;
+                // Use std::slice::from_ref for single-object branches so no clone is needed.
                 let items: &[Value] = if let Some(arr) = actual_response.as_array() {
                     arr.as_slice()
                 } else if let Some(items_arr) =
@@ -260,15 +256,13 @@ pub fn label_response_items(
                 } else if let Some(nodes) = extract_graphql_nodes(&actual_response) {
                     nodes.as_slice()
                 } else if let Some(obj) = extract_graphql_single_object(&actual_response) {
-                    graphql_single_buf = [obj.clone()];
-                    &graphql_single_buf
+                    std::slice::from_ref(obj)
                 } else if actual_response.is_object()
                     && !is_graphql_wrapper(&actual_response)
                     && !is_search_result_wrapper(&actual_response)
                     && !is_mcp_text_wrapper(&actual_response)
                 {
-                    single_item_buf = [actual_response.as_ref().clone()];
-                    &single_item_buf
+                    std::slice::from_ref(actual_response.as_ref())
                 } else {
                     &[]
                 };
