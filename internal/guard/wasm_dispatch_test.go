@@ -2,6 +2,7 @@ package guard
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
 	"os"
 	"path/filepath"
@@ -308,7 +309,7 @@ func TestLabelResource_FunctionNotExported(t *testing.T) {
 	assert.ErrorContains(t, err, "not exported from WASM module")
 }
 
-func TestLabelResource_EmptyWasmResponseTriggersMarshalError(t *testing.T) {
+func TestLabelResource_EmptyWasmResponseTriggersUnmarshalError(t *testing.T) {
 	// labelResourceReturnsZeroWasm exports label_resource and returns 0 (empty result).
 	// LabelResource calls unmarshalWasmResponse on the empty byte slice, which should
 	// fail JSON parsing.
@@ -377,7 +378,7 @@ func TestHostCallBackend_ToolNameReadFailure(t *testing.T) {
 	defer cleanup()
 
 	stack := make([]uint64, 6)
-	stack[0] = 0      // toolNamePtr
+	stack[0] = 0       // toolNamePtr
 	stack[1] = 1 << 30 // toolNameLen — far exceeds memory size
 	stack[2] = 0
 	stack[3] = 0
@@ -486,6 +487,11 @@ func TestHostCallBackend_ResultTooLarge(t *testing.T) {
 	// which is encoded as uint64(0xFFFFFFFE) via setResult(int32(-2)).
 	const bufTooSmall = uint64(0xFFFFFFFE)
 	assert.Equal(t, bufTooSmall, stack[0], "result too large should return -2 buffer-too-small sentinel")
+
+	requiredHint, ok := g.module.Memory().Read(400, 4)
+	require.True(t, ok)
+	requiredSize := binary.LittleEndian.Uint32(requiredHint)
+	assert.Equal(t, uint32(len(`{"data":"some response data"}`)), requiredSize, "resultPtr should contain required JSON size hint")
 }
 
 func TestHostCallBackend_ResultTooLarge_BufferLessThan4(t *testing.T) {
@@ -507,9 +513,16 @@ func TestHostCallBackend_ResultTooLarge_BufferLessThan4(t *testing.T) {
 	stack[4] = 400
 	stack[5] = 2 // resultSize < 4 — cannot write required-size hint
 
+	ok = g.module.Memory().Write(400, []byte{0xAA, 0xBB})
+	require.True(t, ok)
+
 	g.hostCallBackend(context.Background(), g.module, stack)
 	const bufTooSmall = uint64(0xFFFFFFFE)
 	assert.Equal(t, bufTooSmall, stack[0], "result too large with small buffer should still return -2")
+
+	bufferAfter, ok := g.module.Memory().Read(400, 2)
+	require.True(t, ok)
+	assert.Equal(t, []byte{0xAA, 0xBB}, bufferAfter, "result buffer should remain unchanged when resultSize < 4")
 }
 
 func TestHostCallBackend_SuccessWithNoArgs(t *testing.T) {
