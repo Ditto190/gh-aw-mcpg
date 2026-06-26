@@ -13,17 +13,10 @@ use super::helpers::*;
 use serde_json::Value;
 use std::borrow::Cow;
 
-/// Path-based label for response items (RFC 6901 JSON Pointer)
-#[derive(Debug, Clone)]
-pub struct PathLabelEntry {
-    pub path: String,
-    pub labels: crate::ResourceLabels,
-}
-
 /// Result of path-based labeling
 #[derive(Debug)]
 pub struct PathLabelResult {
-    pub labeled_paths: Vec<PathLabelEntry>,
+    pub labeled_paths: Vec<crate::PathLabel>,
     pub default_labels: Option<crate::ResourceLabels>,
     pub items_path: Option<&'static str>,
 }
@@ -96,7 +89,7 @@ pub fn label_response_paths(
                         vec![]
                     };
 
-                    labeled_paths.push(PathLabelEntry {
+                    labeled_paths.push(crate::PathLabel {
                         path: format!("/{}/{}", items_key, i),
                         labels: crate::ResourceLabels {
                             description: format!("repo:{}", full_name),
@@ -199,7 +192,7 @@ pub fn label_response_paths(
                             pr_integrity(item, repo_for_labels, item_repo_private, is_forked, ctx);
                         let path = make_item_path(&items_path, i);
 
-                        labeled_paths.push(PathLabelEntry {
+                        labeled_paths.push(crate::PathLabel {
                             path,
                             labels: crate::ResourceLabels {
                                 description: format!("pr:{}#{}", repo_for_labels, pr_number),
@@ -287,7 +280,7 @@ pub fn label_response_paths(
                             issue_integrity(item, repo_for_labels, item_repo_private, ctx);
                         let path = make_item_path(&items_path, i);
 
-                        labeled_paths.push(PathLabelEntry {
+                        labeled_paths.push(crate::PathLabel {
                             path,
                             labels: crate::ResourceLabels {
                                 description: format!("issue:{}#{}", repo_for_labels, issue_number),
@@ -364,7 +357,7 @@ pub fn label_response_paths(
                         ctx,
                     );
 
-                    labeled_paths.push(PathLabelEntry {
+                    labeled_paths.push(crate::PathLabel {
                         path: format!("/{}", i),
                         labels: crate::ResourceLabels {
                             description: format!("commit:{}@{}", repo_for_labels, short_sha),
@@ -412,7 +405,7 @@ pub fn label_response_paths(
                 let mut labeled_paths = Vec::with_capacity(limited_items.len());
 
                 for (i, _item) in limited_items.iter().enumerate() {
-                    labeled_paths.push(PathLabelEntry {
+                    labeled_paths.push(crate::PathLabel {
                         path: format!("/{}", i),
                         labels: crate::ResourceLabels {
                             description: format!("file:{}", arg_repo_full),
@@ -468,7 +461,7 @@ pub fn label_response_paths(
                         merged_integrity(repo_for_labels, ctx).into()
                     };
 
-                    labeled_paths.push(PathLabelEntry {
+                    labeled_paths.push(crate::PathLabel {
                         path: format!("/{}", i),
                         labels: crate::ResourceLabels {
                             description: format!("release:{}@{}", repo_for_labels, tag),
@@ -504,7 +497,7 @@ pub fn label_response_paths(
                 for (i, item) in limited_items.iter().enumerate() {
                     let id = get_str_or(item, "id", "unknown");
 
-                    labeled_paths.push(PathLabelEntry {
+                    labeled_paths.push(crate::PathLabel {
                         path: format!("/{}", i),
                         labels: crate::ResourceLabels {
                             description: format!("notification:{}", id),
@@ -543,7 +536,7 @@ pub fn label_response_paths(
                     let is_public = get_bool_or(item, "public", true);
                     let id = get_str_or(item, "id", "unknown");
 
-                    labeled_paths.push(PathLabelEntry {
+                    labeled_paths.push(crate::PathLabel {
                         path: format!("/{}", i),
                         labels: crate::ResourceLabels {
                             description: format!("gist:{}", id),
@@ -616,7 +609,7 @@ pub fn label_response_paths(
                         (vec![], integrity)
                     };
 
-                    labeled_paths.push(PathLabelEntry {
+                    labeled_paths.push(crate::PathLabel {
                         path: make_item_path(&items_path, i),
                         labels: crate::ResourceLabels {
                             description: {
