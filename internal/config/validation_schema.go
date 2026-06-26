@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -60,12 +59,6 @@ var schemaHTTPClientTimeout = 10 * time.Second
 var schemaErrPrinter = message.NewPrinter(language.English)
 
 var (
-	domainVarPattern = regexp.MustCompile(`^\$\{[A-Z_][A-Z0-9_]*\}$`)
-	// domainHostnamePattern matches a single RFC-1123 hostname label (no dots), e.g.
-	// "awmg-mcpg" or "localhost". This allows network-isolation topology hostnames
-	// that resolve from ${MCP_GATEWAY_DOMAIN} or are passed directly.
-	domainHostnamePattern = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?$`)
-
 	// logSchema is the debug logger for schema validation
 	logSchema = logger.New("config:validation_schema")
 

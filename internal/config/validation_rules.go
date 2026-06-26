@@ -9,6 +9,11 @@ import (
 var (
 	containerPattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9./_-]*(:([a-zA-Z0-9._-]+|latest))?(@sha256:[a-fA-F0-9]{64})?$`)
 	urlPattern       = regexp.MustCompile(`^https?://.+`)
+	domainVarPattern = regexp.MustCompile(`^\$\{[A-Z_][A-Z0-9_]*\}$`)
+	// domainHostnamePattern matches a single RFC-1123 hostname label (no dots), e.g.
+	// "awmg-mcpg" or "localhost". This allows network-isolation topology hostnames
+	// that resolve from ${MCP_GATEWAY_DOMAIN} or are passed directly.
+	domainHostnamePattern = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?$`)
 )
 
 // PortRange validates that a port is in the valid range (1-65535)
@@ -218,9 +223,9 @@ func AbsolutePath(value, fieldName, jsonPath string) *ValidationError {
 	}
 }
 
-// validateStringPatterns validates additional rule-based string constraints that
+// validateRuleBasedPatterns validates additional rule-based string constraints that
 // are not handled by schema validation alone.
-func validateStringPatterns(stdinCfg *StdinConfig) error {
+func validateRuleBasedPatterns(stdinCfg *StdinConfig) error {
 	logValidation.Printf("Validating string patterns: server_count=%d", len(stdinCfg.MCPServers))
 
 	for name, server := range stdinCfg.MCPServers {

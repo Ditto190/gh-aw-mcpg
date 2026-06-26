@@ -132,7 +132,7 @@ func TestValidateStringPatternsComprehensive(t *testing.T) {
 					},
 				}
 
-				err := validateStringPatterns(config)
+				err := validateRuleBasedPatterns(config)
 
 				if tt.shouldError {
 					require.Error(t, err, "Expected validation error but got none")
@@ -144,7 +144,7 @@ func TestValidateStringPatternsComprehensive(t *testing.T) {
 		}
 	})
 
-	t.Run("stdio server mount validation is deferred", func(t *testing.T) {
+	t.Run("validateRuleBasedPatterns skips mount validation", func(t *testing.T) {
 		tests := []struct {
 			name   string
 			mounts []string
@@ -195,7 +195,7 @@ func TestValidateStringPatternsComprehensive(t *testing.T) {
 					},
 				}
 
-				err := validateStringPatterns(config)
+				err := validateRuleBasedPatterns(config)
 				assert.NoError(t, err, "Mount validation should be deferred to MountFormat/validateMounts")
 			})
 		}
@@ -256,7 +256,7 @@ func TestValidateStringPatternsComprehensive(t *testing.T) {
 					},
 				}
 
-				err := validateStringPatterns(config)
+				err := validateRuleBasedPatterns(config)
 
 				if tt.shouldError {
 					require.Error(t, err, "Expected validation error but got none")
@@ -334,7 +334,7 @@ func TestValidateStringPatternsComprehensive(t *testing.T) {
 					},
 				}
 
-				err := validateStringPatterns(config)
+				err := validateRuleBasedPatterns(config)
 
 				if tt.shouldError {
 					require.Error(t, err, "Expected validation error but got none")
@@ -418,7 +418,7 @@ func TestValidateStringPatternsComprehensive(t *testing.T) {
 					},
 				}
 
-				err := validateStringPatterns(config)
+				err := validateRuleBasedPatterns(config)
 
 				if tt.shouldError {
 					require.Error(t, err, "Expected validation error but got none")
@@ -535,7 +535,7 @@ func TestValidateStringPatternsComprehensive(t *testing.T) {
 					},
 				}
 
-				err := validateStringPatterns(config)
+				err := validateRuleBasedPatterns(config)
 
 				if tt.shouldError {
 					require.Error(t, err, "Expected validation error but got none")
@@ -630,7 +630,7 @@ func TestValidateStringPatternsComprehensive(t *testing.T) {
 					},
 				}
 
-				err := validateStringPatterns(config)
+				err := validateRuleBasedPatterns(config)
 
 				if tt.shouldError {
 					require.Error(t, err, "Expected validation error but got none")
@@ -662,7 +662,7 @@ func TestValidateStringPatternsComprehensive(t *testing.T) {
 				},
 			}
 
-			err := validateStringPatterns(config)
+			err := validateRuleBasedPatterns(config)
 			assert.NoError(t, err, "Expected no error for multiple valid servers")
 		})
 
@@ -680,7 +680,7 @@ func TestValidateStringPatternsComprehensive(t *testing.T) {
 				},
 			}
 
-			err := validateStringPatterns(config)
+			err := validateRuleBasedPatterns(config)
 			require.Error(t, err, "Expected validation error for invalid server")
 			assert.ErrorContains(t, err, "container", "Error should mention container issue")
 		})
@@ -692,7 +692,7 @@ func TestValidateStringPatternsComprehensive(t *testing.T) {
 				MCPServers: map[string]*StdinServerConfig{},
 			}
 
-			err := validateStringPatterns(config)
+			err := validateRuleBasedPatterns(config)
 			assert.NoError(t, err, "Empty servers map should be valid")
 		})
 
@@ -707,7 +707,7 @@ func TestValidateStringPatternsComprehensive(t *testing.T) {
 				Gateway: nil,
 			}
 
-			err := validateStringPatterns(config)
+			err := validateRuleBasedPatterns(config)
 			assert.NoError(t, err, "Nil gateway should be valid")
 		})
 
@@ -718,7 +718,7 @@ func TestValidateStringPatternsComprehensive(t *testing.T) {
 				},
 			}
 
-			err := validateStringPatterns(config)
+			err := validateRuleBasedPatterns(config)
 			assert.NoError(t, err, "Empty server config should pass pattern validation")
 		})
 
@@ -733,7 +733,7 @@ func TestValidateStringPatternsComprehensive(t *testing.T) {
 				},
 			}
 
-			err := validateStringPatterns(config)
+			err := validateRuleBasedPatterns(config)
 			assert.NoError(t, err, "HTTP server without container should be valid")
 		})
 
@@ -758,7 +758,7 @@ func TestValidateStringPatternsComprehensive(t *testing.T) {
 				},
 			}
 
-			err := validateStringPatterns(config)
+			err := validateRuleBasedPatterns(config)
 			assert.NoError(t, err, "Complex valid configuration should pass")
 		})
 	})
@@ -774,13 +774,13 @@ func TestValidateStringPatternsComprehensive(t *testing.T) {
 				},
 			}
 
-			err := validateStringPatterns(config)
+			err := validateRuleBasedPatterns(config)
 			require.Error(t, err)
 			assert.ErrorContains(t, err, "mcpServers.my-server.container", "Error should include JSON path")
 			assert.ErrorContains(t, err, "Suggestion", "Error should include suggestion")
 		})
 
-		t.Run("mount validation is deferred to rule validators", func(t *testing.T) {
+		t.Run("mount format validation is handled separately", func(t *testing.T) {
 			config := &StdinConfig{
 				MCPServers: map[string]*StdinServerConfig{
 					"test-server": {
@@ -791,8 +791,8 @@ func TestValidateStringPatternsComprehensive(t *testing.T) {
 				},
 			}
 
-			err := validateStringPatterns(config)
-			assert.NoError(t, err, "validateStringPatterns should not duplicate mount validation")
+			err := validateRuleBasedPatterns(config)
+			assert.NoError(t, err, "validateRuleBasedPatterns should not duplicate mount validation")
 		})
 
 		t.Run("domain error includes suggestion", func(t *testing.T) {
@@ -808,7 +808,7 @@ func TestValidateStringPatternsComprehensive(t *testing.T) {
 				},
 			}
 
-			err := validateStringPatterns(config)
+			err := validateRuleBasedPatterns(config)
 			require.Error(t, err)
 			assert.ErrorContains(t, err, "Suggestion", "Error should include suggestion")
 			assert.ErrorContains(t, err, "localhost", "Suggestion should mention localhost")

@@ -365,7 +365,7 @@ func LoadFromStdin() (*Config, error) {
 	logConfig.Printf("Parsed stdin config with %d servers", len(stdinCfg.MCPServers))
 
 	// Validate string patterns from schema (regex constraints)
-	if err := validateStringPatterns(&stdinCfg); err != nil {
+	if err := validateRuleBasedPatterns(&stdinCfg); err != nil {
 		return nil, err
 	}
 

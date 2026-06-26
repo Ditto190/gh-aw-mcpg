@@ -562,7 +562,7 @@ func TestValidateStringPatterns(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := validateStringPatterns(tt.config)
+			err := validateRuleBasedPatterns(tt.config)
 
 			if tt.shouldErr {
 				require.Error(t, err)
