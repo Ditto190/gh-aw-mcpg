@@ -202,6 +202,34 @@ func NewUnified(ctx context.Context, cfg *config.Config) (*UnifiedServer, error)
 	return us, nil
 }
 
+// executeBackendRequest sends a JSON-RPC request to a backend server and unmarshals the
+// result into T. It centralizes: GetOrLaunchForSession → SendRequestWithServerID →
+// error check → unmarshal.
+func executeBackendRequest[T any](ctx context.Context, l *launcher.Launcher, serverID, sessionID, method string, params map[string]interface{}) (T, error) {
+	var zero T
+	conn, err := launcher.GetOrLaunchForSession(l, serverID, sessionID)
+	if err != nil {
+		return zero, fmt.Errorf("failed to connect to backend %s: %w", serverID, err)
+	}
+
+	response, err := conn.SendRequestWithServerID(ctx, method, params, serverID)
+	if err != nil {
+		return zero, err
+	}
+
+	if response.Error != nil {
+		logUnified.Printf("executeBackendRequest: backend error: serverID=%s, method=%s, code=%d", serverID, method, response.Error.Code)
+		return zero, fmt.Errorf("backend error %s: code=%d, message=%s", method, response.Error.Code, response.Error.Message)
+	}
+
+	var result T
+	if err := json.Unmarshal(response.Result, &result); err != nil {
+		return zero, fmt.Errorf("failed to parse %s result: %w", method, err)
+	}
+
+	return result, nil
+}
+
 // executeBackendToolCall executes a backend MCP tool call and returns the raw result.
 // This helper consolidates the common pattern of:
 // 1. Get or launch backend connection
@@ -213,32 +241,10 @@ func NewUnified(ctx context.Context, cfg *config.Config) (*UnifiedServer, error)
 // and wrapping errors as needed.
 func executeBackendToolCall(ctx context.Context, l *launcher.Launcher, serverID, sessionID, toolName string, args interface{}) (interface{}, error) {
 	logUnified.Printf("executeBackendToolCall: serverID=%s, toolName=%s", serverID, toolName)
-	conn, err := launcher.GetOrLaunchForSession(l, serverID, sessionID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect: %w", err)
-	}
-
-	response, err := conn.SendRequestWithServerID(ctx, "tools/call", map[string]interface{}{
+	return executeBackendRequest[interface{}](ctx, l, serverID, sessionID, "tools/call", map[string]interface{}{
 		"name":      toolName,
 		"arguments": args,
-	}, serverID)
-	if err != nil {
-		return nil, err
-	}
-
-	// Check if the backend returned an error
-	if response.Error != nil {
-		logUnified.Printf("executeBackendToolCall: backend error: serverID=%s, toolName=%s, code=%d", serverID, toolName, response.Error.Code)
-		return nil, fmt.Errorf("backend error: code=%d, message=%s", response.Error.Code, response.Error.Message)
-	}
-
-	// Parse the result
-	var result interface{}
-	if err := json.Unmarshal(response.Result, &result); err != nil {
-		return nil, fmt.Errorf("failed to parse result: %w", err)
-	}
-
-	return result, nil
+	})
 }
 
 // guardBackendCaller implements guard.BackendCaller for guards to query backend metadata

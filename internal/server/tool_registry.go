@@ -413,30 +413,15 @@ func (us *UnifiedServer) registerPromptsFromBackend(ctx context.Context, serverI
 
 		us.server.AddPrompt(sdkPrompt, func(ctx context.Context, req *sdk.GetPromptRequest) (*sdk.GetPromptResult, error) {
 			sessionID := us.getSessionID(ctx)
-			backendConn, connErr := launcher.GetOrLaunchForSession(us.launcher, serverIDCopy, sessionID)
-			if connErr != nil {
-				return nil, fmt.Errorf("failed to connect to backend %s: %w", serverIDCopy, connErr)
-			}
-
 			params := map[string]interface{}{
 				"name":      promptNameCopy,
 				"arguments": req.Params.Arguments,
 			}
-
-			response, reqErr := backendConn.SendRequestWithServerID(ctx, "prompts/get", params, serverIDCopy)
-			if reqErr != nil {
-				return nil, reqErr
+			result, err := executeBackendRequest[sdk.GetPromptResult](ctx, us.launcher, serverIDCopy, sessionID, "prompts/get", params)
+			if err != nil {
+				return nil, err
 			}
-			if response.Error != nil {
-				return nil, fmt.Errorf("backend error for prompts/get %s/%s: code=%d, message=%s",
-					serverIDCopy, promptNameCopy, response.Error.Code, response.Error.Message)
-			}
-
-			var promptResult sdk.GetPromptResult
-			if unmarshErr := json.Unmarshal(response.Result, &promptResult); unmarshErr != nil {
-				return nil, fmt.Errorf("failed to parse prompt result: %w", unmarshErr)
-			}
-			return &promptResult, nil
+			return &result, nil
 		})
 
 		logUnified.Printf("Registered prompt: %s___%s", serverID, promptNameCopy)
