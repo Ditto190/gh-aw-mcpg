@@ -153,10 +153,9 @@ pub fn label_response_items(
                     } else {
                         false
                     };
-                    let secrecy = if tool_name == "list_pull_requests"
-                        || tool_name == "pull_request_read"
-                        || tool_name == "get_pull_request"
-                    {
+                    // All tools in this match arm use shared repo secrecy except search_pull_requests,
+                    // which uses per-item secrecy derived from each PR's repository.
+                    let secrecy = if tool_name != "search_pull_requests" {
                         repo_visibility_secrecy(&arg_owner, &arg_repo, &arg_repo_full, ctx)
                     } else {
                         vec![]
@@ -278,10 +277,9 @@ pub fn label_response_items(
                 } else {
                     false
                 };
-                let secrecy = if tool_name == "list_issues"
-                    || tool_name == "get_issue"
-                    || tool_name == "issue_read"
-                {
+                // All tools in this match arm use shared repo secrecy except search_issues,
+                // which uses per-item secrecy derived from each issue's repository.
+                let secrecy = if tool_name != "search_issues" {
                     repo_visibility_secrecy(&arg_owner, &arg_repo, &default_repo_full_name, ctx)
                 } else {
                     vec![]

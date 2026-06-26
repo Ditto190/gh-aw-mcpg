@@ -952,18 +952,8 @@ pub extern "C" fn label_response(
             path_result.labeled_paths.len()
         ));
 
-        // Convert to output format
-        let labeled_paths: Vec<PathLabel> = path_result
-            .labeled_paths
-            .into_iter()
-            .map(|entry| PathLabel {
-                path: entry.path,
-                labels: entry.labels,
-            })
-            .collect();
-
         let output = PathLabeledOutput {
-            labeled_paths,
+            labeled_paths: path_result.labeled_paths,
             default_labels: path_result.default_labels,
             items_path: path_result.items_path,
         };
