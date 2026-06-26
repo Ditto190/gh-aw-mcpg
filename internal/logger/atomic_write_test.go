@@ -39,7 +39,8 @@ func TestAtomicWriteFile(t *testing.T) {
 	})
 
 	t.Run("write file fails – nonexistent directory", func(t *testing.T) {
-		filePath := filepath.Join("/nonexistent/directory/that/does/not/exist", "output.json")
+		tmpDir := t.TempDir()
+		filePath := filepath.Join(tmpDir, "missing-parent", "output.json")
 
 		err := atomicWriteFile(filePath, data, 0600)
 		require.Error(t, err, "should fail when parent directory does not exist")
