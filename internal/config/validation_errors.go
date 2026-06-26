@@ -48,6 +48,7 @@ func UnsupportedType(fieldName, actualType, jsonPath, suggestion string) *Valida
 
 // UndefinedVariable creates a ValidationError for undefined environment variables
 func UndefinedVariable(varName, jsonPath string) *ValidationError {
+	logValidation.Printf("Validation error: undefined environment variable at %s, var=%s", jsonPath, varName)
 	return &ValidationError{
 		Field:      "env variable",
 		Message:    fmt.Sprintf("undefined environment variable referenced: %s", varName),
@@ -58,6 +59,7 @@ func UndefinedVariable(varName, jsonPath string) *ValidationError {
 
 // MissingRequired creates a ValidationError for missing required fields
 func MissingRequired(fieldName, serverType, jsonPath, suggestion string) *ValidationError {
+	logValidation.Printf("Validation error: missing required field at %s, field=%s, serverType=%s", jsonPath, fieldName, serverType)
 	return &ValidationError{
 		Field:      fieldName,
 		Message:    fmt.Sprintf("'%s' is required for %s servers", fieldName, serverType),
@@ -84,6 +86,7 @@ func AppendConfigDocsFooter(sb *strings.Builder) {
 // InvalidPattern creates a ValidationError for values that don't match a required pattern.
 // Used by validation_schema.go for container, mount, URL, and other pattern validations.
 func InvalidPattern(fieldName, value, jsonPath, suggestion string) *ValidationError {
+	logValidation.Printf("Validation error: invalid pattern at %s, field=%s, value=%q", jsonPath, fieldName, value)
 	return &ValidationError{
 		Field:      fieldName,
 		Message:    fmt.Sprintf("%s '%s' does not match required pattern", fieldName, value),
@@ -106,6 +109,7 @@ func InvalidValue(fieldName, message, jsonPath, suggestion string) *ValidationEr
 // SchemaValidationError creates a ValidationError for custom schema validation failures.
 // Used by validation.go for the various stages of custom schema fetching, parsing, and validation.
 func SchemaValidationError(serverType, message, jsonPath, suggestion string) *ValidationError {
+	logValidation.Printf("Validation error: schema validation failure at %s, serverType=%s, message=%q", jsonPath, serverType, message)
 	return &ValidationError{
 		Field:      "type",
 		Message:    fmt.Sprintf("%s for server type '%s'", message, serverType),
