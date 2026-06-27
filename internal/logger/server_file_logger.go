@@ -112,14 +112,7 @@ func (sfl *ServerFileLogger) Close() error {
 
 	var firstErr error
 	for serverID, file := range sfl.files {
-		if err := file.Sync(); err != nil {
-			log.Printf("WARNING: Failed to sync log file for server %s: %v", serverID, err)
-			if firstErr == nil {
-				firstErr = err
-			}
-		}
-		if err := file.Close(); err != nil {
-			log.Printf("WARNING: Failed to close log file for server %s: %v", serverID, err)
+		if err := closeLogFile(file, nil, "server "+serverID); err != nil {
 			if firstErr == nil {
 				firstErr = err
 			}
