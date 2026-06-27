@@ -93,6 +93,15 @@ func TimeoutRange(timeout, min, max int, fieldName, jsonPath string) *Validation
 	return nil
 }
 
+func mountValidationError(jsonPath string, index int, message, suggestion string) *ValidationError {
+	return &ValidationError{
+		Field:      "mounts",
+		Message:    message,
+		JSONPath:   fmt.Sprintf("%s.mounts[%d]", jsonPath, index),
+		Suggestion: suggestion,
+	}
+}
+
 // MountFormat validates a mount specification in the format "source:dest:mode"
 // Returns nil if valid, *ValidationError if invalid
 // Per MCP Gateway specification v1.8.0 section 4.1.5:
@@ -104,12 +113,10 @@ func MountFormat(mount, jsonPath string, index int) *ValidationError {
 	parts := strings.Split(mount, ":")
 	if len(parts) != 3 {
 		logValidation.Printf("Mount format validation failed: invalid part count=%d", len(parts))
-		return &ValidationError{
-			Field:      "mounts",
-			Message:    fmt.Sprintf("invalid mount format '%s' (expected 'source:dest:mode')", mount),
-			JSONPath:   fmt.Sprintf("%s.mounts[%d]", jsonPath, index),
-			Suggestion: "Use format 'source:dest:mode' where mode is 'ro' (read-only) or 'rw' (read-write), e.g. '/host/path:/container/path:ro'",
-		}
+		return mountValidationError(jsonPath, index,
+			fmt.Sprintf("invalid mount format '%s' (expected 'source:dest:mode')", mount),
+			"Use format 'source:dest:mode' where mode is 'ro' (read-only) or 'rw' (read-write), e.g. '/host/path:/container/path:ro'",
+		)
 	}
 
 	source := parts[0]
@@ -118,52 +125,42 @@ func MountFormat(mount, jsonPath string, index int) *ValidationError {
 
 	// Validate source is not empty
 	if source == "" {
-		return &ValidationError{
-			Field:      "mounts",
-			Message:    fmt.Sprintf("mount source cannot be empty in '%s'", mount),
-			JSONPath:   fmt.Sprintf("%s.mounts[%d]", jsonPath, index),
-			Suggestion: "Provide a valid absolute source path (e.g., '/host/path')",
-		}
+		return mountValidationError(jsonPath, index,
+			fmt.Sprintf("mount source cannot be empty in '%s'", mount),
+			"Provide a valid absolute source path (e.g., '/host/path')",
+		)
 	}
 
 	// Validate source is an absolute path (MCP spec requirement)
 	if !strings.HasPrefix(source, "/") {
-		return &ValidationError{
-			Field:      "mounts",
-			Message:    fmt.Sprintf("mount source must be an absolute path, got '%s'", source),
-			JSONPath:   fmt.Sprintf("%s.mounts[%d]", jsonPath, index),
-			Suggestion: "Use an absolute path starting with '/' (e.g., '/var/data' instead of 'data')",
-		}
+		return mountValidationError(jsonPath, index,
+			fmt.Sprintf("mount source must be an absolute path, got '%s'", source),
+			"Use an absolute path starting with '/' (e.g., '/var/data' instead of 'data')",
+		)
 	}
 
 	// Validate dest is not empty
 	if dest == "" {
-		return &ValidationError{
-			Field:      "mounts",
-			Message:    fmt.Sprintf("mount destination cannot be empty in '%s'", mount),
-			JSONPath:   fmt.Sprintf("%s.mounts[%d]", jsonPath, index),
-			Suggestion: "Provide a valid absolute destination path (e.g., '/app/data')",
-		}
+		return mountValidationError(jsonPath, index,
+			fmt.Sprintf("mount destination cannot be empty in '%s'", mount),
+			"Provide a valid absolute destination path (e.g., '/app/data')",
+		)
 	}
 
 	// Validate dest is an absolute path (MCP spec requirement)
 	if !strings.HasPrefix(dest, "/") {
-		return &ValidationError{
-			Field:      "mounts",
-			Message:    fmt.Sprintf("mount destination must be an absolute path, got '%s'", dest),
-			JSONPath:   fmt.Sprintf("%s.mounts[%d]", jsonPath, index),
-			Suggestion: "Use an absolute path starting with '/' (e.g., '/app/data' instead of 'app/data')",
-		}
+		return mountValidationError(jsonPath, index,
+			fmt.Sprintf("mount destination must be an absolute path, got '%s'", dest),
+			"Use an absolute path starting with '/' (e.g., '/app/data' instead of 'app/data')",
+		)
 	}
 
 	// Validate mode
 	if mode != "ro" && mode != "rw" {
-		return &ValidationError{
-			Field:      "mounts",
-			Message:    fmt.Sprintf("invalid mount mode '%s' (must be 'ro' or 'rw')", mode),
-			JSONPath:   fmt.Sprintf("%s.mounts[%d]", jsonPath, index),
-			Suggestion: "Use 'ro' for read-only or 'rw' for read-write",
-		}
+		return mountValidationError(jsonPath, index,
+			fmt.Sprintf("invalid mount mode '%s' (must be 'ro' or 'rw')", mode),
+			"Use 'ro' for read-only or 'rw' for read-write",
+		)
 	}
 
 	return nil
