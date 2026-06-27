@@ -373,6 +373,26 @@ func parseDIFCTagsFromAny(raw any) []difc.Tag {
 	return tags
 }
 
+// fillLabeledResourceFromMap populates description, secrecy, and integrity fields
+// on the provided LabeledResource from a decoded JSON map.
+func fillLabeledResourceFromMap(rawData map[string]any, resource *difc.LabeledResource) {
+	if desc, ok := rawData["description"].(string); ok {
+		resource.Description = desc
+	}
+
+	if tags := parseDIFCTagsFromAny(rawData["secrecy"]); tags != nil {
+		resource.Secrecy = *difc.NewSecrecyLabelWithTags(tags)
+	} else {
+		resource.Secrecy = *difc.NewSecrecyLabel()
+	}
+
+	if tags := parseDIFCTagsFromAny(rawData["integrity"]); tags != nil {
+		resource.Integrity = *difc.NewIntegrityLabelWithTags(tags)
+	} else {
+		resource.Integrity = *difc.NewIntegrityLabel()
+	}
+}
+
 // parseResourceResponse converts the guard label_resource response to a LabeledResource.
 func parseResourceResponse(response map[string]any) (*difc.LabeledResource, difc.OperationType, error) {
 	resourceData, ok := response["resource"].(map[string]any)
@@ -381,24 +401,7 @@ func parseResourceResponse(response map[string]any) (*difc.LabeledResource, difc
 	}
 
 	resource := &difc.LabeledResource{}
-
-	if desc, ok := resourceData["description"].(string); ok {
-		resource.Description = desc
-	}
-
-	// Parse secrecy tags
-	if tags := parseDIFCTagsFromAny(resourceData["secrecy"]); tags != nil {
-		resource.Secrecy = *difc.NewSecrecyLabelWithTags(tags)
-	} else {
-		resource.Secrecy = *difc.NewSecrecyLabel()
-	}
-
-	// Parse integrity tags
-	if tags := parseDIFCTagsFromAny(resourceData["integrity"]); tags != nil {
-		resource.Integrity = *difc.NewIntegrityLabelWithTags(tags)
-	} else {
-		resource.Integrity = *difc.NewIntegrityLabel()
-	}
+	fillLabeledResourceFromMap(resourceData, resource)
 
 	// Parse operation type
 	operation := difc.OperationWrite // default to most restrictive
@@ -437,24 +440,7 @@ func parseCollectionLabeledData(items []any) (*difc.CollectionLabeledData, error
 		// Parse labels
 		if labelsData, ok := itemMap["labels"].(map[string]any); ok {
 			labels := &difc.LabeledResource{}
-
-			if desc, ok := labelsData["description"].(string); ok {
-				labels.Description = desc
-			}
-
-			// Parse secrecy tags
-			if tags := parseDIFCTagsFromAny(labelsData["secrecy"]); tags != nil {
-				labels.Secrecy = *difc.NewSecrecyLabelWithTags(tags)
-			} else {
-				labels.Secrecy = *difc.NewSecrecyLabel()
-			}
-
-			// Parse integrity tags
-			if tags := parseDIFCTagsFromAny(labelsData["integrity"]); tags != nil {
-				labels.Integrity = *difc.NewIntegrityLabelWithTags(tags)
-			} else {
-				labels.Integrity = *difc.NewIntegrityLabel()
-			}
+			fillLabeledResourceFromMap(labelsData, labels)
 
 			labeledItem.Labels = labels
 		}

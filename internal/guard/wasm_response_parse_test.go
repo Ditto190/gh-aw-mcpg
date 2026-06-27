@@ -55,6 +55,33 @@ func TestParseDIFCTagsFromAny(t *testing.T) {
 	}
 }
 
+func TestFillLabeledResourceFromMap(t *testing.T) {
+	t.Run("fills description and labels", func(t *testing.T) {
+		resource := &difc.LabeledResource{}
+		fillLabeledResourceFromMap(map[string]any{
+			"description": "repo",
+			"secrecy":     []any{"private", "internal"},
+			"integrity":   []any{"approved"},
+		}, resource)
+
+		require.NotNil(t, resource)
+		assert.Equal(t, "repo", resource.Description)
+		assert.Equal(t, []difc.Tag{"internal", "private"}, sortTags(resource.Secrecy.Label.GetTags()))
+		assert.Equal(t, []difc.Tag{"approved"}, resource.Integrity.Label.GetTags())
+	})
+
+	t.Run("defaults secrecy and integrity to empty labels", func(t *testing.T) {
+		resource := &difc.LabeledResource{}
+		fillLabeledResourceFromMap(map[string]any{
+			"description": 42,
+		}, resource)
+
+		assert.Equal(t, "", resource.Description)
+		assert.Empty(t, resource.Secrecy.Label.GetTags())
+		assert.Empty(t, resource.Integrity.Label.GetTags())
+	})
+}
+
 // ─── parseResourceResponse ────────────────────────────────────────────────────
 
 func TestParseResourceResponse(t *testing.T) {
