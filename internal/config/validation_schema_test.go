@@ -432,7 +432,7 @@ func TestValidateStringPatterns(t *testing.T) {
 			shouldErr: false,
 		},
 		{
-			name: "invalid mount without mode",
+			name: "mount validation is deferred",
 			config: &StdinConfig{
 				MCPServers: map[string]*StdinServerConfig{
 					"test": {
@@ -442,7 +442,7 @@ func TestValidateStringPatterns(t *testing.T) {
 					},
 				},
 			},
-			shouldErr: true,
+			shouldErr: false,
 		},
 		{
 			name: "valid http url pattern",
@@ -562,7 +562,7 @@ func TestValidateStringPatterns(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := validateStringPatterns(tt.config)
+			err := validateRuleBasedPatterns(tt.config)
 
 			if tt.shouldErr {
 				require.Error(t, err)
