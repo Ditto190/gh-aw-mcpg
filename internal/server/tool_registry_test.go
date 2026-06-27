@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -10,6 +11,8 @@ import (
 	"time"
 
 	"github.com/github/gh-aw-mcpg/internal/config"
+	"github.com/github/gh-aw-mcpg/internal/launcher"
+	"github.com/github/gh-aw-mcpg/internal/mcp"
 	"github.com/github/gh-aw-mcpg/internal/sanitize"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/assert"
@@ -58,6 +61,330 @@ func newMockBackend(t *testing.T, serverName string, toolNames []string) *httpte
 			json.NewEncoder(w).Encode(resp)
 		}
 	}))
+}
+
+func newBackendListTestConnection(t *testing.T, serverID string, backend http.HandlerFunc) (func(), *mcp.Connection) {
+	t.Helper()
+
+	server := httptest.NewServer(backend)
+
+	cfg := &config.Config{
+		Servers: map[string]*config.ServerConfig{
+			serverID: {
+				Type: "http",
+				URL:  server.URL,
+			},
+		},
+	}
+
+	l := launcher.New(context.Background(), cfg)
+
+	conn, err := launcher.GetOrLaunch(l, serverID)
+	require.NoError(t, err)
+
+	return func() {
+		l.Close()
+		server.Close()
+	}, conn
+}
+
+func failOnUnexpectedRequestError(err error) error {
+	return fmt.Errorf("unexpected request error: %w", err)
+}
+
+func failOnUnexpectedResponseError(code int, message string) error {
+	return fmt.Errorf("unexpected response error: code=%d message=%s", code, message)
+}
+
+func failOnUnexpectedParseError(err error) error {
+	return fmt.Errorf("unexpected parse error: %w", err)
+}
+
+func TestFetchBackendList_Success(t *testing.T) {
+	assert := assert.New(t)
+	require := require.New(t)
+
+	cleanup, conn := newBackendListTestConnection(t, "test-backend", func(w http.ResponseWriter, r *http.Request) {
+		var req map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		switch req["method"] {
+		case "initialize":
+			if err := json.NewEncoder(w).Encode(map[string]interface{}{
+				"jsonrpc": "2.0",
+				"id":      req["id"],
+				"result": map[string]interface{}{
+					"protocolVersion": "2024-11-05",
+					"capabilities":    map[string]interface{}{},
+					"serverInfo": map[string]interface{}{
+						"name":    "test-backend",
+						"version": "1.0.0",
+					},
+				},
+			}); err != nil {
+				t.Errorf("encode initialize response: %v", err)
+				http.Error(w, "encode initialize response: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+		case "tools/list":
+			if err := json.NewEncoder(w).Encode(map[string]interface{}{
+				"jsonrpc": "2.0",
+				"id":      req["id"],
+				"result": map[string]interface{}{
+					"tools": []map[string]interface{}{
+						{"name": "read_file"},
+					},
+				},
+			}); err != nil {
+				t.Errorf("encode tools response: %v", err)
+				http.Error(w, "encode tools response: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+		default:
+			w.WriteHeader(http.StatusBadRequest)
+		}
+	})
+	defer cleanup()
+
+	var listResult struct {
+		Tools []struct {
+			Name string `json:"name"`
+		} `json:"tools"`
+	}
+
+	err := fetchBackendList(
+		context.Background(),
+		conn,
+		"test-backend",
+		"tools/list",
+		&listResult,
+		failOnUnexpectedRequestError,
+		failOnUnexpectedResponseError,
+		failOnUnexpectedParseError,
+	)
+	require.NoError(err)
+	require.Len(listResult.Tools, 1)
+	assert.Equal("read_file", listResult.Tools[0].Name)
+}
+
+func TestFetchBackendList_BackendErrorCanGracefullySkip(t *testing.T) {
+	assert := assert.New(t)
+	require := require.New(t)
+
+	cleanup, conn := newBackendListTestConnection(t, "prompt-backend", func(w http.ResponseWriter, r *http.Request) {
+		var req map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		switch req["method"] {
+		case "initialize":
+			if err := json.NewEncoder(w).Encode(map[string]interface{}{
+				"jsonrpc": "2.0",
+				"id":      req["id"],
+				"result": map[string]interface{}{
+					"protocolVersion": "2024-11-05",
+					"capabilities":    map[string]interface{}{},
+					"serverInfo": map[string]interface{}{
+						"name":    "prompt-backend",
+						"version": "1.0.0",
+					},
+				},
+			}); err != nil {
+				t.Errorf("encode initialize response: %v", err)
+				http.Error(w, "encode initialize response: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+		case "prompts/list":
+			if err := json.NewEncoder(w).Encode(map[string]interface{}{
+				"jsonrpc": "2.0",
+				"id":      req["id"],
+				"error": map[string]interface{}{
+					"code":    -32601,
+					"message": "method not found",
+				},
+			}); err != nil {
+				t.Errorf("encode prompts response: %v", err)
+				http.Error(w, "encode prompts response: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+		default:
+			w.WriteHeader(http.StatusBadRequest)
+		}
+	})
+	defer cleanup()
+
+	var listResult struct {
+		Prompts []struct {
+			Name string `json:"name"`
+		} `json:"prompts"`
+	}
+
+	var handledCode int
+	var handledMessage string
+	err := fetchBackendList(
+		context.Background(),
+		conn,
+		"prompt-backend",
+		"prompts/list",
+		&listResult,
+		failOnUnexpectedRequestError,
+		func(code int, message string) error {
+			handledCode = code
+			handledMessage = message
+			return nil
+		},
+		failOnUnexpectedParseError,
+	)
+	require.NoError(err)
+	assert.Equal(-32601, handledCode)
+	assert.Equal("method not found", handledMessage)
+	assert.Empty(listResult.Prompts)
+}
+
+func TestFetchBackendList_RequestErrorCanGracefullySkip(t *testing.T) {
+	assert := assert.New(t)
+	require := require.New(t)
+
+	serverID := "request-error-backend"
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		if req["method"] == "initialize" {
+			if err := json.NewEncoder(w).Encode(map[string]interface{}{
+				"jsonrpc": "2.0",
+				"id":      req["id"],
+				"result": map[string]interface{}{
+					"protocolVersion": "2024-11-05",
+					"capabilities":    map[string]interface{}{},
+					"serverInfo": map[string]interface{}{
+						"name":    serverID,
+						"version": "1.0.0",
+					},
+				},
+			}); err != nil {
+				t.Errorf("encode initialize response: %v", err)
+				http.Error(w, "encode initialize response: "+err.Error(), http.StatusInternalServerError)
+			}
+			return
+		}
+
+		w.WriteHeader(http.StatusBadRequest)
+	}))
+
+	cfg := &config.Config{
+		Servers: map[string]*config.ServerConfig{
+			serverID: {
+				Type: "http",
+				URL:  backend.URL,
+			},
+		},
+	}
+
+	l := launcher.New(context.Background(), cfg)
+	conn, err := launcher.GetOrLaunch(l, serverID)
+	require.NoError(err)
+
+	backend.Close()
+	defer l.Close()
+
+	var listResult struct {
+		Prompts []struct {
+			Name string `json:"name"`
+		} `json:"prompts"`
+	}
+
+	handledRequestError := false
+	err = fetchBackendList(
+		context.Background(),
+		conn,
+		serverID,
+		"prompts/list",
+		&listResult,
+		func(err error) error {
+			handledRequestError = true
+			return nil
+		},
+		failOnUnexpectedResponseError,
+		failOnUnexpectedParseError,
+	)
+	require.NoError(err)
+	assert.True(handledRequestError)
+	assert.Empty(listResult.Prompts)
+}
+
+func TestFetchBackendList_ParseError(t *testing.T) {
+	require := require.New(t)
+
+	cleanup, conn := newBackendListTestConnection(t, "invalid-backend", func(w http.ResponseWriter, r *http.Request) {
+		var req map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		switch req["method"] {
+		case "initialize":
+			if err := json.NewEncoder(w).Encode(map[string]interface{}{
+				"jsonrpc": "2.0",
+				"id":      req["id"],
+				"result": map[string]interface{}{
+					"protocolVersion": "2024-11-05",
+					"capabilities":    map[string]interface{}{},
+					"serverInfo": map[string]interface{}{
+						"name":    "invalid-backend",
+						"version": "1.0.0",
+					},
+				},
+			}); err != nil {
+				t.Errorf("encode initialize response: %v", err)
+				http.Error(w, "encode initialize response: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+		case "tools/list":
+			if err := json.NewEncoder(w).Encode(map[string]interface{}{
+				"jsonrpc": "2.0",
+				"id":      req["id"],
+				"result":  "not a tool list",
+			}); err != nil {
+				t.Errorf("encode tools response: %v", err)
+				http.Error(w, "encode tools response: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+		default:
+			w.WriteHeader(http.StatusBadRequest)
+		}
+	})
+	defer cleanup()
+
+	var listResult struct {
+		Tools []struct {
+			Name string `json:"name"`
+		} `json:"tools"`
+	}
+
+	err := fetchBackendList(
+		context.Background(),
+		conn,
+		"invalid-backend",
+		"tools/list",
+		&listResult,
+		failOnUnexpectedRequestError,
+		failOnUnexpectedResponseError,
+		func(err error) error {
+			return err
+		},
+	)
+	require.Error(err)
+	require.ErrorContains(err, "cannot unmarshal")
 }
 
 // TestRegisterAllTools_NoDIFC_Parallel verifies that with DIFC disabled and parallel mode,

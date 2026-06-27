@@ -69,6 +69,29 @@ func getToolResponseFilter(cfg *config.Config, serverID, toolName string) string
 	return strings.TrimSpace(serverCfg.ToolResponseFilters[toolName])
 }
 
+func fetchBackendList[T any](
+	ctx context.Context,
+	conn *mcp.Connection,
+	serverID string,
+	method string,
+	listResult *T,
+	handleRequestError func(error) error,
+	handleResponseError func(code int, message string) error,
+	handleParseError func(error) error,
+) error {
+	result, err := conn.SendRequestWithServerID(ctx, method, nil, serverID)
+	if err != nil {
+		return handleRequestError(err)
+	}
+	if result.Error != nil {
+		return handleResponseError(result.Error.Code, result.Error.Message)
+	}
+	if err := json.Unmarshal(result.Result, listResult); err != nil {
+		return handleParseError(err)
+	}
+	return nil
+}
+
 // registerAllTools fetches and registers tools from all backend servers
 func (us *UnifiedServer) registerAllTools() error {
 	logger.LogInfo("backend", "Starting tool registration for %d backends", len(us.launcher.ServerIDs()))
@@ -200,18 +223,6 @@ func (us *UnifiedServer) registerToolsFromBackend(serverID string) error {
 		logger.LogInfoToServer(serverID, "backend", "Backend server info unavailable (no SDK session or server omitted serverInfo)")
 	}
 
-	// List tools from backend
-	result, err := conn.SendRequestWithServerID(context.Background(), "tools/list", nil, serverID)
-	if err != nil {
-		return fmt.Errorf("failed to list tools: %w", err)
-	}
-
-	// Check if the backend returned an error
-	if result.Error != nil {
-		return fmt.Errorf("backend error listing tools: code=%d, message=%s", result.Error.Code, result.Error.Message)
-	}
-
-	// Parse the result
 	var listResult struct {
 		Tools []struct {
 			Name        string                 `json:"name"`
@@ -220,9 +231,23 @@ func (us *UnifiedServer) registerToolsFromBackend(serverID string) error {
 			Annotations *sdk.ToolAnnotations   `json:"annotations,omitempty"`
 		} `json:"tools"`
 	}
-
-	if err := json.Unmarshal(result.Result, &listResult); err != nil {
-		return fmt.Errorf("failed to parse tools: %w", err)
+	if err := fetchBackendList(
+		context.Background(),
+		conn,
+		serverID,
+		"tools/list",
+		&listResult,
+		func(err error) error {
+			return fmt.Errorf("failed to list tools: %w", err)
+		},
+		func(code int, message string) error {
+			return fmt.Errorf("backend error listing tools: code=%d, message=%s", code, message)
+		},
+		func(err error) error {
+			return fmt.Errorf("failed to parse tools: %w", err)
+		},
+	); err != nil {
+		return err
 	}
 
 	// Filter tools by the server's allowed-tools list (if configured).
@@ -366,27 +391,30 @@ func (us *UnifiedServer) registerPromptsFromBackend(ctx context.Context, serverI
 		return nil
 	}
 
-	// List prompts from backend
-	result, err := conn.SendRequestWithServerID(ctx, "prompts/list", nil, serverID)
-	if err != nil {
-		// Many backends do not implement prompts — treat as a graceful skip.
-		logUnified.Printf("Backend %s does not support prompts/list (skipping): %v", serverID, err)
-		return nil
-	}
-
-	// A JSON-RPC error from the backend also means prompts are unavailable.
-	if result.Error != nil {
-		logUnified.Printf("Backend %s returned error for prompts/list (skipping): code=%d, message=%s",
-			serverID, result.Error.Code, result.Error.Message)
-		return nil
-	}
-
-	// Parse the prompt list.
 	var listResult struct {
 		Prompts []*sdk.Prompt `json:"prompts"`
 	}
-	if err := json.Unmarshal(result.Result, &listResult); err != nil {
-		return fmt.Errorf("failed to parse prompts from %s: %w", serverID, err)
+	if err := fetchBackendList(
+		ctx,
+		conn,
+		serverID,
+		"prompts/list",
+		&listResult,
+		func(err error) error {
+			// Many backends do not implement prompts — treat as a graceful skip.
+			logUnified.Printf("Backend %s does not support prompts/list (skipping): %v", serverID, err)
+			return nil
+		},
+		func(code int, message string) error {
+			logUnified.Printf("Backend %s returned error for prompts/list (skipping): code=%d, message=%s",
+				serverID, code, message)
+			return nil
+		},
+		func(err error) error {
+			return fmt.Errorf("failed to parse prompts from %s: %w", serverID, err)
+		},
+	); err != nil {
+		return err
 	}
 
 	if len(listResult.Prompts) == 0 {
