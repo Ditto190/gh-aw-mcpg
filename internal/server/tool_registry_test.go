@@ -259,7 +259,7 @@ func TestFetchBackendList_RequestErrorCanGracefullySkip(t *testing.T) {
 		}
 
 		if req["method"] == "initialize" {
-			require.NoError(json.NewEncoder(w).Encode(map[string]interface{}{
+			if err := json.NewEncoder(w).Encode(map[string]interface{}{
 				"jsonrpc": "2.0",
 				"id":      req["id"],
 				"result": map[string]interface{}{
@@ -270,7 +270,10 @@ func TestFetchBackendList_RequestErrorCanGracefullySkip(t *testing.T) {
 						"version": "1.0.0",
 					},
 				},
-			}))
+			}); err != nil {
+				t.Errorf("encode initialize response: %v", err)
+				http.Error(w, "encode initialize response: "+err.Error(), http.StatusInternalServerError)
+			}
 			return
 		}
 
