@@ -208,7 +208,9 @@ func TestFetchBackendList_BackendErrorCanGracefullySkip(t *testing.T) {
 					"message": "method not found",
 				},
 			}); err != nil {
-				t.Fatalf("encode prompts response: %v", err)
+				t.Errorf("encode prompts response: %v", err)
+				http.Error(w, "encode prompts response: "+err.Error(), http.StatusInternalServerError)
+				return
 			}
 		default:
 			w.WriteHeader(http.StatusBadRequest)
