@@ -125,7 +125,9 @@ func TestFetchBackendList_Success(t *testing.T) {
 					},
 				},
 			}); err != nil {
-				t.Fatalf("encode initialize response: %v", err)
+				t.Errorf("encode initialize response: %v", err)
+				http.Error(w, "encode initialize response: "+err.Error(), http.StatusInternalServerError)
+				return
 			}
 		case "tools/list":
 			if err := json.NewEncoder(w).Encode(map[string]interface{}{
