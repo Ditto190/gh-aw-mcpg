@@ -50,7 +50,7 @@ Quick reference for AI agents working with MCP Gateway (Go-based MCP proxy serve
 - `internal/testutil/` - Test utilities and helpers
 - `internal/tracing/` - OpenTelemetry tracing setup and OTLP export
 - `internal/tty/` - Terminal detection utilities
-- `internal/urlutil/` - URL hostname extraction utilities for domain audit logging
+- `internal/urlutil/` - URL hostname extraction utilities (used by guard and middleware for domain audit logging)
 - `internal/version/` - Version management
 
 ## Key Tech
