@@ -104,8 +104,13 @@ func deriveAPIFromServerURL(serverURL string) string {
 		logGitHub.Printf("GitHub.com detected, using default API URL: %s", DefaultGitHubAPIBaseURL)
 		return DefaultGitHubAPIBaseURL
 	case strings.HasSuffix(hostname, ".ghe.com"):
+		// If the hostname already starts with "api." (e.g. GITHUB_SERVER_URL was
+		// set to the API base directly), return it as-is to avoid producing
+		// "api.api.<tenant>.ghe.com".
 		var apiURL string
-		if port := parsed.Port(); port != "" {
+		if strings.HasPrefix(hostname, "api.") {
+			apiURL = fmt.Sprintf("%s://%s", parsed.Scheme, parsed.Host)
+		} else if port := parsed.Port(); port != "" {
 			apiURL = fmt.Sprintf("%s://api.%s:%s", parsed.Scheme, hostname, port)
 		} else {
 			apiURL = fmt.Sprintf("%s://api.%s", parsed.Scheme, hostname)

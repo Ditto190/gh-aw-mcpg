@@ -128,6 +128,16 @@ func TestDeriveAPIFromServerURL(t *testing.T) {
 			expected:  "https://api.mycompany.ghe.com:8443",
 		},
 		{
+			name:      "GHEC already-API hostname is returned as-is",
+			serverURL: "https://api.mycompany.ghe.com",
+			expected:  "https://api.mycompany.ghe.com",
+		},
+		{
+			name:      "GHEC already-API hostname with port is returned as-is",
+			serverURL: "https://api.mycompany.ghe.com:8443",
+			expected:  "https://api.mycompany.ghe.com:8443",
+		},
+		{
 			name:      "GHES with port",
 			serverURL: "https://github.example.com:8443",
 			expected:  "https://github.example.com:8443/api/v3",
