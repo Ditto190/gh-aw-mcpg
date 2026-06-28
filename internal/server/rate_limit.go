@@ -67,7 +67,7 @@ func isRateLimitText(text string) bool {
 // "API rate limit exceeded [rate reset in 42s]".
 // Returns zero time when the value cannot be parsed or is 0 seconds.
 //
-// See also: httputil.ParseRateLimitResetHeader in httputil/github_http.go, which
+// See also: githubhttp.ParseRateLimitResetHeader in githubhttp/client.go, which
 // parses the same timing information from the X-RateLimit-Reset HTTP response header
 // instead of MCP tool result text bodies.
 func parseRateLimitResetFromText(text string) time.Time {

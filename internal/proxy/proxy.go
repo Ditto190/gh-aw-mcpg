@@ -16,6 +16,7 @@ import (
 
 	"github.com/github/gh-aw-mcpg/internal/config"
 	"github.com/github/gh-aw-mcpg/internal/difc"
+	"github.com/github/gh-aw-mcpg/internal/githubhttp"
 	"github.com/github/gh-aw-mcpg/internal/guard"
 	"github.com/github/gh-aw-mcpg/internal/httputil"
 	"github.com/github/gh-aw-mcpg/internal/logger"
@@ -257,7 +258,7 @@ func (r *restBackendCaller) CallTool(ctx context.Context, toolName string, args 
 
 	case "get_collaborator_permission":
 		var parseErr error
-		collabOwner, collabRepo, collabUsername, parseErr = httputil.ParseCollaboratorPermissionArgs(argsMap)
+		collabOwner, collabRepo, collabUsername, parseErr = githubhttp.ParseCollaboratorPermissionArgs(argsMap)
 		if parseErr != nil {
 			logProxy.Printf("restBackendCaller: get_collaborator_permission missing args (owner=%q repo=%q username=%q)", collabOwner, collabRepo, collabUsername)
 			return nil, parseErr
@@ -282,7 +283,7 @@ func (r *restBackendCaller) CallTool(ctx context.Context, toolName string, args 
 	}
 	// For get_collaborator_permission, reuse shared REST call helper.
 	if toolName == "get_collaborator_permission" {
-		result, err := httputil.FetchCollaboratorPermission(
+		result, err := githubhttp.FetchCollaboratorPermission(
 			ctx,
 			collabOwner,
 			collabRepo,
@@ -377,7 +378,7 @@ func (s *Server) forwardToGitHub(ctx context.Context, method, path string, body 
 	} else if s.githubToken != "" {
 		authHeader = "token " + s.githubToken
 	}
-	httputil.ApplyGitHubAPIHeaders(req, authHeader)
+	githubhttp.ApplyGitHubAPIHeaders(req, authHeader)
 	if contentType != "" {
 		req.Header.Set("Content-Type", contentType)
 	}

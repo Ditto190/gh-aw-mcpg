@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/github/gh-aw-mcpg/internal/httputil"
+	"github.com/github/gh-aw-mcpg/internal/githubhttp"
 )
 
 // TestInjectRetryAfterIfRateLimited verifies Retry-After injection and logging for
@@ -94,18 +94,18 @@ func TestComputeRetryAfter(t *testing.T) {
 
 	t.Run("zero time returns default", func(t *testing.T) {
 		t.Parallel()
-		assert.Equal(t, 60, httputil.ComputeRetryAfter(time.Time{}))
+		assert.Equal(t, 60, githubhttp.ComputeRetryAfter(time.Time{}))
 	})
 
 	t.Run("past time returns default", func(t *testing.T) {
 		t.Parallel()
-		assert.Equal(t, 60, httputil.ComputeRetryAfter(time.Now().Add(-time.Minute)))
+		assert.Equal(t, 60, githubhttp.ComputeRetryAfter(time.Now().Add(-time.Minute)))
 	})
 
 	t.Run("future time returns seconds until reset", func(t *testing.T) {
 		t.Parallel()
 		future := time.Now().Add(30 * time.Second)
-		secs := httputil.ComputeRetryAfter(future)
+		secs := githubhttp.ComputeRetryAfter(future)
 		// Allow ±2s for timing jitter.
 		assert.GreaterOrEqual(t, secs, 29)
 		assert.LessOrEqual(t, secs, 32)
@@ -114,7 +114,7 @@ func TestComputeRetryAfter(t *testing.T) {
 	t.Run("very far future is clamped to max", func(t *testing.T) {
 		t.Parallel()
 		farFuture := time.Now().Add(24 * time.Hour)
-		assert.Equal(t, 3600, httputil.ComputeRetryAfter(farFuture))
+		assert.Equal(t, 3600, githubhttp.ComputeRetryAfter(farFuture))
 	})
 }
 

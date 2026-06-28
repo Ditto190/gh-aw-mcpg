@@ -16,6 +16,7 @@ import (
 	oteltrace "go.opentelemetry.io/otel/trace"
 
 	"github.com/github/gh-aw-mcpg/internal/difc"
+	"github.com/github/gh-aw-mcpg/internal/githubhttp"
 	"github.com/github/gh-aw-mcpg/internal/guard"
 	"github.com/github/gh-aw-mcpg/internal/httputil"
 	"github.com/github/gh-aw-mcpg/internal/logger"
@@ -229,7 +230,7 @@ func (h *proxyHandler) handleWithDIFC(w http.ResponseWriter, r *http.Request, pa
 		if rateLimited, resetHeader := rateLimitSignal(resp); rateLimited {
 			fwdSpan.SetAttributes(tracing.RateLimitHit.Bool(true))
 			eventAttrs := []attribute.KeyValue{}
-			if resetAt := httputil.ParseRateLimitResetHeader(resetHeader); !resetAt.IsZero() {
+			if resetAt := githubhttp.ParseRateLimitResetHeader(resetHeader); !resetAt.IsZero() {
 				eventAttrs = append(eventAttrs, attribute.String("reset_at", resetAt.UTC().Format(time.RFC3339)))
 			}
 			difcSpan.AddEvent("rate_limit.detected", oteltrace.WithAttributes(eventAttrs...))
@@ -463,8 +464,8 @@ func injectRetryAfterIfRateLimited(w http.ResponseWriter, resp *http.Response) {
 	}
 	remaining := resp.Header.Get("X-Ratelimit-Remaining")
 
-	resetAt := httputil.ParseRateLimitResetHeader(resetHeader)
-	retryAfter := httputil.ComputeRetryAfter(resetAt)
+	resetAt := githubhttp.ParseRateLimitResetHeader(resetHeader)
+	retryAfter := githubhttp.ComputeRetryAfter(resetAt)
 
 	w.Header().Set("Retry-After", strconv.Itoa(retryAfter))
 

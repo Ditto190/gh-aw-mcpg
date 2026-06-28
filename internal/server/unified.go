@@ -12,8 +12,8 @@ import (
 	"github.com/github/gh-aw-mcpg/internal/config"
 	"github.com/github/gh-aw-mcpg/internal/difc"
 	"github.com/github/gh-aw-mcpg/internal/envutil"
+	"github.com/github/gh-aw-mcpg/internal/githubhttp"
 	"github.com/github/gh-aw-mcpg/internal/guard"
-	"github.com/github/gh-aw-mcpg/internal/httputil"
 	"github.com/github/gh-aw-mcpg/internal/launcher"
 	"github.com/github/gh-aw-mcpg/internal/logger"
 	"github.com/github/gh-aw-mcpg/internal/mcp"
@@ -279,7 +279,7 @@ func (g *guardBackendCaller) callCollaboratorPermission(ctx context.Context, arg
 		return nil, fmt.Errorf("get_collaborator_permission: unexpected args type: %T", args)
 	}
 
-	owner, repo, username, err := httputil.ParseCollaboratorPermissionArgs(argsMap)
+	owner, repo, username, err := githubhttp.ParseCollaboratorPermissionArgs(argsMap)
 	if err != nil {
 		logUnified.Printf("get_collaborator_permission: missing required args (owner=%q repo=%q username=%q)", owner, repo, username)
 		return nil, err
@@ -292,14 +292,14 @@ func (g *guardBackendCaller) callCollaboratorPermission(ctx context.Context, arg
 	}
 
 	apiURL := envutil.DeriveGitHubAPIURL(envutil.DefaultGitHubAPIBaseURL)
-	result, err := httputil.FetchCollaboratorPermission(
+	result, err := githubhttp.FetchCollaboratorPermission(
 		ctx,
 		owner,
 		repo,
 		username,
 		func(ctx context.Context, apiPath string) (*http.Response, error) {
 			logUnified.Printf("get_collaborator_permission: GET %s (for %s/%s user %s)", apiPath, owner, repo, username)
-			resp, err := httputil.DoGitHubGET(ctx, apiURL, apiPath, "token "+token)
+			resp, err := githubhttp.DoGitHubGET(ctx, apiURL, apiPath, "token "+token)
 			if err != nil {
 				logUnified.Printf("get_collaborator_permission: REST call failed for %s/%s user %s: %v", owner, repo, username, err)
 				return nil, fmt.Errorf("REST call failed: %w", err)
