@@ -177,7 +177,6 @@ func GuardPolicyToMap(policy interface{}) (map[string]interface{}, error) {
 		return nil, fmt.Errorf("policy must decode to a JSON object")
 	}
 
-	logGuardPolicy.Printf("GuardPolicyToMap: policy converted to map with %d keys", len(payload))
 	return payload, nil
 }
 
