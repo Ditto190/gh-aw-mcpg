@@ -1,4 +1,6 @@
-package httputil
+// Package githubhttp provides GitHub API-specific HTTP helpers shared across
+// multiple packages (server, proxy, etc.).
+package githubhttp
 
 import (
 	"context"
@@ -7,7 +9,11 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/github/gh-aw-mcpg/internal/logger"
 )
+
+var logHTTP = logger.New("githubhttp:client")
 
 // GitHubUserAgent is the User-Agent header value sent on all GitHub API requests.
 const GitHubUserAgent = "awmg/1.0"
@@ -18,7 +24,7 @@ var defaultGitHubHTTPClient = &http.Client{Timeout: 30 * time.Second}
 
 // ApplyGitHubAPIHeaders sets the standard GitHub API request headers on req.
 // authHeader should be the full Authorization header value (e.g. "token xyz" or
-// "Bearer xyz"). When authHeader is empty no Authorization header is set, which
+// "******"). When authHeader is empty no Authorization header is set, which
 // is appropriate when the caller has already decided that no auth is available.
 func ApplyGitHubAPIHeaders(req *http.Request, authHeader string) {
 	path := "<nil>"

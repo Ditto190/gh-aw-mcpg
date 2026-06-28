@@ -33,8 +33,9 @@ Quick reference for AI agents working with MCP Gateway (Go-based MCP proxy serve
   - `validation_test.go` - Comprehensive validation tests
 - `internal/difc/` - Decentralized Information Flow Control
 - `internal/envutil/` - Environment variable and Docker env-arg utilities
+- `internal/githubhttp/` - GitHub API-specific HTTP helpers (auth headers, collaborator permission, rate-limit parsing)
 - `internal/guard/` - Security guards (NoopGuard, WasmGuard, WriteSinkGuard)
-- `internal/httputil/` - Shared HTTP helper utilities (server, proxy)
+- `internal/httputil/` - Generic HTTP helper utilities (server, proxy)
 - `internal/launcher/` - Backend process management
 - `internal/logger/` - Debug logging framework (micro logger)
 - `internal/mcp/` - MCP protocol types with enhanced error logging

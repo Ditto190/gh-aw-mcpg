@@ -512,3 +512,55 @@ func validateGuardPolicies(cfg *Config) error {
 	}
 	return nil
 }
+
+// validateRuleBasedPatterns validates additional rule-based string constraints that
+// are not handled by schema validation alone.
+func validateRuleBasedPatterns(stdinCfg *StdinConfig) error {
+	logValidation.Printf("Validating string patterns: server_count=%d", len(stdinCfg.MCPServers))
+
+	for name, server := range stdinCfg.MCPServers {
+		jsonPath := fmt.Sprintf("mcpServers.%s", name)
+		logValidation.Printf("Validating server: name=%s, type=%s", name, server.Type)
+
+		if IsStdioServerType(server.Type) {
+			if server.Container != "" && !containerPattern.MatchString(server.Container) {
+				return InvalidPattern("container", server.Container,
+					fmt.Sprintf("%s.container", jsonPath),
+					"Use a valid container image format (e.g., 'ghcr.io/owner/image:tag', 'owner/image:latest', or 'ghcr.io/owner/image:tag@sha256:<digest>')")
+			}
+
+			if server.Entrypoint != "" && len(strings.TrimSpace(server.Entrypoint)) == 0 {
+				return InvalidValue("entrypoint", "entrypoint cannot be empty or whitespace only",
+					fmt.Sprintf("%s.entrypoint", jsonPath),
+					"Provide a valid entrypoint path or remove the field")
+			}
+		}
+
+		if server.Type == "http" {
+			if server.URL != "" && !urlPattern.MatchString(server.URL) {
+				return InvalidPattern("url", server.URL,
+					fmt.Sprintf("%s.url", jsonPath),
+					"Use a valid HTTP or HTTPS URL (e.g., 'https://api.example.com/mcp')")
+			}
+		}
+	}
+
+	if stdinCfg.Gateway != nil {
+		if err := validateGatewayConfig(stdinCfg.Gateway); err != nil {
+			return err
+		}
+
+		if stdinCfg.Gateway.Domain != "" {
+			domain := stdinCfg.Gateway.Domain
+			if domain != "localhost" && domain != "host.docker.internal" &&
+				!domainVarPattern.MatchString(domain) && !domainHostnamePattern.MatchString(domain) {
+				return InvalidValue("domain",
+					fmt.Sprintf("domain '%s' must be 'localhost', 'host.docker.internal', an RFC-1123 hostname label (e.g. 'awmg-mcpg'), or a variable expression", domain),
+					"gateway.domain",
+					"Use 'localhost', 'host.docker.internal', a topology hostname like 'awmg-mcpg', or a variable like '${MCP_GATEWAY_DOMAIN}'")
+			}
+		}
+	}
+
+	return nil
+}
