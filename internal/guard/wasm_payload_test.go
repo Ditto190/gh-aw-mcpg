@@ -105,12 +105,12 @@ func TestNormalizeLabelListField(t *testing.T) {
 		{
 			name:    "array with empty string entry returns error",
 			raw:     []interface{}{"valid", ""},
-			wantErr: "refusal-labels",
+			wantErr: "each entry must be a non-empty string",
 		},
 		{
 			name:    "array with non-string entry returns error",
 			raw:     []interface{}{"valid", 99},
-			wantErr: "refusal-labels",
+			wantErr: "each entry must be a non-empty string",
 		},
 		// --- neither []interface{} nor string: uncovered branch ---
 		{
