@@ -191,8 +191,7 @@ func TestNormalizeLabelListField(t *testing.T) {
 			t.Parallel()
 			got, err := normalizeLabelListField("refusal-labels", tt.raw)
 			if tt.wantErr != "" {
-				require.Error(t, err)
-				assert.Contains(t, err.Error(), tt.wantErr)
+				require.ErrorContains(t, err, tt.wantErr)
 				assert.Nil(t, got)
 				return
 			}
