@@ -180,7 +180,7 @@ pub fn apply_tool_labels(
                 if let Some(issue_num) =
                     extract_number_as_string(tool_args, field_names::ISSUE_NUMBER)
                 {
-                    desc = format!("issue:{}/{}#{}", owner, repo, issue_num);
+                    desc = format!("issue:{}/{}#{}", owner, repo, &issue_num);
                     if let Some(info) =
                         super::backend::get_issue_author_info(&owner, &repo, &issue_num)
                     {
