@@ -17,6 +17,29 @@ static ENDORSEMENT_GATEWAY_WARNING_EMITTED: AtomicBool = AtomicBool::new(false);
 /// Ensures the disapproval gateway-mode warning is emitted at most once per process lifetime.
 static DISAPPROVAL_GATEWAY_WARNING_EMITTED: AtomicBool = AtomicBool::new(false);
 
+/// Identifies which type of maintainer reaction is being evaluated.
+#[derive(Clone, Copy)]
+pub(crate) enum ReactionKind {
+    Endorsement,
+    Disapproval,
+}
+
+impl ReactionKind {
+    fn as_str(self) -> &'static str {
+        match self {
+            ReactionKind::Endorsement => "endorsement",
+            ReactionKind::Disapproval => "disapproval",
+        }
+    }
+
+    fn warning_emitted(self) -> &'static AtomicBool {
+        match self {
+            ReactionKind::Endorsement => &ENDORSEMENT_GATEWAY_WARNING_EMITTED,
+            ReactionKind::Disapproval => &DISAPPROVAL_GATEWAY_WARNING_EMITTED,
+        }
+    }
+}
+
 /// Extract a resource number from a JSON item, returning the number as a string.
 /// Checks the `number` field first, then falls back to extracting the trailing
 /// number segment from `html_url` or `url` (e.g. `.../issues/123` → `123`).
@@ -649,7 +672,7 @@ pub fn has_maintainer_reaction_with_callback(
     endorser_min: &str,
     ctx: &PolicyContext,
     callback: GithubMcpCallback,
-    reaction_kind: &str, // "endorsement" or "disapproval" — used for log messages
+    reaction_kind: ReactionKind,
 ) -> bool {
     if reaction_list.is_empty() {
         return false;
@@ -673,20 +696,14 @@ pub fn has_maintainer_reaction_with_callback(
             // gateway mode: reaction counts are available but reactor identity is not.
             if item.get("reactions").is_some() {
                 // Use reaction-kind-specific flags so each kind logs its own warning once.
-                let already_warned = match reaction_kind {
-                    "endorsement" => {
-                        ENDORSEMENT_GATEWAY_WARNING_EMITTED.swap(true, Ordering::Relaxed)
-                    }
-                    "disapproval" => {
-                        DISAPPROVAL_GATEWAY_WARNING_EMITTED.swap(true, Ordering::Relaxed)
-                    }
-                    _ => false,
-                };
+                let already_warned =
+                    reaction_kind.warning_emitted().swap(true, Ordering::Relaxed);
                 if !already_warned {
                     crate::log_warn(&format!(
                         "[integrity] {}: {}-reactions configured but reactor identity unavailable \
                          (gateway mode) — ignoring reactions for integrity evaluation",
-                        repo_full_name, reaction_kind
+                        repo_full_name,
+                        reaction_kind.as_str()
                     ));
                 }
             }
@@ -739,7 +756,12 @@ pub fn has_maintainer_reaction_with_callback(
                 crate::log_debug(&format!(
                     "[integrity] {}: skipping stale {} reaction {} from @{} \
                      (item updatedAt={} > reaction createdAt={})",
-                    repo_full_name, reaction_kind, content, login, item_updated, reaction_created
+                    repo_full_name,
+                    reaction_kind.as_str(),
+                    content,
+                    login,
+                    item_updated,
+                    reaction_created
                 ));
                 continue;
             }
@@ -765,7 +787,7 @@ pub fn has_maintainer_reaction_with_callback(
                 perm.as_ref().and_then(|p| p.permission.as_deref()),
                 reactor_rank,
                 endorser_min_rank,
-                reaction_kind,
+                reaction_kind.as_str(),
                 content
             ));
             return true;
@@ -773,7 +795,12 @@ pub fn has_maintainer_reaction_with_callback(
             crate::log_info(&format!(
                 "[integrity] {}: reactor @{} has integrity rank {}, below \
                  endorser-min-integrity rank {} — ignoring {} {}",
-                repo_full_name, login, reactor_rank, endorser_min_rank, reaction_kind, content
+                repo_full_name,
+                login,
+                reactor_rank,
+                endorser_min_rank,
+                reaction_kind.as_str(),
+                content
             ));
         }
     }
@@ -793,7 +820,7 @@ pub fn has_maintainer_endorsement(item: &Value, repo_full_name: &str, ctx: &Poli
         effective_endorser_min_integrity(ctx),
         ctx,
         crate::invoke_backend,
-        "endorsement",
+        ReactionKind::Endorsement,
     )
 }
 
@@ -809,7 +836,7 @@ pub fn has_maintainer_disapproval(item: &Value, repo_full_name: &str, ctx: &Poli
         effective_endorser_min_integrity(ctx),
         ctx,
         crate::invoke_backend,
-        "disapproval",
+        ReactionKind::Disapproval,
     )
 }
 
@@ -2632,7 +2659,7 @@ mod tests {
             "approved",
             &ctx,
             admin_permission_callback,
-            "endorsement"
+            ReactionKind::Endorsement
         ));
     }
 
@@ -2650,7 +2677,7 @@ mod tests {
             "approved",
             &ctx,
             admin_permission_callback,
-            "endorsement"
+            ReactionKind::Endorsement
         ));
     }
 
@@ -2669,7 +2696,7 @@ mod tests {
             "approved",
             &ctx,
             read_permission_callback,
-            "endorsement"
+            ReactionKind::Endorsement
         ));
     }
 
@@ -2688,7 +2715,7 @@ mod tests {
             "approved",
             &ctx,
             admin_permission_callback,
-            "endorsement"
+            ReactionKind::Endorsement
         ));
     }
 
@@ -2707,7 +2734,7 @@ mod tests {
             "approved",
             &ctx,
             admin_permission_callback,
-            "endorsement"
+            ReactionKind::Endorsement
         ));
     }
 
@@ -2727,7 +2754,7 @@ mod tests {
             "approved",
             &ctx,
             admin_permission_callback,
-            "endorsement"
+            ReactionKind::Endorsement
         ));
     }
 
@@ -2743,7 +2770,7 @@ mod tests {
             "approved",
             &ctx,
             admin_permission_callback,
-            "endorsement"
+            ReactionKind::Endorsement
         ));
     }
 
@@ -2758,7 +2785,7 @@ mod tests {
             "approved",
             &ctx,
             admin_permission_callback,
-            "endorsement"
+            ReactionKind::Endorsement
         ));
     }
 
@@ -2779,7 +2806,7 @@ mod tests {
             "approved",
             &ctx,
             error_callback,
-            "endorsement"
+            ReactionKind::Endorsement
         ));
     }
 
@@ -2802,7 +2829,7 @@ mod tests {
             "approved",
             &ctx,
             admin_permission_callback,
-            "endorsement"
+            ReactionKind::Endorsement
         ));
     }
 
@@ -2825,7 +2852,7 @@ mod tests {
             "approved",
             &ctx,
             admin_permission_callback,
-            "endorsement"
+            ReactionKind::Endorsement
         ));
     }
 
@@ -2848,7 +2875,7 @@ mod tests {
             "approved",
             &ctx,
             admin_permission_callback,
-            "endorsement"
+            ReactionKind::Endorsement
         ));
     }
 
@@ -2878,7 +2905,7 @@ mod tests {
             "approved",
             &ctx,
             admin_permission_callback,
-            "endorsement"
+            ReactionKind::Endorsement
         ));
     }
 
@@ -2899,7 +2926,7 @@ mod tests {
             "approved",
             &ctx,
             admin_permission_callback,
-            "endorsement"
+            ReactionKind::Endorsement
         ));
     }
 
@@ -3106,7 +3133,7 @@ mod tests {
             "approved",
             &ctx,
             admin_permission_callback,
-            "endorsement"
+            ReactionKind::Endorsement
         ));
         assert!(has_maintainer_reaction_with_callback(
             &item,
@@ -3115,7 +3142,7 @@ mod tests {
             "approved",
             &ctx,
             admin_permission_callback,
-            "disapproval"
+            ReactionKind::Disapproval
         ));
 
         // Simulate the integrity chain: start with none (external contributor),
@@ -3155,7 +3182,7 @@ mod tests {
             "approved",
             &ctx,
             admin_permission_callback,
-            "disapproval"
+            ReactionKind::Disapproval
         ));
     }
 
@@ -3177,7 +3204,7 @@ mod tests {
             "approved",
             &ctx,
             read_permission_callback,
-            "disapproval"
+            ReactionKind::Disapproval
         ));
     }
 
