@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -19,6 +20,20 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// bodyErrorTransport is an http.RoundTripper that returns a valid response whose
+// body fails when read, exercising the io.ReadAll error path in forwardAndReadBody.
+type bodyErrorTransport struct{}
+
+func (b *bodyErrorTransport) RoundTrip(_ *http.Request) (*http.Response, error) {
+	pr, pw := io.Pipe()
+	pw.CloseWithError(errors.New("simulated body read error"))
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     make(http.Header),
+		Body:       pr,
+	}, nil
+}
 
 // newTestServer creates a minimal proxy Server for unit testing.
 // It uses a NoopGuard so no WASM file is needed, and points
@@ -744,4 +759,69 @@ func TestHandleWithDIFC_StrictModeBlocksFilteredItems(t *testing.T) {
 
 	// NoopGuard returns nil LabelResponse, so no items are filtered → 200 OK
 	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+// ─── forwardAndReadBody: body read failure ────────────────────────────────────
+
+// TestForwardAndReadBody_BodyReadError covers the io.ReadAll error path in
+// forwardAndReadBody (lines 431-435 of handler.go). The upstream request
+// succeeds but the response body fails when read.
+func TestForwardAndReadBody_BodyReadError(t *testing.T) {
+	s := newTestServer(t, "http://example.com")
+	s.httpClient = &http.Client{Transport: &bodyErrorTransport{}}
+	h := &proxyHandler{server: s}
+
+	w := httptest.NewRecorder()
+	resp, body := h.forwardAndReadBody(w, context.Background(), http.MethodGet, "/repos/org/repo/issues", nil, "", "")
+
+	assert.Nil(t, resp)
+	assert.Nil(t, body)
+	assertJSONErrorResponse(t, w.Result(), http.StatusBadGateway, "bad_gateway", "failed to read upstream response")
+}
+
+// ─── handleUnrecognizedPassthrough: upstream failure returns early ────────────
+
+// TestHandleUnrecognizedPassthrough_UpstreamFails covers the resp == nil early
+// return in handleUnrecognizedPassthrough (line 147-149 of handler.go). When the
+// upstream is unreachable for an unrecognized path, the handler writes a 502
+// error itself (via forwardAndReadBody) and returns without further processing.
+func TestHandleUnrecognizedPassthrough_UpstreamFails(t *testing.T) {
+	// Point at a port that is not listening so the TCP dial fails immediately.
+	s := newTestServer(t, "http://127.0.0.1:1")
+	h := &proxyHandler{server: s}
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/unknown/endpoint", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+
+	assertJSONErrorResponse(t, w.Result(), http.StatusBadGateway, "bad_gateway", "upstream request failed")
+}
+
+// ─── handleWithDIFC: rate limit detection ────────────────────────────────────
+
+// TestHandleWithDIFC_RateLimitDetected covers the rate-limit tracing code path
+// in handleWithDIFC (lines 230-237 of handler.go). An upstream 429 response with
+// a non-zero X-Ratelimit-Reset header exercises both the outer rateLimited branch
+// and the inner !resetAt.IsZero() branch.
+func TestHandleWithDIFC_RateLimitDetected(t *testing.T) {
+	resetAt := time.Now().Add(60 * time.Second)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("X-Ratelimit-Remaining", "0")
+		w.Header().Set("X-Ratelimit-Reset", fmt.Sprintf("%d", resetAt.Unix()))
+		w.WriteHeader(http.StatusTooManyRequests)
+		w.Write([]byte(`{"message":"API rate limit exceeded"}`)) //nolint:errcheck
+	}))
+	defer upstream.Close()
+
+	s := newTestServer(t, upstream.URL)
+	h := &proxyHandler{server: s}
+
+	req := httptest.NewRequest(http.MethodGet, "/repos/org/repo/issues", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+
+	// 429 response is passed through; writeResponse injects Retry-After
+	assert.Equal(t, http.StatusTooManyRequests, w.Code)
+	assert.NotEmpty(t, w.Header().Get("Retry-After"))
 }
