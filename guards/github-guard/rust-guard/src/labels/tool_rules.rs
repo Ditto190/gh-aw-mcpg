@@ -173,13 +173,6 @@ pub fn apply_tool_labels(
         }
 
         "issue_dependency_read" => {
-            if !owner.is_empty() && !repo.is_empty() {
-                if let Some(issue_num) =
-                    extract_number_as_string(tool_args, field_names::ISSUE_NUMBER)
-                {
-                    desc = format!("issue:{}/{}#{}", owner, repo, issue_num);
-                }
-            }
             secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
             integrity = private_writer_integrity(repo_id, repo_private, ctx);
 
@@ -187,6 +180,7 @@ pub fn apply_tool_labels(
                 if let Some(issue_num) =
                     extract_number_as_string(tool_args, field_names::ISSUE_NUMBER)
                 {
+                    desc = format!("issue:{}/{}#{}", owner, repo, &issue_num);
                     if let Some(info) =
                         super::backend::get_issue_author_info(&owner, &repo, &issue_num)
                     {
