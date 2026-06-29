@@ -43,6 +43,7 @@ tools:
   edit:
   bash: true
 
+max-ai-credits: 2000
 timeout-minutes: 30
 strict: true
 ---
