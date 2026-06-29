@@ -534,19 +534,22 @@ func TestCompileToolResponseFilterWithVars_CacheHit(t *testing.T) {
 }
 
 // TestCompileToolResponseFilterWithVars_DifferentVarsCacheMiss verifies that
-// different variable name lists produce distinct cache entries.
+// the same filter string compiled with different variable name lists produces
+// distinct cache entries (different *gojq.Code pointers).
 func TestCompileToolResponseFilterWithVars_DifferentVarsCacheMiss(t *testing.T) {
-	filter := ". | {id: $id}"
-	code1, err := CompileToolResponseFilterWithVars(filter, []string{"$id"})
+	// Use a filter that doesn't reference any specific variable so it compiles
+	// successfully with any varNames list.
+	filter := ". | {ok: true}"
+	code1, err := CompileToolResponseFilterWithVars(filter, []string{"$a"})
 	require.NoError(t, err)
 	require.NotNil(t, code1)
 
-	// Same filter string but different variable name list → should be a distinct entry.
-	code2, err := CompileToolResponseFilterWithVars(filter+" ", []string{"$id"})
+	// Same filter string but a different variable name list → distinct cache key.
+	code2, err := CompileToolResponseFilterWithVars(filter, []string{"$a", "$b"})
 	require.NoError(t, err)
 	require.NotNil(t, code2)
 
-	assert.NotSame(t, code1, code2, "CompileToolResponseFilterWithVars should use distinct cache entries for different filter strings")
+	assert.NotSame(t, code1, code2, "CompileToolResponseFilterWithVars should use distinct cache entries for different varNames")
 }
 
 // ---------------------------------------------------------------------------
