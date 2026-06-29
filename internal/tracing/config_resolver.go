@@ -31,6 +31,8 @@ func resolveEndpoint(cfg *config.TracingConfig) string {
 		signalPath = defaultSignalPath
 	}
 
+	logTracing.Printf("resolveEndpoint: endpoint=%q, signalPath=%q", endpoint, signalPath)
+
 	u, err := url.Parse(endpoint)
 	if err != nil {
 		// If unparseable, fall back to string append for best-effort.
@@ -40,6 +42,7 @@ func resolveEndpoint(cfg *config.TracingConfig) string {
 		if !strings.HasSuffix(normalized, signalPath) {
 			normalized += signalPath
 		}
+		logTracing.Printf("resolveEndpoint: URL parse failed, using string fallback: result=%q", normalized)
 		return normalized
 	}
 
@@ -50,12 +53,15 @@ func resolveEndpoint(cfg *config.TracingConfig) string {
 	} else {
 		u.Path = normalizedPath
 	}
-	return u.String()
+	resolved := u.String()
+	logTracing.Printf("resolveEndpoint: resolved=%q", resolved)
+	return resolved
 }
 
 // resolveServiceName returns the service name from config.
 func resolveServiceName(cfg *config.TracingConfig) string {
 	if cfg != nil && cfg.ServiceName != "" {
+		logTracing.Printf("resolveServiceName: using configured service name: %q", cfg.ServiceName)
 		return cfg.ServiceName
 	}
 	return config.DefaultTracingServiceName
@@ -181,14 +187,16 @@ func resolveExtraEndpointConfigs(cfg *config.TracingConfig) []extraEndpointConfi
 }
 
 func resolveCommaSeparatedExtraEndpoints(raw, signalPath string) []extraEndpointConfig {
+	parts := strings.Split(raw, ",")
 	var endpoints []extraEndpointConfig
-	for _, ep := range strings.Split(raw, ",") {
+	for _, ep := range parts {
 		normalized := normalizeExtraEndpoint(ep, signalPath)
 		if normalized == "" {
 			continue
 		}
 		endpoints = append(endpoints, extraEndpointConfig{URL: normalized})
 	}
+	logTracing.Printf("resolveCommaSeparatedExtraEndpoints: parsed %d valid endpoint(s) from %d raw entries", len(endpoints), len(parts))
 	return endpoints
 }
 
