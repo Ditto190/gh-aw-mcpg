@@ -786,8 +786,11 @@ func TestForwardAndReadBody_BodyReadError(t *testing.T) {
 // upstream is unreachable for an unrecognized path, the handler writes a 502
 // error itself (via forwardAndReadBody) and returns without further processing.
 func TestHandleUnrecognizedPassthrough_UpstreamFails(t *testing.T) {
-	// Point at a port that is not listening so the TCP dial fails immediately.
-	s := newTestServer(t, "http://127.0.0.1:1")
+	// Use a closed httptest server URL to deterministically force a connection failure.
+	closed := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	upstreamURL := closed.URL
+	closed.Close()
+	s := newTestServer(t, upstreamURL)
 	h := &proxyHandler{server: s}
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/unknown/endpoint", nil)
