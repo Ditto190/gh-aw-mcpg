@@ -1576,15 +1576,18 @@ fn extract_author_login(item: &Value) -> &str {
     get_nested_str(item, "author", field_names::LOGIN)
 }
 
-/// Check whether an item contains an `author_association` (or `authorAssociation`) field.
-pub fn has_author_association(item: &Value) -> bool {
+/// Extract the `author_association` field from an item, checking both the
+/// snake_case REST form (`author_association`) and the camelCase GraphQL form
+/// (`authorAssociation`). Returns `None` if neither is present or is a string.
+fn get_author_association(item: &Value) -> Option<&str> {
     item.get("author_association")
         .and_then(|v| v.as_str())
-        .is_some()
-        || item
-            .get("authorAssociation")
-            .and_then(|v| v.as_str())
-            .is_some()
+        .or_else(|| item.get("authorAssociation").and_then(|v| v.as_str()))
+}
+
+/// Check whether an item contains an `author_association` (or `authorAssociation`) field.
+pub fn has_author_association(item: &Value) -> bool {
+    get_author_association(item).is_some()
 }
 
 /// Extract author_association from an item and return initial integrity floor.
@@ -1597,10 +1600,7 @@ pub fn author_association_floor(item: &Value, scope: &str, ctx: &PolicyContext) 
         return writer_integrity(scope, ctx);
     }
 
-    let association = item
-        .get("author_association")
-        .and_then(|v| v.as_str())
-        .or_else(|| item.get("authorAssociation").and_then(|v| v.as_str()));
+    let association = get_author_association(item);
 
     author_association_floor_from_str(scope, association, ctx)
 }
