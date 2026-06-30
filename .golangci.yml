@@ -19,38 +19,34 @@ linters:
     - revive
     - testifylint
     - gosec
-
-linters-settings:
-  testifylint:
-    enable-all: true
   # Configuration for disabled linters is kept for reference if they are re-enabled
-  errcheck:
-    exclude-functions:
-      - (*os.File).Close
-      - (*os.File).Sync
-      - os.Chdir
-      - os.Chmod
-      - os.Chtimes
-      - os.MkdirAll
-      - os.Remove
-      - os.RemoveAll
-      - os.WriteFile
-  gocritic:
-    enable-all: true
-    disabled-checks:
-      - ifElseChain
-      - singleCaseSwitch
-      - appendAssign
-      - unlambda
-      - elseif
-      - assignOp
-      - argOrder
-      - dupBranchBody
-      - deprecatedComment
-      - commentFormatting
-      - badCall
-
-issues:
-  exclude-generated: lax
-  exclude-dirs-use-default: false
-  exclude-use-default: false
+  settings:
+    testifylint:
+      enable-all: true
+    errcheck:
+      exclude-functions:
+        - (*os.File).Close
+        - (*os.File).Sync
+        - os.Chdir
+        - os.Chmod
+        - os.Chtimes
+        - os.MkdirAll
+        - os.Remove
+        - os.RemoveAll
+        - os.WriteFile
+    gocritic:
+      enable-all: true
+      disabled-checks:
+        - ifElseChain
+        - singleCaseSwitch
+        - appendAssign
+        - unlambda
+        - elseif
+        - assignOp
+        - argOrder
+        - dupBranchBody
+        - deprecatedComment
+        - commentFormatting
+        - badCall
+  exclusions:
+    generated: lax
