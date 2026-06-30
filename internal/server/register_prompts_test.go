@@ -138,11 +138,16 @@ func TestRegisterPromptsFromBackend_NoCapability(t *testing.T) {
 // returns an HTTP error for prompts/list. The function should swallow the error (non-fatal)
 // and return nil.
 func TestRegisterPromptsFromBackend_RequestError(t *testing.T) {
+	promptsListCalled := make(chan struct{}, 10)
+	t.Cleanup(func() {
+		assert.Equal(t, 1, len(promptsListCalled), "expected prompts/list to be called exactly once")
+	})
+
 	srv := newStreamableBackendWithPromptsCapability(t, func(w http.ResponseWriter, _ interface{}) {
+		promptsListCalled <- struct{}{}
 		// Return HTTP 500 → SDK treats this as a request-level failure
 		w.WriteHeader(http.StatusInternalServerError)
 	})
-	defer srv.Close()
 
 	conn := connectStreamableBackend(t, srv)
 	us := minimalPromptsTestServer(t)
