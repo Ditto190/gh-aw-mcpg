@@ -76,15 +76,12 @@ func registerFlagCompletions(cmd *cobra.Command) {
 	if err := cmd.MarkFlagFilename("config", "toml"); err != nil {
 		debugLog.Printf("Failed to register --config filename completion: %v", err)
 	}
-	cmd.RegisterFlagCompletionFunc("log-dir", func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
-		return nil, cobra.ShellCompDirectiveFilterDirs
-	})
-	cmd.RegisterFlagCompletionFunc("payload-dir", func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
-		return nil, cobra.ShellCompDirectiveFilterDirs
-	})
-	cmd.RegisterFlagCompletionFunc("wasm-cache-dir", func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
-		return nil, cobra.ShellCompDirectiveFilterDirs
-	})
+	// Use MarkFlagDirname for directory flags (cobra best practice)
+	for _, dirFlag := range []string{"log-dir", "payload-dir", "wasm-cache-dir"} {
+		if err := cmd.MarkFlagDirname(dirFlag); err != nil {
+			debugLog.Printf("Failed to register --%s dirname completion: %v", dirFlag, err)
+		}
+	}
 	// Show all files for --env — the canonical .env file has no extension.
 	if err := cmd.MarkFlagFilename("env"); err != nil {
 		debugLog.Printf("Failed to register --env filename completion: %v", err)

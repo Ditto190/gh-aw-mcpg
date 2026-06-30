@@ -117,31 +117,31 @@ func TestRegisterFlagCompletions(t *testing.T) {
 	t.Run("log-dir flag completion returns directory filter", func(t *testing.T) {
 		cmd := setupCmd(t)
 
-		compFunc, ok := cmd.GetFlagCompletionFunc("log-dir")
-		require.True(t, ok, "log-dir flag should have a completion function")
-		_, directive := compFunc(cmd, nil, "")
-		assert.Equal(t, cobra.ShellCompDirectiveFilterDirs, directive,
-			"log-dir flag should have directory completion directive")
+		flag := cmd.Flags().Lookup("log-dir")
+		require.NotNil(t, flag, "log-dir flag should be registered")
+		require.NotNil(t, flag.Annotations, "log-dir flag should have dirname annotations")
+		_, ok := flag.Annotations[cobra.BashCompSubdirsInDir]
+		assert.True(t, ok, "log-dir flag should have directory completion annotation via MarkFlagDirname")
 	})
 
 	t.Run("payload-dir flag completion returns directory filter", func(t *testing.T) {
 		cmd := setupCmd(t)
 
-		compFunc, ok := cmd.GetFlagCompletionFunc("payload-dir")
-		require.True(t, ok, "payload-dir flag should have a completion function")
-		_, directive := compFunc(cmd, nil, "")
-		assert.Equal(t, cobra.ShellCompDirectiveFilterDirs, directive,
-			"payload-dir flag should have directory completion directive")
+		flag := cmd.Flags().Lookup("payload-dir")
+		require.NotNil(t, flag, "payload-dir flag should be registered")
+		require.NotNil(t, flag.Annotations, "payload-dir flag should have dirname annotations")
+		_, ok := flag.Annotations[cobra.BashCompSubdirsInDir]
+		assert.True(t, ok, "payload-dir flag should have directory completion annotation via MarkFlagDirname")
 	})
 
 	t.Run("wasm-cache-dir flag completion returns directory filter", func(t *testing.T) {
 		cmd := setupCmd(t)
 
-		compFunc, ok := cmd.GetFlagCompletionFunc("wasm-cache-dir")
-		require.True(t, ok, "wasm-cache-dir flag should have a completion function")
-		_, directive := compFunc(cmd, nil, "")
-		assert.Equal(t, cobra.ShellCompDirectiveFilterDirs, directive,
-			"wasm-cache-dir flag should have directory completion directive")
+		flag := cmd.Flags().Lookup("wasm-cache-dir")
+		require.NotNil(t, flag, "wasm-cache-dir flag should be registered")
+		require.NotNil(t, flag.Annotations, "wasm-cache-dir flag should have dirname annotations")
+		_, ok := flag.Annotations[cobra.BashCompSubdirsInDir]
+		assert.True(t, ok, "wasm-cache-dir flag should have directory completion annotation via MarkFlagDirname")
 	})
 
 	t.Run("env flag completion shows all files (no extension filter)", func(t *testing.T) {

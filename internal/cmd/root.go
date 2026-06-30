@@ -77,6 +77,11 @@ func init() {
 	// Set custom error prefix for better branding
 	rootCmd.SetErrPrefix("MCPG Error:")
 
+	// Provide user-friendly flag parse error messages that include the usage hint
+	rootCmd.SetFlagErrorFunc(func(cmd *cobra.Command, err error) error {
+		return fmt.Errorf("%w\nSee '%s --help' for usage", err, cmd.CommandPath())
+	})
+
 	// Set custom version template with enhanced formatting
 	rootCmd.SetVersionTemplate(`MCPG Gateway {{.Version}}
 `)
@@ -87,6 +92,10 @@ func init() {
 
 	// Register all flags from feature modules (flags_*.go files)
 	registerAllFlags(rootCmd)
+
+	// Preserve flag registration order in help output (cobra sorts alphabetically by default)
+	rootCmd.Flags().SortFlags = false
+	rootCmd.PersistentFlags().SortFlags = false
 
 	// Register custom flag completions
 	registerFlagCompletions(rootCmd)
@@ -453,7 +462,7 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 
 	// Write gateway configuration to stdout per spec section 5.4
-	if err := writeGatewayConfigToStdout(cfg, listenAddr, mode, tlsEnabled); err != nil {
+	if err := writeGatewayConfigToStdout(cmd, cfg, listenAddr, mode, tlsEnabled); err != nil {
 		log.Printf("Warning: failed to write gateway configuration to stdout: %v", err)
 	}
 
@@ -479,7 +488,7 @@ func run(cmd *cobra.Command, args []string) error {
 // Execute runs the root command
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		fmt.Fprintln(rootCmd.ErrOrStderr(), err)
 		os.Exit(1)
 	}
 }
