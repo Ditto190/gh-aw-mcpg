@@ -136,12 +136,12 @@ func validateToolResponseFiltersWithVars(filters map[string]string, jsonPath str
 	}
 
 	for toolName, rawFilter := range filters {
-		if strings.TrimSpace(toolName) == "" {
-			return fmt.Errorf("%s contains an empty tool name", jsonPath)
+		if err := NonEmptyString(strings.TrimSpace(toolName), "tool name", jsonPath); err != nil {
+			return err
 		}
 		filter := strings.TrimSpace(rawFilter)
-		if filter == "" {
-			return fmt.Errorf("%s.%s must not be empty", jsonPath, toolName)
+		if err := NonEmptyString(filter, toolName, jsonPath+"."+toolName); err != nil {
+			return err
 		}
 
 		query, err := gojq.Parse(filter)

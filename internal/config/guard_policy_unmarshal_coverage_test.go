@@ -125,7 +125,7 @@ func TestGuardPolicyUnmarshalJSON_InvalidInnerJSON(t *testing.T) {
 		{
 			name:    "allow-only inner value fails AllowOnlyPolicy unmarshal - missing min-integrity",
 			json:    `{"allow-only": {"repos":"all"}}`,
-			wantErr: "allow-only must include min-integrity",
+			wantErr: "min-integrity is required",
 		},
 	}
 
@@ -338,7 +338,7 @@ func TestNormalizeGuardPolicy_EndorsementReactionDedup(t *testing.T) {
 		}}
 		_, err := NormalizeGuardPolicy(policy)
 		require.Error(t, err)
-		assert.ErrorContains(t, err, "allow-only.endorsement-reactions entries must not be empty")
+		assert.ErrorContains(t, err, "endorsement-reactions cannot be empty")
 	})
 
 	t.Run("deduplicate disapproval-reactions case-insensitively", func(t *testing.T) {
@@ -361,7 +361,7 @@ func TestNormalizeGuardPolicy_EndorsementReactionDedup(t *testing.T) {
 		}}
 		_, err := NormalizeGuardPolicy(policy)
 		require.Error(t, err)
-		assert.ErrorContains(t, err, "allow-only.disapproval-reactions entries must not be empty")
+		assert.ErrorContains(t, err, "disapproval-reactions cannot be empty")
 	})
 
 	t.Run("invalid disapproval-integrity rejected", func(t *testing.T) {

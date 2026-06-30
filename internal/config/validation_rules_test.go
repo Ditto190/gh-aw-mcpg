@@ -911,6 +911,70 @@ func TestSchemaValidationError(t *testing.T) {
 	}
 }
 
+func TestRequiredStringField(t *testing.T) {
+	tests := []struct {
+		name       string
+		value      string
+		fieldName  string
+		jsonPath   string
+		suggestion string
+		shouldErr  bool
+		errMsg     string
+	}{
+		{
+			name:       "valid non-empty string",
+			value:      "approved",
+			fieldName:  "min-integrity",
+			jsonPath:   "allow-only.min-integrity",
+			suggestion: "Specify the minimum integrity level",
+			shouldErr:  false,
+		},
+		{
+			name:       "empty string returns error",
+			value:      "",
+			fieldName:  "min-integrity",
+			jsonPath:   "allow-only.min-integrity",
+			suggestion: "Specify the minimum integrity level",
+			shouldErr:  true,
+			errMsg:     "min-integrity is required",
+		},
+		{
+			name:       "custom field name in error",
+			value:      "",
+			fieldName:  "container",
+			jsonPath:   "mcpServers.github.container",
+			suggestion: "Add a container image",
+			shouldErr:  true,
+			errMsg:     "container is required",
+		},
+		{
+			name:       "suggestion included in error",
+			value:      "",
+			fieldName:  "url",
+			jsonPath:   "mcpServers.http-server.url",
+			suggestion: "Provide an HTTPS URL",
+			shouldErr:  true,
+			errMsg:     "Provide an HTTPS URL",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := RequiredStringField(tt.value, tt.fieldName, tt.jsonPath, tt.suggestion)
+
+			if tt.shouldErr {
+				require.NotNil(t, err, "Expected validation error but got none")
+				assert.ErrorContains(t, err, tt.errMsg)
+				assert.ErrorContains(t, err, tt.jsonPath)
+				assert.Equal(t, tt.fieldName, err.Field)
+				assert.Equal(t, tt.suggestion, err.Suggestion)
+			} else {
+				require.NoError(t, validationErrAsError(err), "Unexpected validation error")
+			}
+		})
+	}
+}
+
 func TestNonEmptyString(t *testing.T) {
 	tests := []struct {
 		name      string

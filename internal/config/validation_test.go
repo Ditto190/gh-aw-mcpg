@@ -1220,7 +1220,7 @@ func TestValidateToolResponseFilters(t *testing.T) {
 				},
 			},
 			shouldErr: true,
-			errMsg:    "must not be empty",
+			errMsg:    "cannot be empty",
 		},
 	}
 
