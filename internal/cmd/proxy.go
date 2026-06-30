@@ -139,7 +139,9 @@ Local usage:
 
 	// Use MarkFlagDirname for directory flags (cobra best practice)
 	for _, dirFlag := range []string{"log-dir", "wasm-cache-dir", "tls-dir"} {
-		cmd.MarkFlagDirname(dirFlag)
+		if err := cmd.MarkFlagDirname(dirFlag); err != nil {
+			logProxyCmd.Printf("Failed to register --%s dirname completion: %v", dirFlag, err)
+		}
 	}
 
 	return cmd
