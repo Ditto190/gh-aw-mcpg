@@ -14,6 +14,12 @@ import (
 // This helper deduplicates the common pattern of defer Body.Close() + io.ReadAll
 // + status-code check that appears in proxy, githubhttp, and similar call sites.
 func ReadResponseBody(resp *http.Response, context string) ([]byte, error) {
+	if resp == nil {
+		return nil, fmt.Errorf("failed to read %s response: nil response", context)
+	}
+	if resp.Body == nil {
+		return nil, fmt.Errorf("failed to read %s response: response body is nil", context)
+	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
