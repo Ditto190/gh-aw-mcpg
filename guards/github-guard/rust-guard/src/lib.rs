@@ -972,8 +972,12 @@ pub extern "C" fn label_response(
         let output_preview = safe_preview(&output_json, PREVIEW_MAX_BYTES);
         log_info(&format!("    path_output_preview={}", output_preview));
 
-        let n = try_write_json_output(&output_json, output_ptr, output_size, "label_response/path");
-        return if n < 0 { 0 } else { n };
+let n = try_write_json_output(&output_json, output_ptr, output_size, "label_response/path");
+if n < 0 {
+    log_info("<<< label_response returning 0 (output write failed)");
+    return 0;
+}
+return n;
     }
 
     // Fall back to legacy item-based labeling for singletons
