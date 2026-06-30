@@ -400,7 +400,7 @@ func parseResourceResponse(response map[string]any) (*difc.LabeledResource, difc
 		return nil, difc.OperationWrite, fmt.Errorf("invalid resource format in guard response")
 	}
 
-	resource := difc.NewLabeledResource("")
+	resource := &difc.LabeledResource{}
 	fillLabeledResourceFromMap(resourceData, resource)
 
 	// Parse operation type
