@@ -148,8 +148,9 @@ func BuildAllowOnlyPolicy(public bool, owner, repo, minIntegrity string) (*Guard
 	if scopeCount != 1 {
 		return nil, fmt.Errorf("exactly one AllowOnly scope variant must be set (public or owner[/repo])")
 	}
-	if integrityInput == "" {
-		return nil, fmt.Errorf("min-integrity is required")
+	if err := RequiredStringField(integrityInput, "min-integrity", "allow-only.min-integrity",
+		"Specify the minimum integrity level (one of: none, unapproved, approved, merged)"); err != nil {
+		return nil, err
 	}
 	if !hasIntegrity {
 		return nil, fmt.Errorf("min-integrity must be one of: %s", strings.Join(allIntegrityLevels, ", "))

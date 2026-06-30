@@ -306,7 +306,7 @@ func TestNormalizeGuardPolicyBlockedAndApproval(t *testing.T) {
 
 		_, err := NormalizeGuardPolicy(policy)
 		require.Error(t, err)
-		assert.ErrorContains(t, err, "blocked-users entries must not be empty")
+		assert.ErrorContains(t, err, "blocked-users cannot be empty")
 	})
 
 	t.Run("empty approval-labels string entry returns error", func(t *testing.T) {
@@ -318,7 +318,7 @@ func TestNormalizeGuardPolicyBlockedAndApproval(t *testing.T) {
 
 		_, err := NormalizeGuardPolicy(policy)
 		require.Error(t, err)
-		assert.ErrorContains(t, err, "approval-labels entries must not be empty")
+		assert.ErrorContains(t, err, "approval-labels cannot be empty")
 	})
 
 	t.Run("empty blocked-users slice results in nil normalized list", func(t *testing.T) {
@@ -368,7 +368,7 @@ func TestNormalizeGuardPolicyRefusalLabels(t *testing.T) {
 
 		_, err := NormalizeGuardPolicy(policy)
 		require.Error(t, err)
-		assert.ErrorContains(t, err, "refusal-labels entries must not be empty")
+		assert.ErrorContains(t, err, "refusal-labels cannot be empty")
 	})
 }
 
@@ -422,7 +422,7 @@ func TestNormalizeGuardPolicyTrustedUsers(t *testing.T) {
 
 		_, err := NormalizeGuardPolicy(policy)
 		require.Error(t, err)
-		assert.ErrorContains(t, err, "trusted-users entries must not be empty")
+		assert.ErrorContains(t, err, "trusted-users cannot be empty")
 	})
 
 	t.Run("empty trusted-users slice results in nil normalized list", func(t *testing.T) {
@@ -446,7 +446,7 @@ func TestNormalizeGuardPolicyTrustedUsers(t *testing.T) {
 
 		_, err := NormalizeGuardPolicy(policy)
 		require.Error(t, err)
-		assert.ErrorContains(t, err, "trusted-users entries must not be empty")
+		assert.ErrorContains(t, err, "trusted-users cannot be empty")
 	})
 }
 
@@ -582,12 +582,12 @@ func TestNormalizeAndValidateScopeArray(t *testing.T) {
 		{
 			name:    "empty string element",
 			scopes:  []interface{}{""},
-			wantErr: "allow-only.repos scope entries must not be empty",
+			wantErr: "repos cannot be empty",
 		},
 		{
 			name:    "whitespace-only element",
 			scopes:  []interface{}{"   "},
-			wantErr: "allow-only.repos scope entries must not be empty",
+			wantErr: "repos cannot be empty",
 		},
 		{
 			name:    "invalid scope pattern",
@@ -730,12 +730,12 @@ func TestAllowOnlyPolicyUnmarshalJSON(t *testing.T) {
 		{
 			name:    "missing min-integrity field",
 			json:    `{"repos":"all"}`,
-			wantErr: "allow-only must include min-integrity",
+			wantErr: "min-integrity is required",
 		},
 		{
 			name:    "whitespace-only min-integrity",
 			json:    `{"repos":"all","min-integrity":"   "}`,
-			wantErr: "allow-only must include min-integrity",
+			wantErr: "min-integrity is required",
 		},
 		{
 			name: "canonical min-integrity key",
@@ -1244,7 +1244,7 @@ func TestNormalizeGuardPolicyReactionEndorsement(t *testing.T) {
 		}}
 		_, err := NormalizeGuardPolicy(policy)
 		require.Error(t, err)
-		assert.ErrorContains(t, err, "endorsement-reactions entries must not be empty")
+		assert.ErrorContains(t, err, "endorsement-reactions cannot be empty")
 	})
 
 	t.Run("empty disapproval-reactions entry rejected", func(t *testing.T) {
@@ -1255,7 +1255,7 @@ func TestNormalizeGuardPolicyReactionEndorsement(t *testing.T) {
 		}}
 		_, err := NormalizeGuardPolicy(policy)
 		require.Error(t, err)
-		assert.ErrorContains(t, err, "disapproval-reactions entries must not be empty")
+		assert.ErrorContains(t, err, "disapproval-reactions cannot be empty")
 	})
 
 	t.Run("disapproval-reactions deduplication (case-insensitive)", func(t *testing.T) {

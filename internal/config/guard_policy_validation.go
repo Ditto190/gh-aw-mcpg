@@ -43,8 +43,8 @@ func ValidateWriteSinkPolicy(ws *WriteSinkPolicy) error {
 	seen := make(map[string]struct{})
 	for _, entry := range ws.Accept {
 		entry = strings.TrimSpace(entry)
-		if entry == "" {
-			return fmt.Errorf("write-sink.accept entries must not be empty")
+		if err := NonEmptyString(entry, "accept", "write-sink.accept"); err != nil {
+			return err
 		}
 		if entry == "*" {
 			return fmt.Errorf("write-sink.accept wildcard \"*\" must be the only entry")
@@ -228,8 +228,8 @@ func normalizeAndValidateScopeArray(scopes []interface{}) ([]string, error) {
 		}
 
 		scopeString = strings.TrimSpace(scopeString)
-		if scopeString == "" {
-			return nil, fmt.Errorf("allow-only.repos scope entries must not be empty")
+		if err := NonEmptyString(scopeString, "repos", "allow-only.repos"); err != nil {
+			return nil, err
 		}
 
 		if !isValidRepoScope(scopeString) {
@@ -330,8 +330,8 @@ func normalizeStringSlice(field string, input []string, caseNorm func(string) st
 	out := make([]string, 0, len(input))
 	for _, v := range input {
 		v = strings.TrimSpace(v)
-		if v == "" {
-			return nil, fmt.Errorf("allow-only.%s entries must not be empty", field)
+		if err := NonEmptyString(v, field, "allow-only."+field); err != nil {
+			return nil, err
 		}
 		key := caseNorm(v)
 		if _, exists := seen[key]; !exists {
@@ -390,8 +390,8 @@ func normalizeToolCallLimits(input map[string]int) (map[string]int, error) {
 	out := make(map[string]int, len(input))
 	for toolName, limit := range input {
 		toolName = strings.TrimSpace(toolName)
-		if toolName == "" {
-			return nil, fmt.Errorf("allow-only.tool-call-limits keys must not be empty")
+		if err := NonEmptyString(toolName, "tool-call-limits key", "allow-only.tool-call-limits"); err != nil {
+			return nil, err
 		}
 		if limit < 0 {
 			return nil, fmt.Errorf("allow-only.tool-call-limits[%q] must be >= 0", toolName)

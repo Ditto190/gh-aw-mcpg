@@ -277,7 +277,7 @@ args = ["run", "--rm", "-i", "ghcr.io/github/github-mcp-server:latest"]
 	cfg, err := LoadFromFile(path)
 	require.Error(t, err)
 	assert.Nil(t, cfg)
-	assert.ErrorContains(t, err, "empty tool name")
+	assert.ErrorContains(t, err, "tool name cannot be empty")
 }
 
 // TestLoadFromFile_ToolResponseFilter_InvalidJqExpression verifies that an
@@ -344,7 +344,7 @@ my_tool = "   "
 	cfg, err := LoadFromFile(path)
 	require.Error(t, err)
 	assert.Nil(t, cfg)
-	assert.ErrorContains(t, err, "must not be empty")
+	assert.ErrorContains(t, err, "cannot be empty")
 }
 
 // TestLoadFromFile_UnknownKeysDoNotCauseError verifies that unknown configuration

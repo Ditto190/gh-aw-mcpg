@@ -166,6 +166,23 @@ func MountFormat(mount, jsonPath string, index int) *ValidationError {
 	return nil
 }
 
+// RequiredStringField validates that a required string field is not empty.
+// It returns a *ValidationError with structured context (Field, JSONPath,
+// Suggestion) so that callers get consistent, machine-readable validation
+// errors instead of plain fmt.Errorf strings.
+// Returns nil if the value is non-empty.
+func RequiredStringField(value, fieldName, jsonPath, suggestion string) *ValidationError {
+	if value == "" {
+		return &ValidationError{
+			Field:      fieldName,
+			Message:    fmt.Sprintf("%s is required", fieldName),
+			JSONPath:   jsonPath,
+			Suggestion: suggestion,
+		}
+	}
+	return nil
+}
+
 // NonEmptyString validates that a string field is not empty (minLength: 1)
 // Returns nil if valid, *ValidationError if invalid
 func NonEmptyString(value, fieldName, jsonPath string) *ValidationError {
