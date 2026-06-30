@@ -137,6 +137,13 @@ Local usage:
 	cmd.RegisterFlagCompletionFunc("guards-mode", cobra.FixedCompletions(
 		difc.ValidModes, cobra.ShellCompDirectiveNoFileComp))
 
+	// Use MarkFlagDirname for directory flags (cobra best practice)
+	for _, dirFlag := range []string{"log-dir", "wasm-cache-dir", "tls-dir"} {
+		if err := cmd.MarkFlagDirname(dirFlag); err != nil {
+			logProxyCmd.Printf("Failed to register --%s dirname completion: %v", dirFlag, err)
+		}
+	}
+
 	return cmd
 }
 
@@ -290,22 +297,23 @@ func runProxy(cmd *cobra.Command, args []string) error {
 			logger.LogInfo("startup", "Proxy listening on %s://%s", scheme, actualAddr)
 
 			// Print connection info
-			fmt.Fprintf(os.Stderr, "\nMCPG GitHub API Proxy\n")
-			fmt.Fprintf(os.Stderr, "  Listening: %s://%s\n", scheme, actualAddr)
-			fmt.Fprintf(os.Stderr, "  Upstream:  %s\n", apiURL)
-			fmt.Fprintf(os.Stderr, "  Mode:      %s\n", proxyDIFCMode)
-			fmt.Fprintf(os.Stderr, "  Guard:     %s\n", proxyGuardWasm)
+			stderr := cmd.ErrOrStderr()
+			fmt.Fprintf(stderr, "\nMCPG GitHub API Proxy\n")
+			fmt.Fprintf(stderr, "  Listening: %s://%s\n", scheme, actualAddr)
+			fmt.Fprintf(stderr, "  Upstream:  %s\n", apiURL)
+			fmt.Fprintf(stderr, "  Mode:      %s\n", proxyDIFCMode)
+			fmt.Fprintf(stderr, "  Guard:     %s\n", proxyGuardWasm)
 			if tlsCfg != nil {
-				fmt.Fprintf(os.Stderr, "  CA cert:   %s\n", tlsCfg.CACertPath)
-				fmt.Fprintf(os.Stderr, "\nConnect with:\n")
-				fmt.Fprintf(os.Stderr, "  export GH_HOST=%s\n", clientAddr(actualAddr))
-				fmt.Fprintf(os.Stderr, "  export NODE_EXTRA_CA_CERTS=%s\n", tlsCfg.CACertPath)
-				fmt.Fprintf(os.Stderr, "  export SSL_CERT_FILE=%s\n", tlsCfg.CACertPath)
-				fmt.Fprintf(os.Stderr, "  export GIT_SSL_CAINFO=%s\n", tlsCfg.CACertPath)
-				fmt.Fprintf(os.Stderr, "  gh issue list -R org/repo\n\n")
+				fmt.Fprintf(stderr, "  CA cert:   %s\n", tlsCfg.CACertPath)
+				fmt.Fprintf(stderr, "\nConnect with:\n")
+				fmt.Fprintf(stderr, "  export GH_HOST=%s\n", clientAddr(actualAddr))
+				fmt.Fprintf(stderr, "  export NODE_EXTRA_CA_CERTS=%s\n", tlsCfg.CACertPath)
+				fmt.Fprintf(stderr, "  export SSL_CERT_FILE=%s\n", tlsCfg.CACertPath)
+				fmt.Fprintf(stderr, "  export GIT_SSL_CAINFO=%s\n", tlsCfg.CACertPath)
+				fmt.Fprintf(stderr, "  gh issue list -R org/repo\n\n")
 			} else {
-				fmt.Fprintf(os.Stderr, "\nConnect with:\n")
-				fmt.Fprintf(os.Stderr, "  curl http://%s/repos/org/repo/issues\n\n", actualAddr)
+				fmt.Fprintf(stderr, "\nConnect with:\n")
+				fmt.Fprintf(stderr, "  curl http://%s/repos/org/repo/issues\n\n", actualAddr)
 			}
 
 			return httpServer.Serve(listener)
