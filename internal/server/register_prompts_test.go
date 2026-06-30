@@ -160,7 +160,13 @@ func TestRegisterPromptsFromBackend_RequestError(t *testing.T) {
 // capability that returns an empty prompts/list causes registerPromptsFromBackend to
 // return nil without registering anything.
 func TestRegisterPromptsFromBackend_EmptyPromptsList(t *testing.T) {
+	promptsListCalled := make(chan struct{}, 10)
+	t.Cleanup(func() {
+		assert.Equal(t, 1, len(promptsListCalled), "expected prompts/list to be called exactly once")
+	})
+
 	srv := newStreamableBackendWithPromptsCapability(t, func(w http.ResponseWriter, reqID interface{}) {
+		promptsListCalled <- struct{}{}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"jsonrpc": "2.0",
