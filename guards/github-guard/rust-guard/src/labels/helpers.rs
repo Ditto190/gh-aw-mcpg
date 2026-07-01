@@ -2141,10 +2141,16 @@ pub(crate) fn is_any_trusted_actor(username: &str, ctx: &PolicyContext) -> bool 
 /// Checks `merged_at` first, then falls back to the `merged` boolean for
 /// responses that omit the timestamp field.
 pub(crate) fn is_pr_merged(item: &Value) -> bool {
-    item.get(field_names::MERGED_AT)
-        .and_then(|v| (!v.is_null()).then_some(true))
-        .or_else(|| item.get(field_names::MERGED).and_then(|v| v.as_bool()))
-        .unwrap_or(false)
+    if item
+        .get(field_names::MERGED_AT)
+        .is_some_and(|value| !value.is_null())
+    {
+        true
+    } else {
+        item.get(field_names::MERGED)
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+    }
 }
 
 #[cfg(test)]

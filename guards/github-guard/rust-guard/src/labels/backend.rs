@@ -795,7 +795,7 @@ mod tests {
 
         let payload = serde_json::json!({
             "author_association": "MEMBER",
-            "merged_at": serde_json::Value::Null,
+            "merged_at": null,
             "merged": true,
             "user": { "login": "merged-pr-author" },
             "base": { "repo": { "full_name": "owner/repo" } },
