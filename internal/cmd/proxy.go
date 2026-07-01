@@ -194,10 +194,9 @@ func runProxy(cmd *cobra.Command, args []string) error {
 	)
 	defer cleanupTracing()
 	if tracingCfg != nil {
-		log.Printf("OpenTelemetry tracing enabled for proxy: endpoint=%s, service=%s", proxyOTLPEndpoint, proxyOTLPService)
-		logger.LogInfo("startup", "OpenTelemetry tracing enabled for proxy: endpoint=%s, service=%s", proxyOTLPEndpoint, proxyOTLPService)
+		logger.StartupInfo("OpenTelemetry tracing enabled for proxy: endpoint=%s, service=%s", proxyOTLPEndpoint, proxyOTLPService)
 	} else {
-		log.Printf("OpenTelemetry tracing disabled for proxy (no --otlp-endpoint configured)")
+		logger.StartupInfo("OpenTelemetry tracing disabled for proxy (no --otlp-endpoint configured)")
 	}
 
 	// Resolve GitHub token (optional — proxy forwards client auth by default)
@@ -274,8 +273,7 @@ func runProxy(cmd *cobra.Command, args []string) error {
 		httpServer,
 		shutdownTimeout,
 		func() {
-			log.Println("Shutting down proxy...")
-			logger.LogInfo("shutdown", "Proxy shutting down")
+			logger.StartupInfo("Shutting down proxy...")
 		},
 		func() error {
 			listener, err := net.Listen("tcp", proxyListen)
@@ -293,8 +291,7 @@ func runProxy(cmd *cobra.Command, args []string) error {
 				scheme = "https"
 			}
 
-			log.Printf("MCPG Proxy listening on %s://%s", scheme, actualAddr)
-			logger.LogInfo("startup", "Proxy listening on %s://%s", scheme, actualAddr)
+			logger.StartupInfo("Proxy listening on %s://%s", scheme, actualAddr)
 
 			// Print connection info
 			stderr := cmd.ErrOrStderr()
