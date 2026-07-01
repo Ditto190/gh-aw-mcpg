@@ -1788,11 +1788,7 @@ pub fn pr_integrity(
     let mut integrity = author_association_floor(item, repo_full_name, ctx);
 
     // Check if PR is merged (either merged_at field exists or merged boolean is true)
-    let mut is_merged = item
-        .get(field_names::MERGED_AT)
-        .map(|v| !v.is_null())
-        .or_else(|| item.get(field_names::MERGED).and_then(|v| v.as_bool()))
-        .unwrap_or(false);
+    let mut is_merged = is_pr_merged(item);
 
     // Track whether fork status was enriched from the backend
     let mut effective_is_forked = is_forked;
@@ -2140,6 +2136,17 @@ pub(crate) fn is_any_trusted_actor(username: &str, ctx: &PolicyContext) -> bool 
         || is_trusted_user(username, ctx)
 }
 
+/// Returns `true` when a pull request has been merged.
+///
+/// Checks `merged_at` first, then falls back to the `merged` boolean for
+/// responses that omit the timestamp field.
+pub(crate) fn is_pr_merged(item: &Value) -> bool {
+    item.get(field_names::MERGED_AT)
+        .and_then(|v| (!v.is_null()).then_some(true))
+        .or_else(|| item.get(field_names::MERGED).and_then(|v| v.as_bool()))
+        .unwrap_or(false)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2203,6 +2210,26 @@ mod tests {
         assert!(is_any_trusted_actor("custom-bot", &ctx));
         assert!(is_any_trusted_actor("trusted-human", &ctx));
         assert!(!is_any_trusted_actor("random-user", &ctx));
+    }
+
+    #[test]
+    fn test_is_pr_merged_checks_timestamp_first() {
+        let item = serde_json::json!({
+            "merged_at": "2024-06-01T12:00:00Z",
+            "merged": false
+        });
+
+        assert!(is_pr_merged(&item));
+    }
+
+    #[test]
+    fn test_is_pr_merged_falls_back_to_boolean() {
+        let item = serde_json::json!({
+            "merged_at": null,
+            "merged": true
+        });
+
+        assert!(is_pr_merged(&item));
     }
 
     #[test]
