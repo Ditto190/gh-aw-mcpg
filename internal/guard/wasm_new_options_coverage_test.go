@@ -48,7 +48,7 @@ var labelResourceAndResponseWasm = []byte{
 // Compiled from:
 //
 //	(module
-//	  (memory 1)
+//	  (memory (export "memory") 1)
 //	  (func (export "label_resource") (param i32 i32 i32 i32) (result i32) i32.const 0)
 //	  (func (export "label_response") (param i32 i32 i32 i32) (result i32) i32.const 0)
 //	  (func (export "label_agent") (param i32 i32 i32 i32) (result i32) i32.const 0))
