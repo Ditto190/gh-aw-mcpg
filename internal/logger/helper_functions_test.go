@@ -19,7 +19,7 @@ func TestLogWithLevel(t *testing.T) {
 
 	err := InitFileLogger(logDir, fileName)
 	require.NoError(t, err)
-	defer CloseGlobalLogger()
+	defer CloseAllLoggers()
 
 	// Test all log levels using the helper
 	LogInfo("test", "Info message via helper")
@@ -27,7 +27,7 @@ func TestLogWithLevel(t *testing.T) {
 	LogError("test", "Error message via helper")
 	LogDebug("test", "Debug message via helper")
 
-	CloseGlobalLogger()
+	CloseAllLoggers()
 
 	// Read and verify
 	logPath := filepath.Join(logDir, fileName)
@@ -54,11 +54,11 @@ func TestLogWithLevelAndServer(t *testing.T) {
 	// Initialize both loggers
 	err := InitFileLogger(logDir, "mcp-gateway.log")
 	require.NoError(t, err)
-	defer CloseGlobalLogger()
+	defer CloseAllLoggers()
 
 	err = InitServerFileLogger(logDir)
 	require.NoError(t, err)
-	defer CloseServerFileLogger()
+	defer CloseAllLoggers()
 
 	serverID := "test-server"
 
@@ -68,8 +68,8 @@ func TestLogWithLevelAndServer(t *testing.T) {
 	LogErrorToServer(serverID, "test", "Error message via server helper")
 	LogDebugToServer(serverID, "test", "Debug message via server helper")
 
-	CloseServerFileLogger()
-	CloseGlobalLogger()
+	CloseAllLoggers()
+	CloseAllLoggers()
 
 	// Verify server-specific log file
 	serverLogPath := filepath.Join(logDir, serverID+".log")
@@ -108,11 +108,11 @@ func TestLogWithMarkdown(t *testing.T) {
 	// Initialize both loggers
 	err := InitFileLogger(logDir, "test.log")
 	require.NoError(t, err)
-	defer CloseGlobalLogger()
+	defer CloseAllLoggers()
 
 	err = InitMarkdownLogger(logDir, "test.md")
 	require.NoError(t, err)
-	defer CloseMarkdownLogger()
+	defer CloseAllLoggers()
 
 	// Test all log levels using the helper
 	LogInfoToMarkdown("test", "Info message via markdown helper")
@@ -120,8 +120,8 @@ func TestLogWithMarkdown(t *testing.T) {
 	LogErrorToMarkdown("test", "Error message via markdown helper")
 	LogDebugToMarkdown("test", "Debug message via markdown helper")
 
-	CloseMarkdownLogger()
-	CloseGlobalLogger()
+	CloseAllLoggers()
+	CloseAllLoggers()
 
 	// Verify regular log file
 	logPath := filepath.Join(logDir, "test.log")
@@ -158,14 +158,14 @@ func TestHelperFunctionsWithFormatting(t *testing.T) {
 
 	err := InitFileLogger(logDir, fileName)
 	require.NoError(t, err)
-	defer CloseGlobalLogger()
+	defer CloseAllLoggers()
 
 	// Test formatted messages
 	LogInfo("test", "Value: %d, String: %s", 42, "hello")
 	LogWarn("test", "Float: %.2f", 3.14159)
 	LogError("test", "Multiple: %d %s %v", 1, "two", true)
 
-	CloseGlobalLogger()
+	CloseAllLoggers()
 
 	logPath := filepath.Join(logDir, fileName)
 	content, err := os.ReadFile(logPath)
@@ -185,7 +185,7 @@ func TestHelperFunctionsConcurrency(t *testing.T) {
 
 	err := InitFileLogger(logDir, fileName)
 	require.NoError(t, err)
-	defer CloseGlobalLogger()
+	defer CloseAllLoggers()
 
 	// Write from multiple goroutines
 	done := make(chan bool, 10)
@@ -204,7 +204,7 @@ func TestHelperFunctionsConcurrency(t *testing.T) {
 		<-done
 	}
 
-	CloseGlobalLogger()
+	CloseAllLoggers()
 
 	// Verify log file
 	logPath := filepath.Join(logDir, fileName)
