@@ -33,11 +33,13 @@ func TestStartupInfo(t *testing.T) {
 
 	err = InitMarkdownLogger(logDir, "test.md")
 	require.NoError(t, err)
-	defer CloseAllLoggers()
+	t.Cleanup(func() {
+		assert.NoError(t, CloseAllLoggers())
+	})
 
 	StartupInfo("Server started on %s", "localhost:3000")
 
-	CloseAllLoggers()
+	require.NoError(t, CloseAllLoggers())
 
 	// Verify file logger received the message
 	logPath := filepath.Join(logDir, "test.log")
