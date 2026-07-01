@@ -377,7 +377,6 @@ func TestLogRPCRequest(t *testing.T) {
 	logDir := filepath.Join(tmpDir, "logs")
 
 	require.NoError(t, InitFileLogger(logDir, "test.log"), "InitFileLogger failed")
-	defer CloseAllLoggers()
 
 	require.NoError(t, InitMarkdownLogger(logDir, "test.md"), "InitMarkdownLogger failed")
 	defer CloseAllLoggers()
@@ -387,7 +386,6 @@ func TestLogRPCRequest(t *testing.T) {
 	LogRPCRequest(RPCDirectionOutbound, "github", "tools/list", payload, nil, nil)
 
 	// Close loggers to flush
-	CloseAllLoggers()
 	CloseAllLoggers()
 
 	// Check text log
@@ -412,7 +410,6 @@ func TestLogRPCResponse(t *testing.T) {
 	logDir := filepath.Join(tmpDir, "logs")
 
 	require.NoError(t, InitFileLogger(logDir, "test.log"), "InitFileLogger failed")
-	defer CloseAllLoggers()
 
 	require.NoError(t, InitMarkdownLogger(logDir, "test.md"), "InitMarkdownLogger failed")
 	defer CloseAllLoggers()
@@ -423,7 +420,6 @@ func TestLogRPCResponse(t *testing.T) {
 	LogRPCResponse(RPCDirectionInbound, "github", payload, err, nil, nil)
 
 	// Close loggers to flush
-	CloseAllLoggers()
 	CloseAllLoggers()
 
 	// Check text log
@@ -450,7 +446,6 @@ func TestLogRPCRequestWithSecrets(t *testing.T) {
 	logDir := filepath.Join(tmpDir, "logs")
 
 	require.NoError(t, InitFileLogger(logDir, "test.log"), "InitFileLogger failed")
-	defer CloseAllLoggers()
 
 	require.NoError(t, InitMarkdownLogger(logDir, "test.md"), "InitMarkdownLogger failed")
 	defer CloseAllLoggers()
@@ -460,7 +455,6 @@ func TestLogRPCRequestWithSecrets(t *testing.T) {
 	LogRPCRequest(RPCDirectionInbound, "client", "authenticate", payload, nil, nil)
 
 	// Close loggers to flush
-	CloseAllLoggers()
 	CloseAllLoggers()
 
 	const secret = "ghp_1234567890123456789012345678901234567890"
@@ -489,7 +483,6 @@ func TestLogRPCRequestPayloadTruncation(t *testing.T) {
 	logDir := filepath.Join(tmpDir, "logs")
 
 	require.NoError(t, InitFileLogger(logDir, "test.log"), "InitFileLogger failed")
-	defer CloseAllLoggers()
 
 	require.NoError(t, InitMarkdownLogger(logDir, "test.md"), "InitMarkdownLogger failed")
 	defer CloseAllLoggers()
@@ -500,7 +493,6 @@ func TestLogRPCRequestPayloadTruncation(t *testing.T) {
 	LogRPCRequest(RPCDirectionOutbound, "backend", "test", payload, nil, nil)
 
 	// Close loggers to flush
-	CloseAllLoggers()
 	CloseAllLoggers()
 
 	// Check text log - payload should be truncated at 10KB
@@ -529,7 +521,6 @@ func TestLogRPCRequest_WithAgentSnapshot(t *testing.T) {
 	logDir := filepath.Join(tmpDir, "logs")
 
 	require.NoError(t, InitFileLogger(logDir, "test.log"), "InitFileLogger failed")
-	defer CloseAllLoggers()
 
 	require.NoError(t, InitJSONLLogger(logDir, "test.jsonl"), "InitJSONLLogger failed")
 	defer CloseAllLoggers()
@@ -540,7 +531,6 @@ func TestLogRPCRequest_WithAgentSnapshot(t *testing.T) {
 	payload := []byte(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{}}`)
 	LogRPCRequest(RPCDirectionOutbound, "github", "tools/call", payload, agentSecrecy, agentIntegrity)
 
-	CloseAllLoggers()
 	CloseAllLoggers()
 
 	// Verify agent tags are recorded in the JSONL log
@@ -565,7 +555,6 @@ func TestLogRPCResponse_WithAgentSnapshot(t *testing.T) {
 	logDir := filepath.Join(tmpDir, "logs")
 
 	require.NoError(t, InitFileLogger(logDir, "test.log"), "InitFileLogger failed")
-	defer CloseAllLoggers()
 
 	require.NoError(t, InitJSONLLogger(logDir, "test.jsonl"), "InitJSONLLogger failed")
 	defer CloseAllLoggers()
@@ -576,7 +565,6 @@ func TestLogRPCResponse_WithAgentSnapshot(t *testing.T) {
 	payload := []byte(`{"jsonrpc":"2.0","id":1,"result":{"tools":[]}}`)
 	LogRPCResponse(RPCDirectionInbound, "github", payload, nil, agentSecrecy, agentIntegrity)
 
-	CloseAllLoggers()
 	CloseAllLoggers()
 
 	// Verify agent tags are recorded in the JSONL log
@@ -600,7 +588,6 @@ func TestLogRPCRequest_EmptyAgentSnapshotTags(t *testing.T) {
 	logDir := filepath.Join(tmpDir, "logs")
 
 	require.NoError(t, InitFileLogger(logDir, "test.log"), "InitFileLogger failed")
-	defer CloseAllLoggers()
 
 	require.NoError(t, InitJSONLLogger(logDir, "test.jsonl"), "InitJSONLLogger failed")
 	defer CloseAllLoggers()
@@ -608,7 +595,6 @@ func TestLogRPCRequest_EmptyAgentSnapshotTags(t *testing.T) {
 	payload := []byte(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`)
 	LogRPCRequest(RPCDirectionOutbound, "github", "tools/list", payload, nil, nil)
 
-	CloseAllLoggers()
 	CloseAllLoggers()
 
 	jsonlPath := filepath.Join(logDir, "test.jsonl")
@@ -628,7 +614,6 @@ func TestLogRPCMessage(t *testing.T) {
 	logDir := filepath.Join(tmpDir, "logs")
 
 	require.NoError(t, InitFileLogger(logDir, "test.log"), "InitFileLogger failed")
-	defer CloseAllLoggers()
 
 	require.NoError(t, InitMarkdownLogger(logDir, "test.md"), "InitMarkdownLogger failed")
 	defer CloseAllLoggers()
@@ -643,7 +628,6 @@ func TestLogRPCMessage(t *testing.T) {
 	}
 	LogRPCMessage(info)
 
-	CloseAllLoggers()
 	CloseAllLoggers()
 
 	// Verify text log
@@ -700,7 +684,6 @@ func TestLogRPCResponse_NoError(t *testing.T) {
 	logDir := filepath.Join(tmpDir, "logs")
 
 	require.NoError(t, InitFileLogger(logDir, "test.log"), "InitFileLogger failed")
-	defer CloseAllLoggers()
 
 	require.NoError(t, InitJSONLLogger(logDir, "test.jsonl"), "InitJSONLLogger failed")
 	defer CloseAllLoggers()
@@ -708,7 +691,6 @@ func TestLogRPCResponse_NoError(t *testing.T) {
 	payload := []byte(`{"jsonrpc":"2.0","id":1,"result":{}}`)
 	LogRPCResponse(RPCDirectionInbound, "backend", payload, nil, nil, nil)
 
-	CloseAllLoggers()
 	CloseAllLoggers()
 
 	// Verify JSONL entry has no error field when nil error is passed

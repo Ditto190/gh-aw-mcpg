@@ -30,7 +30,6 @@ func TestStartupInfo(t *testing.T) {
 
 	err := InitFileLogger(logDir, "test.log")
 	require.NoError(t, err)
-	defer CloseAllLoggers()
 
 	err = InitMarkdownLogger(logDir, "test.md")
 	require.NoError(t, err)
@@ -38,7 +37,6 @@ func TestStartupInfo(t *testing.T) {
 
 	StartupInfo("Server started on %s", "localhost:3000")
 
-	CloseAllLoggers()
 	CloseAllLoggers()
 
 	// Verify file logger received the message
@@ -157,7 +155,6 @@ func TestStartupWarn_DoesNotWriteToMarkdownLogger(t *testing.T) {
 
 	err := InitFileLogger(logDir, "test.log")
 	require.NoError(t, err)
-	defer CloseAllLoggers()
 
 	err = InitMarkdownLogger(logDir, "test.md")
 	require.NoError(t, err)
@@ -165,7 +162,6 @@ func TestStartupWarn_DoesNotWriteToMarkdownLogger(t *testing.T) {
 
 	StartupWarn("startup warning: %s", "something is off")
 
-	CloseAllLoggers()
 	CloseAllLoggers()
 
 	// Verify the message IS in the file log

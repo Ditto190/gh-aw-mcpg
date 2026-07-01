@@ -237,7 +237,6 @@ func TestServerFileLoggerPreservesUnifiedView(t *testing.T) {
 	// Initialize both the unified file logger and the server file logger
 	err := InitFileLogger(logDir, "mcp-gateway.log")
 	require.NoError(t, err, "InitFileLogger failed")
-	defer CloseAllLoggers()
 
 	err = InitServerFileLogger(logDir)
 	require.NoError(t, err, "InitServerFileLogger failed")
@@ -249,8 +248,6 @@ func TestServerFileLoggerPreservesUnifiedView(t *testing.T) {
 	LogErrorToServer("github", "backend", "GitHub authentication failed")
 
 	// Close loggers to flush
-	err = CloseAllLoggers()
-	require.NoError(t, err)
 	err = CloseAllLoggers()
 	require.NoError(t, err)
 

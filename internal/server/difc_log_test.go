@@ -63,7 +63,6 @@ func initTestLoggers(t *testing.T, tmpDir string) func() {
 	require.NoError(t, err)
 	return func() {
 		logger.CloseAllLoggers()
-		logger.CloseAllLoggers()
 	}
 }
 

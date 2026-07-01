@@ -1027,7 +1027,6 @@ func TestLogDifcFilteredItem_NoLogger(t *testing.T) {
 // has been initialised (and no markdown logger is active either).
 func TestLogUnrecognizedEndpointPassthrough_NoLogger(t *testing.T) {
 	CloseAllLoggers()
-	CloseAllLoggers()
 
 	assert.NotPanics(t, func() {
 		LogUnrecognizedEndpointPassthrough("GET", "/v1/unknown")
@@ -1042,14 +1041,12 @@ func TestLogUnrecognizedEndpointPassthrough_WritesCorrectFields(t *testing.T) {
 	logDir := filepath.Join(tmpDir, "logs")
 
 	require.NoError(t, InitJSONLLogger(logDir, "rpc-messages.jsonl"), "InitJSONLLogger failed")
-	defer CloseAllLoggers()
 
 	require.NoError(t, InitMarkdownLogger(logDir, "gateway.md"), "InitMarkdownLogger failed")
 	defer CloseAllLoggers()
 
 	LogUnrecognizedEndpointPassthrough("POST", "/v1/unknown/endpoint")
 
-	CloseAllLoggers()
 	CloseAllLoggers()
 
 	// Verify JSONL output.

@@ -24,7 +24,6 @@ func captureServerLog(t *testing.T, fn func()) string {
 	require.NoError(t, logger.InitServerFileLogger(logDir), "failed to init server file logger")
 	t.Cleanup(func() {
 		logger.CloseAllLoggers()
-		logger.CloseAllLoggers()
 	})
 	fn()
 	logPath := filepath.Join(logDir, "mcp-gateway.log")

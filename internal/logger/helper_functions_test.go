@@ -54,7 +54,6 @@ func TestLogWithLevelAndServer(t *testing.T) {
 	// Initialize both loggers
 	err := InitFileLogger(logDir, "mcp-gateway.log")
 	require.NoError(t, err)
-	defer CloseAllLoggers()
 
 	err = InitServerFileLogger(logDir)
 	require.NoError(t, err)
@@ -68,7 +67,6 @@ func TestLogWithLevelAndServer(t *testing.T) {
 	LogErrorToServer(serverID, "test", "Error message via server helper")
 	LogDebugToServer(serverID, "test", "Debug message via server helper")
 
-	CloseAllLoggers()
 	CloseAllLoggers()
 
 	// Verify server-specific log file
@@ -108,7 +106,6 @@ func TestLogWithMarkdown(t *testing.T) {
 	// Initialize both loggers
 	err := InitFileLogger(logDir, "test.log")
 	require.NoError(t, err)
-	defer CloseAllLoggers()
 
 	err = InitMarkdownLogger(logDir, "test.md")
 	require.NoError(t, err)
@@ -120,7 +117,6 @@ func TestLogWithMarkdown(t *testing.T) {
 	LogErrorToMarkdown("test", "Error message via markdown helper")
 	LogDebugToMarkdown("test", "Debug message via markdown helper")
 
-	CloseAllLoggers()
 	CloseAllLoggers()
 
 	// Verify regular log file
