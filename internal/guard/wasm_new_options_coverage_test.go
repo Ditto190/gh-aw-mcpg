@@ -70,7 +70,7 @@ var fullGuardWasm = []byte{
 // Compiled from:
 //
 //	(module
-//	  (memory 1)
+//	  (memory (export "memory") 1)
 //	  (func (export "label_agent") (param i32 i32 i32 i32) (result i32) i32.const 2))
 var labelAgentReturnsTwoWasm = []byte{
 	0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x01, 0x09, 0x01, 0x60, 0x04, 0x7f, 0x7f, 0x7f,
