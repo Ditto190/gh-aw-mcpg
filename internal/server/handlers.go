@@ -75,7 +75,7 @@ func handleClose(unifiedServer *UnifiedServer) http.Handler {
 			"serversTerminated": serversTerminated,
 		})
 
-		logger.LogInfo("shutdown", "Gateway shutdown initiated: servers_terminated=%d, remote=%s", serversTerminated, r.RemoteAddr)
+		logger.LogInfo("shutdown", "Close endpoint response sent: servers_terminated=%d, remote=%s", serversTerminated, r.RemoteAddr)
 		log.Printf("Gateway shutdown initiated. Terminated %d server(s)", serversTerminated)
 
 		// Exit the process after draining in-flight requests (spec 5.1.3)
