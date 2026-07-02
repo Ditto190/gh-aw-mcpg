@@ -62,6 +62,35 @@ command = "docker"
 	assert.Greater(t, perr.Position.Col, 0, "parse error should include column number")
 }
 
+// TestFormatConfigError verifies that FormatConfigError returns source-context-rich
+// output for toml.ParseError and falls back to err.Error() for other errors.
+func TestFormatConfigError(t *testing.T) {
+	t.Run("wraps toml.ParseError with ErrorWithUsage", func(t *testing.T) {
+		// Write invalid TOML to trigger a ParseError
+		path := writeTempTOML(t, "[gateway]\nport 3000\n")
+		_, err := LoadFromFile(path)
+		require.Error(t, err, "expected error from invalid TOML")
+
+		msg := FormatConfigError(err)
+
+		// ErrorWithUsage output contains the file source snippet (|) and a
+		// column pointer (^), which Error() alone does not include.
+		assert.Contains(t, msg, "|", "ErrorWithUsage should include source-snippet lines")
+		assert.Contains(t, msg, "^", "ErrorWithUsage should include column pointer")
+	})
+
+	t.Run("falls back to err.Error() for non-TOML errors", func(t *testing.T) {
+		err := fmt.Errorf("some other error")
+		assert.Equal(t, "some other error", FormatConfigError(err))
+	})
+
+	t.Run("falls back to err.Error() for wrapped non-TOML errors", func(t *testing.T) {
+		inner := fmt.Errorf("inner error")
+		err := fmt.Errorf("config error: %w", inner)
+		assert.Equal(t, "config error: inner error", FormatConfigError(err))
+	})
+}
+
 func TestLoadFromFile_BothTracingAndOpenTelemetry_OpenTelemetryTakesPrecedence(t *testing.T) {
 	path := writeTempTOML(t, `
 [gateway.tracing]
