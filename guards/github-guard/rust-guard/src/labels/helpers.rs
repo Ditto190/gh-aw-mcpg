@@ -9,7 +9,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use serde_json::Value;
 
 use super::backend::GithubMcpCallback;
-use super::constants::{field_names, label_constants, policy_integrity, scope_names};
+use super::constants::{field_names, label_constants, scope_names};
 
 /// Ensures the endorsement gateway-mode warning is emitted at most once per process lifetime.
 static ENDORSEMENT_GATEWAY_WARNING_EMITTED: AtomicBool = AtomicBool::new(false);
@@ -556,6 +556,7 @@ const MAX_REACTIONS_TO_CHECK: usize = 20;
 
 /// Return the effective `disapproval_integrity` level from context, defaulting to "none".
 fn effective_disapproval_integrity(ctx: &PolicyContext) -> &'static str {
+    use super::constants::policy_integrity;
     let v = ctx.disapproval_integrity.trim();
     if v.is_empty() {
         policy_integrity::NONE
@@ -574,6 +575,7 @@ fn effective_disapproval_integrity(ctx: &PolicyContext) -> &'static str {
 
 /// Return the effective `endorser_min_integrity` level from context, defaulting to "approved".
 fn effective_endorser_min_integrity(ctx: &PolicyContext) -> &'static str {
+    use super::constants::policy_integrity;
     let v = ctx.endorser_min_integrity.trim();
     if v.is_empty() {
         policy_integrity::APPROVED
