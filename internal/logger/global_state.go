@@ -348,7 +348,7 @@ var logLinePool = sync.Pool{
 // Uses a pooled strings.Builder to eliminate one fmt.Sprintf call per invocation.
 // The outer "[%s] [%s] [%s] %s" formatting is replaced by direct WriteString calls,
 // and the message is written with fmt.Fprintf directly into the pooled buffer.
-// This reduces string allocations from 2 per call to 1 (only sb.String() allocates).
+// This reduces string allocations from 2 per call to 1 (a final copy is required before returning the builder to the pool).
 func formatLogLine(level LogLevel, category, format string, args ...interface{}) string {
 	timestamp := time.Now().UTC().Format(jsonTimestampLayout)
 
