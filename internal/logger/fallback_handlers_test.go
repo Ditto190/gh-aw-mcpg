@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestHandleFileLoggerError_UsesFallback(t *testing.T) {
+func TestFileLoggerFactory_OnError_UsesFallback(t *testing.T) {
 	var logger *FileLogger
 	var err error
 	_ = captureStdLog(t, func() {
@@ -22,7 +22,7 @@ func TestHandleFileLoggerError_UsesFallback(t *testing.T) {
 	assert.Equal(t, os.Stderr, logger.logger.Writer())
 }
 
-func TestHandleMarkdownLoggerError_UsesFallback(t *testing.T) {
+func TestMarkdownLoggerFactory_OnError_UsesFallback(t *testing.T) {
 	var logger *MarkdownLogger
 	var err error
 	_ = captureStdLog(t, func() {
@@ -35,7 +35,7 @@ func TestHandleMarkdownLoggerError_UsesFallback(t *testing.T) {
 	assert.False(t, logger.initialized)
 }
 
-func TestHandleToolsLoggerError_UsesFallback(t *testing.T) {
+func TestToolsLoggerFactory_OnError_UsesFallback(t *testing.T) {
 	var logger *ToolsLogger
 	var err error
 	_ = captureStdLog(t, func() {

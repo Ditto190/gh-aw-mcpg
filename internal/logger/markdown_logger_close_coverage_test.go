@@ -71,7 +71,7 @@ func TestMarkdownLogger_Close_FooterWriteError(t *testing.T) {
 }
 
 // TestMarkdownLogger_Close_NilLogFile covers the ml.logFile == nil branch:
-// when the logger has no file (e.g. handleMarkdownLoggerError / fallback mode),
+// when the logger has no file (e.g. markdownLoggerFactory.onError / fallback mode),
 // Close() should return nil.
 func TestMarkdownLogger_Close_NilLogFile(t *testing.T) {
 	tmpDir := t.TempDir()
