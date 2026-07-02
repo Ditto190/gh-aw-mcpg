@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -329,12 +330,48 @@ var logFuncs = map[LogLevel]func(string, string, ...interface{}){
 //  1. Use withGlobalLogger instead of manual RLock/RUnlock
 //  2. Pass the appropriate mutex, logger pointer, and callback function
 
+// logLinePool pools strings.Builder instances to reduce per-call heap allocations
+// in formatLogLine. Each builder is pre-grown to 256 bytes, which comfortably covers
+// the fixed prefix ([timestamp] [LEVEL] [category] ≈ 50 chars) plus a typical message.
+// Using sync.Pool allows builders to be reused across goroutines without contention.
+var logLinePool = sync.Pool{
+	New: func() interface{} {
+		sb := &strings.Builder{}
+		sb.Grow(256)
+		return sb
+	},
+}
+
 // formatLogLine builds the standard log line used by FileLogger and ServerFileLogger.
 // Centralizing the format ensures consistency across all file-based loggers.
+//
+// Uses a pooled strings.Builder to eliminate one fmt.Sprintf call per invocation.
+// The outer "[%s] [%s] [%s] %s" formatting is replaced by direct WriteString calls,
+// and the message is written with fmt.Fprintf directly into the pooled buffer.
+// This reduces string allocations from 2 per call to 1 (a final copy is required before returning the builder to the pool).
 func formatLogLine(level LogLevel, category, format string, args ...interface{}) string {
 	timestamp := time.Now().UTC().Format(jsonTimestampLayout)
-	message := fmt.Sprintf(format, args...)
-	return fmt.Sprintf("[%s] [%s] [%s] %s", timestamp, level, category, message)
+
+	sb := logLinePool.Get().(*strings.Builder)
+	sb.Reset()
+
+	sb.WriteByte('[')
+	sb.WriteString(timestamp)
+	sb.WriteString("] [")
+	sb.WriteString(string(level))
+	sb.WriteString("] [")
+	sb.WriteString(category)
+	sb.WriteString("] ")
+
+	if len(args) > 0 {
+		fmt.Fprintf(sb, format, args...)
+	} else {
+		sb.WriteString(format)
+	}
+
+	result := strings.Clone(sb.String())
+	logLinePool.Put(sb)
+	return result
 }
 
 // It syncs buffered data before closing and handles errors appropriately.
