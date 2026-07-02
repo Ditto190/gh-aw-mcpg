@@ -18,6 +18,7 @@ package logger
 
 import (
 	"log"
+	"os"
 	"sync"
 )
 
@@ -206,4 +207,17 @@ func silentFallbackLoggerOnInitError[T any](fallback T) (T, error) {
 func strictLoggerOnInitError[T any](err error) (T, error) {
 	var zero T
 	return zero, err
+}
+
+// syncFileWithWarning flushes file to disk and logs a WARNING to stderr if the
+// sync fails. context is appended to the log message (e.g. " for server github")
+// to distinguish call sites; pass an empty string for the main log file.
+// A nil file is silently ignored so callers need not check before calling.
+func syncFileWithWarning(file *os.File, context string) {
+	if file == nil {
+		return
+	}
+	if err := file.Sync(); err != nil {
+		log.Printf("WARNING: Failed to sync log file%s: %v", context, err)
+	}
 }
