@@ -185,27 +185,22 @@ func logWithMarkdown(level LogLevel, category, format string, args ...interface{
 	})
 }
 
-// The exported wrappers below follow the Log-Level Quad-Function Pattern
-// documented in common.go, with shared per-level closure registration handled
-// by newLevelLoggerFuncs.
+// The exported vars below follow the Log-Level Quad-Function Pattern
+// documented in global_state.go. Each var is a direct alias of the
+// corresponding per-level closure in markdownLevelLoggers, eliminating
+// the four boilerplate wrapper functions.
 var markdownLevelLoggers = newLevelLoggerFuncs(logWithMarkdown)
 
-// LogInfoToMarkdown logs to both regular and markdown loggers.
-func LogInfoToMarkdown(category, format string, args ...interface{}) {
-	markdownLevelLoggers.info(category, format, args...)
-}
+var (
+	// LogInfoToMarkdown logs to both regular and markdown loggers.
+	LogInfoToMarkdown = markdownLevelLoggers.info
 
-// LogWarnToMarkdown logs to both regular and markdown loggers.
-func LogWarnToMarkdown(category, format string, args ...interface{}) {
-	markdownLevelLoggers.warn(category, format, args...)
-}
+	// LogWarnToMarkdown logs to both regular and markdown loggers.
+	LogWarnToMarkdown = markdownLevelLoggers.warn
 
-// LogErrorToMarkdown logs to both regular and markdown loggers.
-func LogErrorToMarkdown(category, format string, args ...interface{}) {
-	markdownLevelLoggers.error(category, format, args...)
-}
+	// LogErrorToMarkdown logs to both regular and markdown loggers.
+	LogErrorToMarkdown = markdownLevelLoggers.error
 
-// LogDebugToMarkdown logs to both regular and markdown loggers.
-func LogDebugToMarkdown(category, format string, args ...interface{}) {
-	markdownLevelLoggers.debug(category, format, args...)
-}
+	// LogDebugToMarkdown logs to both regular and markdown loggers.
+	LogDebugToMarkdown = markdownLevelLoggers.debug
+)
