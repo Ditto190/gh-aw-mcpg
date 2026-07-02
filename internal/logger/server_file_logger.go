@@ -145,22 +145,27 @@ func logWithLevelAndServer(serverID string, level LogLevel, category, format str
 	}
 }
 
-// The exported vars below follow the Log-Level Quad-Var Pattern
-// documented in global_state.go. Each var is a direct alias of the
-// corresponding per-level closure in serverLevelLoggers, eliminating
-// the four boilerplate wrapper functions.
+// The exported wrappers below follow the Log-Level Quad-Function Pattern
+// documented in common.go, with shared per-level closure registration handled
+// by newServerLevelLoggerFuncs.
 var serverLevelLoggers = newServerLevelLoggerFuncs(logWithLevelAndServer)
 
-var (
-	// LogInfoToServer logs an informational message to the server-specific log file.
-	LogInfoToServer = serverLevelLoggers.info
+// LogInfoToServer logs an informational message to the server-specific log file.
+func LogInfoToServer(serverID, category, format string, args ...interface{}) {
+	serverLevelLoggers.info(serverID, category, format, args...)
+}
 
-	// LogWarnToServer logs a warning message to the server-specific log file.
-	LogWarnToServer = serverLevelLoggers.warn
+// LogWarnToServer logs a warning message to the server-specific log file.
+func LogWarnToServer(serverID, category, format string, args ...interface{}) {
+	serverLevelLoggers.warn(serverID, category, format, args...)
+}
 
-	// LogErrorToServer logs an error message to the server-specific log file.
-	LogErrorToServer = serverLevelLoggers.error
+// LogErrorToServer logs an error message to the server-specific log file.
+func LogErrorToServer(serverID, category, format string, args ...interface{}) {
+	serverLevelLoggers.error(serverID, category, format, args...)
+}
 
-	// LogDebugToServer logs a debug message to the server-specific log file.
-	LogDebugToServer = serverLevelLoggers.debug
-)
+// LogDebugToServer logs a debug message to the server-specific log file.
+func LogDebugToServer(serverID, category, format string, args ...interface{}) {
+	serverLevelLoggers.debug(serverID, category, format, args...)
+}
