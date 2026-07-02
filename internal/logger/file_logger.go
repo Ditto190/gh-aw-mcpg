@@ -81,12 +81,8 @@ func (fl *FileLogger) Log(level LogLevel, category, format string, args ...inter
 	fl.logger.Println(logLine)
 
 	// Flush the log to disk immediately to ensure it's readable by other processes
-	if fl.logFile != nil {
-		if err := fl.logFile.Sync(); err != nil {
-			// Log sync errors to stderr to avoid infinite recursion
-			log.Printf("WARNING: Failed to sync log file: %v", err)
-		}
-	}
+	// Log sync errors to stderr to avoid infinite recursion
+	syncFileWithWarning(fl.logFile, "")
 }
 
 // GetWriter returns the underlying io.Writer for the file logger

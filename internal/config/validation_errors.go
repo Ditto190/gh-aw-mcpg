@@ -35,37 +35,44 @@ func (e *ValidationError) Error() string {
 	return sb.String()
 }
 
+// newValidationError logs logMsg and returns a ValidationError with the given fields.
+// It centralises the repeated log+return pattern used by error constructor functions.
+func newValidationError(logMsg, field, message, jsonPath, suggestion string) *ValidationError {
+	logValidation.Print(logMsg)
+	return &ValidationError{Field: field, Message: message, JSONPath: jsonPath, Suggestion: suggestion}
+}
+
 // UnsupportedType creates a ValidationError for unsupported type values
 func UnsupportedType(fieldName, actualType, jsonPath, suggestion string) *ValidationError {
-	logValidation.Printf("Validation error: unsupported type at %s.%s, type=%s", jsonPath, fieldName, actualType)
-	return &ValidationError{
-		Field:      fieldName,
-		Message:    fmt.Sprintf("unsupported server type '%s'", actualType),
-		JSONPath:   fmt.Sprintf("%s.%s", jsonPath, fieldName),
-		Suggestion: suggestion,
-	}
+	return newValidationError(
+		fmt.Sprintf("Validation error: unsupported type at %s.%s, type=%s", jsonPath, fieldName, actualType),
+		fieldName,
+		fmt.Sprintf("unsupported server type '%s'", actualType),
+		fmt.Sprintf("%s.%s", jsonPath, fieldName),
+		suggestion,
+	)
 }
 
 // UndefinedVariable creates a ValidationError for undefined environment variables
 func UndefinedVariable(varName, jsonPath string) *ValidationError {
-	logValidation.Printf("Validation error: undefined environment variable at %s, var=%s", jsonPath, varName)
-	return &ValidationError{
-		Field:      "env variable",
-		Message:    fmt.Sprintf("undefined environment variable referenced: %s", varName),
-		JSONPath:   jsonPath,
-		Suggestion: fmt.Sprintf("Set the environment variable %s before starting the gateway", varName),
-	}
+	return newValidationError(
+		fmt.Sprintf("Validation error: undefined environment variable at %s, var=%s", jsonPath, varName),
+		"env variable",
+		fmt.Sprintf("undefined environment variable referenced: %s", varName),
+		jsonPath,
+		fmt.Sprintf("Set the environment variable %s before starting the gateway", varName),
+	)
 }
 
 // MissingRequired creates a ValidationError for missing required fields
 func MissingRequired(fieldName, serverType, jsonPath, suggestion string) *ValidationError {
-	logValidation.Printf("Validation error: missing required field at %s, field=%s, serverType=%s", jsonPath, fieldName, serverType)
-	return &ValidationError{
-		Field:      fieldName,
-		Message:    fmt.Sprintf("'%s' is required for %s servers", fieldName, serverType),
-		JSONPath:   jsonPath,
-		Suggestion: suggestion,
-	}
+	return newValidationError(
+		fmt.Sprintf("Validation error: missing required field at %s, field=%s, serverType=%s", jsonPath, fieldName, serverType),
+		fieldName,
+		fmt.Sprintf("'%s' is required for %s servers", fieldName, serverType),
+		jsonPath,
+		suggestion,
+	)
 }
 
 // UnsupportedField creates a ValidationError for unsupported or unrecognized fields.
@@ -86,13 +93,13 @@ func AppendConfigDocsFooter(sb *strings.Builder) {
 // InvalidPattern creates a ValidationError for values that don't match a required pattern.
 // Used by validation_schema.go for container, mount, URL, and other pattern validations.
 func InvalidPattern(fieldName, value, jsonPath, suggestion string) *ValidationError {
-	logValidation.Printf("Validation error: invalid pattern at %s, field=%s, value=%q", jsonPath, fieldName, value)
-	return &ValidationError{
-		Field:      fieldName,
-		Message:    fmt.Sprintf("%s '%s' does not match required pattern", fieldName, value),
-		JSONPath:   jsonPath,
-		Suggestion: suggestion,
-	}
+	return newValidationError(
+		fmt.Sprintf("Validation error: invalid pattern at %s, field=%s, value=%q", jsonPath, fieldName, value),
+		fieldName,
+		fmt.Sprintf("%s '%s' does not match required pattern", fieldName, value),
+		jsonPath,
+		suggestion,
+	)
 }
 
 // InvalidValue creates a ValidationError for field values that violate a constraint.
@@ -109,11 +116,11 @@ func InvalidValue(fieldName, message, jsonPath, suggestion string) *ValidationEr
 // SchemaValidationError creates a ValidationError for custom schema validation failures.
 // Used by validation.go for the various stages of custom schema fetching, parsing, and validation.
 func SchemaValidationError(serverType, message, jsonPath, suggestion string) *ValidationError {
-	logValidation.Printf("Validation error: schema validation failure at %s, serverType=%s, message=%q", jsonPath, serverType, message)
-	return &ValidationError{
-		Field:      "type",
-		Message:    fmt.Sprintf("%s for server type '%s'", message, serverType),
-		JSONPath:   jsonPath,
-		Suggestion: suggestion,
-	}
+	return newValidationError(
+		fmt.Sprintf("Validation error: schema validation failure at %s, serverType=%s, message=%q", jsonPath, serverType, message),
+		"type",
+		fmt.Sprintf("%s for server type '%s'", message, serverType),
+		jsonPath,
+		suggestion,
+	)
 }

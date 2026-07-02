@@ -21,13 +21,13 @@ var (
 func PortRange(port int, jsonPath string) *ValidationError {
 	logValidation.Printf("Validating port range: port=%d, jsonPath=%s", port, jsonPath)
 	if port < 1 || port > 65535 {
-		logValidation.Printf("Port validation failed: port=%d out of range", port)
-		return &ValidationError{
-			Field:      "port",
-			Message:    fmt.Sprintf("port must be between 1 and 65535, got %d", port),
-			JSONPath:   jsonPath,
-			Suggestion: "Use a valid port number (e.g., 8080)",
-		}
+		return newValidationError(
+			fmt.Sprintf("Port validation failed: port=%d out of range", port),
+			"port",
+			fmt.Sprintf("port must be between 1 and 65535, got %d", port),
+			jsonPath,
+			"Use a valid port number (e.g., 8080)",
+		)
 	}
 	return nil
 }
@@ -65,13 +65,13 @@ func PositiveInteger(value int, fieldName, jsonPath string) *ValidationError {
 func TimeoutMinimum(timeout, min int, fieldName, jsonPath string) *ValidationError {
 	logValidation.Printf("Validating timeout minimum: field=%s, value=%d, min=%d, jsonPath=%s", fieldName, timeout, min, jsonPath)
 	if timeout < min {
-		logValidation.Printf("Timeout minimum validation failed: %s=%d is below minimum %d", fieldName, timeout, min)
-		return &ValidationError{
-			Field:      fieldName,
-			Message:    fmt.Sprintf("%s must be at least %d, got %d", fieldName, min, timeout),
-			JSONPath:   jsonPath,
-			Suggestion: fmt.Sprintf("Use a value of at least %d seconds", min),
-		}
+		return newValidationError(
+			fmt.Sprintf("Timeout minimum validation failed: %s=%d is below minimum %d", fieldName, timeout, min),
+			fieldName,
+			fmt.Sprintf("%s must be at least %d, got %d", fieldName, min, timeout),
+			jsonPath,
+			fmt.Sprintf("Use a value of at least %d seconds", min),
+		)
 	}
 	return nil
 }
@@ -81,14 +81,14 @@ func TimeoutMinimum(timeout, min int, fieldName, jsonPath string) *ValidationErr
 func TimeoutRange(timeout, min, max int, fieldName, jsonPath string) *ValidationError {
 	logValidation.Printf("Validating timeout range: field=%s, value=%d, min=%d, max=%d, jsonPath=%s", fieldName, timeout, min, max, jsonPath)
 	if timeout < min || timeout > max {
-		logValidation.Printf("Timeout range validation failed: %s=%d is outside [%d, %d]", fieldName, timeout, min, max)
 		suggestedTimeout := min + (max-min)/2
-		return &ValidationError{
-			Field:      fieldName,
-			Message:    fmt.Sprintf("%s must be between %d and %d, got %d", fieldName, min, max, timeout),
-			JSONPath:   jsonPath,
-			Suggestion: fmt.Sprintf("Use a value between %d and %d seconds (e.g., %d)", min, max, suggestedTimeout),
-		}
+		return newValidationError(
+			fmt.Sprintf("Timeout range validation failed: %s=%d is outside [%d, %d]", fieldName, timeout, min, max),
+			fieldName,
+			fmt.Sprintf("%s must be between %d and %d, got %d", fieldName, min, max, timeout),
+			jsonPath,
+			fmt.Sprintf("Use a value between %d and %d seconds (e.g., %d)", min, max, suggestedTimeout),
+		)
 	}
 	return nil
 }
@@ -204,13 +204,13 @@ func NonEmptyString(value, fieldName, jsonPath string) *ValidationError {
 func AbsolutePath(value, fieldName, jsonPath string) *ValidationError {
 	logValidation.Printf("Validating absolute path: field=%s, value=%s, jsonPath=%s", fieldName, value, jsonPath)
 	if value == "" {
-		logValidation.Printf("Absolute path validation failed: %s is empty", fieldName)
-		return &ValidationError{
-			Field:      fieldName,
-			Message:    fmt.Sprintf("%s cannot be empty", fieldName),
-			JSONPath:   jsonPath,
-			Suggestion: fmt.Sprintf("Provide an absolute path for %s", fieldName),
-		}
+		return newValidationError(
+			fmt.Sprintf("Absolute path validation failed: %s is empty", fieldName),
+			fieldName,
+			fmt.Sprintf("%s cannot be empty", fieldName),
+			jsonPath,
+			fmt.Sprintf("Provide an absolute path for %s", fieldName),
+		)
 	}
 
 	// Check for Unix absolute path (starts with /)
@@ -228,11 +228,11 @@ func AbsolutePath(value, fieldName, jsonPath string) *ValidationError {
 		return nil
 	}
 
-	logValidation.Printf("Absolute path validation failed: %s=%s is not absolute", fieldName, value)
-	return &ValidationError{
-		Field:      fieldName,
-		Message:    fmt.Sprintf("%s must be an absolute path, got '%s'", fieldName, value),
-		JSONPath:   jsonPath,
-		Suggestion: "Use an absolute path: Unix paths start with '/' (e.g., '/tmp/payloads'), Windows paths start with a drive letter (e.g., 'C:\\payloads')",
-	}
+	return newValidationError(
+		fmt.Sprintf("Absolute path validation failed: %s=%s is not absolute", fieldName, value),
+		fieldName,
+		fmt.Sprintf("%s must be an absolute path, got '%s'", fieldName, value),
+		jsonPath,
+		"Use an absolute path: Unix paths start with '/' (e.g., '/tmp/payloads'), Windows paths start with a drive letter (e.g., 'C:\\payloads')",
+	)
 }
