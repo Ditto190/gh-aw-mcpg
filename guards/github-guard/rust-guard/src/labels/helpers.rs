@@ -577,40 +577,43 @@ fn apply_demotion_label_demotion(
 /// Maximum number of reactions to inspect per item. Caps API enrichment calls.
 const MAX_REACTIONS_TO_CHECK: usize = 20;
 
-/// Return the effective `disapproval_integrity` level from context, defaulting to "none".
-fn effective_disapproval_integrity(ctx: &PolicyContext) -> &'static str {
-    let v = ctx.disapproval_integrity.trim();
+/// Parse a policy integrity level from a config string, returning `default` when empty or
+/// unrecognised, and emitting a single log warning on unrecognised values.
+fn resolve_integrity_level(value: &str, default: MinIntegrity, caller: &str) -> &'static str {
+    let v = value.trim();
     if v.is_empty() {
-        policy_integrity::NONE
+        default.as_str()
     } else {
         MinIntegrity::from_policy_str(v)
             .unwrap_or_else(|| {
                 crate::log_warn(&format!(
-                    "effective_disapproval_integrity: unrecognised level {:?}, defaulting to 'none'",
-                    v
+                    "{}: unrecognised level {:?}, defaulting to '{}'",
+                    caller,
+                    v,
+                    default.as_str()
                 ));
-                MinIntegrity::None
+                default
             })
             .as_str()
     }
 }
 
+/// Return the effective `disapproval_integrity` level from context, defaulting to "none".
+fn effective_disapproval_integrity(ctx: &PolicyContext) -> &'static str {
+    resolve_integrity_level(
+        &ctx.disapproval_integrity,
+        MinIntegrity::None,
+        "effective_disapproval_integrity",
+    )
+}
+
 /// Return the effective `endorser_min_integrity` level from context, defaulting to "approved".
 fn effective_endorser_min_integrity(ctx: &PolicyContext) -> &'static str {
-    let v = ctx.endorser_min_integrity.trim();
-    if v.is_empty() {
-        policy_integrity::APPROVED
-    } else {
-        MinIntegrity::from_policy_str(v)
-            .unwrap_or_else(|| {
-                crate::log_warn(&format!(
-                    "effective_endorser_min_integrity: unrecognised level {:?}, defaulting to 'approved'",
-                    v
-                ));
-                MinIntegrity::Approved
-            })
-            .as_str()
-    }
+    resolve_integrity_level(
+        &ctx.endorser_min_integrity,
+        MinIntegrity::Approved,
+        "effective_endorser_min_integrity",
+    )
 }
 
 /// Convert an integrity level name to its rank for comparison.
@@ -4095,5 +4098,89 @@ mod tests {
         let result = pr_integrity(&item, "owner/repo", false, Some(false), &ctx);
 
         assert_eq!(result, blocked_integrity("owner/repo", &ctx));
+    }
+
+    #[test]
+    fn test_issue_integrity_promotion_label_promotes_to_writer() {
+        let ctx = PolicyContext {
+            promotion_label: "trusted".to_string(),
+            ..Default::default()
+        };
+        let item = serde_json::json!({
+            "number": 100,
+            "user": { "login": "external" },
+            "author_association": "NONE",
+            "labels": [{ "name": "trusted" }]
+        });
+        let result = issue_integrity(&item, "owner/repo", false, &ctx);
+        assert_eq!(
+            integrity_rank("owner/repo", &result, &ctx),
+            3,
+            "promotion_label should raise NONE-association issue to writer integrity"
+        );
+    }
+
+    #[test]
+    fn test_issue_integrity_demotion_label_caps_to_none() {
+        let ctx = PolicyContext {
+            demotion_label: "untrusted".to_string(),
+            ..Default::default()
+        };
+        let item = serde_json::json!({
+            "number": 101,
+            "user": { "login": "owner" },
+            "author_association": "OWNER",
+            "labels": [{ "name": "untrusted" }]
+        });
+        let result = issue_integrity(&item, "owner/repo", false, &ctx);
+        assert_eq!(
+            integrity_rank("owner/repo", &result, &ctx),
+            1,
+            "demotion_label should cap OWNER-association issue to none integrity"
+        );
+    }
+
+    #[test]
+    fn test_pr_integrity_promotion_label_raises_forked_pr_to_writer() {
+        let ctx = PolicyContext {
+            promotion_label: "trusted".to_string(),
+            ..Default::default()
+        };
+        let item = serde_json::json!({
+            "number": 102,
+            "user": { "login": "external" },
+            "author_association": "NONE",
+            "labels": [{ "name": "trusted" }]
+        });
+        // Forked PR from external contributor normally gets reader (rank 2);
+        // promotion_label should raise it to writer (rank 3).
+        let result = pr_integrity(&item, "owner/repo", false, Some(true), &ctx);
+        assert_eq!(
+            integrity_rank("owner/repo", &result, &ctx),
+            3,
+            "promotion_label should raise forked PR from reader to writer integrity"
+        );
+    }
+
+    #[test]
+    fn test_pr_integrity_demotion_label_caps_merged_pr_to_none() {
+        let ctx = PolicyContext {
+            demotion_label: "reverted".to_string(),
+            ..Default::default()
+        };
+        let item = serde_json::json!({
+            "number": 103,
+            "user": { "login": "owner" },
+            "author_association": "OWNER",
+            "merged_at": "2024-06-01T12:00:00Z",
+            "labels": [{ "name": "reverted" }]
+        });
+        // Merged PR would normally be rank 4; demotion_label should cap it to none (rank 1).
+        let result = pr_integrity(&item, "owner/repo", false, Some(false), &ctx);
+        assert_eq!(
+            integrity_rank("owner/repo", &result, &ctx),
+            1,
+            "demotion_label should cap merged PR to none integrity"
+        );
     }
 }
