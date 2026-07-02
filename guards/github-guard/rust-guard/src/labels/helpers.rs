@@ -9,7 +9,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use serde_json::Value;
 
 use super::backend::GithubMcpCallback;
-use super::constants::{field_names, label_constants, policy_integrity, scope_names};
+use super::constants::{field_names, label_constants, scope_names};
 
 /// Ensures the endorsement gateway-mode warning is emitted at most once per process lifetime.
 static ENDORSEMENT_GATEWAY_WARNING_EMITTED: AtomicBool = AtomicBool::new(false);
