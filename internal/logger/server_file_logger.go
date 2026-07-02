@@ -93,11 +93,7 @@ func (sfl *ServerFileLogger) Log(serverID string, level LogLevel, category, form
 
 	// Flush to disk immediately
 	sfl.mu.RLock()
-	if file, exists := sfl.files[serverID]; exists {
-		if err := file.Sync(); err != nil {
-			log.Printf("WARNING: Failed to sync log file for server %s: %v", serverID, err)
-		}
-	}
+	syncFileWithWarning(sfl.files[serverID], " for server "+serverID)
 	sfl.mu.RUnlock()
 }
 
