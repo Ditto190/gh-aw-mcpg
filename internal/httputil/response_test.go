@@ -95,6 +95,24 @@ func TestReadResponseBody_ReadError(t *testing.T) {
 	assert.Nil(t, body)
 }
 
+func TestReadResponseBody_NilResponse(t *testing.T) {
+	body, err := ReadResponseBody(nil, "test context")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "nil response")
+	assert.Nil(t, body)
+}
+
+func TestReadResponseBody_NilBody(t *testing.T) {
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       nil,
+	}
+	body, err := ReadResponseBody(resp, "test context")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "response body is nil")
+	assert.Nil(t, body)
+}
+
 func TestReadResponseBodyStrict(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -162,6 +180,24 @@ func TestReadResponseBodyStrict_ReadError(t *testing.T) {
 	body, err := ReadResponseBodyStrict(resp, http.StatusOK, "test")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to read test response")
+	assert.Nil(t, body)
+}
+
+func TestReadResponseBodyStrict_NilResponse(t *testing.T) {
+	body, err := ReadResponseBodyStrict(nil, http.StatusOK, "test context")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "nil response")
+	assert.Nil(t, body)
+}
+
+func TestReadResponseBodyStrict_NilBody(t *testing.T) {
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       nil,
+	}
+	body, err := ReadResponseBodyStrict(resp, http.StatusOK, "test context")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "response body is nil")
 	assert.Nil(t, body)
 }
 
