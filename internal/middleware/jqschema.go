@@ -5,7 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"os"
+	"path/filepath"
+	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -14,8 +17,8 @@ import (
 	"github.com/github/gh-aw-mcpg/internal/logger"
 	"github.com/github/gh-aw-mcpg/internal/mcp"
 	"github.com/github/gh-aw-mcpg/internal/mcpresult"
-	"github.com/github/gh-aw-mcpg/internal/strutil"
 	"github.com/github/gh-aw-mcpg/internal/urlutil"
+	"github.com/github/gh-aw-mcpg/internal/util"
 	"github.com/itchyny/gojq"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -73,15 +76,34 @@ var (
 	jqSchemaCompileErr error
 )
 
-// filterCodeCache caches compiled tool-response filter code by expression string.
-// Filters compiled by CompileToolResponseFilter are stored on first call and reused
-// on subsequent calls with the same expression, avoiding redundant parse+compile work
-// when multiple tools share identical filter expressions.
+// filterCodeCache caches compiled tool-response filter code.
+//
+// Key shapes:
+//   - string (raw filter expression) for CompileToolResponseFilter
+//   - toolResponseFilterVarsCacheKey for CompileToolResponseFilterWithVars
+//
+// Entries are stored on first call and reused on subsequent calls with the same
+// key, avoiding redundant parse+compile work when multiple tools share identical
+// filter definitions.
 //
 // The cache is unbounded and grows with the number of unique filter expressions.
 // In practice this is bounded by the number of distinct filter strings in the
 // gateway configuration, which is typically small (one per tool).
+//
+// TODO: if config hot-reload is added, replace sync.Map with a bounded LRU cache.
 var filterCodeCache sync.Map
+
+type toolResponseFilterVarsCacheKey struct {
+	filter      string
+	varNamesKey string
+}
+
+// secureCompileOpts are the gojq compiler options applied to every Compile call in this
+// package. Centralising them here ensures the security intent ($ENV disabled) is never
+// accidentally omitted from a future compile site.
+var secureCompileOpts = []gojq.CompilerOption{
+	gojq.WithEnvironLoader(func() []string { return nil }), // explicitly disable $ENV access (defense-in-depth)
+}
 
 // init compiles the jq schema filter at startup for better performance and validation.
 // Following gojq best practices: compile once, run many times.
@@ -95,20 +117,18 @@ var filterCodeCache sync.Map
 func init() {
 	query, err := gojq.Parse(jqSchemaFilter)
 	if err != nil {
-		jqSchemaCompileErr = fmt.Errorf("failed to parse jq schema filter: %w", err)
-		log.Printf("FATAL: Failed to parse jq schema filter at init (application will not start): %v", err)
-		return
+		panic(fmt.Sprintf("built-in jq schema filter failed to parse: %v", err))
 	}
 
 	jqSchemaCode, jqSchemaCompileErr = gojq.Compile(query,
-		gojq.WithFunction("walk_schema", 0, 0, func(v any, _ []any) any {
-			return inferSchema(v)
-		}),
-		gojq.WithEnvironLoader(func() []string { return nil }), // explicitly disable $ENV access (defense-in-depth)
+		append(secureCompileOpts,
+			gojq.WithFunction("walk_schema", 0, 0, func(v any, _ []any) any {
+				return inferSchema(v)
+			}),
+		)...,
 	)
 	if jqSchemaCompileErr != nil {
-		log.Printf("FATAL: Failed to compile jq schema filter at init (application will not start): %v", jqSchemaCompileErr)
-		return
+		panic(fmt.Sprintf("built-in jq schema filter failed to compile: %v", jqSchemaCompileErr))
 	}
 
 	logger.LogInfo("startup", "jq schema filter compiled successfully - native Go walk_schema, array limit: 2^29 elements, timeout: %v", DefaultJqTimeout)
@@ -233,32 +253,13 @@ func runJqCode(
 // For parameterized filters that need to incorporate per-call values such as server IDs,
 // session metadata, or user-controlled data, use CompileToolResponseFilterWithVars instead.
 func CompileToolResponseFilter(filter string) (*gojq.Code, error) {
-	if cached, ok := filterCodeCache.Load(filter); ok {
-		code, ok := cached.(*gojq.Code)
-		if !ok {
-			// Should never happen; the cache only stores *gojq.Code values.
-			return nil, fmt.Errorf("internal error: unexpected cached value type for filter (len=%d)", len(filter))
-		}
-		logMiddleware.Printf("CompileToolResponseFilter: cache hit, len=%d", len(filter))
-		return code, nil
-	}
-
-	logMiddleware.Printf("CompileToolResponseFilter: parsing jq filter expression, len=%d", len(filter))
-	query, err := gojq.Parse(filter)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse tool response filter: %w", err)
-	}
-
-	code, err := gojq.Compile(query,
-		gojq.WithEnvironLoader(func() []string { return nil }), // explicitly disable $ENV access (defense-in-depth)
+	return compileToolResponseFilterInternal(
+		filter,
+		filter,
+		secureCompileOpts,
+		"CompileToolResponseFilter",
+		"",
 	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to compile tool response filter: %w", err)
-	}
-
-	filterCodeCache.Store(filter, code)
-	logMiddleware.Printf("CompileToolResponseFilter: filter compiled and cached successfully")
-	return code, nil
 }
 
 // CompileToolResponseFilterWithVars parses and compiles a jq expression that references
@@ -272,25 +273,77 @@ func CompileToolResponseFilter(filter string) (*gojq.Code, error) {
 // Binding values at the Go level is injection-safe: they are never interpolated into
 // the jq expression string.
 //
-// Note: compiled code from this function is not cached because the variable names form
-// part of the compile options and are not included in the filter string key.
+// Compiled code is cached by the composite key (filter + variable names). The same
+// (filter, varNames) tuple recurs on every tool invocation, so caching here eliminates
+// repeated gojq.Parse + gojq.Compile calls on the parameterized-filter hot path.
 func CompileToolResponseFilterWithVars(filter string, varNames []string) (*gojq.Code, error) {
-	logMiddleware.Printf("CompileToolResponseFilterWithVars: parsing jq filter expression, len=%d, vars=%v", len(filter), varNames)
+	cacheKey := toolResponseFilterVarsCacheKey{
+		filter:      filter,
+		varNamesKey: buildVarNamesCacheKey(varNames),
+	}
+	return compileToolResponseFilterInternal(
+		cacheKey,
+		filter,
+		compileOptsWithVariables(varNames),
+		"CompileToolResponseFilterWithVars",
+		fmt.Sprintf(", vars=%v", varNames),
+	)
+}
+
+func compileToolResponseFilterInternal[K comparable](
+	cacheKey K,
+	filter string,
+	compileOpts []gojq.CompilerOption,
+	logFunctionName string,
+	logSuffix string,
+) (*gojq.Code, error) {
+	if cached, ok := filterCodeCache.Load(cacheKey); ok {
+		code, ok := cached.(*gojq.Code)
+		if !ok {
+			// Should never happen; the cache only stores *gojq.Code values.
+			return nil, fmt.Errorf("internal error: unexpected cached value type for filter (len=%d)", len(filter))
+		}
+		logMiddleware.Printf("%s: cache hit, len=%d%s", logFunctionName, len(filter), logSuffix)
+		return code, nil
+	}
+
+	logMiddleware.Printf("%s: parsing jq filter expression, len=%d%s", logFunctionName, len(filter), logSuffix)
 	query, err := gojq.Parse(filter)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse tool response filter: %w", err)
 	}
 
-	code, err := gojq.Compile(query,
-		gojq.WithEnvironLoader(func() []string { return nil }), // explicitly disable $ENV access (defense-in-depth)
-		gojq.WithVariables(varNames),
-	)
+	code, err := gojq.Compile(query, compileOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to compile tool response filter: %w", err)
 	}
 
-	logMiddleware.Printf("CompileToolResponseFilterWithVars: filter compiled successfully")
+	filterCodeCache.Store(cacheKey, code)
+	logMiddleware.Printf("%s: filter compiled and cached successfully", logFunctionName)
 	return code, nil
+}
+
+func compileOptsWithVariables(varNames []string) []gojq.CompilerOption {
+	opts := make([]gojq.CompilerOption, 0, len(secureCompileOpts)+1)
+	opts = append(opts, secureCompileOpts...)
+	opts = append(opts, gojq.WithVariables(varNames))
+	return opts
+}
+
+func buildVarNamesCacheKey(varNames []string) string {
+	if len(varNames) == 0 {
+		return ""
+	}
+	const estimatedBytesPerVar = 12 // ~len-digits + ":" + typical var name + ";"
+	var b strings.Builder
+	b.Grow(len(varNames) * estimatedBytesPerVar)
+	for _, varName := range varNames {
+		b.WriteString(strconv.Itoa(len(varName)))
+		b.WriteByte(':')
+		b.WriteString(varName)
+		b.WriteByte(';')
+	}
+	return b.String()
 }
 
 func applyToolResponseFilter(ctx context.Context, code *gojq.Code, jsonData any) (any, error) {
@@ -430,7 +483,7 @@ func wrapToolHandler(
 
 	return func(ctx context.Context, req *sdk.CallToolRequest, args any) (*sdk.CallToolResult, any, error) {
 		// Generate random query ID
-		queryID := strutil.RandomHexWithFallback(queryIDBytes)
+		queryID := util.RandomHexWithFallback(queryIDBytes)
 
 		// Get session ID from context
 		sessionID := getSessionID(ctx)
@@ -691,4 +744,113 @@ func parseServerIDFromToolName(toolName string) string {
 		return toolName
 	}
 	return serverID
+}
+
+// savePayload saves the payload to disk and returns the file path
+// The file is saved to {baseDir}/{sessionID}/{queryID}/payload.json
+// The returned path uses pathPrefix if provided, otherwise returns the actual filesystem path
+func savePayload(baseDir, pathPrefix, sessionID, queryID string, payload []byte) (string, error) {
+	// Create directory structure: {baseDir}/{sessionID}/{queryID}
+	dir := filepath.Join(baseDir, sessionID, queryID)
+
+	logger.LogDebug("payload", "Creating payload directory: baseDir=%s, session=%s, query=%s, fullPath=%s",
+		baseDir, sessionID, queryID, dir)
+
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		logger.LogError("payload", "Failed to create payload directory: path=%s, error=%v", dir, err)
+		return "", fmt.Errorf("failed to create payload directory: %w", err)
+	}
+
+	logger.LogDebug("payload", "Successfully created payload directory: path=%s, permissions=0755", dir)
+
+	// Save payload to file with restrictive permissions (owner read/write only)
+	filePath := filepath.Join(dir, "payload.json")
+	payloadSize := len(payload)
+
+	logger.LogInfo("payload", "Writing large payload to filesystem: path=%s, size=%d bytes (%.2f KB, %.2f MB)",
+		filePath, payloadSize, float64(payloadSize)/1024, float64(payloadSize)/(1024*1024))
+
+	if err := os.WriteFile(filePath, payload, 0600); err != nil {
+		logger.LogError("payload", "Failed to write payload file: path=%s, size=%d bytes, error=%v",
+			filePath, payloadSize, err)
+		return "", fmt.Errorf("failed to write payload file: %w", err)
+	}
+
+	// Enforce permissions even if the file already existed (WriteFile only sets mode on create)
+	if err := os.Chmod(filePath, 0600); err != nil {
+		logger.LogError("payload", "Failed to enforce payload file permissions: path=%s, size=%d bytes, error=%v",
+			filePath, payloadSize, err)
+		return "", fmt.Errorf("failed to set payload file permissions: %w", err)
+	}
+
+	// Log with the requested chmod mode rather than re-stating as a guarantee (Chmod may be
+	// a no-op on some platforms/filesystems while still returning nil).
+	logger.LogInfo("payload", "Successfully saved large payload to filesystem: path=%s, size=%d bytes, chmod=0600",
+		filePath, payloadSize)
+
+	// If pathPrefix is provided, use it to remap the path for the client
+	// This allows the gateway to save files at one path (e.g., /tmp/jq-payloads)
+	// while returning a different path to clients (e.g., /workspace/payloads)
+	returnPath := filePath
+	if pathPrefix != "" {
+		// Replace baseDir with pathPrefix in the file path
+		relPath := filepath.Join(sessionID, queryID, "payload.json")
+		returnPath = filepath.Join(pathPrefix, relPath)
+		logger.LogInfo("payload", "Remapped payload path for client: filesystem=%s, clientPath=%s, pathPrefix=%s",
+			filePath, returnPath, pathPrefix)
+	}
+
+	return returnPath, nil
+}
+
+// inferSchema recursively walks a JSON-compatible Go value and replaces every leaf
+// with its jq type name ("null", "boolean", "number", "string"). Objects are
+// traversed key-by-key; arrays are collapsed to a single representative element (or
+// [] when empty). The output mirrors what the previous pure-jq walk_schema filter
+// produced, but runs entirely in Go, bypassing jq interpreter overhead for recursion.
+//
+// Type mapping (matches jq's built-in type function):
+//   - nil                                          → "null"
+//   - bool                                         → "boolean"
+//   - any integer or floating-point numeric type   → "number"
+//     (float32/64, int/8/16/32/64, uint/8/16/32/64, json.Number)
+//   - string                                       → "string"
+//   - map[string]any                               → recursed object
+//   - []any                                        → recursed array (first element only)
+func inferSchema(v any) any {
+	switch val := v.(type) {
+	case map[string]any:
+		result := make(map[string]any, len(val))
+		for k, child := range val {
+			result[k] = inferSchema(child)
+		}
+		return result
+	case []any:
+		if len(val) == 0 {
+			return []any{}
+		}
+		return []any{inferSchema(val[0])}
+	case nil:
+		return "null"
+	case bool:
+		return "boolean"
+	case float64, float32,
+		int, int8, int16, int32, int64,
+		uint, uint8, uint16, uint32, uint64,
+		json.Number:
+		return "number"
+	case string:
+		return "string"
+	default:
+		// Defensive fallback: classify any remaining numeric reflect.Kind as "number"
+		// and everything else as "string" to keep the schema output valid.
+		switch reflect.TypeOf(v).Kind() {
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+			reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
+			reflect.Float32, reflect.Float64:
+			return "number"
+		default:
+			return "string"
+		}
+	}
 }

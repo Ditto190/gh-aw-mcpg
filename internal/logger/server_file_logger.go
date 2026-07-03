@@ -52,7 +52,7 @@ func InitServerFileLogger(logDir string) error {
 
 // getOrCreateLogger returns a logger for the given serverID, creating it if necessary
 func (sfl *ServerFileLogger) getOrCreateLogger(serverID string) (*log.Logger, error) {
-	return syncutil.GetOrCreate(&sfl.mu, sfl.loggers, serverID, func() (*log.Logger, error) {
+	return syncutil.MapGetOrCreate(&sfl.mu, sfl.loggers, serverID, func() (*log.Logger, error) {
 		// If in fallback mode, return nil to indicate no per-server logging
 		if sfl.useFallback {
 			return nil, fmt.Errorf("server file logger in fallback mode")
@@ -93,11 +93,7 @@ func (sfl *ServerFileLogger) Log(serverID string, level LogLevel, category, form
 
 	// Flush to disk immediately
 	sfl.mu.RLock()
-	if file, exists := sfl.files[serverID]; exists {
-		if err := file.Sync(); err != nil {
-			log.Printf("WARNING: Failed to sync log file for server %s: %v", serverID, err)
-		}
-	}
+	syncFileWithWarning(sfl.files[serverID], " for server "+serverID)
 	sfl.mu.RUnlock()
 }
 
@@ -168,9 +164,4 @@ func LogErrorToServer(serverID, category, format string, args ...interface{}) {
 // LogDebugToServer logs a debug message to the server-specific log file.
 func LogDebugToServer(serverID, category, format string, args ...interface{}) {
 	serverLevelLoggers.debug(serverID, category, format, args...)
-}
-
-// CloseServerFileLogger closes the global server file logger
-func CloseServerFileLogger() error {
-	return closeGlobalLogger(&globalServerLoggerMu, &globalServerFileLogger)
 }

@@ -972,24 +972,12 @@ pub extern "C" fn label_response(
         let output_preview = safe_preview(&output_json, PREVIEW_MAX_BYTES);
         log_info(&format!("    path_output_preview={}", output_preview));
 
-        if output_json.len() as u32 > output_size {
-            log_warn(&format!(
-                "    output buffer too small ({} > {})",
-                output_json.len(),
-                output_size
-            ));
-            log_info("<<< label_response returning 0 (buffer too small)");
+        let n = try_write_json_output(&output_json, output_ptr, output_size, "label_response/path");
+        if n < 0 {
+            log_info("<<< label_response returning 0 (output write failed)");
             return 0;
         }
-
-        // Write output
-        unsafe { write_bytes_to_output(output_ptr, output_json.as_bytes()) };
-
-        log_info(&format!(
-            "<<< label_response returning {} bytes (path-based)",
-            output_json.len()
-        ));
-        return output_json.len() as i32;
+        return n;
     }
 
     // Fall back to legacy item-based labeling for singletons
@@ -1034,24 +1022,13 @@ pub extern "C" fn label_response(
     let output_preview = safe_preview(&output_json, PREVIEW_MAX_BYTES);
     log_info(&format!("    output_preview={}", output_preview));
 
-    if output_json.len() as u32 > output_size {
-        log_warn(&format!(
-            "    output buffer too small ({} > {})",
-            output_json.len(),
-            output_size
-        ));
-        log_info("<<< label_response returning 0 (buffer too small)");
-        return 0;
+    let n = try_write_json_output(&output_json, output_ptr, output_size, "label_response/legacy");
+    if n < 0 {
+        log_info("<<< label_response returning 0 (output write failed)");
+        0
+    } else {
+        n
     }
-
-    // Write output
-    unsafe { write_bytes_to_output(output_ptr, output_json.as_bytes()) };
-
-    log_info(&format!(
-        "<<< label_response returning {} bytes",
-        output_json.len()
-    ));
-    output_json.len() as i32
 }
 
 // ============================================================================

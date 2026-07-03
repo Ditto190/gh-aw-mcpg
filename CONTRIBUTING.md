@@ -296,7 +296,7 @@ gh-aw-mcpg/
     ├── proxy/                 # HTTP forward proxy for DIFC filtering
     ├── sanitize/              # Sensitive data redaction utilities for logging
     ├── server/                # HTTP server (routed/unified modes)
-    ├── strutil/               # String and formatting utility helpers (deduplication, trimming, duration formatting, JSON deep-clone)
+    ├── util/               # String, formatting, randomness, and JSON deep-clone utilities
     ├── syncutil/              # Concurrency utility helpers
     ├── sys/                   # System utilities
     ├── testutil/              # Test utilities and helpers
@@ -325,7 +325,7 @@ gh-aw-mcpg/
 - **`internal/proxy/`** - HTTP forward proxy applying DIFC filtering to `gh` CLI and REST/GraphQL requests
 - **`internal/sanitize/`** - Sensitive data redaction utilities (`SanitizeString`, `SanitizeJSON`, `TruncateSecret`) for safe log output
 - **`internal/server/`** - HTTP server with routed and unified modes
-- **`internal/strutil/`** - String and formatting utility helpers (deduplication, trimming, duration formatting, JSON deep-clone)
+- **`internal/util/`** - String, formatting, randomness, and JSON deep-clone utilities
 - **`internal/syncutil/`** - Concurrency utility helpers (get-or-create pattern)
 - **`internal/sys/`** - System utilities
 - **`internal/testutil/`** - Test utilities and helpers
@@ -569,6 +569,7 @@ docker run --rm -i \
   -e MCP_GATEWAY_DOMAIN=localhost \
   -e MCP_GATEWAY_AGENT_ID=your-agent-id \
   -v /var/run/docker.sock:/var/run/docker.sock \
+  -v /path/to/logs:/tmp/gh-aw/mcp-logs \
   -p 8000:8000 \
   awmg < config.json
 ```
@@ -591,6 +592,7 @@ docker run --rm -i \
   -e MCP_GATEWAY_DOMAIN=example.com \
   -e MCP_GATEWAY_AGENT_ID=your-agent-id \
   -v /var/run/docker.sock:/var/run/docker.sock \
+  -v /path/to/logs:/tmp/gh-aw/mcp-logs \
   -p 8080:8080 \
   awmg < custom-config.json
 ```

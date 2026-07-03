@@ -853,3 +853,30 @@ func TestFormatLogLine(t *testing.T) {
 		assert.Contains(t, result, "[]", "Empty category should produce empty bracket pair")
 	})
 }
+
+// BenchmarkFormatLogLine measures allocations and throughput for formatLogLine.
+// Run with: go test -bench=BenchmarkFormatLogLine -benchmem ./internal/logger/
+func BenchmarkFormatLogLine(b *testing.B) {
+	b.Run("no_args", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			_ = formatLogLine(LogLevelInfo, "startup", "Gateway initialized successfully")
+		}
+	})
+
+	b.Run("with_args", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			_ = formatLogLine(LogLevelInfo, "client", "request %s %s completed in %dms", "GET", "/repos", 42)
+		}
+	})
+
+	b.Run("with_args_parallel", func(b *testing.B) {
+		b.ReportAllocs()
+		b.RunParallel(func(pb *testing.PB) {
+			for pb.Next() {
+				_ = formatLogLine(LogLevelWarn, "backend", "server %s returned %d", "github", 503)
+			}
+		})
+	})
+}

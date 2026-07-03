@@ -251,8 +251,9 @@ func (p *AllowOnlyPolicy) UnmarshalJSON(data []byte) error {
 	if p.Repos == nil {
 		return fmt.Errorf("allow-only must include repos")
 	}
-	if strings.TrimSpace(p.MinIntegrity) == "" {
-		return fmt.Errorf("allow-only must include min-integrity")
+	if err := RequiredStringField(strings.TrimSpace(p.MinIntegrity), "min-integrity", "allow-only.min-integrity",
+		"Specify the minimum integrity level (one of: none, unapproved, approved, merged)"); err != nil {
+		return err
 	}
 
 	logGuardPolicy.Printf("UnmarshalJSON: allow-only policy parsed, repos=%T, minIntegrity=%s", p.Repos, p.MinIntegrity)

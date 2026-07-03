@@ -17,6 +17,29 @@ static ENDORSEMENT_GATEWAY_WARNING_EMITTED: AtomicBool = AtomicBool::new(false);
 /// Ensures the disapproval gateway-mode warning is emitted at most once per process lifetime.
 static DISAPPROVAL_GATEWAY_WARNING_EMITTED: AtomicBool = AtomicBool::new(false);
 
+/// Identifies which type of maintainer reaction is being evaluated.
+#[derive(Clone, Copy)]
+pub(crate) enum ReactionKind {
+    Endorsement,
+    Disapproval,
+}
+
+impl ReactionKind {
+    fn as_str(self) -> &'static str {
+        match self {
+            ReactionKind::Endorsement => "endorsement",
+            ReactionKind::Disapproval => "disapproval",
+        }
+    }
+
+    fn warning_emitted(self) -> &'static AtomicBool {
+        match self {
+            ReactionKind::Endorsement => &ENDORSEMENT_GATEWAY_WARNING_EMITTED,
+            ReactionKind::Disapproval => &DISAPPROVAL_GATEWAY_WARNING_EMITTED,
+        }
+    }
+}
+
 /// Extract a resource number from a JSON item, returning the number as a string.
 /// Checks the `number` field first, then falls back to extracting the trailing
 /// number segment from `html_url` or `url` (e.g. `.../issues/123` → `123`).
@@ -554,42 +577,43 @@ fn apply_demotion_label_demotion(
 /// Maximum number of reactions to inspect per item. Caps API enrichment calls.
 const MAX_REACTIONS_TO_CHECK: usize = 20;
 
-/// Return the effective `disapproval_integrity` level from context, defaulting to "none".
-fn effective_disapproval_integrity(ctx: &PolicyContext) -> &'static str {
-    use super::constants::policy_integrity;
-    let v = ctx.disapproval_integrity.trim();
+/// Parse a policy integrity level from a config string, returning `default` when empty or
+/// unrecognised, and emitting a single log warning on unrecognised values.
+fn resolve_integrity_level(value: &str, default: MinIntegrity, caller: &str) -> &'static str {
+    let v = value.trim();
     if v.is_empty() {
-        policy_integrity::NONE
+        default.as_str()
     } else {
         MinIntegrity::from_policy_str(v)
             .unwrap_or_else(|| {
                 crate::log_warn(&format!(
-                    "effective_disapproval_integrity: unrecognised level {:?}, defaulting to 'none'",
-                    v
+                    "{}: unrecognised level {:?}, defaulting to '{}'",
+                    caller,
+                    v,
+                    default.as_str()
                 ));
-                MinIntegrity::None
+                default
             })
             .as_str()
     }
 }
 
+/// Return the effective `disapproval_integrity` level from context, defaulting to "none".
+fn effective_disapproval_integrity(ctx: &PolicyContext) -> &'static str {
+    resolve_integrity_level(
+        &ctx.disapproval_integrity,
+        MinIntegrity::None,
+        "effective_disapproval_integrity",
+    )
+}
+
 /// Return the effective `endorser_min_integrity` level from context, defaulting to "approved".
 fn effective_endorser_min_integrity(ctx: &PolicyContext) -> &'static str {
-    use super::constants::policy_integrity;
-    let v = ctx.endorser_min_integrity.trim();
-    if v.is_empty() {
-        policy_integrity::APPROVED
-    } else {
-        MinIntegrity::from_policy_str(v)
-            .unwrap_or_else(|| {
-                crate::log_warn(&format!(
-                    "effective_endorser_min_integrity: unrecognised level {:?}, defaulting to 'approved'",
-                    v
-                ));
-                MinIntegrity::Approved
-            })
-            .as_str()
-    }
+    resolve_integrity_level(
+        &ctx.endorser_min_integrity,
+        MinIntegrity::Approved,
+        "effective_endorser_min_integrity",
+    )
 }
 
 /// Convert an integrity level name to its rank for comparison.
@@ -651,7 +675,7 @@ pub fn has_maintainer_reaction_with_callback(
     endorser_min: &str,
     ctx: &PolicyContext,
     callback: GithubMcpCallback,
-    reaction_kind: &str, // "endorsement" or "disapproval" — used for log messages
+    reaction_kind: ReactionKind,
 ) -> bool {
     if reaction_list.is_empty() {
         return false;
@@ -675,20 +699,14 @@ pub fn has_maintainer_reaction_with_callback(
             // gateway mode: reaction counts are available but reactor identity is not.
             if item.get("reactions").is_some() {
                 // Use reaction-kind-specific flags so each kind logs its own warning once.
-                let already_warned = match reaction_kind {
-                    "endorsement" => {
-                        ENDORSEMENT_GATEWAY_WARNING_EMITTED.swap(true, Ordering::Relaxed)
-                    }
-                    "disapproval" => {
-                        DISAPPROVAL_GATEWAY_WARNING_EMITTED.swap(true, Ordering::Relaxed)
-                    }
-                    _ => false,
-                };
+                let already_warned =
+                    reaction_kind.warning_emitted().swap(true, Ordering::Relaxed);
                 if !already_warned {
                     crate::log_warn(&format!(
                         "[integrity] {}: {}-reactions configured but reactor identity unavailable \
                          (gateway mode) — ignoring reactions for integrity evaluation",
-                        repo_full_name, reaction_kind
+                        repo_full_name,
+                        reaction_kind.as_str()
                     ));
                 }
             }
@@ -741,7 +759,12 @@ pub fn has_maintainer_reaction_with_callback(
                 crate::log_debug(&format!(
                     "[integrity] {}: skipping stale {} reaction {} from @{} \
                      (item updatedAt={} > reaction createdAt={})",
-                    repo_full_name, reaction_kind, content, login, item_updated, reaction_created
+                    repo_full_name,
+                    reaction_kind.as_str(),
+                    content,
+                    login,
+                    item_updated,
+                    reaction_created
                 ));
                 continue;
             }
@@ -767,7 +790,7 @@ pub fn has_maintainer_reaction_with_callback(
                 perm.as_ref().and_then(|p| p.permission.as_deref()),
                 reactor_rank,
                 endorser_min_rank,
-                reaction_kind,
+                reaction_kind.as_str(),
                 content
             ));
             return true;
@@ -775,7 +798,12 @@ pub fn has_maintainer_reaction_with_callback(
             crate::log_info(&format!(
                 "[integrity] {}: reactor @{} has integrity rank {}, below \
                  endorser-min-integrity rank {} — ignoring {} {}",
-                repo_full_name, login, reactor_rank, endorser_min_rank, reaction_kind, content
+                repo_full_name,
+                login,
+                reactor_rank,
+                endorser_min_rank,
+                reaction_kind.as_str(),
+                content
             ));
         }
     }
@@ -795,7 +823,7 @@ pub fn has_maintainer_endorsement(item: &Value, repo_full_name: &str, ctx: &Poli
         effective_endorser_min_integrity(ctx),
         ctx,
         crate::invoke_backend,
-        "endorsement",
+        ReactionKind::Endorsement,
     )
 }
 
@@ -811,7 +839,7 @@ pub fn has_maintainer_disapproval(item: &Value, repo_full_name: &str, ctx: &Poli
         effective_endorser_min_integrity(ctx),
         ctx,
         crate::invoke_backend,
-        "disapproval",
+        ReactionKind::Disapproval,
     )
 }
 
@@ -1551,15 +1579,35 @@ fn extract_author_login(item: &Value) -> &str {
     get_nested_str(item, "author", field_names::LOGIN)
 }
 
-/// Check whether an item contains an `author_association` (or `authorAssociation`) field.
-pub fn has_author_association(item: &Value) -> bool {
+/// Extract the `author_association` field from an item, checking both the
+/// snake_case REST form (`author_association`) and the camelCase GraphQL form
+/// (`authorAssociation`). Returns `None` if neither is present or is not a string.
+fn get_author_association(item: &Value) -> Option<&str> {
     item.get("author_association")
         .and_then(|v| v.as_str())
-        .is_some()
-        || item
-            .get("authorAssociation")
-            .and_then(|v| v.as_str())
-            .is_some()
+        .or_else(|| item.get("authorAssociation").and_then(|v| v.as_str()))
+}
+
+/// Check whether an item contains an `author_association` (or `authorAssociation`) field.
+pub fn has_author_association(item: &Value) -> bool {
+    get_author_association(item).is_some()
+}
+
+/// Returns `true` if the given PR object has been merged.
+///
+/// Checks `merged_at` (non-null value) first, then falls back to the `merged`
+/// boolean field when `merged_at` is absent or explicitly `null`.
+pub(crate) fn is_pr_merged(item: &Value) -> bool {
+    if item
+        .get(field_names::MERGED_AT)
+        .is_some_and(|value| !value.is_null())
+    {
+        true
+    } else {
+        item.get(field_names::MERGED)
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+    }
 }
 
 /// Extract author_association from an item and return initial integrity floor.
@@ -1572,10 +1620,7 @@ pub fn author_association_floor(item: &Value, scope: &str, ctx: &PolicyContext) 
         return writer_integrity(scope, ctx);
     }
 
-    let association = item
-        .get("author_association")
-        .and_then(|v| v.as_str())
-        .or_else(|| item.get("authorAssociation").and_then(|v| v.as_str()));
+    let association = get_author_association(item);
 
     author_association_floor_from_str(scope, association, ctx)
 }
@@ -1763,11 +1808,7 @@ pub fn pr_integrity(
     let mut integrity = author_association_floor(item, repo_full_name, ctx);
 
     // Check if PR is merged (either merged_at field exists or merged boolean is true)
-    let mut is_merged = item
-        .get(field_names::MERGED_AT)
-        .map(|v| !v.is_null())
-        .or_else(|| item.get(field_names::MERGED).and_then(|v| v.as_bool()))
-        .unwrap_or(false);
+    let mut is_merged = is_pr_merged(item);
 
     // Track whether fork status was enriched from the backend
     let mut effective_is_forked = is_forked;
@@ -2178,6 +2219,26 @@ mod tests {
         assert!(is_any_trusted_actor("custom-bot", &ctx));
         assert!(is_any_trusted_actor("trusted-human", &ctx));
         assert!(!is_any_trusted_actor("random-user", &ctx));
+    }
+
+    #[test]
+    fn test_is_pr_merged_checks_timestamp_first() {
+        let item = serde_json::json!({
+            "merged_at": "2024-06-01T12:00:00Z",
+            "merged": false
+        });
+
+        assert!(is_pr_merged(&item));
+    }
+
+    #[test]
+    fn test_is_pr_merged_falls_back_to_boolean() {
+        let item = serde_json::json!({
+            "merged_at": null,
+            "merged": true
+        });
+
+        assert!(is_pr_merged(&item));
     }
 
     #[test]
@@ -2634,7 +2695,7 @@ mod tests {
             "approved",
             &ctx,
             admin_permission_callback,
-            "endorsement"
+            ReactionKind::Endorsement
         ));
     }
 
@@ -2652,7 +2713,7 @@ mod tests {
             "approved",
             &ctx,
             admin_permission_callback,
-            "endorsement"
+            ReactionKind::Endorsement
         ));
     }
 
@@ -2671,7 +2732,7 @@ mod tests {
             "approved",
             &ctx,
             read_permission_callback,
-            "endorsement"
+            ReactionKind::Endorsement
         ));
     }
 
@@ -2690,7 +2751,7 @@ mod tests {
             "approved",
             &ctx,
             admin_permission_callback,
-            "endorsement"
+            ReactionKind::Endorsement
         ));
     }
 
@@ -2709,7 +2770,7 @@ mod tests {
             "approved",
             &ctx,
             admin_permission_callback,
-            "endorsement"
+            ReactionKind::Endorsement
         ));
     }
 
@@ -2729,7 +2790,7 @@ mod tests {
             "approved",
             &ctx,
             admin_permission_callback,
-            "endorsement"
+            ReactionKind::Endorsement
         ));
     }
 
@@ -2745,7 +2806,7 @@ mod tests {
             "approved",
             &ctx,
             admin_permission_callback,
-            "endorsement"
+            ReactionKind::Endorsement
         ));
     }
 
@@ -2760,7 +2821,7 @@ mod tests {
             "approved",
             &ctx,
             admin_permission_callback,
-            "endorsement"
+            ReactionKind::Endorsement
         ));
     }
 
@@ -2781,7 +2842,7 @@ mod tests {
             "approved",
             &ctx,
             error_callback,
-            "endorsement"
+            ReactionKind::Endorsement
         ));
     }
 
@@ -2804,7 +2865,7 @@ mod tests {
             "approved",
             &ctx,
             admin_permission_callback,
-            "endorsement"
+            ReactionKind::Endorsement
         ));
     }
 
@@ -2827,7 +2888,7 @@ mod tests {
             "approved",
             &ctx,
             admin_permission_callback,
-            "endorsement"
+            ReactionKind::Endorsement
         ));
     }
 
@@ -2850,7 +2911,7 @@ mod tests {
             "approved",
             &ctx,
             admin_permission_callback,
-            "endorsement"
+            ReactionKind::Endorsement
         ));
     }
 
@@ -2880,7 +2941,7 @@ mod tests {
             "approved",
             &ctx,
             admin_permission_callback,
-            "endorsement"
+            ReactionKind::Endorsement
         ));
     }
 
@@ -2901,7 +2962,7 @@ mod tests {
             "approved",
             &ctx,
             admin_permission_callback,
-            "endorsement"
+            ReactionKind::Endorsement
         ));
     }
 
@@ -3108,7 +3169,7 @@ mod tests {
             "approved",
             &ctx,
             admin_permission_callback,
-            "endorsement"
+            ReactionKind::Endorsement
         ));
         assert!(has_maintainer_reaction_with_callback(
             &item,
@@ -3117,7 +3178,7 @@ mod tests {
             "approved",
             &ctx,
             admin_permission_callback,
-            "disapproval"
+            ReactionKind::Disapproval
         ));
 
         // Simulate the integrity chain: start with none (external contributor),
@@ -3157,7 +3218,7 @@ mod tests {
             "approved",
             &ctx,
             admin_permission_callback,
-            "disapproval"
+            ReactionKind::Disapproval
         ));
     }
 
@@ -3179,7 +3240,7 @@ mod tests {
             "approved",
             &ctx,
             read_permission_callback,
-            "disapproval"
+            ReactionKind::Disapproval
         ));
     }
 
@@ -3747,5 +3808,413 @@ mod tests {
         let ctx = PolicyContext::default();
         let item = serde_json::json!({"labels": [{"name": "needs-review"}]});
         assert!(!has_demotion_label(&item, &ctx));
+    }
+
+    // =========================================================================
+    // Tests for issue_integrity
+    // =========================================================================
+
+    #[test]
+    fn test_issue_integrity_blocked_author_returns_blocked() {
+        let ctx = PolicyContext {
+            blocked_users: vec!["bad-actor".to_string()],
+            ..Default::default()
+        };
+        let item = serde_json::json!({
+            "number": 1,
+            "user": { "login": "bad-actor" }
+        });
+
+        let result = issue_integrity(&item, "owner/repo", false, &ctx);
+
+        assert_eq!(result, blocked_integrity("owner/repo", &ctx));
+    }
+
+    #[test]
+    fn test_issue_integrity_public_repo_no_author_gets_none_floor() {
+        // No user.login and no author_association — backend stub returns -1 (unavailable).
+        // Collaborator lookup is also skipped (empty login). Baseline → none (rank 1).
+        let ctx = PolicyContext::default();
+        let item = serde_json::json!({ "number": 2 });
+
+        let result = issue_integrity(&item, "owner/repo", false, &ctx);
+
+        assert_eq!(integrity_rank("owner/repo", &result, &ctx), 1);
+    }
+
+    #[test]
+    fn test_issue_integrity_public_repo_none_association_gets_reader_floor() {
+        // author_association="NONE" maps to reader integrity (rank 2).
+        let ctx = PolicyContext::default();
+        let item = serde_json::json!({
+            "number": 3,
+            "user": { "login": "contributor" },
+            "author_association": "NONE"
+        });
+
+        let result = issue_integrity(&item, "owner/repo", false, &ctx);
+
+        assert_eq!(integrity_rank("owner/repo", &result, &ctx), 2);
+    }
+
+    #[test]
+    fn test_issue_integrity_public_repo_owner_association_gets_writer_floor() {
+        // author_association="OWNER" maps to writer integrity (rank 3).
+        let ctx = PolicyContext::default();
+        let item = serde_json::json!({
+            "number": 4,
+            "user": { "login": "owner" },
+            "author_association": "OWNER"
+        });
+
+        let result = issue_integrity(&item, "owner/repo", false, &ctx);
+
+        assert_eq!(integrity_rank("owner/repo", &result, &ctx), 3);
+    }
+
+    #[test]
+    fn test_issue_integrity_private_repo_gets_writer_floor() {
+        // Private repo floor is always at least writer (rank 3), regardless of association.
+        let ctx = PolicyContext::default();
+        let item = serde_json::json!({ "number": 5 });
+
+        let result = issue_integrity(&item, "owner/repo", true, &ctx);
+
+        assert_eq!(integrity_rank("owner/repo", &result, &ctx), 3);
+    }
+
+    #[test]
+    fn test_issue_integrity_refusal_label_caps_to_none() {
+        // T-GP-004: an issue with a refusal label must be capped at none integrity,
+        // even if the author_association would otherwise grant writer-level access.
+        let ctx = PolicyContext {
+            refusal_labels: vec!["spam".to_string()],
+            ..Default::default()
+        };
+        let item = serde_json::json!({
+            "number": 6,
+            "user": { "login": "owner" },
+            "author_association": "OWNER",
+            "labels": [{ "name": "spam" }]
+        });
+
+        let result = issue_integrity(&item, "owner/repo", false, &ctx);
+
+        assert_eq!(integrity_rank("owner/repo", &result, &ctx), 1);
+    }
+
+    #[test]
+    fn test_issue_integrity_approval_label_promotes_to_writer() {
+        // An approval label raises a reader-floor issue to at least writer (rank 3).
+        let ctx = PolicyContext {
+            approval_labels: vec!["approved".to_string()],
+            ..Default::default()
+        };
+        let item = serde_json::json!({
+            "number": 7,
+            "user": { "login": "contributor" },
+            "author_association": "NONE",
+            "labels": [{ "name": "approved" }]
+        });
+
+        let result = issue_integrity(&item, "owner/repo", false, &ctx);
+
+        assert_eq!(integrity_rank("owner/repo", &result, &ctx), 3);
+    }
+
+    #[test]
+    fn test_issue_integrity_refusal_label_overrides_approval_label() {
+        // T-GP-005: refusal label takes precedence over approval label.
+        // Even when both labels are present, the refusal demotion wins → rank 1.
+        let ctx = PolicyContext {
+            approval_labels: vec!["approved".to_string()],
+            refusal_labels: vec!["spam".to_string()],
+            ..Default::default()
+        };
+        let item = serde_json::json!({
+            "number": 8,
+            "user": { "login": "contributor" },
+            "author_association": "NONE",
+            "labels": [{ "name": "approved" }, { "name": "spam" }]
+        });
+
+        let result = issue_integrity(&item, "owner/repo", false, &ctx);
+
+        assert_eq!(integrity_rank("owner/repo", &result, &ctx), 1);
+    }
+
+    #[test]
+    fn test_issue_integrity_blocked_user_with_refusal_label_returns_blocked() {
+        // T-GP-007: blocked_users check fires before any label processing.
+        // The result must be blocked_integrity, not just none.
+        let ctx = PolicyContext {
+            blocked_users: vec!["bad-actor".to_string()],
+            refusal_labels: vec!["spam".to_string()],
+            ..Default::default()
+        };
+        let item = serde_json::json!({
+            "number": 9,
+            "user": { "login": "bad-actor" },
+            "author_association": "OWNER",
+            "labels": [{ "name": "spam" }]
+        });
+
+        let result = issue_integrity(&item, "owner/repo", false, &ctx);
+
+        assert_eq!(result, blocked_integrity("owner/repo", &ctx));
+    }
+
+    // =========================================================================
+    // Tests for pr_integrity
+    // =========================================================================
+
+    #[test]
+    fn test_pr_integrity_blocked_author_returns_blocked() {
+        let ctx = PolicyContext {
+            blocked_users: vec!["bad-actor".to_string()],
+            ..Default::default()
+        };
+        let item = serde_json::json!({
+            "number": 10,
+            "user": { "login": "bad-actor" }
+        });
+
+        let result = pr_integrity(&item, "owner/repo", false, None, &ctx);
+
+        assert_eq!(result, blocked_integrity("owner/repo", &ctx));
+    }
+
+    #[test]
+    fn test_pr_integrity_public_repo_direct_pr_gets_writer_floor() {
+        // A non-forked public PR (is_forked=Some(false)) gets writer-level integrity (rank 3).
+        let ctx = PolicyContext::default();
+        let item = serde_json::json!({
+            "number": 11,
+            "user": { "login": "contributor" },
+            "author_association": "NONE"
+        });
+
+        let result = pr_integrity(&item, "owner/repo", false, Some(false), &ctx);
+
+        assert_eq!(integrity_rank("owner/repo", &result, &ctx), 3);
+    }
+
+    #[test]
+    fn test_pr_integrity_public_repo_forked_pr_gets_reader_floor() {
+        // A forked public PR (is_forked=Some(true)) gets at most reader-level integrity (rank 2).
+        let ctx = PolicyContext::default();
+        let item = serde_json::json!({
+            "number": 12,
+            "user": { "login": "external" },
+            "author_association": "NONE"
+        });
+
+        let result = pr_integrity(&item, "owner/repo", false, Some(true), &ctx);
+
+        assert_eq!(integrity_rank("owner/repo", &result, &ctx), 2);
+    }
+
+    #[test]
+    fn test_pr_integrity_private_repo_gets_writer_floor() {
+        let ctx = PolicyContext::default();
+        let item = serde_json::json!({ "number": 13 });
+
+        let result = pr_integrity(&item, "owner/repo", true, None, &ctx);
+
+        assert_eq!(integrity_rank("owner/repo", &result, &ctx), 3);
+    }
+
+    #[test]
+    fn test_pr_integrity_merged_pr_gets_merged_floor() {
+        // A merged PR (merged_at present) gets merged-level integrity (rank 4).
+        let ctx = PolicyContext::default();
+        let item = serde_json::json!({
+            "number": 14,
+            "user": { "login": "contributor" },
+            "author_association": "OWNER",
+            "merged_at": "2024-06-01T12:00:00Z"
+        });
+
+        let result = pr_integrity(&item, "owner/repo", false, Some(false), &ctx);
+
+        assert_eq!(integrity_rank("owner/repo", &result, &ctx), 4);
+    }
+
+    #[test]
+    fn test_pr_integrity_refusal_label_caps_to_none() {
+        // T-GP-004: refusal label overrides writer-level PR integrity → rank 1.
+        let ctx = PolicyContext {
+            refusal_labels: vec!["spam".to_string()],
+            ..Default::default()
+        };
+        let item = serde_json::json!({
+            "number": 15,
+            "user": { "login": "owner" },
+            "author_association": "OWNER",
+            "labels": [{ "name": "spam" }]
+        });
+
+        let result = pr_integrity(&item, "owner/repo", false, Some(false), &ctx);
+
+        assert_eq!(integrity_rank("owner/repo", &result, &ctx), 1);
+    }
+
+    #[test]
+    fn test_pr_integrity_refusal_label_overrides_approval_label() {
+        // T-GP-005: when both an approval and refusal label are present, refusal wins.
+        let ctx = PolicyContext {
+            approval_labels: vec!["approved".to_string()],
+            refusal_labels: vec!["spam".to_string()],
+            ..Default::default()
+        };
+        let item = serde_json::json!({
+            "number": 16,
+            "user": { "login": "contributor" },
+            "author_association": "NONE",
+            "labels": [{ "name": "approved" }, { "name": "spam" }]
+        });
+
+        let result = pr_integrity(&item, "owner/repo", false, Some(false), &ctx);
+
+        assert_eq!(integrity_rank("owner/repo", &result, &ctx), 1);
+    }
+
+    #[test]
+    fn test_pr_integrity_blocked_user_with_refusal_label_returns_blocked() {
+        // T-GP-007: blocked_users check fires before label processing; result is
+        // blocked_integrity rather than just none.
+        let ctx = PolicyContext {
+            blocked_users: vec!["bad-actor".to_string()],
+            refusal_labels: vec!["spam".to_string()],
+            ..Default::default()
+        };
+        let item = serde_json::json!({
+            "number": 17,
+            "user": { "login": "bad-actor" },
+            "author_association": "OWNER",
+            "labels": [{ "name": "spam" }]
+        });
+
+        let result = pr_integrity(&item, "owner/repo", false, Some(false), &ctx);
+
+        assert_eq!(result, blocked_integrity("owner/repo", &ctx));
+    }
+
+    #[test]
+    fn test_issue_integrity_promotion_label_promotes_to_writer() {
+        let ctx = PolicyContext {
+            promotion_label: "trusted".to_string(),
+            ..Default::default()
+        };
+        let item = serde_json::json!({
+            "number": 100,
+            "user": { "login": "external" },
+            "author_association": "NONE",
+            "labels": [{ "name": "trusted" }]
+        });
+        let result = issue_integrity(&item, "owner/repo", false, &ctx);
+        assert_eq!(
+            integrity_rank("owner/repo", &result, &ctx),
+            3,
+            "promotion_label should raise NONE-association issue to writer integrity"
+        );
+    }
+
+    #[test]
+    fn test_issue_integrity_demotion_label_caps_to_none() {
+        let ctx = PolicyContext {
+            demotion_label: "untrusted".to_string(),
+            ..Default::default()
+        };
+        let item = serde_json::json!({
+            "number": 101,
+            "user": { "login": "owner" },
+            "author_association": "OWNER",
+            "labels": [{ "name": "untrusted" }]
+        });
+        let result = issue_integrity(&item, "owner/repo", false, &ctx);
+        assert_eq!(
+            integrity_rank("owner/repo", &result, &ctx),
+            1,
+            "demotion_label should cap OWNER-association issue to none integrity"
+        );
+    }
+
+    #[test]
+    fn test_pr_integrity_promotion_label_raises_forked_pr_to_writer() {
+        let ctx = PolicyContext {
+            promotion_label: "trusted".to_string(),
+            ..Default::default()
+        };
+        let item = serde_json::json!({
+            "number": 102,
+            "user": { "login": "external" },
+            "author_association": "NONE",
+            "labels": [{ "name": "trusted" }]
+        });
+        // Forked PR from external contributor normally gets reader (rank 2);
+        // promotion_label should raise it to writer (rank 3).
+        let result = pr_integrity(&item, "owner/repo", false, Some(true), &ctx);
+        assert_eq!(
+            integrity_rank("owner/repo", &result, &ctx),
+            3,
+            "promotion_label should raise forked PR from reader to writer integrity"
+        );
+    }
+
+    #[test]
+    fn test_pr_integrity_demotion_label_caps_merged_pr_to_none() {
+        let ctx = PolicyContext {
+            demotion_label: "reverted".to_string(),
+            ..Default::default()
+        };
+        let item = serde_json::json!({
+            "number": 103,
+            "user": { "login": "owner" },
+            "author_association": "OWNER",
+            "merged_at": "2024-06-01T12:00:00Z",
+            "labels": [{ "name": "reverted" }]
+        });
+        // Merged PR would normally be rank 4; demotion_label should cap it to none (rank 1).
+        let result = pr_integrity(&item, "owner/repo", false, Some(false), &ctx);
+        assert_eq!(
+            integrity_rank("owner/repo", &result, &ctx),
+            1,
+            "demotion_label should cap merged PR to none integrity"
+        );
+    }
+
+    #[test]
+    fn limit_items_with_log_truncates_at_max() {
+        let items: Vec<u32> = (0..200).collect();
+        let limited = limit_items_with_log(&items, "test_tool");
+        let max = crate::labels::constants::MAX_ITEMS_PER_RESPONSE;
+        assert_eq!(limited.len(), max);
+        // Verify leading slice semantics
+        assert_eq!(limited[0], 0);
+        assert_eq!(limited[max - 1], (max - 1) as u32);
+    }
+
+    #[test]
+    fn limit_items_with_log_passes_through_at_exact_max() {
+        let max = crate::labels::constants::MAX_ITEMS_PER_RESPONSE;
+        let items: Vec<u32> = (0..max as u32).collect();
+        let result = limit_items_with_log(&items, "test_tool");
+        assert_eq!(result.len(), max);
+    }
+
+    #[test]
+    fn limit_items_with_log_passes_through_below_max() {
+        let items = vec![1u32, 2, 3];
+        let result = limit_items_with_log(&items, "test_tool");
+        assert_eq!(result.len(), 3);
+        assert_eq!(result, &[1, 2, 3]);
+    }
+
+    #[test]
+    fn limit_items_with_log_handles_empty_slice() {
+        let items: &[u32] = &[];
+        let result = limit_items_with_log(items, "test_tool");
+        assert!(result.is_empty());
     }
 }

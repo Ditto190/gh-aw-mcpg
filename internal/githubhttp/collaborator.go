@@ -4,11 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 
+	"github.com/github/gh-aw-mcpg/internal/httputil"
+
 	"github.com/github/gh-aw-mcpg/internal/logger"
-	"github.com/github/gh-aw-mcpg/internal/strutil"
+	"github.com/github/gh-aw-mcpg/internal/util"
 )
 
 var logCollab = logger.New("githubhttp:collaborator")
@@ -18,9 +19,9 @@ var logCollab = logger.New("githubhttp:collaborator")
 // It returns the (possibly partial) values even on error so that callers can
 // include them in diagnostic log messages.
 func ParseCollaboratorPermissionArgs(argsMap map[string]interface{}) (owner, repo, username string, err error) {
-	owner = strutil.GetStringFromMap(argsMap, "owner")
-	repo = strutil.GetStringFromMap(argsMap, "repo")
-	username = strutil.GetStringFromMap(argsMap, "username")
+	owner = util.GetStringFromMap(argsMap, "owner")
+	repo = util.GetStringFromMap(argsMap, "repo")
+	username = util.GetStringFromMap(argsMap, "username")
 	if owner == "" || repo == "" || username == "" {
 		logCollab.Printf("ParseCollaboratorPermissionArgs: missing required fields: owner=%q, repo=%q, username=%q", owner, repo, username)
 		err = fmt.Errorf("get_collaborator_permission: missing owner/repo/username")
@@ -83,18 +84,12 @@ func FetchCollaboratorPermission(
 	if resp.Body == nil {
 		return nil, fmt.Errorf("failed to fetch response: response body is nil")
 	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
+	body, err := httputil.ReadResponseBody(resp, "GitHub API")
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
+		logCollab.Printf("FetchCollaboratorPermission: GitHub API error: owner=%s, repo=%s, username=%s, err=%v", owner, repo, username, err)
+		return nil, err
 	}
-
 	logCollab.Printf("FetchCollaboratorPermission: response received: status=%d, bodyLen=%d", resp.StatusCode, len(body))
-	if resp.StatusCode >= 400 {
-		logCollab.Printf("FetchCollaboratorPermission: GitHub API error: status=%d, owner=%s, repo=%s, username=%s", resp.StatusCode, owner, repo, username)
-		return nil, fmt.Errorf("GitHub API returned %d", resp.StatusCode)
-	}
 
 	return LogAndWrapCollaboratorPermission(body, owner, repo, username, resp.StatusCode, logPrintf), nil
 }

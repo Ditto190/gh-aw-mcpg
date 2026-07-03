@@ -62,6 +62,35 @@ command = "docker"
 	assert.Greater(t, perr.Position.Col, 0, "parse error should include column number")
 }
 
+// TestFormatConfigError verifies that FormatConfigError returns source-context-rich
+// output for toml.ParseError and falls back to err.Error() for other errors.
+func TestFormatConfigError(t *testing.T) {
+	t.Run("wraps toml.ParseError with ErrorWithUsage", func(t *testing.T) {
+		// Write invalid TOML to trigger a ParseError
+		path := writeTempTOML(t, "[gateway]\nport 3000\n")
+		_, err := LoadFromFile(path)
+		require.Error(t, err, "expected error from invalid TOML")
+
+		msg := FormatConfigError(err)
+
+		// ErrorWithUsage output contains the file source snippet (|) and a
+		// column pointer (^), which Error() alone does not include.
+		assert.Contains(t, msg, "|", "ErrorWithUsage should include source-snippet lines")
+		assert.Contains(t, msg, "^", "ErrorWithUsage should include column pointer")
+	})
+
+	t.Run("falls back to err.Error() for non-TOML errors", func(t *testing.T) {
+		err := fmt.Errorf("some other error")
+		assert.Equal(t, "some other error", FormatConfigError(err))
+	})
+
+	t.Run("falls back to err.Error() for wrapped non-TOML errors", func(t *testing.T) {
+		inner := fmt.Errorf("inner error")
+		err := fmt.Errorf("config error: %w", inner)
+		assert.Equal(t, "config error: inner error", FormatConfigError(err))
+	})
+}
+
 func TestLoadFromFile_BothTracingAndOpenTelemetry_OpenTelemetryTakesPrecedence(t *testing.T) {
 	path := writeTempTOML(t, `
 [gateway.tracing]
@@ -277,7 +306,7 @@ args = ["run", "--rm", "-i", "ghcr.io/github/github-mcp-server:latest"]
 	cfg, err := LoadFromFile(path)
 	require.Error(t, err)
 	assert.Nil(t, cfg)
-	assert.ErrorContains(t, err, "empty tool name")
+	assert.ErrorContains(t, err, "tool name cannot be empty")
 }
 
 // TestLoadFromFile_ToolResponseFilter_InvalidJqExpression verifies that an
@@ -344,12 +373,12 @@ my_tool = "   "
 	cfg, err := LoadFromFile(path)
 	require.Error(t, err)
 	assert.Nil(t, cfg)
-	assert.ErrorContains(t, err, "must not be empty")
+	assert.ErrorContains(t, err, "cannot be empty")
 }
 
-// TestLoadFromFile_UnknownKeysDoNotCauseError verifies that unknown configuration
-// keys are rejected with an error per spec §4.3.1.
-func TestLoadFromFile_UnknownKeysDoNotCauseError(t *testing.T) {
+// TestLoadFromFile_UnknownKeysAreRejectedWithError verifies that unknown
+// configuration keys are rejected with an error per spec §4.3.1.
+func TestLoadFromFile_UnknownKeysAreRejectedWithError(t *testing.T) {
 	path := writeTempTOML(t, `
 [gateway]
 prot = 3000
@@ -363,6 +392,36 @@ args = ["run", "--rm", "-i", "ghcr.io/github/github-mcp-server:latest"]
 	require.Error(t, err)
 	assert.Nil(t, cfg)
 	assert.ErrorContains(t, err, "unrecognized field")
+}
+
+// TestLoadFromFile_GuardConfigAllowsDynamicKeys verifies that guard-specific
+// config sections accept arbitrary nested TOML keys without triggering the
+// unknown-field check.
+func TestLoadFromFile_GuardConfigAllowsDynamicKeys(t *testing.T) {
+	path := writeTempTOML(t, `
+[servers.github]
+command = "docker"
+args = ["run", "--rm", "-i", "ghcr.io/github/github-mcp-server:latest"]
+
+[guards.myfence]
+type = "wasm"
+path = "/path/to/guard.wasm"
+
+[guards.myfence.config]
+level = "strict"
+allowed_repos = ["owner/repo"]
+`)
+	cfg, err := LoadFromFile(path)
+	require.NoError(t, err)
+	require.NotNil(t, cfg)
+	require.Contains(t, cfg.Guards, "myfence")
+
+	guard := cfg.Guards["myfence"]
+	require.NotNil(t, guard)
+	assert.Equal(t, "wasm", guard.Type)
+	assert.Equal(t, "/path/to/guard.wasm", guard.Path)
+	assert.Equal(t, "strict", guard.Config["level"])
+	assert.Equal(t, []interface{}{"owner/repo"}, guard.Config["allowed_repos"])
 }
 
 // TestLoadFromFile_TrustedBotsEmptyArray verifies that an explicitly set but

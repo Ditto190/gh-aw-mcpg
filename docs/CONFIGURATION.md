@@ -445,7 +445,7 @@ The gateway supports OpenTelemetry tracing via a nested configuration block. For
 | Field | Description | Default |
 |-------|-------------|---------|
 | `endpoint` | OTLP/HTTP collector URL. With the `opentelemetry` key, this field is required, must be non-empty, and MUST use `https://` (spec §4.1.3.6). With legacy `tracing`, an empty value disables tracing (noop tracer, zero overhead), and `http://` endpoints may be used. | (disabled) |
-| `headers` | Comma-separated `key=value` HTTP headers for export requests. Supports `${VAR}` expansion. Example: `"Authorization=Bearer ${OTEL_TOKEN}"` | (none) |
+| `headers` (TOML only) | Comma-separated `key=value` HTTP headers for export requests. Supports `${VAR}` expansion. Example: `"Authorization=Bearer ${OTEL_TOKEN}"` | (none) |
 | `traceId` (JSON) / `trace_id` (TOML) | Parent trace ID (32-char lowercase hex, W3C format) to link gateway spans into a pre-existing trace. Supports `${VAR}` expansion. | (none) |
 | `spanId` (JSON) / `span_id` (TOML) | Parent span ID (16-char lowercase hex, W3C format). Ignored without `traceId`. Supports `${VAR}` expansion. | (none) |
 | `serviceName` (JSON) / `service_name` (TOML) | The `service.name` resource attribute reported in traces. | `mcp-gateway` |
@@ -471,12 +471,13 @@ headers = "Authorization=Bearer ${OTEL_TOKEN}"
       "endpoint": "https://otel-collector.example.com",
       "serviceName": "mcp-gateway",
       "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
-      "spanId": "00f067aa0ba902b7",
-      "headers": "Authorization=Bearer ${OTEL_TOKEN}"
+      "spanId": "00f067aa0ba902b7"
     }
   }
 }
 ```
+
+> **Note:** The `headers` field is **not supported** in JSON stdin `gateway.opentelemetry` (per spec §4.1.3.6). To pass OTLP export headers when using JSON stdin config, use the `OTEL_EXPORTER_OTLP_HEADERS` environment variable.
 
 **TOML-only / CLI-only options** (not available in JSON stdin):
 

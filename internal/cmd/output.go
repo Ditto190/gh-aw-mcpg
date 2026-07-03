@@ -8,12 +8,13 @@ import (
 	"os"
 
 	"github.com/github/gh-aw-mcpg/internal/config"
+	"github.com/spf13/cobra"
 )
 
 // writeGatewayConfigToStdout writes the rewritten gateway configuration to stdout
 // per MCP Gateway Specification Section 5.4
-func writeGatewayConfigToStdout(cfg *config.Config, listenAddr, mode string, tlsEnabled bool) error {
-	return writeGatewayConfig(cfg, listenAddr, mode, tlsEnabled, os.Stdout)
+func writeGatewayConfigToStdout(cmd *cobra.Command, cfg *config.Config, listenAddr, mode string, tlsEnabled bool) error {
+	return writeGatewayConfig(cfg, listenAddr, mode, tlsEnabled, cmd.OutOrStdout())
 }
 
 func writeGatewayConfig(cfg *config.Config, listenAddr, mode string, tlsEnabled bool, w io.Writer) error {

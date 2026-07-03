@@ -17,7 +17,7 @@ import (
 func resetObservedURLDomainsLogger(t *testing.T) {
 	t.Helper()
 	t.Cleanup(func() {
-		_ = CloseObservedURLDomainsLogger()
+		_ = CloseAllLoggers()
 	})
 }
 
@@ -54,7 +54,7 @@ func TestURLDomainAuditEnabled_Toggle(t *testing.T) {
 	assert.False(t, URLDomainAuditEnabled(), "audit should be disabled after SetURLDomainAuditEnabled(false)")
 }
 
-// ---- InitObservedURLDomainsLogger / CloseObservedURLDomainsLogger ----
+// ---- InitObservedURLDomainsLogger / CloseAllLoggers ----
 
 func TestInitObservedURLDomainsLogger_Success(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -94,21 +94,21 @@ func TestInitObservedURLDomainsLogger_FallbackOnBadDir(t *testing.T) {
 	globalObservedURLDomainsMu.RUnlock()
 }
 
-func TestCloseObservedURLDomainsLogger_NilGlobal(t *testing.T) {
+func TestCloseAllLoggers_ObservedURLDomains_NilGlobal(t *testing.T) {
 	// Ensure the global is nil before the test.
-	_ = CloseObservedURLDomainsLogger()
+	_ = CloseAllLoggers()
 
 	// Closing when there is no global logger should return nil without panicking.
-	err := CloseObservedURLDomainsLogger()
-	assert.NoError(t, err, "CloseObservedURLDomainsLogger on nil logger should be a no-op")
+	err := CloseAllLoggers()
+	assert.NoError(t, err, "CloseAllLoggers on nil logger should be a no-op")
 }
 
-func TestCloseObservedURLDomainsLogger_ClearsGlobal(t *testing.T) {
+func TestCloseAllLoggers_ObservedURLDomains_ClearsGlobal(t *testing.T) {
 	tmpDir := t.TempDir()
 	require.NoError(t, InitObservedURLDomainsLogger(tmpDir, observedURLDomainsFileName))
 
-	err := CloseObservedURLDomainsLogger()
-	assert.NoError(t, err, "CloseObservedURLDomainsLogger should succeed")
+	err := CloseAllLoggers()
+	assert.NoError(t, err, "CloseAllLoggers should succeed")
 
 	globalObservedURLDomainsMu.RLock()
 	assert.Nil(t, globalObservedURLDomainsLogger, "global logger should be nil after close")
@@ -208,7 +208,7 @@ func TestLogDomains_AccumulatesNewDomains(t *testing.T) {
 	domains := readObservedURLDomainsFile(t, tmpDir, observedURLDomainsFileName)
 	require.Contains(t, domains, "github")
 
-	// Results are sorted by strutil.SortedSetKeys.
+	// Results are sorted by util.SortedSetKeys.
 	got := domains["github"]
 	sort.Strings(got)
 	assert.Equal(t, []string{"api.github.com", "uploads.github.com"}, got)
@@ -283,7 +283,7 @@ func TestLogDomains_SortedOutputInFile(t *testing.T) {
 
 func TestLogObservedURLDomains_NoGlobalLogger_NoPanic(t *testing.T) {
 	// Ensure no global logger is set.
-	_ = CloseObservedURLDomainsLogger()
+	_ = CloseAllLoggers()
 	resetObservedURLDomainsLogger(t)
 
 	// Calling the global helper with no logger initialised must not panic.
@@ -364,16 +364,16 @@ func TestLogObservedURLDomains_WriteError_WarningLogged(t *testing.T) {
 // where the target file name already exists as a directory.  atomicWriteFile can
 // still create the temp file (filePath+".tmp") in the parent dir, but os.Rename will
 // return EISDIR on Linux, causing writeToFile to fail.
-func TestSetupObservedURLDomainsLogger_WriteToFileFails(t *testing.T) {
+func TestObservedURLDomainsLoggerFactory_Setup_WriteToFileFails(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create a directory at the target file path so atomicWriteFile's Rename fails.
 	targetDir := filepath.Join(tmpDir, observedURLDomainsFileName)
 	require.NoError(t, os.MkdirAll(targetDir, 0755))
 
-	l, err := setupObservedURLDomainsLogger(nil, tmpDir, observedURLDomainsFileName)
+	l, err := observedURLDomainsLoggerFactory.setup(nil, tmpDir, observedURLDomainsFileName)
 
-	require.Error(t, err, "setupObservedURLDomainsLogger should return an error when writeToFile fails")
+	require.Error(t, err, "observedURLDomainsLoggerFactory.setup should return an error when writeToFile fails")
 	assert.Nil(t, l, "logger should be nil on setup failure")
 	assert.Contains(t, err.Error(), "failed to rename temp file",
 		"error should originate from the atomic rename step")

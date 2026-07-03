@@ -16,6 +16,13 @@ import (
 
 var logValidation = logger.New("config:validation")
 
+// secureCompileOpts are the gojq compiler options applied to every Compile call in this
+// package. Centralising them here ensures the security intent ($ENV disabled) is never
+// accidentally omitted from a future compile site.
+var secureCompileOpts = []gojq.CompilerOption{
+	gojq.WithEnvironLoader(func() []string { return nil }), // explicitly disable $ENV access (defense-in-depth)
+}
+
 // customSchemaCache stores compiled custom schemas by schema URL to avoid
 // repeated fetch + compile work across validations.
 var customSchemaCache sync.Map
@@ -129,12 +136,12 @@ func validateToolResponseFiltersWithVars(filters map[string]string, jsonPath str
 	}
 
 	for toolName, rawFilter := range filters {
-		if strings.TrimSpace(toolName) == "" {
-			return fmt.Errorf("%s contains an empty tool name", jsonPath)
+		if err := NonEmptyString(strings.TrimSpace(toolName), "tool name", jsonPath); err != nil {
+			return err
 		}
 		filter := strings.TrimSpace(rawFilter)
-		if filter == "" {
-			return fmt.Errorf("%s.%s must not be empty", jsonPath, toolName)
+		if err := NonEmptyString(filter, "tool response filter", jsonPath+"."+toolName); err != nil {
+			return err
 		}
 
 		query, err := gojq.Parse(filter)
@@ -142,8 +149,7 @@ func validateToolResponseFiltersWithVars(filters map[string]string, jsonPath str
 			return fmt.Errorf("%s.%s contains an invalid jq expression: %w", jsonPath, toolName, err)
 		}
 		if _, err := gojq.Compile(query,
-			gojq.WithEnvironLoader(func() []string { return nil }), // match runtime compile options (defense-in-depth)
-			gojq.WithVariables(varNames),
+			append(secureCompileOpts, gojq.WithVariables(varNames))...,
 		); err != nil {
 			return fmt.Errorf("%s.%s contains an invalid jq expression: %w", jsonPath, toolName, err)
 		}
@@ -435,7 +441,6 @@ func validateGatewayConfig(gateway *StdinGatewayConfig) error {
 	if gateway.OpenTelemetry != nil {
 		tracingCfg := &TracingConfig{
 			Endpoint:    gateway.OpenTelemetry.Endpoint,
-			Headers:     gateway.OpenTelemetry.Headers,
 			TraceID:     gateway.OpenTelemetry.TraceID,
 			SpanID:      gateway.OpenTelemetry.SpanID,
 			ServiceName: gateway.OpenTelemetry.ServiceName,
