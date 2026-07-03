@@ -79,8 +79,10 @@ func TestWrapToolHandler_DataMarshalFailure(t *testing.T) {
 	result, data, err := wrapped(context.Background(), &sdk.CallToolRequest{}, nil)
 
 	require.NoError(t, err, "data marshal failure should not propagate as an error")
-	// The original result and data must be returned unchanged.
-	assert.Equal(t, originalResult, result, "original result should be returned on marshal failure")
+	// Pointer identity confirms the original result was returned without copying or mutating.
+	assert.Same(t, originalResult, result, "original result pointer should be returned on marshal failure")
+	require.Len(t, result.Content, 1)
+	assert.Equal(t, "ok", result.Content[0].(*sdk.TextContent).Text, "result content should be unchanged on marshal failure")
 	assert.Equal(t, ch, data, "original data (channel) should be returned on marshal failure")
 }
 
@@ -99,7 +101,7 @@ func TestWrapToolHandler_JsonNumberFloat64Overflow(t *testing.T) {
 	baseDir := t.TempDir()
 
 	// json.Number("1e309") marshals to the string "1e309" in JSON, so
-	// json.Marshal(data) succeeds and returns a 6-byte payload. Use a
+	// json.Marshal(data) succeeds and returns a 5-byte payload. Use a
 	// sizeThreshold of 0 to force the large-payload path.
 	//
 	// However, json.Number("1e309").Float64() returns an error
@@ -118,7 +120,9 @@ func TestWrapToolHandler_JsonNumberFloat64Overflow(t *testing.T) {
 	result, data, err := wrapped(context.Background(), &sdk.CallToolRequest{}, nil)
 
 	require.NoError(t, err, "json.Number overflow should not propagate as handler error")
+	// The original result pointer must be returned when schema generation fails.
 	require.NotNil(t, result)
+	assert.Same(t, originalResult, result, "original result should be returned when json.Number conversion fails")
 
 	// When schema generation fails (lines 647-650), the original result and data
 	// are returned (not a PayloadMetadata struct).
