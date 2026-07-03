@@ -131,6 +131,7 @@ func (p *PathLabeledData) resolve() error {
 	// Get the items array from the original data
 	items, err := p.getItems()
 	if err != nil {
+		logPathLabels.Printf("resolve: getItems failed: %v", err)
 		return err
 	}
 
@@ -150,7 +151,7 @@ func (p *PathLabeledData) resolve() error {
 	for _, pl := range p.PathLabels.LabeledPaths {
 		idx, err := p.extractIndexFromPath(pl.Path, p.PathLabels.ItemsPath)
 		if err != nil {
-			// Path doesn't match items pattern, skip
+			logPathLabels.Printf("resolve: skipping labeled path %q: %v", pl.Path, err)
 			continue
 		}
 		entry := pl.Labels // Create a copy
@@ -339,6 +340,7 @@ func (p *PathLabeledData) GetItems() []LabeledItem {
 	if !p.resolved {
 		_ = p.resolve()
 	}
+	logPathLabels.Printf("GetItems: returning %d resolved items", len(p.resolvedItems))
 	return p.resolvedItems
 }
 
@@ -347,6 +349,7 @@ func (p *PathLabeledData) ToCollectionLabeledData() *CollectionLabeledData {
 	if !p.resolved {
 		_ = p.resolve()
 	}
+	logPathLabels.Printf("ToCollectionLabeledData: converting %d items", len(p.resolvedItems))
 	return &CollectionLabeledData{
 		Items: p.resolvedItems,
 	}
