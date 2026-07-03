@@ -773,9 +773,7 @@ func TestFixSchemaBytes_keepaliveIntervalNegative(t *testing.T) {
 }
 
 // TestSchema_OpenTelemetryConfig verifies that the JSON schema accepts and rejects
-// opentelemetry configurations correctly, covering all defined fields.
-// These tests guard against schema/struct drift (the headers field in particular
-// was documented but missing from the schema, causing silent acceptance failures).
+// opentelemetry configurations correctly, covering currently defined schema fields.
 func TestSchema_OpenTelemetryConfig(t *testing.T) {
 	validBase := `{
 		"mcpServers": {"s": {"container": "img:latest"}},
@@ -794,13 +792,14 @@ func TestSchema_OpenTelemetryConfig(t *testing.T) {
 			shouldErr: false,
 		},
 		{
-			name:      "valid opentelemetry with headers",
+			name:      "invalid opentelemetry with headers",
 			otel:      `{"endpoint": "https://otel.example.com", "headers": "Authorization=Bearer token"}`,
-			shouldErr: false,
+			shouldErr: true,
+			errMsg:    "headers",
 		},
 		{
 			name:      "valid opentelemetry with all fields",
-			otel:      `{"endpoint": "https://otel.example.com", "headers": "X-Key=val", "traceId": "4bf92f3577b34da6a3ce929d0e0e4736", "spanId": "00f067aa0ba902b7", "serviceName": "my-svc"}`,
+			otel:      `{"endpoint": "https://otel.example.com", "traceId": "4bf92f3577b34da6a3ce929d0e0e4736", "spanId": "00f067aa0ba902b7", "serviceName": "my-svc"}`,
 			shouldErr: false,
 		},
 		{
