@@ -182,9 +182,8 @@ func TestLoadFromStdin_ValidateGatewayConfigError_AllZeroTraceId(t *testing.T) {
 }
 
 // TestLoadFromStdin_OpenTelemetryHeaders verifies that gateway.opentelemetry.headers
-// is accepted by schema validation and wired through to TracingConfig.Headers.
-// The field was added in spec §4.1.3.6 to allow header-based OTLP auth in JSON stdin
-// configs (mirrors the TOML gateway.opentelemetry.headers field).
+// is rejected by schema validation (spec §4.1.3.7 v1.14.0 Breaking Change).
+// Authentication headers must be provided via OTEL_EXPORTER_OTLP_HEADERS env var.
 func TestLoadFromStdin_OpenTelemetryHeaders(t *testing.T) {
 	jsonConfig := `{
 		"mcpServers": {
@@ -198,22 +197,18 @@ func TestLoadFromStdin_OpenTelemetryHeaders(t *testing.T) {
 			"agentId": "test-key",
 			"opentelemetry": {
 				"endpoint": "https://otel-collector.example.com",
-				"headers": "Authorization=Bearer mytoken"
+				"headers": "X-Test=value"
 			}
 		}
 	}`
 
-	var cfg *Config
 	var loadErr error
 	stdinFromString(t, jsonConfig, func() {
-		cfg, loadErr = LoadFromStdin()
+		_, loadErr = LoadFromStdin()
 	})
 
-	require.NoError(t, loadErr, "headers field in opentelemetry config must be accepted")
-	require.NotNil(t, cfg)
-	require.NotNil(t, cfg.Gateway.Tracing)
-	assert.Equal(t, "Authorization=Bearer mytoken", cfg.Gateway.Tracing.Headers,
-		"headers must be wired through to TracingConfig.Headers")
+	require.Error(t, loadErr, "headers field in opentelemetry config must be rejected")
+	assert.ErrorContains(t, loadErr, "headers")
 }
 
 // TestNormalizeLocalType_NonObjectServerValue covers the continue branch (line 616-617)
