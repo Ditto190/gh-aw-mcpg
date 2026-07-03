@@ -552,6 +552,22 @@ func TestCompileToolResponseFilterWithVars_DifferentVarsCacheMiss(t *testing.T) 
 	assert.NotSame(t, code1, code2, "CompileToolResponseFilterWithVars should use distinct cache entries for different varNames")
 }
 
+func TestCompileToolResponseFilterWithVars_DoesNotReusePlainFilterCache(t *testing.T) {
+	// Same filter text compiled through different APIs must not share cache entries,
+	// because plain and variable-enabled paths have different cache key types/options.
+	filter := ". | {ok: true}"
+
+	plainCode, err := CompileToolResponseFilter(filter)
+	require.NoError(t, err)
+	require.NotNil(t, plainCode)
+
+	varCode, err := CompileToolResponseFilterWithVars(filter, nil)
+	require.NoError(t, err)
+	require.NotNil(t, varCode)
+
+	assert.NotSame(t, plainCode, varCode, "plain and var-enabled compilation should use distinct cache entries")
+}
+
 func TestToolResponseFilterVarsCacheKey_NoSeparatorCollision(t *testing.T) {
 	t.Parallel()
 
