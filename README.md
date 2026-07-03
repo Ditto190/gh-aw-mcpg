@@ -184,7 +184,7 @@ Key configuration fields (gateway-level under `[gateway]` in TOML / `"gateway"` 
 |-------|-------------|
 | `agent_id` / `agentId` | Agent/session identifier used for routing and optional auth matching |
 | `api_key` / `apiKey` | Deprecated alias for `agent_id` / `agentId` (accepted with warnings) |
-| `port` | Metadata only; validated (1–65535) but does not control the listen address. Use the `--listen` flag or `MCP_GATEWAY_PORT` env var (containerized) to set the actual listen port. |
+| `port` | Metadata only; validated (1–65535) but does not control the listen address. Use the `--listen` flag to set the listen address; `MCP_GATEWAY_PORT` is used by `run.sh`/`run_containerized.sh` to build the `--listen` argument, not read directly by `awmg`. |
 | `payload_dir` / `payloadDir` | Directory for large payload storage (must be absolute path) |
 | `payload_size_threshold` / `payloadSizeThreshold` | Size threshold in bytes for payload storage (default: `524288`) |
 | `trusted_bots` / `trustedBots` | Additional bot usernames to treat as trusted with "approved" integrity. Additive to the built-in trusted bot list. Non-empty array when present. Example: `["my-bot[bot]"]` |
