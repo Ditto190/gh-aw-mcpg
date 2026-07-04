@@ -61,12 +61,16 @@ func readResponseBody(resp *http.Response, context, operation string) ([]byte, e
 		logHTTP.Printf("%s: nil body for context=%s, status=%d", operation, context, resp.StatusCode)
 		return nil, fmt.Errorf("failed to read %s response: response body is nil", context)
 	}
-	defer resp.Body.Close()
+	body, readErr := io.ReadAll(resp.Body)
+	closeErr := resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		logHTTP.Printf("%s: body read failed for context=%s, status=%d, err=%v", operation, context, resp.StatusCode, err)
-		return nil, fmt.Errorf("failed to read %s response: %w", context, err)
+	if readErr != nil {
+		logHTTP.Printf("%s: body read failed for context=%s, status=%d, err=%v", operation, context, resp.StatusCode, readErr)
+		return nil, fmt.Errorf("failed to read %s response: %w", context, readErr)
+	}
+	if closeErr != nil {
+		logHTTP.Printf("%s: body close failed for context=%s, status=%d, err=%v", operation, context, resp.StatusCode, closeErr)
+		return nil, fmt.Errorf("failed to close %s response body: %w", context, closeErr)
 	}
 
 	return body, nil

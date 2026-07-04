@@ -2,6 +2,7 @@ package httputil
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"net/http"
 	"testing"
@@ -242,4 +243,34 @@ type trackingReadCloser struct {
 func (t *trackingReadCloser) Close() error {
 	t.closed = true
 	return nil
+}
+
+type failCloser struct {
+	io.Reader
+}
+
+func (f *failCloser) Close() error {
+	return errors.New("close failed")
+}
+
+func TestReadResponseBody_CloseError(t *testing.T) {
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       &failCloser{Reader: bytes.NewBufferString(`{"ok":true}`)},
+	}
+	body, err := ReadResponseBody(resp, "test")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to close test response body")
+	assert.Nil(t, body)
+}
+
+func TestReadResponseBodyStrict_CloseError(t *testing.T) {
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       &failCloser{Reader: bytes.NewBufferString(`{"ok":true}`)},
+	}
+	body, err := ReadResponseBodyStrict(resp, http.StatusOK, "test")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to close test response body")
+	assert.Nil(t, body)
 }
