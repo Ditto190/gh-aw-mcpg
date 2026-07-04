@@ -134,9 +134,9 @@ func TestServeAndWait_ShutdownTimesOut(t *testing.T) {
 		)
 	}()
 
+	readyClient := &http.Client{Timeout: 100 * time.Millisecond}
 	require.Eventually(t, func() bool {
-		client := &http.Client{Timeout: 100 * time.Millisecond}
-		resp, reqErr := client.Get("http://" + listener.Addr().String())
+		resp, reqErr := readyClient.Get("http://" + listener.Addr().String())
 		if reqErr != nil {
 			return false
 		}
@@ -145,10 +145,11 @@ func TestServeAndWait_ShutdownTimesOut(t *testing.T) {
 	}, time.Second, 20*time.Millisecond)
 
 	requestDone := make(chan struct{})
+	hangClient := &http.Client{Timeout: 5 * time.Second}
 	go func() {
 		defer close(requestDone)
 
-		resp, reqErr := http.Get("http://" + listener.Addr().String() + "/hang")
+		resp, reqErr := hangClient.Get("http://" + listener.Addr().String() + "/hang")
 		if resp != nil {
 			_ = resp.Body.Close()
 		}
