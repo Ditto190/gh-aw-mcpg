@@ -28,7 +28,7 @@ func (w *BaseResponseWriter) WriteHeader(code int) {
 		w.StatusCode = code
 		w.wroteHeader = true
 	} else {
-		logHTTP.Printf("BaseResponseWriter.WriteHeader: ignoring duplicate status code=%d (already captured=%d)", code, w.StatusCode)
+		logHTTP.Printf("BaseResponseWriter.WriteHeader: duplicate status code=%d (captured=%d); forwarding to underlying writer", code, w.StatusCode)
 	}
 	w.ResponseWriter.WriteHeader(code)
 }
