@@ -1,15 +1,5 @@
 {
   "entries": {
-    "actions/cache@v5.0.5": {
-      "repo": "actions/cache",
-      "version": "v5.0.5",
-      "sha": "27d5ce7f107fe9357f9df03efb73ab90386fccae"
-    },
-    "actions/cache/restore@v5.0.5": {
-      "repo": "actions/cache/restore",
-      "version": "v5.0.5",
-      "sha": "27d5ce7f107fe9357f9df03efb73ab90386fccae"
-    },
     "actions/cache/restore@v6.1.0": {
       "repo": "actions/cache/restore",
       "version": "v6.1.0",
@@ -95,10 +85,10 @@
       "version": "v7.3.0",
       "sha": "53b7df96c91f9c12dcc8a07bcb9ccacbed38856a"
     },
-    "docker/login-action@v4.3.0": {
+    "docker/login-action@v4.4.0": {
       "repo": "docker/login-action",
-      "version": "v4.3.0",
-      "sha": "c99871dec2022cc055c062a10cc1a1310835ceb4"
+      "version": "v4.4.0",
+      "sha": "af1e73f918a031802d376d3c8bbc3fe56130a9b0"
     },
     "docker/setup-buildx-action@v4.2.0": {
       "repo": "docker/setup-buildx-action",
