@@ -15,20 +15,9 @@ import (
 // + status-code check that appears in proxy, githubhttp, and similar call sites.
 func ReadResponseBody(resp *http.Response, context string) ([]byte, error) {
 	logHTTP.Printf("ReadResponseBody: context=%s", context)
-	if resp == nil {
-		logHTTP.Printf("ReadResponseBody: nil response for context=%s", context)
-		return nil, fmt.Errorf("failed to read %s response: nil response", context)
-	}
-	if resp.Body == nil {
-		logHTTP.Printf("ReadResponseBody: nil body for context=%s, status=%d", context, resp.StatusCode)
-		return nil, fmt.Errorf("failed to read %s response: response body is nil", context)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
+	body, err := readResponseBody(resp, context, "ReadResponseBody")
 	if err != nil {
-		logHTTP.Printf("ReadResponseBody: body read failed for context=%s, status=%d, err=%v", context, resp.StatusCode, err)
-		return nil, fmt.Errorf("failed to read %s response: %w", context, err)
+		return nil, err
 	}
 
 	if resp.StatusCode >= 400 {
@@ -49,20 +38,9 @@ func ReadResponseBody(resp *http.Response, context string) ([]byte, error) {
 // and wants the body included in the error message.
 func ReadResponseBodyStrict(resp *http.Response, expectedStatus int, context string) ([]byte, error) {
 	logHTTP.Printf("ReadResponseBodyStrict: context=%s, expectedStatus=%d", context, expectedStatus)
-	if resp == nil {
-		logHTTP.Printf("ReadResponseBodyStrict: nil response for context=%s", context)
-		return nil, fmt.Errorf("failed to read %s response: nil response", context)
-	}
-	if resp.Body == nil {
-		logHTTP.Printf("ReadResponseBodyStrict: nil body for context=%s, status=%d", context, resp.StatusCode)
-		return nil, fmt.Errorf("failed to read %s response: response body is nil", context)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
+	body, err := readResponseBody(resp, context, "ReadResponseBodyStrict")
 	if err != nil {
-		logHTTP.Printf("ReadResponseBodyStrict: body read failed for context=%s, status=%d, err=%v", context, resp.StatusCode, err)
-		return nil, fmt.Errorf("failed to read %s response: %w", context, err)
+		return nil, err
 	}
 
 	if resp.StatusCode != expectedStatus {
@@ -71,5 +49,25 @@ func ReadResponseBodyStrict(resp *http.Response, expectedStatus int, context str
 	}
 
 	logHTTP.Printf("ReadResponseBodyStrict: success: context=%s, status=%d, bodyLen=%d", context, resp.StatusCode, len(body))
+	return body, nil
+}
+
+func readResponseBody(resp *http.Response, context, operation string) ([]byte, error) {
+	if resp == nil {
+		logHTTP.Printf("%s: nil response for context=%s", operation, context)
+		return nil, fmt.Errorf("failed to read %s response: nil response", context)
+	}
+	if resp.Body == nil {
+		logHTTP.Printf("%s: nil body for context=%s, status=%d", operation, context, resp.StatusCode)
+		return nil, fmt.Errorf("failed to read %s response: response body is nil", context)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		logHTTP.Printf("%s: body read failed for context=%s, status=%d, err=%v", operation, context, resp.StatusCode, err)
+		return nil, fmt.Errorf("failed to read %s response: %w", context, err)
+	}
+
 	return body, nil
 }
