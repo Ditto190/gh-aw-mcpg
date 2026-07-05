@@ -381,17 +381,8 @@ func fillLabeledResourceFromMap(rawData map[string]any, resource *difc.LabeledRe
 		resource.Description = desc
 	}
 
-	if tags := parseDIFCTagsFromAny(rawData["secrecy"]); tags != nil {
-		resource.Secrecy = *difc.NewSecrecyLabel(tags...)
-	} else {
-		resource.Secrecy = *difc.NewSecrecyLabel()
-	}
-
-	if tags := parseDIFCTagsFromAny(rawData["integrity"]); tags != nil {
-		resource.Integrity = *difc.NewIntegrityLabel(tags...)
-	} else {
-		resource.Integrity = *difc.NewIntegrityLabel()
-	}
+	resource.Secrecy = *difc.NewSecrecyLabel(parseDIFCTagsFromAny(rawData["secrecy"])...)
+	resource.Integrity = *difc.NewIntegrityLabel(parseDIFCTagsFromAny(rawData["integrity"])...)
 }
 
 // parseResourceResponse converts the guard label_resource response to a LabeledResource.
