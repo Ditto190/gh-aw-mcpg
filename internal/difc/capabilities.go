@@ -46,6 +46,7 @@ func (c *Capabilities) Contains(tag Tag) bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	_, ok := c.tags[tag]
+	logCapabilities.Printf("Contains: tag=%s, found=%v", tag, ok)
 	return ok
 }
 
@@ -57,6 +58,7 @@ func (c *Capabilities) GetAll() []Tag {
 	for tag := range c.tags {
 		tags = append(tags, tag)
 	}
+	logCapabilities.Printf("GetAll: returning %d tags", len(tags))
 	return tags
 }
 
