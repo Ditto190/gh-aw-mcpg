@@ -1011,7 +1011,7 @@ func TestNonEmptyString(t *testing.T) {
 			fieldName: "payloadDir",
 			jsonPath:  "gateway.payloadDir",
 			shouldErr: true,
-			errMsg:    "payloadDir cannot be empty",
+			errMsg:    "payloadDir is required",
 		},
 		{
 			name:      "empty string with different field",
@@ -1019,7 +1019,7 @@ func TestNonEmptyString(t *testing.T) {
 			fieldName: "apiKey",
 			jsonPath:  "gateway.apiKey",
 			shouldErr: true,
-			errMsg:    "apiKey cannot be empty",
+			errMsg:    "apiKey is required",
 		},
 	}
 

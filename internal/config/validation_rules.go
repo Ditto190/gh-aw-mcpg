@@ -189,16 +189,8 @@ func RequiredStringField(value, fieldName, jsonPath, suggestion string) *Validat
 // NonEmptyString validates that a string field is not empty (minLength: 1)
 // Returns nil if valid, *ValidationError if invalid
 func NonEmptyString(value, fieldName, jsonPath string) *ValidationError {
-	if value == "" {
-		return newValidationError(
-			fmt.Sprintf("Non-empty string validation failed: %s is empty", fieldName),
-			fieldName,
-			fmt.Sprintf("%s cannot be empty", fieldName),
-			jsonPath,
-			fmt.Sprintf("Provide a non-empty value for %s", fieldName),
-		)
-	}
-	return nil
+	return RequiredStringField(value, fieldName, jsonPath,
+		fmt.Sprintf("Provide a non-empty value for %s", fieldName))
 }
 
 // AbsolutePath validates that a directory path is an absolute path
