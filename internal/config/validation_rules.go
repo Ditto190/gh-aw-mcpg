@@ -34,10 +34,12 @@ func PortRange(port int, jsonPath string) *ValidationError {
 
 // TimeoutPositive validates that a timeout value is at least 1.
 // Returns nil if valid, *ValidationError if invalid.
-// It delegates validation to TimeoutMinimum with min=1, then overrides the
-// Suggestion with a more specific message: "Use a positive number of seconds (e.g., 30)".
+// It delegates to PositiveInteger, then overrides Message and Suggestion
+// to use timeout-specific phrasing ("must be at least 1" / "positive number
+// of seconds") instead of the generic positive-integer wording.
 func TimeoutPositive(timeout int, fieldName, jsonPath string) *ValidationError {
-	if err := TimeoutMinimum(timeout, 1, fieldName, jsonPath); err != nil {
+	if err := PositiveInteger(timeout, fieldName, jsonPath); err != nil {
+		err.Message = fmt.Sprintf("%s must be at least 1, got %d", fieldName, timeout)
 		err.Suggestion = "Use a positive number of seconds (e.g., 30)"
 		return err
 	}
@@ -183,16 +185,15 @@ func RequiredStringField(value, fieldName, jsonPath, suggestion string) *Validat
 	return nil
 }
 
-// NonEmptyString validates that a string field is not empty (minLength: 1)
-// Returns nil if valid, *ValidationError if invalid
+// NonEmptyString validates that a string field is not empty (minLength: 1).
+// It delegates to RequiredStringField, then overrides the Message to use
+// "cannot be empty" phrasing instead of the generic "is required" wording.
+// Returns nil if valid, *ValidationError if invalid.
 func NonEmptyString(value, fieldName, jsonPath string) *ValidationError {
-	if value == "" {
-		return &ValidationError{
-			Field:      fieldName,
-			Message:    fmt.Sprintf("%s cannot be empty", fieldName),
-			JSONPath:   jsonPath,
-			Suggestion: fmt.Sprintf("Provide a non-empty value for %s", fieldName),
-		}
+	if err := RequiredStringField(value, fieldName, jsonPath,
+		fmt.Sprintf("Provide a non-empty value for %s", fieldName)); err != nil {
+		err.Message = fmt.Sprintf("%s cannot be empty", fieldName)
+		return err
 	}
 	return nil
 }
