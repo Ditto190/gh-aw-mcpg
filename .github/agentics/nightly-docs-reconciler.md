@@ -258,7 +258,7 @@ All commands from CONTRIBUTING.md were tested:
 ## Code References
 
 - Configuration structs: `internal/config/config_core.go`, `internal/config/config_stdin.go`
-- Validation logic: `internal/config/validation_server.go`, `internal/config/validation_gateway.go`, `internal/config/validation_rules.go`
+- Validation logic: `internal/config/validation_schema.go` (and `internal/config/schema/mcp-gateway-config.schema.json`), `internal/config/validation_server.go`, `internal/config/validation_gateway.go`, `internal/config/validation_rules.go`
 - [Additional relevant files]
 ```
 
