@@ -51,7 +51,7 @@ Test all code examples and instructions in `README.md`:
 3. **Validate configuration field descriptions:**
    - Read the "Server Configuration Fields" section
    - Cross-reference each described field with actual struct tags and validation code
-   - Check that constraints (required/optional) match the validation logic in `internal/config/validation_server.go`, `internal/config/validation_gateway.go`, and `internal/config/validation_rules.go`
+   - Check that constraints (required/optional) match the JSON schema validation in `internal/config/validation_schema.go` (and `internal/config/schema/mcp-gateway-config.schema.json`), plus rule-based checks in `internal/config/validation_server.go`, `internal/config/validation_gateway.go`, and `internal/config/validation_rules.go`
 
 ### 1.3 Feature List Accuracy
 
