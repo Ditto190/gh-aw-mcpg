@@ -30,6 +30,17 @@ func TruncateWithSuffix(s string, maxLen int, suffix string) string {
 	return s[:maxLen] + suffix
 }
 
+// FormatSessionIDForLog returns a log-safe session ID representation.
+// Empty session IDs are rendered as "(none)"; non-empty IDs are truncated to
+// the first 8 bytes with an ellipsis when needed.
+func FormatSessionIDForLog(sessionID string) string {
+	const sessionIDLogMaxLen = 8
+	if sessionID == "" {
+		return "(none)"
+	}
+	return Truncate(sessionID, sessionIDLogMaxLen)
+}
+
 // TruncateRunes truncates s to at most maxRunes Unicode code points (runes).
 // Unlike Truncate, which counts bytes, TruncateRunes is safe for non-ASCII
 // content (e.g. emoji, CJK characters). If maxRunes is 0 or negative, returns
