@@ -94,7 +94,7 @@ var labelReturnsNeg1Wasm = []byte{
 func setupWasmGuard(t *testing.T, wasmBytes []byte, name string) (*WasmGuard, func()) {
 	t.Helper()
 	ctx := context.Background()
-	rt := wazero.NewRuntime(ctx)
+	rt := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfigInterpreter())
 	mod, err := rt.InstantiateWithConfig(ctx, wasmBytes, wazero.NewModuleConfig().WithName(name))
 	require.NoError(t, err, "failed to instantiate WASM module %s", name)
 	g := &WasmGuard{name: name, module: mod}
