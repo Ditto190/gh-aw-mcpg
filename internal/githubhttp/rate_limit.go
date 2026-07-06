@@ -4,6 +4,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/github/gh-aw-mcpg/internal/sanitize"
+	"github.com/github/gh-aw-mcpg/internal/util"
 )
 
 // ParseRateLimitResetHeader parses the Unix-timestamp value of the
@@ -30,7 +33,7 @@ func ParseRateLimitResetFromText(text string) time.Time {
 	lower := strings.ToLower(text)
 	idx := strings.Index(lower, "rate reset in ")
 	if idx < 0 {
-		logHTTP.Print("ParseRateLimitResetFromText: no reset time pattern found in text")
+		logHTTP.Printf("ParseRateLimitResetFromText: no reset time pattern found in text=%q", util.Truncate(sanitize.SanitizeString(text), 120))
 		return time.Time{}
 	}
 	rest := text[idx+len("rate reset in "):]
