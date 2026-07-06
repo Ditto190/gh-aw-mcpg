@@ -307,6 +307,46 @@ func NewWasmGuardWithOptions(ctx context.Context, name string, wasmBytes []byte,
 		return nil, fmt.Errorf("WASM module must export label_agent")
 	}
 
+	expectedParamTypes := []api.ValueType{
+		api.ValueTypeI32,
+		api.ValueTypeI32,
+		api.ValueTypeI32,
+		api.ValueTypeI32,
+	}
+	expectedResultTypes := []api.ValueType{api.ValueTypeI32}
+	validateFunctionSignature := func(functionName string, fn api.Function) error {
+		def := fn.Definition()
+		paramTypes := def.ParamTypes()
+		resultTypes := def.ResultTypes()
+		if len(paramTypes) != len(expectedParamTypes) || len(resultTypes) != len(expectedResultTypes) {
+			return fmt.Errorf("WASM module function %s must have signature (i32,i32,i32,i32)->i32, got %v->%v", functionName, paramTypes, resultTypes)
+		}
+		for i := range expectedParamTypes {
+			if paramTypes[i] != expectedParamTypes[i] {
+				return fmt.Errorf("WASM module function %s must have signature (i32,i32,i32,i32)->i32, got %v->%v", functionName, paramTypes, resultTypes)
+			}
+		}
+		for i := range expectedResultTypes {
+			if resultTypes[i] != expectedResultTypes[i] {
+				return fmt.Errorf("WASM module function %s must have signature (i32,i32,i32,i32)->i32, got %v->%v", functionName, paramTypes, resultTypes)
+			}
+		}
+		return nil
+	}
+
+	if err := validateFunctionSignature("label_resource", labelResourceFn); err != nil {
+		runtime.Close(ctx)
+		return nil, err
+	}
+	if err := validateFunctionSignature("label_response", labelResponseFn); err != nil {
+		runtime.Close(ctx)
+		return nil, err
+	}
+	if err := validateFunctionSignature("label_agent", labelAgentFn); err != nil {
+		runtime.Close(ctx)
+		return nil, err
+	}
+
 	logWasm.Printf("WASM guard created successfully: name=%s", name)
 	return guard, nil
 }

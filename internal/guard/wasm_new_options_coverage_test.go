@@ -170,6 +170,23 @@ func TestNewWasmGuardWithOptions_MissingLabelAgent(t *testing.T) {
 	assert.ErrorContains(t, err, "must export label_agent")
 }
 
+// TestNewWasmGuardWithOptions_InvalidExportedFunctionSignature verifies that
+// required exported guard functions use the expected ABI.
+func TestNewWasmGuardWithOptions_InvalidExportedFunctionSignature(t *testing.T) {
+	ctx := context.Background()
+	opts := &WasmGuardOptions{
+		DisableCompilationCache: true,
+	}
+
+	invalidSignatureWasm := append([]byte(nil), fullGuardWasm...)
+	invalidSignatureWasm[14] = 0x7e // i64 instead of i32 in the shared function type
+
+	_, err := NewWasmGuardWithOptions(ctx, "bad-signature", invalidSignatureWasm, &mockBackendCaller{}, opts)
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "must have signature (i32,i32,i32,i32)->i32")
+	assert.ErrorContains(t, err, "label_resource")
+}
+
 // TestNewWasmGuardWithOptions_SuccessPath verifies that a WASM module exporting all
 // three required guard functions is successfully loaded and usable.
 func TestNewWasmGuardWithOptions_SuccessPath(t *testing.T) {
