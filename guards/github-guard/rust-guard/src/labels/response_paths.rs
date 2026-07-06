@@ -28,7 +28,7 @@ fn default_repo_for_items(arg_repo_full: String, items: &[Value]) -> String {
     items.first().map(extract_repo_from_item).unwrap_or_default()
 }
 
-struct RepoItemContext<'a> {
+struct RepoItemsContext<'a> {
     limited_items: &'a [Value],
     items_path: &'static str,
     default_repo: String,
@@ -36,6 +36,11 @@ struct RepoItemContext<'a> {
     default_repo_private: bool,
 }
 
+/// Resolve shared repository collection context for issue/PR-style responses.
+///
+/// `tool_name` identifies the currently executing tool. `search_tool_name` is the
+/// search variant used to determine whether to defer to per-item repository secrecy
+/// labels (`search_*`) or use a single collection-level secrecy baseline.
 fn resolve_repo_item_context<'a>(
     tool_name: &str,
     tool_args: &Value,
@@ -43,7 +48,7 @@ fn resolve_repo_item_context<'a>(
     search_tool_name: &str,
     log_label: &str,
     ctx: &PolicyContext,
-) -> Option<RepoItemContext<'a>> {
+) -> Option<RepoItemsContext<'a>> {
     let (items, items_path) = extract_items_array(actual_response);
     let items = items?;
 
@@ -68,7 +73,7 @@ fn resolve_repo_item_context<'a>(
     }
     .into();
 
-    Some(RepoItemContext {
+    Some(RepoItemsContext {
         limited_items: limit_items_with_log(items, log_label),
         items_path,
         default_repo,
@@ -192,9 +197,9 @@ pub fn label_response_paths(
                         // Extract repo from each item (may differ for search results)
                         let item_repo = extract_repo_from_item(item);
                         let repo_for_labels = if item_repo.is_empty() {
-                            repo_item_ctx.default_repo.as_str()
+                            &repo_item_ctx.default_repo
                         } else {
-                            item_repo.as_str()
+                            &item_repo
                         };
 
                         let base_repo = item
@@ -282,9 +287,9 @@ pub fn label_response_paths(
                         // Extract repo from each item (may differ for search results)
                         let item_repo = extract_repo_from_item(item);
                         let repo_for_labels = if item_repo.is_empty() {
-                            repo_item_ctx.default_repo.as_str()
+                            &repo_item_ctx.default_repo
                         } else {
-                            item_repo.as_str()
+                            &item_repo
                         };
 
                         let item_repo_private =
