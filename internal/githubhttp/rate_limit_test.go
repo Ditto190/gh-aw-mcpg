@@ -127,9 +127,9 @@ func TestParseRateLimitResetFromText(t *testing.T) {
 
 			assert.False(t, got.IsZero(), "expected non-zero time")
 			// The returned time should be in the range [before+minOffset, after+maxOffset].
-			assert.True(t, got.After(before.Add(tt.minOffset-time.Second)),
+			assert.True(t, !got.Before(before.Add(tt.minOffset)),
 				"reset time %v is too early (expected at least %v after %v)", got, tt.minOffset, before)
-			assert.True(t, got.Before(after.Add(tt.maxOffset+time.Second)),
+			assert.True(t, !got.After(after.Add(tt.maxOffset)),
 				"reset time %v is too late (expected at most %v after %v)", got, tt.maxOffset, after)
 		})
 	}
