@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"time"
 
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
@@ -66,12 +67,29 @@ func (f *fanoutExporter) ExportSpans(ctx context.Context, spans []sdktrace.ReadO
 	})
 }
 
-// Shutdown shuts down each underlying exporter concurrently, collecting any
-// errors. All errors are joined and returned.
+// Shutdown shuts down each underlying exporter concurrently, giving each
+// exporter its own context derived from the parent's remaining deadline.
+// This prevents a slow or unresponsive exporter from consuming the entire
+// deadline and leaving insufficient time for other exporters to complete.
 func (f *fanoutExporter) Shutdown(ctx context.Context) error {
 	logTracing.Printf("fanoutExporter.Shutdown: shutting down %d backends", len(f.exporters))
+
+	// Capture the remaining time budget from the parent context once so that
+	// every goroutine starts with the same deadline, even if Go's scheduler
+	// delays some goroutines after others begin executing.
+	var remaining time.Duration
+	if deadline, ok := ctx.Deadline(); ok {
+		remaining = time.Until(deadline)
+	}
+
 	err := f.forEachExporter("Shutdown", func(e sdktrace.SpanExporter) error {
-		return e.Shutdown(ctx)
+		exporterCtx := ctx
+		if remaining > 0 {
+			var cancel context.CancelFunc
+			exporterCtx, cancel = context.WithTimeout(context.Background(), remaining)
+			defer cancel()
+		}
+		return e.Shutdown(exporterCtx)
 	})
 	logTracing.Printf("fanoutExporter.Shutdown: completed")
 	return err
