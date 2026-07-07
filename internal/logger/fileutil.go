@@ -8,7 +8,7 @@ import (
 	"sync"
 )
 
-// It syncs buffered data before closing and handles errors appropriately.
+// closeLogFile syncs buffered data before closing and handles errors appropriately.
 // The mutex should already be held by the caller.
 //
 // Error handling strategy:
