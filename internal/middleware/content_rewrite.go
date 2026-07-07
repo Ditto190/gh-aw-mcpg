@@ -49,7 +49,7 @@ func rewriteEnvelopeTextPayload(data any, filteredText string) (any, bool) {
 
 		rewrittenContent, ok := rewriteFirstContentItem(contentValue, filteredText)
 		if !ok {
-			logMiddleware.Print("rewriteEnvelopeTextPayload: failed to rewrite first content item")
+		logMiddleware.Printf("rewriteEnvelopeTextPayload: failed to rewrite first content item (contentType=%T)", contentValue)
 			return nil, false
 		}
 		logMiddleware.Printf("rewriteEnvelopeTextPayload: envelope rewrite complete, filteredLen=%d", len(filteredText))
