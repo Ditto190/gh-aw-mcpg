@@ -133,6 +133,7 @@ func TestRecordSpanErrorSafe_RecordsPublicMsgNotInternalError(t *testing.T) {
 		}
 	}
 	require.True(t, foundMsg, "exception.message attribute should be present on exception event")
+}
 
 func TestRecordSpanErrorSafe_SetsErrorTypeFromPublicErr(t *testing.T) {
 	span, getSpans := newRecordingSpan(t, "op")
