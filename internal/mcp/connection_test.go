@@ -524,7 +524,7 @@ func TestNewHTTPConnectionStoresKeepalive(t *testing.T) {
 	headers := map[string]string{}
 	httpClient := &http.Client{}
 
-	conn := newHTTPConnection(ctx, cancel, client, nil, url, headers, httpClient, HTTPTransportStreamable, "test-server", keepAlive, 0)
+	conn := assembleHTTPConnection(ctx, cancel, client, nil, url, headers, httpClient, HTTPTransportStreamable, "test-server", keepAlive, 0)
 
 	require.NotNil(t, conn)
 	assert.Equal(t, keepAlive, conn.keepAliveInterval,
@@ -601,8 +601,8 @@ func TestSetupHTTPRequest(t *testing.T) {
 	}
 }
 
-// TestNewHTTPConnection tests the newHTTPConnection helper function
-func TestNewHTTPConnection(t *testing.T) {
+// TestAssembleHTTPConnection tests the assembleHTTPConnection helper function
+func TestAssembleHTTPConnection(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -611,7 +611,7 @@ func TestNewHTTPConnection(t *testing.T) {
 	headers := map[string]string{"Authorization": "test"}
 	httpClient := &http.Client{}
 
-	conn := newHTTPConnection(ctx, cancel, client, nil, url, headers, httpClient, HTTPTransportStreamable, "test-server", 0, 0)
+	conn := assembleHTTPConnection(ctx, cancel, client, nil, url, headers, httpClient, HTTPTransportStreamable, "test-server", 0, 0)
 
 	require.NotNil(t, conn, "Connection should not be nil")
 	assert.Equal(t, client, conn.client, "Client should match")

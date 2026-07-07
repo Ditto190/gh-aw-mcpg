@@ -129,9 +129,9 @@ func (p *PathLabeledData) resolve() error {
 	}
 
 	// Get the items array from the original data
-	items, err := p.getItems()
+	items, err := p.extractRawItems()
 	if err != nil {
-		logPathLabels.Printf("resolve: getItems failed: %v", err)
+		logPathLabels.Printf("resolve: extractRawItems failed: %v", err)
 		return err
 	}
 
@@ -177,12 +177,14 @@ func (p *PathLabeledData) resolve() error {
 	return nil
 }
 
-// getItems extracts the items array from the unwrapped data based on ItemsPath
-func (p *PathLabeledData) getItems() ([]interface{}, error) {
+// extractRawItems extracts the raw []interface{} items array from the unwrapped data
+// based on ItemsPath. It is an internal helper for path resolution; callers that
+// need typed resolved items should use GetItems instead.
+func (p *PathLabeledData) extractRawItems() ([]interface{}, error) {
 	if p.PathLabels.ItemsPath == "" {
 		// Root-level array
 		if arr, ok := p.UnwrappedData.([]interface{}); ok {
-			logPathLabels.Printf("getItems: found root-level array with %d items", len(arr))
+			logPathLabels.Printf("extractRawItems: found root-level array with %d items", len(arr))
 			return arr, nil
 		}
 		// Not an array, return nil (single item)
@@ -190,7 +192,7 @@ func (p *PathLabeledData) getItems() ([]interface{}, error) {
 	}
 
 	// Navigate to the items path using UnwrappedData (which may have been extracted from MCP wrapper)
-	logPathLabels.Printf("getItems: navigating to items at path=%s", p.PathLabels.ItemsPath)
+	logPathLabels.Printf("extractRawItems: navigating to items at path=%s", p.PathLabels.ItemsPath)
 	current := p.UnwrappedData
 	parts := splitJSONPointer(p.PathLabels.ItemsPath)
 
@@ -221,7 +223,7 @@ func (p *PathLabeledData) getItems() ([]interface{}, error) {
 	}
 
 	if arr, ok := current.([]interface{}); ok {
-		logPathLabels.Printf("getItems: found %d items at path=%s", len(arr), p.PathLabels.ItemsPath)
+		logPathLabels.Printf("extractRawItems: found %d items at path=%s", len(arr), p.PathLabels.ItemsPath)
 		return arr, nil
 	}
 

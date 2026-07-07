@@ -1,8 +1,6 @@
 package logger
 
 import (
-	"encoding/json"
-	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -115,14 +113,7 @@ func (l *ObservedURLDomainsLogger) writeToFile() error {
 	for serverID, domains := range l.data {
 		serialized[serverID] = util.SortedSetKeys(domains)
 	}
-
-	jsonData, err := json.MarshalIndent(serialized, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal observed URL domains: %w", err)
-	}
-
-	filePath := filepath.Join(l.logDir, l.fileName)
-	return atomicWriteFile(filePath, jsonData, 0600)
+	return writeJSONToFile(l.logDir, l.fileName, serialized, 0600)
 }
 
 func (l *ObservedURLDomainsLogger) Close() error { return nil }
