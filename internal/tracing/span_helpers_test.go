@@ -122,15 +122,17 @@ func TestRecordSpanErrorSafe_RecordsPublicMsgNotInternalError(t *testing.T) {
 	require.NotEmpty(t, recorded.Events)
 	exceptionEvent := recorded.Events[0]
 	assert.Equal(t, "exception", exceptionEvent.Name)
+	foundMsg := false
 	for _, attr := range exceptionEvent.Attributes {
 		if attr.Key == "exception.message" {
+			foundMsg = true
 			assert.Equal(t, publicMsg, attr.Value.AsString(),
 				"exception.message should be the public message, not the internal error")
 			assert.NotContains(t, attr.Value.AsString(), "secret-token-12345",
 				"internal error details must not leak to the trace backend")
 		}
 	}
-}
+	require.True(t, foundMsg, "exception.message attribute should be present on exception event")
 
 func TestRecordSpanErrorSafe_SetsErrorTypeFromPublicErr(t *testing.T) {
 	span, getSpans := newRecordingSpan(t, "op")
