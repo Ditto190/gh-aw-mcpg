@@ -56,10 +56,12 @@ func TestForcePublicRepos_PublicRepo_OverridesAllowOnly(t *testing.T) {
 	filteredEnv := filterEnv(os.Environ(),
 		"GITHUB_REPOSITORY", "GITHUB_TOKEN", "GITHUB_MCP_SERVER_TOKEN",
 		"GITHUB_PERSONAL_ACCESS_TOKEN", "GH_TOKEN", "GITHUB_API_URL",
+		"MCP_GATEWAY_FORCE_PUBLIC_REPOS",
 	)
 	filteredEnv = append(filteredEnv,
 		"GITHUB_REPOSITORY=test-owner/test-repo",
 		"GITHUB_TOKEN=mock-token-for-testing",
+		"MCP_GATEWAY_FORCE_PUBLIC_REPOS=true",
 		fmt.Sprintf("GITHUB_API_URL=%s", mockAPI.URL),
 		"MCP_GATEWAY_WASM_GUARDS_DIR=",
 	)
