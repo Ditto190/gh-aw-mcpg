@@ -164,7 +164,7 @@ func TestRestBackendCaller_ExtractOwnerRepoNumber(t *testing.T) {
 			owner, repo, number, err := extractOwnerRepoNumber(tt.args, "owner", "repo", tt.numberKey, tt.toolName)
 			if tt.wantErr != "" {
 				require.Error(t, err)
-				assert.ErrorContains(t, err, tt.wantErr)
+				assert.EqualError(t, err, tt.wantErr)
 				return
 			}
 
