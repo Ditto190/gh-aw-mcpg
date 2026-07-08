@@ -18,8 +18,8 @@ import (
 // returns true when the workflow repository is public.
 func TestShouldForcePublicRepos_PublicRepo(t *testing.T) {
 	t.Setenv(guard.WASMGuardsDirEnvVar, "")
+	t.Setenv(config.EnvForcePublicRepos, "true")	
 	apiServer := startMockRepoVisibilityServer(t, "public", false)
-
 	t.Setenv("GITHUB_REPOSITORY", "test-owner/test-repo")
 	t.Setenv("GITHUB_TOKEN", "mock-token")
 	t.Setenv("GITHUB_API_URL", apiServer.URL)
