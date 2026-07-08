@@ -89,7 +89,7 @@ func atomicWriteFile(filePath string, data []byte, perm os.FileMode) error {
 func writeJSONToFile(logDir, fileName string, data any, perm os.FileMode) error {
 	jsonData, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
-		return fmt.Errorf("failed to marshal JSON data: %w", err)
+		return fmt.Errorf("failed to marshal JSON data for %s: %w", filepath.Join(logDir, fileName), err)
 	}
 	return atomicWriteFile(filepath.Join(logDir, fileName), jsonData, perm)
 }

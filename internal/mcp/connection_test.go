@@ -512,9 +512,9 @@ func TestDefaultKeepaliveInterval(t *testing.T) {
 		"DefaultKeepaliveInterval must be positive")
 }
 
-// TestNewHTTPConnectionStoresKeepalive verifies that the keepalive interval is stored on
+// TestAssembleHTTPConnectionStoresKeepalive verifies that the keepalive interval is stored on
 // the connection struct so that reconnectSDKTransport can recreate the session with the same setting.
-func TestNewHTTPConnectionStoresKeepalive(t *testing.T) {
+func TestAssembleHTTPConnectionStoresKeepalive(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
