@@ -57,8 +57,25 @@ type GuardPolicy struct {
 
 // WriteSinkPolicy configures a write-sink guard that accepts writes from
 // agents carrying the listed secrecy labels.
+//
+// The optional SinkVisibility field declares the visibility of the output
+// channel's target repository. When set to "public", the write-sink guard
+// blocks any agent with a non-empty secrecy label from writing — regardless
+// of the accept patterns — because public outputs are readable by anyone on
+// the internet and would leak private data.
+//
+// Valid values:
+//   - "public"   — target is a public repo; agents with non-empty secrecy are BLOCKED
+//   - "private"  — target is a private repo; standard accept-pattern matching applies
+//   - "internal" — target is an org-internal repo; same behavior as "private"
+//
+// When omitted, the guard falls back to accept-pattern matching only (backward
+// compatible). The gh-aw compiler MUST check the safe-outputs target repository
+// visibility and set this field accordingly to prevent data exfiltration from
+// private repos to public outputs (see: GitLost vulnerability class).
 type WriteSinkPolicy struct {
-	Accept []string `toml:"accept" json:"accept"`
+	Accept         []string `toml:"accept" json:"accept"`
+	SinkVisibility string   `toml:"sink-visibility" json:"sink-visibility,omitempty"`
 }
 
 // AllowOnlyPolicy configures scope and minimum required integrity.
@@ -347,6 +364,18 @@ func unmarshalStringListOrExpression(raw json.RawMessage) ([]string, error) {
 //	the agent has no secrecy tags. The write-sink is still required to prevent
 //	the noop guard integrity violation (see WriteSinkGuard godoc).
 //	The wildcard "*" must be the sole entry — it cannot be mixed with other patterns.
+//
+// Sink Visibility:
+//
+//	When sink-visibility is "public", the write-sink guard ignores accept patterns
+//	entirely and blocks ANY agent with non-empty secrecy. This prevents data
+//	exfiltration from private repos to public outputs (GitLost vulnerability class).
+//
+//	The gh-aw compiler MUST check the safe-outputs target repository visibility
+//	and set sink-visibility accordingly:
+//	  - Public repo target  → sink-visibility = "public"
+//	  - Private repo target → sink-visibility = "private"
+//	  - Internal repo target → sink-visibility = "internal"
 //
 // Note: min-integrity has no effect on these rules (it only affects integrity labels).
 var WriteSinkAcceptRules = "see godoc" // exists for documentation only

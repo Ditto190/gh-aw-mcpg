@@ -632,3 +632,69 @@ func TestValidateWriteSinkPolicy_WildcardNotFirst(t *testing.T) {
 	assert.Error(t, err, `accept=["private:org/repo", "*"] should be invalid`)
 	assert.ErrorContains(t, err, "wildcard")
 }
+
+// TestValidateWriteSinkPolicy_SinkVisibility_Valid tests that valid sink-visibility
+// values ("public", "private", "internal") pass validation.
+func TestValidateWriteSinkPolicy_SinkVisibility_Valid(t *testing.T) {
+	tests := []struct {
+		name       string
+		visibility string
+	}{
+		{name: "public", visibility: "public"},
+		{name: "private", visibility: "private"},
+		{name: "internal", visibility: "internal"},
+		{name: "empty (omitted)", visibility: ""},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			policy := &WriteSinkPolicy{Accept: []string{"*"}, SinkVisibility: tc.visibility}
+			err := ValidateWriteSinkPolicy(policy)
+			assert.NoError(t, err, "sink-visibility=%q should be valid", tc.visibility)
+		})
+	}
+}
+
+// TestValidateWriteSinkPolicy_SinkVisibility_Invalid tests that invalid sink-visibility
+// values are rejected.
+func TestValidateWriteSinkPolicy_SinkVisibility_Invalid(t *testing.T) {
+	tests := []struct {
+		name       string
+		visibility string
+	}{
+		{name: "unknown value", visibility: "unknown"},
+		{name: "typo", visibility: "publi"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			policy := &WriteSinkPolicy{Accept: []string{"*"}, SinkVisibility: tc.visibility}
+			err := ValidateWriteSinkPolicy(policy)
+			assert.Error(t, err, "sink-visibility=%q should be invalid", tc.visibility)
+			assert.ErrorContains(t, err, "sink-visibility")
+		})
+	}
+}
+
+// TestValidateWriteSinkPolicy_SinkVisibility_CaseInsensitive tests that
+// sink-visibility validation is case-insensitive.
+func TestValidateWriteSinkPolicy_SinkVisibility_CaseInsensitive(t *testing.T) {
+	tests := []string{"PUBLIC", "Private", "INTERNAL", "Public"}
+	for _, v := range tests {
+		t.Run(v, func(t *testing.T) {
+			policy := &WriteSinkPolicy{Accept: []string{"*"}, SinkVisibility: v}
+			err := ValidateWriteSinkPolicy(policy)
+			assert.NoError(t, err, "sink-visibility=%q should be valid (case-insensitive)", v)
+		})
+	}
+}
+
+// TestValidateWriteSinkPolicy_SinkVisibility_PublicWithScopedAccept tests that
+// sink-visibility="public" can be combined with any accept pattern (the guard
+// overrides accept behavior at runtime when visibility is public).
+func TestValidateWriteSinkPolicy_SinkVisibility_PublicWithScopedAccept(t *testing.T) {
+	policy := &WriteSinkPolicy{
+		Accept:         []string{"private:github/gh-aw*"},
+		SinkVisibility: "public",
+	}
+	err := ValidateWriteSinkPolicy(policy)
+	assert.NoError(t, err, "sink-visibility=public with scoped accept should be valid")
+}

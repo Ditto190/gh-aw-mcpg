@@ -548,3 +548,178 @@ func TestWriteSinkGuard_WildcardAccept_TaintedAgent(t *testing.T) {
 	assert.True(t, result.IsAllowed(),
 		"wildcard accept should allow writes from any tainted agent; got: %s", result.Reason)
 }
+
+// =============================================================================
+// Sink Visibility Tests
+//
+// These tests verify the sink-visibility feature that blocks tainted agents
+// from writing to public output channels. This is the core defense against
+// the GitLost vulnerability class.
+// =============================================================================
+
+// TestWriteSinkGuard_SinkVisibility_Public_BlocksTaintedAgent tests the key
+// security property: when sink-visibility is "public", any agent with non-empty
+// secrecy is BLOCKED from writing.
+func TestWriteSinkGuard_SinkVisibility_Public_BlocksTaintedAgent(t *testing.T) {
+	g := NewWriteSinkGuardWithVisibility([]string{"*"}, "public")
+
+	// Agent tainted with private secrecy (e.g., read from private repo)
+	agentSecrecy := difc.NewSecrecyLabel([]difc.Tag{"private:github/secret-repo"}...)
+	agentIntegrity := difc.NewIntegrityLabel()
+
+	resource, operation, err := g.LabelResource(context.Background(), "create_issue_comment", nil, nil, nil)
+	require.NoError(t, err)
+	assert.Equal(t, difc.OperationWrite, operation)
+
+	// Resource secrecy should be EMPTY for public sinks
+	secrecyTags := resource.Secrecy.Label.GetTags()
+	assert.Empty(t, secrecyTags, "public sink resource should have empty secrecy")
+
+	evaluator := difc.NewEvaluatorWithMode(difc.EnforcementFilter)
+	result := evaluator.Evaluate(agentSecrecy, agentIntegrity, resource, operation)
+	assert.False(t, result.IsAllowed(),
+		"public sink must BLOCK tainted agents (GitLost defense)")
+	assert.Contains(t, result.Reason, "secrecy",
+		"denial reason should mention secrecy constraint")
+}
+
+// TestWriteSinkGuard_SinkVisibility_Public_AllowsCleanAgent tests that an
+// agent with empty secrecy (no private data read) CAN write to public sinks.
+func TestWriteSinkGuard_SinkVisibility_Public_AllowsCleanAgent(t *testing.T) {
+	g := NewWriteSinkGuardWithVisibility([]string{"*"}, "public")
+
+	// Agent with empty secrecy (hasn't read any private repos)
+	agentSecrecy := difc.NewSecrecyLabel()
+	agentIntegrity := difc.NewIntegrityLabel()
+
+	resource, operation, err := g.LabelResource(context.Background(), "create_issue_comment", nil, nil, nil)
+	require.NoError(t, err)
+
+	evaluator := difc.NewEvaluatorWithMode(difc.EnforcementFilter)
+	result := evaluator.Evaluate(agentSecrecy, agentIntegrity, resource, operation)
+	assert.True(t, result.IsAllowed(),
+		"public sink should allow writes from clean (untainted) agents; got: %s", result.Reason)
+}
+
+// TestWriteSinkGuard_SinkVisibility_Private_AllowsMatchingAgent tests that
+// sink-visibility="private" uses standard accept-pattern matching.
+func TestWriteSinkGuard_SinkVisibility_Private_AllowsMatchingAgent(t *testing.T) {
+	g := NewWriteSinkGuardWithVisibility([]string{"private:github/gh-aw*"}, "private")
+
+	agentSecrecy := difc.NewSecrecyLabel([]difc.Tag{"private:github/gh-aw*"}...)
+	agentIntegrity := difc.NewIntegrityLabel()
+
+	resource, operation, err := g.LabelResource(context.Background(), "create_issue", nil, nil, nil)
+	require.NoError(t, err)
+
+	evaluator := difc.NewEvaluatorWithMode(difc.EnforcementFilter)
+	result := evaluator.Evaluate(agentSecrecy, agentIntegrity, resource, operation)
+	assert.True(t, result.IsAllowed(),
+		"private sink should allow writes from agents with matching secrecy; got: %s", result.Reason)
+}
+
+// TestWriteSinkGuard_SinkVisibility_Private_BlocksMismatchedAgent tests that
+// sink-visibility="private" still blocks agents with extra secrecy tags.
+func TestWriteSinkGuard_SinkVisibility_Private_BlocksMismatchedAgent(t *testing.T) {
+	g := NewWriteSinkGuardWithVisibility([]string{"private:github/gh-aw*"}, "private")
+
+	// Agent has secrecy from a repo NOT covered by accept
+	agentSecrecy := difc.NewSecrecyLabel([]difc.Tag{"private:github/gh-aw*", "private:other-org/secret"}...)
+	agentIntegrity := difc.NewIntegrityLabel()
+
+	resource, operation, err := g.LabelResource(context.Background(), "create_issue", nil, nil, nil)
+	require.NoError(t, err)
+
+	evaluator := difc.NewEvaluatorWithMode(difc.EnforcementFilter)
+	result := evaluator.Evaluate(agentSecrecy, agentIntegrity, resource, operation)
+	assert.False(t, result.IsAllowed(),
+		"private sink should block agents with uncovered secrecy tags")
+}
+
+// TestWriteSinkGuard_SinkVisibility_Internal_BehavesLikePrivate tests that
+// sink-visibility="internal" has the same behavior as "private".
+func TestWriteSinkGuard_SinkVisibility_Internal_BehavesLikePrivate(t *testing.T) {
+	g := NewWriteSinkGuardWithVisibility([]string{"private:github/gh-aw*"}, "internal")
+
+	agentSecrecy := difc.NewSecrecyLabel([]difc.Tag{"private:github/gh-aw*"}...)
+	agentIntegrity := difc.NewIntegrityLabel()
+
+	resource, operation, err := g.LabelResource(context.Background(), "create_issue", nil, nil, nil)
+	require.NoError(t, err)
+
+	evaluator := difc.NewEvaluatorWithMode(difc.EnforcementFilter)
+	result := evaluator.Evaluate(agentSecrecy, agentIntegrity, resource, operation)
+	assert.True(t, result.IsAllowed(),
+		"internal sink should behave like private (allow matching secrecy); got: %s", result.Reason)
+}
+
+// TestWriteSinkGuard_SinkVisibility_Unset_BackwardCompatible tests that
+// omitting sink-visibility preserves backward-compatible behavior (wildcard
+// accept allows all writes).
+func TestWriteSinkGuard_SinkVisibility_Unset_BackwardCompatible(t *testing.T) {
+	// No visibility specified — same as NewWriteSinkGuard
+	g := NewWriteSinkGuardWithVisibility([]string{"*"}, "")
+
+	// Tainted agent — should be allowed (backward compat)
+	agentSecrecy := difc.NewSecrecyLabel([]difc.Tag{"private:github/secret-repo"}...)
+	agentIntegrity := difc.NewIntegrityLabel()
+
+	resource, operation, err := g.LabelResource(context.Background(), "create_issue_comment", nil, nil, nil)
+	require.NoError(t, err)
+
+	evaluator := difc.NewEvaluatorWithMode(difc.EnforcementFilter)
+	result := evaluator.Evaluate(agentSecrecy, agentIntegrity, resource, operation)
+	assert.True(t, result.IsAllowed(),
+		"unset sink-visibility with wildcard accept should preserve backward compat; got: %s", result.Reason)
+}
+
+// TestWriteSinkGuard_SinkVisibility_Public_ResourceDescription tests that
+// the resource description includes visibility info for debugging.
+func TestWriteSinkGuard_SinkVisibility_Public_ResourceDescription(t *testing.T) {
+	g := NewWriteSinkGuardWithVisibility([]string{"*"}, "public")
+
+	resource, _, err := g.LabelResource(context.Background(), "create_issue", nil, nil, nil)
+	require.NoError(t, err)
+	assert.Contains(t, resource.Description, "public",
+		"resource description should indicate public sink for debugging")
+}
+
+// TestWriteSinkGuard_SinkVisibility_Accessor tests the SinkVisibility() accessor.
+func TestWriteSinkGuard_SinkVisibility_Accessor(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"public", "public"},
+		{"private", "private"},
+		{"internal", "internal"},
+		{"", ""},
+		{"  Public  ", "public"}, // normalized
+	}
+	for _, tc := range tests {
+		g := NewWriteSinkGuardWithVisibility([]string{"*"}, tc.input)
+		assert.Equal(t, tc.expected, g.SinkVisibility())
+	}
+}
+
+// TestWriteSinkGuard_SinkVisibility_Public_MultipleTaintedTags tests that
+// even an agent with many private secrecy tags is blocked by public sink.
+func TestWriteSinkGuard_SinkVisibility_Public_MultipleTaintedTags(t *testing.T) {
+	g := NewWriteSinkGuardWithVisibility([]string{"*"}, "public")
+
+	// Agent accumulated secrecy from multiple private repos
+	agentSecrecy := difc.NewSecrecyLabel([]difc.Tag{
+		"private:org1/repo-a",
+		"private:org2/repo-b",
+		"private:org3/repo-c",
+	}...)
+	agentIntegrity := difc.NewIntegrityLabel()
+
+	resource, operation, err := g.LabelResource(context.Background(), "create_issue_comment", nil, nil, nil)
+	require.NoError(t, err)
+
+	evaluator := difc.NewEvaluatorWithMode(difc.EnforcementFilter)
+	result := evaluator.Evaluate(agentSecrecy, agentIntegrity, resource, operation)
+	assert.False(t, result.IsAllowed(),
+		"public sink must block agents with ANY non-empty secrecy (GitLost defense)")
+}

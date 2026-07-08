@@ -18,7 +18,7 @@ func ValidateGuardPolicy(policy *GuardPolicy) error {
 		return errors.New(errMsgPolicyMissingKey)
 	}
 	if policy.WriteSink != nil {
-		logGuardPolicy.Printf("ValidateGuardPolicy: delegating to write-sink validation, acceptCount=%d", len(policy.WriteSink.Accept))
+		logGuardPolicy.Printf("ValidateGuardPolicy: delegating to write-sink validation, acceptCount=%d, sinkVisibility=%q", len(policy.WriteSink.Accept), policy.WriteSink.SinkVisibility)
 		return ValidateWriteSinkPolicy(policy.WriteSink)
 	}
 	logGuardPolicy.Print("ValidateGuardPolicy: delegating to allow-only normalization")
@@ -26,14 +26,28 @@ func ValidateGuardPolicy(policy *GuardPolicy) error {
 	return err
 }
 
+// validSinkVisibilityValues defines the allowed values for sink-visibility.
+var validSinkVisibilityValues = map[string]bool{
+	"public":   true,
+	"private":  true,
+	"internal": true,
+}
+
 // ValidateWriteSinkPolicy validates a write-sink policy.
 func ValidateWriteSinkPolicy(ws *WriteSinkPolicy) error {
 	if ws == nil {
 		return fmt.Errorf("write-sink policy must not be nil")
 	}
-	logGuardPolicy.Printf("ValidateWriteSinkPolicy: acceptCount=%d", len(ws.Accept))
+	logGuardPolicy.Printf("ValidateWriteSinkPolicy: acceptCount=%d, sinkVisibility=%q", len(ws.Accept), ws.SinkVisibility)
 	if len(ws.Accept) == 0 {
 		return fmt.Errorf("write-sink.accept must contain at least one entry")
+	}
+	// Validate sink-visibility if provided
+	if ws.SinkVisibility != "" {
+		normalized := strings.ToLower(strings.TrimSpace(ws.SinkVisibility))
+		if !validSinkVisibilityValues[normalized] {
+			return fmt.Errorf("write-sink.sink-visibility must be one of: public, private, internal; got %q", ws.SinkVisibility)
+		}
 	}
 	// Special case: ["*"] is a valid wildcard that accepts all writes
 	if len(ws.Accept) == 1 && strings.TrimSpace(ws.Accept[0]) == "*" {

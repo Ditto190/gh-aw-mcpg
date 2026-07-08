@@ -118,13 +118,23 @@ GITHUB_PERSONAL_ACCESS_TOKEN = ""  # Pass through from host
 # The accept patterns must match the agent's secrecy tags, which depend on
 # the GitHub guard's allow-only.repos configuration.
 #
-# For repos="all" or repos="public" (agent has no secrecy tags):
+# CRITICAL: The gh-aw compiler MUST set sink-visibility based on the target
+# repo's visibility to prevent data exfiltration (GitLost vulnerability class).
+#
+# For a PUBLIC target repo (blocks tainted agents):
 # [servers.safeoutputs.guard_policies.write-sink]
 # accept = ["*"]
+# sink-visibility = "public"
 #
-# For scoped repos (agent has secrecy tags matching the scope):
+# For a PRIVATE target repo with scoped repos:
 # [servers.safeoutputs.guard_policies.write-sink]
 # accept = ["private:myorg/api-*", "private:myorg/web-*"]
+# sink-visibility = "private"
+#
+# For a PRIVATE target repo with broad access (repos="all"):
+# [servers.safeoutputs.guard_policies.write-sink]
+# accept = ["*"]
+# sink-visibility = "private"
 #
 # Accept pattern format: "visibility:owner/repo-pattern"
 # Visibility prefixes: private, public, internal

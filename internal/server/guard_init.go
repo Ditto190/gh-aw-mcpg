@@ -61,8 +61,8 @@ func (us *UnifiedServer) registerGuard(serverID string) error {
 	if g == nil {
 		// Check if server has a write-sink policy — create WriteSinkGuard directly
 		if ws := us.resolveWriteSinkPolicy(serverID); ws != nil {
-			g = guard.NewWriteSinkGuard(ws.Accept)
-			logger.LogInfoToServer(serverID, "difc", "Created write-sink guard with %d accept patterns", len(ws.Accept))
+			g = guard.NewWriteSinkGuardWithVisibility(ws.Accept, ws.SinkVisibility)
+			logger.LogInfoToServer(serverID, "difc", "Created write-sink guard with %d accept patterns, sink-visibility=%q", len(ws.Accept), ws.SinkVisibility)
 		}
 	}
 

@@ -38,6 +38,7 @@ args = ["run", "--rm", "-i", "ghcr.io/github/safe-outputs:latest"]
 
 [servers.safeoutputs.guard_policies.write-sink]
 accept = ["private:github/gh-aw-mcpg", "private:github/gh-aw"]
+sink-visibility = "private"
 ```
 
 **Important**: Per [MCP Gateway Specification Section 3.2.1](https://github.com/github/gh-aw/blob/main/docs/src/content/docs/reference/mcp-gateway.md#321-containerization-requirement), all stdio-based MCP servers MUST be containerized. The gateway rejects configurations where `command` is not `"docker"`.
@@ -77,7 +78,8 @@ JSON configuration is the primary format for containerized deployments. Pass via
       "container": "ghcr.io/github/safe-outputs:latest",
       "guard-policies": {
         "write-sink": {
-          "accept": ["private:github/gh-aw-mcpg", "private:github/gh-aw"]
+          "accept": ["private:github/gh-aw-mcpg", "private:github/gh-aw"],
+          "sink-visibility": "private"
         }
       }
     }
@@ -297,11 +299,52 @@ secrecy and integrity labels. The write-sink guard solves this by classifying al
 operations as writes and accepting writes from agents whose secrecy labels match the
 configured `accept` patterns.
 
+#### sink-visibility (CRITICAL for security)
+
+The `sink-visibility` field declares the visibility of the output channel's target
+repository. **The gh-aw compiler MUST check the safe-outputs target repository visibility
+and set this field accordingly** to prevent the GitLost vulnerability class — data
+exfiltration from private repos to public outputs via prompt injection.
+
+| `sink-visibility` | Behavior | Use when |
+|---|---|---|
+| `"public"` | Blocks any agent with non-empty secrecy from writing | Target repo is public |
+| `"private"` | Standard accept-pattern matching | Target repo is private |
+| `"internal"` | Same as `"private"` | Target repo is org-internal |
+| *(omitted)* | Standard accept-pattern matching (backward compatible) | Legacy configs |
+
+When `sink-visibility` is `"public"`, the guard sets resource secrecy to EMPTY regardless
+of `accept` patterns. The DIFC evaluator's write check (`agentSecrecy ⊆ resourceSecrecy`)
+then fails for any agent with non-empty secrecy — because no non-empty set is a subset
+of the empty set. This blocks exfiltration even if the agent was tricked into reading
+private data via prompt injection.
+
+**Example: Public repo target (blocks tainted agents):**
+```json
+"guard-policies": {
+  "write-sink": {
+    "accept": ["*"],
+    "sink-visibility": "public"
+  }
+}
+```
+
+**Example: Private repo target (standard matching):**
+```json
+"guard-policies": {
+  "write-sink": {
+    "accept": ["private:owner/repo1", "private:owner/repo2"],
+    "sink-visibility": "private"
+  }
+}
+```
+
 For exact repos (`repos=["owner/repo1", "owner/repo2"]`):
 ```json
 "guard-policies": {
   "write-sink": {
-    "accept": ["private:owner/repo1", "private:owner/repo2"]
+    "accept": ["private:owner/repo1", "private:owner/repo2"],
+    "sink-visibility": "private"
   }
 }
 ```
@@ -310,33 +353,43 @@ For prefix wildcard repos (`repos=["owner/prefix*"]`):
 ```json
 "guard-policies": {
   "write-sink": {
-    "accept": ["private:owner/prefix*"]
+    "accept": ["private:owner/prefix*"],
+    "sink-visibility": "private"
   }
 }
 ```
 
-For broad access (`repos="all"` or `repos="public"`):
+For broad access (`repos="all"` or `repos="public"`) with a **public** target repo:
 ```json
 "guard-policies": {
   "write-sink": {
-    "accept": ["*"]
+    "accept": ["*"],
+    "sink-visibility": "public"
+  }
+}
+```
+
+For broad access (`repos="all"` or `repos="public"`) with a **private** target repo:
+```json
+"guard-policies": {
+  "write-sink": {
+    "accept": ["*"],
+    "sink-visibility": "private"
   }
 }
 ```
 
 TOML equivalents:
 ```toml
-# Exact repos
-[servers.safeoutputs.guard_policies.write-sink]
-accept = ["private:owner/repo1", "private:owner/repo2"]
-
-# Prefix wildcard repos
-[servers.safeoutputs.guard_policies.write-sink]
-accept = ["private:owner/prefix*"]
-
-# Broad access (repos="all" or repos="public")
+# Public sink (blocks tainted agents)
 [servers.safeoutputs.guard_policies.write-sink]
 accept = ["*"]
+sink-visibility = "public"
+
+# Private sink (standard matching)
+[servers.safeoutputs.guard_policies.write-sink]
+accept = ["private:owner/repo1", "private:owner/repo2"]
+sink-visibility = "private"
 ```
 
 - **`accept`**: Array of secrecy tags the sink accepts (exact string match against agent secrecy tags — not glob patterns)
@@ -347,8 +400,15 @@ accept = ["*"]
   - `"public:owner/repo*"` - Matches agent secrecy tag for public repos matching a prefix
   - `"internal:owner/repo*"` - Matches agent secrecy tag for internal repos matching a prefix
 
+- **`sink-visibility`** *(optional, strongly recommended)*: Declares the visibility of the safe-outputs target repository.
+  - `"public"` — Target is a public repository. **Overrides accept patterns**: resource secrecy is set to empty, blocking any tainted agent.
+  - `"private"` — Target is a private repository. Standard accept-pattern matching applies.
+  - `"internal"` — Target is an org-internal repository. Same behavior as `"private"`.
+  - When omitted, falls back to accept-pattern matching only (backward compatible but less secure for public targets).
+
 - **How it works**: The write-sink classifies all operations as writes. For DIFC write checks:
-  - Resource secrecy is set to the `accept` patterns → agent secrecy ⊆ resource secrecy passes
+  - If `sink-visibility` is `"public"`: resource secrecy = `[]` → blocks all tainted agents
+  - Otherwise: resource secrecy is set to the `accept` patterns → agent secrecy ⊆ resource secrecy passes
   - Resource integrity is left empty → no integrity requirements for writes
 
 - **When to use**: Required for **all** output servers (`safeoutputs`, etc.) when DIFC guards are enabled on any server in the configuration
@@ -378,6 +438,13 @@ to the agent via `label_agent`. The mapping depends on the `repos` configuration
 - Multi-entry repos produce one tag per entry; `accept` must include all of them
 - `accept` can be a superset of the agent's secrecy (extra entries are harmless)
 - `min-integrity` does not affect these rules (it only changes integrity labels)
+
+**Sink visibility (CRITICAL for gh-aw compiler)**:
+- The gh-aw compiler **MUST** check the safe-outputs target repository visibility and set `sink-visibility` accordingly
+- Public target repo → `sink-visibility: "public"` — blocks tainted agents regardless of `accept`
+- Private target repo → `sink-visibility: "private"` — standard accept matching
+- Internal target repo → `sink-visibility: "internal"` — same as private
+- Without `sink-visibility: "public"`, an agent tricked into reading private data (via prompt injection) can exfiltrate it to a public repo comment (GitLost vulnerability)
 
 ## Custom Schemas (`customSchemas`)
 
