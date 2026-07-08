@@ -533,11 +533,12 @@ mod tests {
         ]);
         let result = label_response_items("list_notifications", &json!({}), &response, &ctx);
         assert_eq!(result.len(), 2);
+        let expected_secrecy = private_user_label();
         for item in &result {
-            let secrecy: Vec<String> = item.labels.secrecy.iter().cloned().collect();
-            assert!(
-                secrecy.iter().any(|s| s.starts_with("private")),
-                "notification secrecy should contain a private label, got: {secrecy:?}"
+            assert_eq!(
+                item.labels.secrecy,
+                expected_secrecy,
+                "notification secrecy should be private:user"
             );
         }
     }
