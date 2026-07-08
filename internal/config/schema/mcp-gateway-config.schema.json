@@ -21,8 +21,17 @@
       "description": "Map of custom server type names to JSON Schema URLs for validation. Custom types enable extensibility for specialized MCP server implementations. Keys are type names (must not be 'stdio' or 'http'), values are HTTPS URLs pointing to JSON Schema definitions, or empty strings to skip validation.",
       "propertyNames": {
         "allOf": [
-          { "pattern": "^[a-z][a-z0-9-]*$" },
-          { "not": { "enum": ["stdio", "http"] } }
+          {
+            "pattern": "^[a-z][a-z0-9-]*$"
+          },
+          {
+            "not": {
+              "enum": [
+                "stdio",
+                "http"
+              ]
+            }
+          }
         ]
       },
       "patternProperties": {
@@ -294,7 +303,12 @@
         "type": {
           "type": "string",
           "pattern": "^[a-z][a-z0-9-]*$",
-          "not": {"enum": ["stdio", "http"]},
+          "not": {
+            "enum": [
+              "stdio",
+              "http"
+            ]
+          },
           "description": "Custom server type name. Must not be 'stdio' or 'http'. Must be registered in customSchemas."
         }
       },
@@ -397,6 +411,10 @@
         "opentelemetry": {
           "$ref": "#/definitions/opentelemetryConfig",
           "description": "Optional OpenTelemetry configuration for emitting distributed tracing spans for MCP calls. When configured, the gateway exports OTLP/HTTP traces to the specified collector endpoint."
+        },
+        "forcePublicRepos": {
+          "type": "boolean",
+          "description": "When true (default), the gateway automatically overrides the allow-only scope to repos=\"public\" when the workflow repository (GITHUB_REPOSITORY) is detected as public at startup. Set to false to opt out (equivalent to private-to-public-flows: allow in workflow front matter)."
         }
       },
       "required": [

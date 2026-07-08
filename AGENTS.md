@@ -417,6 +417,7 @@ DEBUG_COLORS=0 DEBUG=* ./awmg --config config.toml
 - `MCP_GATEWAY_ALLOWONLY_SCOPE_OWNER` - AllowOnly owner scope value (sets default for `--allowonly-scope-owner`)
 - `MCP_GATEWAY_ALLOWONLY_SCOPE_REPO` - AllowOnly repo name, requires owner (sets default for `--allowonly-scope-repo`)
 - `MCP_GATEWAY_ALLOWONLY_MIN_INTEGRITY` - AllowOnly integrity level: `none`, `unapproved`, `approved`, `merged` (sets default for `--allowonly-min-integrity`)
+- `MCP_GATEWAY_FORCE_PUBLIC_REPOS` - When `true` (default), automatically forces `repos="public"` allow-only policy when `GITHUB_REPOSITORY` identifies a public repository; set to `false` to opt out. Overridden by `gateway.forcePublicRepos` in JSON stdin config.
 - `MCP_GATEWAY_TLS_CERT` - Path to TLS server certificate PEM file; enables HTTPS when set together with `MCP_GATEWAY_TLS_KEY` (sets default for `--tls-cert`)
 - `MCP_GATEWAY_TLS_KEY` - Path to TLS server private key PEM file; required when `MCP_GATEWAY_TLS_CERT` is set (sets default for `--tls-key`)
 - `MCP_GATEWAY_CA_CERT` - Path to CA certificate PEM file for client certificate verification; enables mutual TLS (mTLS) when set alongside `MCP_GATEWAY_TLS_CERT`/`MCP_GATEWAY_TLS_KEY` (sets default for `--tls-ca`)

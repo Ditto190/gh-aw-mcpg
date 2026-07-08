@@ -15,6 +15,9 @@ const (
 	EnvAllowOnlyScopeOwner   = "MCP_GATEWAY_ALLOWONLY_SCOPE_OWNER"
 	EnvAllowOnlyScopeRepo    = "MCP_GATEWAY_ALLOWONLY_SCOPE_REPO"
 	EnvAllowOnlyMinIntegrity = "MCP_GATEWAY_ALLOWONLY_MIN_INTEGRITY"
+	// EnvForcePublicRepos controls whether force-public-repos enforcement is active.
+	// Default true (feature on). Set to "false" to opt out.
+	EnvForcePublicRepos = "MCP_GATEWAY_FORCE_PUBLIC_REPOS"
 )
 
 // ParseServerGuardPolicy parses a guard policy from a server-specific raw policy map.

@@ -43,6 +43,7 @@ type StdinGatewayConfig struct {
 	PayloadPathPrefix    *string                   `json:"payloadPathPrefix,omitempty"`
 	PayloadSizeThreshold *int                      `json:"payloadSizeThreshold,omitempty"`
 	TrustedBots          []string                  `json:"trustedBots,omitempty"`
+	ForcePublicRepos     *bool                     `json:"forcePublicRepos,omitempty"`
 	OpenTelemetry        *StdinOpenTelemetryConfig `json:"opentelemetry,omitempty"`
 
 	agentIDSet      bool `json:"-"`
@@ -418,6 +419,9 @@ func convertStdinConfig(stdinCfg *StdinConfig) (*Config, error) {
 				return nil, err
 			}
 			cfg.Gateway.TrustedBots = stdinCfg.Gateway.TrustedBots
+		}
+		if stdinCfg.Gateway.ForcePublicRepos != nil {
+			cfg.Gateway.ForcePublicRepos = stdinCfg.Gateway.ForcePublicRepos
 		}
 	} else {
 		logStdin.Print("No gateway config in stdin, applying defaults")

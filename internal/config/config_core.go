@@ -149,6 +149,14 @@ type GatewayConfig struct {
 	// Example values: "copilot-swe-agent[bot]", "my-org-bot[bot]"
 	TrustedBots []string `toml:"trusted_bots" json:"trusted_bots,omitempty"`
 
+	// ForcePublicRepos controls whether the gateway automatically overrides the
+	// allow-only policy to repos="public" when the GITHUB_REPOSITORY repo is public.
+	// nil / omitted → enabled by default (auto-force when repo is public)
+	// true  → explicitly enabled
+	// false → disabled (opt-out via private-to-public-flows: allow)
+	// Corresponds to env var MCP_GATEWAY_FORCE_PUBLIC_REPOS.
+	ForcePublicRepos *bool `toml:"force_public_repos" json:"forcePublicRepos,omitempty"`
+
 	// Tracing holds OpenTelemetry OTLP tracing configuration (legacy TOML key).
 	// New configurations should use the opentelemetry key (spec §4.1.3.6).
 	// When Endpoint is set, traces are exported to the specified OTLP endpoint.
