@@ -436,8 +436,8 @@ func (us *UnifiedServer) verifySinkVisibilityAtRuntime(serverID, configuredVisib
 		return "public"
 	}
 
-	logger.LogInfoToServer(serverID, "difc", "Sink visibility runtime verification passed: repo=%s, visibility=%q", nwo, vis)
-	return string(vis)
+	logger.LogInfoToServer(serverID, "difc", "Sink visibility runtime verification passed: repo=%s, configured=%q, actual=%q", nwo, configuredVisibility, vis)
+	return configured
 }
 
 // resolveWorkflowRepoVisibility fetches and caches the visibility of the workflow
