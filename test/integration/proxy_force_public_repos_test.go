@@ -74,9 +74,7 @@ func (e *proxyTestEnv) readLogs(t *testing.T) string {
 	t.Helper()
 	logPath := e.logDir + "/proxy.log"
 	data, err := os.ReadFile(logPath)
-	if err != nil {
-		return ""
-	}
+	require.NoError(t, err, "Failed to read %s", logPath)
 	return string(data)
 }
 
@@ -169,7 +167,7 @@ func TestProxyForcePublicRepos_FlagDisabled(t *testing.T) {
 	t.Run("LogShowsDisabled", func(t *testing.T) {
 		time.Sleep(500 * time.Millisecond)
 		combined := env.readLogs(t) + env.stderr.String()
-		assert.Contains(t, combined, "forcePublicRepos: disabled by flag",
+		assert.Contains(t, combined, "forcePublicRepos: disabled",
 			"Should log that force-public-repos was disabled")
 	})
 }
@@ -202,7 +200,7 @@ func TestProxyForcePublicRepos_EnvVarDisabled(t *testing.T) {
 	t.Run("LogShowsDisabled", func(t *testing.T) {
 		time.Sleep(500 * time.Millisecond)
 		combined := env.readLogs(t) + env.stderr.String()
-		assert.Contains(t, combined, "forcePublicRepos: disabled by flag",
+		assert.Contains(t, combined, "forcePublicRepos: disabled",
 			"Should log that force-public-repos was disabled by env var default")
 	})
 }
@@ -269,7 +267,8 @@ func TestProxyForcePublicRepos_NoGithubRepo(t *testing.T) {
 
 	// Verify logs show skipped check
 	time.Sleep(500 * time.Millisecond)
-	logData, _ := os.ReadFile(logDir + "/proxy.log")
+	logData, err := os.ReadFile(logDir + "/proxy.log")
+	require.NoError(t, err, "Failed to read %s", logDir+"/proxy.log")
 	combined := string(logData) + stderr.String()
 	assert.Contains(t, combined, "GITHUB_REPOSITORY not set",
 		"Should log that GITHUB_REPOSITORY is not set")

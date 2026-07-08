@@ -382,7 +382,7 @@ func clientAddr(addr string) string {
 //   - The repository is not public
 func proxyForcePublicReposIfNeeded(ctx context.Context, policyJSON, token, apiURL string) string {
 	if !proxyForcePublicRepo {
-		logger.LogInfo("difc", "forcePublicRepos: disabled by flag")
+		logger.LogInfo("difc", "forcePublicRepos: disabled")
 		return policyJSON
 	}
 
