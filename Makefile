@@ -40,7 +40,7 @@ lint:
 test-unit:
 	@echo "Running unit tests..."
 	@go mod tidy
-	@go test -v -parallel=8 -timeout=3m ./internal/...
+	@go test -v -p=8 -parallel=8 -timeout=3m ./internal/...
 
 # Run all tests (unit + integration) — requires a built binary for integration tests
 test-all: build
