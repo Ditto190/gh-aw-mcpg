@@ -46,7 +46,7 @@ test-unit:
 test-all: build
 	@echo "Running all tests..."
 	@go mod tidy
-	@go test -v -parallel=8 -timeout=5m ./...
+	@go test -v -p=8 -parallel=8 -timeout=5m ./...
 
 # Legacy target: run unit tests (for backward compatibility)
 test: test-unit
