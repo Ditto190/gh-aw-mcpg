@@ -116,6 +116,18 @@ type UnifiedServer struct {
 	// Health monitoring
 	healthMonitor *launcher.HealthMonitor
 
+	// Cached workflow repository visibility — set once during guard registration startup.
+	// Used by both verifySinkVisibilityAtRuntime and shouldForcePublicRepos to avoid
+	// repeated GitHub API calls for the same repository.
+	repoVisibilityOnce    sync.Once
+	repoVisibilityCached  githubhttp.RepoVisibility
+	repoVisibilityCacheOK bool
+
+	// Cached result of the force-public-repos check — set once during guard registration.
+	// Avoids re-evaluating the check for every backend server registered at startup.
+	forcePublicReposOnce   sync.Once
+	forcePublicReposResult bool
+
 	// Cache tracer at construction to avoid calling otel.Tracer on every request.
 	tracing.CachedTracer
 }
@@ -167,6 +179,9 @@ func NewUnified(ctx context.Context, cfg *config.Config) (*UnifiedServer, error)
 
 	us.server = server
 	us.logWASMGuardsDirConfiguration()
+
+	// Validate sinkVisibilityExemptServers entries match actual server IDs
+	us.validateSinkVisibilityExemptServers()
 
 	// Register guards for all backends
 	for _, serverID := range l.ServerIDs() {

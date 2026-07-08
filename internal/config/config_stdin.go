@@ -32,18 +32,20 @@ type StdinConfig struct {
 // StdinGatewayConfig represents gateway configuration in stdin JSON format.
 // Uses pointers for optional fields to distinguish between unset and zero values.
 type StdinGatewayConfig struct {
-	Port                 *int                      `json:"port,omitempty"`
-	AgentID              string                    `json:"agentId,omitempty"`
-	APIKey               string                    `json:"apiKey,omitempty"`
-	Domain               string                    `json:"domain,omitempty"`
-	StartupTimeout       *int                      `json:"startupTimeout,omitempty"`
-	ToolTimeout          *int                      `json:"toolTimeout,omitempty"`
-	KeepaliveInterval    *int                      `json:"keepaliveInterval,omitempty"`
-	PayloadDir           string                    `json:"payloadDir,omitempty"`
-	PayloadPathPrefix    *string                   `json:"payloadPathPrefix,omitempty"`
-	PayloadSizeThreshold *int                      `json:"payloadSizeThreshold,omitempty"`
-	TrustedBots          []string                  `json:"trustedBots,omitempty"`
-	OpenTelemetry        *StdinOpenTelemetryConfig `json:"opentelemetry,omitempty"`
+	Port                        *int                      `json:"port,omitempty"`
+	AgentID                     string                    `json:"agentId,omitempty"`
+	APIKey                      string                    `json:"apiKey,omitempty"`
+	Domain                      string                    `json:"domain,omitempty"`
+	StartupTimeout              *int                      `json:"startupTimeout,omitempty"`
+	ToolTimeout                 *int                      `json:"toolTimeout,omitempty"`
+	KeepaliveInterval           *int                      `json:"keepaliveInterval,omitempty"`
+	PayloadDir                  string                    `json:"payloadDir,omitempty"`
+	PayloadPathPrefix           *string                   `json:"payloadPathPrefix,omitempty"`
+	PayloadSizeThreshold        *int                      `json:"payloadSizeThreshold,omitempty"`
+	TrustedBots                 []string                  `json:"trustedBots,omitempty"`
+	ForcePublicRepos            *bool                     `json:"forcePublicRepos,omitempty"`
+	SinkVisibilityExemptServers []string                  `json:"sinkVisibilityExemptServers,omitempty"`
+	OpenTelemetry               *StdinOpenTelemetryConfig `json:"opentelemetry,omitempty"`
 
 	agentIDSet      bool `json:"-"`
 	legacyAPIKeySet bool `json:"-"`
@@ -418,6 +420,12 @@ func convertStdinConfig(stdinCfg *StdinConfig) (*Config, error) {
 				return nil, err
 			}
 			cfg.Gateway.TrustedBots = stdinCfg.Gateway.TrustedBots
+		}
+		if stdinCfg.Gateway.ForcePublicRepos != nil {
+			cfg.Gateway.ForcePublicRepos = stdinCfg.Gateway.ForcePublicRepos
+		}
+		if len(stdinCfg.Gateway.SinkVisibilityExemptServers) > 0 {
+			cfg.Gateway.SinkVisibilityExemptServers = stdinCfg.Gateway.SinkVisibilityExemptServers
 		}
 	} else {
 		logStdin.Print("No gateway config in stdin, applying defaults")
