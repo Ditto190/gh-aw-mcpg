@@ -69,14 +69,12 @@ func startProxyWithEnv(t *testing.T, policyJSON string, port string, extraArgs [
 	return env
 }
 
-// readLogs reads the proxy's mcp-gateway.log for assertion.
+// readLogs reads the proxy's proxy.log for assertion.
 func (e *proxyTestEnv) readLogs(t *testing.T) string {
 	t.Helper()
-	logPath := e.logDir + "/mcp-gateway.log"
+	logPath := e.logDir + "/proxy.log"
 	data, err := os.ReadFile(logPath)
-	if err != nil {
-		return ""
-	}
+	require.NoError(t, err, "Failed to read %s", logPath)
 	return string(data)
 }
 
@@ -168,8 +166,8 @@ func TestProxyForcePublicRepos_FlagDisabled(t *testing.T) {
 	// Verify logs show the flag disabled the override
 	t.Run("LogShowsDisabled", func(t *testing.T) {
 		time.Sleep(500 * time.Millisecond)
-		stderr := env.stderr.String()
-		assert.Contains(t, stderr, "forcePublicRepos: disabled by flag",
+		combined := env.readLogs(t) + env.stderr.String()
+		assert.Contains(t, combined, "forcePublicRepos: disabled",
 			"Should log that force-public-repos was disabled")
 	})
 }
@@ -201,8 +199,8 @@ func TestProxyForcePublicRepos_EnvVarDisabled(t *testing.T) {
 
 	t.Run("LogShowsDisabled", func(t *testing.T) {
 		time.Sleep(500 * time.Millisecond)
-		stderr := env.stderr.String()
-		assert.Contains(t, stderr, "forcePublicRepos: disabled by flag",
+		combined := env.readLogs(t) + env.stderr.String()
+		assert.Contains(t, combined, "forcePublicRepos: disabled",
 			"Should log that force-public-repos was disabled by env var default")
 	})
 }
@@ -269,7 +267,10 @@ func TestProxyForcePublicRepos_NoGithubRepo(t *testing.T) {
 
 	// Verify logs show skipped check
 	time.Sleep(500 * time.Millisecond)
-	assert.Contains(t, stderr.String(), "GITHUB_REPOSITORY not set",
+	logData, err := os.ReadFile(logDir + "/proxy.log")
+	require.NoError(t, err, "Failed to read %s", logDir+"/proxy.log")
+	combined := string(logData) + stderr.String()
+	assert.Contains(t, combined, "GITHUB_REPOSITORY not set",
 		"Should log that GITHUB_REPOSITORY is not set")
 }
 
@@ -279,17 +280,28 @@ func TestProxyForcePublicRepos_NoGithubRepo(t *testing.T) {
 
 // TestProxyForcePublicRepos_PrivateRepo verifies that when
 // GITHUB_REPOSITORY identifies a private repo, no override is applied.
+//
+// It points the proxy at a mock GitHub API that reports the repository as
+// private. This keeps the test deterministic and independent of the live
+// visibility of any real repository (the CI token is typically scoped to a
+// single public repo, so a real private repo is not reliably reachable).
 func TestProxyForcePublicRepos_PrivateRepo(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping proxy integration test in short mode")
 	}
 
-	// Use a private repo that the token has access to (github/gh-aw-mcpg)
+	// Mock GitHub API that reports the repo as private for the visibility check
+	// and returns 200 for proxied read requests.
+	mockAPI := startMockGitHubAPI(t, "private", true)
+	defer mockAPI.Close()
+
+	// Policy allows the repo by name — a read should be permitted.
 	policy := `{"allow-only":{"repos":["github/gh-aw-mcpg"],"min-integrity":"none"}}`
 
-	env := startProxyWithEnv(t, policy, "18924", nil, []string{
-		"GITHUB_REPOSITORY=github/gh-aw-mcpg",
-	})
+	env := startProxyWithEnv(t, policy, "18924",
+		[]string{"--github-api-url", mockAPI.URL},
+		[]string{"GITHUB_REPOSITORY=github/gh-aw-mcpg"},
+	)
 	defer env.stop(t)
 
 	t.Run("PrivateRepo_Allowed", func(t *testing.T) {

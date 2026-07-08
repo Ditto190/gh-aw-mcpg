@@ -382,13 +382,13 @@ func clientAddr(addr string) string {
 //   - The repository is not public
 func proxyForcePublicReposIfNeeded(ctx context.Context, policyJSON, token, apiURL string) string {
 	if !proxyForcePublicRepo {
-		logProxyCmd.Print("forcePublicRepos: disabled by flag")
+		logger.LogInfo("difc", "forcePublicRepos: disabled")
 		return policyJSON
 	}
 
 	nwo := os.Getenv("GITHUB_REPOSITORY")
 	if nwo == "" {
-		logProxyCmd.Print("forcePublicRepos: GITHUB_REPOSITORY not set — skipping")
+		logger.LogInfo("difc", "forcePublicRepos: GITHUB_REPOSITORY not set — skipping")
 		return policyJSON
 	}
 
@@ -397,7 +397,7 @@ func proxyForcePublicReposIfNeeded(ctx context.Context, policyJSON, token, apiUR
 		authToken = envutil.LookupGitHubToken()
 	}
 	if authToken == "" {
-		logProxyCmd.Print("forcePublicRepos: no GitHub token available — skipping")
+		logger.LogInfo("difc", "forcePublicRepos: no GitHub token available — skipping")
 		return policyJSON
 	}
 
@@ -408,7 +408,7 @@ func proxyForcePublicReposIfNeeded(ctx context.Context, policyJSON, token, apiUR
 	}
 
 	if vis != githubhttp.RepoVisibilityPublic {
-		logProxyCmd.Printf("forcePublicRepos: repo %s is %s — no override needed", nwo, vis)
+		logger.LogInfo("difc", "forcePublicRepos: repo %s is %s — no override needed", nwo, vis)
 		return policyJSON
 	}
 
