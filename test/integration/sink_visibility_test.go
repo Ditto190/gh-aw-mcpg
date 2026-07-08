@@ -223,8 +223,8 @@ func TestSinkVisibility_InvalidValue(t *testing.T) {
 					"Stderr should mention the invalid sink-visibility field")
 				t.Logf("✓ Invalid sink-visibility=%s rejected by schema validation", tt.sinkVisibility)
 			case <-time.After(12 * time.Second):
-				cmd.Process.Kill()
-				cmd.Wait()
+				_ = cmd.Process.Kill()
+				<-done
 				t.Fatalf("Gateway did not exit within timeout; stderr:\n%s", stderr.String())
 			}
 		})
