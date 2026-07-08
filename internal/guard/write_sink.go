@@ -2,6 +2,7 @@ package guard
 
 import (
 	"context"
+	"strings"
 
 	"github.com/github/gh-aw-mcpg/internal/difc"
 	"github.com/github/gh-aw-mcpg/internal/logger"
@@ -9,6 +10,13 @@ import (
 )
 
 var logWriteSink = logger.New("guard:write-sink")
+
+// SinkVisibility constants for the write-sink guard.
+const (
+	SinkVisibilityPublic   = "public"
+	SinkVisibilityPrivate  = "private"
+	SinkVisibilityInternal = "internal"
+)
 
 // WriteSinkGuard is a guard for write-only output channels (e.g., safe-outputs).
 //
@@ -31,35 +39,69 @@ var logWriteSink = logger.New("guard:write-sink")
 // assigns OperationRead + empty labels, causing integrity violations when the
 // agent has integrity tags from other guards.
 //
+// # Sink Visibility
+//
+// When sink-visibility is set to "public", the guard sets resource secrecy to
+// EMPTY regardless of accept patterns. This means any agent with non-empty
+// secrecy will be blocked by the DIFC evaluator (agentSecrecy ⊆ {} fails for
+// any non-empty agent secrecy). This prevents data exfiltration from private
+// repos to public outputs — the core defense against the GitLost vulnerability
+// class where prompt injection causes an agent to read private data and then
+// write it to a public location.
+//
+// When sink-visibility is "private", "internal", or omitted, the guard uses
+// the configured accept patterns (existing behavior).
+//
 // Configuration examples:
 //
-//	// For repos="all" or repos="public" (agent has no secrecy):
+//	// Public sink — blocks tainted agents:
+//	"guard-policies": {
+//	  "write-sink": {
+//	    "accept": ["*"],
+//	    "sink-visibility": "public"
+//	  }
+//	}
+//
+//	// Private sink — standard accept matching:
+//	"guard-policies": {
+//	  "write-sink": {
+//	    "accept": ["private:github/gh-aw*"],
+//	    "sink-visibility": "private"
+//	  }
+//	}
+//
+//	// Backward compatible (no visibility specified):
 //	"guard-policies": {
 //	  "write-sink": {
 //	    "accept": ["*"]
 //	  }
 //	}
-//
-//	// For scoped repos (agent has secrecy tags):
-//	"guard-policies": {
-//	  "write-sink": {
-//	    "accept": ["private:github/gh-aw*"]
-//	  }
-//	}
 type WriteSinkGuard struct {
-	acceptTags []difc.Tag
+	acceptTags     []difc.Tag
+	sinkVisibility string
 }
 
 // NewWriteSinkGuard creates a new write-sink guard with the specified accept patterns.
 // Each pattern becomes a secrecy tag on the resource, allowing agents with
 // matching secrecy to write to this sink.
 func NewWriteSinkGuard(accept []string) *WriteSinkGuard {
+	return NewWriteSinkGuardWithVisibility(accept, "")
+}
+
+// NewWriteSinkGuardWithVisibility creates a new write-sink guard with accept
+// patterns and an explicit sink visibility declaration.
+//
+// When sinkVisibility is "public", the guard will block any agent with
+// non-empty secrecy from writing, regardless of accept patterns. This prevents
+// exfiltration of private data to public outputs.
+func NewWriteSinkGuardWithVisibility(accept []string, sinkVisibility string) *WriteSinkGuard {
 	tags := make([]difc.Tag, len(accept))
 	for i, a := range accept {
 		tags[i] = difc.Tag(a)
 	}
-	logWriteSink.Printf("Creating write-sink guard with %d accept patterns", len(tags))
-	return &WriteSinkGuard{acceptTags: tags}
+	normalized := strings.ToLower(strings.TrimSpace(sinkVisibility))
+	logWriteSink.Printf("Creating write-sink guard with %d accept patterns, sink-visibility=%q", len(tags), normalized)
+	return &WriteSinkGuard{acceptTags: tags, sinkVisibility: normalized}
 }
 
 // Name returns the identifier for this guard
@@ -74,10 +116,16 @@ func (g *WriteSinkGuard) LabelAgent(_ context.Context, _ interface{}, _ BackendC
 	return emptyAgentLabelsResult(difc.ModeFilter), nil
 }
 
-// LabelResource sets the resource's secrecy to the configured accept patterns
-// and classifies the operation as a write.
+// LabelResource sets the resource's secrecy based on sink visibility and
+// configured accept patterns, classifying the operation as a write.
 //
-// For writes the DIFC evaluator checks:
+// When sink-visibility is "public", resource secrecy is left EMPTY. This means
+// the DIFC evaluator's write check (agentSecrecy ⊆ resourceSecrecy) will fail
+// for any agent with non-empty secrecy — blocking exfiltration of private data
+// to public outputs.
+//
+// When sink-visibility is "private", "internal", or unset, the resource secrecy
+// is set to the configured accept patterns (standard behavior):
 //   - agentSecrecy ⊆ resource.Secrecy     (no secret information leak)
 //   - resource.Integrity ⊆ agentIntegrity  (agent is trusted enough)
 //
@@ -86,13 +134,35 @@ func (g *WriteSinkGuard) LabelAgent(_ context.Context, _ interface{}, _ BackendC
 // By leaving the resource integrity empty, the second check also passes
 // because the agent has all zero of the (empty) required integrity tags.
 func (g *WriteSinkGuard) LabelResource(_ context.Context, toolName string, toolArgs interface{}, _ BackendCaller, _ *difc.Capabilities) (*difc.LabeledResource, difc.OperationType, error) {
-	logWriteSink.Printf("LabelResource: tool=%s, operation=write, accept_tags=%d", toolName, len(g.acceptTags))
 	g.auditURLsInBody(toolName, toolArgs)
 
+	if g.sinkVisibility == SinkVisibilityPublic {
+		// Public sink: resource secrecy stays EMPTY.
+		// Any agent with non-empty secrecy will be blocked by the evaluator.
+		logWriteSink.Printf("LabelResource: tool=%s, operation=write, sink-visibility=public (empty resource secrecy — tainted agents blocked)", toolName)
+		resource := difc.NewLabeledResource("write-sink:public (" + toolName + ")")
+		return resource, difc.OperationWrite, nil
+	}
+
+	// Private/internal/unset: use configured accept patterns
+	logWriteSink.Printf("LabelResource: tool=%s, operation=write, sink-visibility=%s, accept_tags=%d", toolName, g.effectiveVisibility(), len(g.acceptTags))
 	resource := difc.NewLabeledResource("write-sink (" + toolName + ")")
 	resource.Secrecy = *difc.NewSecrecyLabel(g.acceptTags...)
 
 	return resource, difc.OperationWrite, nil
+}
+
+// effectiveVisibility returns the sink visibility for logging, defaulting to "unset".
+func (g *WriteSinkGuard) effectiveVisibility() string {
+	if g.sinkVisibility == "" {
+		return "unset"
+	}
+	return g.sinkVisibility
+}
+
+// SinkVisibility returns the configured sink visibility value.
+func (g *WriteSinkGuard) SinkVisibility() string {
+	return g.sinkVisibility
 }
 
 func (g *WriteSinkGuard) auditURLsInBody(toolName string, args interface{}) {
