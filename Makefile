@@ -40,13 +40,13 @@ lint:
 test-unit:
 	@echo "Running unit tests..."
 	@go mod tidy
-	@go test -v ./internal/...
+	@go test -v -parallel=8 -timeout=3m ./internal/...
 
 # Run all tests (unit + integration) — requires a built binary for integration tests
 test-all: build
 	@echo "Running all tests..."
 	@go mod tidy
-	@go test -v ./...
+	@go test -v -parallel=8 -timeout=5m ./...
 
 # Legacy target: run unit tests (for backward compatibility)
 test: test-unit
@@ -69,7 +69,7 @@ test-integration:
 		echo "Binary not found. Building..."; \
 		$(MAKE) build; \
 	fi
-	@go test -v ./test/integration/...
+	@go test -v -timeout=5m ./test/integration/...
 
 # Run unit tests with race detection (catches concurrent data races)
 # The MCP Gateway is a concurrent server; use this to validate thread safety.
