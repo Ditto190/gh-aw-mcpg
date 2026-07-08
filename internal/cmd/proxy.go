@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
@@ -15,6 +16,7 @@ import (
 	"github.com/github/gh-aw-mcpg/internal/config"
 	"github.com/github/gh-aw-mcpg/internal/difc"
 	"github.com/github/gh-aw-mcpg/internal/envutil"
+	"github.com/github/gh-aw-mcpg/internal/githubhttp"
 	"github.com/github/gh-aw-mcpg/internal/guard"
 	"github.com/github/gh-aw-mcpg/internal/logger"
 	"github.com/github/gh-aw-mcpg/internal/proxy"
@@ -33,21 +35,22 @@ var tlsTrustEnvKeys = []string{
 
 // Proxy subcommand flag variables
 var (
-	proxyGuardWasm      string
-	proxyPolicy         string
-	proxyToken          string
-	proxyListen         string
-	proxyLogDir         string
-	proxyWasmCacheDir   string
-	proxyDIFCMode       string
-	proxyAPIURL         string
-	proxyTLS            bool
-	proxyTLSDir         string
-	proxyTrustedBots    []string
-	proxyTrustedUsers   []string
-	proxyOTLPEndpoint   string
-	proxyOTLPService    string
-	proxyOTLPSampleRate float64
+	proxyGuardWasm       string
+	proxyPolicy          string
+	proxyToken           string
+	proxyListen          string
+	proxyLogDir          string
+	proxyWasmCacheDir    string
+	proxyDIFCMode        string
+	proxyAPIURL          string
+	proxyTLS             bool
+	proxyTLSDir          string
+	proxyTrustedBots     []string
+	proxyTrustedUsers    []string
+	proxyOTLPEndpoint    string
+	proxyOTLPService     string
+	proxyOTLPSampleRate  float64
+	proxyForcePublicRepo bool
 )
 
 func init() {
@@ -116,6 +119,7 @@ Local usage:
 	cmd.Flags().StringVar(&proxyWasmCacheDir, "wasm-cache-dir", resolveWasmCacheDir(false, "", defaultProxyLogDir), "Directory for disk-backed wazero compilation cache (default: sibling of <log-dir>, named wazero-cache)")
 	cmd.Flags().StringVar(&proxyDIFCMode, "guards-mode", difc.DefaultEnforcementMode(), "DIFC enforcement mode: strict, filter, propagate")
 	cmd.Flags().StringVar(&proxyAPIURL, "github-api-url", "", "Upstream GitHub API URL (default: auto-derived from GITHUB_API_URL or GITHUB_SERVER_URL, falls back to https://api.github.com)")
+	cmd.Flags().BoolVar(&proxyForcePublicRepo, "force-public-repos", envutil.GetEnvBool(config.EnvForcePublicRepos, true), "When true (default), forces repos=\"public\" at runtime if the workflow repo is public. Set to false to disable.")
 	cmd.Flags().BoolVar(&proxyTLS, "tls", false, "Enable HTTPS with auto-generated self-signed certificates")
 	cmd.Flags().StringVar(&proxyTLSDir, "tls-dir", "", "Directory for TLS certificates (default: <log-dir>/proxy-tls)")
 	cmd.Flags().StringSliceVar(&proxyTrustedBots, "trusted-bots", nil, "Additional trusted bot usernames (comma-separated, extends built-in list)")
@@ -220,12 +224,20 @@ func runProxy(cmd *cobra.Command, args []string) error {
 	logger.LogInfo("startup", "Upstream GitHub API URL: %s", apiURL)
 	logProxyCmd.Printf("Resolved GitHub API URL: %s, explicit flag=%v", apiURL, proxyAPIURL != "")
 
+	// Defense-in-depth: force repos="public" when running in a public repository.
+	// This overrides the compiled policy to prevent agents from reading private
+	// repos, even if the compiler misconfigured the allow-only scope.
+	effectivePolicy := proxyPolicy
+	if effectivePolicy != "" {
+		effectivePolicy = proxyForcePublicReposIfNeeded(ctx, effectivePolicy, token, apiURL)
+	}
+
 	// Create the proxy server
 	logProxyCmd.Printf("Creating proxy server: guard=%s, hasPolicy=%v, mode=%s, trustedBots=%d, trustedUsers=%d",
-		proxyGuardWasm, proxyPolicy != "", proxyDIFCMode, len(proxyTrustedBots), len(proxyTrustedUsers))
+		proxyGuardWasm, effectivePolicy != "", proxyDIFCMode, len(proxyTrustedBots), len(proxyTrustedUsers))
 	proxySrv, err := proxy.New(ctx, proxy.Config{
 		WasmPath:     proxyGuardWasm,
-		Policy:       proxyPolicy,
+		Policy:       effectivePolicy,
 		GitHubToken:  token,
 		GitHubAPIURL: apiURL,
 		DIFCMode:     proxyDIFCMode,
@@ -356,4 +368,80 @@ func clientAddr(addr string) string {
 		return net.JoinHostPort("localhost", port)
 	}
 	return addr
+}
+
+// proxyForcePublicReposIfNeeded checks if GITHUB_REPOSITORY is public and, if so,
+// overrides the allow-only policy's repos field to "public". This prevents agents
+// in public-repo workflows from reading private repos through the proxy.
+//
+// Skipped when:
+//   - --force-public-repos=false (or MCP_GATEWAY_FORCE_PUBLIC_REPOS=false)
+//   - GITHUB_REPOSITORY is not set
+//   - No GitHub token is available
+//   - The API call fails (fail-open)
+//   - The repository is not public
+func proxyForcePublicReposIfNeeded(ctx context.Context, policyJSON, token, apiURL string) string {
+	if !proxyForcePublicRepo {
+		logProxyCmd.Print("forcePublicRepos: disabled by flag")
+		return policyJSON
+	}
+
+	nwo := os.Getenv("GITHUB_REPOSITORY")
+	if nwo == "" {
+		logProxyCmd.Print("forcePublicRepos: GITHUB_REPOSITORY not set — skipping")
+		return policyJSON
+	}
+
+	authToken := token
+	if authToken == "" {
+		authToken = envutil.LookupGitHubToken()
+	}
+	if authToken == "" {
+		logProxyCmd.Print("forcePublicRepos: no GitHub token available — skipping")
+		return policyJSON
+	}
+
+	vis, err := githubhttp.FetchRepoVisibility(ctx, apiURL, nwo, "token "+authToken)
+	if err != nil {
+		logger.LogWarn("difc", "forcePublicRepos: failed to determine visibility for %s (fail-open): %v", nwo, err)
+		return policyJSON
+	}
+
+	if vis != githubhttp.RepoVisibilityPublic {
+		logProxyCmd.Printf("forcePublicRepos: repo %s is %s — no override needed", nwo, vis)
+		return policyJSON
+	}
+
+	// Repository is public — override policy to repos="public"
+	var policyMap map[string]interface{}
+	if err := json.Unmarshal([]byte(policyJSON), &policyMap); err != nil {
+		logger.LogWarn("difc", "forcePublicRepos: failed to parse policy JSON (using original): %v", err)
+		return policyJSON
+	}
+
+	// Find the allow-only section (canonical or legacy key)
+	var allowOnly map[string]interface{}
+	if ao, ok := policyMap["allow-only"]; ok {
+		allowOnly, _ = ao.(map[string]interface{})
+	} else if ao, ok := policyMap["allowonly"]; ok {
+		allowOnly, _ = ao.(map[string]interface{})
+	}
+
+	if allowOnly == nil {
+		policyMap["allow-only"] = map[string]interface{}{
+			"repos":         "public",
+			"min-integrity": "none",
+		}
+	} else {
+		allowOnly["repos"] = "public"
+	}
+
+	overridden, err := json.Marshal(policyMap)
+	if err != nil {
+		logger.LogWarn("difc", "forcePublicRepos: failed to marshal overridden policy (using original): %v", err)
+		return policyJSON
+	}
+
+	logger.LogWarn("difc", "FORCED REPOS=PUBLIC: workflow repo %s is public — overriding proxy allow-only scope to prevent private data reads", nwo)
+	return string(overridden)
 }
