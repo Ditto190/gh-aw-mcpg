@@ -80,7 +80,7 @@ func FetchCollaboratorPermission(
 	}
 	body, err := httputil.ReadResponseBody(resp, "GitHub collaborator API")
 	if err != nil {
-		logCollab.Printf("FetchCollaboratorPermission: GitHub API error: owner=%s, repo=%s, username=%s, err=%v", owner, repo, username, err)
+		logCollab.Printf("FetchCollaboratorPermission: GitHub collaborator API error: owner=%s, repo=%s, username=%s, err=%v", owner, repo, username, err)
 		return nil, err
 	}
 	logCollab.Printf("FetchCollaboratorPermission: response received: status=%d, bodyLen=%d", resp.StatusCode, len(body))
