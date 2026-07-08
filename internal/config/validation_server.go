@@ -227,6 +227,10 @@ func validateCustomServerConfig(name string, server *StdinServerConfig, customSc
 
 // validateAgainstCustomSchema fetches and validates a server config against its custom schema
 func validateAgainstCustomSchema(name string, server *StdinServerConfig, schemaURL string, jsonPath string) error {
+	schemaErr := func(message, hint string) error {
+		return SchemaValidationError(server.Type, message, jsonPath, hint)
+	}
+
 	if cachedSchema, ok := customSchemaCache.Load(schemaURL); ok {
 		if schema, ok := cachedSchema.(*jsonschema.Schema); ok {
 			logValidation.Printf("Using cached custom schema: name=%s, url=%s", name, schemaURL)
@@ -241,9 +245,8 @@ func validateAgainstCustomSchema(name string, server *StdinServerConfig, schemaU
 	schemaJSON, err := fetchSchema(schemaURL)
 	if err != nil {
 		logValidation.Printf("Failed to fetch custom schema: name=%s, url=%s, error=%v", name, schemaURL, err)
-		return SchemaValidationError(server.Type,
+		return schemaErr(
 			fmt.Sprintf("failed to fetch custom schema: %v", err),
-			jsonPath,
 			fmt.Sprintf("Ensure the schema URL '%s' is accessible and returns a valid JSON Schema", schemaURL))
 	}
 
@@ -252,9 +255,8 @@ func validateAgainstCustomSchema(name string, server *StdinServerConfig, schemaU
 	// Parse the schema JSON into a document
 	schemaDoc, parseErr := jsonschema.UnmarshalJSON(bytes.NewReader(schemaJSON))
 	if parseErr != nil {
-		return SchemaValidationError(server.Type,
+		return schemaErr(
 			fmt.Sprintf("failed to parse custom schema: %v", parseErr),
-			jsonPath,
 			fmt.Sprintf("The schema at '%s' must be valid JSON", schemaURL))
 	}
 
@@ -271,25 +273,22 @@ func validateAgainstCustomSchema(name string, server *StdinServerConfig, schemaU
 
 	// Add the schema with the fetch URL
 	if err := compiler.AddResource(schemaURL, schemaDoc); err != nil {
-		return SchemaValidationError(server.Type,
+		return schemaErr(
 			fmt.Sprintf("failed to compile custom schema: %v", err),
-			jsonPath,
 			fmt.Sprintf("The schema at '%s' must be a valid JSON Schema document", schemaURL))
 	}
 	if schemaID != schemaURL {
 		if err := compiler.AddResource(schemaID, schemaDoc); err != nil {
-			return SchemaValidationError(server.Type,
+			return schemaErr(
 				fmt.Sprintf("failed to compile custom schema with $id: %v", err),
-				jsonPath,
 				fmt.Sprintf("Check the $id field in the schema at '%s'", schemaURL))
 		}
 	}
 
 	schema, err := compiler.Compile(schemaID)
 	if err != nil {
-		return SchemaValidationError(server.Type,
+		return schemaErr(
 			fmt.Sprintf("failed to compile custom schema: %v", err),
-			jsonPath,
 			fmt.Sprintf("The schema at '%s' must be a valid JSON Schema Draft 7 document", schemaURL))
 	}
 
@@ -302,6 +301,9 @@ func validateAgainstCustomSchema(name string, server *StdinServerConfig, schemaU
 // validateServerAgainstSchema validates a server config map (including additional
 // properties) against a compiled custom schema.
 func validateServerAgainstSchema(name string, server *StdinServerConfig, schema *jsonschema.Schema, schemaURL string, jsonPath string) error {
+	schemaErr := func(message, hint string) error {
+		return SchemaValidationError(server.Type, message, jsonPath, hint)
+	}
 
 	// Convert server config to a map that includes both struct fields and additional properties
 	// This ensures custom fields are validated against the custom schema
@@ -310,16 +312,16 @@ func validateServerAgainstSchema(name string, server *StdinServerConfig, schema 
 	// Marshal the struct to JSON first
 	serverJSON, err := json.Marshal(server)
 	if err != nil {
-		return SchemaValidationError(server.Type,
+		return schemaErr(
 			fmt.Sprintf("failed to marshal server config for validation: %v", err),
-			jsonPath, "Internal error - please report this issue")
+			"Internal error - please report this issue")
 	}
 
 	// Unmarshal to map to get struct fields
 	if err := json.Unmarshal(serverJSON, &serverMap); err != nil {
-		return SchemaValidationError(server.Type,
+		return schemaErr(
 			fmt.Sprintf("failed to unmarshal server config for validation: %v", err),
-			jsonPath, "Internal error - please report this issue")
+			"Internal error - please report this issue")
 	}
 
 	// Merge additional properties (custom fields) into the map
@@ -330,9 +332,8 @@ func validateServerAgainstSchema(name string, server *StdinServerConfig, schema 
 	// Validate the merged map against the custom schema
 	if err := schema.Validate(serverMap); err != nil {
 		logValidation.Printf("Custom schema validation failed: name=%s, error=%v", name, err)
-		return SchemaValidationError(server.Type,
+		return schemaErr(
 			fmt.Sprintf("server configuration does not match custom schema: %v", err),
-			jsonPath,
 			fmt.Sprintf("Update the server configuration to match the schema requirements at '%s'", schemaURL))
 	}
 
