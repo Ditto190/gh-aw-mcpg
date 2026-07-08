@@ -95,10 +95,10 @@ Installed gh-aw agents should support scenario evaluation requests that do not c
 
 When the request is framed as a PM or stakeholder workflow (for example "weekly product health digest"):
 
-- prefer `schedule: weekly` (or `daily on weekdays` for operational digests) plus `workflow_dispatch` for preview/backfill runs
-- read with `github` (`gh-proxy`) and default to `create-issue` for the digest destination
-- require an explicit report window, grouping dimensions, and a stable dedup key before creating output
-- use `close-older-issues: true` for recurring issue-style digests and call `noop` when the selected window has no qualifying updates
+- Prefer `schedule: weekly` (or `daily on weekdays` for operational digests) plus `workflow_dispatch` for preview/backfill runs
+- Read with `github` (`gh-proxy`) and default to `create-issue` for the digest destination
+- Require an explicit report window, grouping dimensions, and a stable dedup key before creating output
+- Use `close-older-issues: true` for recurring issue-style digests and call `noop` when the selected window has no qualifying updates
 
 ## PR Checks with Linked References
 
