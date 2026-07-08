@@ -157,6 +157,14 @@ type GatewayConfig struct {
 	// Corresponds to env var MCP_GATEWAY_FORCE_PUBLIC_REPOS.
 	ForcePublicRepos *bool `toml:"force_public_repos" json:"forcePublicRepos,omitempty"`
 
+	// SinkVisibilityExemptServers lists server IDs that are exempt from the
+	// default sink-visibility="public" enforcement. By default, all non-safe-outputs
+	// write-sink servers are assigned sink-visibility="public" (security-by-default).
+	// Servers in this list retain their configured (or omitted) sink-visibility as-is.
+	// Use ["*"] to exempt all servers (equivalent to disabling the default).
+	// Set by the compiler when private-to-public-flows is configured in frontmatter.
+	SinkVisibilityExemptServers []string `toml:"sink_visibility_exempt_servers" json:"sinkVisibilityExemptServers,omitempty"`
+
 	// Tracing holds OpenTelemetry OTLP tracing configuration (legacy TOML key).
 	// New configurations should use the opentelemetry key (spec §4.1.3.6).
 	// When Endpoint is set, traces are exported to the specified OTLP endpoint.

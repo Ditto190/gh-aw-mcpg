@@ -43,6 +43,15 @@ func startMockGitHubAPI(t *testing.T, visibility string, private bool) *httptest
 	}))
 }
 
+// startMockGitHubAPIWithStatus starts a mock GitHub API that always returns
+// the specified HTTP status code (for testing error/failure scenarios).
+func startMockGitHubAPIWithStatus(t *testing.T, statusCode int) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(statusCode)
+	}))
+}
+
 // TestSinkVisibility_ConfigAccepted verifies the gateway starts successfully
 // with various sink-visibility configurations in the write-sink guard policy.
 func TestSinkVisibility_ConfigAccepted(t *testing.T) {

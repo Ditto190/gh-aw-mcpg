@@ -66,7 +66,30 @@ func (us *UnifiedServer) registerGuard(serverID string) error {
 	if g == nil {
 		// Check if server has a write-sink policy — create WriteSinkGuard directly
 		if ws := us.resolveWriteSinkPolicy(serverID); ws != nil {
-			effectiveVisibility := us.verifySinkVisibilityAtRuntime(serverID, ws.SinkVisibility)
+			effectiveVisibility := ws.SinkVisibility
+
+			// Security-by-default: non-safe-outputs write-sink servers get
+			// sink-visibility="public" when no explicit value is configured.
+			// This assumes external sinks release data publicly unless exempted.
+			if effectiveVisibility == "" && !isSafeOutputsServer(serverID) && !us.isServerExemptFromSinkVisibility(serverID) {
+				effectiveVisibility = "public"
+				logger.LogInfoToServer(serverID, "difc",
+					"Defaulting sink-visibility to \"public\" for non-safe-outputs write-sink server (security-by-default)")
+			}
+
+			// Runtime safety net for safe-outputs: if the compiler didn't set
+			// sink-visibility but the workflow repo is public, force "public" to
+			// prevent exfiltration. This makes the gateway self-defending even
+			// without compiler cooperation.
+			if effectiveVisibility == "" && isSafeOutputsServer(serverID) {
+				if vis, ok := us.resolveWorkflowRepoVisibility(); ok && vis == githubhttp.RepoVisibilityPublic {
+					effectiveVisibility = "public"
+					logger.LogWarnToServer(serverID, "difc",
+						"SAFE-OUTPUTS SAFETY NET: no sink-visibility configured but workflow repo is public — forcing sink-visibility=\"public\" to prevent data exfiltration")
+				}
+			}
+
+			effectiveVisibility = us.verifySinkVisibilityAtRuntime(serverID, effectiveVisibility)
 			g = guard.NewWriteSinkGuardWithVisibility(ws.Accept, effectiveVisibility)
 			logger.LogInfoToServer(serverID, "difc", "Created write-sink guard with %d accept patterns, sink-visibility=%q", len(ws.Accept), effectiveVisibility)
 		}
@@ -522,6 +545,50 @@ func (us *UnifiedServer) computeForcePublicRepos() bool {
 	}
 
 	return vis == githubhttp.RepoVisibilityPublic
+}
+
+// isSafeOutputsServer returns true if the server ID identifies a safe-outputs
+// server. Matches "safe-outputs" and the legacy "safeoutputs" form.
+func isSafeOutputsServer(serverID string) bool {
+	return serverID == "safe-outputs" || serverID == "safeoutputs"
+}
+
+// isServerExemptFromSinkVisibility returns true if the given server should NOT
+// receive the default sink-visibility="public" enforcement. A server is exempt when:
+//   - forcePublicRepos is explicitly disabled (blanket opt-out)
+//   - The server ID appears in gateway.SinkVisibilityExemptServers
+//   - SinkVisibilityExemptServers contains "*" (wildcard exempts all)
+func (us *UnifiedServer) isServerExemptFromSinkVisibility(serverID string) bool {
+	if us.cfg == nil || us.cfg.Gateway == nil {
+		return false
+	}
+	// Blanket opt-out: forcePublicRepos=false implies all servers exempt
+	if us.cfg.Gateway.ForcePublicRepos != nil && !*us.cfg.Gateway.ForcePublicRepos {
+		return true
+	}
+	for _, exempt := range us.cfg.Gateway.SinkVisibilityExemptServers {
+		if exempt == "*" || exempt == serverID {
+			return true
+		}
+	}
+	return false
+}
+
+// validateSinkVisibilityExemptServers checks that each entry in the exempt list
+// matches an actual server in the config. Unknown server IDs produce a warning.
+func (us *UnifiedServer) validateSinkVisibilityExemptServers() {
+	if us.cfg == nil || us.cfg.Gateway == nil {
+		return
+	}
+	for _, exempt := range us.cfg.Gateway.SinkVisibilityExemptServers {
+		if exempt == "*" {
+			continue
+		}
+		if _, exists := us.cfg.Servers[exempt]; !exists {
+			logger.LogWarn("difc",
+				"sinkVisibilityExemptServers contains unknown server ID %q — ignoring (not in mcpServers config)", exempt)
+		}
+	}
 }
 
 // overrideToPublicScope modifies the in-memory guard policy for serverID so that

@@ -180,6 +180,9 @@ func NewUnified(ctx context.Context, cfg *config.Config) (*UnifiedServer, error)
 	us.server = server
 	us.logWASMGuardsDirConfiguration()
 
+	// Validate sinkVisibilityExemptServers entries match actual server IDs
+	us.validateSinkVisibilityExemptServers()
+
 	// Register guards for all backends
 	for _, serverID := range l.ServerIDs() {
 		if err := us.registerGuard(serverID); err != nil {
