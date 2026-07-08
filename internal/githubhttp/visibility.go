@@ -118,5 +118,5 @@ func VerifySinkVisibility(ctx context.Context, apiBaseURL, nwo, authHeader, conf
 	//   - configured="public" but actual=private → keep "public" (more restrictive)
 	//   - configured="private" and actual=private → no change needed
 	//   - configured="internal" and actual=internal → no change needed
-	return configuredVisibility, false, nil
+	return configured, false, nil
 }
