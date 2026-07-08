@@ -63,10 +63,10 @@ func resolveGuardPolicyOverride(cmd *cobra.Command) (*config.GuardPolicy, string
 	cliPolicyJSON := ""
 	if cliGuardPolicyChanged {
 		cliPolicyJSON = guardPolicyJSON
-		debugLog.Printf("Using CLI guard-policy-json: %q", cliPolicyJSON)
+		debugLog.Printf("Using CLI guard-policy-json: len=%d", len(cliPolicyJSON))
 	}
 
-	policy, policyJSON, err := config.ResolveGuardPolicyOverride(
+	policy, source, err := config.ResolveGuardPolicyOverride(
 		cliChanged,
 		cliPolicyJSON,
 		allowOnlyPublic,
@@ -77,9 +77,9 @@ func resolveGuardPolicyOverride(cmd *cobra.Command) (*config.GuardPolicy, string
 	if err != nil {
 		debugLog.Printf("Guard policy resolution failed: %v", err)
 	} else if policy != nil {
-		debugLog.Printf("Guard policy resolved: policyJSON=%q", policyJSON)
+		debugLog.Printf("Guard policy resolved: source=%q", source)
 	} else {
 		debugLog.Print("No guard policy override configured")
 	}
-	return policy, policyJSON, err
+	return policy, source, err
 }
