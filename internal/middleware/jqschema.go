@@ -344,6 +344,10 @@ func buildVarNamesCacheKey(varNames []string) string {
 	return b.String()
 }
 
+// applyToolResponseFilter applies a pre-compiled jq filter to tool response data.
+// It is the internal implementation used by ApplyToolResponseFilter (which compiles
+// the filter from a string) and by tryApplyToolResponseFilter (which applies it
+// within the wrapToolHandler pipeline).
 func applyToolResponseFilter(ctx context.Context, code *gojq.Code, jsonData any) (any, error) {
 	return runJqCode(ctx, code, jsonData, "tool response filter", runJqCodeOptions{
 		CheckMultipleResults: true,
@@ -457,6 +461,10 @@ func WrapToolHandlerWithFilter(
 	return wrapToolHandler(handler, toolName, baseDir, pathPrefix, sizeThreshold, getSessionID, filter)
 }
 
+// wrapToolHandler is the shared implementation for WrapToolHandler and
+// WrapToolHandlerWithFilter. When filter is empty the jq response-filter step is
+// skipped; WrapToolHandler always passes an empty filter while
+// WrapToolHandlerWithFilter passes the caller-supplied expression.
 func wrapToolHandler(
 	handler func(context.Context, *sdk.CallToolRequest, any) (*sdk.CallToolResult, any, error),
 	toolName string,

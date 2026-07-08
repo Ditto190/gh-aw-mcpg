@@ -5,8 +5,6 @@
 package logger
 
 import (
-	"encoding/json"
-	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -92,18 +90,10 @@ func (tl *ToolsLogger) LogTools(serverID string, tools []ToolInfo) error {
 	})
 }
 
-// writeToFile writes the current tools data to the JSON file
-// Caller must hold tl.mu lock
+// writeToFile writes the current tools data to the JSON file.
+// Caller must hold tl.mu lock.
 func (tl *ToolsLogger) writeToFile() error {
-	filePath := filepath.Join(tl.logDir, tl.fileName)
-
-	// Marshal to JSON with indentation for readability
-	jsonData, err := json.MarshalIndent(tl.data, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal tools data: %w", err)
-	}
-
-	return atomicWriteFile(filePath, jsonData, 0644)
+	return writeJSONToFile(tl.logDir, tl.fileName, tl.data, 0644)
 }
 
 // Close is a no-op for ToolsLogger (implements closableLogger interface)

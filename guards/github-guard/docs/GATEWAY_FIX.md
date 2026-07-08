@@ -294,7 +294,7 @@ If you prefer path-based labeling (more efficient, no data copying), the fix is 
 
 ### The Issue
 
-The `PathLabeledData.getItems()` function expects to find items at `items_path` within the `OriginalData`, but `OriginalData` is MCP-wrapped.
+The `PathLabeledData.extractRawItems()` function expects to find items at `items_path` within the `OriginalData`, but `OriginalData` is MCP-wrapped.
 
 ### The Fix
 

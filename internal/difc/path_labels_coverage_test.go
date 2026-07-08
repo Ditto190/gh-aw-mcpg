@@ -114,9 +114,9 @@ func TestGetItems_NonNumericArrayIndex(t *testing.T) {
 	assert.ErrorContains(t, err, "expected array index")
 }
 
-// TestGetItems_UnexpectedTypeAtPath covers the default case in getItems where
+// TestExtractRawItems_UnexpectedTypeAtPath covers the default case in extractRawItems where
 // the value at a path segment is neither a map nor an array.
-func TestGetItems_UnexpectedTypeAtPath(t *testing.T) {
+func TestExtractRawItems_UnexpectedTypeAtPath(t *testing.T) {
 	data := map[string]interface{}{
 		"count": float64(42), // scalar, not navigable
 	}
@@ -492,10 +492,10 @@ func TestResolve_SkipsNonMatchingLabeledPaths(t *testing.T) {
 	assert.False(t, items[1].Labels.Secrecy.Label.Contains(Tag("should-be-skipped")))
 }
 
-// TestGetItems_EmptyPartInPath covers the `if part == "" { continue }` branch
-// in getItems when the items_path contains consecutive slashes (e.g. "//items").
+// TestExtractRawItems_EmptyPartInPath covers the `if part == "" { continue }` branch
+// in extractRawItems when the items_path contains consecutive slashes (e.g. "//items").
 // splitJSONPointer on "//items" produces ["", "items"]; the empty part is skipped.
-func TestGetItems_EmptyPartInPath(t *testing.T) {
+func TestExtractRawItems_EmptyPartInPath(t *testing.T) {
 	// "//items" is an unusual but parseable path: after removing the leading "/",
 	// splitting "/items" on "/" gives ["", "items"], so the first empty segment
 	// triggers the `continue` branch and the second segment navigates to "items".

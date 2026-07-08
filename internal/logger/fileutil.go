@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -79,4 +80,16 @@ func atomicWriteFile(filePath string, data []byte, perm os.FileMode) error {
 		return fmt.Errorf("failed to rename temp file: %w", err)
 	}
 	return nil
+}
+
+// writeJSONToFile marshals data as indented JSON and atomically writes it to
+// filepath.Join(logDir, fileName) with the given file permissions.
+// It is a shared helper used by logger types that periodically persist state
+// to a JSON file (e.g. ToolsLogger, ObservedURLDomainsLogger).
+func writeJSONToFile(logDir, fileName string, data any, perm os.FileMode) error {
+	jsonData, err := json.MarshalIndent(data, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal JSON data for %s: %w", filepath.Join(logDir, fileName), err)
+	}
+	return atomicWriteFile(filepath.Join(logDir, fileName), jsonData, perm)
 }

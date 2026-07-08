@@ -213,10 +213,14 @@ func parseJSONRPCResponseWithSSE(body []byte, statusCode int, contextDesc string
 	return &rpcResponse, nil
 }
 
-// newHTTPConnection creates a new HTTP Connection struct with common fields.
+// assembleHTTPConnection assembles a *Connection from low-level HTTP transport parts.
+// It is the internal assembly step called by trySDKTransport after a transport has
+// been successfully established; it is distinct from NewHTTPConnection (connection.go),
+// which is the high-level public constructor that drives transport selection and
+// creates the HTTP client.
 // keepAlive is passed through to store on the connection so that reconnectSDKTransport
 // can re-create the SDK client with the same keepalive setting.
-func newHTTPConnection(ctx context.Context, cancel context.CancelFunc, client *sdk.Client, session *sdk.ClientSession, url string, headers map[string]string, httpClient *http.Client, transportType HTTPTransportType, serverID string, keepAlive time.Duration, connectTimeout time.Duration) *Connection {
+func assembleHTTPConnection(ctx context.Context, cancel context.CancelFunc, client *sdk.Client, session *sdk.ClientSession, url string, headers map[string]string, httpClient *http.Client, transportType HTTPTransportType, serverID string, keepAlive time.Duration, connectTimeout time.Duration) *Connection {
 	// Extract session ID from SDK session if available
 	var sessionID string
 	if session != nil {
@@ -378,7 +382,7 @@ func trySDKTransport(
 		return nil, fmt.Errorf("%s transport connect failed: %w", transportName, err)
 	}
 
-	conn := newHTTPConnection(ctx, cancel, client, session, url, headers, httpClient, transportType, serverID, keepAlive, connectTimeout)
+	conn := assembleHTTPConnection(ctx, cancel, client, session, url, headers, httpClient, transportType, serverID, keepAlive, connectTimeout)
 
 	logger.LogInfo("backend", "%s transport connected successfully", transportName)
 	logConn.Printf("Connected with %s transport", transportName)
