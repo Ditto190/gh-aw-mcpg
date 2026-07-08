@@ -675,7 +675,7 @@ func TestValidateWriteSinkPolicy_SinkVisibility_Invalid(t *testing.T) {
 }
 
 // TestValidateWriteSinkPolicy_SinkVisibility_CaseInsensitive tests that
-// sink-visibility validation is case-insensitive (values are normalized).
+// sink-visibility validation is case-insensitive.
 func TestValidateWriteSinkPolicy_SinkVisibility_CaseInsensitive(t *testing.T) {
 	tests := []string{"PUBLIC", "Private", "INTERNAL", "Public"}
 	for _, v := range tests {
