@@ -308,8 +308,8 @@ func TestOverrideToPublicScope_NoConfig_NoOp(t *testing.T) {
 // once even when shouldForcePublicRepos is called multiple times.
 func TestShouldForcePublicRepos_ResultCached(t *testing.T) {
 	t.Setenv(guard.WASMGuardsDirEnvVar, "")
+	t.Setenv(config.EnvForcePublicRepos, "true")
 	callCount := 0
-	apiServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "" && len(r.URL.Path) > 1 {
 			callCount++
 		}
