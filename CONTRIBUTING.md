@@ -317,6 +317,7 @@ gh-aw-mcpg/
 - **`internal/githubhttp/`** - GitHub API-specific HTTP helpers (auth headers, collaborator permission, rate-limit parsing)
 - **`internal/guard/`** - Guard framework for resource labeling
 - **`internal/httputil/`** - Shared HTTP helper utilities (server responses, proxy transport)
+- **`internal/jqutil/`** - Shared gojq compiler options (security: `$ENV` access disabled)
 - **`internal/launcher/`** - Backend process management (Docker, stdio)
 - **`internal/logger/`** - Micro logger for debug output
 - **`internal/mcp/`** - MCP protocol types and JSON-RPC handling
