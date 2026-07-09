@@ -4,7 +4,6 @@ package cmd
 
 import (
 	"context"
-	"log"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -78,10 +77,6 @@ func shutdownTracingProviderWithTimeout(tracingProvider *tracing.Provider, warnf
 	} else {
 		debugLog.Print("Tracing provider shut down successfully")
 	}
-}
-
-func logTracingWarnf(format string, args ...any) {
-	log.Printf("Warning: "+format, args...)
 }
 
 func setupCommandTracing(

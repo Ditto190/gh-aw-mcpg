@@ -339,7 +339,7 @@ func run(cmd *cobra.Command, args []string) error {
 		tracingCfg,
 		"Failed to initialize tracing provider: %v",
 		logger.StartupWarn,
-		logTracingWarnf,
+		logger.StartupWarn,
 	)
 	defer cleanupTracing()
 

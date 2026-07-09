@@ -3,14 +3,12 @@ package guard
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/github/gh-aw-mcpg/internal/difc"
 	"github.com/github/gh-aw-mcpg/internal/logger"
 	"github.com/tetratelabs/wazero/api"
-	"github.com/tetratelabs/wazero/sys"
 )
 
 // parseLabelAgentResponse validates and decodes the raw JSON returned by the
@@ -74,25 +72,6 @@ func parsePathLabeledResponse(responseJSON []byte, originalData any) (difc.Label
 	result := pld.ToCollectionLabeledData()
 	logWasm.Printf("parsePathLabeledResponse: converted to CollectionLabeledData successfully")
 	return result, nil
-}
-
-// isWasmTrap reports whether err represents a WASM execution trap that should
-// permanently poison the guard. Normal process exits (exit code 0, e.g. TinyGo
-// init) are NOT considered traps. A non-zero exit code is treated as a trap.
-// As a fallback for wazero execution faults (e.g. Rust panic → unreachable),
-// the function also matches on wazero's "wasm error:" message prefix
-// (verified against wazero v1.12.0; re-verify on upgrades).
-func isWasmTrap(err error) bool {
-	if err == nil {
-		return false
-	}
-	// A normal WASI process exit (exit code 0) is not a trap — don't poison the guard.
-	var exitErr *sys.ExitError
-	if errors.As(err, &exitErr) {
-		return exitErr.ExitCode() != 0
-	}
-	// Fallback for wazero execution traps (e.g. Rust panic → unreachable).
-	return strings.Contains(err.Error(), "wasm error:")
 }
 
 // callWasmFunction calls an exported function in the WASM module.
