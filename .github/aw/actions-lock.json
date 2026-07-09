@@ -45,10 +45,10 @@
       "version": "v6.5.0",
       "sha": "924ae3a1cded613372ab5595356fb5720e22ba16"
     },
-    "actions/setup-java@v5.4.0": {
+    "actions/setup-java@v5.5.0": {
       "repo": "actions/setup-java",
-      "version": "v5.4.0",
-      "sha": "1bcf9fb12cf4aa7d266a90ae39939e61372fe520"
+      "version": "v5.5.0",
+      "sha": "0f481fcb613427c0f801b606911222b5b6f3083a"
     },
     "actions/setup-node@v6.4.0": {
       "repo": "actions/setup-node",
@@ -70,10 +70,10 @@
       "version": "v0.24.0",
       "sha": "e22c389904149dbc22b58101806040fa8d37a610"
     },
-    "astral-sh/setup-uv@v8.2.0": {
+    "astral-sh/setup-uv@v8.3.2": {
       "repo": "astral-sh/setup-uv",
-      "version": "v8.2.0",
-      "sha": "fac544c07dec837d0ccb6301d7b5580bf5edae39"
+      "version": "v8.3.2",
+      "sha": "11f9893b081a58869d3b5fccaea48c9e9e46f990"
     },
     "denoland/setup-deno@v2.0.5": {
       "repo": "denoland/setup-deno",
@@ -105,20 +105,20 @@
       "version": "v1.24.1",
       "sha": "54075bcc5e249e4758d363f27d099f55d843f124"
     },
-    "github/codeql-action/upload-sarif@v4.36.3": {
+    "github/codeql-action/upload-sarif@v4.37.0": {
       "repo": "github/codeql-action/upload-sarif",
-      "version": "v4.36.3",
-      "sha": "54f647b7e1bb85c95cddabcd46b0c578ec92bc1a"
+      "version": "v4.37.0",
+      "sha": "99df26d4f13ea111d4ec1a7dddef6063f76b97e9"
     },
-    "github/gh-aw-actions/setup-cli@v0.82.2": {
+    "github/gh-aw-actions/setup-cli@v0.82.7": {
       "repo": "github/gh-aw-actions/setup-cli",
-      "version": "v0.82.2",
-      "sha": "3fac1cfa7a5a375a6a5eb9839178f6dad7adb60a"
+      "version": "v0.82.7",
+      "sha": "bf7ba42ce6443bf79fa184c9c6a35de202690bfc"
     },
-    "github/gh-aw-actions/setup@v0.82.2": {
+    "github/gh-aw-actions/setup@v0.82.7": {
       "repo": "github/gh-aw-actions/setup",
-      "version": "v0.82.2",
-      "sha": "3fac1cfa7a5a375a6a5eb9839178f6dad7adb60a"
+      "version": "v0.82.7",
+      "sha": "bf7ba42ce6443bf79fa184c9c6a35de202690bfc"
     },
     "haskell-actions/setup@v2.11.0": {
       "repo": "haskell-actions/setup",
@@ -141,26 +141,6 @@
       "image": "alpine:latest",
       "digest": "sha256:25109184c71bdad752c8312a8623239686a9a2071e8825f20acb8f2198c3f659",
       "pinned_image": "alpine:latest@sha256:25109184c71bdad752c8312a8623239686a9a2071e8825f20acb8f2198c3f659"
-    },
-    "ghcr.io/github/gh-aw-firewall/agent:0.27.22": {
-      "image": "ghcr.io/github/gh-aw-firewall/agent:0.27.22",
-      "digest": "sha256:55f06588411008b7148eb64b8dfe28602a0cce3675b36c6b190b54aca138468e",
-      "pinned_image": "ghcr.io/github/gh-aw-firewall/agent:0.27.22@sha256:55f06588411008b7148eb64b8dfe28602a0cce3675b36c6b190b54aca138468e"
-    },
-    "ghcr.io/github/gh-aw-firewall/api-proxy:0.27.22": {
-      "image": "ghcr.io/github/gh-aw-firewall/api-proxy:0.27.22",
-      "digest": "sha256:afb9ff9140b17d38871dfb9dbac5ff8689ea634c2f91c435da2825192d4881c1",
-      "pinned_image": "ghcr.io/github/gh-aw-firewall/api-proxy:0.27.22@sha256:afb9ff9140b17d38871dfb9dbac5ff8689ea634c2f91c435da2825192d4881c1"
-    },
-    "ghcr.io/github/gh-aw-firewall/cli-proxy:0.27.22": {
-      "image": "ghcr.io/github/gh-aw-firewall/cli-proxy:0.27.22",
-      "digest": "sha256:e23e1604241f579b418e6522d938285b57ada31bc27742a65c90ee2250b1755c",
-      "pinned_image": "ghcr.io/github/gh-aw-firewall/cli-proxy:0.27.22@sha256:e23e1604241f579b418e6522d938285b57ada31bc27742a65c90ee2250b1755c"
-    },
-    "ghcr.io/github/gh-aw-firewall/squid:0.27.22": {
-      "image": "ghcr.io/github/gh-aw-firewall/squid:0.27.22",
-      "digest": "sha256:3cdcc1e2b4b4fe602ba69fd3e21aac7ac512d5c1fce24df4ce69dc4f98164b59",
-      "pinned_image": "ghcr.io/github/gh-aw-firewall/squid:0.27.22@sha256:3cdcc1e2b4b4fe602ba69fd3e21aac7ac512d5c1fce24df4ce69dc4f98164b59"
     },
     "ghcr.io/github/gh-aw-mcpg:latest": {
       "image": "ghcr.io/github/gh-aw-mcpg:latest",
