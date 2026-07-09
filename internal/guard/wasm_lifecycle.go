@@ -17,6 +17,7 @@ import (
 	"github.com/tetratelabs/wazero"
 	"github.com/tetratelabs/wazero/api"
 	"github.com/tetratelabs/wazero/imports/wasi_snapshot_preview1"
+	"github.com/tetratelabs/wazero/sys"
 )
 
 var logWasm = logger.New("guard:wasm")
@@ -532,6 +533,25 @@ func (g *WasmGuard) IsHealthy() bool {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	return !g.failed
+}
+
+// isWasmTrap reports whether err represents a WASM execution trap that should
+// permanently poison the guard. Normal process exits (exit code 0, e.g. TinyGo
+// init) are NOT considered traps. A non-zero exit code is treated as a trap.
+// As a fallback for wazero execution faults (e.g. Rust panic → unreachable),
+// the function also matches on wazero's "wasm error:" message prefix
+// (verified against wazero v1.12.0; re-verify on upgrades).
+func isWasmTrap(err error) bool {
+	if err == nil {
+		return false
+	}
+	// A normal WASI process exit (exit code 0) is not a trap — don't poison the guard.
+	var exitErr *sys.ExitError
+	if errors.As(err, &exitErr) {
+		return exitErr.ExitCode() != 0
+	}
+	// Fallback for wazero execution traps (e.g. Rust panic → unreachable).
+	return strings.Contains(err.Error(), "wasm error:")
 }
 
 // callWasmGuardFunction serialises WASM access, sets the backend reference, marshals

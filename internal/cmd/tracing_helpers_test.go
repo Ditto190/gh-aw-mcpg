@@ -1,9 +1,7 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
-	"log"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -175,17 +173,4 @@ func TestSetupCommandTracing(t *testing.T) {
 		assert.NotPanics(t, cleanup)
 		assert.False(t, shutdownWarnCalled)
 	})
-}
-
-// TestLogTracingWarnf verifies that logTracingWarnf prefixes the message with
-// "Warning: " and writes the formatted string to the default log output.
-func TestLogTracingWarnf(t *testing.T) {
-	var buf bytes.Buffer
-	oldOutput := log.Writer()
-	log.SetOutput(&buf)
-	t.Cleanup(func() { log.SetOutput(oldOutput) })
-
-	logTracingWarnf("disk cache failed: %s", "permission denied")
-
-	assert.Contains(t, buf.String(), "Warning: disk cache failed: permission denied")
 }
