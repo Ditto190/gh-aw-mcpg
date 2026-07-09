@@ -107,6 +107,14 @@ When running `awmg proxy`, these variables configure the upstream GitHub API:
 | `GITHUB_API_URL` | Explicit GitHub API endpoint (e.g., `https://api.mycompany.ghe.com`); used by proxy to set upstream target | (auto-derived) |
 | `GITHUB_SERVER_URL` | GitHub server URL; proxy auto-derives API endpoint: `*.ghe.com` → `api.*.ghe.com`, GHES → `<host>/api/v3`, `github.com` → `api.github.com` | (falls back to `api.github.com`) |
 
+## GitHub Actions Runtime Variables
+
+These variables are set automatically by the GitHub Actions runner. The gateway reads them at startup to determine repository context:
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `GITHUB_REPOSITORY` | GitHub repository in `owner/repo` form. Read at startup to check public/private visibility when `MCP_GATEWAY_FORCE_PUBLIC_REPOS` is enabled and for sink-visibility runtime verification. Set automatically by GitHub Actions. | (set by GitHub Actions) |
+
 ## GitHub Actions OIDC Variables
 
 When any HTTP server uses `auth.type = "github-oidc"`, the gateway reads these environment variables (set automatically by the GitHub Actions runner when `permissions: { id-token: write }` is granted):
@@ -127,6 +135,7 @@ These environment variables configure guard policies (e.g., AllowOnly policies f
 | `MCP_GATEWAY_ALLOWONLY_SCOPE_OWNER` | AllowOnly owner scope value (sets default for `--allowonly-scope-owner`) | (disabled) |
 | `MCP_GATEWAY_ALLOWONLY_SCOPE_REPO` | AllowOnly repo name (requires owner) (sets default for `--allowonly-scope-repo`) | (disabled) |
 | `MCP_GATEWAY_ALLOWONLY_MIN_INTEGRITY` | AllowOnly integrity level: `none`, `unapproved`, `approved`, `merged` (sets default for `--allowonly-min-integrity`) | (disabled) |
+| `MCP_GATEWAY_FORCE_PUBLIC_REPOS` | When `true` (default), the gateway may override allow-only policies to `repos="public"` at runtime if `GITHUB_REPOSITORY` is set, a GitHub token is available, and the GitHub API confirms the workflow repo is public (fails open on API errors). Set to `false` to opt out. Overridden by `gateway.forcePublicRepos` in JSON stdin config. | `true` |
 
 ## OpenTelemetry / Tracing Variables
 
