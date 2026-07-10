@@ -149,8 +149,9 @@ import (
 //    - Error: Returns nil (never fails, falls back to unified logging)
 //    - Use case: Per-server logs are helpful but not required
 //
-//    Note: ServerFileLogger doesn't use initLogger() because it creates
-//    files on-demand, but follows the same fallback philosophy.
+//    Note: ServerFileLogger uses serverFileLoggerFactory but not initLogger()
+//    because it creates per-serverID files on demand rather than opening
+//    a single file at initialization. The factory setup receives a nil file.
 //
 // Global Logger Management:
 //

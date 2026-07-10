@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 	"sync"
 
 	"github.com/github/gh-aw-mcpg/internal/syncutil"
@@ -24,6 +23,20 @@ var (
 	globalServerLoggerMu   sync.RWMutex
 )
 
+// serverFileLoggerFactory bundles the setup and error-handler for ServerFileLogger.
+// Unlike other factories, setup receives a nil file because ServerFileLogger creates
+// per-serverID files on demand rather than opening a single file at initialization.
+var serverFileLoggerFactory = loggerFactory[*ServerFileLogger]{
+	setup: func(_ *os.File, logDir, _ string) (*ServerFileLogger, error) {
+		log.Printf("Initialized per-serverID logging in directory: %s", logDir)
+		return newServerFileLogger(logDir, false), nil
+	},
+	onError: func(err error, logDir, _ string) (*ServerFileLogger, error) {
+		return fallbackLoggerOnInitError(err, "Failed to create log directory for server logs",
+			"Falling back to unified logging only", newServerFileLogger(logDir, true))
+	},
+}
+
 func newServerFileLogger(logDir string, useFallback bool) *ServerFileLogger {
 	return &ServerFileLogger{
 		logDir:      logDir,
@@ -35,17 +48,16 @@ func newServerFileLogger(logDir string, useFallback bool) *ServerFileLogger {
 
 // InitServerFileLogger initializes the global server file logger
 func InitServerFileLogger(logDir string) error {
-	// Create log directory if it doesn't exist
+	var sfl *ServerFileLogger
+	var initErr error
 	if err := os.MkdirAll(logDir, 0755); err != nil {
-		logFallbackWarnings(err, "Failed to create log directory for server logs", "Falling back to unified logging only")
-		sfl := newServerFileLogger(logDir, true)
-		initGlobalLogger(&globalServerLoggerMu, &globalServerFileLogger, sfl)
-		return nil
+		sfl, initErr = serverFileLoggerFactory.onError(err, logDir, "")
+	} else {
+		sfl, initErr = serverFileLoggerFactory.setup(nil, logDir, "")
 	}
-
-	sfl := newServerFileLogger(logDir, false)
-
-	log.Printf("Initialized per-serverID logging in directory: %s", logDir)
+	if initErr != nil {
+		return initErr
+	}
 	initGlobalLogger(&globalServerLoggerMu, &globalServerFileLogger, sfl)
 	return nil
 }
@@ -60,8 +72,7 @@ func (sfl *ServerFileLogger) getOrCreateLogger(serverID string) (*log.Logger, er
 
 		// Create log file for this serverID
 		fileName := fmt.Sprintf("%s.log", serverID)
-		logPath := filepath.Join(sfl.logDir, fileName)
-		file, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		file, err := initLogFile(sfl.logDir, fileName, os.O_APPEND)
 		if err != nil {
 			return nil, fmt.Errorf("failed to open log file for server %s: %w", serverID, err)
 		}
