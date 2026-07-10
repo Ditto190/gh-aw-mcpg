@@ -230,7 +230,7 @@ func (h *proxyHandler) handleWithDIFC(w http.ResponseWriter, r *http.Request, pa
 	}
 	if resp != nil {
 		fwdSpan.SetAttributes(tracing.HTTPResponseStatusCodeKey.Int(resp.StatusCode))
-		if rateLimited, resetHeader := rateLimitSignal(resp); rateLimited {
+		if rateLimited, resetHeader, _ := rateLimitSignal(resp); rateLimited {
 			fwdSpan.SetAttributes(tracing.RateLimitHit.Bool(true))
 			if difcSpan.IsRecording() {
 				eventAttrs := []attribute.KeyValue{}
@@ -463,11 +463,10 @@ func copyResponseHeaders(w http.ResponseWriter, resp *http.Response) {
 //  1. Injects a Retry-After header so the client knows when to retry.
 //  2. Logs the event at ERROR level so operators can monitor rate-limit incidents.
 func injectRetryAfterIfRateLimited(w http.ResponseWriter, resp *http.Response) {
-	isRateLimited, resetHeader := rateLimitSignal(resp)
+	isRateLimited, resetHeader, remaining := rateLimitSignal(resp)
 	if !isRateLimited {
 		return
 	}
-	remaining := resp.Header.Get("X-Ratelimit-Remaining")
 
 	resetAt := githubhttp.ParseRateLimitResetHeader(resetHeader)
 	retryAfter := githubhttp.ComputeRetryAfter(resetAt)
@@ -479,12 +478,12 @@ func injectRetryAfterIfRateLimited(w http.ResponseWriter, resp *http.Response) {
 		resp.StatusCode, remaining, resetHeader, retryAfter)
 }
 
-func rateLimitSignal(resp *http.Response) (bool, string) {
+func rateLimitSignal(resp *http.Response) (bool, string, string) {
 	is429 := resp.StatusCode == http.StatusTooManyRequests
 	// Use Go's canonical header key form (textproto.CanonicalMIMEHeaderKey produces
 	// "X-Ratelimit-Remaining", matching GitHub's actual response headers).
 	remaining := resp.Header.Get("X-Ratelimit-Remaining")
-	return is429 || remaining == "0", resp.Header.Get("X-Ratelimit-Reset")
+	return is429 || remaining == "0", resp.Header.Get("X-Ratelimit-Reset"), remaining
 }
 
 var metadataPassthrough = map[string]bool{

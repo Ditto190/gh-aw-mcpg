@@ -127,9 +127,10 @@ func TestRateLimitSignal(t *testing.T) {
 			StatusCode: http.StatusTooManyRequests,
 			Header:     http.Header{"X-Ratelimit-Reset": []string{"12345"}},
 		}
-		limited, reset := rateLimitSignal(resp)
+		limited, reset, remaining := rateLimitSignal(resp)
 		assert.True(t, limited)
 		assert.Equal(t, "12345", reset)
+		assert.Equal(t, "", remaining)
 	})
 
 	t.Run("remaining zero is rate limited", func(t *testing.T) {
@@ -138,8 +139,9 @@ func TestRateLimitSignal(t *testing.T) {
 			StatusCode: http.StatusOK,
 			Header:     http.Header{"X-Ratelimit-Remaining": []string{"0"}},
 		}
-		limited, _ := rateLimitSignal(resp)
+		limited, _, remaining := rateLimitSignal(resp)
 		assert.True(t, limited)
+		assert.Equal(t, "0", remaining)
 	})
 
 	t.Run("non-rate-limited response", func(t *testing.T) {
@@ -148,7 +150,8 @@ func TestRateLimitSignal(t *testing.T) {
 			StatusCode: http.StatusOK,
 			Header:     http.Header{"X-Ratelimit-Remaining": []string{"100"}},
 		}
-		limited, _ := rateLimitSignal(resp)
+		limited, _, remaining := rateLimitSignal(resp)
 		assert.False(t, limited)
+		assert.Equal(t, "100", remaining)
 	})
 }
