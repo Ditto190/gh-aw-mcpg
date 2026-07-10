@@ -44,9 +44,9 @@ pub use helpers::{
     MinIntegrity, PolicyContext, PolicyScopeEntry, ScopeKind,
 };
 
-// Test-only re-exports: crate-internal helpers used by tests in this file and
-// sibling modules.  These are `pub(crate)` in helpers.rs; the cfg(test) gate
-// keeps them out of the non-test public surface.
+// Test-only re-exports: helpers used by tests in this file and sibling modules.
+// The cfg(test) gate keeps them out of the non-test public surface.
+
 #[cfg(test)]
 pub(crate) use helpers::{
     commit_integrity, extract_graphql_single_object, extract_items_array,
