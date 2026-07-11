@@ -170,8 +170,9 @@ func TestInitAndSetGlobalLoggerOnSuccess_DoesNotOverwriteOnError(t *testing.T) {
 	resetAllGlobalLoggers(t)
 	t.Cleanup(func() { resetAllGlobalLoggers(t) })
 
-	tmpDir := t.TempDir()
-	require.NoError(t, InitJSONLLogger(tmpDir, "test.jsonl"))
+tmpDir := t.TempDir()
+t.Cleanup(func() { require.NoError(t, CloseAllLoggers()) })
+require.NoError(t, InitJSONLLogger(tmpDir, "test.jsonl"))
 
 	globalJSONLMu.RLock()
 	original := globalJSONLLogger
