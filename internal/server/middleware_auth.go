@@ -14,10 +14,8 @@ var logAuth = logger.New("server:auth")
 // If key is empty the handler is returned unchanged.
 func applyIfConfigured(key string, handler http.HandlerFunc, middleware func(string, http.HandlerFunc) http.HandlerFunc) http.HandlerFunc {
 	if key != "" {
-		logAuth.Print("Auth key configured, applying middleware")
 		return middleware(key, handler)
 	}
-	logAuth.Print("No auth key configured, skipping middleware")
 	return handler
 }
 
@@ -71,5 +69,10 @@ func rejectAuthRequest(w http.ResponseWriter, r *http.Request, status int, code,
 // applyAuthIfConfigured applies authentication middleware if an API key is provided
 // Returns the handler unchanged if apiKey is empty
 func applyAuthIfConfigured(apiKey string, handler http.HandlerFunc) http.HandlerFunc {
+	if apiKey != "" {
+		logAuth.Print("Auth key configured, applying middleware")
+	} else {
+		logAuth.Print("No auth key configured, skipping middleware")
+	}
 	return applyIfConfigured(apiKey, handler, authMiddleware)
 }
