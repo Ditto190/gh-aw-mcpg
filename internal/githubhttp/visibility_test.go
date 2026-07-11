@@ -220,3 +220,22 @@ func TestVerifySinkVisibility_APIError(t *testing.T) {
 	assert.Equal(t, "private", effective)
 	assert.False(t, overridden)
 }
+
+func TestFetchRepoVisibility_NetworkError(t *testing.T) {
+	// Use an address that immediately refuses connections.
+	_, err := FetchRepoVisibility(context.Background(), "http://127.0.0.1:1", "octo/repo", "token test")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to fetch repo visibility")
+}
+
+func TestFetchRepoVisibility_InvalidJSON(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("not-json{{{"))
+	}))
+	defer server.Close()
+
+	_, err := FetchRepoVisibility(context.Background(), server.URL, "octo/repo", "token test")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to decode repo response")
+}
