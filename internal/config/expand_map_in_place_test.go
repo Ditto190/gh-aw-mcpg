@@ -1,7 +1,6 @@
 package config
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -63,12 +62,9 @@ func TestExpandMapInPlace(t *testing.T) {
 		err := expandMapInPlace(&m, "my-server", "environment variable(s)")
 		require.Error(t, err)
 		errStr := err.Error()
-		assert.True(t, strings.Contains(errStr, "my-server"),
-			"error should mention the server name, got: %q", errStr)
-		assert.True(t, strings.Contains(errStr, "environment variable(s)"),
-			"error should mention the field description, got: %q", errStr)
-		assert.True(t, strings.Contains(errStr, "failed to expand"),
-			"error should contain 'failed to expand', got: %q", errStr)
+		assert.Contains(t, errStr, "my-server")
+		assert.Contains(t, errStr, "environment variable(s)")
+		assert.Contains(t, errStr, "failed to expand")
 	})
 
 	t.Run("error includes fieldDesc from HTTP headers call site", func(t *testing.T) {
@@ -86,8 +82,8 @@ func TestExpandMapInPlace(t *testing.T) {
 		t.Setenv("CALLER_VAR", "caller-value")
 
 		original := map[string]string{"K": "${CALLER_VAR}"}
-		// Save a reference to the original map to verify identity changes.
-		// expandMapInPlace replaces *m with a new map, so the pointer target changes.
+		// expandMapInPlace writes the expanded entries back through the pointer;
+		// verify the caller-visible variable holds the expanded value.
 		ptr := &original
 		err := expandMapInPlace(ptr, "srv", "env vars")
 		require.NoError(t, err)
