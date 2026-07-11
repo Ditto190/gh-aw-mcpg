@@ -210,8 +210,9 @@ func TestInitAndSetGlobalNoFileLogger_UsesFallbackOnMkdirError(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	globalServerLoggerMu.RLock()
-	require.NotNil(t, globalServerFileLogger)
-	assert.True(t, globalServerFileLogger.useFallback, "mkdir failure should initialize server logger in fallback mode")
-	globalServerLoggerMu.RUnlock()
+globalServerLoggerMu.RLock()
+logger := globalServerFileLogger
+globalServerLoggerMu.RUnlock()
+require.NotNil(t, logger)
+assert.True(t, logger.useFallback, "mkdir failure should initialize server logger in fallback mode")
 }
