@@ -34,8 +34,6 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
-
-	"github.com/github/gh-aw-mcpg/internal/util"
 )
 
 // SecretPatterns contains regex patterns for detecting potential secrets
@@ -92,10 +90,11 @@ func TruncateSecret(input string) string {
 	if len(input) == 0 {
 		return ""
 	}
-	if len(input) <= 4 {
+	const prefixLen = 4
+	if len(input) <= prefixLen {
 		return "..."
 	}
-	return util.TruncateWithSuffix(input, 4, "...")
+	return input[:prefixLen] + "..."
 }
 
 // TruncateSecretMap returns a sanitized version of environment variables
