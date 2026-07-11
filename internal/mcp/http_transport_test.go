@@ -1123,6 +1123,30 @@ func TestHeaderInjectingRoundTripper(t *testing.T) {
 	assert.Equal(t, "hello", received["X-Custom"])
 }
 
+func TestCloneClientWithTransport(t *testing.T) {
+	originalTransport := &http.Transport{}
+	base := &http.Client{
+		Transport: originalTransport,
+		Timeout:   2 * time.Second,
+	}
+	replacementTransport := &http.Transport{}
+
+	cloned := cloneClientWithTransport(base, replacementTransport)
+
+	assert.NotSame(t, base, cloned)
+	assert.Equal(t, base.Timeout, cloned.Timeout)
+	assert.Same(t, replacementTransport, cloned.Transport)
+	assert.Same(t, originalTransport, base.Transport)
+}
+
+func TestResolveBaseTransport(t *testing.T) {
+	baseWithTransport := &http.Client{Transport: &http.Transport{}}
+	assert.Same(t, baseWithTransport.Transport, resolveBaseTransport(baseWithTransport))
+
+	baseWithoutTransport := &http.Client{}
+	assert.Same(t, http.DefaultTransport, resolveBaseTransport(baseWithoutTransport))
+}
+
 // TestBuildHTTPClientWithHeaders_Empty verifies that an empty headers map returns
 // the same client (pointer equality).
 func TestBuildHTTPClientWithHeaders_Empty(t *testing.T) {

@@ -46,9 +46,9 @@ func (rt *headerInjectingRoundTripper) RoundTrip(req *http.Request) (*http.Respo
 	return rt.base.RoundTrip(reqCopy)
 }
 
-// cloneHTTPClientWithTransport returns a shallow copy of baseClient with the given transport.
+// cloneClientWithTransport returns a shallow copy of baseClient with the given transport.
 // Callers constructing a wrapper transport should use resolveBaseTransport to obtain its base.
-func cloneHTTPClientWithTransport(baseClient *http.Client, newTransport http.RoundTripper) *http.Client {
+func cloneClientWithTransport(baseClient *http.Client, newTransport http.RoundTripper) *http.Client {
 	clone := *baseClient
 	clone.Transport = newTransport
 	return &clone
@@ -70,7 +70,7 @@ func buildHTTPClientWithHeaders(baseClient *http.Client, headers map[string]stri
 		return baseClient
 	}
 	logHTTP.Printf("Wrapping HTTP client with %d custom header(s)", len(headers))
-	return cloneHTTPClientWithTransport(baseClient, &headerInjectingRoundTripper{
+	return cloneClientWithTransport(baseClient, &headerInjectingRoundTripper{
 		base:    resolveBaseTransport(baseClient),
 		headers: headers,
 	})
@@ -103,7 +103,7 @@ func (rt *oidcRoundTripper) RoundTrip(req *http.Request) (*http.Response, error)
 // token overwrites the Authorization header.
 func buildHTTPClientWithOIDC(baseClient *http.Client, provider *oidc.Provider, audience string) *http.Client {
 	logHTTP.Printf("Wrapping HTTP client with OIDC provider: audience=%s", audience)
-	return cloneHTTPClientWithTransport(baseClient, &oidcRoundTripper{
+	return cloneClientWithTransport(baseClient, &oidcRoundTripper{
 		base:     resolveBaseTransport(baseClient),
 		provider: provider,
 		audience: audience,
