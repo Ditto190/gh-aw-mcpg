@@ -46,6 +46,22 @@ func (rt *headerInjectingRoundTripper) RoundTrip(req *http.Request) (*http.Respo
 	return rt.base.RoundTrip(reqCopy)
 }
 
+// cloneHTTPClientWithTransport returns a shallow copy of baseClient with the given transport.
+// Callers constructing a wrapper transport should use resolveBaseTransport to obtain its base.
+func cloneHTTPClientWithTransport(baseClient *http.Client, newTransport http.RoundTripper) *http.Client {
+	clone := *baseClient
+	clone.Transport = newTransport
+	return &clone
+}
+
+// resolveBaseTransport returns the client's transport, falling back to http.DefaultTransport.
+func resolveBaseTransport(c *http.Client) http.RoundTripper {
+	if c.Transport != nil {
+		return c.Transport
+	}
+	return http.DefaultTransport
+}
+
 // buildHTTPClientWithHeaders returns a copy of baseClient whose transport injects
 // the provided headers into every outgoing request. When headers is empty the
 // original baseClient is returned unchanged.
@@ -54,13 +70,10 @@ func buildHTTPClientWithHeaders(baseClient *http.Client, headers map[string]stri
 		return baseClient
 	}
 	logHTTP.Printf("Wrapping HTTP client with %d custom header(s)", len(headers))
-	base := baseClient.Transport
-	if base == nil {
-		base = http.DefaultTransport
-	}
-	clone := *baseClient
-	clone.Transport = &headerInjectingRoundTripper{base: base, headers: headers}
-	return &clone
+	return cloneHTTPClientWithTransport(baseClient, &headerInjectingRoundTripper{
+		base:    resolveBaseTransport(baseClient),
+		headers: headers,
+	})
 }
 
 // oidcRoundTripper is an http.RoundTripper that dynamically acquires a GitHub Actions
@@ -90,15 +103,9 @@ func (rt *oidcRoundTripper) RoundTrip(req *http.Request) (*http.Response, error)
 // token overwrites the Authorization header.
 func buildHTTPClientWithOIDC(baseClient *http.Client, provider *oidc.Provider, audience string) *http.Client {
 	logHTTP.Printf("Wrapping HTTP client with OIDC provider: audience=%s", audience)
-	base := baseClient.Transport
-	if base == nil {
-		base = http.DefaultTransport
-	}
-	clone := *baseClient
-	clone.Transport = &oidcRoundTripper{
-		base:     base,
+	return cloneHTTPClientWithTransport(baseClient, &oidcRoundTripper{
+		base:     resolveBaseTransport(baseClient),
 		provider: provider,
 		audience: audience,
-	}
-	return &clone
+	})
 }
