@@ -47,11 +47,7 @@ func (rt *headerInjectingRoundTripper) RoundTrip(req *http.Request) (*http.Respo
 }
 
 // cloneHTTPClientWithTransport returns a shallow copy of baseClient with the given transport.
-// If baseClient's transport is nil, http.DefaultTransport is used as the base for the new transport.
-// The caller is responsible for constructing the new transport using the returned base transport.
-//
-// This helper centralises the "clone the client, resolve default transport, assign new transport"
-// idiom shared by buildHTTPClientWithHeaders and buildHTTPClientWithOIDC.
+// Callers constructing a wrapper transport should use resolveBaseTransport to obtain its base.
 func cloneHTTPClientWithTransport(baseClient *http.Client, newTransport http.RoundTripper) *http.Client {
 	clone := *baseClient
 	clone.Transport = newTransport
