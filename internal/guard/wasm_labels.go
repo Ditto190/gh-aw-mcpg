@@ -161,6 +161,9 @@ func unmarshalWasmResponse(funcName string, data []byte) (map[string]any, error)
 // validateIntegrityField returns an error if raw is not a valid integrity-level
 // string. fieldName is used in the error message (e.g. "disapproval-integrity").
 // It delegates to config.ValidateAndNormalizeIntegrityField for validation.
+//
+// TODO: if this function grows in complexity or is reused outside of this file,
+// move it to guard/validation.go alongside other guard policy validation helpers.
 func validateIntegrityField(fieldName string, raw interface{}) error {
 	s, ok := raw.(string)
 	if !ok {
