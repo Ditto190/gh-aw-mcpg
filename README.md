@@ -63,6 +63,15 @@ When running `awmg` directly (outside `docker run`), useful CLI flags include:
 - A complete reference for all environment variables — including guard policy, TLS, tracing, authentication tokens, and containerized deployment — is in [docs/ENVIRONMENT_VARIABLES.md](docs/ENVIRONMENT_VARIABLES.md).
 
 Common operational environment variables include:
+- `MCP_GATEWAY_LOG_DIR` — log file directory (default: `/tmp/gh-aw/mcp-logs`)
+- `MCP_GATEWAY_PAYLOAD_DIR` — large payload storage directory (must be absolute path; default: `/tmp/jq-payloads`)
+- `MCP_GATEWAY_PAYLOAD_SIZE_THRESHOLD` — size threshold in bytes for payload storage (default: `524288`)
+- `MCP_GATEWAY_FORCE_PUBLIC_REPOS` — when `true` (default), auto-forces `repos="public"` allow-only policy when workflow repo is public
+- `MCP_GATEWAY_AGENT_ID` — agent identifier for env validation and containerized startup checks
+- `MCP_GATEWAY_API_KEY` — *deprecated alias for `MCP_GATEWAY_AGENT_ID`*; still accepted with a deprecation warning, prefer `MCP_GATEWAY_AGENT_ID`
+- `ACTIONS_ID_TOKEN_REQUEST_URL`, `ACTIONS_ID_TOKEN_REQUEST_TOKEN` — required for `github-oidc` auth type (set automatically by GitHub Actions)
+- `DOCKER_HOST` — Docker daemon socket path (default: `/var/run/docker.sock`)
+- `RUNNING_IN_CONTAINER` — set to `"true"` to force container detection when `/.dockerenv` and cgroup detection are unavailable
 - `MCP_GATEWAY_SHUTDOWN_TIMEOUT`
 - `MCP_GATEWAY_WASM_CACHE_DIR`
 - `MCP_GATEWAY_PAYLOAD_PATH_PREFIX`
@@ -192,7 +201,7 @@ Key configuration fields (gateway-level under `[gateway]` in TOML / `"gateway"` 
 |-------|-------------|
 | `agent_id` / `agentId` | Agent/session identifier used for routing and optional auth matching |
 | `api_key` / `apiKey` | Deprecated alias for `agent_id` / `agentId` (accepted with warnings) |
-| `port` | Metadata only; validated (1–65535) but does not control the listen address. Use the `--listen` flag to set the listen address; `MCP_GATEWAY_PORT` is used by `run.sh`/`run_containerized.sh` to build the `--listen` argument, not read directly by `awmg`. |
+| `port` | Metadata only; validated (1–65535) but does not control the listen address. Use the `--listen` flag to set the listen address. `MCP_GATEWAY_PORT` is read by `--validate-env` only as a required-variable presence check; port-mapping and listen-address construction are handled by wrapper scripts (`run.sh`, `run_containerized.sh`). |
 | `keepalive_interval` / `keepaliveInterval` | Interval in seconds between keepalive pings sent to HTTP backends (`-1` disables keepalive; default `1500`) |
 | `payload_dir` / `payloadDir` | Directory for large payload storage (must be absolute path) |
 | `payload_path_prefix` / `payloadPathPrefix` | Optional path prefix used when returning `payloadPath` values to clients (for remapped/mounted payload directories) |

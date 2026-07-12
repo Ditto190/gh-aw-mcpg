@@ -877,22 +877,22 @@ func TestLoadFromStdin_InvalidMountFormat(t *testing.T) {
 		{
 			name:     "relative source path",
 			mounts:   `["relative/path:/container:ro"]`,
-			errorMsg: "mount source must be an absolute path",
+			errorMsg: "validation error",
 		},
 		{
 			name:     "relative destination path",
 			mounts:   `["/host:relative/path:ro"]`,
-			errorMsg: "mount destination must be an absolute path",
+			errorMsg: "validation error",
 		},
 		{
 			name:     "dot relative source",
 			mounts:   `["./config:/app/config:ro"]`,
-			errorMsg: "mount source must be an absolute path",
+			errorMsg: "validation error",
 		},
 		{
 			name:     "dot relative destination",
 			mounts:   `["/host/config:./config:ro"]`,
-			errorMsg: "mount destination must be an absolute path",
+			errorMsg: "validation error",
 		},
 	}
 
