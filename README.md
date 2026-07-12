@@ -201,7 +201,7 @@ Key configuration fields (gateway-level under `[gateway]` in TOML / `"gateway"` 
 |-------|-------------|
 | `agent_id` / `agentId` | Agent/session identifier used for routing and optional auth matching |
 | `api_key` / `apiKey` | Deprecated alias for `agent_id` / `agentId` (accepted with warnings) |
-| `port` | Metadata only; validated (1–65535) but does not control the listen address. Use the `--listen` flag to set the listen address. `MCP_GATEWAY_PORT` is read directly by the binary for environment validation (`--validate-env`) and containerized startup checks, but does not auto-configure the listen address; use `--listen` or wrapper scripts for that. |
+| `port` | Metadata only; validated (1–65535) but does not control the listen address. Use the `--listen` flag to set the listen address. `MCP_GATEWAY_PORT` is read by `--validate-env` only as a required-variable presence check; port-mapping and listen-address construction are handled by wrapper scripts (`run.sh`, `run_containerized.sh`). |
 | `keepalive_interval` / `keepaliveInterval` | Interval in seconds between keepalive pings sent to HTTP backends (`-1` disables keepalive; default `1500`) |
 | `payload_dir` / `payloadDir` | Directory for large payload storage (must be absolute path) |
 | `payload_path_prefix` / `payloadPathPrefix` | Optional path prefix used when returning `payloadPath` values to clients (for remapped/mounted payload directories) |

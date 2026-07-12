@@ -339,6 +339,42 @@ func TestValidateJSONSchema(t *testing.T) {
 			shouldErr: true,
 			errorMsg:  "validation error",
 		},
+		{
+			name: "invalid mount - relative source path rejected by schema",
+			config: `{
+				"mcpServers": {
+					"github": {
+						"container": "ghcr.io/github/github-mcp-server:latest",
+						"mounts": ["host/path:/container/path:ro"]
+					}
+				},
+				"gateway": {
+					"port": 8080,
+					"domain": "localhost",
+					"agentId": "test-key"
+				}
+			}`,
+			shouldErr: true,
+			errorMsg:  "validation error",
+		},
+		{
+			name: "invalid mount - relative destination path rejected by schema",
+			config: `{
+				"mcpServers": {
+					"github": {
+						"container": "ghcr.io/github/github-mcp-server:latest",
+						"mounts": ["/host/path:container/path:ro"]
+					}
+				},
+				"gateway": {
+					"port": 8080,
+					"domain": "localhost",
+					"agentId": "test-key"
+				}
+			}`,
+			shouldErr: true,
+			errorMsg:  "validation error",
+		},
 	}
 
 	for _, tt := range tests {
