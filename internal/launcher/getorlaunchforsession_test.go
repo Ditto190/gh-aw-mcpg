@@ -279,6 +279,53 @@ func TestGetOrLaunchForSession_StdioSessionPoolHit_DifferentSessions(t *testing.
 	assert.Equal(httpConn, connB)
 }
 
+// TestGetOrLaunchForSession_UnknownServer tests that an unknown server ID returns an error.
+func TestGetOrLaunchForSession_UnknownServer(t *testing.T) {
+	require := require.New(t)
+
+	ctx := context.Background()
+	cfg := newTestConfig(map[string]*config.ServerConfig{})
+
+	l := New(ctx, cfg)
+	defer l.Close()
+
+	conn, err := GetOrLaunchForSession(l, "nonexistent-server", "session-xyz")
+	require.Error(err, "Should return error for unknown server ID")
+	require.Nil(conn)
+	assert.ErrorContains(t, err, "nonexistent-server")
+}
+
+// TestGetOrLaunchForSession_HTTPBackendUsesStatelessPool tests that HTTP backends
+// route through the stateless connection pool when called via GetOrLaunchForSession.
+func TestGetOrLaunchForSession_HTTPBackendUsesStatelessPool(t *testing.T) {
+	require := require.New(t)
+	assert := assert.New(t)
+
+	mockServer := newMockHTTPMCPServer(t)
+	defer mockServer.Close()
+
+	ctx := context.Background()
+	cfg := newTestConfig(map[string]*config.ServerConfig{
+		"http-backend": {
+			Type: "http",
+			URL:  mockServer.URL,
+		},
+	})
+
+	l := New(ctx, cfg)
+	defer l.Close()
+
+	// GetOrLaunchForSession for an HTTP backend should succeed, using the stateless pool
+	conn, err := GetOrLaunchForSession(l, "http-backend", "session-http-1")
+	require.NoError(err)
+	assert.NotNil(conn)
+
+	// A second call with a different session ID should return the same pooled connection
+	conn2, err := GetOrLaunchForSession(l, "http-backend", "session-http-2")
+	require.NoError(err)
+	assert.Equal(conn, conn2, "HTTP backend should return the same stateless connection regardless of session ID")
+}
+
 // newMockHTTPMCPServer creates a test HTTP server that responds to MCP initialize requests.
 func newMockHTTPMCPServer(t *testing.T) *httptest.Server {
 	t.Helper()
