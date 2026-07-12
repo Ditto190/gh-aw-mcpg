@@ -28,7 +28,7 @@ func (c *Connection) logReconnectResult(err error) {
 
 func snapshotTags(snapshot *AgentTagsSnapshot) ([]string, []string) {
 	if snapshot == nil {
-		logConnLogging.Print("snapshotTags: no agent tag snapshot available")
+		logConnLogging.Print("snapshotTags: no agent tag snapshot attached")
 		return nil, nil
 	}
 	logConnLogging.Printf("snapshotTags: secrecyCount=%d, integrityCount=%d", len(snapshot.Secrecy), len(snapshot.Integrity))
