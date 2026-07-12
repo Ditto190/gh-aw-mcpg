@@ -94,11 +94,11 @@ func TestAuthMiddleware_MalformedAuthorizationHeader(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, rr.Code)
 }
 
-func TestAuthMiddleware_EmptyAPIKeyAcceptsAnyRequest(t *testing.T) {
+func TestAuthMiddleware_EmptyAPIKeyRejectsRequest(t *testing.T) {
 	t.Parallel()
 
-	// When apiKey is empty, authMiddleware is not applied (per applyAuthIfConfigured logic)
-	// but we can still verify authMiddleware itself with an empty configured key
+	// authMiddleware with an empty configured key still enforces the header check;
+	// applyAuthIfConfigured skips wrapping entirely when the key is empty.
 	const apiKey = ""
 	called := false
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
