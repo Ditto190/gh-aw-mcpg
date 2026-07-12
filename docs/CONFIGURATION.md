@@ -504,7 +504,7 @@ The `customSchemas` top-level field allows you to define custom server types bey
 
 | Field | Description | Default |
 |-------|-------------|---------|
-| `port` | Validated and stored for metadata purposes only. The actual listen address is always set by the `--listen` CLI flag (default `127.0.0.1:3000`). | `3000` (informational only) |
+| `port` | Validated and stored for metadata purposes only. The actual listen address is always set by the `--listen` CLI flag (default `127.0.0.1:3000`). **Note:** When using JSON stdin format, `gateway.port` is required by schema validation even though TOML configs have an internal default of `3000`. | `3000` (informational only; required in JSON stdin) |
 | `agentId` | Agent/session identifier used for routing and optional auth matching | (disabled) |
 | `apiKey` | Deprecated alias for `agentId` (accepted for backward compatibility) | (deprecated) |
 | `domain` | Gateway domain (`"localhost"`, `"host.docker.internal"`, or `"${VAR}"`) | (unset) |

@@ -194,7 +194,7 @@ echo '{"mcpServers": {...}}' | ./awmg --config-stdin
 ./awmg --config config.toml --sequential-launch
 
 # Custom payload directory and size threshold (payload dir must be absolute)
-./awmg --config config.toml --payload-dir /tmp/payloads --payload-size-threshold 1048576
+./awmg --config config.toml --payload-dir /tmp/gh-aw/payloads --payload-size-threshold 1048576
 
 # Enable OTLP tracing with a 25% sample rate
 ./awmg --config config.toml --otlp-endpoint http://localhost:4318 --otlp-sample-rate 0.25

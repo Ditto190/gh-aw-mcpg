@@ -321,6 +321,24 @@ func TestValidateJSONSchema(t *testing.T) {
 			shouldErr: true,
 			errorMsg:  "validation error",
 		},
+		{
+			name: "invalid mount - two-part format rejected by schema",
+			config: `{
+				"mcpServers": {
+					"github": {
+						"container": "ghcr.io/github/github-mcp-server:latest",
+						"mounts": ["/host/path:/container/path"]
+					}
+				},
+				"gateway": {
+					"port": 8080,
+					"domain": "localhost",
+					"agentId": "test-key"
+				}
+			}`,
+			shouldErr: true,
+			errorMsg:  "validation error",
+		},
 	}
 
 	for _, tt := range tests {
