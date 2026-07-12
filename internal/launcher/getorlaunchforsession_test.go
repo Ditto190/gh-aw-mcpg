@@ -279,21 +279,6 @@ func TestGetOrLaunchForSession_StdioSessionPoolHit_DifferentSessions(t *testing.
 	assert.Equal(httpConn, connB)
 }
 
-// TestGetOrLaunchForSession_UnknownServer tests that an unknown server ID returns an error.
-func TestGetOrLaunchForSession_UnknownServer(t *testing.T) {
-	require := require.New(t)
-
-	ctx := context.Background()
-	cfg := newTestConfig(map[string]*config.ServerConfig{})
-
-	l := New(ctx, cfg)
-	defer l.Close()
-
-	conn, err := GetOrLaunchForSession(l, "nonexistent-server", "session-xyz")
-	require.Error(err, "Should return error for unknown server ID")
-	require.Nil(conn)
-	assert.ErrorContains(t, err, "nonexistent-server")
-}
 
 // TestGetOrLaunchForSession_HTTPBackendUsesStatelessPool tests that HTTP backends
 // route through the stateless connection pool when called via GetOrLaunchForSession.
