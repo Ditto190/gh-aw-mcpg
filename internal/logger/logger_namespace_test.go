@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -85,6 +86,7 @@ func TestLoggerNamespacesMatchFileConventions(t *testing.T) {
 			unusedExceptions = append(unusedExceptions, relPath)
 		}
 	}
+	slices.Sort(unusedExceptions)
 	require.Empty(t, unusedExceptions, "logger namespace exception list contains unused entries")
 }
 
