@@ -23,6 +23,7 @@ pub const WRITE_OPERATIONS: &[&str] = &[
     "cancel_workflow_run", // gh run cancel       — cancels an in-progress workflow run
     "copy_project",        // gh project copy — creates a new Projects v2 board from an existing one
     "create_branch",
+    "create_codespace",  // gh codespace create — POST /user/codespaces
     "create_discussion", // gh discussion create — creates a discussion in a repository
     "create_gist",
     "create_issue",
@@ -35,6 +36,7 @@ pub const WRITE_OPERATIONS: &[&str] = &[
     "create_release", // POST /repos/.../releases
     "create_repository",
     "create_repository_autolink", // gh repo autolink create — POST /repos/.../autolinks
+    "delete_codespace", // gh codespace delete — DELETE /user/codespaces/{name} or /orgs/{org}/members/{user}/codespaces/{name}
     "delete_deploy_key",
     "delete_file",
     "delete_gist",              // DELETE /gists/{gist_id}
@@ -90,6 +92,7 @@ pub const WRITE_OPERATIONS: &[&str] = &[
     "unmark_project_template", // gh project mark-template --undo — GraphQL unmarkProjectV2AsTemplate
     "unpin_issue",             // gh issue unpin
     "unstar_repository",
+    "update_codespace", // gh codespace edit — PATCH /user/codespaces/{codespace_name}
     "update_issue_comment", // PATCH /repos/.../issues/comments/{id}
     "update_project",       // gh project close/edit/reopen — updates Projects v2 metadata/status
     "upload_release_asset", // gh release upload
@@ -333,6 +336,9 @@ mod tests {
             "delete_release_asset",
             "delete_workflow_run",
             "stop_codespace",
+            "create_codespace",
+            "delete_codespace",
+            "update_codespace",
         ] {
             assert!(
                 is_write_operation(op),
