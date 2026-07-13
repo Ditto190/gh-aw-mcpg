@@ -25,7 +25,7 @@ func TestLoggerNamespacesMatchFileConventions(t *testing.T) {
 	internalRoot := filepath.Join(repoRoot, "internal")
 
 	exceptionNamespaces := map[string][]string{
-		"internal/auth/header.go":                 {"auth:header", "auth:apikey"},
+		"internal/auth/header.go":                {"auth:header", "auth:apikey"},
 		"internal/config/config_core.go":         {"config:config"},
 		"internal/config/config_feature.go":      {"config:feature"},
 		"internal/envutil/expand_env_args.go":    {"envutil:expand"},
@@ -80,11 +80,17 @@ func TestLoggerNamespacesMatchFileConventions(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	assert.Equal(t, len(exceptionNamespaces), len(seenExceptions), "logger namespace exception list contains unused entries")
+	var unusedExceptions []string
+	for relPath := range exceptionNamespaces {
+		if !seenExceptions[relPath] {
+			unusedExceptions = append(unusedExceptions, relPath)
+		}
+	}
+	assert.Empty(t, unusedExceptions, "logger namespace exception list contains unused entries")
 }
 
 func loggerNamespaces(file *ast.File) []string {
-	namespaces := []string{}
+	var namespaces []string
 
 	ast.Inspect(file, func(node ast.Node) bool {
 		call, ok := node.(*ast.CallExpr)
