@@ -53,7 +53,6 @@ func TimeoutPositive(timeout int, fieldName, jsonPath string) *ValidationError {
 func PositiveInteger(value int, fieldName, jsonPath string) *ValidationError {
 	logValidation.Printf("Validating positive integer: field=%s, value=%d, jsonPath=%s", fieldName, value, jsonPath)
 	if value < 1 {
-		logValidation.Printf("Positive integer validation failed: %s=%d is not positive", fieldName, value)
 		return newValidationError(
 			fmt.Sprintf("Positive integer validation failed: %s=%d is not positive", fieldName, value),
 			fieldName,
