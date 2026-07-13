@@ -11,7 +11,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -75,7 +74,7 @@ func TestLoggerNamespacesMatchFileConventions(t *testing.T) {
 			seenExceptions[relPath] = true
 		}
 
-		assert.ElementsMatch(t, expected, actual, "unexpected logger namespaces in %s", relPath)
+		require.ElementsMatch(t, expected, actual, "unexpected logger namespaces in %s", relPath)
 		return nil
 	})
 	require.NoError(t, err)
@@ -86,7 +85,7 @@ func TestLoggerNamespacesMatchFileConventions(t *testing.T) {
 			unusedExceptions = append(unusedExceptions, relPath)
 		}
 	}
-	assert.Empty(t, unusedExceptions, "logger namespace exception list contains unused entries")
+	require.Empty(t, unusedExceptions, "logger namespace exception list contains unused entries")
 }
 
 func loggerNamespaces(file *ast.File) []string {
