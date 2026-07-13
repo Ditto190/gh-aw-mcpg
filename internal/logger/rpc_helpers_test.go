@@ -176,66 +176,6 @@ func BenchmarkExtractErrorMessageLong(b *testing.B) {
 	}
 }
 
-// TestTruncateAndSanitize tests the truncateAndSanitize function
-func TestTruncateAndSanitize(t *testing.T) {
-	tests := []struct {
-		name      string
-		payload   string
-		maxLength int
-		want      string
-	}{
-		{
-			name:      "short string no truncation",
-			payload:   "Hello, World!",
-			maxLength: 50,
-			want:      "Hello, World!",
-		},
-		{
-			name:      "exact max length",
-			payload:   "Hello",
-			maxLength: 5,
-			want:      "Hello",
-		},
-		{
-			name:      "truncation needed",
-			payload:   "This is a very long string that needs to be truncated",
-			maxLength: 20,
-			want:      "This is a very long ...",
-		},
-		{
-			name:      "empty string",
-			payload:   "",
-			maxLength: 10,
-			want:      "",
-		},
-		{
-			name:      "zero max length",
-			payload:   "test",
-			maxLength: 0,
-			want:      "...",
-		},
-		{
-			name:      "sanitize secrets - GitHub token",
-			payload:   "token: ghp_1234567890abcdefghijklmnopqrstuvwxyz",
-			maxLength: 100,
-			want:      "token=[REDACTED]",
-		},
-		{
-			name:      "sanitize and truncate",
-			payload:   "auth bearer ghp_1234567890abcdefghijklmnopqrstuvwxyz " + strings.Repeat("x", 100),
-			maxLength: 50,
-			want:      "auth bearer [REDACTED] " + strings.Repeat("x", 27) + "...",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := truncateAndSanitize(tt.payload, tt.maxLength)
-			assert.Equal(t, tt.want, result)
-		})
-	}
-}
-
 // TestIsEffectivelyEmpty tests the isEffectivelyEmpty function
 func TestIsEffectivelyEmpty(t *testing.T) {
 	tests := []struct {

@@ -19,16 +19,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-
-	"github.com/github/gh-aw-mcpg/internal/sanitize"
-	"github.com/github/gh-aw-mcpg/internal/util"
 )
-
-// truncateAndSanitize truncates the payload to max length and sanitizes secrets.
-func truncateAndSanitize(payload string, maxLength int) string {
-	sanitized := sanitize.SanitizeString(payload)
-	return util.Truncate(sanitized, maxLength)
-}
 
 // LogMarshaledForDebug marshals value for debug logging and dispatches to the
 // provided callbacks for success or marshal failure paths.

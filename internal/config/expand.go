@@ -1,3 +1,16 @@
+// Package config — expand.go provides ${VAR_NAME} environment variable expansion
+// for configuration values loaded from JSON stdin and TOML files.
+//
+// Why this file does NOT reuse internal/envutil:
+//
+// internal/envutil is a generic, low-level toolkit (GetEnvString, GetEnvIntRaw, …)
+// that returns defaults or zero values when a variable is undefined.  Config
+// expansion has stricter semantics: an undefined variable referenced in a
+// configuration file is a hard error, not a silent fallback.  Implementing that
+// "fail-fast on undefined" contract directly here (via os.LookupEnv + error
+// accumulation) avoids coupling the expansion logic to envutil's optional-return
+// pattern and makes the fatal-undefined guarantee explicit and testable without
+// envutil dependency.
 package config
 
 import (
