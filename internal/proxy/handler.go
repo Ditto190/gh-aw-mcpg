@@ -35,10 +35,10 @@ func writeDIFCForbidden(w http.ResponseWriter, message string) {
 // rejectProxyRequest standardizes proxy request rejection by logging, recording
 // a span error, and writing a JSON error response.
 func rejectProxyRequest(w http.ResponseWriter, span oteltrace.Span, status int, code, msg string, err error) {
-	logger.LogError("proxy", "Request rejected: status=%d code=%s message=%s err=%v", status, code, msg, err)
 	if err == nil {
 		err = errors.New(msg)
 	}
+	logger.LogError("proxy", "Request rejected: status=%d code=%s message=%s err=%v", status, code, msg, err)
 	if span != nil {
 		tracing.RecordSpanError(span, err, msg)
 	}
@@ -249,7 +249,9 @@ func (h *proxyHandler) handleWithDIFC(w http.ResponseWriter, r *http.Request, pa
 		}
 	}
 	if resp == nil {
-		tracing.RecordSpanErrorOnAll(errors.New("upstream request failed"), "upstream request failed", fwdSpan, difcSpan)
+		// fwdSpan already received the error via rejectProxyRequest inside forwardAndReadBody;
+		// only propagate to the parent difcSpan here to avoid duplicate exception events.
+		tracing.RecordSpanError(difcSpan, errors.New("upstream request failed"), "upstream request failed")
 		return
 	}
 
@@ -436,13 +438,13 @@ func (h *proxyHandler) forwardAndReadBody(
 	logHandler.Printf("forwardAndReadBody: %s %s", method, path)
 	resp, err := h.server.forwardToGitHub(ctx, method, path, body, contentType, clientAuth)
 	if err != nil {
-		rejectProxyRequest(w, span, http.StatusBadGateway, "bad_gateway", "upstream request failed", err)
+		rejectProxyRequest(w, span, http.StatusBadGateway, "bad_gateway", "upstream request failed", fmt.Errorf("%s %s: %w", method, path, err))
 		return nil, nil
 	}
 	defer resp.Body.Close()
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		rejectProxyRequest(w, span, http.StatusBadGateway, "bad_gateway", "failed to read upstream response", err)
+		rejectProxyRequest(w, span, http.StatusBadGateway, "bad_gateway", "failed to read upstream response", fmt.Errorf("%s %s status=%d: %w", method, path, resp.StatusCode, err))
 		return nil, nil
 	}
 	logHandler.Printf("forwardAndReadBody: %s %s -> status=%d bodyLen=%d", method, path, resp.StatusCode, len(respBody))
