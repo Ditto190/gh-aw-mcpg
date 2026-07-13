@@ -157,5 +157,5 @@ func TestInitAndSetGlobalNoFileLogger_SetupError(t *testing.T) {
 		tmpDir,
 		errFactory,
 	)
-	require.Error(t, err, "initAndSetGlobalNoFileLogger must return error when factory.setup fails")
+require.ErrorIs(t, err, os.ErrInvalid, "initAndSetGlobalNoFileLogger must return the factory.setup error")
 }
