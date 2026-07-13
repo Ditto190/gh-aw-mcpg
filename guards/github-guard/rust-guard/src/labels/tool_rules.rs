@@ -794,6 +794,21 @@ pub fn apply_tool_labels(
             integrity = writer_integrity(scope_names::USER, ctx);
         }
 
+        // === Codespaces lifecycle management (account-scoped writes) ===
+        // Pre-emptive synthetic guard entries for CLI-only Codespaces lifecycle operations:
+        //   `gh codespace create` → POST /user/codespaces
+        //   `gh codespace edit`   → PATCH /user/codespaces/{codespace_name}
+        //   `gh codespace delete` → DELETE /user/codespaces/{name} or /orgs/{org}/members/{user}/codespaces/{name}
+        //   `gh codespace stop`   → POST /user|/orgs/.../codespaces/.../stop
+        // Codespaces expose repository content, dev-environment metadata, and user/org-billed
+        // compute state. Treat conservatively as private user-scoped writes.
+        // S = private:user; I = writer(user)
+        "create_codespace" | "update_codespace" | "delete_codespace" | "stop_codespace" => {
+            secrecy = private_user_label();
+            baseline_scope = Cow::Borrowed(scope_names::USER);
+            integrity = writer_integrity(scope_names::USER, ctx);
+        }
+
         _ => {
             // Default: inherit provided labels
         }
@@ -1656,6 +1671,32 @@ mod tests {
             "add_ssh_key",
             "delete_gpg_key",
             "delete_ssh_key",
+        ] {
+            let (secrecy, integrity, _) =
+                super::apply_tool_labels(tool, &args, "", vec![], vec![], String::new(), &ctx);
+            assert_eq!(
+                secrecy, expected_secrecy,
+                "{tool}: must be user-private (secrecy = private:user)",
+            );
+            assert_eq!(
+                integrity, expected_integrity,
+                "{tool}: must require writer-level user integrity",
+            );
+        }
+    }
+
+    #[test]
+    fn apply_tool_labels_codespace_lifecycle_is_user_private_write() {
+        let ctx = default_ctx();
+        let args = serde_json::json!({});
+        let expected_secrecy = private_user_label();
+        let expected_integrity = writer_integrity(scope_names::USER, &ctx);
+
+        for tool in &[
+            "create_codespace",
+            "update_codespace",
+            "delete_codespace",
+            "stop_codespace",
         ] {
             let (secrecy, integrity, _) =
                 super::apply_tool_labels(tool, &args, "", vec![], vec![], String::new(), &ctx);
