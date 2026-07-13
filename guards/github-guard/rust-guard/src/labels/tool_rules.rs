@@ -201,23 +201,9 @@ pub fn apply_tool_labels(
                 apply_issue_read_enrichment(&owner, &repo, repo_id, tool_args, desc, integrity, true, ctx);
         }
 
-        "issue_dependency_write" => {
-            if !owner.is_empty() && !repo.is_empty() {
-                if let Some(issue_num) =
-                    extract_number_as_string(tool_args, field_names::ISSUE_NUMBER)
-                {
-                    desc = format!("issue:{}/{}#{}", owner, repo, issue_num);
-                }
-            }
-            secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
-            integrity = writer_integrity(repo_id, ctx);
-        }
-
-        // === Issue Pin/Unpin (repo-scoped write) ===
-        "pin_issue" | "unpin_issue" => {
-            // Pinning/unpinning an issue is a repo-level cosmetic write operation.
-            // S = S(repo) — inherits from repository visibility
-            // I = writer (requires repo write access to change issue pin state)
+        // === Issue dependency / pin / unpin writes (repo-scoped write) ===
+        // S = S(repo); I = writer
+        "issue_dependency_write" | "pin_issue" | "unpin_issue" => {
             if !owner.is_empty() && !repo.is_empty() {
                 if let Some(issue_num) =
                     extract_number_as_string(tool_args, field_names::ISSUE_NUMBER)
@@ -975,6 +961,23 @@ mod tests {
         let ctx = default_ctx();
         let result = check_file_secrecy(
             "auth_token",
+            vec![],
+            "octocat",
+            "hello-world",
+            "octocat/hello-world",
+            &ctx,
+        );
+        assert_eq!(
+            result,
+            private_label("octocat", "hello-world", "octocat/hello-world", &ctx)
+        );
+    }
+
+    #[test]
+    fn check_file_secrecy_credential_file_triggers_private() {
+        let ctx = default_ctx();
+        let result = check_file_secrecy(
+            "config/db_credentials.json",
             vec![],
             "octocat",
             "hello-world",
