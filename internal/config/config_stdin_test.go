@@ -1314,3 +1314,93 @@ func TestConvertStdinConfig_PayloadSizeThreshold(t *testing.T) {
 		assert.NoError(t, err)
 	})
 }
+
+// TestConvertStdinConfig_GatewayOptionalFields verifies that the optional gateway
+// fields PayloadDir, ForcePublicRepos, and SinkVisibilityExemptServers are correctly
+// wired through convertStdinConfig when set.
+func TestConvertStdinConfig_GatewayOptionalFields(t *testing.T) {
+	forceTrue := true
+	forceFalse := false
+
+	t.Run("payloadDir wired from stdin gateway config", func(t *testing.T) {
+		stdinCfg := &StdinConfig{
+			Gateway: &StdinGatewayConfig{
+				PayloadDir: "/custom/payloads",
+			},
+		}
+		cfg, err := convertStdinConfig(stdinCfg)
+		require.NoError(t, err)
+		require.NotNil(t, cfg.Gateway)
+		assert.Equal(t, "/custom/payloads", cfg.Gateway.PayloadDir)
+	})
+
+	t.Run("empty payloadDir leaves gateway default", func(t *testing.T) {
+		stdinCfg := &StdinConfig{
+			Gateway: &StdinGatewayConfig{},
+		}
+		cfg, err := convertStdinConfig(stdinCfg)
+		require.NoError(t, err)
+		require.NotNil(t, cfg.Gateway)
+		assert.Equal(t, DefaultPayloadDir, cfg.Gateway.PayloadDir)
+	})
+
+	t.Run("forcePublicRepos true value preserved", func(t *testing.T) {
+		stdinCfg := &StdinConfig{
+			Gateway: &StdinGatewayConfig{
+				ForcePublicRepos: &forceTrue,
+			},
+		}
+		cfg, err := convertStdinConfig(stdinCfg)
+		require.NoError(t, err)
+		require.NotNil(t, cfg.Gateway)
+		require.NotNil(t, cfg.Gateway.ForcePublicRepos)
+		assert.True(t, *cfg.Gateway.ForcePublicRepos)
+	})
+
+	t.Run("forcePublicRepos false value preserved", func(t *testing.T) {
+		stdinCfg := &StdinConfig{
+			Gateway: &StdinGatewayConfig{
+				ForcePublicRepos: &forceFalse,
+			},
+		}
+		cfg, err := convertStdinConfig(stdinCfg)
+		require.NoError(t, err)
+		require.NotNil(t, cfg.Gateway)
+		require.NotNil(t, cfg.Gateway.ForcePublicRepos)
+		assert.False(t, *cfg.Gateway.ForcePublicRepos)
+	})
+
+	t.Run("nil forcePublicRepos leaves field nil", func(t *testing.T) {
+		stdinCfg := &StdinConfig{
+			Gateway: &StdinGatewayConfig{},
+		}
+		cfg, err := convertStdinConfig(stdinCfg)
+		require.NoError(t, err)
+		require.NotNil(t, cfg.Gateway)
+		assert.Nil(t, cfg.Gateway.ForcePublicRepos)
+	})
+
+	t.Run("sinkVisibilityExemptServers wired from stdin gateway config", func(t *testing.T) {
+		stdinCfg := &StdinConfig{
+			Gateway: &StdinGatewayConfig{
+				SinkVisibilityExemptServers: []string{"github", "slack"},
+			},
+		}
+		cfg, err := convertStdinConfig(stdinCfg)
+		require.NoError(t, err)
+		require.NotNil(t, cfg.Gateway)
+		assert.Equal(t, []string{"github", "slack"}, cfg.Gateway.SinkVisibilityExemptServers)
+	})
+
+	t.Run("empty sinkVisibilityExemptServers leaves field nil", func(t *testing.T) {
+		stdinCfg := &StdinConfig{
+			Gateway: &StdinGatewayConfig{
+				SinkVisibilityExemptServers: []string{},
+			},
+		}
+		cfg, err := convertStdinConfig(stdinCfg)
+		require.NoError(t, err)
+		require.NotNil(t, cfg.Gateway)
+		assert.Nil(t, cfg.Gateway.SinkVisibilityExemptServers)
+	})
+}
