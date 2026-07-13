@@ -113,6 +113,7 @@ func loggerNamespaces(file *ast.File) []string {
 
 		lit, ok := call.Args[0].(*ast.BasicLit)
 		if !ok || lit.Kind != token.STRING {
+			namespaces = append(namespaces, "<non-literal logger namespace>")
 			return true
 		}
 
