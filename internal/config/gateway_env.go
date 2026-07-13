@@ -1,6 +1,6 @@
 package config
 
-// config_env.go — gateway-specific environment variable helpers.
+// gateway_env.go — gateway-specific environment variable helpers.
 //
 // This file intentionally layers on top of internal/envutil rather than
 // calling os.Getenv directly. The layering is deliberate:
