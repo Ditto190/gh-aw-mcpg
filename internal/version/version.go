@@ -43,14 +43,17 @@ func vcsCommitFromBuildInfo(buildInfo *debug.BuildInfo) string {
 // Returns an empty string when the setting is absent.
 func vcsTimeFromBuildInfo(buildInfo *debug.BuildInfo) string {
 	if buildInfo == nil {
+		logVersion.Print("vcsTimeFromBuildInfo: no build info available")
 		return ""
 	}
 
 	for _, setting := range buildInfo.Settings {
 		if setting.Key == "vcs.time" {
+			logVersion.Printf("vcsTimeFromBuildInfo: found vcs.time, buildDate=%s", setting.Value)
 			return setting.Value
 		}
 	}
+	logVersion.Print("vcsTimeFromBuildInfo: vcs.time not found in build settings")
 	return ""
 }
 
