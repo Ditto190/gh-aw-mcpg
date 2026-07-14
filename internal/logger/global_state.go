@@ -10,55 +10,42 @@ import (
 
 // Close Pattern for Logger Types
 //
-// All logger types in this package implement their Close() method using the withLock
-// helper to ensure consistent mutex handling:
+// All logger types in this package implement their Close() method using the shared
+// close helpers to ensure consistent mutex handling and sync/close lifecycle:
 //
-//	func (l *Logger) Close() error {
-//	    return l.withLock(func() error {
-//	        // Optional: Perform cleanup before closing (e.g., write footer)
-//	        return closeLogFile(l.logFile, &l.mu, "loggerName")
-//	    })
-//	}
+//   - closeLogFileWithLock: for simple loggers with no pre-close cleanup
+//   - closeLogFileWithCleanup: for loggers that need to write a footer or flush
+//     state before the file is closed
 //
-// The withLock helper (promoted from the embedded lockable type) acquires the mutex,
-// executes the callback, then releases the mutex — ensuring the lock is always released via defer.
+// Why these helpers?
 //
-// Why this pattern?
-//
-//  1. Consistent locking: withLock enforces acquire-on-enter / release-on-exit
-//  2. Deferred unlock: Implemented inside withLock using defer, so it's never forgotten
-//  3. Optional cleanup: Logger-specific cleanup (like MarkdownLogger's footer) goes inside the callback
-//  4. Shared helper: Always delegate to closeLogFile() for consistent sync and close behavior
-//  5. Error handling: Return errors from closeLogFile to indicate serious issues
+//  1. Consistent locking: each helper acquires the embedded lockable mutex,
+//     runs the work, then releases it via defer — the lock is never forgotten
+//  2. Shared sync/close: the actual os.File.Sync + os.File.Close call lives in
+//     one place (closeLogFileWithLock); no logger reimplements it
+//  3. Error propagation: cleanup errors are returned rather than silently dropped
+//  4. Minimal Close() bodies: logger-specific behavior is expressed as a single
+//     callback without boilerplate
 //
 // Examples:
 //
 // Simple Close() with no cleanup (FileLogger, JSONLLogger):
 //
 //	func (fl *FileLogger) Close() error {
-//	    return fl.withLock(func() error {
-//	        return closeLogFile(fl.logFile, &fl.mu, "file")
-//	    })
+//	    return closeLogFileWithLock(&fl.lockable, fl.logFile, "file")
 //	}
 //
 // Close() with custom cleanup (MarkdownLogger):
 //
 //	func (ml *MarkdownLogger) Close() error {
-//	    return ml.withLock(func() error {
-//	        if ml.logFile != nil {
-//	            footer := "\n</details>\n"
-//	            if _, err := ml.logFile.WriteString(footer); err != nil {
-//	                return closeLogFile(ml.logFile, &ml.mu, "markdown")
-//	            }
-//	            return closeLogFile(ml.logFile, &ml.mu, "markdown")
-//	        }
-//	        return nil
+//	    return closeLogFileWithCleanup(&ml.lockable, ml.logFile, "markdown", func(file *os.File) error {
+//	        _, err := file.WriteString("\n</details>\n")
+//	        return err
 //	    })
 //	}
 //
-// When adding a new single-file logger type, embed lockable and prefer the
-// closeLogFileWithLock / closeLogFileWithCleanup helpers so the sync/close lifecycle
-// stays centralized.
+// When adding a new single-file logger type, embed lockable and use one of
+// these two helpers so the sync/close lifecycle stays centralized.
 
 // Initialization Pattern for Logger Types
 //
@@ -68,23 +55,20 @@ import (
 //
 // Standard Initialization Pattern:
 //
-// All logger types use the initLogger() generic helper function for initialization.
-// The setup and error-handler callbacks are defined as named package-level functions
-// (e.g., setupFileLogger, handleFileLoggerError) and bundled into a package-level
-// loggerFactory[T] variable to aid readability and testability:
-// The per-logger Init* functions stay as the public API, but they delegate through
-// bindGlobalLogger in global_helpers.go so the mutex/global-pointer wiring and init
-// policy are centralized while fallback semantics remain explicit at the call site.
+// All logger types use bindGlobalLogger + one of the three init* methods on the
+// returned globalLoggerRef for initialization. The setup and error-handler callbacks
+// are bundled into a package-level loggerFactory[T] variable to aid readability and
+// testability. The per-logger Init* functions stay as the public API while
+// mutex/global-pointer wiring and the init policy are centralized in global_helpers.go:
 //
-//	var fileLoggerFactory = loggerFactory[*FileLogger]{
-//	    setup:   setupFileLogger,
-//	    onError: handleFileLoggerError,
-//	}
+//   - initWithFallback: always installs the logger (even a fallback instance on error)
+//   - initOnSuccess:    only replaces the global when initialization succeeds
+//   - initNoFile:       for loggers that create files lazily or not at all
+//
+//	var fileLoggerRef = bindGlobalLogger(&globalLoggerMu, &globalFileLogger)
 //
 //	func InitFileLogger(logDir, fileName string) error {
-//	    logger, err := initLogger(logDir, fileName, os.O_APPEND, fileLoggerFactory)
-//	    initGlobalLogger(&globalLoggerMu, &globalFileLogger, logger)
-//	    return err
+//	    return fileLoggerRef.initWithFallback(logDir, fileName, os.O_APPEND, fileLoggerFactory)
 //	}
 //
 // The initLogger() helper:
