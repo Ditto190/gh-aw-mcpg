@@ -224,7 +224,7 @@ func TestCloseLogFileWithCleanup_ClosesAfterCleanupError(t *testing.T) {
 		cleanupCalled = true
 		return fmt.Errorf("footer write failed")
 	})
-	require.NoError(t, err)
+	require.EqualError(t, err, "footer write failed")
 	assert.True(t, cleanupCalled, "cleanup callback should run before close")
 
 	_, writeErr := file.WriteString("should fail after close")

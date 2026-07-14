@@ -52,7 +52,10 @@ func closeLogFileWithCleanup(
 	return l.withLock(func() error {
 		if file != nil && cleanup != nil {
 			if err := cleanup(file); err != nil {
-				return closeLogFile(file, &l.mu, loggerName)
+				if closeErr := closeLogFile(file, &l.mu, loggerName); closeErr != nil {
+					return closeErr
+				}
+				return err
 			}
 		}
 		return closeLogFile(file, &l.mu, loggerName)
