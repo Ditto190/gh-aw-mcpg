@@ -2,6 +2,7 @@ package logger
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -175,19 +176,14 @@ func TestInitAndSetGlobalLoggerOnSuccess_DoesNotOverwriteOnError(t *testing.T) {
 	t.Cleanup(func() { require.NoError(t, CloseAllLoggers()) })
 	require.NoError(t, InitJSONLLogger(tmpDir, "test.jsonl"))
 
+	loggerRef := bindGlobalLogger(&globalJSONLMu, &globalJSONLLogger)
+
 	globalJSONLMu.RLock()
 	original := globalJSONLLogger
 	globalJSONLMu.RUnlock()
 	require.NotNil(t, original)
 
-	err := initAndSetGlobalLoggerOnSuccess(
-		&globalJSONLMu,
-		&globalJSONLLogger,
-		"/proc/self/invalid",
-		"test.jsonl",
-		os.O_APPEND,
-		jsonlLoggerFactory,
-	)
+	err := loggerRef.initOnSuccess("/proc/self/invalid", "test.jsonl", os.O_APPEND, jsonlLoggerFactory)
 	require.Error(t, err)
 
 	globalJSONLMu.RLock()
@@ -204,12 +200,8 @@ func TestInitAndSetGlobalNoFileLogger_UsesFallbackOnMkdirError(t *testing.T) {
 	blockingFile := filepath.Join(tmpDir, "not-a-dir")
 	require.NoError(t, os.WriteFile(blockingFile, []byte("x"), 0644))
 
-	err := initAndSetGlobalNoFileLogger(
-		&globalServerLoggerMu,
-		&globalServerFileLogger,
-		filepath.Join(blockingFile, "subdir"),
-		serverFileLoggerFactory,
-	)
+	loggerRef := bindGlobalLogger(&globalServerLoggerMu, &globalServerFileLogger)
+	err := loggerRef.initNoFile(filepath.Join(blockingFile, "subdir"), serverFileLoggerFactory)
 	require.NoError(t, err)
 
 	globalServerLoggerMu.RLock()
@@ -217,6 +209,27 @@ func TestInitAndSetGlobalNoFileLogger_UsesFallbackOnMkdirError(t *testing.T) {
 	globalServerLoggerMu.RUnlock()
 	require.NotNil(t, logger)
 	assert.True(t, logger.useFallback, "mkdir failure should initialize server logger in fallback mode")
+}
+
+func TestCloseLogFileWithCleanup_ClosesAfterCleanupError(t *testing.T) {
+	tmpDir := t.TempDir()
+	logPath := filepath.Join(tmpDir, "cleanup-error.log")
+
+	file, err := os.Create(logPath)
+	require.NoError(t, err)
+
+	var l lockable
+	cleanupCalled := false
+
+	err = closeLogFileWithCleanup(&l, file, "test", func(f *os.File) error {
+		cleanupCalled = true
+		return fmt.Errorf("footer write failed")
+	})
+	require.EqualError(t, err, "footer write failed")
+	assert.True(t, cleanupCalled, "cleanup callback should run before close")
+
+	_, writeErr := file.WriteString("should fail after close")
+	require.Error(t, writeErr, "file should be closed even when cleanup fails")
 }
 
 // TestInitAndSetGlobalNoFileLogger_FactorySetupError verifies that
