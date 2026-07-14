@@ -190,7 +190,7 @@ func randomSerial() (*big.Int, error) {
 	if serial.Sign() == 0 {
 		serial = new(big.Int).Add(serial, big.NewInt(1))
 	}
-	logTLS.Printf("generated random serial number: %s", serial.String())
+	logTLS.Printf("generated random serial number: %s", serial)
 	return serial, nil
 }
 
@@ -200,8 +200,11 @@ func writePEM(path, blockType string, derBytes []byte, perm os.FileMode) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
 	if err := pem.Encode(f, &pem.Block{Type: blockType, Bytes: derBytes}); err != nil {
+		_ = f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
 		return err
 	}
 	logTLS.Printf("PEM file written successfully: path=%s", path)
