@@ -66,7 +66,7 @@ func TestNewHTTPConnection_WithOIDCProvider(t *testing.T) {
 		context.Background(),
 		"oidc-test",
 		mcpServer.URL,
-		nil,   // no static headers
+		nil, // no static headers
 		provider,
 		"https://example.com/audience",
 		0,
