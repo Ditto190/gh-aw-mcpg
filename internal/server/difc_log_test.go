@@ -481,9 +481,9 @@ func TestBuildDIFCFilteredNotice_ItemWithDescOnly(t *testing.T) {
 	assert.NotEmpty(t, notice)
 	assert.Contains(t, notice, "[Filtered]")
 	assert.Contains(t, notice, "1 item(s)")
-	assert.Contains(t, notice, "issue:org/repo#42")
-	// No parenthesized reason should appear.
-	assert.NotContains(t, notice, "()")
+	assert.Contains(t, notice, "are not shown: issue:org/repo#42")
+	// Ensure the description is not formatted with a parenthesized reason.
+	assert.NotContains(t, notice, "issue:org/repo#42 (")
 }
 
 // TestBuildDIFCFilteredNotice_ItemWithReasonOnly verifies that an item with a reason
