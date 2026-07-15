@@ -49,7 +49,7 @@ func vcsTimeFromBuildInfo(buildInfo *debug.BuildInfo) string {
 
 	for _, setting := range buildInfo.Settings {
 		if setting.Key == "vcs.time" {
-			logVersion.Printf("vcsTimeFromBuildInfo: found vcs.time, buildDate=%s", setting.Value)
+			logVersion.Printf("vcsTimeFromBuildInfo: found vcs.time, vcsTime=%s", setting.Value)
 			return setting.Value
 		}
 	}
