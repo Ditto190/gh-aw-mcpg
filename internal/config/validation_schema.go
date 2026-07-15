@@ -249,7 +249,7 @@ func formatSchemaError(err error) error {
 
 		AppendConfigDocsFooter(&sb)
 
-		return fmt.Errorf("%s", sb.String())
+		return errors.New(sb.String())
 	}
 
 	return fmt.Errorf("configuration validation error (version: %s): %s", version.Get(), err.Error())
