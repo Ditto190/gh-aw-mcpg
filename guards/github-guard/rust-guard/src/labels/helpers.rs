@@ -513,7 +513,6 @@ fn item_has_config_label(item: &Value, config_label: &str) -> bool {
 
 /// Check whether a content item carries the configured built-in promotion label
 /// (case-insensitive). Returns `false` when `promotion_label` is empty (feature disabled).
-#[cfg(test)]
 pub fn has_promotion_label(item: &Value, ctx: &PolicyContext) -> bool {
     item_has_config_label(item, &ctx.promotion_label)
 }
