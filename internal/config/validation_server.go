@@ -302,7 +302,7 @@ func validateAgainstCustomSchema(name string, server *StdinServerConfig, schemaU
 	if err != nil {
 		return schemaErr(
 			fmt.Sprintf("failed to compile custom schema: %v", err),
-			fmt.Sprintf("The schema at '%s' must be a valid JSON Schema Draft 7 document", schemaURL))
+			fmt.Sprintf("The schema at '%s' must be a valid JSON Schema document (Draft 2020-12 or earlier)", schemaURL))
 	}
 
 	logValidation.Printf("Custom schema compiled successfully: name=%s", name)
@@ -330,11 +330,17 @@ func validateServerAgainstSchema(name string, server *StdinServerConfig, schema 
 			"Internal error - please report this issue")
 	}
 
-	// Unmarshal to map to get struct fields
-	if err := json.Unmarshal(serverJSON, &serverMap); err != nil {
+	// Parse using jsonschema.UnmarshalJSON for number-precision consistency with embedded schema path
+	serverObj, parseErr := jsonschema.UnmarshalJSON(bytes.NewReader(serverJSON))
+	if parseErr != nil {
 		return schemaErr(
-			fmt.Sprintf("failed to unmarshal server config for validation: %v", err),
+			fmt.Sprintf("failed to parse server config for validation: %v", parseErr),
 			"Internal error - please report this issue")
+	}
+	if obj, ok := serverObj.(map[string]interface{}); ok {
+		serverMap = obj
+	} else {
+		logValidation.Printf("unexpected: server config parsed to non-object type, using empty map for validation: name=%s", name)
 	}
 
 	// Merge additional properties (custom fields) into the map
