@@ -41,7 +41,11 @@ func registerCoreFlags(cmd *cobra.Command) {
 	cmd.Flags().BoolVar(&validateEnv, "validate-env", false, "Validate execution environment (Docker, env vars) before starting")
 	cmd.Flags().CountVarP(&verbosity, "verbose", "v", "Increase verbosity level: -v (info), -vv (debug), -vvv (trace)")
 
-	// Flag validation groups
+	// Flag validation groups.
+	// Note: MarkFlagsMutuallyExclusive only fires when flags are explicitly set on
+	// the command line. Neither --routed nor --unified has an env-var default, so
+	// there is no env-var bypass risk here; runtime logic defaults to routed mode
+	// when neither flag is set.
 	cmd.MarkFlagsMutuallyExclusive("routed", "unified")
 	cmd.MarkFlagsOneRequired("config", "config-stdin")
 }
