@@ -8,6 +8,7 @@ import (
 	"github.com/github/gh-aw-mcpg/internal/config"
 	"github.com/github/gh-aw-mcpg/internal/difc"
 	"github.com/github/gh-aw-mcpg/internal/envutil"
+	"github.com/github/gh-aw-mcpg/internal/guard"
 	"github.com/spf13/cobra"
 )
 
@@ -37,14 +38,32 @@ func init() {
 	})
 }
 
-// detectGuardWasm returns the baked-in container guard path if it exists,
-// or empty string if not found (requiring the user to specify --guard-wasm).
+// detectGuardWasm returns the path to the WASM guard module to use as the
+// default for the --guard-wasm flag. It checks in order:
+//  1. The baked-in container guard at containerGuardWasmPath.
+//  2. The first .wasm file under $MCP_GATEWAY_WASM_GUARDS_DIR/github/.
+//
+// Returns an empty string when no guard can be auto-detected, which causes
+// --guard-wasm to be marked as required.
 func detectGuardWasm() string {
 	debugLog.Printf("Checking for baked-in guard at %s", containerGuardWasmPath)
 	if _, err := os.Stat(containerGuardWasmPath); err == nil {
 		debugLog.Printf("Auto-detected baked-in guard: %s", containerGuardWasmPath)
 		return containerGuardWasmPath
 	}
+
+	// Fall back to MCP_GATEWAY_WASM_GUARDS_DIR/github/*.wasm if the env var is set.
+	// This allows operators who set MCP_GATEWAY_WASM_GUARDS_DIR to satisfy the
+	// --guard-wasm requirement without passing it explicitly on the CLI.
+	// Note: MarkFlagRequired only fires on CLI-set flags, so the env var must be
+	// translated to a concrete default here at flag-registration time.
+	if wasmPath, found, err := guard.FindServerWASMGuardFile("github"); err != nil {
+		debugLog.Printf("WASM guard discovery via %s failed: %v", guard.WASMGuardsDirEnvVar, err)
+	} else if found {
+		debugLog.Printf("Auto-detected guard via %s: %s", guard.WASMGuardsDirEnvVar, wasmPath)
+		return wasmPath
+	}
+
 	debugLog.Print("Baked-in guard not found, --guard-wasm flag required")
 	return ""
 }

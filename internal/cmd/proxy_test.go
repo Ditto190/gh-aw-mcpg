@@ -14,7 +14,8 @@ import (
 )
 
 // TestDetectGuardWasm_FileNotFound tests that detectGuardWasm returns empty string
-// when the baked-in guard at containerGuardWasmPath does not exist.
+// when the baked-in guard at containerGuardWasmPath does not exist and
+// MCP_GATEWAY_WASM_GUARDS_DIR is not set.
 // In standard test environments (non-container), the baked-in guard is absent.
 func TestDetectGuardWasm_FileNotFound(t *testing.T) {
 	// Confirm the baked-in path does not exist in this environment
@@ -23,11 +24,54 @@ func TestDetectGuardWasm_FileNotFound(t *testing.T) {
 		t.Skipf("baked-in guard found at %s (running in container) — skipping 'not found' test", containerGuardWasmPath)
 	}
 
+	// Ensure the env-var fallback is disabled too.
+	t.Setenv("MCP_GATEWAY_WASM_GUARDS_DIR", "")
+
 	result := detectGuardWasm()
 	assert.Empty(t, result, "detectGuardWasm should return empty string when guard file does not exist")
 }
 
-// TestDetectGuardWasm_FileExists verifies that detectGuardWasm returns the
+// TestDetectGuardWasm_ViaWasmGuardsDir verifies that detectGuardWasm falls back to
+// MCP_GATEWAY_WASM_GUARDS_DIR/github/*.wasm when the baked-in container guard is absent.
+func TestDetectGuardWasm_ViaWasmGuardsDir(t *testing.T) {
+	// Only meaningful when not running in a container with the baked-in guard.
+	if _, err := os.Stat(containerGuardWasmPath); err == nil {
+		t.Skipf("baked-in guard found at %s — fallback test not applicable", containerGuardWasmPath)
+	}
+
+	// Create a temporary directory that mimics the MCP_GATEWAY_WASM_GUARDS_DIR layout:
+	//   <root>/github/00-github-guard.wasm
+	rootDir := t.TempDir()
+	githubDir := rootDir + "/github"
+	require.NoError(t, os.MkdirAll(githubDir, 0o755))
+	wasmFile := githubDir + "/00-github-guard.wasm"
+	require.NoError(t, os.WriteFile(wasmFile, []byte("fake wasm"), 0o644))
+
+	t.Setenv("MCP_GATEWAY_WASM_GUARDS_DIR", rootDir)
+
+	result := detectGuardWasm()
+	assert.Equal(t, wasmFile, result,
+		"detectGuardWasm should return the guard found under MCP_GATEWAY_WASM_GUARDS_DIR/github/")
+}
+
+// TestDetectGuardWasm_WasmGuardsDirEmpty verifies that detectGuardWasm returns empty
+// when MCP_GATEWAY_WASM_GUARDS_DIR is set but contains no .wasm files for github.
+func TestDetectGuardWasm_WasmGuardsDirEmpty(t *testing.T) {
+	if _, err := os.Stat(containerGuardWasmPath); err == nil {
+		t.Skipf("baked-in guard found at %s — fallback test not applicable", containerGuardWasmPath)
+	}
+
+	// Create a directory structure with no .wasm files.
+	rootDir := t.TempDir()
+	require.NoError(t, os.MkdirAll(rootDir+"/github", 0o755))
+
+	t.Setenv("MCP_GATEWAY_WASM_GUARDS_DIR", rootDir)
+
+	result := detectGuardWasm()
+	assert.Empty(t, result,
+		"detectGuardWasm should return empty when WASM_GUARDS_DIR/github/ contains no .wasm files")
+}
+
 // containerGuardWasmPath when that file is present on the filesystem.
 // This test creates a temporary file at the expected path to simulate the container environment.
 func TestDetectGuardWasm_FileExists(t *testing.T) {
@@ -265,12 +309,16 @@ func TestNewProxyCmd_OTLPServiceNameDefaultFromEnv(t *testing.T) {
 }
 
 // TestNewProxyCmd_GuardWasmRequiredWhenNoBakedInGuard verifies that --guard-wasm is
-// marked as required when the baked-in container guard does not exist.
+// marked as required when the baked-in container guard does not exist and
+// MCP_GATEWAY_WASM_GUARDS_DIR is not set.
 func TestNewProxyCmd_GuardWasmRequiredWhenNoBakedInGuard(t *testing.T) {
 	// This test is only meaningful when running outside a container.
 	if _, err := os.Stat(containerGuardWasmPath); err == nil {
 		t.Skipf("baked-in guard found at %s — in container, --guard-wasm is optional", containerGuardWasmPath)
 	}
+
+	// Disable the env-var fallback so the flag is truly required.
+	t.Setenv("MCP_GATEWAY_WASM_GUARDS_DIR", "")
 
 	cmd := newProxyCmd()
 	require.NotNil(t, cmd)
