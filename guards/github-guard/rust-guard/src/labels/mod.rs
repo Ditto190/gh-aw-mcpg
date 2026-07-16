@@ -5878,6 +5878,30 @@ mod tests {
     }
 
     #[test]
+    fn test_apply_tool_labels_create_agent_task_secrecy_is_repo_scoped() {
+        // create_agent_task is blocked via is_blocked_tool(), so integrity will be overridden
+        // to blocked_integrity in label_resource. This test verifies the secrecy assignment
+        // before that override: for no owner/repo it should stay empty.
+        let ctx = default_ctx();
+        let tool_args = json!({ "owner": "", "repo": "" });
+
+        let (secrecy, _integrity, _desc) = apply_tool_labels(
+            "create_agent_task",
+            &tool_args,
+            "",
+            vec![],
+            vec![],
+            String::new(),
+            &ctx,
+        );
+
+        assert!(
+            secrecy.is_empty(),
+            "create_agent_task without owner/repo should have empty secrecy (no repo-visibility lookup possible)"
+        );
+    }
+
+    #[test]
     fn test_apply_tool_labels_enable_toolset_public_secrecy_writer_integrity() {
         let ctx = default_ctx();
         let tool_args = json!({ "toolset": "advanced" });
