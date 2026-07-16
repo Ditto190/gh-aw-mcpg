@@ -293,10 +293,7 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 
 	// Determine mode (default to routed if neither flag is set)
-	mode := "routed"
-	if unifiedMode {
-		mode = "unified"
-	}
+	mode := resolveServerMode(routedMode, unifiedMode)
 
 	debugLog.Printf("Server mode: %s, guards mode: %s", mode, cfg.DIFCMode)
 
@@ -491,6 +488,17 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+func resolveServerMode(routed, unified bool) string {
+	switch {
+	case unified:
+		return "unified"
+	case routed:
+		return "routed"
+	default:
+		return "routed"
+	}
 }
 
 // Execute runs the root command

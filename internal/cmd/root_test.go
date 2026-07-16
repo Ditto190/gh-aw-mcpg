@@ -435,6 +435,40 @@ func TestPostRunCleanup(t *testing.T) {
 	})
 }
 
+func TestResolveServerMode(t *testing.T) {
+	tests := []struct {
+		name    string
+		routed  bool
+		unified bool
+		want    string
+	}{
+		{
+			name:    "defaults to routed when no flags are set",
+			routed:  false,
+			unified: false,
+			want:    "routed",
+		},
+		{
+			name:    "uses routed mode when routed flag is set",
+			routed:  true,
+			unified: false,
+			want:    "routed",
+		},
+		{
+			name:    "uses unified mode when unified flag is set",
+			routed:  false,
+			unified: true,
+			want:    "unified",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, resolveServerMode(tt.routed, tt.unified))
+		})
+	}
+}
+
 // TestWriteGatewayConfig_WildcardAddresses tests that wildcard bind addresses
 // (0.0.0.0 and ::) are replaced with 127.0.0.1 in the output client URLs,
 // since clients cannot connect to wildcard addresses directly.
