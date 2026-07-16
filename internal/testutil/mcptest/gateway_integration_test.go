@@ -5,9 +5,10 @@ import (
 	"encoding/json"
 	"net/http/httptest"
 	"testing"
-
-	"github.com/stretchr/testify/require"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -101,9 +102,7 @@ func TestGatewayWithSingleBackend(t *testing.T) {
 
 	// Test: Verify tools are registered in gateway
 	tools := us.GetToolsForBackend("testbackend")
-	if len(tools) != 2 {
-		t.Errorf("Expected 2 tools for testbackend, got %d", len(tools))
-	}
+	require.Len(t, tools, 2, "Expected 2 tools for testbackend")
 
 	// Verify tool names
 	toolNames := make(map[string]bool)
@@ -112,12 +111,8 @@ func TestGatewayWithSingleBackend(t *testing.T) {
 		t.Logf("✓ Gateway has tool: %s (backend: %s)", tool.Name, tool.BackendID)
 	}
 
-	if !toolNames["test_tool"] {
-		t.Error("Expected tool 'test_tool' not found")
-	}
-	if !toolNames["calculator"] {
-		t.Error("Expected tool 'calculator' not found")
-	}
+	assert.True(t, toolNames["test_tool"], "Expected tool 'test_tool' not found")
+	assert.True(t, toolNames["calculator"], "Expected tool 'calculator' not found")
 }
 
 // TestGatewayRoutedMode tests the gateway in routed mode with HTTP server
@@ -174,28 +169,22 @@ func TestGatewayRoutedMode(t *testing.T) {
 	backend1Tools := us.GetToolsForBackend("backend1")
 	backend2Tools := us.GetToolsForBackend("backend2")
 
-	if len(backend1Tools) != 1 || backend1Tools[0].Name != "tool1" {
-		t.Error("Backend1 should only see tool1")
-	}
+	require.Len(t, backend1Tools, 1, "Backend1 should have exactly 1 tool")
+	assert.Equal(t, "tool1", backend1Tools[0].Name, "Backend1 should only see tool1")
 
-	if len(backend2Tools) != 1 || backend2Tools[0].Name != "tool2" {
-		t.Error("Backend2 should only see tool2")
-	}
+	require.Len(t, backend2Tools, 1, "Backend2 should have exactly 1 tool")
+	assert.Equal(t, "tool2", backend2Tools[0].Name, "Backend2 should only see tool2")
 
 	t.Logf("✓ Backend isolation verified: backend1 has %d tools, backend2 has %d tools",
 		len(backend1Tools), len(backend2Tools))
 
 	// Test: Verify routes are set up
 	serverIDs := us.GetServerIDs()
-	if len(serverIDs) != 2 {
-		t.Errorf("Expected 2 server IDs, got %d", len(serverIDs))
-	}
+	require.Len(t, serverIDs, 2, "Expected 2 server IDs")
 
 	expectedIDs := map[string]bool{"backend1": true, "backend2": true}
 	for _, id := range serverIDs {
-		if !expectedIDs[id] {
-			t.Errorf("Unexpected server ID: %s", id)
-		}
+		assert.True(t, expectedIDs[id], "Unexpected server ID: %s", id)
 		t.Logf("✓ Route available: /mcp/%s", id)
 	}
 }
@@ -219,9 +208,8 @@ func TestGatewayWithResources(t *testing.T) {
 	driver := mcptest.NewTestDriver()
 	defer driver.Stop()
 
-	if err := driver.AddTestServer("test", testServerCfg); err != nil {
-		t.Fatalf("Failed to add test server: %v", err)
-	}
+	err := driver.AddTestServer("test", testServerCfg)
+	require.NoError(t, err, "Failed to add test server")
 
 	transport, err := driver.CreateStdioTransport("test")
 	require.NoError(t, err, "Failed to create transport")
@@ -234,31 +222,16 @@ func TestGatewayWithResources(t *testing.T) {
 	// Test: List resources
 	resources, err := validator.ListResources()
 	require.NoError(t, err, "Failed to list resources")
+	require.Len(t, resources, 1, "Expected 1 resource")
 
-	if len(resources) != 1 {
-		t.Errorf("Expected 1 resource, got %d", len(resources))
-	}
-
-	if len(resources) > 0 {
-		if resources[0].URI != "test://config" {
-			t.Errorf("Expected URI 'test://config', got '%s'", resources[0].URI)
-		}
-		t.Logf("✓ Resource available through test server: %s", resources[0].URI)
-	}
+	assert.Equal(t, "test://config", resources[0].URI)
+	t.Logf("✓ Resource available through test server: %s", resources[0].URI)
 
 	// Test: Read resource
 	result, err := validator.ReadResource("test://config")
 	require.NoError(t, err, "Failed to read resource")
 
-	if len(result.Contents) != 1 {
-		t.Errorf("Expected 1 content item, got %d", len(result.Contents))
-	}
-
-	if len(result.Contents) > 0 {
-		content := result.Contents[0]
-		if content.Text != `{"setting": "value"}` {
-			t.Errorf("Expected config JSON, got '%s'", content.Text)
-		}
-		t.Logf("✓ Resource content validated: %s", content.Text)
-	}
+	require.Len(t, result.Contents, 1, "Expected 1 content item")
+	assert.Equal(t, `{"setting": "value"}`, result.Contents[0].Text)
+	t.Logf("✓ Resource content validated: %s", result.Contents[0].Text)
 }
