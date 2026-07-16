@@ -13,7 +13,8 @@ use super::helpers::{
     ensure_integrity_baseline, extract_number_as_string, extract_repo_info_from_search_query,
     format_repo_id, get_string_field, is_any_trusted_actor, is_default_branch_commit_context,
     is_default_branch_ref, max_integrity, merged_integrity, policy_private_scope_label,
-    private_user_label, project_github_label, reader_integrity, short_sha, writer_integrity,
+    private_scope_label, private_user_label, project_github_label, reader_integrity, short_sha,
+    writer_integrity,
     PolicyContext,
 };
 use std::borrow::Cow;
@@ -77,6 +78,20 @@ fn resolve_search_scope(tool_args: &Value, owner: &str, repo: &str) -> (String, 
     } else {
         (String::new(), String::new(), String::new())
     }
+}
+
+fn get_first_non_empty_field(tool_args: &Value, field_names: &[&str]) -> String {
+    field_names
+        .iter()
+        .find_map(|field_name| {
+            let value = get_string_field(tool_args, field_name);
+            if value.is_empty() {
+                None
+            } else {
+                Some(value)
+            }
+        })
+        .unwrap_or_default()
 }
 
 /// Compute integrity for a user-authored resource (issue or PR), applying:
@@ -204,6 +219,18 @@ pub fn apply_tool_labels(
         // === Issue dependency / pin / unpin writes (repo-scoped write) ===
         // S = S(repo); I = writer
         "issue_dependency_write" | "pin_issue" | "unpin_issue" => {
+            if !owner.is_empty() && !repo.is_empty() {
+                if let Some(issue_num) =
+                    extract_number_as_string(tool_args, field_names::ISSUE_NUMBER)
+                {
+                    desc = format!("issue:{}/{}#{}", owner, repo, issue_num);
+                }
+            }
+            secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
+            integrity = writer_integrity(repo_id, ctx);
+        }
+
+        "transfer_issue" => {
             if !owner.is_empty() && !repo.is_empty() {
                 if let Some(issue_num) =
                     extract_number_as_string(tool_args, field_names::ISSUE_NUMBER)
@@ -679,6 +706,12 @@ pub fn apply_tool_labels(
             integrity = writer_integrity(repo_id, ctx);
         }
 
+        // === Repo-scoped workflow/fork writes ===
+        "disable_workflow" | "enable_workflow" | "sync_fork" => {
+            secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
+            integrity = writer_integrity(repo_id, ctx);
+        }
+
         // === Repository creation/fork (user/org-scoped writes) ===
         "create_repository" | "fork_repository" => {
             // Creating/forking repositories is account-scoped and does not return repo content.
@@ -748,6 +781,36 @@ pub fn apply_tool_labels(
             secrecy = private_user_label();
             baseline_scope = Cow::Borrowed(scope_names::USER);
             integrity = writer_integrity(scope_names::USER, ctx);
+        }
+
+        // === Scope-sensitive secret / variable writes ===
+        "set_secret" | "delete_secret" | "set_variable" | "delete_variable" => {
+            let org = {
+                let explicit_org = get_first_non_empty_field(
+                    tool_args,
+                    &["org", "org_name", "organization", "organization_name"],
+                );
+                if !explicit_org.is_empty() {
+                    explicit_org
+                } else if repo.is_empty() {
+                    owner.clone()
+                } else {
+                    String::new()
+                }
+            };
+
+            if !owner.is_empty() && !repo.is_empty() {
+                secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
+                integrity = writer_integrity(repo_id, ctx);
+            } else if !org.is_empty() {
+                secrecy = private_scope_label(&org);
+                baseline_scope = Cow::Owned(org.clone());
+                integrity = writer_integrity(&org, ctx);
+            } else {
+                secrecy = private_user_label();
+                baseline_scope = Cow::Borrowed(scope_names::USER);
+                integrity = writer_integrity(scope_names::USER, ctx);
+            }
         }
 
         // === Dynamic toolset enablement (capability expansion) ===
@@ -1741,6 +1804,91 @@ mod tests {
                 "{op} must have writer integrity"
             );
             assert!(secrecy.is_empty(), "{op}: public repo should have empty secrecy");
+        }
+    }
+
+    #[test]
+    fn apply_tool_labels_workflow_toggle_and_sync_fork_are_repo_scoped_writes() {
+        let ctx = default_ctx();
+        let args = serde_json::json!({ "owner": "github", "repo": "copilot" });
+        let repo_id = "github/copilot";
+
+        for op in &["disable_workflow", "enable_workflow", "sync_fork"] {
+            let (secrecy, integrity, _desc) =
+                super::apply_tool_labels(op, &args, repo_id, vec![], vec![], String::new(), &ctx);
+            assert_eq!(
+                integrity,
+                writer_integrity(repo_id, &ctx),
+                "{op} must require repo-scoped writer integrity"
+            );
+            assert!(secrecy.is_empty(), "{op}: public repo should have empty secrecy");
+        }
+    }
+
+    #[test]
+    fn apply_tool_labels_transfer_issue_sets_issue_desc_and_writer_integrity() {
+        let ctx = default_ctx();
+        let args =
+            serde_json::json!({ "owner": "github", "repo": "copilot", "issue_number": 42 });
+        let repo_id = "github/copilot";
+
+        let (secrecy, integrity, desc) =
+            super::apply_tool_labels("transfer_issue", &args, repo_id, vec![], vec![], String::new(), &ctx);
+
+        assert_eq!(desc, "issue:github/copilot#42");
+        assert_eq!(integrity, writer_integrity(repo_id, &ctx));
+        assert!(secrecy.is_empty(), "public repo should have empty secrecy");
+    }
+
+    #[test]
+    fn apply_tool_labels_secret_and_variable_writes_cover_repo_org_and_user_scopes() {
+        let ctx = default_ctx();
+        let repo_args =
+            serde_json::json!({ "owner": "github", "repo": "copilot", "environment_name": "prod" });
+        let org_args = serde_json::json!({ "org": "github" });
+        let user_args = serde_json::json!({});
+        let repo_id = "github/copilot";
+
+        for tool in &["set_secret", "delete_secret", "set_variable", "delete_variable"] {
+            let (repo_secrecy, repo_integrity, _desc) =
+                super::apply_tool_labels(tool, &repo_args, repo_id, vec![], vec![], String::new(), &ctx);
+            assert_eq!(
+                repo_integrity,
+                writer_integrity(repo_id, &ctx),
+                "{tool}: repo-scoped writes must require repo writer integrity"
+            );
+            assert!(
+                repo_secrecy.is_empty(),
+                "{tool}: public repo scope should not add secrecy labels"
+            );
+
+            let (org_secrecy, org_integrity, _desc) =
+                super::apply_tool_labels(tool, &org_args, "", vec![], vec![], String::new(), &ctx);
+            assert_eq!(
+                org_secrecy,
+                private_scope_label("github"),
+                "{tool}: org-scoped writes must use owner-private secrecy"
+            );
+            assert_eq!(
+                org_integrity,
+                writer_integrity("github", &ctx),
+                "{tool}: org-scoped writes must require org writer integrity"
+            );
+        }
+
+        for tool in &["set_secret", "delete_secret"] {
+            let (user_secrecy, user_integrity, _desc) =
+                super::apply_tool_labels(tool, &user_args, "", vec![], vec![], String::new(), &ctx);
+            assert_eq!(
+                user_secrecy,
+                private_user_label(),
+                "{tool}: user-scoped secret writes must be private:user"
+            );
+            assert_eq!(
+                user_integrity,
+                writer_integrity(scope_names::USER, &ctx),
+                "{tool}: user-scoped secret writes must require user writer integrity"
+            );
         }
     }
 
