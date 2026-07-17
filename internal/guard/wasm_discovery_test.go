@@ -214,3 +214,59 @@ func TestFindServerWASMGuardFile(t *testing.T) {
 		assert.Equal(t, wasmPath, path)
 	})
 }
+
+func TestFindGuardFile(t *testing.T) {
+	t.Run("non-github server skips container path and uses env var", func(t *testing.T) {
+		rootDir := t.TempDir()
+		serverDir := filepath.Join(rootDir, "myserver")
+		require.NoError(t, os.MkdirAll(serverDir, 0o755))
+		wasmPath := filepath.Join(serverDir, "policy.wasm")
+		require.NoError(t, os.WriteFile(wasmPath, []byte{0x00, 0x61, 0x73, 0x6d}, 0o644))
+		t.Setenv(WASMGuardsDirEnvVar, rootDir)
+
+		path, found, err := FindGuardFile("myserver")
+		require.NoError(t, err)
+		assert.True(t, found)
+		assert.Equal(t, wasmPath, path)
+	})
+
+	t.Run("github server falls back to env var when container path absent", func(t *testing.T) {
+		// Only meaningful when the baked-in container path does not exist.
+		if _, err := os.Stat(ContainerGuardWasmPath); err == nil {
+			t.Skipf("baked-in container guard present at %s — fallback test not applicable", ContainerGuardWasmPath)
+		}
+
+		rootDir := t.TempDir()
+		serverDir := filepath.Join(rootDir, "github")
+		require.NoError(t, os.MkdirAll(serverDir, 0o755))
+		wasmPath := filepath.Join(serverDir, "00-github-guard.wasm")
+		require.NoError(t, os.WriteFile(wasmPath, []byte{0x00, 0x61, 0x73, 0x6d}, 0o644))
+		t.Setenv(WASMGuardsDirEnvVar, rootDir)
+
+		path, found, err := FindGuardFile("github")
+		require.NoError(t, err)
+		assert.True(t, found)
+		assert.Equal(t, wasmPath, path)
+	})
+
+	t.Run("returns empty when nothing found for non-github server", func(t *testing.T) {
+		t.Setenv(WASMGuardsDirEnvVar, "")
+
+		path, found, err := FindGuardFile("myserver")
+		require.NoError(t, err)
+		assert.False(t, found)
+		assert.Empty(t, path)
+	})
+
+	t.Run("returns empty when nothing found for github server without container path or env var", func(t *testing.T) {
+		if _, err := os.Stat(ContainerGuardWasmPath); err == nil {
+			t.Skipf("baked-in container guard present at %s — skipping 'not found' test", ContainerGuardWasmPath)
+		}
+		t.Setenv(WASMGuardsDirEnvVar, "")
+
+		path, found, err := FindGuardFile("github")
+		require.NoError(t, err)
+		assert.False(t, found)
+		assert.Empty(t, path)
+	})
+}

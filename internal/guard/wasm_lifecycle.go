@@ -26,6 +26,9 @@ var globalCompilationCacheMu sync.Mutex
 
 const WASMGuardsDirEnvVar = "MCP_GATEWAY_WASM_GUARDS_DIR"
 
+// ContainerGuardWasmPath is the baked-in guard path in the container image.
+const ContainerGuardWasmPath = "/guards/github/00-github-guard.wasm"
+
 // globalCompilationCache is a process-level compilation cache shared across all
 // WasmGuard instances. wazero's cache is goroutine-safe and eliminates redundant
 // JIT compilation when multiple guards load the same WASM binary.
@@ -69,6 +72,23 @@ func FindServerWASMGuardFile(serverID string) (string, bool, error) {
 
 	logWasm.Printf("No WASM guard file found in directory: serverID=%s, dir=%s", serverID, serverGuardDir)
 	return "", false, nil
+}
+
+// FindGuardFile discovers the WASM guard file for a server. It checks in order:
+//  1. The baked-in container guard at ContainerGuardWasmPath (only when serverID == "github").
+//  2. The first .wasm file under $MCP_GATEWAY_WASM_GUARDS_DIR/<serverID>.
+//
+// Returns an empty string and found=false when no guard can be discovered.
+func FindGuardFile(serverID string) (string, bool, error) {
+	if serverID == "github" {
+		logWasm.Printf("Checking for baked-in container guard at %s", ContainerGuardWasmPath)
+		if _, err := os.Stat(ContainerGuardWasmPath); err == nil {
+			logWasm.Printf("Found baked-in container guard: %s", ContainerGuardWasmPath)
+			return ContainerGuardWasmPath, true, nil
+		}
+	}
+
+	return FindServerWASMGuardFile(serverID)
 }
 
 func newCompilationCache(dir string) (wazero.CompilationCache, error) {
