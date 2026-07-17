@@ -768,12 +768,11 @@ func TestWriteSinkGuard_AuditURLsInBody_NilArgs(t *testing.T) {
 	require.NoError(t, err)
 
 	domainsFile := filepath.Join(logDir, "observed-url-domains.json")
-	data, readErr := os.ReadFile(domainsFile)
-	if readErr == nil {
-		var observed map[string][]string
-		require.NoError(t, json.Unmarshal(data, &observed))
-		assert.Empty(t, observed["write-sink"], "no domains should be recorded for nil args")
-	}
+data, readErr := os.ReadFile(domainsFile)
+	require.NoError(t, readErr)
+	var observed map[string][]string
+	require.NoError(t, json.Unmarshal(data, &observed))
+	assert.Empty(t, observed["write-sink"], "no domains should be recorded for nil args")
 }
 
 // TestWriteSinkGuard_AuditURLsInBody_NoURLs verifies that auditURLsInBody is a no-op
