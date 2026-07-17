@@ -408,9 +408,9 @@ func formatErrorContext(ve *jsonschema.ValidationError, prefix string) string {
 		}
 	case *kind.Enum:
 		if len(k.Want) > 0 {
-			values := make([]string, 0, len(k.Want))
-			for _, v := range k.Want {
-				values = append(values, fmt.Sprintf("%v", v))
+			values := make([]string, len(k.Want))
+			for i, v := range k.Want {
+				values[i] = fmt.Sprintf("%v", v)
 			}
 			addDetail("enum",
 				fmt.Sprintf("Details: Invalid value - allowed values: %s", strings.Join(values, ", ")),
@@ -458,7 +458,6 @@ func formatErrorContext(ve *jsonschema.ValidationError, prefix string) string {
 		// This ensures every validation error gets at least some context rather
 		// than silently producing no detail. The LocalizedString already gives
 		// the specific reason; this hint directs users to the documentation.
-		_ = k // suppress unused-variable warning for the type-switch binding
 		addDetail("generic",
 			"Details: See the error message above for more information",
 			"  → Review the MCP Gateway configuration documentation for valid values",
