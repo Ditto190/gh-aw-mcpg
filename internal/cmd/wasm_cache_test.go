@@ -137,18 +137,16 @@ func TestSetupWasmCompilationCache(t *testing.T) {
 		})
 	})
 
-	t.Run("returns error when cache configuration fails", func(t *testing.T) {
+	t.Run("falls back to in-memory cache when disk cache init fails", func(t *testing.T) {
 		ctx := context.Background()
 		tempFile, err := os.CreateTemp(t.TempDir(), "not-a-dir")
 		require.NoError(t, err)
 		require.NoError(t, tempFile.Close())
 
-		// Force a non-recoverable failure by using an empty-string dir with a
-		// pre-existing broken cache so that the in-memory fallback also fails.
-		// The simplest portable trigger: pass a file path as the cache dir so
-		// the disk-backed cache fails, but then let the in-memory fallback
-		// succeed (it always does). This path exercises the happy-path fallback
-		// so we just verify cleanup is non-nil and no error is returned.
+		// Passing a file path (not a directory) as the cache dir triggers the
+		// disk-backed cache to fail and fall back to an in-memory cache.
+		// Verify that the helper surfaces the fallback successfully: no error,
+		// empty resolvedDir (in-memory), and a non-nil cleanup func.
 		resolvedDir, cleanup, err := setupWasmCompilationCache(ctx, true, tempFile.Name(), "/tmp/logs")
 		require.NoError(t, err)
 		assert.Empty(t, resolvedDir, "fallback in-memory cache should return empty dir")
