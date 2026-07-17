@@ -45,10 +45,10 @@
       "version": "v7.0.0",
       "sha": "b7ad1dad31e06c5925ef5d2fc7ad053ef454303e"
     },
-    "actions/setup-java@v5.5.0": {
+    "actions/setup-java@v5.6.0": {
       "repo": "actions/setup-java",
-      "version": "v5.5.0",
-      "sha": "0f481fcb613427c0f801b606911222b5b6f3083a"
+      "version": "v5.6.0",
+      "sha": "03ad4de0992f5dab5e18fcb136590ce7c4a0ac95"
     },
     "actions/setup-node@v7.0.0": {
       "repo": "actions/setup-node",
@@ -105,20 +105,20 @@
       "version": "v1.24.1",
       "sha": "54075bcc5e249e4758d363f27d099f55d843f124"
     },
-    "github/codeql-action/upload-sarif@v4.37.0": {
+    "github/codeql-action/upload-sarif@v4.37.1": {
       "repo": "github/codeql-action/upload-sarif",
-      "version": "v4.37.0",
-      "sha": "99df26d4f13ea111d4ec1a7dddef6063f76b97e9"
+      "version": "v4.37.1",
+      "sha": "7188fc363630916deb702c7fdcf4e481b751f97a"
     },
-    "github/gh-aw-actions/setup-cli@v0.82.10": {
+    "github/gh-aw-actions/setup-cli@v0.82.12": {
       "repo": "github/gh-aw-actions/setup-cli",
-      "version": "v0.82.10",
-      "sha": "05205436a78512d71a2d842e46586ed05f4fa058"
+      "version": "v0.82.12",
+      "sha": "23fd0ef1f0a76a3707df928f9c733abd98e4ec75"
     },
-    "github/gh-aw-actions/setup@v0.82.10": {
+    "github/gh-aw-actions/setup@v0.82.12": {
       "repo": "github/gh-aw-actions/setup",
-      "version": "v0.82.10",
-      "sha": "05205436a78512d71a2d842e46586ed05f4fa058"
+      "version": "v0.82.12",
+      "sha": "23fd0ef1f0a76a3707df928f9c733abd98e4ec75"
     },
     "haskell-actions/setup@v2.11.0": {
       "repo": "haskell-actions/setup",
