@@ -744,12 +744,11 @@ func TestWriteSinkGuard_AuditURLsInBody_Disabled(t *testing.T) {
 
 	// The file may exist but must contain no domain entries.
 	domainsFile := filepath.Join(logDir, "observed-url-domains.json")
-	data, readErr := os.ReadFile(domainsFile)
-	if readErr == nil {
-		var observed map[string][]string
-		require.NoError(t, json.Unmarshal(data, &observed))
-		assert.Empty(t, observed["write-sink"], "no domains should be recorded when audit is disabled")
-	}
+data, readErr := os.ReadFile(domainsFile)
+	require.NoError(t, readErr)
+	var observed map[string][]string
+	require.NoError(t, json.Unmarshal(data, &observed))
+	assert.Empty(t, observed["write-sink"], "no domains should be recorded when audit is disabled")
 }
 
 // TestWriteSinkGuard_AuditURLsInBody_NilArgs verifies that auditURLsInBody is a no-op
