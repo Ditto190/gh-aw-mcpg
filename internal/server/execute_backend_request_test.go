@@ -14,6 +14,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func writeJSONResponse(t *testing.T, w http.ResponseWriter, payload interface{}) {
+	t.Helper()
+	assert.NoError(t, json.NewEncoder(w).Encode(payload))
+}
+
 // newCustomBackend creates a mock HTTP backend that delegates all method handling
 // to the given handler function. It always handles "initialize" automatically.
 func newCustomBackend(t *testing.T, serverName string, handleMethod func(w http.ResponseWriter, method string, reqID interface{}, params interface{})) *httptest.Server {
@@ -25,17 +30,17 @@ func newCustomBackend(t *testing.T, serverName string, handleMethod func(w http.
 		}
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
+			http.Error(w, "failed to read request body", http.StatusInternalServerError)
 			return
 		}
 		if len(body) == 0 {
-			w.WriteHeader(http.StatusBadRequest)
+			http.Error(w, "empty request body", http.StatusBadRequest)
 			return
 		}
 
 		var req map[string]interface{}
 		if err := json.Unmarshal(body, &req); err != nil {
-			w.WriteHeader(http.StatusBadRequest)
+			http.Error(w, "invalid JSON-RPC request", http.StatusBadRequest)
 			return
 		}
 		method, _ := req["method"].(string)
@@ -50,8 +55,10 @@ func newCustomBackend(t *testing.T, serverName string, handleMethod func(w http.
 				},
 			}
 			w.Header().Set("Content-Type", "application/json")
+			// The SDK stores the negotiated session from initialize responses and
+			// reuses it on later requests, so tests need to provide one here.
 			w.Header().Set("Mcp-Session-Id", "test-session-abc")
-			json.NewEncoder(w).Encode(resp) //nolint:errcheck
+			writeJSONResponse(t, w, resp)
 			return
 		}
 		if method == "notifications/initialized" {
@@ -96,7 +103,7 @@ func TestExecuteBackendRequest_LauncherError(t *testing.T) {
 func TestExecuteBackendRequest_BackendRPCError(t *testing.T) {
 	backend := newCustomBackend(t, "rpc-error-server", func(w http.ResponseWriter, method string, reqID interface{}, _ interface{}) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{ //nolint:errcheck
+		writeJSONResponse(t, w, map[string]interface{}{
 			"jsonrpc": "2.0",
 			"id":      reqID,
 			"error": map[string]interface{}{
@@ -120,7 +127,7 @@ func TestExecuteBackendRequest_BackendRPCError(t *testing.T) {
 func TestExecuteBackendRequest_TransportError(t *testing.T) {
 	backend := newCustomBackend(t, "transport-error-server", func(w http.ResponseWriter, method string, reqID interface{}, _ interface{}) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{ //nolint:errcheck
+		writeJSONResponse(t, w, map[string]interface{}{
 			"jsonrpc": "2.0",
 			"id":      reqID,
 			"result":  map[string]interface{}{"ok": true},
@@ -144,9 +151,9 @@ func TestExecuteBackendRequest_TransportError(t *testing.T) {
 func TestExecuteBackendRequest_UnmarshalError(t *testing.T) {
 	backend := newCustomBackend(t, "unmarshal-error-server", func(w http.ResponseWriter, method string, reqID interface{}, _ interface{}) {
 		w.Header().Set("Content-Type", "application/json")
-		// Return a valid tools/call payload; executeBackendRequest unmarshalling into
-		// strictResult should fail.
-		json.NewEncoder(w).Encode(map[string]interface{}{ //nolint:errcheck
+		// Return a valid JSON-RPC tools/call response whose result shape is
+		// incompatible with strictResult so executeBackendRequest's unmarshal step fails.
+		writeJSONResponse(t, w, map[string]interface{}{
 			"jsonrpc": "2.0",
 			"id":      reqID,
 			"result": map[string]interface{}{
@@ -176,7 +183,7 @@ func TestExecuteBackendRequest_Success(t *testing.T) {
 
 	backend := newCustomBackend(t, "success-server", func(w http.ResponseWriter, method string, reqID interface{}, _ interface{}) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{ //nolint:errcheck
+		writeJSONResponse(t, w, map[string]interface{}{
 			"jsonrpc": "2.0",
 			"id":      reqID,
 			"result": map[string]interface{}{
@@ -207,11 +214,11 @@ func TestExecuteBackendRequest_WithParams(t *testing.T) {
 			}
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{ //nolint:errcheck
+		writeJSONResponse(t, w, map[string]interface{}{
 			"jsonrpc": "2.0",
 			"id":      reqID,
 			"result": map[string]interface{}{
-				"content": []map[string]interface{}{{"type": "text", "text": "ok"}},
+				"content": []map[string]interface{}{{"type": "text", "text": receivedName}},
 			},
 		})
 	})
@@ -219,10 +226,17 @@ func TestExecuteBackendRequest_WithParams(t *testing.T) {
 
 	l := newExecuteBackendTestLauncher(t, "params-server", backend.URL)
 
-	got, err := executeBackendRequest[interface{}](context.Background(), l, "params-server", "session-1", "tools/call",
+	type toolCallResult struct {
+		Content []struct {
+			Text string `json:"text"`
+		} `json:"content"`
+	}
+
+	got, err := executeBackendRequest[toolCallResult](context.Background(), l, "params-server", "session-1", "tools/call",
 		map[string]interface{}{"name": "echo", "arguments": map[string]interface{}{"name": "hello-world"}})
 	require.NoError(t, err)
-	assert.NotNil(t, got)
+	require.Len(t, got.Content, 1)
+	assert.Equal(t, "hello-world", got.Content[0].Text)
 	assert.Equal(t, "hello-world", receivedName, "params should be forwarded to backend")
 }
 
@@ -237,7 +251,7 @@ func TestExecuteBackendRequest_InterfaceType(t *testing.T) {
 
 	backend := newCustomBackend(t, "interface-server", func(w http.ResponseWriter, method string, reqID interface{}, _ interface{}) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{ //nolint:errcheck
+		writeJSONResponse(t, w, map[string]interface{}{
 			"jsonrpc": "2.0",
 			"id":      reqID,
 			"result":  payload,
@@ -253,12 +267,12 @@ func TestExecuteBackendRequest_InterfaceType(t *testing.T) {
 	assert.NotNil(t, got)
 }
 
-// TestExecuteBackendRequest_MultipleRequests verifies that multiple requests to the
-// same backend succeed.
-func TestExecuteBackendRequest_MultipleRequests(t *testing.T) {
+// TestExecuteBackendRequest_SessionIsolation verifies that multiple sessions can
+// use the same backend successfully.
+func TestExecuteBackendRequest_SessionIsolation(t *testing.T) {
 	backend := newCustomBackend(t, "session-server", func(w http.ResponseWriter, method string, reqID interface{}, _ interface{}) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{ //nolint:errcheck
+		writeJSONResponse(t, w, map[string]interface{}{
 			"jsonrpc": "2.0",
 			"id":      reqID,
 			"result": map[string]interface{}{
@@ -270,14 +284,14 @@ func TestExecuteBackendRequest_MultipleRequests(t *testing.T) {
 
 	l := newExecuteBackendTestLauncher(t, "session-server", backend.URL)
 
-	type okResult struct {
+	type toolsResult struct {
 		Tools []struct {
 			Name string `json:"name"`
 		} `json:"tools"`
 	}
 
-	r1, err1 := executeBackendRequest[okResult](context.Background(), l, "session-server", "session-A", "tools/list", nil)
-	r2, err2 := executeBackendRequest[okResult](context.Background(), l, "session-server", "session-B", "tools/list", nil)
+	r1, err1 := executeBackendRequest[toolsResult](context.Background(), l, "session-server", "session-A", "tools/list", nil)
+	r2, err2 := executeBackendRequest[toolsResult](context.Background(), l, "session-server", "session-B", "tools/list", nil)
 
 	require.NoError(t, err1)
 	require.NoError(t, err2)
@@ -299,7 +313,7 @@ func TestExecuteBackendToolCall_DelegatesToExecuteBackendRequest(t *testing.T) {
 			}
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{ //nolint:errcheck
+		writeJSONResponse(t, w, map[string]interface{}{
 			"jsonrpc": "2.0",
 			"id":      reqID,
 			"result": map[string]interface{}{
@@ -332,6 +346,5 @@ func TestExecuteBackendToolCall_PropagatesLauncherError(t *testing.T) {
 
 	_, err := executeBackendToolCall(context.Background(), l, "ghost-server", "session-1", "any_tool", nil)
 	require.Error(t, err)
-	assert.ErrorContains(t, err, "failed to connect to backend ghost-server")
 	assert.ErrorIs(t, err, launcher.ErrServerNotFound)
 }

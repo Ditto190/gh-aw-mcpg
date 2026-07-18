@@ -79,8 +79,8 @@ func TestDetectGuardWasm_WasmGuardsDirEmpty(t *testing.T) {
 // (e.g. the "github" path inside the dir exists but is a file, not a directory).
 // This exercises the err != nil branch on the FindServerWASMGuardFile call.
 func TestDetectGuardWasm_WasmGuardsDirError(t *testing.T) {
-	if _, err := os.Stat(containerGuardWasmPath); err == nil {
-		t.Skipf("baked-in guard found at %s — error-path test not applicable", containerGuardWasmPath)
+	if _, err := os.Stat(guard.ContainerGuardWasmPath); err == nil {
+		t.Skipf("baked-in guard found at %s — error-path test not applicable", guard.ContainerGuardWasmPath)
 	}
 
 	// Create a root dir where "github" is a regular file rather than a directory.
