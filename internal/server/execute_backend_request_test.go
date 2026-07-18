@@ -14,6 +14,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func writeJSONResponse(t *testing.T, w http.ResponseWriter, payload interface{}) {
+	t.Helper()
+	assert.NoError(t, json.NewEncoder(w).Encode(payload))
+}
+
 // newCustomBackend creates a mock HTTP backend that delegates all method handling
 // to the given handler function. It always handles "initialize" automatically.
 func newCustomBackend(t *testing.T, serverName string, handleMethod func(w http.ResponseWriter, method string, reqID interface{}, params interface{})) *httptest.Server {
@@ -51,7 +56,7 @@ func newCustomBackend(t *testing.T, serverName string, handleMethod func(w http.
 			}
 			w.Header().Set("Content-Type", "application/json")
 			w.Header().Set("Mcp-Session-Id", "test-session-abc")
-			json.NewEncoder(w).Encode(resp) //nolint:errcheck
+			writeJSONResponse(t, w, resp)
 			return
 		}
 		if method == "notifications/initialized" {
@@ -96,7 +101,7 @@ func TestExecuteBackendRequest_LauncherError(t *testing.T) {
 func TestExecuteBackendRequest_BackendRPCError(t *testing.T) {
 	backend := newCustomBackend(t, "rpc-error-server", func(w http.ResponseWriter, method string, reqID interface{}, _ interface{}) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{ //nolint:errcheck
+		writeJSONResponse(t, w, map[string]interface{}{
 			"jsonrpc": "2.0",
 			"id":      reqID,
 			"error": map[string]interface{}{
@@ -120,7 +125,7 @@ func TestExecuteBackendRequest_BackendRPCError(t *testing.T) {
 func TestExecuteBackendRequest_TransportError(t *testing.T) {
 	backend := newCustomBackend(t, "transport-error-server", func(w http.ResponseWriter, method string, reqID interface{}, _ interface{}) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{ //nolint:errcheck
+		writeJSONResponse(t, w, map[string]interface{}{
 			"jsonrpc": "2.0",
 			"id":      reqID,
 			"result":  map[string]interface{}{"ok": true},
@@ -146,7 +151,7 @@ func TestExecuteBackendRequest_UnmarshalError(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		// Return a valid JSON-RPC tools/call response whose result shape is
 		// incompatible with strictResult so executeBackendRequest's unmarshal step fails.
-		json.NewEncoder(w).Encode(map[string]interface{}{ //nolint:errcheck
+		writeJSONResponse(t, w, map[string]interface{}{
 			"jsonrpc": "2.0",
 			"id":      reqID,
 			"result": map[string]interface{}{
@@ -176,7 +181,7 @@ func TestExecuteBackendRequest_Success(t *testing.T) {
 
 	backend := newCustomBackend(t, "success-server", func(w http.ResponseWriter, method string, reqID interface{}, _ interface{}) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{ //nolint:errcheck
+		writeJSONResponse(t, w, map[string]interface{}{
 			"jsonrpc": "2.0",
 			"id":      reqID,
 			"result": map[string]interface{}{
@@ -207,7 +212,7 @@ func TestExecuteBackendRequest_WithParams(t *testing.T) {
 			}
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{ //nolint:errcheck
+		writeJSONResponse(t, w, map[string]interface{}{
 			"jsonrpc": "2.0",
 			"id":      reqID,
 			"result": map[string]interface{}{
@@ -244,7 +249,7 @@ func TestExecuteBackendRequest_InterfaceType(t *testing.T) {
 
 	backend := newCustomBackend(t, "interface-server", func(w http.ResponseWriter, method string, reqID interface{}, _ interface{}) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{ //nolint:errcheck
+		writeJSONResponse(t, w, map[string]interface{}{
 			"jsonrpc": "2.0",
 			"id":      reqID,
 			"result":  payload,
@@ -265,7 +270,7 @@ func TestExecuteBackendRequest_InterfaceType(t *testing.T) {
 func TestExecuteBackendRequest_SessionIsolation(t *testing.T) {
 	backend := newCustomBackend(t, "session-server", func(w http.ResponseWriter, method string, reqID interface{}, _ interface{}) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{ //nolint:errcheck
+		writeJSONResponse(t, w, map[string]interface{}{
 			"jsonrpc": "2.0",
 			"id":      reqID,
 			"result": map[string]interface{}{
@@ -306,7 +311,7 @@ func TestExecuteBackendToolCall_DelegatesToExecuteBackendRequest(t *testing.T) {
 			}
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{ //nolint:errcheck
+		writeJSONResponse(t, w, map[string]interface{}{
 			"jsonrpc": "2.0",
 			"id":      reqID,
 			"result": map[string]interface{}{
