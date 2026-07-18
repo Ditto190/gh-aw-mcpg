@@ -80,9 +80,20 @@ func FindServerWASMGuardFile(serverID string) (string, bool, error) {
 //
 // Returns an empty string and found=false when no guard can be discovered.
 func FindGuardFile(serverID string) (string, bool, error) {
+	return findGuardFile(serverID, os.Stat)
+}
+
+func findGuardFile(serverID string, statFn func(string) (os.FileInfo, error)) (string, bool, error) {
 	if serverID == "github" {
+		// Preserve explicit opt-out behavior used by container runners:
+		// when MCP_GATEWAY_WASM_GUARDS_DIR is set but blank, skip baked-in discovery.
+		if guardDir, ok := os.LookupEnv(WASMGuardsDirEnvVar); ok && guardDir == "" {
+			logWasm.Printf("Skipping baked-in guard discovery: %s is explicitly set but blank", WASMGuardsDirEnvVar)
+			return "", false, nil
+		}
+
 		logWasm.Printf("Checking for baked-in container guard at %s", ContainerGuardWasmPath)
-		if _, err := os.Stat(ContainerGuardWasmPath); err == nil {
+		if _, err := statFn(ContainerGuardWasmPath); err == nil {
 			logWasm.Printf("Found baked-in container guard: %s", ContainerGuardWasmPath)
 			return ContainerGuardWasmPath, true, nil
 		}

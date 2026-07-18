@@ -231,11 +231,6 @@ func TestFindGuardFile(t *testing.T) {
 	})
 
 	t.Run("github server falls back to env var when container path absent", func(t *testing.T) {
-		// Only meaningful when the baked-in container path does not exist.
-		if _, err := os.Stat(ContainerGuardWasmPath); err == nil {
-			t.Skipf("baked-in container guard present at %s — fallback test not applicable", ContainerGuardWasmPath)
-		}
-
 		rootDir := t.TempDir()
 		serverDir := filepath.Join(rootDir, "github")
 		require.NoError(t, os.MkdirAll(serverDir, 0o755))
@@ -243,10 +238,52 @@ func TestFindGuardFile(t *testing.T) {
 		require.NoError(t, os.WriteFile(wasmPath, []byte{0x00, 0x61, 0x73, 0x6d}, 0o644))
 		t.Setenv(WASMGuardsDirEnvVar, rootDir)
 
-		path, found, err := FindGuardFile("github")
+		statFn := func(_ string) (os.FileInfo, error) {
+			return nil, os.ErrNotExist
+		}
+
+		path, found, err := findGuardFile("github", statFn)
 		require.NoError(t, err)
 		assert.True(t, found)
 		assert.Equal(t, wasmPath, path)
+	})
+
+	t.Run("github server prefers baked-in container path over env var fallback", func(t *testing.T) {
+		rootDir := t.TempDir()
+		serverDir := filepath.Join(rootDir, "github")
+		require.NoError(t, os.MkdirAll(serverDir, 0o755))
+		envWasmPath := filepath.Join(serverDir, "00-github-guard.wasm")
+		require.NoError(t, os.WriteFile(envWasmPath, []byte{0x00, 0x61, 0x73, 0x6d}, 0o644))
+		t.Setenv(WASMGuardsDirEnvVar, rootDir)
+
+		statCalls := 0
+		statFn := func(path string) (os.FileInfo, error) {
+			statCalls++
+			require.Equal(t, ContainerGuardWasmPath, path)
+			return nil, nil
+		}
+
+		path, found, err := findGuardFile("github", statFn)
+		require.NoError(t, err)
+		assert.True(t, found)
+		assert.Equal(t, ContainerGuardWasmPath, path)
+		assert.Equal(t, 1, statCalls)
+	})
+
+	t.Run("github server skips baked-in path when env var explicitly set blank", func(t *testing.T) {
+		t.Setenv(WASMGuardsDirEnvVar, "")
+
+		statCalls := 0
+		statFn := func(_ string) (os.FileInfo, error) {
+			statCalls++
+			return nil, os.ErrNotExist
+		}
+
+		path, found, err := findGuardFile("github", statFn)
+		require.NoError(t, err)
+		assert.False(t, found)
+		assert.Empty(t, path)
+		assert.Zero(t, statCalls, "baked-in path should not be probed when env var is explicitly blank")
 	})
 
 	t.Run("returns empty when nothing found for non-github server", func(t *testing.T) {
@@ -259,12 +296,13 @@ func TestFindGuardFile(t *testing.T) {
 	})
 
 	t.Run("returns empty when nothing found for github server without container path or env var", func(t *testing.T) {
-		if _, err := os.Stat(ContainerGuardWasmPath); err == nil {
-			t.Skipf("baked-in container guard present at %s — skipping 'not found' test", ContainerGuardWasmPath)
-		}
 		t.Setenv(WASMGuardsDirEnvVar, "")
 
-		path, found, err := FindGuardFile("github")
+		statFn := func(_ string) (os.FileInfo, error) {
+			return nil, os.ErrNotExist
+		}
+
+		path, found, err := findGuardFile("github", statFn)
 		require.NoError(t, err)
 		assert.False(t, found)
 		assert.Empty(t, path)
