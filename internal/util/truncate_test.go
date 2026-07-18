@@ -217,3 +217,24 @@ func TestTruncateRunes(t *testing.T) {
 		})
 	}
 }
+
+func BenchmarkTruncateRunes_NoTruncationASCII(b *testing.B) {
+	s := "hello world this is a normal ASCII log message"
+	for b.Loop() {
+		_ = TruncateRunes(s, 80)
+	}
+}
+
+func BenchmarkTruncateRunes_NoTruncationMultibyte(b *testing.B) {
+	s := "日本語テスト用の文字列サンプル"
+	for b.Loop() {
+		_ = TruncateRunes(s, 80)
+	}
+}
+
+func BenchmarkTruncateRunes_TruncationMultibyte(b *testing.B) {
+	s := "日本語テスト用の文字列サンプルデータ長めのテキスト"
+	for b.Loop() {
+		_ = TruncateRunes(s, 5)
+	}
+}
