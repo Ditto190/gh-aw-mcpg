@@ -4,7 +4,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/github/gh-aw-mcpg/internal/config"
 	"github.com/github/gh-aw-mcpg/internal/difc"
@@ -23,9 +22,6 @@ var (
 	allowOnlyRepo     string
 	allowOnlyMinInt   string
 )
-
-// containerGuardWasmPath is the baked-in guard path in the container image.
-const containerGuardWasmPath = "/guards/github/00-github-guard.wasm"
 
 // registerGuardsModeFlag registers the --guards-mode flag and its completion
 // on cmd, storing the value in target. Both the serve (root) command and the
@@ -46,7 +42,6 @@ func validateGuardsMode(mode string) error {
 	}
 	return nil
 }
-
 func init() {
 	RegisterFlag(func(cmd *cobra.Command) {
 		registerGuardsModeFlag(cmd, &difcMode)
@@ -61,27 +56,16 @@ func init() {
 
 // detectGuardWasm returns the path to the WASM guard module to use as the
 // default for the --guard-wasm flag. It checks in order:
-//  1. The baked-in container guard at containerGuardWasmPath.
+//  1. The baked-in container guard at guard.ContainerGuardWasmPath.
 //  2. The first .wasm file under $MCP_GATEWAY_WASM_GUARDS_DIR/github/.
 //
 // Returns an empty string when no guard can be auto-detected, which causes
 // --guard-wasm to be marked as required.
 func detectGuardWasm() string {
-	debugLog.Printf("Checking for baked-in guard at %s", containerGuardWasmPath)
-	if _, err := os.Stat(containerGuardWasmPath); err == nil {
-		debugLog.Printf("Auto-detected baked-in guard: %s", containerGuardWasmPath)
-		return containerGuardWasmPath
-	}
-
-	// Fall back to MCP_GATEWAY_WASM_GUARDS_DIR/github/*.wasm if the env var is set.
-	// This allows operators who set MCP_GATEWAY_WASM_GUARDS_DIR to satisfy the
-	// --guard-wasm requirement without passing it explicitly on the CLI.
-	// Note: MarkFlagRequired only fires on CLI-set flags, so the env var must be
-	// translated to a concrete default here at flag-registration time.
-	if wasmPath, found, err := guard.FindServerWASMGuardFile("github"); err != nil {
-		debugLog.Printf("WASM guard discovery via %s failed: %v", guard.WASMGuardsDirEnvVar, err)
+	if wasmPath, found, err := guard.FindGuardFile("github"); err != nil {
+		debugLog.Printf("WASM guard discovery failed: %v", err)
 	} else if found {
-		debugLog.Printf("Auto-detected guard via %s: %s", guard.WASMGuardsDirEnvVar, wasmPath)
+		debugLog.Printf("Auto-detected guard: %s", wasmPath)
 		return wasmPath
 	}
 
