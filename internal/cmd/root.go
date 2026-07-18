@@ -228,14 +228,9 @@ func run(cmd *cobra.Command, args []string) error {
 		logger.LogInfoToMarkdown("startup", "Loaded %d MCP server(s)", len(cfg.Servers))
 	}
 
-	// Validate guards mode before applying
-	if err := validateGuardsMode(difcMode); err != nil {
+	if err := applyLaunchAndGuardsOverrides(cmd, cfg); err != nil {
 		return err
 	}
-
-	// Apply command-line flags to config
-	cfg.DIFCMode = difcMode
-	cfg.SequentialLaunch = sequentialLaunch
 
 	// Override gateway config with command-line flags
 	if cfg.Gateway == nil {
@@ -280,7 +275,7 @@ func run(cmd *cobra.Command, args []string) error {
 	applyFlagOrEnv(cmd, "url-domain-audit", &cfg.Gateway.URLDomainAudit, urlDomainAudit, false)
 	logger.SetURLDomainAuditEnabled(cfg.Gateway.URLDomainAudit)
 
-	if sequentialLaunch {
+	if cfg.SequentialLaunch {
 		log.Println("Sequential server launching enabled")
 	} else {
 		log.Println("Parallel server launching enabled (default)")
@@ -493,6 +488,23 @@ func resolveServerMode(routed, unified bool) string {
 	default:
 		return "routed"
 	}
+}
+
+func applyLaunchAndGuardsOverrides(cmd *cobra.Command, cfg *config.Config) error {
+	guardsModeFlagChanged := cmd.Flags().Changed("guards-mode")
+	_, guardsModeEnvSet := os.LookupEnv("MCP_GATEWAY_GUARDS_MODE")
+	if guardsModeFlagChanged || guardsModeEnvSet {
+		if err := validateGuardsMode(difcMode); err != nil {
+			return err
+		}
+		cfg.DIFCMode = difcMode
+	}
+
+	if cmd.Flags().Changed("sequential-launch") {
+		cfg.SequentialLaunch = sequentialLaunch
+	}
+
+	return nil
 }
 
 // Execute runs the root command
