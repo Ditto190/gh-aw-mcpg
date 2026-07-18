@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -149,7 +150,8 @@ func fetchSchema(url string) ([]byte, error) {
 // newCompiler creates a JSON Schema compiler using the library defaults (Draft 2020-12).
 //
 // Note: this compiler has no custom loader set via UseLoader(). Schemas that contain
-// $ref pointers to other remote URLs will silently fail to resolve those references.
+// $ref pointers to other remote URLs fail compilation with a loader error (for example,
+// "no URLLoader set").
 // The embedded mcp-gateway-config.schema.json is self-contained, so this is not a
 // problem for the main validation path. Custom server schemas fetched by
 // validateServerAgainstSchema are also compiled with this compiler and therefore must
@@ -350,6 +352,16 @@ func detailForKeyword(keyword string) (string, []string) {
 			"Details: Array does not satisfy the required contains constraint",
 			"  → Ensure the array contains at least one item matching the required schema",
 		}
+	case "minContains":
+		return "minContains", []string{
+			"Details: Array does not meet the minimum number of matching items",
+			"  → Add items matching the required schema until the minimum is satisfied",
+		}
+	case "maxContains":
+		return "maxContains", []string{
+			"Details: Array exceeds the maximum number of matching items",
+			"  → Remove items matching the required schema until the maximum is satisfied",
+		}
 	case "uniqueItems":
 		return "uniqueItems", []string{
 			"Details: Array items must be unique — duplicate values are not allowed",
@@ -388,8 +400,12 @@ func formatErrorContext(ve *jsonschema.ValidationError, prefix string) string {
 	switch k := ve.ErrorKind.(type) {
 	case *kind.AdditionalProperties:
 		if len(k.Properties) > 0 {
+			quotedProperties := make([]string, len(k.Properties))
+			for i, p := range k.Properties {
+				quotedProperties[i] = strconv.Quote(p)
+			}
 			addDetail("additionalProperties",
-				fmt.Sprintf("Details: Unexpected field(s): %s", strings.Join(k.Properties, ", ")),
+				fmt.Sprintf("Details: Unexpected field(s): %s", strings.Join(quotedProperties, ", ")),
 				"  → Check for typos in field names or remove unsupported fields",
 			)
 		} else {
@@ -445,8 +461,26 @@ func formatErrorContext(ve *jsonschema.ValidationError, prefix string) string {
 		addFromKeyword("oneOf")
 	case *kind.Not:
 		addFromKeyword("not")
-	case *kind.Contains, *kind.MinContains, *kind.MaxContains:
+	case *kind.Contains:
 		addFromKeyword("contains")
+	case *kind.MinContains:
+		if k.Want > 0 {
+			addDetail("minContains",
+				fmt.Sprintf("Details: Array must contain at least %d matching item(s), found %d", k.Want, len(k.Got)),
+				"  → Add items matching the required schema until the minimum is satisfied",
+			)
+		} else {
+			addFromKeyword("minContains")
+		}
+	case *kind.MaxContains:
+		if k.Want >= 0 {
+			addDetail("maxContains",
+				fmt.Sprintf("Details: Array must contain at most %d matching item(s), found %d", k.Want, len(k.Got)),
+				"  → Remove items matching the required schema until the maximum is satisfied",
+			)
+		} else {
+			addFromKeyword("maxContains")
+		}
 	case *kind.UniqueItems:
 		addFromKeyword("uniqueItems")
 	case *kind.Minimum, *kind.Maximum, *kind.ExclusiveMinimum, *kind.ExclusiveMaximum,

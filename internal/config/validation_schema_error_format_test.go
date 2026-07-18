@@ -28,7 +28,13 @@ func TestFormatErrorContext(t *testing.T) {
 			name:         "additionalProperties error kind",
 			errorKind:    &kind.AdditionalProperties{Properties: []string{"foo"}},
 			prefix:       "  ",
-			wantContains: []string{"Unexpected field(s): foo", "typos", "  Details:"},
+			wantContains: []string{"Unexpected field(s): \"foo\"", "typos", "  Details:"},
+		},
+		{
+			name:         "additionalProperties escapes control characters in field names",
+			errorKind:    &kind.AdditionalProperties{Properties: []string{"bad\nkey", "\x1b[31mred"}},
+			prefix:       "",
+			wantContains: []string{"\"bad\\nkey\"", "\"\\x1b[31mred\""},
 		},
 		{
 			name:         "additionalProperties error kind without field list falls back to generic message",
@@ -139,16 +145,19 @@ func TestFormatErrorContext(t *testing.T) {
 			wantContains: []string{"Details:", "contains"},
 		},
 		{
-			name:         "minContains error kind gets contains context",
+			name:         "minContains error kind includes concrete bounds",
 			errorKind:    &kind.MinContains{Got: []int{}, Want: 2},
 			prefix:       "",
-			wantContains: []string{"Details:", "contains"},
+			wantContains: []string{"Details:", "at least 2", "found 0"},
 		},
 		{
-			name:         "maxContains error kind gets contains context",
+			name:         "maxContains error kind includes concrete bounds",
 			errorKind:    &kind.MaxContains{Got: []int{0, 1, 2}, Want: 1},
 			prefix:       "",
-			wantContains: []string{"Details:", "contains"},
+			wantContains: []string{"Details:", "at most 1", "found 3"},
+			wantNotContain: []string{
+				"at least one item matching",
+			},
 		},
 		{
 			name:         "uniqueItems error kind gets specific context",
@@ -264,6 +273,20 @@ func TestDetailForKeyword(t *testing.T) {
 			wantKey:           "contains",
 			wantLinesLen:      2,
 			wantLine0Contains: "Array does not satisfy",
+		},
+		{
+			name:              "minContains returns minimum matching details",
+			keyword:           "minContains",
+			wantKey:           "minContains",
+			wantLinesLen:      2,
+			wantLine0Contains: "minimum number of matching items",
+		},
+		{
+			name:              "maxContains returns maximum matching details",
+			keyword:           "maxContains",
+			wantKey:           "maxContains",
+			wantLinesLen:      2,
+			wantLine0Contains: "maximum number of matching items",
 		},
 		{
 			name:              "uniqueItems returns uniqueness details",
