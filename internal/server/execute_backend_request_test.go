@@ -25,17 +25,17 @@ func newCustomBackend(t *testing.T, serverName string, handleMethod func(w http.
 		}
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
+			http.Error(w, "failed to read request body", http.StatusInternalServerError)
 			return
 		}
 		if len(body) == 0 {
-			w.WriteHeader(http.StatusBadRequest)
+			http.Error(w, "empty request body", http.StatusBadRequest)
 			return
 		}
 
 		var req map[string]interface{}
 		if err := json.Unmarshal(body, &req); err != nil {
-			w.WriteHeader(http.StatusBadRequest)
+			http.Error(w, "invalid JSON-RPC request", http.StatusBadRequest)
 			return
 		}
 		method, _ := req["method"].(string)
@@ -144,8 +144,8 @@ func TestExecuteBackendRequest_TransportError(t *testing.T) {
 func TestExecuteBackendRequest_UnmarshalError(t *testing.T) {
 	backend := newCustomBackend(t, "unmarshal-error-server", func(w http.ResponseWriter, method string, reqID interface{}, _ interface{}) {
 		w.Header().Set("Content-Type", "application/json")
-		// Return a valid tools/call response whose JSON shape is incompatible with
-		// strictResult so executeBackendRequest's unmarshal step fails.
+		// Return a valid JSON-RPC tools/call response whose result shape is
+		// incompatible with strictResult so executeBackendRequest's unmarshal step fails.
 		json.NewEncoder(w).Encode(map[string]interface{}{ //nolint:errcheck
 			"jsonrpc": "2.0",
 			"id":      reqID,
@@ -219,10 +219,17 @@ func TestExecuteBackendRequest_WithParams(t *testing.T) {
 
 	l := newExecuteBackendTestLauncher(t, "params-server", backend.URL)
 
-	got, err := executeBackendRequest[interface{}](context.Background(), l, "params-server", "session-1", "tools/call",
+	type toolCallResult struct {
+		Content []struct {
+			Text string `json:"text"`
+		} `json:"content"`
+	}
+
+	got, err := executeBackendRequest[toolCallResult](context.Background(), l, "params-server", "session-1", "tools/call",
 		map[string]interface{}{"name": "echo", "arguments": map[string]interface{}{"name": "hello-world"}})
 	require.NoError(t, err)
-	assert.NotNil(t, got)
+	require.Len(t, got.Content, 1)
+	assert.Equal(t, "ok", got.Content[0].Text)
 	assert.Equal(t, "hello-world", receivedName, "params should be forwarded to backend")
 }
 
