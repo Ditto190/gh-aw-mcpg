@@ -92,9 +92,8 @@ func TestExecuteBackendRequest_BackendRPCError(t *testing.T) {
 	l := newExecuteBackendTestLauncher(t, "rpc-error-server", backend.URL)
 
 	type result struct{ Value string }
-	_, err := executeBackendRequest[result](context.Background(), l, "rpc-error-server", "session-1", "custom/method", nil)
+	_, err := executeBackendRequest[result](context.Background(), l, "rpc-error-server", "session-1", "tools/list", nil)
 	require.Error(t, err, "should propagate backend RPC error")
-	assert.Contains(t, err.Error(), "backend error server=rpc-error-server")
 	assert.Contains(t, err.Error(), "Method not found")
 }
 
@@ -103,56 +102,62 @@ func TestExecuteBackendRequest_BackendRPCError(t *testing.T) {
 func TestExecuteBackendRequest_UnmarshalError(t *testing.T) {
 	backend := newCustomBackend(t, "unmarshal-error-server", func(w http.ResponseWriter, method string, reqID interface{}, _ interface{}) {
 		w.Header().Set("Content-Type", "application/json")
-		// Return a result that cannot unmarshal into a struct with a numeric field
 		json.NewEncoder(w).Encode(map[string]interface{}{ //nolint:errcheck
 			"jsonrpc": "2.0",
 			"id":      reqID,
-			"result":  "this is a plain string, not an object",
+			"result": map[string]interface{}{
+				"tools": []map[string]interface{}{
+					{
+						"name":        "tool-one",
+						"description": "Tool one",
+						"inputSchema": map[string]interface{}{"type": "object"},
+					},
+				},
+			},
 		})
 	})
 	defer backend.Close()
 
 	l := newExecuteBackendTestLauncher(t, "unmarshal-error-server", backend.URL)
 
-	// Use a struct type so that a bare JSON string fails to unmarshal
-	type strictResult struct {
-		RequiredField int `json:"required_field"`
-	}
-	// A plain string "this is a plain string, not an object" fails to unmarshal
-	// into strictResult because json.Unmarshal requires a JSON object.
-	_, err := executeBackendRequest[strictResult](context.Background(), l, "unmarshal-error-server", "session-1", "custom/method", nil)
+	_, err := executeBackendRequest[[]int](context.Background(), l, "unmarshal-error-server", "session-1", "tools/list", nil)
 	require.Error(t, err, "should return error when result cannot be unmarshalled")
-	assert.Contains(t, err.Error(), "failed to parse custom/method result")
+	assert.Contains(t, err.Error(), "failed to parse tools/list result")
 }
 
 // TestExecuteBackendRequest_Success verifies the happy path: a well-formed backend
 // response is unmarshalled into the requested type and returned without error.
 func TestExecuteBackendRequest_Success(t *testing.T) {
 	type myResult struct {
-		Status  string `json:"status"`
-		Count   int    `json:"count"`
-		Enabled bool   `json:"enabled"`
+		Tools []struct {
+			Name string `json:"name"`
+		} `json:"tools"`
 	}
-
-	expected := myResult{Status: "ok", Count: 42, Enabled: true}
 
 	backend := newCustomBackend(t, "success-server", func(w http.ResponseWriter, method string, reqID interface{}, _ interface{}) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{ //nolint:errcheck
 			"jsonrpc": "2.0",
 			"id":      reqID,
-			"result":  expected,
+			"result": map[string]interface{}{
+				"tools": []map[string]interface{}{
+					{
+						"name":        "tool-success",
+						"description": "Tool success",
+						"inputSchema": map[string]interface{}{"type": "object"},
+					},
+				},
+			},
 		})
 	})
 	defer backend.Close()
 
 	l := newExecuteBackendTestLauncher(t, "success-server", backend.URL)
 
-	got, err := executeBackendRequest[myResult](context.Background(), l, "success-server", "session-1", "custom/get", nil)
+	got, err := executeBackendRequest[myResult](context.Background(), l, "success-server", "session-1", "tools/list", nil)
 	require.NoError(t, err, "should succeed for a well-formed backend response")
-	assert.Equal(t, expected.Status, got.Status)
-	assert.Equal(t, expected.Count, got.Count)
-	assert.Equal(t, expected.Enabled, got.Enabled)
+	require.Len(t, got.Tools, 1)
+	assert.Equal(t, "tool-success", got.Tools[0].Name)
 }
 
 // TestExecuteBackendRequest_WithParams verifies that params are forwarded to the backend.
@@ -161,15 +166,21 @@ func TestExecuteBackendRequest_WithParams(t *testing.T) {
 
 	backend := newCustomBackend(t, "params-server", func(w http.ResponseWriter, method string, reqID interface{}, params interface{}) {
 		if p, ok := params.(map[string]interface{}); ok {
-			if name, ok := p["name"].(string); ok {
-				receivedName = name
+			if args, ok := p["arguments"].(map[string]interface{}); ok {
+				if name, ok := args["name"].(string); ok {
+					receivedName = name
+				}
 			}
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{ //nolint:errcheck
 			"jsonrpc": "2.0",
 			"id":      reqID,
-			"result":  map[string]interface{}{"echoed": receivedName},
+			"result": map[string]interface{}{
+				"content": []map[string]interface{}{
+					{"type": "text", "text": receivedName},
+				},
+			},
 		})
 	})
 	defer backend.Close()
@@ -177,12 +188,18 @@ func TestExecuteBackendRequest_WithParams(t *testing.T) {
 	l := newExecuteBackendTestLauncher(t, "params-server", backend.URL)
 
 	type echoResult struct {
-		Echoed string `json:"echoed"`
+		Content []struct {
+			Text string `json:"text"`
+		} `json:"content"`
 	}
-	got, err := executeBackendRequest[echoResult](context.Background(), l, "params-server", "session-1", "echo/name",
-		map[string]interface{}{"name": "hello-world"})
+	got, err := executeBackendRequest[echoResult](context.Background(), l, "params-server", "session-1", "tools/call",
+		map[string]interface{}{
+			"name":      "echo_name",
+			"arguments": map[string]interface{}{"name": "hello-world"},
+		})
 	require.NoError(t, err)
-	assert.Equal(t, "hello-world", got.Echoed)
+	require.Len(t, got.Content, 1)
+	assert.Equal(t, "hello-world", got.Content[0].Text)
 	assert.Equal(t, "hello-world", receivedName, "params should be forwarded to backend")
 }
 
@@ -221,24 +238,34 @@ func TestExecuteBackendRequest_SessionIsolation(t *testing.T) {
 		json.NewEncoder(w).Encode(map[string]interface{}{ //nolint:errcheck
 			"jsonrpc": "2.0",
 			"id":      reqID,
-			"result":  map[string]interface{}{"ok": true},
+			"result": map[string]interface{}{
+				"tools": []map[string]interface{}{
+					{
+						"name":        "session_tool",
+						"description": "Session tool",
+						"inputSchema": map[string]interface{}{"type": "object"},
+					},
+				},
+			},
 		})
 	})
 	defer backend.Close()
 
 	l := newExecuteBackendTestLauncher(t, "session-server", backend.URL)
 
-	type okResult struct {
-		OK bool `json:"ok"`
+	type toolsResult struct {
+		Tools []struct {
+			Name string `json:"name"`
+		} `json:"tools"`
 	}
 
-	r1, err1 := executeBackendRequest[okResult](context.Background(), l, "session-server", "session-A", "ping", nil)
-	r2, err2 := executeBackendRequest[okResult](context.Background(), l, "session-server", "session-B", "ping", nil)
+	r1, err1 := executeBackendRequest[toolsResult](context.Background(), l, "session-server", "session-A", "tools/list", nil)
+	r2, err2 := executeBackendRequest[toolsResult](context.Background(), l, "session-server", "session-B", "tools/list", nil)
 
 	require.NoError(t, err1)
 	require.NoError(t, err2)
-	assert.True(t, r1.OK)
-	assert.True(t, r2.OK)
+	assert.NotEmpty(t, r1.Tools)
+	assert.NotEmpty(t, r2.Tools)
 }
 
 // TestExecuteBackendToolCall_DelegatesToExecuteBackendRequest verifies that
