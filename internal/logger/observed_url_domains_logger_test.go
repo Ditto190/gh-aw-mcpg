@@ -155,8 +155,8 @@ func TestLogDomains_NilDomains(t *testing.T) {
 
 func TestLogDomains_FallbackMode_ReturnsNil(t *testing.T) {
 	l := &ObservedURLDomainsLogger{
-		data:        make(map[string]map[string]struct{}),
-		useFallback: true,
+		data:         make(map[string]map[string]struct{}),
+		jsonFileSink: jsonFileSink{useFallback: true},
 	}
 
 	// In fallback mode LogDomains should silently succeed without writing.
@@ -320,8 +320,8 @@ func TestLogObservedURLDomains_FallbackMode_NoPanic(t *testing.T) {
 	globalObservedURLDomainsMu.Lock()
 	prev := globalObservedURLDomainsLogger
 	globalObservedURLDomainsLogger = &ObservedURLDomainsLogger{
-		data:        make(map[string]map[string]struct{}),
-		useFallback: true,
+		data:         make(map[string]map[string]struct{}),
+		jsonFileSink: jsonFileSink{useFallback: true},
 	}
 	globalObservedURLDomainsMu.Unlock()
 	t.Cleanup(func() {

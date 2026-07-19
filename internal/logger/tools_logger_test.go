@@ -221,8 +221,7 @@ func TestWriteToFile_Success(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	tl := &ToolsLogger{
-		logDir:   tmpDir,
-		fileName: "tools.json",
+		jsonFileSink: jsonFileSink{logDir: tmpDir, fileName: "tools.json"},
 		data: &ToolsData{
 			Servers: map[string][]ToolInfo{
 				"server1": {
@@ -252,9 +251,8 @@ func TestWriteToFile_WriteFileFails(t *testing.T) {
 	assert := assert.New(t)
 
 	tl := &ToolsLogger{
-		logDir:   "/nonexistent/dir/that/does/not/exist",
-		fileName: "tools.json",
-		data:     &ToolsData{Servers: make(map[string][]ToolInfo)},
+		jsonFileSink: jsonFileSink{logDir: "/nonexistent/dir/that/does/not/exist", fileName: "tools.json"},
+		data:         &ToolsData{Servers: make(map[string][]ToolInfo)},
 	}
 
 	err := tl.writeToFile()
@@ -275,9 +273,8 @@ func TestWriteToFile_RenameFails(t *testing.T) {
 	require.NoError(os.MkdirAll(targetPath, 0755))
 
 	tl := &ToolsLogger{
-		logDir:   tmpDir,
-		fileName: "tools.json",
-		data:     &ToolsData{Servers: make(map[string][]ToolInfo)},
+		jsonFileSink: jsonFileSink{logDir: tmpDir, fileName: "tools.json"},
+		data:         &ToolsData{Servers: make(map[string][]ToolInfo)},
 	}
 
 	err := tl.writeToFile()
@@ -299,9 +296,8 @@ func TestLogToolsForServer_ErrorIsLogged(t *testing.T) {
 	oldLogger := globalToolsLogger
 	// Point the global logger at a nonexistent directory so writeToFile fails.
 	globalToolsLogger = &ToolsLogger{
-		logDir:   "/nonexistent/path/for/test",
-		fileName: "tools.json",
-		data:     &ToolsData{Servers: make(map[string][]ToolInfo)},
+		jsonFileSink: jsonFileSink{logDir: "/nonexistent/path/for/test", fileName: "tools.json"},
+		data:         &ToolsData{Servers: make(map[string][]ToolInfo)},
 	}
 	globalToolsMu.Unlock()
 	t.Cleanup(func() {
@@ -325,10 +321,8 @@ func TestLogToolsForServer_FallbackSkipsErrors(t *testing.T) {
 	globalToolsMu.Lock()
 	oldLogger := globalToolsLogger
 	globalToolsLogger = &ToolsLogger{
-		logDir:      "/nonexistent/path",
-		fileName:    "tools.json",
-		useFallback: true,
-		data:        &ToolsData{Servers: make(map[string][]ToolInfo)},
+		jsonFileSink: jsonFileSink{logDir: "/nonexistent/path", fileName: "tools.json", useFallback: true},
+		data:         &ToolsData{Servers: make(map[string][]ToolInfo)},
 	}
 	globalToolsMu.Unlock()
 	t.Cleanup(func() {

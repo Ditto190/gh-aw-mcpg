@@ -123,3 +123,34 @@ func writeJSONToFile(logDir, fileName string, data any, perm os.FileMode) error 
 	}
 	return atomicWriteFile(filepath.Join(logDir, fileName), jsonData, perm)
 }
+
+// jsonFileSink holds the shared state common to stateful JSON-file loggers
+// (logDir, fileName, useFallback). Embed this struct in logger types that
+// persist an in-memory data structure to a JSON file so the three repeated
+// fields and the writeJSON helper do not have to be duplicated.
+//
+// Usage:
+//
+//	type MyLogger struct {
+//	    lockable
+//	    jsonFileSink
+//	    data  MyData
+//	}
+//
+// The embedded jsonFileSink.writeJSON method can then be called from
+// writeToFile to write data to the configured JSON file:
+//
+//	func (l *MyLogger) writeToFile() error {
+//	    return l.writeJSON(l.data, 0644)
+//	}
+type jsonFileSink struct {
+	logDir      string
+	fileName    string
+	useFallback bool
+}
+
+// writeJSON marshals data as indented JSON and atomically writes it to the
+// file at s.logDir/s.fileName with the given permissions.
+func (s *jsonFileSink) writeJSON(data any, perm os.FileMode) error {
+	return writeJSONToFile(s.logDir, s.fileName, data, perm)
+}
