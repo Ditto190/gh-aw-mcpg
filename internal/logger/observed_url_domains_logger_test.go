@@ -90,7 +90,7 @@ func TestInitObservedURLDomainsLogger_FallbackOnBadDir(t *testing.T) {
 	// The global logger should be a fallback instance (not nil).
 	globalObservedURLDomainsMu.RLock()
 	assert.NotNil(t, globalObservedURLDomainsLogger, "fallback logger should still be set")
-	assert.True(t, globalObservedURLDomainsLogger.useFallback, "logger should be in fallback mode")
+	assert.True(t, globalObservedURLDomainsLogger.jsonFileSink.useFallback, "logger should be in fallback mode")
 	globalObservedURLDomainsMu.RUnlock()
 }
 
@@ -155,8 +155,8 @@ func TestLogDomains_NilDomains(t *testing.T) {
 
 func TestLogDomains_FallbackMode_ReturnsNil(t *testing.T) {
 	l := &ObservedURLDomainsLogger{
-		data:        make(map[string]map[string]struct{}),
-		useFallback: true,
+		data:         make(map[string]map[string]struct{}),
+		jsonFileSink: jsonFileSink{useFallback: true},
 	}
 
 	// In fallback mode LogDomains should silently succeed without writing.
@@ -320,8 +320,8 @@ func TestLogObservedURLDomains_FallbackMode_NoPanic(t *testing.T) {
 	globalObservedURLDomainsMu.Lock()
 	prev := globalObservedURLDomainsLogger
 	globalObservedURLDomainsLogger = &ObservedURLDomainsLogger{
-		data:        make(map[string]map[string]struct{}),
-		useFallback: true,
+		data:         make(map[string]map[string]struct{}),
+		jsonFileSink: jsonFileSink{useFallback: true},
 	}
 	globalObservedURLDomainsMu.Unlock()
 	t.Cleanup(func() {

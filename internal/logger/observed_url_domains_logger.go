@@ -27,10 +27,8 @@ func URLDomainAuditEnabled() bool {
 // ObservedURLDomainsLogger manages unique observed URL domains grouped by server ID.
 type ObservedURLDomainsLogger struct {
 	lockable
-	logDir      string
-	fileName    string
-	data        map[string]map[string]struct{}
-	useFallback bool
+	jsonFileSink
+	data map[string]map[string]struct{}
 }
 
 var (
@@ -46,9 +44,8 @@ var observedURLDomainsLoggerFactory = newLoggerFactory(
 		}
 
 		l := &ObservedURLDomainsLogger{
-			logDir:   logDir,
-			fileName: fileName,
-			data:     make(map[string]map[string]struct{}),
+			jsonFileSink: jsonFileSink{logDir: logDir, fileName: fileName},
+			data:         make(map[string]map[string]struct{}),
 		}
 		if err := l.writeToFile(); err != nil {
 			return nil, err
@@ -58,10 +55,8 @@ var observedURLDomainsLoggerFactory = newLoggerFactory(
 	},
 	func(err error, logDir, fileName string) (*ObservedURLDomainsLogger, error) {
 		return fallbackLoggerOnInitError(err, "Failed to initialize observed URL domains log file", "Observed URL domains logging disabled", &ObservedURLDomainsLogger{
-			logDir:      logDir,
-			fileName:    fileName,
-			data:        make(map[string]map[string]struct{}),
-			useFallback: true,
+			jsonFileSink: jsonFileSink{logDir: logDir, fileName: fileName, useFallback: true},
+			data:         make(map[string]map[string]struct{}),
 		})
 	},
 )
@@ -112,7 +107,7 @@ func (l *ObservedURLDomainsLogger) writeToFile() error {
 	for serverID, domains := range l.data {
 		serialized[serverID] = util.SortedSetKeys(domains)
 	}
-	return writeJSONToFile(l.logDir, l.fileName, serialized, 0600)
+	return l.writeJSON(serialized, 0600)
 }
 
 func (l *ObservedURLDomainsLogger) Close() error { return nil }

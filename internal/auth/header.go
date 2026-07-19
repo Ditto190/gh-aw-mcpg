@@ -36,16 +36,13 @@ package auth
 
 import (
 	"errors"
-	"fmt"
 	"strings"
 
 	"github.com/github/gh-aw-mcpg/internal/logger"
 	"github.com/github/gh-aw-mcpg/internal/sanitize"
-	"github.com/github/gh-aw-mcpg/internal/util"
 )
 
 var logAuth = logger.ForFile()
-var logAPIKey = logger.New("auth:apikey")
 
 var (
 	// ErrMissingAuthHeader is returned when the Authorization header is missing
@@ -199,18 +196,4 @@ func IsMalformedHeader(header string) bool {
 		}
 	}
 	return false
-}
-
-// GenerateRandomAgentID generates a cryptographically random agent ID.
-// Per spec §7.3, the gateway SHOULD generate a random agent ID on startup
-// if none is provided. Returns a 32-byte hex-encoded string (64 chars).
-func GenerateRandomAgentID() (string, error) {
-	logAPIKey.Print("Generating random agent ID")
-	key, err := util.RandomHex(32)
-	if err != nil {
-		logAPIKey.Printf("Random agent ID generation failed: %v", err)
-		return "", fmt.Errorf("failed to generate random agent ID: %w", err)
-	}
-	logAPIKey.Print("Random agent ID generated successfully")
-	return key, nil
 }

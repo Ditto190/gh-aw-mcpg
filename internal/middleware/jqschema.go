@@ -718,20 +718,12 @@ func auditObservedURLDomains(toolName string, data any) {
 	if !logger.URLDomainAuditEnabled() || data == nil {
 		return
 	}
-	serverID := parseServerIDFromToolName(toolName)
+	serverID := util.ParseServerIDFromToolName(toolName)
 	domains := urlutil.ExtractURLDomainsFromValue(data)
 	if len(domains) == 0 {
 		return
 	}
 	logger.LogObservedURLDomains(serverID, domains)
-}
-
-func parseServerIDFromToolName(toolName string) string {
-	serverID, _, ok := strings.Cut(toolName, "___")
-	if !ok || serverID == "" {
-		return toolName
-	}
-	return serverID
 }
 
 // savePayload saves the payload to disk and returns the file path

@@ -26,10 +26,8 @@ type ToolsData struct {
 // ToolsLogger manages logging of MCP server tools to a JSON file
 type ToolsLogger struct {
 	lockable
-	logDir      string
-	fileName    string
-	data        *ToolsData
-	useFallback bool
+	jsonFileSink
+	data *ToolsData
 }
 
 var (
@@ -47,8 +45,7 @@ var toolsLoggerFactory = newLoggerFactory(
 		}
 
 		tl := &ToolsLogger{
-			logDir:   logDir,
-			fileName: fileName,
+			jsonFileSink: jsonFileSink{logDir: logDir, fileName: fileName},
 			data: &ToolsData{
 				Servers: make(map[string][]ToolInfo),
 			},
@@ -58,9 +55,7 @@ var toolsLoggerFactory = newLoggerFactory(
 	},
 	func(err error, logDir, fileName string) (*ToolsLogger, error) {
 		return fallbackLoggerOnInitError(err, "Failed to initialize tools log file", "Tools logging disabled", &ToolsLogger{
-			logDir:      logDir,
-			fileName:    fileName,
-			useFallback: true,
+			jsonFileSink: jsonFileSink{logDir: logDir, fileName: fileName, useFallback: true},
 			data: &ToolsData{
 				Servers: make(map[string][]ToolInfo),
 			},
@@ -92,7 +87,7 @@ func (tl *ToolsLogger) LogTools(serverID string, tools []ToolInfo) error {
 // writeToFile writes the current tools data to the JSON file.
 // Caller must hold tl.mu lock.
 func (tl *ToolsLogger) writeToFile() error {
-	return writeJSONToFile(tl.logDir, tl.fileName, tl.data, 0644)
+	return tl.writeJSON(tl.data, 0644)
 }
 
 // Close is a no-op for ToolsLogger (implements closableLogger interface)

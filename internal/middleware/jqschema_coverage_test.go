@@ -19,6 +19,7 @@ import (
 
 	"github.com/github/gh-aw-mcpg/internal/jqutil"
 	"github.com/github/gh-aw-mcpg/internal/logger"
+	"github.com/github/gh-aw-mcpg/internal/util"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -595,11 +596,11 @@ func TestCompileOptsWithVariables_DoesNotMutateSharedSecureOpts(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// parseServerIDFromToolName
+// util.ParseServerIDFromToolName
 // ---------------------------------------------------------------------------
 
-// TestParseServerIDFromToolName exercises all three branches of the unexported
-// parseServerIDFromToolName helper:
+// TestParseServerIDFromToolName exercises all three branches of
+// util.ParseServerIDFromToolName (formerly the unexported helper in jqschema.go):
 //
 //   - No "___" separator present          → !ok, returns the full toolName
 //   - "___" separator with empty serverID → serverID=="", returns the full toolName
@@ -652,7 +653,7 @@ func TestParseServerIDFromToolName(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			got := parseServerIDFromToolName(tt.toolName)
+			got := util.ParseServerIDFromToolName(tt.toolName)
 			assert.Equal(t, tt.want, got)
 		})
 	}
