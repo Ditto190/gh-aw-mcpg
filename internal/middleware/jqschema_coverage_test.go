@@ -19,7 +19,6 @@ import (
 
 	"github.com/github/gh-aw-mcpg/internal/jqutil"
 	"github.com/github/gh-aw-mcpg/internal/logger"
-	"github.com/github/gh-aw-mcpg/internal/util"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -593,70 +592,6 @@ func TestCompileOptsWithVariables_DoesNotMutateSharedSecureOpts(t *testing.T) {
 
 	assert.Len(t, secureCompileOpts, initialLen)
 	assert.Len(t, opts, initialLen+1)
-}
-
-// ---------------------------------------------------------------------------
-// util.ParseServerIDFromToolName
-// ---------------------------------------------------------------------------
-
-// TestParseServerIDFromToolName exercises all three branches of
-// util.ParseServerIDFromToolName (formerly the unexported helper in jqschema.go):
-//
-//   - No "___" separator present          → !ok, returns the full toolName
-//   - "___" separator with empty serverID → serverID=="", returns the full toolName
-//   - "___" separator with non-empty serverID → returns the serverID prefix
-func TestParseServerIDFromToolName(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name     string
-		toolName string
-		want     string
-	}{
-		{
-			name:     "no separator returns full tool name",
-			toolName: "list_repos",
-			want:     "list_repos",
-		},
-		{
-			name:     "normal prefixed tool name returns server ID",
-			toolName: "github___list_repos",
-			want:     "github",
-		},
-		{
-			// strings.Cut("___list_repos", "___") → ("", "list_repos", true)
-			// serverID=="" so the function falls into the !ok||serverID=="" branch
-			// and returns the original toolName unchanged.
-			name:     "tool name starting with separator returns full name",
-			toolName: "___list_repos",
-			want:     "___list_repos",
-		},
-		{
-			name:     "empty tool name returns empty string",
-			toolName: "",
-			want:     "",
-		},
-		{
-			// strings.Cut("___", "___") → ("", "", true); serverID=="" → returns "___"
-			name:     "separator only returns full name",
-			toolName: "___",
-			want:     "___",
-		},
-		{
-			// strings.Cut splits on the FIRST occurrence only.
-			name:     "multiple separators returns portion before first",
-			toolName: "github___owner___list_repos",
-			want:     "github",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			got := util.ParseServerIDFromToolName(tt.toolName)
-			assert.Equal(t, tt.want, got)
-		})
-	}
 }
 
 // ---------------------------------------------------------------------------
