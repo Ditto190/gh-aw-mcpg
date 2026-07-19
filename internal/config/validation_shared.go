@@ -6,7 +6,7 @@ import (
 	"github.com/github/gh-aw-mcpg/internal/logger"
 )
 
-var logValidation = logger.New("config:validation_shared")
+var logValidation = logger.ForFile()
 
 // customSchemaCache stores compiled custom schemas by schema URL to avoid
 // repeated fetch + compile work across validations.
