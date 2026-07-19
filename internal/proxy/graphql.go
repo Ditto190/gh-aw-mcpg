@@ -129,6 +129,7 @@ func MatchGraphQL(body []byte) *GraphQLRouteMatch {
 	if toolName == "search_issues" || toolName == "search_code" {
 		if q := extractSearchQuery(gql.Query, gql.Variables); q != "" {
 			args["query"] = q
+			logGraphQL.Printf("MatchGraphQL: search query extracted for tool=%s", toolName)
 		}
 	}
 
@@ -172,11 +173,13 @@ func extractOwnerRepo(variables map[string]interface{}, query string) (string, s
 	if owner == "" {
 		if m := varOwnerPattern.FindStringSubmatch(query); m != nil {
 			owner = m[1]
+			logGraphQL.Printf("extractOwnerRepo: from inline JSON owner=%q", owner)
 		}
 	}
 	if repo == "" {
 		if m := varRepoPattern.FindStringSubmatch(query); m != nil {
 			repo = m[1]
+			logGraphQL.Printf("extractOwnerRepo: from inline JSON repo=%q", repo)
 		}
 	}
 
