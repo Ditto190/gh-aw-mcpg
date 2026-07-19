@@ -174,7 +174,7 @@ func TestExtractRateLimitErrorText(t *testing.T) {
 				},
 			},
 		})
-		assert.Contains(t, got, "secondary rate limit triggered")
+assert.Equal(t, "secondary rate limit triggeredadditional info", got)
 	})
 }
 
