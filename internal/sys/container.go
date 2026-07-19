@@ -88,15 +88,20 @@ func extractContainerIDFromCgroup() string {
 // extractContainerIDFromCgroupFiles reads the given cgroup files in order and
 // returns the first container ID found, or "" if none is extractable.
 func extractContainerIDFromCgroupFiles(paths []string) string {
+	logSys.Printf("Scanning %d cgroup file(s) for container ID", len(paths))
 	for _, cgroupPath := range paths {
 		data, err := os.ReadFile(cgroupPath)
 		if err != nil {
+			logSys.Printf("Skipping cgroup file (unreadable): path=%s, err=%v", cgroupPath, err)
 			continue
 		}
 		if id := extractContainerIDFromContent(string(data)); id != "" {
+			logSys.Printf("Extracted container ID from cgroup file: path=%s, id=%s", cgroupPath, id)
 			return id
 		}
+		logSys.Printf("No container ID found in cgroup file: path=%s", cgroupPath)
 	}
+	logSys.Print("No container ID found in any cgroup file")
 	return ""
 }
 
