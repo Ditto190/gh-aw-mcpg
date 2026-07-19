@@ -91,7 +91,7 @@ func New(namespace string) *Logger {
 func ForFile() *Logger {
 	_, file, _, ok := runtime.Caller(1)
 	if !ok {
-		return New("unknown:unknown")
+		return New("error:caller-not-found")
 	}
 	pkg := filepath.Base(filepath.Dir(file))
 	filename := strings.TrimSuffix(filepath.Base(file), ".go")

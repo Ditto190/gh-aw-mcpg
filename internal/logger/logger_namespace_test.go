@@ -25,19 +25,35 @@ func TestLoggerNamespacesMatchFileConventions(t *testing.T) {
 	internalRoot := filepath.Join(repoRoot, "internal")
 
 	exceptionNamespaces := map[string][]string{
-		"internal/auth/header.go":                {"auth:apikey"},
-		"internal/config/config_core.go":         {"config:config"},
-		"internal/config/config_feature.go":      {"config:feature"},
-		"internal/envutil/expand_env_args.go":    {"envutil:expand"},
-		"internal/guard/wasm_lifecycle.go":       {"guard:wasm"},
-		"internal/guard/write_sink.go":           {"guard:write-sink"},
-		"internal/launcher/connection_pool.go":   {"launcher:pool"},
-		"internal/launcher/health_monitor.go":    {"launcher:health"},
-		"internal/server/http_helpers.go":        {"server:helpers"},
-		"internal/server/http_server.go":         {"server:transport"},
-		"internal/server/middleware_auth.go":     {"server:auth"},
-		"internal/server/sdk_logging.go":         {"server:sdk-frontend"},
-		"internal/server/session_auto_init.go":   {"server:auto-init"},
+		// header.go defines two loggers: one for general auth (auto-derived via ForFile as
+		// "auth:header") and one for API-key auth which uses the custom namespace "auth:apikey"
+		// so callers can filter API-key debug logs independently with DEBUG=auth:apikey.
+		"internal/auth/header.go": {"auth:apikey"},
+
+		// The following files use intentionally shorter or semantically clearer namespaces
+		// instead of the full file-name-derived form. These are preserved for backward
+		// compatibility with existing DEBUG filter configurations.
+		"internal/config/config_core.go":    {"config:config"},
+		"internal/config/config_feature.go": {"config:feature"},
+		"internal/envutil/expand_env_args.go": {"envutil:expand"},
+		"internal/guard/wasm_lifecycle.go":    {"guard:wasm"},
+		"internal/guard/write_sink.go":        {"guard:write-sink"},
+		"internal/launcher/connection_pool.go": {"launcher:pool"},
+		"internal/launcher/health_monitor.go":  {"launcher:health"},
+		"internal/server/http_helpers.go":      {"server:helpers"},
+
+		// http_server.go defines two loggers: the primary one for the HTTP server itself
+		// (auto-derived via ForFile as "server:http_server") and a second one with the custom
+		// namespace "server:transport" for transport-layer events, allowing independent filtering.
+		"internal/server/http_server.go": {"server:transport"},
+
+		"internal/server/middleware_auth.go":   {"server:auth"},
+		"internal/server/sdk_logging.go":       {"server:sdk-frontend"},
+		"internal/server/session_auto_init.go": {"server:auto-init"},
+
+		// testutil/mcptest/server.go uses "testutil:mcptest" (package/feature oriented) rather
+		// than the file-derived "mcptest:server". testutil/mcptest/validator.go similarly uses
+		// "testutil:validator" to group all testutil helpers under a common DEBUG prefix.
 		"internal/testutil/mcptest/server.go":    {"testutil:mcptest"},
 		"internal/testutil/mcptest/validator.go": {"testutil:validator"},
 	}
