@@ -11,7 +11,29 @@ import (
 	"github.com/santhosh-tekuri/jsonschema/v6/kind"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/text/message"
 )
+
+// keywordPathErrorKind is a test helper that implements jsonschema.ErrorKind
+// via KeywordPath and LocalizedString for testing KeywordPath-based fallback
+// error context dispatch.
+type keywordPathErrorKind struct {
+	keyword string
+	message string
+}
+
+// KeywordPath returns the configured keyword path for fallback dispatch tests.
+func (k *keywordPathErrorKind) KeywordPath() []string {
+	if k.keyword == "" {
+		return nil
+	}
+	return []string{k.keyword}
+}
+
+// LocalizedString returns the configured message for fallback dispatch tests.
+func (k *keywordPathErrorKind) LocalizedString(*message.Printer) string {
+	return k.message
+}
 
 // TestFormatErrorContext tests the formatErrorContext helper function.
 // This function provides additional diagnostic context for JSON Schema validation errors
@@ -121,6 +143,12 @@ func TestFormatErrorContext(t *testing.T) {
 			wantContains: []string{"outside the allowed range"},
 		},
 		{
+			name:         "allOf validation error kind",
+			errorKind:    &kind.AllOf{},
+			prefix:       "",
+			wantContains: []string{"satisfy all required constraints", "required rule is satisfied"},
+		},
+		{
 			name:         "oneOf validation error kind",
 			errorKind:    &kind.OneOf{},
 			prefix:       "",
@@ -164,6 +192,24 @@ func TestFormatErrorContext(t *testing.T) {
 			errorKind:    &kind.UniqueItems{Duplicates: [2]int{0, 2}},
 			prefix:       "",
 			wantContains: []string{"Details:", "unique"},
+		},
+		{
+			name:         "keyword path fallback handles if",
+			errorKind:    &keywordPathErrorKind{keyword: "if", message: "'if' failed"},
+			prefix:       "",
+			wantContains: []string{"failed conditional schema evaluation", "expected branch applies"},
+		},
+		{
+			name:         "keyword path fallback handles then",
+			errorKind:    &keywordPathErrorKind{keyword: "then", message: "'then' failed"},
+			prefix:       "",
+			wantContains: []string{"failed its required follow-up constraints", "conditional requirements are satisfied"},
+		},
+		{
+			name:         "keyword path fallback handles else",
+			errorKind:    &keywordPathErrorKind{keyword: "else", message: "'else' failed"},
+			prefix:       "",
+			wantContains: []string{"failed the alternate constraints", "alternate conditional requirements are satisfied"},
 		},
 		{
 			name: "truly unhandled error kind falls back to generic context",
@@ -254,6 +300,34 @@ func TestDetailForKeyword(t *testing.T) {
 			wantLine0Contains: "Value is outside the allowed range",
 		},
 		{
+			name:              "allOf returns combined constraint details",
+			keyword:           "allOf",
+			wantKey:           "allOf",
+			wantLinesLen:      2,
+			wantLine0Contains: "satisfy all required constraints",
+		},
+		{
+			name:              "if returns conditional details",
+			keyword:           "if",
+			wantKey:           "conditional",
+			wantLinesLen:      2,
+			wantLine0Contains: "conditional schema evaluation",
+		},
+		{
+			name:              "then returns conditional details",
+			keyword:           "then",
+			wantKey:           "conditional",
+			wantLinesLen:      2,
+			wantLine0Contains: "follow-up constraints",
+		},
+		{
+			name:              "else returns conditional details",
+			keyword:           "else",
+			wantKey:           "conditional",
+			wantLinesLen:      2,
+			wantLine0Contains: "alternate constraints",
+		},
+		{
 			name:              "oneOf returns no-matching-format details",
 			keyword:           "oneOf",
 			wantKey:           "oneOf",
@@ -336,7 +410,7 @@ func TestFormatValidationErrorRecursive(t *testing.T) {
 		formatValidationErrorRecursive(ve, &sb, 0)
 
 		result := sb.String()
-		assert.Contains(t, result, "Location: mcpServers.github")
+		assert.Contains(t, result, "Location: /mcpServers.github")
 		assert.Contains(t, result, "Error:")
 		// Verify the Required kind is localized correctly (English: includes the missing property name).
 		// schemaErrPrinter uses language.English, so "container" will appear in the output.
@@ -500,8 +574,8 @@ func TestFormatValidationErrorRecursive(t *testing.T) {
 		formatValidationErrorRecursive(ve, &sb, 0)
 
 		result := sb.String()
-		assert.Contains(t, result, "Location: mcpServers/github/container",
-			"Multi-segment instance location should be joined with /")
+		assert.Contains(t, result, "Location: /mcpServers/github/container",
+			"Multi-segment instance location should be formatted as an RFC 6901 JSON Pointer")
 	})
 }
 
@@ -529,7 +603,7 @@ func TestFormatSchemaError(t *testing.T) {
 		assert.Contains(t, errStr, "Configuration validation error", "Should include standard prefix")
 		assert.Contains(t, errStr, "Location:", "Should include location")
 		assert.Contains(t, errStr, "Error:", "Should include error keyword")
-		assert.Contains(t, errStr, "mcpServers.github", "Should include the instance location")
+		assert.Contains(t, errStr, "/mcpServers.github", "Should include the instance location")
 		// Should include documentation footer
 		assert.Contains(t, errStr, "https://", "Should include documentation links")
 	})
@@ -561,7 +635,7 @@ func TestFormatSchemaError(t *testing.T) {
 		require.Error(t, result)
 		errStr := result.Error()
 		assert.Contains(t, errStr, "Configuration validation error")
-		assert.Contains(t, errStr, "gateway.port")
+		assert.Contains(t, errStr, "/gateway.port")
 		assert.Contains(t, errStr, "mcp-gateway")
 	})
 
@@ -623,8 +697,8 @@ func TestFormatSchemaError(t *testing.T) {
 		result := formatSchemaError(parent)
 		require.Error(t, result)
 		errStr := result.Error()
-		assert.Contains(t, errStr, "mcpServers.github")
-		assert.Contains(t, errStr, "mcpServers.github.container",
+		assert.Contains(t, errStr, "/mcpServers.github")
+		assert.Contains(t, errStr, "/mcpServers.github.container",
 			"Should include child error location from recursive formatting")
 	})
 }
