@@ -344,7 +344,7 @@ func detailForKeyword(keyword string) (string, []string) {
 		}
 	case "allOf":
 		return "allOf", []string{
-			"Details: Configuration does not satisfy all required constraints",
+			"Details: Configuration must satisfy all required constraints",
 			"  → Review each related field and ensure every required rule is satisfied together",
 		}
 	case "if":
