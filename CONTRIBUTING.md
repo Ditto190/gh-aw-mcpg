@@ -100,6 +100,16 @@ Run both unit and integration tests (always rebuilds the binary first):
 make test-all
 ```
 
+#### Common Maintenance Targets
+```bash
+make format          # Auto-format Go code
+make clean           # Remove build artifacts and generated test outputs
+make agent-finished  # Format + build + lint + tests (recommended before submitting)
+make help            # Show all available targets
+```
+
+Use `make release patch|minor|major` to trigger the automated release workflow.
+
 #### Rust Guard Tests
 Run Rust guard unit tests (requires `cargo`):
 ```bash
@@ -167,7 +177,7 @@ Start the server with:
 ./run.sh
 ```
 
-This will start MCPG in routed mode on `http://0.0.0.0:8000` (using the defaults from `run.sh`).
+This will start MCP Gateway in routed mode on `http://0.0.0.0:8000` (using the defaults from `run.sh`).
 
 Or run manually:
 ```bash
@@ -204,7 +214,7 @@ See [docs/ENVIRONMENT_VARIABLES.md](docs/ENVIRONMENT_VARIABLES.md) for the full 
 
 ### Testing with Codex
 
-You can test MCPG with Codex (in another terminal):
+You can test MCP Gateway with Codex (in another terminal):
 ```bash
 cp ~/.codex/config.toml ~/.codex/config.toml.bak && cp agent-configs/codex.config.toml ~/.codex/config.toml
 AGENT_ID=demo-agent codex

@@ -15,6 +15,8 @@ This gateway is used with [GitHub Agentic Workflows](https://github.com/github/g
    ```json
    {
      "gateway": {
+       "port": 8000,
+       "domain": "${MCP_GATEWAY_DOMAIN}",
        "agentId": "${MCP_GATEWAY_AGENT_ID}"
      },
      "mcpServers": {
@@ -28,6 +30,8 @@ This gateway is used with [GitHub Agentic Workflows](https://github.com/github/g
      }
    }
    ```
+
+   Note: In JSON stdin config, `gateway.port` and `gateway.domain` are schema-required fields.
 
    Looking for complete examples? See [`config.example.toml`](config.example.toml), [`config.example-payload-threshold.toml`](config.example-payload-threshold.toml), and [`example-http-config.json`](example-http-config.json).
 
@@ -55,26 +59,35 @@ Inside the container, the gateway starts in routed mode on `http://0.0.0.0:8000`
 - If you configure `payloadDir` / `MCP_GATEWAY_PAYLOAD_DIR`, use an absolute path (for example `/tmp/jq-payloads`)
 - If you configure `payloadDir`, you can also tune `payloadSizeThreshold` / `MCP_GATEWAY_PAYLOAD_SIZE_THRESHOLD` to control when payloads are written to disk (default: `524288` bytes)
 
-When running `awmg` directly (outside `docker run`), useful CLI flags include:
-- `--config-stdin`: Read JSON config from stdin (required when piping config, e.g. `cat config.json | awmg --config-stdin --routed`).
-  - For backward compatibility, JSON stdin also accepts legacy snake_case server timeout aliases: `connect_timeout` and `tool_timeout` (prefer `connectTimeout` and `toolTimeout`).
-- `--env <file>`: Load environment variables from a `.env` file before startup.
-- `-v`, `-vv`, `-vvv`: Increase verbosity (`info`, `debug`, `trace`).
+When running `awmg` directly (outside `docker run`), commonly used CLI flags include:
+- Configuration input: `--config` (`-c`), `--config-stdin`, `--env` (config source and env file loading).
+- Runtime mode/networking: `--listen` (`-l`), `--routed`, `--unified`, `--validate-env`, `--sequential-launch` (serve mode, address, and startup checks).
+- Observability: `-v`/`-vv`/`-vvv` (log verbosity).
+- Logging/payload/shutdown: `--log-dir`, `--payload-dir`, `--payload-path-prefix`, `--payload-size-threshold`, `--wasm-cache-dir`, `--url-domain-audit`, `--shutdown-timeout` (runtime file/log and graceful-shutdown behavior).
+- Guards/security: `--guards-mode`, `--guards-sink-server-ids`, `--guard-policy-json`, `--allowonly-scope-public`, `--allowonly-scope-owner`, `--allowonly-scope-repo`, `--allowonly-min-integrity`, `--tls-cert`, `--tls-key`, `--tls-ca`, `--hmac-secret` (DIFC policy and transport security).
+- Tracing: `--otlp-endpoint`, `--otlp-service-name`, `--otlp-sample-rate` (OpenTelemetry export settings).
+- For backward compatibility, JSON stdin also accepts legacy snake_case server timeout aliases: `connect_timeout` and `tool_timeout` (prefer `connectTimeout` and `toolTimeout`).
+- Run `./awmg --help` for the full authoritative flag list.
 - A complete reference for all environment variables — including guard policy, TLS, tracing, authentication tokens, and containerized deployment — is in [docs/ENVIRONMENT_VARIABLES.md](docs/ENVIRONMENT_VARIABLES.md).
 
 Common operational environment variables include:
+- `MCP_GATEWAY_PORT` — used by `--validate-env` container checks (must be 1-65535)
 - `MCP_GATEWAY_DOMAIN` — gateway domain used by containerized startup checks and commonly referenced from config
+- `GITHUB_API_URL`, `GITHUB_SERVER_URL` — explicit/derived GitHub API endpoint selection for proxy mode
 - `MCP_GATEWAY_LOG_DIR` — log file directory (default: `/tmp/gh-aw/mcp-logs`)
 - `MCP_GATEWAY_PAYLOAD_DIR` — large payload storage directory (must be absolute path; default: `/tmp/jq-payloads`)
 - `MCP_GATEWAY_PAYLOAD_SIZE_THRESHOLD` — size threshold in bytes for payload storage (default: `524288`)
 - `MCP_GATEWAY_SESSION_TIMEOUT` — session timeout for stateful unified/routed MCP sessions (default: `6h`)
 - `MCP_GATEWAY_TOOL_TIMEOUT` — global tool invocation timeout fallback when JSON stdin `gateway.toolTimeout` is not set (built-in default: `60`)
 - `MCP_GATEWAY_FORCE_PUBLIC_REPOS` — when `true` (default), auto-forces `repos="public"` allow-only policy when workflow repo is public
+- `MCP_GATEWAY_GUARDS_MODE`, `MCP_GATEWAY_WASM_GUARDS_DIR` — default guard enforcement mode and per-server WASM guard discovery root
+- `MCP_GATEWAY_ALLOWONLY_SCOPE_PUBLIC`, `MCP_GATEWAY_ALLOWONLY_SCOPE_OWNER`, `MCP_GATEWAY_ALLOWONLY_SCOPE_REPO`, `MCP_GATEWAY_ALLOWONLY_MIN_INTEGRITY` — environment defaults for allow-only policy override flags
 - `MCP_GATEWAY_AGENT_ID` — agent identifier for env validation and containerized startup checks
-- `MCP_GATEWAY_API_KEY` — *deprecated alias for `MCP_GATEWAY_AGENT_ID`*; still accepted with a deprecation warning, prefer `MCP_GATEWAY_AGENT_ID`
+- `MCP_GATEWAY_API_KEY` — *deprecated alias for `MCP_GATEWAY_AGENT_ID`*; still accepted with a deprecation warning (lower precedence when both are set).
 - `ACTIONS_ID_TOKEN_REQUEST_URL`, `ACTIONS_ID_TOKEN_REQUEST_TOKEN` — required for `github-oidc` auth type (set automatically by GitHub Actions)
 - `DOCKER_HOST` — Docker daemon socket path (default: `/var/run/docker.sock`)
 - `RUNNING_IN_CONTAINER` — set to `"true"` to force container detection when `/.dockerenv` and cgroup detection are unavailable
+- `OTEL_EXPORTER_OTLP_HEADERS`, `GH_AW_OTLP_ENDPOINTS` — tracing export headers and multi-endpoint OTLP fan-out
 - `MCP_GATEWAY_SHUTDOWN_TIMEOUT`
 - `MCP_GATEWAY_WASM_CACHE_DIR`
 - `MCP_GATEWAY_PAYLOAD_PATH_PREFIX`
@@ -220,6 +233,7 @@ Key configuration fields (gateway-level under `[gateway]` in TOML / `"gateway"` 
 | `customSchemas` (JSON stdin top-level) | Map custom server `type` names to HTTPS JSON schema URLs for custom server validation |
 
 For the full gateway field list (including rate limiting, tracing, keepalive, and more), see **[docs/CONFIGURATION.md](docs/CONFIGURATION.md)**.
+For the full server field list (including TOML-only fields such as `working_directory`, `rate_limit_threshold`, and `rate_limit_cooldown`), also see **[docs/CONFIGURATION.md](docs/CONFIGURATION.md)**.
 
 ## Architecture
 
