@@ -44,8 +44,10 @@ func WriteErrorResponse(w http.ResponseWriter, statusCode int, code, message str
 	})
 }
 
-// RejectRequest writes the standard JSON error payload for rejected HTTP
-// requests after the caller records any package-specific logging or telemetry.
+// RejectRequest is the semantic entry point for rejected HTTP requests after the
+// caller records any package-specific logging or telemetry. It intentionally
+// wraps WriteErrorResponse so rejection helpers in other packages stay insulated
+// from lower-level response-shape changes.
 func RejectRequest(w http.ResponseWriter, statusCode int, code, message string) {
 	WriteErrorResponse(w, statusCode, code, message)
 }
