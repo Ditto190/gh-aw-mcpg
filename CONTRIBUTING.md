@@ -95,7 +95,7 @@ make test-integration  # Automatically builds binary if needed
 ```
 
 #### Run All Tests
-Run both unit and integration tests (depends on `build`, so `make` may skip rebuilding when already up to date):
+Run both unit and integration tests (rebuilds binary only if source has changed since last build):
 ```bash
 make test-all
 ```
