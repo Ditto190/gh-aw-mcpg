@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -78,6 +79,28 @@ func TestHMACMiddleware_ValidSignature(t *testing.T) {
 	body := []byte(`{"method":"test"}`)
 	req := httptest.NewRequest("POST", "/mcp", bytes.NewReader(body))
 	signRequest(t, req, testHMACSecret, body, time.Now(), "nonce-001")
+
+	w := httptest.NewRecorder()
+	wrapped(w, req)
+
+	assert.True(t, called, "next handler should be called on valid signature")
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestHMACMiddleware_ValidSignature_GETWithBody(t *testing.T) {
+	called := false
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		body, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
+		assert.Equal(t, `{"method":"test"}`, string(body))
+		w.WriteHeader(http.StatusOK)
+	})
+	wrapped := hmacMiddleware(testHMACSecret, handler)
+
+	body := []byte(`{"method":"test"}`)
+	req := httptest.NewRequest("GET", "/mcp", bytes.NewReader(body))
+	signRequest(t, req, testHMACSecret, body, time.Now(), "nonce-get-body-001")
 
 	w := httptest.NewRecorder()
 	wrapped(w, req)
