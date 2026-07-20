@@ -191,9 +191,6 @@ func LogDifcFilteredItem(entry *JSONLFilteredItem) {
 	entry.Event = "difc_filtered"
 	entry.Schema = difcSchemaV2
 	withGlobalLogger(&globalJSONLMu, &globalJSONLLogger, func(logger *JSONLLogger) {
-		if logger == nil {
-			return
-		}
 		_ = logger.logEntry(entry)
 	})
 }
@@ -211,16 +208,10 @@ func LogUnrecognizedEndpointPassthrough(method, path string) {
 		Note:      "Endpoint not in route table or metadata allowlist -- forwarded with no integrity and no secrecy labels",
 	}
 
-	if b, err := json.Marshal(entry); err == nil {
-		LogWarnToMarkdown("proxy", "[UNRECOGNIZED-ENDPOINT] %s", string(b))
-	} else {
-		LogWarnToMarkdown("proxy", "failed to marshal unrecognized endpoint event for %s %s: %v", method, path, err)
-	}
+	b, _ := json.Marshal(entry)
+	LogWarnToMarkdown("proxy", "[UNRECOGNIZED-ENDPOINT] %s", string(b))
 
 	withGlobalLogger(&globalJSONLMu, &globalJSONLLogger, func(logger *JSONLLogger) {
-		if logger == nil {
-			return
-		}
 		_ = logger.logEntry(entry)
 	})
 }
