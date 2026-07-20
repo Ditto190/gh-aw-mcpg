@@ -201,8 +201,8 @@ import (
 // Info/Warn/Error/Debug closures is centralized here.
 //
 // The shared logFuncs map below centralises the LogLevel → log-function
-// mapping so that the internal helpers (logWithMarkdown, logWithLevelAndServer)
-// do not need their own switch-on-level blocks.
+// mapping so that internal helpers like logWithLevelAndServer do not need
+// their own switch-on-level blocks.
 //
 // If a new LogLevel constant is ever added (e.g., LogLevelTrace), update all
 // required locations to keep the public API consistent:
@@ -214,10 +214,10 @@ import (
 //  6. Update TestLogLevelWrappers_CoverAllRegisteredLevels in log_level_wrappers_test.go.
 //
 // logFuncs maps each LogLevel to its corresponding global log function.
-// This eliminates repeated switch-on-level blocks in logWithMarkdown
-// (markdown_logger.go) and logWithLevelAndServer (server_file_logger.go).
-// When adding a new LogLevel constant, add a corresponding entry here so
-// that all dispatch sites automatically support the new level.
+// This eliminates repeated switch-on-level blocks in helpers like
+// logWithLevelAndServer (server_file_logger.go). When adding a new LogLevel
+// constant, add a corresponding entry here so that all dispatch sites
+// automatically support the new level.
 
 // logFuncSet is a generic bundle of per-level logging closures all sharing the
 // same function signature F. It is the single source of truth for the
@@ -274,6 +274,40 @@ var logFuncs = map[LogLevel]func(string, string, ...interface{}){
 	LogLevelDebug: LogDebug,
 }
 
+// globalLevelLogger captures logger types whose Log method accepts the shared
+// (level, category, format, args...) signature used by the unified file and
+// markdown sinks.
+type globalLevelLogger interface {
+	closableLogger
+	Log(LogLevel, string, string, ...interface{})
+}
+
+// levelSinkFunc writes a single log entry to one destination.
+type levelSinkFunc func(LogLevel, string, string, ...interface{})
+
+// newGlobalLevelSink adapts a global logger pointer plus its mutex into a
+// reusable levelSinkFunc. This lets the file and markdown helper families share
+// the same sink-dispatch helper instead of each open-coding their own
+// withGlobalLogger wrapper.
+func newGlobalLevelSink[T globalLevelLogger](mu *sync.RWMutex, logger *T) levelSinkFunc {
+	return func(level LogLevel, category, format string, args ...interface{}) {
+		withGlobalLogger(mu, logger, func(l T) {
+			l.Log(level, category, format, args...)
+		})
+	}
+}
+
+// dispatchLevelToSinks writes the same log entry to each provided sink in
+// order. Nil sinks are ignored so callers can build destination lists without
+// extra conditionals.
+func dispatchLevelToSinks(level LogLevel, category, format string, args []interface{}, sinks ...levelSinkFunc) {
+	for _, sink := range sinks {
+		if sink != nil {
+			sink(level, category, format, args...)
+		}
+	}
+}
+
 // Global Logger RWMutex Access Pattern
 //
 // All access to global logger instances uses the withGlobalLogger helper function
@@ -295,8 +329,7 @@ var logFuncs = map[LogLevel]func(string, string, ...interface{}){
 //	})
 //
 // The withGlobalLogger helper is used in:
-//   - file_logger.go: logWithLevel (for FileLogger)
-//   - markdown_logger.go: logWithMarkdown (for MarkdownLogger)
+//   - global_state.go: newGlobalLevelSink (used by FileLogger and MarkdownLogger sinks)
 //   - jsonl_logger.go: LogRPCMessageJSONLWithTags and logRPCMessageJSONLWithTagsAndSanitized (for JSONLLogger)
 //   - server_file_logger.go: logWithLevelAndServer (for ServerFileLogger)
 //   - tools_logger.go: LogToolsForServer (for ToolsLogger)

@@ -7,7 +7,9 @@
 //     for per-server logs
 //
 // These APIs target different sinks and can be used together when a message should
-// appear in multiple outputs.
+// appear in multiple outputs. The unified file and markdown helper families
+// share a common sink-dispatch path so new sink fan-out behavior stays
+// centralized.
 //
 // # Per-type setup and error-handler functions
 //
