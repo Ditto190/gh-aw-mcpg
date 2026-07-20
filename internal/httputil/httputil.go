@@ -44,6 +44,14 @@ func WriteErrorResponse(w http.ResponseWriter, statusCode int, code, message str
 	})
 }
 
+// RejectRequest is the semantic entry point for rejected HTTP requests after the
+// caller records any package-specific logging or telemetry. It intentionally
+// wraps WriteErrorResponse so rejection helpers in other packages stay insulated
+// from lower-level response-shape changes.
+func RejectRequest(w http.ResponseWriter, statusCode int, code, message string) {
+	WriteErrorResponse(w, statusCode, code, message)
+}
+
 // IsTransientHTTPError returns true for status codes that indicate a temporary
 // server-side condition (rate-limiting or transient failure) worth retrying.
 func IsTransientHTTPError(statusCode int) bool {
