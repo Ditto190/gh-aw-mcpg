@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -1739,4 +1740,153 @@ func TestBuildHTTPClientWithHeaders_NilTransport(t *testing.T) {
 
 	assert.Equal(t, "nil-transport-value", <-receivedHeader,
 		"header should be injected even when base client Transport is nil")
+}
+
+// TestExecuteHTTPRequest_ConnectionError verifies that when the HTTP request
+// fails with a connection-level error (e.g. server is unreachable), executeHTTPRequest
+// returns an error wrapping the connection failure.
+func TestExecuteHTTPRequest_ConnectionError(t *testing.T) {
+	t.Parallel()
+
+	// Start a server, record the URL, then close it so subsequent requests will fail.
+	deadSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	deadURL := deadSrv.URL
+	deadSrv.Close() // connection will now be refused
+
+	// Bootstrap a plain JSON connection using a real init server.
+	initSrv := newPlainJSONInitServer(t)
+	defer initSrv.Close()
+	conn := newPlainJSONConn(t, initSrv.URL, map[string]string{})
+	// Redirect subsequent requests to the now-closed server.
+	conn.httpURL = deadURL
+
+	_, err := conn.executeHTTPRequest(context.Background(), "tools/list", nil, 1, nil)
+	require.Error(t, err, "should return error when server is unreachable")
+	assert.Contains(t, err.Error(), "cannot connect to HTTP backend", "error should describe a connection failure")
+}
+
+// TestExecuteHTTPRequest_BodyReadError verifies that when the HTTP response body
+// cannot be fully read (e.g. server closes connection mid-body), executeHTTPRequest
+// returns an appropriate error.
+func TestExecuteHTTPRequest_BodyReadError(t *testing.T) {
+	t.Parallel()
+
+	// Serve a response that sends headers with Content-Length > 0 but then
+	// closes the connection before writing the body so io.ReadAll returns an error.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Hijack the connection to write a truncated response directly.
+		hj, ok := w.(http.Hijacker)
+		if !ok {
+			http.Error(w, "hijacking not supported", http.StatusInternalServerError)
+			return
+		}
+		conn, buf, err := hj.Hijack()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		// Write a valid HTTP header that promises 100 bytes, then drop the connection.
+		buf.WriteString("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 100\r\n\r\n")
+		buf.Flush()
+		// Close immediately — the client will get EOF before the promised body arrives.
+	}))
+	defer srv.Close()
+
+	// Establish a plain JSON connection with a fresh initialization.
+	initSrv := newPlainJSONInitServer(t)
+	defer initSrv.Close()
+	conn := newPlainJSONConn(t, initSrv.URL, map[string]string{})
+	conn.httpURL = srv.URL // redirect subsequent requests to the truncation server
+
+	_, err := conn.executeHTTPRequest(context.Background(), "tools/list", nil, 1, nil)
+	require.Error(t, err, "should return error when response body cannot be read")
+	assert.Contains(t, err.Error(), "failed to read", "error should describe the read failure")
+}
+
+// newPlainJSONInitServer starts a test server that handles MCP initialize and
+// returns a minimal success response, used to bootstrap a plain JSON connection.
+func newPlainJSONInitServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]interface{}
+		json.NewDecoder(r.Body).Decode(&body) //nolint:errcheck
+		method, _ := body["method"].(string)
+		if method == "initialize" {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(map[string]interface{}{ //nolint:errcheck
+				"jsonrpc": "2.0",
+				"id":      body["id"],
+				"result": map[string]interface{}{
+					"protocolVersion": "2024-11-05",
+					"serverInfo":      map[string]interface{}{"name": "test-init"},
+				},
+			})
+		}
+	}))
+}
+
+// TestSendHTTPRequest_ReconnectSucceedsButRetryFails verifies that when a session-not-found
+// response triggers a reconnect that succeeds, but the subsequent retry request itself fails
+// (e.g. server becomes unavailable after reconnect), sendHTTPRequest returns the retry error.
+func TestSendHTTPRequest_ReconnectSucceedsButRetryFails(t *testing.T) {
+	// closeAfterReconnect is closed once the reconnect initialize has been served.
+	// This allows us to close the listener immediately afterwards so the retry
+	// tools/list request hits a dead server.
+	closeAfterReconnect := make(chan struct{})
+
+	var mu sync.Mutex
+	initCount := 0
+	var srv *httptest.Server
+
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]interface{}
+		json.NewDecoder(r.Body).Decode(&body) //nolint:errcheck
+		method, _ := body["method"].(string)
+
+		switch method {
+		case "initialize":
+			mu.Lock()
+			initCount++
+			current := initCount
+			mu.Unlock()
+
+			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Mcp-Session-Id", fmt.Sprintf("session-%d", current))
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(map[string]interface{}{ //nolint:errcheck
+				"jsonrpc": "2.0",
+				"id":      body["id"],
+				"result": map[string]interface{}{
+					"protocolVersion": "2024-11-05",
+					"serverInfo":      map[string]interface{}{"name": "test"},
+				},
+			})
+			if current >= 2 {
+				// The reconnect initialize is complete; signal to close the server
+				// so the subsequent retry tools/list request cannot connect.
+				select {
+				case <-closeAfterReconnect:
+				default:
+					close(closeAfterReconnect)
+					go srv.Close()
+				}
+			}
+
+		case "tools/list":
+			// Always return session-not-found to trigger reconnect.
+			w.Header().Set("Content-Type", "text/plain")
+			w.WriteHeader(http.StatusNotFound)
+			fmt.Fprint(w, "session not found")
+		}
+	}))
+
+	conn := newPlainJSONConn(t, srv.URL, map[string]string{"Authorization": "test-token"})
+	require.NotNil(t, conn)
+	defer conn.Close()
+
+	// The tools/list triggers session-not-found, reconnect succeeds (session-2 issued),
+	// but the retry executeHTTPRequest fails because the server closes after reconnect.
+	_, err := conn.sendHTTPRequest(context.Background(), "tools/list", nil)
+	require.Error(t, err, "should return error when retry request fails after successful reconnect")
 }
