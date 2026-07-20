@@ -1642,7 +1642,7 @@ fn repo_id_from_repo_object(item: &Value) -> Option<String> {
 
     if let Some(owner_login) = item
         .get("owner")
-        .and_then(|owner| owner.get("login"))
+        .and_then(|owner| owner.get(field_names::LOGIN))
         .and_then(|v| v.as_str())
     {
         if !owner_login.is_empty() {
