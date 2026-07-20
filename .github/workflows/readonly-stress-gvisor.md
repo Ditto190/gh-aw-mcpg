@@ -2,6 +2,7 @@
 emoji: 🔒
 description: PR stress test proving mcpg enforces read-only GitHub access (MCP tool calls + proxied CLI) under the gVisor agent runtime
 on:
+  roles: all
   pull_request:
     types: [opened, synchronize, reopened]
   workflow_dispatch:
@@ -61,7 +62,7 @@ safe-outputs:
   create-issue:
     max: 1
   add-labels:
-    allowed: [readonly-stress-pass]
+    allowed: [readonly-stress-pass-gvisor]
   messages:
     footer: "> 🔒 *mcpg read-only stress (gVisor runtime) by [{workflow_name}]({run_url})*"
     run-started: "🔒 [{workflow_name}]({run_url}) is stress-testing mcpg read-only enforcement under the gVisor runtime..."
