@@ -747,7 +747,7 @@ pub(crate) fn has_maintainer_reaction_with_callback(
         // Retrieve the reactor's login.
         let login = match node
             .get("user")
-            .and_then(|u| u.get("login"))
+            .and_then(|u| u.get(field_names::LOGIN))
             .and_then(|v| v.as_str())
             .filter(|l| !l.is_empty())
         {

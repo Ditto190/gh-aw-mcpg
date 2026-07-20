@@ -604,17 +604,14 @@ pub fn label_response_paths(
                         } else {
                             repo_visibility_secrecy_for_repo_id(&item_repo, ctx)
                         };
-                        let association = get_str_or(content, "author_association", "");
+                        let association = get_author_association(content);
                         let integrity_scope = if item_repo.is_empty() {
                             &arg_owner
                         } else {
                             &item_repo
                         };
-                        let integrity = author_association_floor_from_str(
-                            integrity_scope,
-                            Some(association),
-                            ctx,
-                        );
+                        let integrity =
+                            author_association_floor_from_str(integrity_scope, association, ctx);
                         (secrecy, integrity)
                     } else {
                         // DRAFT_ISSUE or unrecognised type: no underlying repo context.
@@ -996,6 +993,32 @@ mod tests {
             entry.labels.integrity,
             author_association_floor_from_str("octocat", Some("CONTRIBUTOR"), &ctx()),
             "missing repo context should fall back to owner-scoped association integrity"
+        );
+    }
+
+    #[test]
+    fn list_project_items_accepts_graphql_author_association_camel_case() {
+        let tool_args = json!({"owner": "octocat"});
+        let response = json!({
+            "items": [{
+                "type": "ISSUE",
+                "content": {
+                    "repository_url": "https://api.github.com/repos/octocat/hello-world",
+                    "authorAssociation": "MEMBER"
+                }
+            }]
+        });
+
+        let result = label_response_paths("list_project_items", &tool_args, &response, &ctx())
+            .expect("list_project_items should produce path labels");
+
+        assert_eq!(result.labeled_paths.len(), 1);
+        let entry = &result.labeled_paths[0];
+        assert_eq!(entry.labels.description, "project-item:issue");
+        assert_eq!(
+            entry.labels.integrity,
+            author_association_floor_from_str("octocat/hello-world", Some("MEMBER"), &ctx()),
+            "camelCase GraphQL authorAssociation should map to association-derived integrity"
         );
     }
 
