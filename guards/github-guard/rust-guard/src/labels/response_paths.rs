@@ -610,16 +610,11 @@ pub fn label_response_paths(
                         } else {
                             &item_repo
                         };
-<<<<<<< HEAD
                         let integrity = author_association_floor_from_str(
                             integrity_scope,
                             association,
                             ctx,
                         );
-=======
-                        let integrity =
-                            author_association_floor_from_str(integrity_scope, association, ctx);
->>>>>>> origin/main
                         (secrecy, integrity)
                     } else {
                         // DRAFT_ISSUE or unrecognised type: no underlying repo context.
