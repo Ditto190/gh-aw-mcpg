@@ -274,9 +274,9 @@ func formatValidationErrorRecursive(ve *jsonschema.ValidationError, sb *strings.
 	indent := strings.Repeat("  ", depth)
 
 	// Format location and message
-	location := strings.Join(ve.InstanceLocation, "/")
-	if location == "" {
-		location = "<root>"
+	location := "<root>"
+	if len(ve.InstanceLocation) > 0 {
+		location = "/" + strings.Join(ve.InstanceLocation, "/")
 	}
 	fmt.Fprintf(sb, "%sLocation: %s\n", indent, location)
 	fmt.Fprintf(sb, "%sError: %s\n", indent, ve.ErrorKind.LocalizedString(schemaErrPrinter))
@@ -341,6 +341,26 @@ func detailForKeyword(keyword string) (string, []string) {
 		return "oneOf", []string{
 			"Details: Configuration doesn't match any of the expected formats",
 			"  → Review the structure and ensure it matches one of the valid configuration types",
+		}
+	case "allOf":
+		return "allOf", []string{
+			"Details: Configuration must satisfy all required constraints",
+			"  → Review each related field and ensure every required rule is satisfied together",
+		}
+	case "if":
+		return "conditional", []string{
+			"Details: Configuration failed conditional schema evaluation",
+			"  → Check the fields used by the conditional rule and verify the expected branch applies",
+		}
+	case "then":
+		return "conditional", []string{
+			"Details: Configuration matched a conditional rule but failed its required follow-up constraints",
+			"  → Update the related fields so the conditional requirements are satisfied",
+		}
+	case "else":
+		return "conditional", []string{
+			"Details: Configuration did not match the conditional rule and also failed the alternate constraints",
+			"  → Update the related fields so the alternate conditional requirements are satisfied",
 		}
 	case "not":
 		return "not", []string{
@@ -457,6 +477,8 @@ func formatErrorContext(ve *jsonschema.ValidationError, prefix string) string {
 		}
 	case *kind.Pattern:
 		addFromKeyword("pattern")
+	case *kind.AllOf:
+		addFromKeyword("allOf")
 	case *kind.OneOf, *kind.AnyOf:
 		addFromKeyword("oneOf")
 	case *kind.Not:
@@ -480,6 +502,18 @@ func formatErrorContext(ve *jsonschema.ValidationError, prefix string) string {
 		*kind.MinProperties, *kind.MaxProperties:
 		addFromKeyword("range")
 	default:
+		// Fall back to the schema keyword path when the concrete ErrorKind type
+		// is not handled directly but still maps to known keyword guidance.
+		// Unknown keywords intentionally add no detail here and continue to the
+		// generic fallback below.
+		if keywordPath := ve.ErrorKind.KeywordPath(); len(keywordPath) > 0 {
+			addFromKeyword(keywordPath[0])
+		}
+
+		if sb.Len() > 0 {
+			return sb.String()
+		}
+
 		// Generic fallback for any ErrorKind not specifically handled above.
 		// This ensures every validation error gets at least some context rather
 		// than silently producing no detail. The LocalizedString already gives
