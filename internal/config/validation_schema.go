@@ -502,6 +502,8 @@ func formatErrorContext(ve *jsonschema.ValidationError, prefix string) string {
 		*kind.MinProperties, *kind.MaxProperties:
 		addFromKeyword("range")
 	default:
+		// Fall back to the schema keyword path when the concrete ErrorKind type
+		// is not handled directly but still maps to known keyword guidance.
 		if keywordPath := ve.ErrorKind.KeywordPath(); len(keywordPath) > 0 {
 			addFromKeyword(keywordPath[0])
 		}

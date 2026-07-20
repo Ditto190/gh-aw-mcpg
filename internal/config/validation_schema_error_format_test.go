@@ -21,6 +21,7 @@ type keywordPathErrorKind struct {
 	message string
 }
 
+// KeywordPath returns the configured keyword path for fallback dispatch tests.
 func (k *keywordPathErrorKind) KeywordPath() []string {
 	if k.keyword == "" {
 		return nil
@@ -28,6 +29,7 @@ func (k *keywordPathErrorKind) KeywordPath() []string {
 	return []string{k.keyword}
 }
 
+// LocalizedString returns the configured message for fallback dispatch tests.
 func (k *keywordPathErrorKind) LocalizedString(*message.Printer) string {
 	return k.message
 }
