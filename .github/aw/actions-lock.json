@@ -15,10 +15,10 @@
       "version": "v6.1.0",
       "sha": "55cc8345863c7cc4c66a329aec7e433d2d1c52a9"
     },
-    "actions/checkout@v7.0.0": {
+    "actions/checkout@v7.0.1": {
       "repo": "actions/checkout",
-      "version": "v7.0.0",
-      "sha": "9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0"
+      "version": "v7.0.1",
+      "sha": "3d3c42e5aac5ba805825da76410c181273ba90b1"
     },
     "actions/create-github-app-token@v3.2.0": {
       "repo": "actions/create-github-app-token",
@@ -55,10 +55,10 @@
       "version": "v7.0.0",
       "sha": "820762786026740c76f36085b0efc47a31fe5020"
     },
-    "actions/setup-python@v6.3.0": {
+    "actions/setup-python@v7.0.0": {
       "repo": "actions/setup-python",
-      "version": "v6.3.0",
-      "sha": "ece7cb06caefa5fff74198d8649806c4678c61a1"
+      "version": "v7.0.0",
+      "sha": "5fda3b95a4ea91299a34e894583c3862153e4b97"
     },
     "actions/upload-artifact@v7.0.1": {
       "repo": "actions/upload-artifact",
@@ -110,15 +110,15 @@
       "version": "v4.37.1",
       "sha": "7188fc363630916deb702c7fdcf4e481b751f97a"
     },
-    "github/gh-aw-actions/setup-cli@v0.82.12": {
+    "github/gh-aw-actions/setup-cli@v0.82.14": {
       "repo": "github/gh-aw-actions/setup-cli",
-      "version": "v0.82.12",
-      "sha": "23fd0ef1f0a76a3707df928f9c733abd98e4ec75"
+      "version": "v0.82.14",
+      "sha": "b6d1443e05b8716267fa19425b99aa4f12006b4a"
     },
-    "github/gh-aw-actions/setup@v0.82.12": {
+    "github/gh-aw-actions/setup@v0.82.14": {
       "repo": "github/gh-aw-actions/setup",
-      "version": "v0.82.12",
-      "sha": "23fd0ef1f0a76a3707df928f9c733abd98e4ec75"
+      "version": "v0.82.14",
+      "sha": "b6d1443e05b8716267fa19425b99aa4f12006b4a"
     },
     "haskell-actions/setup@v2.11.0": {
       "repo": "haskell-actions/setup",

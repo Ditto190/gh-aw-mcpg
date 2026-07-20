@@ -21,7 +21,7 @@ network:
 
 steps:
   - name: Checkout full repository
-    uses: actions/checkout@v7.0.0
+    uses: actions/checkout@v7.0.1
     with:
       fetch-depth: 1
       persist-credentials: false
