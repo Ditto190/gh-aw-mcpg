@@ -10,6 +10,29 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestDispatchLevelToSinks(t *testing.T) {
+	t.Run("writes to each sink in order", func(t *testing.T) {
+		var calls []string
+
+		dispatchLevelToSinks(LogLevelWarn, "startup", "message %d", []interface{}{1},
+			func(level LogLevel, category, format string, args ...interface{}) {
+				calls = append(calls, string(level)+":"+category+":"+format)
+				assert.Equal(t, []interface{}{1}, args)
+			},
+			nil,
+			func(level LogLevel, category, format string, args ...interface{}) {
+				calls = append(calls, string(level)+":"+category+":"+format)
+				assert.Equal(t, []interface{}{1}, args)
+			},
+		)
+
+		assert.Equal(t, []string{
+			"WARN:startup:message %d",
+			"WARN:startup:message %d",
+		}, calls)
+	})
+}
+
 // TestLogWithLevel verifies the logWithLevel helper function works correctly
 // and eliminates duplicate code in file_logger.go
 func TestLogWithLevel(t *testing.T) {

@@ -95,14 +95,12 @@ func (fl *FileLogger) GetWriter() io.Writer {
 
 // Global logging functions that use the global file logger
 
-// logWithLevel is a helper that reduces code duplication for logging at different levels.
-// It uses the withGlobalLogger helper from global_helpers.go to handle mutex locking and
-// nil-checking, eliminating the need for repeated RWMutex lock/unlock patterns across
-// LogInfo, LogWarn, LogError, and LogDebug.
+var fileLevelSink = newGlobalLevelSink(&globalLoggerMu, &globalFileLogger)
+
+// logWithLevel is a helper that reduces code duplication for logging at
+// different levels by delegating to the shared sink dispatcher.
 func logWithLevel(level LogLevel, category, format string, args ...interface{}) {
-	withGlobalLogger(&globalLoggerMu, &globalFileLogger, func(logger *FileLogger) {
-		logger.Log(level, category, format, args...)
-	})
+	dispatchLevelToSinks(level, category, format, args, fileLevelSink)
 }
 
 // The exported wrappers below follow the Log-Level Quad-Function Pattern
