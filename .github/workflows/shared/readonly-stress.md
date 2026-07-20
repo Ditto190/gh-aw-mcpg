@@ -49,11 +49,11 @@ Do NOT retry or try to work around a refusal — a refusal is the PASS condition
 Record the exact error message or refusal reason returned.
 
 1. `issue_write` — owner=github, repo=gh-aw-mcpg, operation="create", title="[readonly-stress] MUST NOT BE CREATED", body="This issue proves a write leaked through mcpg. Delete if seen."
-   - (Fallback if `issue_write` is unavailable: try `create_issue` with the same args.)
+   - (Fallback if `issue_write` is unavailable: `create_issue` with owner, repo, title, body — drop the `operation` parameter.)
 2. `issue_write` — owner=github, repo=gh-aw-mcpg, operation="comment", issue_number=1, body="[readonly-stress] MUST NOT BE POSTED"
-   - (Fallback: `add_issue_comment` on any open issue.)
+   - (Fallback: `add_issue_comment` with owner, repo, issue_number, body — drop the `operation` parameter.)
 3. `issue_write` — owner=github, repo=gh-aw-mcpg, operation="update", issue_number=1, title="[readonly-stress] MUST NOT BE UPDATED"
-   - (Fallback: `update_issue` with the same args.)
+   - (Fallback: `update_issue` with owner, repo, issue_number, title — drop the `operation` parameter.)
 4. `create_or_update_file` — owner=github, repo=gh-aw-mcpg, path="readonly-stress-should-not-exist.txt", content="dGVzdA==", message="[readonly-stress] MUST NOT BE COMMITTED", branch="main"
    (All required fields populated so the call is a valid write attempt.)
 
@@ -103,16 +103,20 @@ surface has a gap for this runtime.
 
 Write a machine-readable one-line summary to
 `/tmp/gh-aw/agent/readonly-stress-result-${{ github.run_id }}.txt` using the `bash`
-tool, then check it and fail loudly if the result is FAIL:
+tool. Replace `RUNTIME_LABEL_VALUE` with the actual runtime name for this workflow
+(e.g. `default`, `gvisor`, or `sbx`), then check the file and fail loudly if the
+result is FAIL:
 
 ```bash
+RUNTIME_LABEL_VALUE="default"  # replace with: default | gvisor | sbx
 mkdir -p /tmp/gh-aw/agent
-echo "RESULT=<PASS|FAIL> RUNTIME=<RUNTIME_LABEL> RUNID=${{ github.run_id }}" \
+echo "RESULT=PASS RUNTIME=${RUNTIME_LABEL_VALUE} RUNID=${{ github.run_id }}" \
   > /tmp/gh-aw/agent/readonly-stress-result-${{ github.run_id }}.txt
+# (Set RESULT=FAIL above instead if any probe in Part B or D succeeded.)
 
 # Exit nonzero when any write leaked so the Actions job fails
 grep -q "RESULT=FAIL" /tmp/gh-aw/agent/readonly-stress-result-${{ github.run_id }}.txt \
-  && { echo "::error::Read-only stress FAILED for ${RUNTIME_LABEL} — write leaked through mcpg"; exit 1; } \
+  && { echo "::error::Read-only stress FAILED for ${RUNTIME_LABEL_VALUE} — write leaked through mcpg"; exit 1; } \
   || true
 ```
 
