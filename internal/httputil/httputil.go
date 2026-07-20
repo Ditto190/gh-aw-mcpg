@@ -44,6 +44,12 @@ func WriteErrorResponse(w http.ResponseWriter, statusCode int, code, message str
 	})
 }
 
+// RejectRequest writes the standard JSON error payload for rejected HTTP
+// requests after the caller records any package-specific logging or telemetry.
+func RejectRequest(w http.ResponseWriter, statusCode int, code, message string) {
+	WriteErrorResponse(w, statusCode, code, message)
+}
+
 // IsTransientHTTPError returns true for status codes that indicate a temporary
 // server-side condition (rate-limiting or transient failure) worth retrying.
 func IsTransientHTTPError(statusCode int) bool {

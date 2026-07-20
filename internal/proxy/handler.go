@@ -42,7 +42,7 @@ func rejectProxyRequest(w http.ResponseWriter, span oteltrace.Span, status int, 
 	if span != nil {
 		tracing.RecordSpanError(span, err, msg)
 	}
-	httputil.WriteErrorResponse(w, status, code, msg)
+	httputil.RejectRequest(w, status, code, msg)
 }
 
 // proxyHandler implements http.Handler and runs the DIFC pipeline on proxied requests.
