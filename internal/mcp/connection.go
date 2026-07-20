@@ -33,6 +33,7 @@ const defaultConnectTimeout = 30 * time.Second
 // non-positive, otherwise it returns the input timeout unchanged.
 func normalizeConnectTimeout(timeout time.Duration) time.Duration {
 	if timeout <= 0 {
+		logConn.Printf("normalizeConnectTimeout: non-positive timeout=%v, using default=%v", timeout, defaultConnectTimeout)
 		return defaultConnectTimeout
 	}
 	return timeout
@@ -306,12 +307,15 @@ func (c *Connection) GetHTTPHeaders() map[string]string {
 func (c *Connection) ServerInfo() (name, version string) {
 	sess := c.getSDKSession()
 	if sess == nil {
+		logConn.Printf("ServerInfo: no SDK session available for serverID=%s (plain JSON-RPC)", c.serverID)
 		return "", ""
 	}
 	initResult := sess.InitializeResult()
 	if initResult == nil || initResult.ServerInfo == nil {
+		logConn.Printf("ServerInfo: no server info in initialize result for serverID=%s", c.serverID)
 		return "", ""
 	}
+	logConn.Printf("ServerInfo: serverID=%s, name=%s, version=%s", c.serverID, initResult.ServerInfo.Name, initResult.ServerInfo.Version)
 	return initResult.ServerInfo.Name, initResult.ServerInfo.Version
 }
 
@@ -329,13 +333,17 @@ func (c *Connection) ServerInfo() (name, version string) {
 func (c *Connection) BackendHasPromptsCapability() bool {
 	sess := c.getSDKSession()
 	if sess == nil {
+		logConn.Printf("BackendHasPromptsCapability: no SDK session for serverID=%s, returning false", c.serverID)
 		return false
 	}
 	initResult := sess.InitializeResult()
 	if initResult == nil || initResult.Capabilities == nil {
+		logConn.Printf("BackendHasPromptsCapability: no capabilities in initialize result for serverID=%s", c.serverID)
 		return false
 	}
-	return initResult.Capabilities.Prompts != nil
+	hasPrompts := initResult.Capabilities.Prompts != nil
+	logConn.Printf("BackendHasPromptsCapability: serverID=%s, hasPrompts=%v", c.serverID, hasPrompts)
+	return hasPrompts
 }
 
 // SendRequest sends a JSON-RPC request and waits for the response
@@ -389,6 +397,7 @@ func (c *Connection) SendRequestWithServerID(ctx context.Context, method string,
 // Returns an error if the session is nil (e.g., for plain JSON-RPC transport).
 func (c *Connection) requireSDKSession() error {
 	if c.getSDKSession() == nil {
+		logConn.Printf("requireSDKSession: no SDK session available for serverID=%s", c.serverID)
 		return fmt.Errorf("SDK session not available for plain JSON-RPC transport")
 	}
 	return nil
