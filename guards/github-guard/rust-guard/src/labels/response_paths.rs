@@ -610,8 +610,11 @@ pub fn label_response_paths(
                         } else {
                             &item_repo
                         };
-                        let integrity =
-                            author_association_floor_from_str(integrity_scope, association, ctx);
+                        let integrity = author_association_floor_from_str(
+                            integrity_scope,
+                            association,
+                            ctx,
+                        );
                         (secrecy, integrity)
                     } else {
                         // DRAFT_ISSUE or unrecognised type: no underlying repo context.
@@ -997,7 +1000,7 @@ mod tests {
     }
 
     #[test]
-    fn list_project_items_accepts_graphql_author_association_camel_case() {
+    fn list_project_items_graphql_author_association_sets_expected_integrity() {
         let tool_args = json!({"owner": "octocat"});
         let response = json!({
             "items": [{
@@ -1014,11 +1017,12 @@ mod tests {
 
         assert_eq!(result.labeled_paths.len(), 1);
         let entry = &result.labeled_paths[0];
+        assert_eq!(entry.path, "/items/0");
         assert_eq!(entry.labels.description, "project-item:issue");
         assert_eq!(
             entry.labels.integrity,
             author_association_floor_from_str("octocat/hello-world", Some("MEMBER"), &ctx()),
-            "camelCase GraphQL authorAssociation should map to association-derived integrity"
+            "camelCase GraphQL authorAssociation should drive project item integrity"
         );
     }
 
