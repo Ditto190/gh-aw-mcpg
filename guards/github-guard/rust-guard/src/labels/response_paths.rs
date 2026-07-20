@@ -1000,6 +1000,34 @@ mod tests {
     }
 
     #[test]
+    fn list_project_items_graphql_author_association_sets_expected_integrity() {
+        let tool_args = json!({"owner": "octocat"});
+        let response = json!({
+            "items": [{
+                "type": "ISSUE",
+                "content": {
+                    "repository_url": "https://api.github.com/repos/octocat/hello-world",
+                    "authorAssociation": "MEMBER"
+                }
+            }]
+        });
+
+        let result = label_response_paths("list_project_items", &tool_args, &response, &ctx())
+            .expect("list_project_items should produce path labels");
+
+        assert_eq!(result.labeled_paths.len(), 1);
+
+        let entry = &result.labeled_paths[0];
+        assert_eq!(entry.path, "/items/0");
+        assert_eq!(entry.labels.description, "project-item:issue");
+        assert_eq!(
+            entry.labels.integrity,
+            author_association_floor_from_str("octocat/hello-world", Some("MEMBER"), &ctx()),
+            "camelCase GraphQL authorAssociation should drive project item integrity"
+        );
+    }
+
+    #[test]
     fn list_project_items_draft_issue_gets_writer_integrity_and_empty_secrecy() {
         let tool_args = json!({"owner": "octocat"});
         let response = json!({
