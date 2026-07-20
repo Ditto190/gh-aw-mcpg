@@ -1830,11 +1830,6 @@ func newPlainJSONInitServer(t *testing.T) *httptest.Server {
 // response triggers a reconnect that succeeds, but the subsequent retry request itself fails
 // (e.g. server becomes unavailable after reconnect), sendHTTPRequest returns the retry error.
 func TestSendHTTPRequest_ReconnectSucceedsButRetryFails(t *testing.T) {
-	// closeAfterReconnect is closed once the reconnect initialize has been served.
-	// This allows us to close the listener immediately afterwards so the retry
-	// tools/list request hits a dead server.
-	closeAfterReconnect := make(chan struct{})
-
 	var mu sync.Mutex
 	initCount := 0
 	var srv *httptest.Server
@@ -1853,6 +1848,16 @@ func TestSendHTTPRequest_ReconnectSucceedsButRetryFails(t *testing.T) {
 
 			w.Header().Set("Content-Type", "application/json")
 			w.Header().Set("Mcp-Session-Id", fmt.Sprintf("session-%d", current))
+			if current >= 2 {
+				// On the reconnect initialize, deterministically tear down the
+				// server before the retry can be issued: force the current
+				// keep-alive connection closed and synchronously close the
+				// listener so the retry tools/list request cannot reconnect.
+				// (srv.Close() itself would block on the in-flight connection,
+				// so we close only the listener here and defer full cleanup.)
+				w.Header().Set("Connection", "close")
+				srv.Listener.Close() //nolint:errcheck
+			}
 			w.WriteHeader(http.StatusOK)
 			json.NewEncoder(w).Encode(map[string]interface{}{ //nolint:errcheck
 				"jsonrpc": "2.0",
@@ -1862,16 +1867,6 @@ func TestSendHTTPRequest_ReconnectSucceedsButRetryFails(t *testing.T) {
 					"serverInfo":      map[string]interface{}{"name": "test"},
 				},
 			})
-			if current >= 2 {
-				// The reconnect initialize is complete; signal to close the server
-				// so the subsequent retry tools/list request cannot connect.
-				select {
-				case <-closeAfterReconnect:
-				default:
-					close(closeAfterReconnect)
-					go srv.Close()
-				}
-			}
 
 		case "tools/list":
 			// Always return session-not-found to trigger reconnect.
@@ -1880,6 +1875,7 @@ func TestSendHTTPRequest_ReconnectSucceedsButRetryFails(t *testing.T) {
 			fmt.Fprint(w, "session not found")
 		}
 	}))
+	defer srv.Close()
 
 	conn := newPlainJSONConn(t, srv.URL, map[string]string{"Authorization": "test-token"})
 	require.NotNil(t, conn)
