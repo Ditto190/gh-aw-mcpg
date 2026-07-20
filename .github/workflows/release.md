@@ -50,7 +50,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v7.0.0
+        uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
           
@@ -91,7 +91,7 @@ jobs:
       new_tag: ${{ steps.create_tag.outputs.new_tag }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v7.0.0
+        uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: true
@@ -155,7 +155,7 @@ jobs:
       release_tag: ${{ steps.get_release.outputs.release_tag }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v7.0.0
+        uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -255,7 +255,7 @@ jobs:
       packages: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v7.0.0
+        uses: actions/checkout@v7.0.1
 
       # Enables emulation so the amd64 runner can build arm64 too
       - name: Set up QEMU
@@ -310,7 +310,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7.0.0
+        uses: actions/checkout@v7.0.1
 
       - name: Set up Go
         uses: actions/setup-go@v7.0.0
