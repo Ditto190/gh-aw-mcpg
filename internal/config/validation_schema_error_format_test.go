@@ -14,8 +14,9 @@ import (
 	"golang.org/x/text/message"
 )
 
-// keywordPathErrorKind is a test helper that implements ErrorKind with a
-// configurable keyword path for testing fallback error context logic.
+// keywordPathErrorKind is a test helper that implements jsonschema.ErrorKind
+// via KeywordPath and LocalizedString for testing KeywordPath-based fallback
+// error context dispatch.
 type keywordPathErrorKind struct {
 	keyword string
 	message string

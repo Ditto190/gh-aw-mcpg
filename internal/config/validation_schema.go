@@ -504,6 +504,8 @@ func formatErrorContext(ve *jsonschema.ValidationError, prefix string) string {
 	default:
 		// Fall back to the schema keyword path when the concrete ErrorKind type
 		// is not handled directly but still maps to known keyword guidance.
+		// Unknown keywords intentionally add no detail here and continue to the
+		// generic fallback below.
 		if keywordPath := ve.ErrorKind.KeywordPath(); len(keywordPath) > 0 {
 			addFromKeyword(keywordPath[0])
 		}
