@@ -1,11 +1,9 @@
 package server
 
 import (
-	"bytes"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
-	"io"
 	"net/http"
 	"strconv"
 	"sync"
@@ -167,14 +165,10 @@ func hmacMiddleware(secret string, next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		// Read and restore body for downstream handlers
-		var body []byte
-		if r.Body != nil && r.Body != http.NoBody {
-			body, err = io.ReadAll(r.Body)
-			if err != nil {
-				rejectRequest(w, r, http.StatusBadRequest, "bad_request", "failed to read request body", "auth", "hmac_validation_failed", "body_read_error")
-				return
-			}
-			r.Body = io.NopCloser(bytes.NewReader(body))
+		body, err := readAndRestoreRequestBody(r)
+		if err != nil {
+			rejectRequest(w, r, http.StatusBadRequest, "bad_request", "failed to read request body", "auth", "hmac_validation_failed", "body_read_error")
+			return
 		}
 
 		expected := computeHMAC(secret, timestamp, nonce, r.URL.Path, body)

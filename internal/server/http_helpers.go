@@ -54,11 +54,11 @@ func rejectRequest(w http.ResponseWriter, r *http.Request, status int, code, msg
 	httputil.RejectRequest(w, status, code, msg)
 }
 
-// peekRequestBody reads all bytes from a POST request body and restores it
+// readAndRestoreRequestBody reads all bytes from request body and restores it
 // so downstream handlers can read it again.
-// Returns nil, nil for non-POST requests or requests with no body.
-func peekRequestBody(r *http.Request) ([]byte, error) {
-	if r.Method != http.MethodPost || r.Body == nil || r.Body == http.NoBody {
+// Returns nil, nil for requests with no body.
+func readAndRestoreRequestBody(r *http.Request) ([]byte, error) {
+	if r.Body == nil || r.Body == http.NoBody {
 		return nil, nil
 	}
 
@@ -79,6 +79,17 @@ func peekRequestBody(r *http.Request) ([]byte, error) {
 
 	r.Body = io.NopCloser(bytes.NewReader(b))
 	return b, nil
+}
+
+// peekRequestBody reads all bytes from a POST request body and restores it
+// so downstream handlers can read it again.
+// Returns nil, nil for non-POST requests or requests with no body.
+func peekRequestBody(r *http.Request) ([]byte, error) {
+	if r.Method != http.MethodPost {
+		return nil, nil
+	}
+
+	return readAndRestoreRequestBody(r)
 }
 
 // logHTTPRequestBody logs the request body for debugging purposes.
