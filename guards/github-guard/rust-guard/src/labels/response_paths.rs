@@ -604,7 +604,7 @@ pub fn label_response_paths(
                         } else {
                             repo_visibility_secrecy_for_repo_id(&item_repo, ctx)
                         };
-                        let association = get_str_or(content, "author_association", "");
+                        let association = get_author_association(content);
                         let integrity_scope = if item_repo.is_empty() {
                             &arg_owner
                         } else {
@@ -612,7 +612,7 @@ pub fn label_response_paths(
                         };
                         let integrity = author_association_floor_from_str(
                             integrity_scope,
-                            Some(association),
+                            association,
                             ctx,
                         );
                         (secrecy, integrity)
