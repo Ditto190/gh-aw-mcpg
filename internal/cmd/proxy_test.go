@@ -163,7 +163,7 @@ func TestNewProxyCmd_CommandMetadata(t *testing.T) {
 func TestNewProxyCmd_DefaultFlagValues(t *testing.T) {
 	// Clear relevant env vars to get clean defaults
 	envVarsToClear := []string{
-		"MCP_GATEWAY_GUARD_POLICY_JSON",
+		config.EnvGuardPolicyJSON,
 		"MCP_GATEWAY_GUARDS_MODE",
 		"MCP_GATEWAY_LOG_DIR",
 		"OTEL_EXPORTER_OTLP_ENDPOINT",
@@ -291,7 +291,7 @@ func TestNewProxyCmd_GuardsModeDefaultFromEnv(t *testing.T) {
 // default value from the MCP_GATEWAY_GUARD_POLICY_JSON environment variable.
 func TestNewProxyCmd_PolicyDefaultFromEnv(t *testing.T) {
 	envPolicy := `{"allow-only":{"repos":"public","min-integrity":"none"}}`
-	t.Setenv("MCP_GATEWAY_GUARD_POLICY_JSON", envPolicy)
+	t.Setenv(config.EnvGuardPolicyJSON, envPolicy)
 
 	cmd := newProxyCmd()
 	require.NotNil(t, cmd)

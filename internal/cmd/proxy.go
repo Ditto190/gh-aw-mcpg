@@ -103,7 +103,7 @@ Local usage:
 	// purpose: it runs as a standalone HTTPS forward proxy, not an MCP gateway. Keeping
 	// them independent avoids confusion and allows each command to evolve separately.
 	cmd.Flags().StringVar(&proxyGuardWasm, "guard-wasm", defaultGuard, guardHelp)
-	cmd.Flags().StringVar(&proxyPolicy, "policy", os.Getenv("MCP_GATEWAY_GUARD_POLICY_JSON"), "Guard policy JSON")
+	cmd.Flags().StringVar(&proxyPolicy, "policy", envutil.GetEnvString(config.EnvGuardPolicyJSON, ""), "Guard policy JSON")
 	cmd.Flags().StringVar(&proxyToken, "github-token", "", "Fallback GitHub API token (default: forwards client Authorization header)")
 	cmd.Flags().StringVarP(&proxyListen, "listen", "l", "127.0.0.1:8080", "Proxy listen address")
 	cmd.Flags().StringVar(&proxyLogDir, "log-dir", defaultProxyLogDir, "Log file directory")
