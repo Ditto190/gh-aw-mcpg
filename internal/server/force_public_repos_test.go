@@ -418,6 +418,54 @@ func TestShouldForcePublicRepos_ResultCached(t *testing.T) {
 	assert.Equal(t, 1, callCount, "GitHub API should be called only once due to caching")
 }
 
+// TestOverrideToPublicScope_PerServerPolicy_InvalidPolicy_Skipped verifies that
+// overrideToPublicScope skips the override when the existing per-server policy
+// cannot be parsed (e.g., "allow-only" is a string instead of an object).
+// This exercises the error path in config.ParseServerGuardPolicy.
+func TestOverrideToPublicScope_PerServerPolicy_InvalidPolicy_Skipped(t *testing.T) {
+	t.Setenv("GITHUB_REPOSITORY", "test-owner/test-repo")
+
+	// "allow-only" must be an object, not a string — ParseServerGuardPolicy returns an error.
+	original := map[string]interface{}{
+		"allow-only": "invalid-string-not-an-object",
+	}
+	cfg := &config.Config{
+		Servers: map[string]*config.ServerConfig{
+			"github": {
+				Type:          "http",
+				GuardPolicies: original,
+			},
+		},
+	}
+	us := newMinimalUnifiedServerForGuardTest(cfg)
+
+	// Should not panic; the invalid policy is silently skipped.
+	assert.NotPanics(t, func() {
+		us.overrideToPublicScope("github")
+	})
+
+	// The policy map must remain unchanged (override was skipped due to parse error).
+	assert.Equal(t, map[string]interface{}{
+		"allow-only": "invalid-string-not-an-object",
+	}, cfg.Servers["github"].GuardPolicies,
+		"overrideToPublicScope should leave the policy unchanged when it cannot be parsed")
+}
+
+// TestResolveWorkflowRepoVisibility_EmptyRepo verifies that resolveWorkflowRepoVisibility
+// returns (empty, false) when GITHUB_REPOSITORY is not set.
+// This exercises the defensive early-return inside the Once.Do callback that
+// is otherwise unreachable via shouldForcePublicRepos (which short-circuits first).
+func TestResolveWorkflowRepoVisibility_EmptyRepo(t *testing.T) {
+	t.Setenv("GITHUB_REPOSITORY", "")
+
+	us := newMinimalUnifiedServerForGuardTest(&config.Config{})
+
+	vis, ok := us.resolveWorkflowRepoVisibility()
+
+	assert.False(t, ok, "resolveWorkflowRepoVisibility should return false when GITHUB_REPOSITORY is empty")
+	assert.Empty(t, vis, "resolveWorkflowRepoVisibility should return empty visibility when GITHUB_REPOSITORY is empty")
+}
+
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
 // startMockRepoVisibilityServer starts a mock HTTP server that returns a repo
