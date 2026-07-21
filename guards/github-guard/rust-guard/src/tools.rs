@@ -142,24 +142,24 @@ pub const READ_WRITE_OPERATIONS: &[&str] = &[
 ];
 
 /// Check if a tool is a write operation
-pub fn is_write_operation(tool_name: &str) -> bool {
+pub(crate) fn is_write_operation(tool_name: &str) -> bool {
     WRITE_OPERATIONS.binary_search(&tool_name).is_ok()
         || is_lock_operation(tool_name)
         || is_unlock_operation(tool_name)
 }
 
 /// Check if a tool is a read-write operation
-pub fn is_read_write_operation(tool_name: &str) -> bool {
+pub(crate) fn is_read_write_operation(tool_name: &str) -> bool {
     READ_WRITE_OPERATIONS.binary_search(&tool_name).is_ok()
 }
 
 /// Check if a tool is a merge operation
-pub fn is_merge_operation(tool_name: &str) -> bool {
+pub(crate) fn is_merge_operation(tool_name: &str) -> bool {
     tool_name.starts_with("merge_")
 }
 
 /// Check if a tool is a delete operation
-pub fn is_delete_operation(tool_name: &str) -> bool {
+pub(crate) fn is_delete_operation(tool_name: &str) -> bool {
     tool_name.starts_with("delete_")
 }
 
@@ -186,7 +186,7 @@ pub const BLOCKED_TOOLS: &[&str] = &[
 ];
 
 /// Returns `true` if `tool_name` is in [`BLOCKED_TOOLS`] — denied regardless of agent integrity.
-pub fn is_blocked_tool(tool_name: &str) -> bool {
+pub(crate) fn is_blocked_tool(tool_name: &str) -> bool {
     BLOCKED_TOOLS.binary_search(&tool_name).is_ok()
 }
 

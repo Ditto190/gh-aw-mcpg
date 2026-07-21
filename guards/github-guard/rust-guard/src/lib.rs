@@ -1525,7 +1525,7 @@ mod tests {
 
             assert_eq!(
                 after_baseline,
-                labels::writer_integrity("github", &ctx),
+                labels::writer_integrity(scope_names::GITHUB, &ctx),
                 "{tool} integrity should remain org writer-scoped after baseline enforcement"
             );
         }
@@ -1559,7 +1559,7 @@ mod tests {
             (
                 "set_secret",
                 json!({ "org": "github" }),
-                labels::writer_integrity("github", &ctx),
+                labels::writer_integrity(scope_names::GITHUB, &ctx),
             ),
             (
                 "delete_secret",
@@ -1569,7 +1569,7 @@ mod tests {
             (
                 "set_variable",
                 json!({ "owner": "github" }),
-                labels::writer_integrity("github", &ctx),
+                labels::writer_integrity(scope_names::GITHUB, &ctx),
             ),
         ];
 
