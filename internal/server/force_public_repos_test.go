@@ -445,7 +445,7 @@ func TestOverrideToPublicScope_PerServerPolicy_InvalidPolicy_Skipped(t *testing.
 	})
 
 	// The policy map must remain unchanged (override was skipped due to parse error).
-assert.Equal(t, map[string]interface{}{
+	assert.Equal(t, map[string]interface{}{
 		"allow-only": "invalid-string-not-an-object",
 	}, cfg.Servers["github"].GuardPolicies,
 		"overrideToPublicScope should leave the policy unchanged when it cannot be parsed")
