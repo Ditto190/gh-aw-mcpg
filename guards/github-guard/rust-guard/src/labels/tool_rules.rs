@@ -684,6 +684,7 @@ pub fn apply_tool_labels(
         | "rerun_workflow_job"
         // Copilot / repo settings / revert
         | "assign_copilot_to_issue"
+        | "assign_copilot_to_issue_with_intent"
         | "request_copilot_review"
         | "edit_repository"
         | "create_repository_autolink" // gh repo autolink create — POST /repos/.../autolinks
