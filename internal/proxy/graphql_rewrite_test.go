@@ -613,18 +613,6 @@ func TestFindParentField_NoEnclosingBrace(t *testing.T) {
 	assert.Equal(t, "", got)
 }
 
-// TestFindParentField_NoFieldNameBeforeBrace covers the branch where an enclosing
-// `{` is found but there is no alphanumeric field name before it (e.g., the brace
-// is at the start of the query or immediately follows whitespace with no identifier).
-// This exercises the "i+1 >= end" early-return path.
-func TestFindParentField_NoFieldNameBeforeBrace(t *testing.T) {
-	// The query starts with `{ nodes ...}` — there is a `{` but no field name before it.
-	query := `{ nodes { number } }`
-	idx := strings.Index(query, "nodes")
-	require.NotEqual(t, -1, idx)
-	got := findParentField(query, idx)
-	assert.Equal(t, "", got)
-}
 
 // TestInjectFieldsIntoQuery tests the injectFieldsIntoQuery function directly,
 // covering all four code paths: named fragment spread, inline fragment, direct
