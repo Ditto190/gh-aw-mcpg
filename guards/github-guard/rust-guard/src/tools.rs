@@ -283,6 +283,14 @@ mod tests {
     }
 
     #[test]
+    fn test_assign_copilot_to_issue_with_intent_is_write_operation() {
+        assert!(
+            is_write_operation("assign_copilot_to_issue_with_intent"),
+            "assign_copilot_to_issue_with_intent must be classified as a write operation"
+        );
+    }
+
+    #[test]
     fn test_repo_modifying_operations_are_write_operations() {
         for op in &[
             "archive_repository",

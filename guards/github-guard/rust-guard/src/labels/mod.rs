@@ -5988,6 +5988,56 @@ mod tests {
     }
 
     #[test]
+    fn test_apply_tool_labels_assign_copilot_to_issue_with_intent_writer_integrity_and_repo_visibility_secrecy(
+    ) {
+        fn private_repo_callback(tool: &str, _args: &str, buffer: &mut [u8]) -> Result<usize, i32> {
+            if tool != "search_repositories" {
+                return Err(-1);
+            }
+            let payload = json!({
+                "items": [{"full_name": "github/copilot-intent-private", "private": true}]
+            })
+            .to_string();
+            let bytes = payload.as_bytes();
+            buffer[..bytes.len()].copy_from_slice(bytes);
+            Ok(bytes.len())
+        }
+
+        let ctx = default_ctx();
+        let owner = "github";
+        let repo = "copilot-intent-private";
+        let repo_id = "github/copilot-intent-private";
+        let tool_args = json!({
+            "owner": owner,
+            "repo": repo,
+            "issue_number": 1
+        });
+
+        let _ = super::backend::is_repo_private_with_callback(private_repo_callback, owner, repo);
+
+        let (secrecy, integrity, _desc) = apply_tool_labels(
+            "assign_copilot_to_issue_with_intent",
+            &tool_args,
+            repo_id,
+            vec![],
+            vec![],
+            String::new(),
+            &ctx,
+        );
+
+        assert_eq!(
+            secrecy,
+            super::helpers::policy_private_scope_label(owner, repo, repo_id, &ctx),
+            "assign_copilot_to_issue_with_intent should inherit private repo secrecy"
+        );
+        assert_eq!(
+            integrity,
+            writer_integrity(repo_id, &ctx),
+            "assign_copilot_to_issue_with_intent should have writer integrity"
+        );
+    }
+
+    #[test]
     fn test_apply_tool_labels_pull_request_review_write_writer_integrity() {
         let ctx = default_ctx();
         let repo_id = "github/copilot";
