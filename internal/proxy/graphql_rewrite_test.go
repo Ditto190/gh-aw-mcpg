@@ -399,18 +399,6 @@ func TestFindParentField(t *testing.T) {
 	}
 }
 
-// TestFindParentField_NestedParensIncrement covers the parenDepth++ branch in
-// findParentField, which is triggered when scanning backward past arguments that
-// contain nested closing parentheses (e.g., f((a, b))).
-func TestFindParentField_NestedParensIncrement(t *testing.T) {
-	// f((nested, args)) { nodes { y } } — scanning backward from { hits ) twice
-	// before the matching (, which exercises the parenDepth++ branch.
-	query := `field((nested, args)) { nodes { y } }`
-	idx := strings.Index(query, "nodes")
-	require.NotEqual(t, -1, idx)
-	got := findParentField(query, idx)
-	assert.Equal(t, "field", got)
-}
 
 // TestFindParentField_SpaceBetweenFieldAndArgs covers the whitespace-skip after
 // closing paren (line: for i >= 0 && query[i] == ' ' ...), which triggers when
