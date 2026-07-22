@@ -36,7 +36,7 @@ pub mod policy_integrity {
 
 #[cfg(test)]
 mod tests {
-    use super::policy_integrity;
+    use super::{desc_prefix, policy_integrity};
 
     /// Ensures ORDER_LOW_TO_HIGH_PIPED stays in sync with ORDER_HIGH_TO_LOW.
     /// If a new integrity level is added or reordered, this test will catch the drift.
@@ -53,6 +53,17 @@ mod tests {
             policy_integrity::ORDER_LOW_TO_HIGH_PIPED,
             "ORDER_LOW_TO_HIGH_PIPED is out of sync with ORDER_HIGH_TO_LOW"
         );
+    }
+
+    #[test]
+    fn description_prefixes_match_canonical_values() {
+        assert_eq!(desc_prefix::REPO, "repo:");
+        assert_eq!(desc_prefix::PR, "pr:");
+        assert_eq!(desc_prefix::ISSUE, "issue:");
+        assert_eq!(desc_prefix::COMMIT, "commit:");
+        assert_eq!(desc_prefix::RELEASE, "release:");
+        assert_eq!(desc_prefix::GIST, "gist:");
+        assert_eq!(desc_prefix::NOTIFICATION, "notification:");
     }
 }
 
@@ -87,6 +98,18 @@ pub mod field_names {
     pub const NUMBER: &str = "number";
     pub const PRIVATE: &str = "private";
     pub const LOGIN: &str = "login";
+}
+
+/// Canonical description prefix strings used in `ResourceLabels::description`.
+/// Using constants prevents silent typos that produce wrong DIFC descriptions.
+pub mod desc_prefix {
+    pub const REPO: &str = "repo:";
+    pub const PR: &str = "pr:";
+    pub const ISSUE: &str = "issue:";
+    pub const COMMIT: &str = "commit:";
+    pub const RELEASE: &str = "release:";
+    pub const GIST: &str = "gist:";
+    pub const NOTIFICATION: &str = "notification:";
 }
 
 /// Sensitive file patterns for detecting secret-containing files
