@@ -71,6 +71,11 @@ func TestFormatConfigError(t *testing.T) {
 		_, err := LoadFromFile(path)
 		require.Error(t, err, "expected error from invalid TOML")
 
+		var perr toml.ParseError
+		require.ErrorAs(t, err, &perr, "expected wrapped toml.ParseError")
+		assert.Greater(t, perr.Position.Line, 0, "parse error should include line number")
+		assert.Greater(t, perr.Position.Col, 0, "parse error should include column number")
+
 		msg := FormatConfigError(err)
 
 		// ErrorWithUsage output contains the file source snippet (|) and a
