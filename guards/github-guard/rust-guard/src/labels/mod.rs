@@ -5990,7 +5990,11 @@ mod tests {
     #[test]
     fn test_apply_tool_labels_assign_copilot_to_issue_with_intent_writer_integrity_and_repo_visibility_secrecy(
     ) {
-        fn private_repo_callback(tool: &str, _args: &str, buffer: &mut [u8]) -> Result<usize, i32> {
+        fn mock_private_repo_search_callback(
+            tool: &str,
+            _args: &str,
+            buffer: &mut [u8],
+        ) -> Result<usize, i32> {
             if tool != "search_repositories" {
                 return Err(-1);
             }
@@ -6013,7 +6017,11 @@ mod tests {
             "issue_number": 1
         });
 
-        let _ = super::backend::is_repo_private_with_callback(private_repo_callback, owner, repo);
+        let _ = super::backend::is_repo_private_with_callback(
+            mock_private_repo_search_callback,
+            owner,
+            repo,
+        );
 
         let (secrecy, integrity, _desc) = apply_tool_labels(
             "assign_copilot_to_issue_with_intent",
