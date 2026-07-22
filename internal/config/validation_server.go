@@ -238,11 +238,15 @@ func validateCustomServerConfig(name string, server *StdinServerConfig, customSc
 	return validateAgainstCustomSchema(name, server, schemaURL, jsonPath)
 }
 
+func schemaErrFor(serverType, jsonPath string) func(string, string) error {
+	return func(message, hint string) error {
+		return SchemaValidationError(serverType, message, jsonPath, hint)
+	}
+}
+
 // validateAgainstCustomSchema fetches and validates a server config against its custom schema
 func validateAgainstCustomSchema(name string, server *StdinServerConfig, schemaURL string, jsonPath string) error {
-	schemaErr := func(message, hint string) error {
-		return SchemaValidationError(server.Type, message, jsonPath, hint)
-	}
+	schemaErr := schemaErrFor(server.Type, jsonPath)
 
 	if cachedSchema, ok := customSchemaCache.Load(schemaURL); ok {
 		if schema, ok := cachedSchema.(*jsonschema.Schema); ok {
@@ -314,9 +318,7 @@ func validateAgainstCustomSchema(name string, server *StdinServerConfig, schemaU
 // validateServerAgainstSchema validates a server config map (including additional
 // properties) against a compiled custom schema.
 func validateServerAgainstSchema(name string, server *StdinServerConfig, schema *jsonschema.Schema, schemaURL string, jsonPath string) error {
-	schemaErr := func(message, hint string) error {
-		return SchemaValidationError(server.Type, message, jsonPath, hint)
-	}
+	schemaErr := schemaErrFor(server.Type, jsonPath)
 
 	// Convert server config to a map that includes both struct fields and additional properties
 	// This ensures custom fields are validated against the custom schema

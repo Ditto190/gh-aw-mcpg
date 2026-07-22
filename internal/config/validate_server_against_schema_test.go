@@ -9,6 +9,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestSchemaErrFor(t *testing.T) {
+	err := schemaErrFor("custom-type", "mcpServers.test-server")("schema message", "schema hint")
+	expectedErr := SchemaValidationError("custom-type", "schema message", "mcpServers.test-server", "schema hint")
+
+	require.Error(t, err)
+	require.Error(t, expectedErr)
+	assert.EqualError(t, err, expectedErr.Error())
+}
+
 // compileSchemaForTest compiles a JSON schema string using the package's own
 // compiler. Tests call this helper to produce a *jsonschema.Schema without any
 // network access.
