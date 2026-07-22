@@ -17,6 +17,8 @@ Repository examples you can copy and adapt:
 
 ### TOML Format (`config.toml`)
 
+TOML files are parsed as **TOML 1.1** using `github.com/BurntSushi/toml` v1.6.0+. If you validate or edit `config.toml` outside the gateway, use a TOML 1.1-compatible tool. This also means TOML 1.1 features such as multi-line inline arrays are accepted.
+
 TOML configuration requires `command = "docker"` for stdio-based MCP servers to ensure containerization:
 
 ```toml

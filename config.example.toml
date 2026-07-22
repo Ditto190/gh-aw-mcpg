@@ -1,6 +1,8 @@
 # MCP Gateway Configuration Example
 # This file demonstrates all available configuration options for the MCP Gateway.
 # Copy this file to config.toml and customize for your needs.
+# TOML files are parsed as TOML 1.1 via BurntSushi/toml v1.6.0+, so external
+# validators/editors should also support TOML 1.1 syntax.
 
 # ============================================================================
 # Gateway Configuration (Optional)
