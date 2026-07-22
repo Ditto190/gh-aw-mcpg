@@ -399,6 +399,20 @@ func TestFindParentField(t *testing.T) {
 	}
 }
 
+// TestFindParentField_SpaceBetweenFieldAndArgs covers the whitespace-skip after
+// closing paren (line: for i >= 0 && query[i] == ' ' ...), which triggers when
+// the field name and its argument list are separated by a space.
+func TestFindParentField_SpaceBetweenFieldAndArgs(t *testing.T) {
+	// "field (args)" — space between field name and opening paren.
+	// When scanning backward, after exiting the paren loop we land on the space,
+	// which exercises the whitespace-skip path before extracting the field name.
+	query := `field (first:10) { nodes { y } }`
+	idx := strings.Index(query, "nodes")
+	require.NotEqual(t, -1, idx)
+	got := findParentField(query, idx)
+	assert.Equal(t, "field", got)
+}
+
 func TestInjectGuardFields_NoNodesNoFragment(t *testing.T) {
 	// A query with required tool but no "nodes" block and no fragment spread —
 	// the injector cannot find a place to insert fields, so body is returned unchanged.

@@ -138,3 +138,64 @@ func BenchmarkMatchRoute_Search(b *testing.B) {
 		MatchRoute(path)
 	}
 }
+
+// TestFixedSegment tests all delimiter characters and the no-delimiter fallback
+// of the fixedSegment helper used by buildRouteDispatch.
+func TestFixedSegment(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{
+			name:  "slash delimiter returns prefix before slash",
+			input: "issues/comments",
+			want:  "issues",
+		},
+		{
+			name:  "open-paren delimiter returns prefix before paren",
+			input: "issues(\\d+)",
+			want:  "issues",
+		},
+		{
+			name:  "open-bracket delimiter returns prefix before bracket",
+			input: "issues[^/]+",
+			want:  "issues",
+		},
+		{
+			name:  "dollar delimiter returns prefix before dollar",
+			input: "notifications$",
+			want:  "notifications",
+		},
+		{
+			name:  "question-mark delimiter returns prefix before question",
+			input: "repos?per_page=30",
+			want:  "repos",
+		},
+		{
+			name:  "no delimiter returns the full string",
+			input: "plainword",
+			want:  "plainword",
+		},
+		{
+			name:  "empty string returns empty",
+			input: "",
+			want:  "",
+		},
+		{
+			name:  "delimiter at start returns empty prefix",
+			input: "/rest/of/path",
+			want:  "",
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tt.want, fixedSegment(tt.input))
+		})
+	}
+}
