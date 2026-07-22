@@ -399,6 +399,33 @@ func TestFindParentField(t *testing.T) {
 	}
 }
 
+// TestFindParentField_NestedParensIncrement covers the parenDepth++ branch in
+// findParentField, which is triggered when scanning backward past arguments that
+// contain nested closing parentheses (e.g., f((a, b))).
+func TestFindParentField_NestedParensIncrement(t *testing.T) {
+	// f((nested, args)) { nodes { y } } — scanning backward from { hits ) twice
+	// before the matching (, which exercises the parenDepth++ branch.
+	query := `field((nested, args)) { nodes { y } }`
+	idx := strings.Index(query, "nodes")
+	require.NotEqual(t, -1, idx)
+	got := findParentField(query, idx)
+	assert.Equal(t, "field", got)
+}
+
+// TestFindParentField_SpaceBetweenFieldAndArgs covers the whitespace-skip after
+// closing paren (line: for i >= 0 && query[i] == ' ' ...), which triggers when
+// the field name and its argument list are separated by a space.
+func TestFindParentField_SpaceBetweenFieldAndArgs(t *testing.T) {
+	// "field (args)" — space between field name and opening paren.
+	// When scanning backward, after exiting the paren loop we land on the space,
+	// which exercises the whitespace-skip path before extracting the field name.
+	query := `field (first:10) { nodes { y } }`
+	idx := strings.Index(query, "nodes")
+	require.NotEqual(t, -1, idx)
+	got := findParentField(query, idx)
+	assert.Equal(t, "field", got)
+}
+
 func TestInjectGuardFields_NoNodesNoFragment(t *testing.T) {
 	// A query with required tool but no "nodes" block and no fragment spread —
 	// the injector cannot find a place to insert fields, so body is returned unchanged.
@@ -580,6 +607,19 @@ func TestFindParentField_NoEnclosingBrace(t *testing.T) {
 	// When the query has no enclosing `{` before `nodes`, findParentField returns "".
 	// This covers the "no enclosing brace found" return path (line: return "").
 	query := `nodes { number }`
+	idx := strings.Index(query, "nodes")
+	require.NotEqual(t, -1, idx)
+	got := findParentField(query, idx)
+	assert.Equal(t, "", got)
+}
+
+// TestFindParentField_NoFieldNameBeforeBrace covers the branch where an enclosing
+// `{` is found but there is no alphanumeric field name before it (e.g., the brace
+// is at the start of the query or immediately follows whitespace with no identifier).
+// This exercises the "i+1 >= end" early-return path.
+func TestFindParentField_NoFieldNameBeforeBrace(t *testing.T) {
+	// The query starts with `{ nodes ...}` — there is a `{` but no field name before it.
+	query := `{ nodes { number } }`
 	idx := strings.Index(query, "nodes")
 	require.NotEqual(t, -1, idx)
 	got := findParentField(query, idx)
