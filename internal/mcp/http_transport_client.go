@@ -39,6 +39,7 @@ type headerInjectingRoundTripper struct {
 }
 
 func (rt *headerInjectingRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	logHTTP.Printf("Injecting %d custom header(s) into request: method=%s, url=%s", len(rt.headers), req.Method, req.URL.Host)
 	reqCopy := req.Clone(req.Context())
 	for k, v := range rt.headers {
 		reqCopy.Header.Set(k, v)
@@ -57,8 +58,10 @@ func cloneClientWithTransport(baseClient *http.Client, newTransport http.RoundTr
 // resolveBaseTransport returns the client's transport, falling back to http.DefaultTransport.
 func resolveBaseTransport(c *http.Client) http.RoundTripper {
 	if c.Transport != nil {
+		logHTTP.Printf("resolveBaseTransport: using client's existing transport (%T)", c.Transport)
 		return c.Transport
 	}
+	logHTTP.Print("resolveBaseTransport: no transport set, using http.DefaultTransport")
 	return http.DefaultTransport
 }
 
