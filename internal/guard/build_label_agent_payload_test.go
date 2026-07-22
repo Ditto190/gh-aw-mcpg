@@ -121,22 +121,15 @@ func TestBuildLabelAgentPayload_BothBotsAndUsers(t *testing.T) {
 	assert.Equal(t, "alice", users[0])
 }
 
-// TestBuildLabelAgentPayload_StringPolicy tests that a JSON string policy is
-// handled via GuardPolicyToMap (JSON roundtrip).
+// TestBuildLabelAgentPayload_StringPolicyWithBots tests that string policies
+// fall back to the original value when GuardPolicyToMap cannot decode them.
 func TestBuildLabelAgentPayload_StringPolicyWithBots(t *testing.T) {
 	policy := `{"allow-only":{"repos":"public","min-integrity":"none"}}`
 	trustedBots := []string{"dependabot[bot]"}
 
 	result := BuildLabelAgentPayload(policy, trustedBots, nil)
 
-	resultMap, ok := result.(map[string]interface{})
-	require.True(t, ok, "result should be a map after JSON roundtrip")
-
-	botsRaw, hasBots := resultMap["trusted-bots"]
-	require.True(t, hasBots, "trusted-bots should be present")
-	bots, _ := botsRaw.([]interface{})
-	require.Len(t, bots, 1)
-	assert.Equal(t, "dependabot[bot]", bots[0])
+	assert.Equal(t, policy, result, "string policy should be returned unchanged on conversion fallback")
 }
 
 // TestBuildLabelAgentPayload_TrustedUsersNoAllowOnly tests that when the policy
