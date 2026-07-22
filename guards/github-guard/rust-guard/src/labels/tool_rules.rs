@@ -6,7 +6,7 @@
 use serde_json::Value;
 
 use super::constants::{
-    field_names, scope_names, SENSITIVE_FILE_KEYWORDS, SENSITIVE_FILE_PATTERNS,
+    desc_prefix, field_names, scope_names, SENSITIVE_FILE_KEYWORDS, SENSITIVE_FILE_PATTERNS,
 };
 use super::helpers::{
     author_association_floor_from_str, elevate_via_collaborator_permission,
@@ -158,7 +158,12 @@ fn apply_issue_read_enrichment(
 ) -> (String, Vec<String>) {
     if !owner.is_empty() && !repo.is_empty() {
         if let Some(issue_num) = extract_number_as_string(tool_args, field_names::ISSUE_NUMBER) {
-            desc = format!("issue:{}/{}#{}", owner, repo, issue_num);
+            desc = format!(
+                "{}{}#{}",
+                desc_prefix::ISSUE,
+                format_repo_id(owner, repo),
+                issue_num
+            );
             if always_enrich {
                 if let Some(info) =
                     super::backend::get_issue_author_info(owner, repo, &issue_num)
@@ -231,7 +236,12 @@ pub fn apply_tool_labels(
                 if let Some(issue_num) =
                     extract_number_as_string(tool_args, field_names::ISSUE_NUMBER)
                 {
-                    desc = format!("issue:{}/{}#{}", owner, repo, issue_num);
+                    desc = format!(
+                        "{}{}#{}",
+                        desc_prefix::ISSUE,
+                        format_repo_id(&owner, &repo),
+                        issue_num
+                    );
                 }
             }
             secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
@@ -276,7 +286,8 @@ pub fn apply_tool_labels(
                 .or_else(|| extract_number_as_string(tool_args, "pullNumber"));
             if !owner.is_empty() && !repo.is_empty() {
                 if let Some(ref num) = pull_number {
-                    desc = format!("pr:{}/{}#{}", owner, repo, num);
+                    desc =
+                        format!("{}{}#{}", desc_prefix::PR, format_repo_id(&owner, &repo), num);
                 }
             }
             secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
@@ -349,7 +360,12 @@ pub fn apply_tool_labels(
             if !owner.is_empty() && !repo.is_empty() {
                 if let Some(sha) = tool_args.get(field_names::SHA).and_then(|v| v.as_str()) {
                     let short_sha = short_sha(sha);
-                    desc = format!("commit:{}/{}@{}", owner, repo, short_sha);
+                    desc = format!(
+                        "{}{}@{}",
+                        desc_prefix::COMMIT,
+                        format_repo_id(&owner, &repo),
+                        short_sha
+                    );
                 }
             }
             secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
