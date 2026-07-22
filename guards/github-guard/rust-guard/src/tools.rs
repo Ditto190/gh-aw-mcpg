@@ -20,6 +20,7 @@ pub const WRITE_OPERATIONS: &[&str] = &[
     "archive_project_item",  // gh project item-archive — archives a Projects v2 item
     "archive_repository",    // gh repo archive — blocked: repo settings change unsupported
     "assign_copilot_to_issue",
+    "assign_copilot_to_issue_with_intent", // upstream Copilot intent assignment write
     "cancel_workflow_run", // gh run cancel       — cancels an in-progress workflow run
     "copy_project",        // gh project copy — creates a new Projects v2 board from an existing one
     "create_branch",
