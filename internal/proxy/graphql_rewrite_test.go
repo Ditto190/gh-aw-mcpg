@@ -399,7 +399,6 @@ func TestFindParentField(t *testing.T) {
 	}
 }
 
-
 // TestFindParentField_SpaceBetweenFieldAndArgs covers the whitespace-skip after
 // closing paren (line: for i >= 0 && query[i] == ' ' ...), which triggers when
 // the field name and its argument list are separated by a space.
@@ -600,7 +599,6 @@ func TestFindParentField_NoEnclosingBrace(t *testing.T) {
 	got := findParentField(query, idx)
 	assert.Equal(t, "", got)
 }
-
 
 // TestInjectFieldsIntoQuery tests the injectFieldsIntoQuery function directly,
 // covering all four code paths: named fragment spread, inline fragment, direct
