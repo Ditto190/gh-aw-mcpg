@@ -20,7 +20,7 @@ pub const WRITE_OPERATIONS: &[&str] = &[
     "archive_project_item",  // gh project item-archive — archives a Projects v2 item
     "archive_repository",    // gh repo archive — blocked: repo settings change unsupported
     "assign_copilot_to_issue",
-    "assign_copilot_to_issue_with_intent", // upstream Copilot intent assignment write
+    "assign_copilot_to_issue_with_intent",
     "cancel_workflow_run", // gh run cancel       — cancels an in-progress workflow run
     "copy_project",        // gh project copy — creates a new Projects v2 board from an existing one
     "create_branch",
@@ -283,14 +283,6 @@ mod tests {
     }
 
     #[test]
-    fn test_assign_copilot_to_issue_with_intent_is_write_operation() {
-        assert!(
-            is_write_operation("assign_copilot_to_issue_with_intent"),
-            "assign_copilot_to_issue_with_intent must be classified as a write operation"
-        );
-    }
-
-    #[test]
     fn test_repo_modifying_operations_are_write_operations() {
         for op in &[
             "archive_repository",
@@ -363,6 +355,14 @@ mod tests {
                 op
             );
         }
+    }
+
+    #[test]
+    fn test_assign_copilot_to_issue_with_intent_is_write_operation() {
+        assert!(
+            is_write_operation("assign_copilot_to_issue_with_intent"),
+            "assign_copilot_to_issue_with_intent must be classified as a write operation"
+        );
     }
 
     #[test]

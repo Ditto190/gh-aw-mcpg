@@ -5970,21 +5970,26 @@ mod tests {
             "issue_number": 1
         });
 
-        let (_secrecy, integrity, _desc) = apply_tool_labels(
+        for tool in &[
             "assign_copilot_to_issue",
-            &tool_args,
-            repo_id,
-            vec![],
-            vec![],
-            String::new(),
-            &ctx,
-        );
+            "assign_copilot_to_issue_with_intent",
+        ] {
+            let (_secrecy, integrity, _desc) = apply_tool_labels(
+                tool,
+                &tool_args,
+                repo_id,
+                vec![],
+                vec![],
+                String::new(),
+                &ctx,
+            );
 
-        assert_eq!(
-            integrity,
-            writer_integrity(repo_id, &ctx),
-            "assign_copilot_to_issue should have writer integrity"
-        );
+            assert_eq!(
+                integrity,
+                writer_integrity(repo_id, &ctx),
+                "{tool} should have writer integrity"
+            );
+        }
     }
 
     #[test]

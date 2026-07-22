@@ -71,14 +71,18 @@ func ComputeRetryAfter(resetAt time.Time) int {
 		maxDelay     = 3600
 	)
 	if resetAt.IsZero() {
+		logHTTP.Printf("ComputeRetryAfter: no reset time available, using default delay=%ds", defaultDelay)
 		return defaultDelay
 	}
 	secs := int(time.Until(resetAt).Seconds()) + 1 // add 1s buffer
 	if secs < 1 {
+		logHTTP.Printf("ComputeRetryAfter: reset time already passed, using default delay=%ds", defaultDelay)
 		return defaultDelay
 	}
 	if secs > maxDelay {
+		logHTTP.Printf("ComputeRetryAfter: computed delay exceeds max, clamping: computed=%ds, max=%ds", secs, maxDelay)
 		return maxDelay
 	}
+	logHTTP.Printf("ComputeRetryAfter: retry delay=%ds, resetAt=%s", secs, resetAt.UTC().Format(time.RFC3339))
 	return secs
 }
