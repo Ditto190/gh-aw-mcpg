@@ -41,9 +41,15 @@ Thank you for your interest in contributing to MCP Gateway! This document provid
    sed 's/GITHUB_PERSONAL_ACCESS_TOKEN=.*/GITHUB_PERSONAL_ACCESS_TOKEN=your_token_here/' example.env > .env
    ```
 
-5. **Pull required Docker images**
+5. **Pull Docker images**
+   Pre-pull the GitHub MCP server image used by the standard GitHub examples and integration tests:
    ```bash
    docker pull ghcr.io/github/github-mcp-server:latest
+   ```
+
+   If you plan to use the bundled sample configs or `run.sh` defaults that also start the fetch
+   and memory MCP servers, pull these optional images as well:
+   ```bash
    docker pull mcp/fetch
    docker pull mcp/memory
    ```
