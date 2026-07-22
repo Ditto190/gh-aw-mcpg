@@ -42,8 +42,7 @@ Thank you for your interest in contributing to MCP Gateway! This document provid
    ```
 
 5. **Pull Docker images**
-   The GitHub MCP server image is the only image you need to pull up front for the documented
-   examples and test flows:
+   Pre-pull the GitHub MCP server image used by the standard GitHub examples and integration tests:
    ```bash
    docker pull ghcr.io/github/github-mcp-server:latest
    ```
