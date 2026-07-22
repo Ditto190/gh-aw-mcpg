@@ -184,6 +184,11 @@ func TestIsEffectivelyEmpty(t *testing.T) {
 		want bool
 	}{
 		{
+			name: "nil map",
+			data: nil,
+			want: true,
+		},
+		{
 			name: "truly empty map",
 			data: map[string]interface{}{},
 			want: true,
@@ -228,6 +233,13 @@ func TestIsEffectivelyEmpty(t *testing.T) {
 			name: "params with empty string",
 			data: map[string]interface{}{
 				"params": "",
+			},
+			want: false,
+		},
+		{
+			name: "params with false boolean",
+			data: map[string]interface{}{
+				"params": false,
 			},
 			want: false,
 		},

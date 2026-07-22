@@ -275,82 +275,132 @@ func TestFormatJSONWithoutFields(t *testing.T) {
 		name           string
 		input          string
 		fieldsToRemove []string
-		wantContains   []string
-		wantNotContain []string
 		wantValid      bool
 		wantEmpty      bool
+		wantJSON       string
+		wantRaw        string
+		wantCompact    bool
 	}{
 		{
 			name:           "remove jsonrpc and method",
 			input:          `{"jsonrpc":"2.0","method":"tools/call","params":{"arg":"value"},"id":1}`,
 			fieldsToRemove: []string{"jsonrpc", "method"},
-			wantContains:   []string{`"params"`, `"arg"`, `"value"`, `"id"`},
-			wantNotContain: []string{`"jsonrpc"`, `"method"`},
 			wantValid:      true,
 			wantEmpty:      false,
+			wantJSON:       `{"params":{"arg":"value"},"id":1}`,
 		},
 		{
 			name:           "compact single line format",
 			input:          `{"a":"b","c":{"d":"e"}}`,
 			fieldsToRemove: []string{},
-			wantContains:   []string{`"a":"b"`, `"c":`, `"d":"e"`},
-			wantNotContain: []string{"\n", "  "},
 			wantValid:      true,
 			wantEmpty:      false,
+			wantJSON:       `{"a":"b","c":{"d":"e"}}`,
+			wantCompact:    true,
 		},
 		{
 			name:           "invalid JSON returns as-is with false",
 			input:          `{invalid json}`,
 			fieldsToRemove: []string{"jsonrpc"},
-			wantContains:   []string{`{invalid json}`},
-			wantNotContain: []string{},
 			wantValid:      false,
 			wantEmpty:      false,
+			wantRaw:        `{invalid json}`,
 		},
 		{
 			name:           "empty object",
 			input:          `{}`,
 			fieldsToRemove: []string{"jsonrpc"},
-			wantContains:   []string{`{}`},
-			wantNotContain: []string{},
 			wantValid:      true,
 			wantEmpty:      true,
+			wantJSON:       `{}`,
 		},
 		{
 			name:           "only params null after removal",
 			input:          `{"jsonrpc":"2.0","method":"tools/list","params":null}`,
 			fieldsToRemove: []string{"jsonrpc", "method"},
-			wantContains:   []string{`"params"`, `null`},
-			wantNotContain: []string{},
 			wantValid:      true,
 			wantEmpty:      true,
+			wantJSON:       `{"params":null}`,
 		},
 		{
 			name:           "params with value is not empty",
 			input:          `{"jsonrpc":"2.0","method":"tools/list","params":{"key":"value"}}`,
 			fieldsToRemove: []string{"jsonrpc", "method"},
-			wantContains:   []string{`"params"`},
-			wantNotContain: []string{},
 			wantValid:      true,
 			wantEmpty:      false,
+			wantJSON:       `{"params":{"key":"value"}}`,
 		},
 		{
 			name:           "nil fields to remove leaves all fields",
 			input:          `{"jsonrpc":"2.0","method":"tools/list","id":1}`,
 			fieldsToRemove: nil,
-			wantContains:   []string{`"jsonrpc"`, `"method"`, `"id"`},
-			wantNotContain: []string{},
 			wantValid:      true,
 			wantEmpty:      false,
+			wantJSON:       `{"jsonrpc":"2.0","method":"tools/list","id":1}`,
 		},
 		{
 			name:           "removing non-existent field is a no-op",
 			input:          `{"id":1,"result":{}}`,
 			fieldsToRemove: []string{"jsonrpc", "method"},
-			wantContains:   []string{`"id"`, `"result"`},
-			wantNotContain: []string{`"jsonrpc"`, `"method"`},
 			wantValid:      true,
 			wantEmpty:      false,
+			wantJSON:       `{"id":1,"result":{}}`,
+		},
+		{
+			name:           "empty string is invalid JSON",
+			input:          "",
+			fieldsToRemove: []string{},
+			wantValid:      false,
+			wantEmpty:      false,
+			wantRaw:        "",
+		},
+		{
+			name:           "json array is invalid for object format",
+			input:          `[1,2,3]`,
+			fieldsToRemove: []string{"field"},
+			wantValid:      false,
+			wantEmpty:      false,
+			wantRaw:        `[1,2,3]`,
+		},
+		{
+			name:           "truncated JSON is invalid",
+			input:          `{"key":"value"`,
+			fieldsToRemove: []string{"key"},
+			wantValid:      false,
+			wantEmpty:      false,
+			wantRaw:        `{"key":"value"`,
+		},
+		{
+			name:           "remove all fields yields empty object",
+			input:          `{"jsonrpc":"2.0","method":"test"}`,
+			fieldsToRemove: []string{"jsonrpc", "method"},
+			wantValid:      true,
+			wantEmpty:      true,
+			wantJSON:       `{}`,
+		},
+		{
+			name:           "empty fields list leaves JSON unchanged",
+			input:          `{"key":"value"}`,
+			fieldsToRemove: []string{},
+			wantValid:      true,
+			wantEmpty:      false,
+			wantJSON:       `{"key":"value"}`,
+		},
+		{
+			name:           "params null with additional field is not empty",
+			input:          `{"jsonrpc":"2.0","params":null,"id":1}`,
+			fieldsToRemove: []string{"jsonrpc"},
+			wantValid:      true,
+			wantEmpty:      false,
+			wantJSON:       `{"params":null,"id":1}`,
+		},
+		{
+			name:           "nested objects are preserved",
+			input:          `{"jsonrpc":"2.0","method":"tools/call","params":{"name":"search","arguments":{"query":"test"}}}`,
+			fieldsToRemove: []string{"jsonrpc", "method"},
+			wantValid:      true,
+			wantEmpty:      false,
+			wantJSON:       `{"params":{"name":"search","arguments":{"query":"test"}}}`,
 		},
 	}
 
@@ -360,13 +410,13 @@ func TestFormatJSONWithoutFields(t *testing.T) {
 
 			assert.Equal(t, tt.wantValid, isValid, "isValid mismatch")
 			assert.Equal(t, tt.wantEmpty, isEmpty, "isEmpty mismatch")
-
-			for _, want := range tt.wantContains {
-				assert.Contains(t, result, want, "result should contain %q", want)
-			}
-
-			for _, notWant := range tt.wantNotContain {
-				assert.NotContains(t, result, notWant, "result should NOT contain %q", notWant)
+			if tt.wantValid {
+				assert.JSONEq(t, tt.wantJSON, result)
+				if tt.wantCompact {
+					assert.NotContains(t, result, "\n", "compact output should be a single line")
+				}
+			} else {
+				assert.Equal(t, tt.wantRaw, result)
 			}
 		})
 	}
