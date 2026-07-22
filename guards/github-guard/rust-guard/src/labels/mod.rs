@@ -5988,8 +5988,7 @@ mod tests {
     }
 
     #[test]
-    fn test_apply_tool_labels_assign_copilot_to_issue_with_intent_writer_integrity_and_repo_visibility_secrecy(
-    ) {
+    fn test_assign_copilot_to_issue_with_intent_labels() {
         fn mock_private_repo_search_callback(
             tool: &str,
             _args: &str,
