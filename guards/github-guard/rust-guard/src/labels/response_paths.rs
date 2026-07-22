@@ -7,7 +7,7 @@
 //! Returns JSON paths like `/items/0`, `/items/1` pointing to labeled objects
 //! in the response, rather than cloning the entire data.
 
-use super::constants::{field_names, label_constants, scope_names};
+use super::constants::{desc_prefix, field_names, label_constants, scope_names};
 use super::extract_mcp_response;
 use super::helpers::*;
 use serde_json::Value;
@@ -146,7 +146,7 @@ pub fn label_response_paths(
                     labeled_paths.push(crate::PathLabel {
                         path: format!("/{}/{}", items_key, i),
                         labels: crate::ResourceLabels {
-                            description: format!("repo:{}", full_name),
+                            description: format!("{}{}", desc_prefix::REPO, full_name),
                             secrecy: secrecy.into(),
                             integrity: integrity.into(),
                         },
@@ -230,7 +230,7 @@ pub fn label_response_paths(
                     labeled_paths.push(crate::PathLabel {
                         path,
                         labels: crate::ResourceLabels {
-                            description: format!("pr:{}#{}", repo_for_labels, pr_number),
+                            description: format!("{}{}#{}", desc_prefix::PR, repo_for_labels, pr_number),
                             secrecy: if tool_name == "search_pull_requests" {
                                 repo_visibility_secrecy_for_repo_id(repo_for_labels, ctx).into()
                             } else {
@@ -298,7 +298,7 @@ pub fn label_response_paths(
                     labeled_paths.push(crate::PathLabel {
                         path,
                         labels: crate::ResourceLabels {
-                            description: format!("issue:{}#{}", repo_for_labels, issue_number),
+                            description: format!("{}{}#{}", desc_prefix::ISSUE, repo_for_labels, issue_number),
                             secrecy: if tool_name == "search_issues" {
                                 repo_visibility_secrecy_for_repo_id(repo_for_labels, ctx).into()
                             } else {
@@ -375,7 +375,7 @@ pub fn label_response_paths(
                     labeled_paths.push(crate::PathLabel {
                         path: format!("/{}", i),
                         labels: crate::ResourceLabels {
-                            description: format!("commit:{}@{}", repo_for_labels, short_sha),
+                            description: format!("{}{}@{}", desc_prefix::COMMIT, repo_for_labels, short_sha),
                             secrecy: default_secrecy.clone(),
                             integrity: integrity.into(),
                         },
@@ -479,7 +479,7 @@ pub fn label_response_paths(
                     labeled_paths.push(crate::PathLabel {
                         path: format!("/{}", i),
                         labels: crate::ResourceLabels {
-                            description: format!("release:{}@{}", repo_for_labels, tag),
+                            description: format!("{}{}@{}", desc_prefix::RELEASE, repo_for_labels, tag),
                             secrecy: default_secrecy_shared.clone(),
                             integrity,
                         },
@@ -515,7 +515,7 @@ pub fn label_response_paths(
                     labeled_paths.push(crate::PathLabel {
                         path: format!("/{}", i),
                         labels: crate::ResourceLabels {
-                            description: format!("notification:{}", id),
+                            description: format!("{}{}", desc_prefix::NOTIFICATION, id),
                             secrecy: notif_secrecy.clone(),
                             integrity: empty_integrity.clone(),
                         },
@@ -554,7 +554,7 @@ pub fn label_response_paths(
                     labeled_paths.push(crate::PathLabel {
                         path: format!("/{}", i),
                         labels: crate::ResourceLabels {
-                            description: format!("gist:{}", id),
+                            description: format!("{}{}", desc_prefix::GIST, id),
                             secrecy: if is_public {
                                 public_gist_secrecy.clone()
                             } else {

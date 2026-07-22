@@ -141,7 +141,7 @@ pub struct CollaboratorPermission {
 /// - `Some(true)` if repository is private
 /// - `Some(false)` if repository is public
 /// - `None` if visibility could not be determined
-pub fn is_repo_private(owner: &str, repo: &str) -> Option<bool> {
+pub(crate) fn is_repo_private(owner: &str, repo: &str) -> Option<bool> {
     is_repo_private_with_callback(crate::invoke_backend, owner, repo)
 }
 
@@ -381,7 +381,7 @@ pub fn get_issue_author_association_with_callback(
         .and_then(|info| info.author_association)
 }
 
-pub fn get_pull_request_facts(
+pub(crate) fn get_pull_request_facts(
     owner: &str,
     repo: &str,
     pull_number: &str,
@@ -389,7 +389,11 @@ pub fn get_pull_request_facts(
     get_pull_request_facts_with_callback(crate::invoke_backend, owner, repo, pull_number)
 }
 
-pub fn get_issue_author_association(owner: &str, repo: &str, issue_number: &str) -> Option<String> {
+pub(crate) fn get_issue_author_association(
+    owner: &str,
+    repo: &str,
+    issue_number: &str,
+) -> Option<String> {
     get_issue_author_association_with_callback(crate::invoke_backend, owner, repo, issue_number)
 }
 
@@ -435,7 +439,7 @@ pub fn get_issue_author_info_with_callback(
     })
 }
 
-pub fn get_issue_author_info(
+pub(crate) fn get_issue_author_info(
     owner: &str,
     repo: &str,
     issue_number: &str,
@@ -576,7 +580,7 @@ pub fn get_collaborator_permission_with_callback(
     })
 }
 
-pub fn get_collaborator_permission(
+pub(crate) fn get_collaborator_permission(
     owner: &str,
     repo: &str,
     username: &str,

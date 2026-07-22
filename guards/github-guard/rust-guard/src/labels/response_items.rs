@@ -10,7 +10,7 @@
 //! Use path-based labeling (`label_response_paths`) when possible for better
 //! performance with large result sets.
 
-use super::constants::{field_names, label_constants, scope_names};
+use super::constants::{desc_prefix, field_names, label_constants, scope_names};
 use super::extract_mcp_response;
 use super::helpers::*;
 use crate::{LabeledItem, ResourceLabels, SharedLabels};
@@ -95,7 +95,7 @@ pub fn label_response_items(
                         labeled_items.push(LabeledItem {
                             data: item.clone(),
                             labels: ResourceLabels {
-                                description: format!("repo:{}", full_name),
+                                description: format!("{}{}", desc_prefix::REPO, full_name),
                                 secrecy: secrecy.into(),
                                 integrity: integrity.into(),
                             },
@@ -105,7 +105,7 @@ pub fn label_response_items(
                         labeled_items.push(LabeledItem {
                             data: item.clone(),
                             labels: ResourceLabels {
-                                description: format!("repo:{}", full_name),
+                                description: format!("{}{}", desc_prefix::REPO, full_name),
                                 secrecy: vec![].into(),
                                 integrity: integrity.into(),
                             },
@@ -210,7 +210,7 @@ pub fn label_response_items(
                         labeled_items.push(LabeledItem {
                             data: item.clone(),
                             labels: ResourceLabels {
-                                description: format!("pr:{}#{}", repo_full_name, number),
+                                description: format!("{}{}#{}", desc_prefix::PR, repo_full_name, number),
                                 secrecy: if tool_name == "search_pull_requests" {
                                     repo_visibility_secrecy_for_repo_id(repo_full_name, ctx).into()
                                 } else {
@@ -274,7 +274,7 @@ pub fn label_response_items(
                     labeled_items.push(LabeledItem {
                         data: item.clone(),
                         labels: ResourceLabels {
-                            description: format!("issue:{}#{}", repo_full_name, number),
+                            description: format!("{}{}#{}", desc_prefix::ISSUE, repo_full_name, number),
                             secrecy: if tool_name == "search_issues" {
                                 repo_visibility_secrecy_for_repo_id(&repo_full_name, ctx).into()
                             } else {
@@ -351,7 +351,7 @@ pub fn label_response_items(
                 labeled_items.push(LabeledItem {
                     data: item.clone(),
                     labels: ResourceLabels {
-                        description: format!("commit:{}@{}", repo_full_name, short_sha),
+                        description: format!("{}{}@{}", desc_prefix::COMMIT, repo_full_name, short_sha),
                         secrecy: secrecy_shared.clone(),
                         integrity: integrity.into(),
                     },
@@ -382,7 +382,7 @@ pub fn label_response_items(
                 labeled_items.push(LabeledItem {
                     data: item.clone(),
                     labels: ResourceLabels {
-                        description: format!("gist:{}", id),
+                        description: format!("{}{}", desc_prefix::GIST, id),
                         secrecy: secrecy.into(),
                         integrity: gist_integrity_shared.clone(),
                     },
@@ -404,7 +404,7 @@ pub fn label_response_items(
                     labeled_items.push(LabeledItem {
                         data: item.clone(),
                         labels: ResourceLabels {
-                            description: format!("notification:{}", id),
+                            description: format!("{}{}", desc_prefix::NOTIFICATION, id),
                             secrecy: notif_secrecy_shared.clone(),
                             integrity: notif_integrity_shared.clone(),
                         },
@@ -433,7 +433,7 @@ pub fn label_response_items(
                 labeled_items.push(LabeledItem {
                     data: item.clone(),
                     labels: ResourceLabels {
-                        description: format!("release:{}@{}", repo_full_name, tag),
+                        description: format!("{}{}@{}", desc_prefix::RELEASE, repo_full_name, tag),
                         secrecy: secrecy_shared.clone(),
                         integrity: release_integrity_shared.clone(),
                     },
