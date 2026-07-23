@@ -43,7 +43,7 @@ tools:
     - "*"
 runtimes:
   go:
-    version: "1.25"
+    version: "1.26"
 steps:
   - name: Set up Go
     uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0

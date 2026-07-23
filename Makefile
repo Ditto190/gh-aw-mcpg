@@ -7,7 +7,7 @@
 BINARY_NAME=awmg
 
 # Go and toolchain versions
-GO_VERSION=1.25.0
+GO_VERSION=1.26.4
 GOLANGCI_LINT_VERSION=v2.8.0
 
 # Build the CLI binary
@@ -27,9 +27,9 @@ lint:
 	@echo "Running golangci-lint..."
 	@GOPATH=$$(go env GOPATH); \
 	if [ -f "$$GOPATH/bin/golangci-lint" ]; then \
-		$$GOPATH/bin/golangci-lint run --timeout=5m || echo "⚠ Warning: golangci-lint failed (compatibility issue with Go 1.25.0). Continuing with other checks..."; \
+		$$GOPATH/bin/golangci-lint run --timeout=5m || echo "⚠ Warning: golangci-lint failed (compatibility issue with Go 1.26.4). Continuing with other checks..."; \
 	elif command -v golangci-lint >/dev/null 2>&1; then \
-		golangci-lint run --timeout=5m || echo "⚠ Warning: golangci-lint failed (compatibility issue with Go 1.25.0). Continuing with other checks..."; \
+		golangci-lint run --timeout=5m || echo "⚠ Warning: golangci-lint failed (compatibility issue with Go 1.26.4). Continuing with other checks..."; \
 	else \
 		echo "⚠ Warning: golangci-lint not found. Run 'make install' to install it."; \
 		echo "  Skipping golangci-lint checks..."; \
@@ -106,9 +106,9 @@ agent-finished:
 	@echo "Running golangci-lint..."
 	@GOPATH=$$(go env GOPATH); \
 	if [ -f "$$GOPATH/bin/golangci-lint" ]; then \
-		$$GOPATH/bin/golangci-lint run --timeout=5m || echo "⚠ Warning: golangci-lint failed (compatibility issue with Go 1.25.0). Continuing with other checks..."; \
+		$$GOPATH/bin/golangci-lint run --timeout=5m || echo "⚠ Warning: golangci-lint failed (compatibility issue with Go 1.26.4). Continuing with other checks..."; \
 	elif command -v golangci-lint >/dev/null 2>&1; then \
-		golangci-lint run --timeout=5m || echo "⚠ Warning: golangci-lint failed (compatibility issue with Go 1.25.0). Continuing with other checks..."; \
+		golangci-lint run --timeout=5m || echo "⚠ Warning: golangci-lint failed (compatibility issue with Go 1.26.4). Continuing with other checks..."; \
 	else \
 		echo "⚠ Warning: golangci-lint not found. Run 'make install' to install it."; \
 		echo "  Skipping golangci-lint checks..."; \
@@ -287,11 +287,7 @@ install:
 	@if command -v go >/dev/null 2>&1; then \
 		INSTALLED_VERSION=$$(go version | awk '{print $$3}' | sed 's/go//'); \
 		echo "✓ Go $$INSTALLED_VERSION is installed"; \
-		INSTALLED_MAJOR=$$(echo "$$INSTALLED_VERSION" | cut -d. -f1 | grep -oE '^[0-9]+' || echo 0); \
-		INSTALLED_MINOR=$$(echo "$$INSTALLED_VERSION" | cut -d. -f2 | grep -oE '^[0-9]+' || echo 0); \
-		REQUIRED_MAJOR=$$(echo "$(GO_VERSION)" | cut -d. -f1 | grep -oE '^[0-9]+' || echo 0); \
-		REQUIRED_MINOR=$$(echo "$(GO_VERSION)" | cut -d. -f2 | grep -oE '^[0-9]+' || echo 0); \
-		if [ "$$INSTALLED_MAJOR" -lt "$$REQUIRED_MAJOR" ] || { [ "$$INSTALLED_MAJOR" -eq "$$REQUIRED_MAJOR" ] && [ "$$INSTALLED_MINOR" -lt "$$REQUIRED_MINOR" ]; }; then \
+		if [ "$$(printf '%s\n%s\n' "$$INSTALLED_VERSION" "$(GO_VERSION)" | sort -V | head -n1)" != "$(GO_VERSION)" ]; then \
 			echo "⚠ Warning: Expected Go $(GO_VERSION) or later, but found $$INSTALLED_VERSION"; \
 			echo "  Visit https://go.dev/dl/ to install Go $(GO_VERSION) or later"; \
 		fi; \

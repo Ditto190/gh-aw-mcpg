@@ -33,7 +33,7 @@ tools:
   edit:
 runtimes:
   go:
-    version: "1.25"
+    version: "1.26"
 sandbox:
   mcp:
     container: "ghcr.io/github/gh-aw-mcpg"
