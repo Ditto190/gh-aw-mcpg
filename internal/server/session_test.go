@@ -254,7 +254,13 @@ func TestEnsureSessionDirectory(t *testing.T) {
 		base := t.TempDir()
 		readOnly := filepath.Join(base, "readonly")
 		require.NoError(t, os.Mkdir(readOnly, 0555))
-		t.Cleanup(func() { os.Chmod(readOnly, 0755) }) //nolint:errcheck
+		t.Cleanup(func() { _ = os.Chmod(readOnly, 0755) })
+
+		probe := filepath.Join(readOnly, "permission-probe")
+		if err := os.Mkdir(probe, 0755); err == nil {
+			_ = os.Remove(probe)
+			t.Skip("directory write restrictions are not enforced in this environment")
+		}
 
 		us2 := newSessionTestUnifiedServer(t)
 		us2.payloadDir = readOnly
