@@ -76,11 +76,12 @@ func newStreamableTransport(url string, httpClient *http.Client) *sdk.Streamable
 		// See streamableMaxRetries for rationale. We fall through to SSE or plain
 		// JSON-RPC on failure.
 		MaxRetries: streamableMaxRetries,
-		// DisableStandaloneSSE prevents the SDK from opening a persistent SSE
-		// GET stream after initialization. The gateway operates in
-		// request-response mode only and does not need server-initiated
-		// messages, so the stream is unnecessary and some backends return 5xx
-		// or keep it open indefinitely, breaking the connection.
+		// DisableStandaloneSSE prevents the SDK from issuing a standalone GET
+		// request for a server-sent events stream immediately after initialization.
+		// The gateway operates in request-response mode only and does not need
+		// server-initiated messages, so this stream is unnecessary.
+		// See StreamableClientTransport.DisableStandaloneSSE in the SDK docs and
+		// TestDisableStandaloneSSECanary for an automated guard against SDK changes.
 		DisableStandaloneSSE: true,
 	}
 }
