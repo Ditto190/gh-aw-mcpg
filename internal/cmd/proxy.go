@@ -383,6 +383,10 @@ func proxyForcePublicReposIfNeeded(ctx context.Context, policyJSON, token, apiUR
 		logger.LogWarn("difc", "forcePublicRepos: failed to parse policy JSON (using original): %v", err)
 		return policyJSON
 	}
+	if policyMap == nil {
+		logger.LogWarn("difc", "forcePublicRepos: policy JSON decoded to null (using original)")
+		return policyJSON
+	}
 
 	// Find the allow-only section (canonical or legacy key)
 	var allowOnly map[string]interface{}
