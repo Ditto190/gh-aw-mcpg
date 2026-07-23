@@ -22,11 +22,16 @@ func withForcePublicRepo(t *testing.T, val bool) {
 
 // repoVisibilityServer returns a test HTTP server that responds to
 // GET /repos/<nwo> with the given visibility JSON.
-func repoVisibilityServer(t *testing.T, nwo, visibility string, statusCode int) *httptest.Server {
+func repoVisibilityServer(t *testing.T, nwo, visibility string, statusCode int, expectedAuthorization string) *httptest.Server {
 	t.Helper()
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, repo, _ := splitNWO(nwo)
 		if r.URL.Path == "/repos/"+owner+"/"+repo {
+			if expectedAuthorization != "" && r.Header.Get("Authorization") != expectedAuthorization {
+				t.Errorf("unexpected Authorization header: got %q want %q", r.Header.Get("Authorization"), expectedAuthorization)
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(statusCode)
 			if statusCode == http.StatusOK {
@@ -104,7 +109,7 @@ func TestProxyForcePublicReposIfNeeded_APIError(t *testing.T) {
 	defer srv.Close()
 
 	policy := `{"allow-only":{"repos":"private","min-integrity":"none"}}`
-	result := proxyForcePublicReposIfNeeded(context.Background(), policy, "token test-token", srv.URL)
+	result := proxyForcePublicReposIfNeeded(context.Background(), policy, "test-token", srv.URL)
 	assert.Equal(t, policy, result, "policy should be unchanged (fail-open) when API returns error")
 }
 
@@ -128,11 +133,11 @@ func TestProxyForcePublicReposIfNeeded_PrivateRepo(t *testing.T) {
 	t.Setenv("GITHUB_REPOSITORY", "octo/repo")
 	clearAllTokenEnvVars(t)
 
-	srv := repoVisibilityServer(t, "octo/repo", "private", http.StatusOK)
+	srv := repoVisibilityServer(t, "octo/repo", "private", http.StatusOK, "")
 	defer srv.Close()
 
 	policy := `{"allow-only":{"repos":"private","min-integrity":"approved"}}`
-	result := proxyForcePublicReposIfNeeded(context.Background(), policy, "token test", srv.URL)
+	result := proxyForcePublicReposIfNeeded(context.Background(), policy, "test-token", srv.URL)
 	assert.Equal(t, policy, result, "policy should be unchanged when repo is private")
 }
 
@@ -143,11 +148,11 @@ func TestProxyForcePublicReposIfNeeded_InternalRepo(t *testing.T) {
 	t.Setenv("GITHUB_REPOSITORY", "octo/repo")
 	clearAllTokenEnvVars(t)
 
-	srv := repoVisibilityServer(t, "octo/repo", "internal", http.StatusOK)
+	srv := repoVisibilityServer(t, "octo/repo", "internal", http.StatusOK, "")
 	defer srv.Close()
 
 	policy := `{"allow-only":{"repos":"private","min-integrity":"approved"}}`
-	result := proxyForcePublicReposIfNeeded(context.Background(), policy, "token test", srv.URL)
+	result := proxyForcePublicReposIfNeeded(context.Background(), policy, "test-token", srv.URL)
 	assert.Equal(t, policy, result, "policy should be unchanged when repo is internal")
 }
 
@@ -159,11 +164,11 @@ func TestProxyForcePublicReposIfNeeded_PublicRepo_WithAllowOnly(t *testing.T) {
 	t.Setenv("GITHUB_REPOSITORY", "octo/repo")
 	clearAllTokenEnvVars(t)
 
-	srv := repoVisibilityServer(t, "octo/repo", "public", http.StatusOK)
+	srv := repoVisibilityServer(t, "octo/repo", "public", http.StatusOK, "token test-token")
 	defer srv.Close()
 
 	policy := `{"allow-only":{"repos":"private","min-integrity":"approved"}}`
-	result := proxyForcePublicReposIfNeeded(context.Background(), policy, "token test", srv.URL)
+	result := proxyForcePublicReposIfNeeded(context.Background(), policy, "test-token", srv.URL)
 
 	var got map[string]interface{}
 	require.NoError(t, json.Unmarshal([]byte(result), &got))
@@ -181,11 +186,11 @@ func TestProxyForcePublicReposIfNeeded_PublicRepo_LegacyAllowOnly(t *testing.T) 
 	t.Setenv("GITHUB_REPOSITORY", "octo/repo")
 	clearAllTokenEnvVars(t)
 
-	srv := repoVisibilityServer(t, "octo/repo", "public", http.StatusOK)
+	srv := repoVisibilityServer(t, "octo/repo", "public", http.StatusOK, "token test-token")
 	defer srv.Close()
 
 	policy := `{"allowonly":{"repos":"private","min-integrity":"merged"}}`
-	result := proxyForcePublicReposIfNeeded(context.Background(), policy, "token test", srv.URL)
+	result := proxyForcePublicReposIfNeeded(context.Background(), policy, "test-token", srv.URL)
 
 	var got map[string]interface{}
 	require.NoError(t, json.Unmarshal([]byte(result), &got))
@@ -205,11 +210,11 @@ func TestProxyForcePublicReposIfNeeded_PublicRepo_NoAllowOnlySection(t *testing.
 	t.Setenv("GITHUB_REPOSITORY", "octo/repo")
 	clearAllTokenEnvVars(t)
 
-	srv := repoVisibilityServer(t, "octo/repo", "public", http.StatusOK)
+	srv := repoVisibilityServer(t, "octo/repo", "public", http.StatusOK, "token test-token")
 	defer srv.Close()
 
 	policy := `{"some-other-key":"value"}`
-	result := proxyForcePublicReposIfNeeded(context.Background(), policy, "token test", srv.URL)
+	result := proxyForcePublicReposIfNeeded(context.Background(), policy, "test-token", srv.URL)
 
 	var got map[string]interface{}
 	require.NoError(t, json.Unmarshal([]byte(result), &got))
@@ -228,12 +233,27 @@ func TestProxyForcePublicReposIfNeeded_PublicRepo_InvalidPolicyJSON(t *testing.T
 	t.Setenv("GITHUB_REPOSITORY", "octo/repo")
 	clearAllTokenEnvVars(t)
 
-	srv := repoVisibilityServer(t, "octo/repo", "public", http.StatusOK)
+	srv := repoVisibilityServer(t, "octo/repo", "public", http.StatusOK, "token test-token")
 	defer srv.Close()
 
 	policy := `{not valid json}`
-	result := proxyForcePublicReposIfNeeded(context.Background(), policy, "token test", srv.URL)
+	result := proxyForcePublicReposIfNeeded(context.Background(), policy, "test-token", srv.URL)
 	assert.Equal(t, policy, result, "policy should be unchanged when JSON is invalid")
+}
+
+// TestProxyForcePublicReposIfNeeded_PublicRepo_NullPolicyJSON verifies that when the
+// policy JSON is a top-level null, the function returns the original policy unchanged.
+func TestProxyForcePublicReposIfNeeded_PublicRepo_NullPolicyJSON(t *testing.T) {
+	withForcePublicRepo(t, true)
+	t.Setenv("GITHUB_REPOSITORY", "octo/repo")
+	clearAllTokenEnvVars(t)
+
+	srv := repoVisibilityServer(t, "octo/repo", "public", http.StatusOK, "token test-token")
+	defer srv.Close()
+
+	policy := `null`
+	result := proxyForcePublicReposIfNeeded(context.Background(), policy, "test-token", srv.URL)
+	assert.Equal(t, policy, result, "policy should be unchanged when JSON is top-level null")
 }
 
 // TestProxyForcePublicReposIfNeeded_TokenFromEnv verifies that when no explicit token
@@ -244,7 +264,7 @@ func TestProxyForcePublicReposIfNeeded_TokenFromEnv(t *testing.T) {
 	clearAllTokenEnvVars(t)
 	t.Setenv("GITHUB_TOKEN", "env-token")
 
-	srv := repoVisibilityServer(t, "octo/repo", "public", http.StatusOK)
+	srv := repoVisibilityServer(t, "octo/repo", "public", http.StatusOK, "token env-token")
 	defer srv.Close()
 
 	policy := `{"allow-only":{"repos":"private","min-integrity":"none"}}`
@@ -266,12 +286,12 @@ func TestProxyForcePublicReposIfNeeded_AllowOnlyWithNullValue(t *testing.T) {
 	t.Setenv("GITHUB_REPOSITORY", "octo/repo")
 	clearAllTokenEnvVars(t)
 
-	srv := repoVisibilityServer(t, "octo/repo", "public", http.StatusOK)
+	srv := repoVisibilityServer(t, "octo/repo", "public", http.StatusOK, "token test-token")
 	defer srv.Close()
 
 	// "allow-only" is null — allowOnly will be nil after type assertion.
 	policy := `{"allow-only":null}`
-	result := proxyForcePublicReposIfNeeded(context.Background(), policy, "token test", srv.URL)
+	result := proxyForcePublicReposIfNeeded(context.Background(), policy, "test-token", srv.URL)
 
 	var got map[string]interface{}
 	require.NoError(t, json.Unmarshal([]byte(result), &got))
