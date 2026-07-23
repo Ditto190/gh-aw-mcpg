@@ -305,7 +305,7 @@ pub fn is_repo_private_with_callback(
 }
 
 /// Fetch pull request facts used for integrity derivation.
-pub fn get_pull_request_facts_with_callback(
+pub(crate) fn get_pull_request_facts_with_callback(
     callback: GithubMcpCallback,
     owner: &str,
     repo: &str,
@@ -370,17 +370,6 @@ pub fn get_pull_request_facts_with_callback(
     })
 }
 
-/// Fetch issue author_association value for resource-level initialization.
-pub fn get_issue_author_association_with_callback(
-    callback: GithubMcpCallback,
-    owner: &str,
-    repo: &str,
-    issue_number: &str,
-) -> Option<String> {
-    get_issue_author_info_with_callback(callback, owner, repo, issue_number)
-        .and_then(|info| info.author_association)
-}
-
 pub(crate) fn get_pull_request_facts(
     owner: &str,
     repo: &str,
@@ -394,11 +383,12 @@ pub(crate) fn get_issue_author_association(
     repo: &str,
     issue_number: &str,
 ) -> Option<String> {
-    get_issue_author_association_with_callback(crate::invoke_backend, owner, repo, issue_number)
+    get_issue_author_info_with_callback(crate::invoke_backend, owner, repo, issue_number)
+        .and_then(|info| info.author_association)
 }
 
 /// Fetch issue author info (association + login) for resource-level initialization.
-pub fn get_issue_author_info_with_callback(
+pub(crate) fn get_issue_author_info_with_callback(
     callback: GithubMcpCallback,
     owner: &str,
     repo: &str,
@@ -455,7 +445,7 @@ pub(crate) fn get_issue_author_info(
 ///
 /// Results are cached per `(owner, repo, username)` to avoid duplicate enrichment
 /// calls when the same reactor appears on multiple items in a response collection.
-pub fn get_collaborator_permission_with_callback(
+pub(crate) fn get_collaborator_permission_with_callback(
     callback: GithubMcpCallback,
     owner: &str,
     repo: &str,
