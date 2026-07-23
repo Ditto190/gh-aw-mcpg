@@ -44,7 +44,6 @@ const MCPProtocolVersion = "2025-11-25"
 // retries"; a negative value means 0 retries (give up immediately on stream
 // close). The gateway handles reconnection itself, so SDK-level retries would
 // cause double-retry behaviour.
-// Verified: go-sdk v1.6.1 streamable.go:1547-1552.
 // See TestMaxRetriesSentinelCanary for an automated guard against SDK changes.
 const streamableMaxRetries = -1
 
@@ -77,13 +76,12 @@ func newStreamableTransport(url string, httpClient *http.Client) *sdk.Streamable
 		// See streamableMaxRetries for rationale. We fall through to SSE or plain
 		// JSON-RPC on failure.
 		MaxRetries: streamableMaxRetries,
-		// DisableStandaloneSSE prevents the SDK from issuing a GET request for a
-		// persistent server-sent events stream immediately after initialization.
-		// Some HTTP MCP servers (e.g. cloud APIs) return 5xx or keep the GET
-		// request open indefinitely, which causes the SDK to call c.fail() and
-		// break the connection before the gateway can send the initialized
-		// notification. The gateway operates in request-response mode only and
-		// does not need server-initiated messages, so this stream is unnecessary.
+		// DisableStandaloneSSE prevents the SDK from issuing a standalone GET
+		// request for a server-sent events stream immediately after initialization.
+		// The gateway operates in request-response mode only and does not need
+		// server-initiated messages, so this stream is unnecessary.
+		// See StreamableClientTransport.DisableStandaloneSSE in the SDK docs and
+		// TestDisableStandaloneSSECanary for an automated guard against SDK changes.
 		DisableStandaloneSSE: true,
 	}
 }

@@ -1325,18 +1325,10 @@ func TestOIDCRoundTripper_ErrorPropagation(t *testing.T) {
 // both pass before accepting a go-sdk upgrade, because the gateway relies on
 // both the streamable retry sentinel and the AddTool validation bypass.
 //
-// SDK source: streamable.go:1547-1552 (verified against go-sdk v1.6.1):
-//
-//	maxRetries := t.MaxRetries
-//	if maxRetries == 0 {
-//	    maxRetries = 5  // 0 means "use default"
-//	} else if maxRetries < 0 {
-//	    maxRetries = 0  // negative means "0 retries"
-//	}
-//
-// SDK reconnect logic: streamable.go:1939-1969 -- retriesWithoutProgress
-// increments when the stream closes with no lastEventID; when it exceeds
-// maxRetries the connection is permanently failed via c.fail().
+// SDK convention: MaxRetries==0 uses the SDK default (5 retries); MaxRetries<0
+// means 0 retries (give up immediately). When the SSE stream closes with no
+// lastEventID (no progress), the SDK's retriesWithoutProgress counter increments;
+// once it exceeds maxRetries the connection is permanently failed via c.fail().
 //
 // See also: tryStreamableHTTPTransport / reconnectSDKTransport in connection.go.
 func TestMaxRetriesSentinelCanary(t *testing.T) {
@@ -1404,7 +1396,7 @@ func TestMaxRetriesSentinelCanary(t *testing.T) {
 	transport := &sdk.StreamableClientTransport{
 		Endpoint:   srv.URL,
 		HTTPClient: srv.Client(),
-		MaxRetries: -1, // SDK interprets -1 as 0 retries (see streamable.go:1547-1552)
+		MaxRetries: -1, // SDK interprets -1 as 0 retries; see TestMaxRetriesSentinelCanary
 		// DisableStandaloneSSE must be false so Connect triggers a standalone SSE GET.
 		// Setting it explicitly avoids depending on the SDK's default value.
 		DisableStandaloneSSE: false,
@@ -1428,9 +1420,8 @@ func TestMaxRetriesSentinelCanary(t *testing.T) {
 		t.Fatal("timed out waiting for the first SSE GET")
 	}
 
-	// Wait beyond the SDK's minimum reconnect backoff (reconnectInitialDelay = 1s
-	// in streamable.go) to ensure any regression where -1 is treated as 0/5 retries
-	// has had time to trigger a second GET request.
+	// Wait beyond the SDK's minimum reconnect backoff to ensure any regression
+	// where -1 is treated as 0/5 retries has had time to trigger a second GET request.
 	time.Sleep(1500 * time.Millisecond)
 
 	got := sseGETs.Load()
@@ -1438,11 +1429,11 @@ func TestMaxRetriesSentinelCanary(t *testing.T) {
 	// With MaxRetries: -1 (0 retries) the SDK must NOT attempt to reconnect
 	// when the stream closes without progress.
 	// If this assertion fails after an SDK upgrade, re-verify the MaxRetries
-	// sentinel in streamable.go:1547-1552 and update the gateway comments in
+	// sentinel behavior in the SDK and update the gateway comments in
 	// tryStreamableHTTPTransport / reconnectSDKTransport.
 	require.Equal(t, int64(1), got,
 		"MaxRetries: -1 must result in 0 SSE reconnects (exactly 1 SSE GET total); "+
-			"if this fails after an SDK upgrade, re-verify streamable.go MaxRetries handling "+
+			"if this fails after an SDK upgrade, re-verify the SDK MaxRetries sentinel "+
 			"and update tryStreamableHTTPTransport / reconnectSDKTransport")
 }
 
