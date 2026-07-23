@@ -285,7 +285,7 @@ args = [
 #
 # Configuration Validation:
 # - Required fields: command, args (for stdio servers)
-# - Unknown keys will generate warnings in logs (helps catch typos!)
+# - Unknown keys are rejected with an error (helps catch typos at startup!)
 # - Parse errors show exact line and column numbers for easy debugging
 # - Example: "failed to parse TOML at line 2, column 6: expected '=' ..."
 #

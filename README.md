@@ -31,7 +31,7 @@ This gateway is used with [GitHub Agentic Workflows](https://github.com/github/g
    }
    ```
 
-   Note: In JSON stdin config, `gateway.port` and `gateway.domain` are schema-required fields.
+   Note: In JSON stdin config, `gateway.port`, `gateway.domain`, and one of `gateway.agentId` or `gateway.apiKey` are schema-required fields.
 
    Looking for complete examples? See [`config.example.toml`](config.example.toml), [`config.example-payload-threshold.toml`](config.example-payload-threshold.toml), and [`example-http-config.json`](example-http-config.json).
 
