@@ -7,7 +7,7 @@
 BINARY_NAME=awmg
 
 # Go and toolchain versions
-GO_VERSION=1.25.0
+GO_VERSION=1.26.4
 GOLANGCI_LINT_VERSION=v2.8.0
 
 # Build the CLI binary
@@ -27,9 +27,9 @@ lint:
 	@echo "Running golangci-lint..."
 	@GOPATH=$$(go env GOPATH); \
 	if [ -f "$$GOPATH/bin/golangci-lint" ]; then \
-		$$GOPATH/bin/golangci-lint run --timeout=5m || echo "⚠ Warning: golangci-lint failed (compatibility issue with Go 1.25.0). Continuing with other checks..."; \
+		$$GOPATH/bin/golangci-lint run --timeout=5m || echo "⚠ Warning: golangci-lint failed (compatibility issue with Go 1.26.4). Continuing with other checks..."; \
 	elif command -v golangci-lint >/dev/null 2>&1; then \
-		golangci-lint run --timeout=5m || echo "⚠ Warning: golangci-lint failed (compatibility issue with Go 1.25.0). Continuing with other checks..."; \
+		golangci-lint run --timeout=5m || echo "⚠ Warning: golangci-lint failed (compatibility issue with Go 1.26.4). Continuing with other checks..."; \
 	else \
 		echo "⚠ Warning: golangci-lint not found. Run 'make install' to install it."; \
 		echo "  Skipping golangci-lint checks..."; \
@@ -106,9 +106,9 @@ agent-finished:
 	@echo "Running golangci-lint..."
 	@GOPATH=$$(go env GOPATH); \
 	if [ -f "$$GOPATH/bin/golangci-lint" ]; then \
-		$$GOPATH/bin/golangci-lint run --timeout=5m || echo "⚠ Warning: golangci-lint failed (compatibility issue with Go 1.25.0). Continuing with other checks..."; \
+		$$GOPATH/bin/golangci-lint run --timeout=5m || echo "⚠ Warning: golangci-lint failed (compatibility issue with Go 1.26.4). Continuing with other checks..."; \
 	elif command -v golangci-lint >/dev/null 2>&1; then \
-		golangci-lint run --timeout=5m || echo "⚠ Warning: golangci-lint failed (compatibility issue with Go 1.25.0). Continuing with other checks..."; \
+		golangci-lint run --timeout=5m || echo "⚠ Warning: golangci-lint failed (compatibility issue with Go 1.26.4). Continuing with other checks..."; \
 	else \
 		echo "⚠ Warning: golangci-lint not found. Run 'make install' to install it."; \
 		echo "  Skipping golangci-lint checks..."; \

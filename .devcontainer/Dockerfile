@@ -1,5 +1,5 @@
-# Dev container for MCP Gateway (Go 1.25)
-FROM mcr.microsoft.com/devcontainers/go:1.25-bookworm
+# Dev container for MCP Gateway (Go 1.26)
+FROM mcr.microsoft.com/devcontainers/go:1.26-bookworm
 
 # Install golangci-lint
 ARG GOLANGCI_LINT_VERSION=v2.8.0

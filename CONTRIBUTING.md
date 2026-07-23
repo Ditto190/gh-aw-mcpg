@@ -5,7 +5,7 @@ Thank you for your interest in contributing to MCP Gateway! This document provid
 ## Prerequisites
 
 1. **Docker** installed and running
-2. **Go 1.25.0 or later** (see [installation instructions](https://go.dev/dl/))
+2. **Go 1.26.4 or later** (see [installation instructions](https://go.dev/dl/))
 3. **Make** for running build commands
 
 ## Getting Started
@@ -24,7 +24,7 @@ Thank you for your interest in contributing to MCP Gateway! This document provid
    ```
 
    This will:
-   - Verify Go installation (and warn if the version is older than 1.25)
+   - Verify Go installation (and warn if the version is older than 1.26)
    - Install golangci-lint if not present
    - Download and verify Go module dependencies
 
