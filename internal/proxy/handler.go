@@ -42,7 +42,7 @@ func rejectProxyRequest(w http.ResponseWriter, span oteltrace.Span, status int, 
 	if span != nil {
 		tracing.RecordSpanError(span, err, msg)
 	}
-	httputil.RejectRequest(w, status, code, msg)
+	httputil.WriteErrorResponse(w, status, code, msg)
 }
 
 // proxyHandler implements http.Handler and runs the DIFC pipeline on proxied requests.
@@ -237,7 +237,7 @@ func (h *proxyHandler) handleWithDIFC(w http.ResponseWriter, r *http.Request, pa
 	}
 	if resp != nil {
 		fwdSpan.SetAttributes(tracing.HTTPResponseStatusCodeKey.Int(resp.StatusCode))
-		if rateLimited, resetHeader, _ := rateLimitSignal(resp); rateLimited {
+		if rateLimited, resetHeader, _ := githubhttp.RateLimitSignal(resp); rateLimited {
 			fwdSpan.SetAttributes(tracing.RateLimitHit.Bool(true))
 			if difcSpan.IsRecording() {
 				eventAttrs := []attribute.KeyValue{}
@@ -471,7 +471,7 @@ func copyResponseHeaders(w http.ResponseWriter, resp *http.Response) {
 //  1. Injects a Retry-After header so the client knows when to retry.
 //  2. Logs the event at ERROR level so operators can monitor rate-limit incidents.
 func injectRetryAfterIfRateLimited(w http.ResponseWriter, resp *http.Response) {
-	isRateLimited, resetHeader, remaining := rateLimitSignal(resp)
+	isRateLimited, resetHeader, remaining := githubhttp.RateLimitSignal(resp)
 	if !isRateLimited {
 		return
 	}
@@ -484,14 +484,6 @@ func injectRetryAfterIfRateLimited(w http.ResponseWriter, resp *http.Response) {
 	logger.LogError("client",
 		"upstream rate limit hit: status=%d X-Ratelimit-Remaining=%s X-Ratelimit-Reset=%s retry-after=%ds",
 		resp.StatusCode, remaining, resetHeader, retryAfter)
-}
-
-func rateLimitSignal(resp *http.Response) (bool, string, string) {
-	is429 := resp.StatusCode == http.StatusTooManyRequests
-	// Use Go's canonical header key form (textproto.CanonicalMIMEHeaderKey produces
-	// "X-Ratelimit-Remaining", matching GitHub's actual response headers).
-	remaining := resp.Header.Get("X-Ratelimit-Remaining")
-	return is429 || remaining == "0", resp.Header.Get("X-Ratelimit-Reset"), remaining
 }
 
 var metadataPassthrough = map[string]bool{

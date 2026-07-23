@@ -1,7 +1,6 @@
 package server
 
 import (
-	"strings"
 	"time"
 
 	"github.com/github/gh-aw-mcpg/internal/githubhttp"
@@ -44,20 +43,10 @@ func isRateLimitToolResult(result interface{}) (bool, time.Time) {
 	}
 
 	text := mcpresult.ExtractTextContent(m)
-	if isRateLimitText(text) {
+	if githubhttp.IsRateLimitText(text) {
 		resetAt := githubhttp.ParseRateLimitResetFromText(text)
 		logCircuitBreaker.Printf("Rate limit detected in tool result: hasResetAt=%v", !resetAt.IsZero())
 		return true, resetAt
 	}
 	return false, time.Time{}
-}
-
-// isRateLimitText returns true when the message indicates a GitHub rate-limit error.
-func isRateLimitText(text string) bool {
-	lower := strings.ToLower(text)
-	return strings.Contains(lower, "rate limit exceeded") ||
-		(strings.Contains(lower, "rate limit") && strings.Contains(lower, "403")) ||
-		strings.Contains(lower, "api rate limit") ||
-		strings.Contains(lower, "secondary rate limit") ||
-		strings.Contains(lower, "too many requests")
 }

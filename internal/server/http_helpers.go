@@ -51,7 +51,7 @@ func logRuntimeError(errorType, detail string, r *http.Request, serverName *stri
 func rejectRequest(w http.ResponseWriter, r *http.Request, status int, code, msg, logCategory, runtimeErrType, runtimeDetail string) {
 	logger.LogErrorToMarkdown(logCategory, "Request rejected: %s, remote=%s, path=%s", msg, r.RemoteAddr, r.URL.Path)
 	logRuntimeError(runtimeErrType, runtimeDetail, r, nil)
-	httputil.RejectRequest(w, status, code, msg)
+	httputil.WriteErrorResponse(w, status, code, msg)
 }
 
 // readAndRestoreRequestBody reads all bytes from request body and restores it

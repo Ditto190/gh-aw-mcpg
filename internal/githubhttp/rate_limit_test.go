@@ -1,12 +1,101 @@
 package githubhttp
 
 import (
+	"net/http"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 )
+
+func TestIsRateLimitText(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		text string
+		want bool
+	}{
+		{
+			name: "rate limit exceeded lowercase",
+			text: "rate limit exceeded",
+			want: true,
+		},
+		{
+			name: "API rate limit exceeded",
+			text: "API rate limit exceeded for user ID 12345",
+			want: true,
+		},
+		{
+			name: "rate limit with 403",
+			text: "rate limit 403 Forbidden",
+			want: true,
+		},
+		{
+			name: "secondary rate limit",
+			text: "You have exceeded a secondary rate limit",
+			want: true,
+		},
+		{
+			name: "too many requests",
+			text: "too many requests, please slow down",
+			want: true,
+		},
+		{
+			name: "uppercase RATE LIMIT EXCEEDED",
+			text: "RATE LIMIT EXCEEDED",
+			want: true,
+		},
+		{
+			name: "mixed case Rate Limit Exceeded",
+			text: "Rate Limit Exceeded for this endpoint",
+			want: true,
+		},
+		{
+			name: "too many requests mixed case",
+			text: "Too Many Requests",
+			want: true,
+		},
+		{
+			name: "normal error message",
+			text: "repository not found",
+			want: false,
+		},
+		{
+			name: "empty string",
+			text: "",
+			want: false,
+		},
+		{
+			name: "unrelated 403 error",
+			text: "403 Forbidden: access denied",
+			want: false,
+		},
+		{
+			name: "partial match rate only",
+			text: "rate of change is high",
+			want: false,
+		},
+		{
+			name: "limit only",
+			text: "limit reached for this feature",
+			want: false,
+		},
+		{
+			name: "api rate limit without 403",
+			text: "api rate limit reset in 60s",
+			want: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tt.want, IsRateLimitText(tt.text))
+		})
+	}
+}
 
 // TestParseRateLimitResetFromText verifies all branches of the text-based
 // rate-limit reset parser.
@@ -133,4 +222,50 @@ func TestParseRateLimitResetFromText(t *testing.T) {
 				"reset time %v is too late (expected at most %v after %v)", got, tt.maxOffset, after)
 		})
 	}
+}
+
+func TestRateLimitSignal(t *testing.T) {
+	t.Parallel()
+
+	t.Run("nil response is not rate limited", func(t *testing.T) {
+		t.Parallel()
+		limited, reset, remaining := RateLimitSignal(nil)
+		assert.False(t, limited)
+		assert.Empty(t, reset)
+		assert.Empty(t, remaining)
+	})
+
+	t.Run("429 status is rate limited", func(t *testing.T) {
+		t.Parallel()
+		resp := &http.Response{
+			StatusCode: http.StatusTooManyRequests,
+			Header:     http.Header{"X-Ratelimit-Reset": []string{"12345"}},
+		}
+		limited, reset, remaining := RateLimitSignal(resp)
+		assert.True(t, limited)
+		assert.Equal(t, "12345", reset)
+		assert.Equal(t, "", remaining)
+	})
+
+	t.Run("remaining zero is rate limited", func(t *testing.T) {
+		t.Parallel()
+		resp := &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     http.Header{"X-Ratelimit-Remaining": []string{"0"}},
+		}
+		limited, _, remaining := RateLimitSignal(resp)
+		assert.True(t, limited)
+		assert.Equal(t, "0", remaining)
+	})
+
+	t.Run("non-rate-limited response", func(t *testing.T) {
+		t.Parallel()
+		resp := &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     http.Header{"X-Ratelimit-Remaining": []string{"100"}},
+		}
+		limited, _, remaining := RateLimitSignal(resp)
+		assert.False(t, limited)
+		assert.Equal(t, "100", remaining)
+	})
 }
