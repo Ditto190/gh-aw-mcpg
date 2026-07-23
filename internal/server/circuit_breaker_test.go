@@ -451,7 +451,7 @@ func TestCircuitBreakerState_String(t *testing.T) {
 	}
 }
 
-// TestIsRateLimitText_Direct directly verifies isRateLimitText with each pattern and edge cases.
+// TestIsRateLimitText_Direct directly verifies githubhttp.IsRateLimitText with each pattern and edge cases.
 func TestIsRateLimitText_Direct(t *testing.T) {
 	t.Parallel()
 
@@ -510,7 +510,7 @@ func TestIsRateLimitText_Direct(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			assert.Equal(t, tt.want, isRateLimitText(tt.text))
+			assert.Equal(t, tt.want, githubhttp.IsRateLimitText(tt.text))
 		})
 	}
 }

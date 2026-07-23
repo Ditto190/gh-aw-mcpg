@@ -41,20 +41,10 @@ func NewValidatorClient(ctx context.Context, transport sdk.Transport) (*Validato
 	}, nil
 }
 
-// paginate collects all pages from a paginated MCP list call using the canonical
-// PaginateAll algorithm from the mcp package.
-// fetch is called with a cursor (empty string for the first page) and returns the items,
-// the next cursor (empty when done), and any error.
-func paginate[T any](ctx context.Context, fetch func(ctx context.Context, cursor string) ([]T, string, error)) ([]T, error) {
-	return mcp.PaginateAll(validatorPaginationMaxPages, func(cursor string) ([]T, string, error) {
-		return fetch(ctx, cursor)
-	})
-}
-
 // ListTools retrieves the list of tools from the connected MCP server, including all paginated results.
 func (v *ValidatorClient) ListTools() ([]*sdk.Tool, error) {
-	tools, err := paginate(v.ctx, func(ctx context.Context, cursor string) ([]*sdk.Tool, string, error) {
-		result, err := v.session.ListTools(ctx, &sdk.ListToolsParams{Cursor: cursor})
+	tools, err := mcp.PaginateAll(validatorPaginationMaxPages, func(cursor string) ([]*sdk.Tool, string, error) {
+		result, err := v.session.ListTools(v.ctx, &sdk.ListToolsParams{Cursor: cursor})
 		if err != nil {
 			return nil, "", err
 		}
@@ -68,8 +58,8 @@ func (v *ValidatorClient) ListTools() ([]*sdk.Tool, error) {
 
 // ListResources retrieves the list of resources from the connected MCP server, including all paginated results.
 func (v *ValidatorClient) ListResources() ([]*sdk.Resource, error) {
-	resources, err := paginate(v.ctx, func(ctx context.Context, cursor string) ([]*sdk.Resource, string, error) {
-		result, err := v.session.ListResources(ctx, &sdk.ListResourcesParams{Cursor: cursor})
+	resources, err := mcp.PaginateAll(validatorPaginationMaxPages, func(cursor string) ([]*sdk.Resource, string, error) {
+		result, err := v.session.ListResources(v.ctx, &sdk.ListResourcesParams{Cursor: cursor})
 		if err != nil {
 			return nil, "", err
 		}

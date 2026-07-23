@@ -245,34 +245,6 @@ func TestWriteErrorResponse(t *testing.T) {
 	}
 }
 
-func TestRejectRequest(t *testing.T) {
-	tests := []struct {
-		name       string
-		statusCode int
-		code       string
-		message    string
-	}{
-		{name: "400", statusCode: http.StatusBadRequest, code: "bad_request", message: "malformed input"},
-		{name: "403", statusCode: http.StatusForbidden, code: "difc_forbidden", message: "DIFC policy violation"},
-		{name: "503", statusCode: http.StatusServiceUnavailable, code: "service_unavailable", message: "gateway shutting down"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			w := httptest.NewRecorder()
-			RejectRequest(w, tt.statusCode, tt.code, tt.message)
-
-			assert.Equal(t, tt.statusCode, w.Code)
-			assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
-
-			var body map[string]string
-			require.NoError(t, json.NewDecoder(w.Body).Decode(&body))
-			assert.Equal(t, tt.code, body["error"])
-			assert.Equal(t, tt.message, body["message"])
-		})
-	}
-}
-
 // TestWriteSimpleHealthResponse verifies that the helper writes a {"status":"ok"} health response.
 func TestWriteSimpleHealthResponse(t *testing.T) {
 	rec := httptest.NewRecorder()

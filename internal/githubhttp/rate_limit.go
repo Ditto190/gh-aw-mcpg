@@ -1,6 +1,7 @@
 package githubhttp
 
 import (
+	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -48,4 +49,25 @@ func ParseRateLimitResetFromText(text string) time.Time {
 	resetAt := time.Now().Add(time.Duration(secs) * time.Second)
 	logHTTP.Printf("Parsed rate limit reset time from text: resetIn=%ds, resetAt=%s", secs, resetAt.UTC().Format(time.RFC3339))
 	return resetAt
+}
+
+// IsRateLimitText returns true when the message indicates a GitHub rate-limit error.
+func IsRateLimitText(text string) bool {
+	lower := strings.ToLower(text)
+	return strings.Contains(lower, "rate limit exceeded") ||
+		(strings.Contains(lower, "rate limit") && strings.Contains(lower, "403")) ||
+		strings.Contains(lower, "api rate limit") ||
+		strings.Contains(lower, "secondary rate limit") ||
+		strings.Contains(lower, "too many requests")
+}
+
+// RateLimitSignal reports whether an HTTP response indicates an upstream rate limit.
+// It returns the reset and remaining header values for downstream retry and logging.
+func RateLimitSignal(resp *http.Response) (bool, string, string) {
+	if resp == nil {
+		return false, "", ""
+	}
+	is429 := resp.StatusCode == http.StatusTooManyRequests
+	remaining := resp.Header.Get("X-Ratelimit-Remaining")
+	return is429 || remaining == "0", resp.Header.Get("X-Ratelimit-Reset"), remaining
 }
