@@ -24,7 +24,7 @@ Thank you for your interest in contributing to MCP Gateway! This document provid
    ```
 
    This will:
-   - Verify Go installation (and warn if the version is older than 1.26)
+   - Verify Go installation (and warn if the version is older than 1.26.4)
    - Install golangci-lint if not present
    - Download and verify Go module dependencies
 
