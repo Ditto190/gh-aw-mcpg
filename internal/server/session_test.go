@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -228,6 +229,50 @@ func TestEnsureSessionDirectory(t *testing.T) {
 
 		assert.DirExists(t, filepath.Join(us.payloadDir, "session-alpha"))
 		assert.DirExists(t, filepath.Join(us.payloadDir, "session-beta"))
+	})
+
+	t.Run("returns error when payloadDir is a file (MkdirAll blocked)", func(t *testing.T) {
+		// Write a regular file where the payloadDir entry would be.
+		// os.Stat on "file/my-session" returns ENOTDIR (not os.IsNotExist),
+		// exercising the line 68-70 error path ("failed to check session directory").
+		base := t.TempDir()
+		fileInsteadOfDir := filepath.Join(base, "not-a-dir")
+		require.NoError(t, os.WriteFile(fileInsteadOfDir, []byte("block"), 0644))
+
+		us2 := newSessionTestUnifiedServer(t)
+		us2.payloadDir = fileInsteadOfDir
+
+		err := us2.ensureSessionDirectory("my-session")
+		assert.Error(t, err, "should fail when payloadDir is a regular file")
+		assert.ErrorContains(t, err, "failed to check session directory")
+	})
+
+	t.Run("returns error when directory cannot be created (MkdirAll failure)", func(t *testing.T) {
+		// Make the payloadDir read-only so that os.Stat returns IsNotExist
+		// (the session subdirectory genuinely does not exist yet) but os.MkdirAll
+		// then fails with permission denied, exercising the line 74-76 path.
+		base := t.TempDir()
+		readOnly := filepath.Join(base, "readonly")
+		require.NoError(t, os.Mkdir(readOnly, 0555))
+		t.Cleanup(func() { os.Chmod(readOnly, 0755) }) //nolint:errcheck
+
+		us2 := newSessionTestUnifiedServer(t)
+		us2.payloadDir = readOnly
+
+		err := us2.ensureSessionDirectory("blocked-session")
+		assert.Error(t, err, "should fail when payloadDir is not writable")
+		assert.ErrorContains(t, err, "failed to create session directory")
+	})
+
+	t.Run("returns error on Stat failure that is not IsNotExist", func(t *testing.T) {
+		// On Linux a null byte in the path causes Stat to return an error that
+		// is not os.IsNotExist, exercising the line 68-70 branch.
+		us2 := newSessionTestUnifiedServer(t)
+		us2.payloadDir = t.TempDir()
+
+		err := us2.ensureSessionDirectory("session\x00bad")
+		assert.Error(t, err, "should fail for a session ID that makes the path invalid")
+		assert.ErrorContains(t, err, "failed to check session directory")
 	})
 }
 
