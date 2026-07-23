@@ -70,11 +70,13 @@ When running `awmg` directly (outside `docker run`), commonly used CLI flags inc
 - Run `./awmg --help` for the full authoritative flag list.
 - A complete reference for all environment variables — including guard policy, TLS, tracing, authentication tokens, and containerized deployment — is in [docs/ENVIRONMENT_VARIABLES.md](docs/ENVIRONMENT_VARIABLES.md).
 
-Common operational environment variables include:
+Key operator-facing environment variables (see [AGENTS.md](AGENTS.md) for the full list):
 - `MCP_GATEWAY_PORT` — used by `--validate-env` container checks (must be 1-65535)
 - `MCP_GATEWAY_DOMAIN` — gateway domain used by containerized startup checks and commonly referenced from config
 - `GITHUB_API_URL`, `GITHUB_SERVER_URL` — explicit/derived GitHub API endpoint selection for proxy mode
 - `MCP_GATEWAY_LOG_DIR` — log file directory (default: `/tmp/gh-aw/mcp-logs`)
+- `DEBUG` — enable debug logging (e.g., `DEBUG=*` for all, `DEBUG=server:*` for a specific package)
+- `DEBUG_COLORS` — control colored debug output (set to `0` to disable; auto-disabled when output is piped)
 - `MCP_GATEWAY_PAYLOAD_DIR` — large payload storage directory (must be absolute path; default: `/tmp/jq-payloads`)
 - `MCP_GATEWAY_PAYLOAD_SIZE_THRESHOLD` — size threshold in bytes for payload storage (default: `524288`)
 - `MCP_GATEWAY_SESSION_TIMEOUT` — session timeout for stateful unified/routed MCP sessions (default: `6h`)
