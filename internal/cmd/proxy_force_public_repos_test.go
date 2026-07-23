@@ -104,6 +104,9 @@ func TestProxyForcePublicReposIfNeeded_APIError(t *testing.T) {
 
 	// Use a server that always returns 500.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got, want := r.Header.Get("Authorization"), "token test-token"; got != want {
+			t.Errorf("unexpected Authorization header: got %q want %q", got, want)
+		}
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer srv.Close()
@@ -133,7 +136,7 @@ func TestProxyForcePublicReposIfNeeded_PrivateRepo(t *testing.T) {
 	t.Setenv("GITHUB_REPOSITORY", "octo/repo")
 	clearAllTokenEnvVars(t)
 
-	srv := repoVisibilityServer(t, "octo/repo", "private", http.StatusOK, "")
+	srv := repoVisibilityServer(t, "octo/repo", "private", http.StatusOK, "token test-token")
 	defer srv.Close()
 
 	policy := `{"allow-only":{"repos":"private","min-integrity":"approved"}}`
@@ -148,7 +151,7 @@ func TestProxyForcePublicReposIfNeeded_InternalRepo(t *testing.T) {
 	t.Setenv("GITHUB_REPOSITORY", "octo/repo")
 	clearAllTokenEnvVars(t)
 
-	srv := repoVisibilityServer(t, "octo/repo", "internal", http.StatusOK, "")
+	srv := repoVisibilityServer(t, "octo/repo", "internal", http.StatusOK, "token test-token")
 	defer srv.Close()
 
 	policy := `{"allow-only":{"repos":"private","min-integrity":"approved"}}`
