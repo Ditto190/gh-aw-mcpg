@@ -38,7 +38,10 @@ type headerInjectingRoundTripper struct {
 	headers map[string]string
 }
 
+var logHTTPClient = logger.ForFile()
+
 func (rt *headerInjectingRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	logHTTPClient.Printf("Injecting %d custom header(s) into request: method=%s, url=%s", len(rt.headers), req.Method, req.URL.Host)
 	reqCopy := req.Clone(req.Context())
 	for k, v := range rt.headers {
 		reqCopy.Header.Set(k, v)
@@ -57,8 +60,10 @@ func cloneClientWithTransport(baseClient *http.Client, newTransport http.RoundTr
 // resolveBaseTransport returns the client's transport, falling back to http.DefaultTransport.
 func resolveBaseTransport(c *http.Client) http.RoundTripper {
 	if c.Transport != nil {
+		logHTTPClient.Printf("resolveBaseTransport: using client's existing transport (%T)", c.Transport)
 		return c.Transport
 	}
+	logHTTPClient.Print("resolveBaseTransport: no transport set, using http.DefaultTransport")
 	return http.DefaultTransport
 }
 
@@ -69,7 +74,7 @@ func buildHTTPClientWithHeaders(baseClient *http.Client, headers map[string]stri
 	if len(headers) == 0 {
 		return baseClient
 	}
-	logHTTP.Printf("Wrapping HTTP client with %d custom header(s)", len(headers))
+	logHTTPClient.Printf("Wrapping HTTP client with %d custom header(s)", len(headers))
 	return cloneClientWithTransport(baseClient, &headerInjectingRoundTripper{
 		base:    resolveBaseTransport(baseClient),
 		headers: headers,
@@ -87,7 +92,7 @@ type oidcRoundTripper struct {
 }
 
 func (rt *oidcRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
-	logHTTP.Printf("Acquiring OIDC token for audience=%s", rt.audience)
+	logHTTPClient.Printf("Acquiring OIDC token for audience=%s", rt.audience)
 	token, err := rt.provider.Token(req.Context(), rt.audience)
 	if err != nil {
 		return nil, fmt.Errorf("OIDC token acquisition failed: %w", err)
@@ -102,7 +107,7 @@ func (rt *oidcRoundTripper) RoundTrip(req *http.Request) (*http.Response, error)
 // Static headers (from buildHTTPClientWithHeaders) are applied first, then the OIDC
 // token overwrites the Authorization header.
 func buildHTTPClientWithOIDC(baseClient *http.Client, provider *oidc.Provider, audience string) *http.Client {
-	logHTTP.Printf("Wrapping HTTP client with OIDC provider: audience=%s", audience)
+	logHTTPClient.Printf("Wrapping HTTP client with OIDC provider: audience=%s", audience)
 	return cloneClientWithTransport(baseClient, &oidcRoundTripper{
 		base:     resolveBaseTransport(baseClient),
 		provider: provider,
