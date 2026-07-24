@@ -84,8 +84,10 @@ func registerFlagCompletions(cmd *cobra.Command) {
 	}
 
 	// Enum completions for allowonly flags.
-	cmd.RegisterFlagCompletionFunc("allowonly-min-integrity", cobra.FixedCompletions(
-		config.AllIntegrityLevels(), cobra.ShellCompDirectiveNoFileComp))
+	if err := cmd.RegisterFlagCompletionFunc("allowonly-min-integrity", cobra.FixedCompletions(
+		config.AllIntegrityLevels(), cobra.ShellCompDirectiveNoFileComp)); err != nil {
+		debugLog.Printf("Failed to register completion for --allowonly-min-integrity: %v", err)
+	}
 
 	// Add ActiveHelp for --config and --config-stdin flags
 	cmd.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
