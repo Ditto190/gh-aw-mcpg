@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/github/gh-aw-mcpg/internal/logger"
+	"github.com/github/gh-aw-mcpg/internal/mcpresult"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -50,7 +51,7 @@ func ConvertToCallToolResult(data interface{}) (*sdk.CallToolResult, error) {
 // It inspects the map directly without marshaling, saving one marshal + up to three
 // unmarshal operations compared to the original JSON round-trip approach.
 func convertMapToCallToolResult(m map[string]interface{}) (*sdk.CallToolResult, error) {
-	isError, _ := m["isError"].(bool)
+	isError := mcpresult.IsErrorResult(m)
 
 	contentVal, hasContent := m["content"]
 	if !hasContent || contentVal == nil {
