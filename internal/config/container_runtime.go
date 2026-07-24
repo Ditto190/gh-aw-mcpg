@@ -12,6 +12,10 @@ const (
 	containerRuntimePodman = "podman"
 )
 
+func isWhitespaceOnly(s string) bool {
+	return strings.TrimSpace(s) == "" && s != ""
+}
+
 func normalizeContainerRuntime(runtime string) string {
 	return strings.ToLower(strings.TrimSpace(runtime))
 }
@@ -24,7 +28,7 @@ func runtimeCommandForName(runtime string) string {
 }
 
 func validateContainerRuntimeValue(value, fieldName string) error {
-	if strings.TrimSpace(value) == "" && value != "" {
+	if isWhitespaceOnly(value) {
 		return fmt.Errorf("%s must not be empty or whitespace-only when set", fieldName)
 	}
 	normalized := normalizeContainerRuntime(value)
@@ -49,7 +53,9 @@ func effectiveContainerRuntimeName(configRuntime string) string {
 
 	// Env override takes precedence over config.
 	if envRuntimeRaw := envutil.GetEnvString("MCP_GATEWAY_CONTAINER_RUNTIME", ""); envRuntimeRaw != "" {
-		if err := validateContainerRuntimeValue(envRuntimeRaw, "MCP_GATEWAY_CONTAINER_RUNTIME"); err != nil {
+		if isWhitespaceOnly(envRuntimeRaw) {
+			logConfig.Printf("Ignoring whitespace-only MCP_GATEWAY_CONTAINER_RUNTIME value")
+		} else if err := validateContainerRuntimeValue(envRuntimeRaw, "MCP_GATEWAY_CONTAINER_RUNTIME"); err != nil {
 			logConfig.Printf("Ignoring invalid MCP_GATEWAY_CONTAINER_RUNTIME=%q: %v", envRuntimeRaw, err)
 		} else {
 			runtime = normalizeContainerRuntime(envRuntimeRaw)

@@ -176,7 +176,7 @@ func TestConvertStdinConfig_ContainerRuntimeSelection(t *testing.T) {
 		assert.Equal(t, "podman", cfg.Servers["test"].Command)
 	})
 
-	t.Run("whitespace MCP_GATEWAY_CONTAINER_RUNTIME is ignored", func(t *testing.T) {
+	t.Run("whitespace MCP_GATEWAY_CONTAINER_RUNTIME falls back to config value", func(t *testing.T) {
 		t.Setenv("MCP_GATEWAY_CONTAINER_RUNTIME", "   ")
 		stdinCfg := &StdinConfig{
 			MCPServers: map[string]*StdinServerConfig{
