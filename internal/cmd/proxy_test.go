@@ -187,7 +187,7 @@ func TestNewProxyCmd_DefaultFlagValues(t *testing.T) {
 				t.Helper()
 				val, err := cmd.Flags().GetString("listen")
 				require.NoError(t, err)
-				assert.Equal(t, "127.0.0.1:8080", val, "--listen default should be 127.0.0.1:8080")
+				assert.Equal(t, DefaultProxyListenAddr, val, "--listen default should match DefaultProxyListenAddr")
 			},
 		},
 		{
@@ -447,12 +447,30 @@ func TestNewProxyCmd_ListenFlag(t *testing.T) {
 
 	flag := cmd.Flags().Lookup("listen")
 	require.NotNil(t, flag)
-	assert.Equal(t, "127.0.0.1:8080", flag.DefValue, "--listen default should be 127.0.0.1:8080")
+	assert.Equal(t, DefaultProxyListenAddr, flag.DefValue, "--listen default should match DefaultProxyListenAddr")
 
 	// Verify the flag has a shorthand
 	shortFlag := cmd.Flags().ShorthandLookup("l")
 	require.NotNil(t, shortFlag, "-l shorthand should be registered for --listen")
 	assert.Equal(t, "listen", shortFlag.Name, "-l should map to --listen")
+}
+
+func TestNewProxyCmd_PolicyCompletionActiveHelp(t *testing.T) {
+	cmd := newProxyCmd()
+	require.NotNil(t, cmd)
+
+	completionFn, ok := cmd.GetFlagCompletionFunc("policy")
+	require.True(t, ok, "policy flag should have a completion function registered")
+	require.NotNil(t, completionFn, "policy completion function should not be nil")
+
+	completions, directive := completionFn(cmd, nil, "")
+	assert.Equal(t, cobra.ShellCompDirectiveNoFileComp, directive,
+		"policy completion should use ShellCompDirectiveNoFileComp directive")
+	require.NotEmpty(t, completions, "policy completion should return active help text")
+	assert.Contains(t, strings.Join(completions, "\n"), "--policy",
+		"policy completion active help should mention --policy usage")
+	assert.Contains(t, strings.Join(completions, "\n"), "\"allow-only\"",
+		"policy completion active help should include a JSON policy example")
 }
 
 // TestNewProxyCmd_IsAddedToRootCmd verifies the proxy subcommand is registered

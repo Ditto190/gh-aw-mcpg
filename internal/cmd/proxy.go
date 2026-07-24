@@ -24,6 +24,8 @@ import (
 
 var logProxyCmd = logger.ForFile()
 
+const DefaultProxyListenAddr = DefaultListenIPv4 + ":8080"
+
 // Proxy subcommand flag variables
 var (
 	proxyGuardWasm       string
@@ -104,8 +106,15 @@ Local usage:
 	// them independent avoids confusion and allows each command to evolve separately.
 	cmd.Flags().StringVar(&proxyGuardWasm, "guard-wasm", defaultGuard, guardHelp)
 	cmd.Flags().StringVar(&proxyPolicy, "policy", envutil.GetEnvString(config.EnvGuardPolicyJSON, ""), "Guard policy JSON")
+	if err := cmd.RegisterFlagCompletionFunc("policy", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return cobra.AppendActiveHelp(nil,
+			"Tip: Pass a JSON guard policy, e.g. --policy '{\"allow-only\":{\"repos\":\"public\",\"min-integrity\":\"none\"}}'"),
+			cobra.ShellCompDirectiveNoFileComp
+	}); err != nil {
+		logProxyCmd.Printf("Failed to register completion for --policy: %v", err)
+	}
 	cmd.Flags().StringVar(&proxyToken, "github-token", "", "Fallback GitHub API token (default: forwards client Authorization header)")
-	cmd.Flags().StringVarP(&proxyListen, "listen", "l", "127.0.0.1:8080", "Proxy listen address")
+	cmd.Flags().StringVarP(&proxyListen, "listen", "l", DefaultProxyListenAddr, "Proxy listen address")
 	cmd.Flags().StringVar(&proxyLogDir, "log-dir", defaultProxyLogDir, "Log file directory")
 	cmd.Flags().StringVar(&proxyWasmCacheDir, "wasm-cache-dir", resolveWasmCacheDir(false, "", defaultProxyLogDir), "Directory for disk-backed wazero compilation cache (default: sibling of <log-dir>, named wazero-cache)")
 	registerGuardsModeFlag(cmd, &proxyDIFCMode)
