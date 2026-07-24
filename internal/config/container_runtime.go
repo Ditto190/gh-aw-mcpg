@@ -71,11 +71,10 @@ func effectiveContainerRuntimeCommand(gateway *GatewayConfig) string {
 }
 
 func configuredContainerRuntimeCommand(gateway *GatewayConfig) string {
-	runtime := DefaultContainerRuntime
+	command := runtimeCommandForName(DefaultContainerRuntime)
 	if gateway != nil {
-		runtime = gateway.ContainerRuntime
+		command = runtimeCommandForName(configuredContainerRuntimeName(gateway.ContainerRuntime))
 	}
-	command := runtimeCommandForName(configuredContainerRuntimeName(runtime))
 	if gateway != nil && strings.TrimSpace(gateway.ContainerRuntimeCommand) != "" {
 		command = strings.TrimSpace(gateway.ContainerRuntimeCommand)
 	}

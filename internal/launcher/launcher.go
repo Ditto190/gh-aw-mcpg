@@ -312,7 +312,11 @@ func isDirectStdioCommand(serverCfg *config.ServerConfig) bool {
 	case "docker", "podman", "nerdctl":
 		return false
 	}
-	for _, arg := range serverCfg.Args {
+	limit := len(serverCfg.Args)
+	if limit > 3 {
+		limit = 3
+	}
+	for _, arg := range serverCfg.Args[:limit] {
 		if strings.EqualFold(arg, "run") {
 			return false
 		}
