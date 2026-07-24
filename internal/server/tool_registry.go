@@ -363,6 +363,7 @@ func (us *UnifiedServer) registerPromptsFromBackend(ctx context.Context, serverI
 	return nil
 }
 func (us *UnifiedServer) registerSysTool(name, description string, inputSchema map[string]interface{}, handler func(context.Context, *sdk.CallToolRequest, interface{}) (*sdk.CallToolResult, interface{}, error)) {
+	logUnified.Printf("registerSysTool: name=%s", name)
 	// Store tool info internally only -- sys tools are intentionally NOT registered
 	// with the MCP SDK server and therefore never appear in tools/list.
 	us.toolsMu.Lock()
@@ -378,12 +379,14 @@ func (us *UnifiedServer) registerSysTool(name, description string, inputSchema m
 
 // callSysServer is a helper that directly dispatches sys tools to SysServer.
 func (us *UnifiedServer) callSysServer(toolName string) (interface{}, error) {
+	logUnified.Printf("callSysServer: dispatching tool=%s", toolName)
 	switch toolName {
 	case "sys_init":
 		return us.sysServer.SysInit()
 	case "sys_list_servers":
 		return us.sysServer.ListServers()
 	default:
+		logUnified.Printf("callSysServer: unknown tool=%s", toolName)
 		return nil, fmt.Errorf("unknown tool: %s", toolName)
 	}
 }
