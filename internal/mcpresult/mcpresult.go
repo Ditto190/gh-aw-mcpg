@@ -45,14 +45,6 @@ func NormalizeContentItems(contentVal interface{}) ([]map[string]interface{}, bo
 	}
 }
 
-// IsErrorResult reports whether the raw MCP result map has its "isError" flag
-// set to true. This is a shared helper for callers that inspect raw
-// map[string]interface{} result objects rather than the typed SDK struct.
-func IsErrorResult(m map[string]interface{}) bool {
-	isErr, _ := m["isError"].(bool)
-	return isErr
-}
-
 // ExtractTextContent returns the concatenated text from text content items in a
 // raw MCP tool result map. Content items with a missing "type" are treated as
 // text items for compatibility with older callers and tests.
