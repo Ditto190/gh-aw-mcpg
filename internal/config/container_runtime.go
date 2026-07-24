@@ -28,7 +28,7 @@ func validateContainerRuntimeValue(value, fieldName string) error {
 	case "", containerRuntimeDocker, containerRuntimePodman:
 		return nil
 	default:
-		return fmt.Errorf("%s must be one of: docker, podman", fieldName)
+		return fmt.Errorf("%s must be one of: docker, podman (got: %q)", fieldName, value)
 	}
 }
 
@@ -39,13 +39,12 @@ func effectiveContainerRuntimeName(configRuntime string) string {
 	}
 
 	// Env override takes precedence over config.
-	if envRuntime := normalizeContainerRuntime(envutil.GetEnvString("MCP_GATEWAY_CONTAINER_RUNTIME", "")); envRuntime != "" {
-		runtime = envRuntime
-	}
-
-	if runtime != containerRuntimeDocker && runtime != containerRuntimePodman {
-		logConfig.Printf("Invalid effective container runtime %q, falling back to default %q", runtime, DefaultContainerRuntime)
-		return DefaultContainerRuntime
+	if envRuntimeRaw := envutil.GetEnvString("MCP_GATEWAY_CONTAINER_RUNTIME", ""); envRuntimeRaw != "" {
+		if err := validateContainerRuntimeValue(envRuntimeRaw, "MCP_GATEWAY_CONTAINER_RUNTIME"); err != nil {
+			logConfig.Printf("Ignoring invalid MCP_GATEWAY_CONTAINER_RUNTIME=%q: %v", envRuntimeRaw, err)
+		} else {
+			runtime = normalizeContainerRuntime(envRuntimeRaw)
+		}
 	}
 	return runtime
 }

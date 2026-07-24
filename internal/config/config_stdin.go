@@ -507,9 +507,13 @@ func convertStdinServerConfig(name string, server *StdinServerConfig, customSche
 	})
 }
 
+// stdioRuntimeConfig carries resolved container runtime settings used when
+// converting JSON stdin `container` server entries into internal stdio commands.
 type stdioRuntimeConfig struct {
+	// Command is the runtime executable/binary to invoke (e.g., docker, podman).
 	Command string
-	Args    []string
+	// Args are runtime-level arguments inserted before the "run" subcommand.
+	Args []string
 }
 
 func convertStdinServerConfigWithRuntime(name string, server *StdinServerConfig, customSchemas map[string]interface{}, runtimeCfg stdioRuntimeConfig) (*ServerConfig, error) {
@@ -581,8 +585,10 @@ func buildStdioServerConfig(name string, server *StdinServerConfig) *ServerConfi
 }
 
 func buildStdioServerConfigWithRuntime(name string, server *StdinServerConfig, runtimeCfg stdioRuntimeConfig) *ServerConfig {
+	// Defensive fallback for unit-level callers that bypass convertStdinConfig's
+	// runtime resolution path. Production conversion always provides a command.
 	if runtimeCfg.Command == "" {
-		runtimeCfg.Command = DefaultContainerRuntime
+		panic("stdio runtime command must not be empty")
 	}
 
 	args := append([]string{}, runtimeCfg.Args...)

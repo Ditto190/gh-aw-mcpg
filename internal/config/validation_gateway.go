@@ -40,9 +40,12 @@ func validateGatewayConfig(gateway *StdinGatewayConfig) error {
 	if err := validateContainerRuntimeValue(gateway.ContainerRuntime, "gateway.containerRuntime"); err != nil {
 		return err
 	}
-	if gateway.ContainerRuntimeCommand != "" && len(strings.TrimSpace(gateway.ContainerRuntimeCommand)) == 0 {
-		return InvalidValue("containerRuntimeCommand", "containerRuntimeCommand cannot be empty or whitespace only",
-			"gateway.containerRuntimeCommand", "Provide a non-empty runtime command path/name or remove the field")
+	if err := validateContainerRuntimeCommandNotBlank(
+		gateway.ContainerRuntimeCommand,
+		"containerRuntimeCommand",
+		"gateway.containerRuntimeCommand",
+	); err != nil {
+		return err
 	}
 
 	// Validate payloadDir if provided (per schema: must be absolute path)
@@ -85,6 +88,14 @@ func validateGatewayConfig(gateway *StdinGatewayConfig) error {
 func validateGatewayPayloadSizeThreshold(value int, fieldName, jsonPath string) error {
 	if ve := PositiveInteger(value, fieldName, jsonPath); ve != nil {
 		return ve
+	}
+	return nil
+}
+
+func validateContainerRuntimeCommandNotBlank(command, fieldName, jsonPath string) error {
+	if len(strings.TrimSpace(command)) == 0 && command != "" {
+		return InvalidValue(fieldName, fmt.Sprintf("%s cannot be empty or whitespace only", fieldName),
+			jsonPath, "Provide a non-empty runtime command path/name or remove the field")
 	}
 	return nil
 }

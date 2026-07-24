@@ -39,8 +39,8 @@ import (
 // Core constants for configuration defaults
 const (
 	DefaultPort              = 3000
-	DefaultStartupTimeout    = 30   // seconds (per spec §4.1.3)
-	DefaultToolTimeout       = 60   // seconds (per spec §4.1.3)
+	DefaultStartupTimeout    = 30 // seconds (per spec §4.1.3)
+	DefaultToolTimeout       = 60 // seconds (per spec §4.1.3)
 	DefaultContainerRuntime  = "docker"
 	DefaultKeepaliveInterval = 1500 // seconds (25 minutes) — keeps HTTP backend sessions alive
 	DefaultConnectTimeout    = 30   // seconds — per-transport timeout for HTTP backend connect
@@ -526,8 +526,12 @@ func LoadFromFile(path string) (*Config, error) {
 	if err := validateContainerRuntimeValue(cfg.Gateway.ContainerRuntime, "gateway.container_runtime"); err != nil {
 		return nil, err
 	}
-	if cfg.Gateway.ContainerRuntimeCommand != "" && strings.TrimSpace(cfg.Gateway.ContainerRuntimeCommand) == "" {
-		return nil, fmt.Errorf("gateway.container_runtime_command cannot be whitespace only")
+	if err := validateContainerRuntimeCommandNotBlank(
+		cfg.Gateway.ContainerRuntimeCommand,
+		"container_runtime_command",
+		"gateway.container_runtime_command",
+	); err != nil {
+		return nil, err
 	}
 
 	// Validate trusted_bots per spec §4.1.3.4: must be non-empty array when present

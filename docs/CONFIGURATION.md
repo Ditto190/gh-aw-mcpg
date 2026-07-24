@@ -125,6 +125,7 @@ Run `./awmg --help` for full CLI options. Selected frequently-used flags (run `.
 - **`gateway.containerRuntime`** (optional): Container runtime for stdio `container` launches in JSON stdin configs
   - Supported values: `"docker"` (default), `"podman"`
   - Can be overridden by environment variable `MCP_GATEWAY_CONTAINER_RUNTIME`
+  - If `MCP_GATEWAY_CONTAINER_RUNTIME` is set to an unsupported value, it is ignored and the configured/default runtime is used
 
 - **`gateway.containerRuntimeCommand`** (optional): Override runtime binary/path (for example, `"/usr/bin/podman"` or `"nerdctl"`)
 

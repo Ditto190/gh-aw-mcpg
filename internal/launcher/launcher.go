@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -294,8 +295,14 @@ func (l *Launcher) launchStdioConnection(serverID, sessionID string, serverCfg *
 	}
 }
 
+// isDirectStdioCommand reports whether a stdio command appears to be direct
+// process execution (as opposed to a container runtime launch).
+//
+// Detection is intentionally dual-mode:
+//   - known runtime executable names (docker/podman/nerdctl), and
+//   - custom runtime binaries where the first argument is "run".
 func isDirectStdioCommand(command string, args []string) bool {
-	switch command {
+	switch strings.ToLower(filepath.Base(command)) {
 	case "docker", "podman", "nerdctl":
 		return false
 	}
