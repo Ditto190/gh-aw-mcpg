@@ -4,8 +4,8 @@ import (
 	"context"
 	"github.com/github/gh-aw-mcpg/internal/difc"
 	"github.com/github/gh-aw-mcpg/internal/logger"
-	"github.com/github/gh-aw-mcpg/internal/util"
 	"github.com/github/gh-aw-mcpg/internal/urlutil"
+	"github.com/github/gh-aw-mcpg/internal/util"
 )
 
 var logWriteSink = logger.New("guard:write-sink")
