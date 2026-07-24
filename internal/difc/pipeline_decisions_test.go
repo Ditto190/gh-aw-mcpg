@@ -289,6 +289,92 @@ func TestFilterAndConvertLabeledData(t *testing.T) {
 		require.Error(t, err)
 		assert.Nil(t, result)
 	})
+
+	t.Run("empty collection returns empty result without blocking", func(t *testing.T) {
+		t.Parallel()
+		collection := &CollectionLabeledData{Items: []LabeledItem{}}
+		result, err := FilterAndConvertLabeledData(evaluator, agentSecrecy, agentIntegrity, OperationRead, collection, EnforcementStrict)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.False(t, result.Blocked, "empty collection should not be blocked")
+		require.IsType(t, []interface{}{}, result.FinalResult)
+		assert.Empty(t, result.FinalResult.([]interface{}), "empty collection should produce empty result")
+	})
+
+	t.Run("all items accessible produces unblocked result", func(t *testing.T) {
+		t.Parallel()
+		collection := &CollectionLabeledData{
+			Items: []LabeledItem{
+				makePublicItem(1),
+				makePublicItem(2),
+				makePublicItem(3),
+			},
+		}
+		result, err := FilterAndConvertLabeledData(evaluator, agentSecrecy, agentIntegrity, OperationRead, collection, EnforcementStrict)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.False(t, result.Blocked, "no filtered items should not block in strict mode")
+		require.NotNil(t, result.Filtered)
+		assert.Equal(t, 3, result.Filtered.GetAccessibleCount())
+		assert.Equal(t, 0, result.Filtered.GetFilteredCount())
+		require.IsType(t, []interface{}{}, result.FinalResult)
+		assert.Len(t, result.FinalResult.([]interface{}), 3)
+	})
+
+	t.Run("write operation evaluates collection items", func(t *testing.T) {
+		t.Parallel()
+		// A write agent with a secret label cannot write to public resources.
+		writeAgentSecrecy := NewSecrecyLabel()
+		writeAgentSecrecy.Label.Add("private:restricted/repo")
+		collection := &CollectionLabeledData{
+			Items: []LabeledItem{
+				makePublicItem(1),
+				makePublicItem(2),
+			},
+		}
+		result, err := FilterAndConvertLabeledData(evaluator, writeAgentSecrecy, agentIntegrity, OperationWrite, collection, EnforcementFilter)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		// Write from a secret-labeled agent to public items is denied in filter mode,
+		// so items are filtered out rather than causing a block.
+		assert.False(t, result.Blocked)
+		require.NotNil(t, result.Filtered)
+	})
+
+	t.Run("read-write operation requires both read and write access", func(t *testing.T) {
+		t.Parallel()
+		collection := &CollectionLabeledData{
+			Items: []LabeledItem{
+				makePublicItem(1),
+				makePrivateItem(2),
+			},
+		}
+		result, err := FilterAndConvertLabeledData(evaluator, agentSecrecy, agentIntegrity, OperationReadWrite, collection, EnforcementFilter)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.False(t, result.Blocked)
+		require.NotNil(t, result.Filtered)
+	})
+
+	t.Run("strict mode with all items accessible does not block", func(t *testing.T) {
+		t.Parallel()
+		// Agent with clearance for all items; no filtering occurs.
+		agentSecrecyWithClearance := NewSecrecyLabel()
+		agentSecrecyWithClearance.Label.Add("private:restricted/repo")
+		collection := &CollectionLabeledData{
+			Items: []LabeledItem{
+				makePublicItem(1),
+				makePrivateItem(2),
+			},
+		}
+		result, err := FilterAndConvertLabeledData(evaluator, agentSecrecyWithClearance, agentIntegrity, OperationRead, collection, EnforcementStrict)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.False(t, result.Blocked, "no filtered items means no blocking in strict mode")
+		require.NotNil(t, result.Filtered)
+		assert.Equal(t, 0, result.Filtered.GetFilteredCount())
+		assert.Equal(t, 2, result.Filtered.GetAccessibleCount())
+	})
 }
 
 func TestShouldAccumulateReadLabels(t *testing.T) {
