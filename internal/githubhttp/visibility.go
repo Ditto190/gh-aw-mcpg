@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/github/gh-aw-mcpg/internal/logger"
+	"github.com/github/gh-aw-mcpg/internal/util"
 )
 
 var logVisibility = logger.ForFile()
@@ -105,7 +106,7 @@ func VerifySinkVisibility(ctx context.Context, apiBaseURL, nwo, authHeader, conf
 		return configuredVisibility, false, err
 	}
 
-	configured := strings.ToLower(strings.TrimSpace(configuredVisibility))
+	configured := util.NormalizeStringCI(configuredVisibility)
 
 	// If actual is "public" but configured is not "public",
 	// override to "public" — this is the security-critical case.

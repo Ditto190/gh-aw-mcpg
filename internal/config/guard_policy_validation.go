@@ -44,7 +44,7 @@ func ValidateWriteSinkPolicy(ws *WriteSinkPolicy) error {
 	}
 	// Validate sink-visibility if provided
 	if ws.SinkVisibility != "" {
-		normalized := strings.ToLower(strings.TrimSpace(ws.SinkVisibility))
+		normalized := util.NormalizeStringCI(ws.SinkVisibility)
 		if !validSinkVisibilityValues[normalized] {
 			return fmt.Errorf("write-sink.sink-visibility must be one of: public, private, internal; got %q", ws.SinkVisibility)
 		}
@@ -183,7 +183,7 @@ func NormalizeGuardPolicy(policy *GuardPolicy) (*NormalizedGuardPolicy, error) {
 
 	switch scope := policy.AllowOnly.Repos.(type) {
 	case string:
-		scopeValue := strings.ToLower(strings.TrimSpace(scope))
+		scopeValue := util.NormalizeStringCI(scope)
 		if scopeValue != "all" && scopeValue != "public" {
 			return nil, fmt.Errorf("allow-only.repos string must be 'all' or 'public'")
 		}
@@ -391,7 +391,7 @@ func ValidateStringArrayField(field string, raw interface{}, requireNonEmpty boo
 func IsValidAllowOnlyReposValue(repos interface{}) bool {
 	switch value := repos.(type) {
 	case string:
-		trimmed := strings.TrimSpace(strings.ToLower(value))
+		trimmed := util.NormalizeStringCI(value)
 		return trimmed == "all" || trimmed == "public"
 	case []interface{}:
 		_, err := normalizeAndValidateScopeArray(value)

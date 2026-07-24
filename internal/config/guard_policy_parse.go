@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/github/gh-aw-mcpg/internal/envutil"
+	"github.com/github/gh-aw-mcpg/internal/util"
 )
 
 // Environment variable names for guard policy configuration.
@@ -277,7 +278,7 @@ func NormalizeScopeKind(policy map[string]interface{}) map[string]interface{} {
 	}
 
 	if scopeKind, ok := normalized["scope_kind"].(string); ok {
-		normalized["scope_kind"] = strings.ToLower(strings.TrimSpace(scopeKind))
+		normalized["scope_kind"] = util.NormalizeStringCI(scopeKind)
 	}
 
 	return normalized

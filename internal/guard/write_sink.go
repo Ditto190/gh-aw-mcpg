@@ -2,10 +2,9 @@ package guard
 
 import (
 	"context"
-	"strings"
-
 	"github.com/github/gh-aw-mcpg/internal/difc"
 	"github.com/github/gh-aw-mcpg/internal/logger"
+	"github.com/github/gh-aw-mcpg/internal/util"
 	"github.com/github/gh-aw-mcpg/internal/urlutil"
 )
 
@@ -99,7 +98,7 @@ func NewWriteSinkGuardWithVisibility(accept []string, sinkVisibility string) *Wr
 	for i, a := range accept {
 		tags[i] = difc.Tag(a)
 	}
-	normalized := strings.ToLower(strings.TrimSpace(sinkVisibility))
+	normalized := util.NormalizeStringCI(sinkVisibility)
 	logWriteSink.Printf("Creating write-sink guard with %d accept patterns, sink-visibility=%q", len(tags), normalized)
 	return &WriteSinkGuard{acceptTags: tags, sinkVisibility: normalized}
 }
