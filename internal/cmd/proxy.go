@@ -108,7 +108,7 @@ Local usage:
 	cmd.Flags().StringVar(&proxyPolicy, "policy", envutil.GetEnvString(config.EnvGuardPolicyJSON, ""), "Guard policy JSON")
 	if err := cmd.RegisterFlagCompletionFunc("policy", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return cobra.AppendActiveHelp(nil,
-			"Tip: Pass a JSON guard policy, e.g. --policy '{\"allow-only\":{\"repos\":\"public\",\"min-integrity\":\"none\"}}'"),
+				"Tip: Pass a JSON guard policy, e.g. --policy '{\"allow-only\":{\"repos\":\"public\",\"min-integrity\":\"none\"}}'"),
 			cobra.ShellCompDirectiveNoFileComp
 	}); err != nil {
 		logProxyCmd.Printf("Failed to register completion for --policy: %v", err)

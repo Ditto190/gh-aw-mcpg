@@ -467,9 +467,10 @@ func TestNewProxyCmd_PolicyCompletionActiveHelp(t *testing.T) {
 	assert.Equal(t, cobra.ShellCompDirectiveNoFileComp, directive,
 		"policy completion should use ShellCompDirectiveNoFileComp directive")
 	require.NotEmpty(t, completions, "policy completion should return active help text")
-	assert.Contains(t, strings.Join(completions, "\n"), "--policy",
+	activeHelp := strings.Join(completions, "\n")
+	assert.Contains(t, activeHelp, "--policy",
 		"policy completion active help should mention --policy usage")
-	assert.Contains(t, strings.Join(completions, "\n"), "\"allow-only\"",
+	assert.Contains(t, activeHelp, "\"allow-only\"",
 		"policy completion active help should include a JSON policy example")
 }
 
