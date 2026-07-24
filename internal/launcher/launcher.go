@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -247,7 +249,7 @@ func GetOrLaunchForSession(l *Launcher, serverID, sessionID string) (*mcp.Connec
 // Returns the raw *mcp.Connection on success; the caller is responsible for storing it.
 func (l *Launcher) launchStdioConnection(serverID, sessionID string, serverCfg *config.ServerConfig) (*mcp.Connection, error) {
 	// Warn if using direct command in a container
-	isDirectCommand := serverCfg.Command != "docker"
+	isDirectCommand := isDirectStdioCommand(serverCfg)
 	if l.runningInContainer && isDirectCommand {
 		l.logSecurityWarning(serverID, serverCfg)
 	}
@@ -291,6 +293,39 @@ func (l *Launcher) launchStdioConnection(serverID, sessionID string, serverCfg *
 		l.logTimeoutError(serverID, sessionID)
 		return nil, fmt.Errorf("server startup timeout after %v", l.startupTimeout)
 	}
+}
+
+// isDirectStdioCommand reports whether a stdio command appears to be direct
+// process execution (as opposed to a container runtime launch).
+//
+// Detection is intentionally dual-mode:
+//   - known runtime executable names (docker/podman/nerdctl), and
+//   - custom runtime binaries where the first argument is "run".
+func isDirectStdioCommand(serverCfg *config.ServerConfig) bool {
+	if serverCfg == nil {
+		return true
+	}
+	if serverCfg.Containerized {
+		return false
+	}
+	switch strings.ToLower(filepath.Base(serverCfg.Command)) {
+	case "docker", "podman", "nerdctl":
+		return false
+	}
+	// Scan only the first few runtime-level args where the container subcommand
+	// appears in supported launch shapes (for example: `run`, or `--flag run`).
+	// This avoids scanning long argument vectors for direct commands.
+	const maxRunProbeArgs = 3
+	limit := len(serverCfg.Args)
+	if limit > maxRunProbeArgs {
+		limit = maxRunProbeArgs
+	}
+	for _, arg := range serverCfg.Args[:limit] {
+		if strings.EqualFold(arg, "run") {
+			return false
+		}
+	}
+	return true
 }
 
 // ServerIDs returns all configured server IDs

@@ -67,3 +67,47 @@ func TestNormalizeContentItems(t *testing.T) {
 		})
 	}
 }
+
+func TestIsErrorResult(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		result map[string]interface{}
+		want   bool
+	}{
+		{
+			name:   "true bool value",
+			result: map[string]interface{}{"isError": true},
+			want:   true,
+		},
+		{
+			name:   "false bool value",
+			result: map[string]interface{}{"isError": false},
+			want:   false,
+		},
+		{
+			name:   "missing isError key",
+			result: map[string]interface{}{},
+			want:   false,
+		},
+		{
+			name:   "non-bool isError value",
+			result: map[string]interface{}{"isError": "true"},
+			want:   false,
+		},
+		{
+			name:   "nil map",
+			result: nil,
+			want:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			assert.Equal(t, tt.want, IsErrorResult(tt.result))
+		})
+	}
+}

@@ -39,8 +39,9 @@ import (
 // Core constants for configuration defaults
 const (
 	DefaultPort              = 3000
-	DefaultStartupTimeout    = 30   // seconds (per spec §4.1.3)
-	DefaultToolTimeout       = 60   // seconds (per spec §4.1.3)
+	DefaultStartupTimeout    = 30 // seconds (per spec §4.1.3)
+	DefaultToolTimeout       = 60 // seconds (per spec §4.1.3)
+	DefaultContainerRuntime  = "docker"
 	DefaultKeepaliveInterval = 1500 // seconds (25 minutes) — keeps HTTP backend sessions alive
 	DefaultConnectTimeout    = 30   // seconds — per-transport timeout for HTTP backend connect
 	// DefaultPayloadDir is the default directory for storing large payloads.
@@ -115,6 +116,19 @@ type GatewayConfig struct {
 
 	// ToolTimeout is the maximum time (seconds) to wait for tool execution
 	ToolTimeout int `toml:"tool_timeout" json:"tool_timeout,omitempty"`
+
+	// ContainerRuntime selects the container runtime used for stdio MCP server launches
+	// in stdin JSON configurations that specify a container image.
+	// Supported values: "docker" (default), "podman".
+	ContainerRuntime string `toml:"container_runtime" json:"containerRuntime,omitempty"`
+
+	// ContainerRuntimeCommand optionally overrides the runtime executable/binary path.
+	// Example: "/usr/bin/podman", "nerdctl".
+	ContainerRuntimeCommand string `toml:"container_runtime_command" json:"containerRuntimeCommand,omitempty"`
+
+	// ContainerRuntimeArgs are optional runtime-level arguments inserted before "run".
+	// Example: ["--events-backend=file"].
+	ContainerRuntimeArgs []string `toml:"container_runtime_args" json:"containerRuntimeArgs,omitempty"`
 
 	// KeepaliveInterval is the interval (seconds) for sending keepalive pings to HTTP
 	// backends. This prevents long-running sessions from being expired by the remote
@@ -256,6 +270,10 @@ type AuthConfig struct {
 type ServerConfig struct {
 	// Type is the server type: "stdio" or "http"
 	Type string `toml:"type" json:"type,omitempty"`
+
+	// Containerized indicates this stdio server entry is explicitly containerized.
+	// This is internal-only metadata used by the launcher for diagnostics.
+	Containerized bool `toml:"-" json:"-"`
 
 	// Command is the executable command (for stdio servers)
 	Command string `toml:"command" json:"command,omitempty"`
@@ -484,7 +502,7 @@ func LoadFromFile(path string) (*Config, error) {
 		return nil, fmt.Errorf("no servers defined in configuration")
 	}
 
-	// Validate TOML stdio servers use Docker for containerization (Spec Section 3.2.1)
+	// Validate TOML stdio servers use configured container runtime command (Spec Section 3.2.1)
 	stdioServerCount := 0
 	for _, serverCfg := range cfg.Servers {
 		if serverCfg.Type == "stdio" {
@@ -492,8 +510,13 @@ func LoadFromFile(path string) (*Config, error) {
 		}
 	}
 	logConfig.Printf("Validating stdio server containerization requirements for %d stdio servers", stdioServerCount)
-	if err := validateTOMLStdioContainerization(cfg.Servers); err != nil {
+	if err := validateTOMLStdioContainerization(cfg.Servers, cfg.Gateway); err != nil {
 		return nil, err
+	}
+	for _, serverCfg := range cfg.Servers {
+		if IsStdioServerType(serverCfg.Type) {
+			serverCfg.Containerized = true
+		}
 	}
 
 	logConfig.Printf("Validating shared server configuration for %d servers", len(cfg.Servers))
@@ -509,6 +532,16 @@ func LoadFromFile(path string) (*Config, error) {
 		cfg.Gateway = &GatewayConfig{}
 	}
 	cfg.Gateway.normalizeAgentID(md.IsDefined("gateway", "agent_id"), md.IsDefined("gateway", "api_key"), "TOML")
+	if err := validateContainerRuntimeValue(cfg.Gateway.ContainerRuntime, "gateway.container_runtime"); err != nil {
+		return nil, err
+	}
+	if err := validateContainerRuntimeCommandNotBlank(
+		cfg.Gateway.ContainerRuntimeCommand,
+		"container_runtime_command",
+		"gateway.container_runtime_command",
+	); err != nil {
+		return nil, err
+	}
 
 	// Validate trusted_bots per spec §4.1.3.4: must be non-empty array when present
 	if err := validateTrustedBots(cfg.Gateway.TrustedBots); err != nil {

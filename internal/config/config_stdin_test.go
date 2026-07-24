@@ -109,12 +109,89 @@ func TestConvertStdinServerConfig_MinimalStdioServer(t *testing.T) {
 
 	assert.Equal(t, "stdio", result.Type)
 	assert.Equal(t, "docker", result.Command)
+	assert.True(t, result.Containerized)
 	assert.Contains(t, result.Args, "minimal/container:v1")
 
 	// Should still have standard env vars
 	assert.Contains(t, result.Args, "NO_COLOR=1")
 	assert.Contains(t, result.Args, "TERM=dumb")
 	assert.Contains(t, result.Args, "PYTHONUNBUFFERED=1")
+}
+
+func TestConvertStdinConfig_ContainerRuntimeSelection(t *testing.T) {
+	t.Run("gateway.containerRuntime=podman selects podman command", func(t *testing.T) {
+		stdinCfg := &StdinConfig{
+			MCPServers: map[string]*StdinServerConfig{
+				"test": {Type: "stdio", Container: "ghcr.io/example/server:latest"},
+			},
+			Gateway: &StdinGatewayConfig{
+				ContainerRuntime: "podman",
+			},
+		}
+
+		cfg, err := convertStdinConfig(stdinCfg)
+		require.NoError(t, err)
+		require.NotNil(t, cfg.Servers["test"])
+		assert.Equal(t, "podman", cfg.Servers["test"].Command)
+		assert.Equal(t, "run", cfg.Servers["test"].Args[0])
+	})
+
+	t.Run("runtime command and args override default runtime binary", func(t *testing.T) {
+		stdinCfg := &StdinConfig{
+			MCPServers: map[string]*StdinServerConfig{
+				"test": {Type: "stdio", Container: "ghcr.io/example/server:latest"},
+			},
+			Gateway: &StdinGatewayConfig{
+				ContainerRuntime:        "podman",
+				ContainerRuntimeCommand: "nerdctl",
+				ContainerRuntimeArgs:    []string{"--namespace", "k8s.io"},
+			},
+		}
+
+		cfg, err := convertStdinConfig(stdinCfg)
+		require.NoError(t, err)
+		server := cfg.Servers["test"]
+		require.NotNil(t, server)
+		assert.Equal(t, "nerdctl", server.Command)
+		require.GreaterOrEqual(t, len(server.Args), 4)
+		assert.Equal(t, "--namespace", server.Args[0])
+		assert.Equal(t, "k8s.io", server.Args[1])
+		assert.Equal(t, "run", server.Args[2])
+	})
+
+	t.Run("MCP_GATEWAY_CONTAINER_RUNTIME overrides config runtime", func(t *testing.T) {
+		t.Setenv("MCP_GATEWAY_CONTAINER_RUNTIME", "podman")
+		stdinCfg := &StdinConfig{
+			MCPServers: map[string]*StdinServerConfig{
+				"test": {Type: "stdio", Container: "ghcr.io/example/server:latest"},
+			},
+			Gateway: &StdinGatewayConfig{
+				ContainerRuntime: "docker",
+			},
+		}
+
+		cfg, err := convertStdinConfig(stdinCfg)
+		require.NoError(t, err)
+		require.NotNil(t, cfg.Servers["test"])
+		assert.Equal(t, "podman", cfg.Servers["test"].Command)
+	})
+
+	t.Run("whitespace MCP_GATEWAY_CONTAINER_RUNTIME falls back to config value", func(t *testing.T) {
+		t.Setenv("MCP_GATEWAY_CONTAINER_RUNTIME", "   ")
+		stdinCfg := &StdinConfig{
+			MCPServers: map[string]*StdinServerConfig{
+				"test": {Type: "stdio", Container: "ghcr.io/example/server:latest"},
+			},
+			Gateway: &StdinGatewayConfig{
+				ContainerRuntime: "podman",
+			},
+		}
+
+		cfg, err := convertStdinConfig(stdinCfg)
+		require.NoError(t, err)
+		require.NotNil(t, cfg.Servers["test"])
+		assert.Equal(t, "podman", cfg.Servers["test"].Command)
+	})
 }
 
 // TestConvertStdinServerConfig_TypeNormalization tests "local" type normalization to "stdio".
@@ -1402,5 +1479,27 @@ func TestConvertStdinConfig_GatewayOptionalFields(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, cfg.Gateway)
 		assert.Nil(t, cfg.Gateway.SinkVisibilityExemptServers)
+	})
+}
+
+func TestValidateGatewayConfig_ContainerRuntime(t *testing.T) {
+	t.Run("accepts docker and podman", func(t *testing.T) {
+		err := validateGatewayConfig(&StdinGatewayConfig{ContainerRuntime: "docker"})
+		assert.NoError(t, err)
+
+		err = validateGatewayConfig(&StdinGatewayConfig{ContainerRuntime: "podman"})
+		assert.NoError(t, err)
+	})
+
+	t.Run("rejects unsupported runtime", func(t *testing.T) {
+		err := validateGatewayConfig(&StdinGatewayConfig{ContainerRuntime: "containerd"})
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "gateway.containerRuntime must be one of: docker, podman")
+	})
+
+	t.Run("rejects whitespace-only runtime value", func(t *testing.T) {
+		err := validateGatewayConfig(&StdinGatewayConfig{ContainerRuntime: "   "})
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "gateway.containerRuntime must not be empty or whitespace-only when set")
 	})
 }

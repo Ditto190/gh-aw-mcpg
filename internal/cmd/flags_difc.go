@@ -28,8 +28,10 @@ var (
 func registerGuardsModeFlag(cmd *cobra.Command, target *string) {
 	cmd.Flags().StringVar(target, "guards-mode", difc.DefaultEnforcementMode(),
 		"Guards enforcement mode: strict (deny violations), filter (remove denied tools), or propagate (auto-adjust agent labels on reads)")
-	cmd.RegisterFlagCompletionFunc("guards-mode", cobra.FixedCompletions(
-		difc.ValidModes, cobra.ShellCompDirectiveNoFileComp))
+	if err := cmd.RegisterFlagCompletionFunc("guards-mode", cobra.FixedCompletions(
+		difc.ValidModes, cobra.ShellCompDirectiveNoFileComp)); err != nil {
+		debugLog.Printf("Failed to register completion for --guards-mode: %v", err)
+	}
 }
 
 func init() {

@@ -503,7 +503,13 @@ fn infer_scope_for_baseline<'a>(
                 }
             }
         }
-        "search_code" | "search_issues" | "search_pull_requests" | "search_commits" => {
+        "search_code"
+        | "search_code_ff_fields_param"
+        | "search_issues"
+        | "search_issues_ff_fields_param"
+        | "search_pull_requests"
+        | "search_pull_requests_ff_fields_param"
+        | "search_commits" => {
             let query = tool_args
                 .get("query")
                 .and_then(|v| v.as_str())
@@ -1319,6 +1325,23 @@ mod tests {
         let tool_args = json!({"query": "repo:github/gh-aw-mcpg fix"});
         let inferred = infer_scope_for_baseline("search_commits", &tool_args, "");
         assert_eq!(inferred, "github/gh-aw-mcpg");
+    }
+
+    #[test]
+    fn infer_scope_for_baseline_uses_search_alias_query_repo() {
+        let tool_args = json!({"query": "repo:github/gh-aw-mcpg alias"});
+        assert_eq!(
+            infer_scope_for_baseline("search_code_ff_fields_param", &tool_args, ""),
+            "github/gh-aw-mcpg"
+        );
+        assert_eq!(
+            infer_scope_for_baseline("search_issues_ff_fields_param", &tool_args, ""),
+            "github/gh-aw-mcpg"
+        );
+        assert_eq!(
+            infer_scope_for_baseline("search_pull_requests_ff_fields_param", &tool_args, ""),
+            "github/gh-aw-mcpg"
+        );
     }
 
     #[test]

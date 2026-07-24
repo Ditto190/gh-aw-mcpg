@@ -211,7 +211,11 @@ pub fn apply_tool_labels(
 
     match tool_name {
         // === Issues (repo-scoped) ===
-        "get_issue" | "issue_read" | "list_issues" | "list_issues_ff_remote_mcp_issue_fields" => {
+        "get_issue"
+        | "issue_read"
+        | "list_issues"
+        | "list_issues_ff_remote_mcp_issue_fields"
+        | "list_issues_ff_fields_param" => {
             // Issues are user-submitted, low integrity
             // I(issue) = contributor if author is contributor, else untrusted (empty)
             // S(issue) = S(repo) - inherits from repository visibility
@@ -222,7 +226,7 @@ pub fn apply_tool_labels(
                 apply_issue_read_enrichment(&owner, &repo, repo_id, tool_args, desc, integrity, enrich, ctx);
         }
 
-        "issue_dependency_read" => {
+        "issue_dependency_read" | "issue_dependency_read_ff_issue_dependencies" => {
             secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
             integrity = private_writer_integrity(repo_id, repo_private, ctx);
             (desc, integrity) =
@@ -231,7 +235,11 @@ pub fn apply_tool_labels(
 
         // === Issue dependency / pin / unpin writes (repo-scoped write) ===
         // S = S(repo); I = writer
-        "issue_dependency_write" | "pin_issue" | "transfer_issue" | "unpin_issue" => {
+        "issue_dependency_write"
+        | "issue_dependency_write_ff_issue_dependencies"
+        | "pin_issue"
+        | "transfer_issue"
+        | "unpin_issue" => {
             if !owner.is_empty() && !repo.is_empty() {
                 if let Some(issue_num) =
                     extract_number_as_string(tool_args, field_names::ISSUE_NUMBER)
@@ -261,7 +269,10 @@ pub fn apply_tool_labels(
         }
 
         // Search issues / pull requests: extract repo scope from query or tool_args when available
-        "search_issues" | "search_pull_requests" => {
+        "search_issues"
+        | "search_issues_ff_fields_param"
+        | "search_pull_requests"
+        | "search_pull_requests_ff_fields_param" => {
             let (s_owner, s_repo, s_repo_id) = resolve_search_scope(tool_args, &owner, &repo);
             if !s_repo_id.is_empty() {
                 desc = format!("{}:{}", tool_name, s_repo_id);
@@ -277,7 +288,10 @@ pub fn apply_tool_labels(
         }
 
         // === Pull Requests ===
-        "get_pull_request" | "pull_request_read" | "list_pull_requests" => {
+        "get_pull_request"
+        | "pull_request_read"
+        | "list_pull_requests"
+        | "list_pull_requests_ff_fields_param" => {
             // I(PR) = merged if merged; otherwise approved/unapproved/contributor floor by evidence
             // S(PR) = S(repo)
             //
@@ -354,7 +368,7 @@ pub fn apply_tool_labels(
         }
 
         // === Commits ===
-        "get_commit" | "list_commits" => {
+        "get_commit" | "list_commits" | "list_commits_ff_fields_param" => {
             // I(commit) = merged on default branch, approved in private repos, else contributor floor
             // S(commit) = S(repo)
             if !owner.is_empty() && !repo.is_empty() {
@@ -465,6 +479,7 @@ pub fn apply_tool_labels(
         | "list_discussions"
         | "list_label"
         | "list_releases"
+        | "list_releases_ff_fields_param"
         | "get_latest_release"
         | "get_release_by_tag"
         | "list_tags" => {
@@ -483,7 +498,7 @@ pub fn apply_tool_labels(
         }
 
         // === Content Access ===
-        "get_file_contents" | "get_file_blame" => {
+        "get_file_contents" | "get_file_blame" | "get_file_contents_ff_fields_param" => {
             secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
             // File secrecy based on path patterns
             if let Some(path) = tool_args.get("path").and_then(|v| v.as_str()) {
@@ -498,7 +513,7 @@ pub fn apply_tool_labels(
         }
 
         // === Code / Commit Search ===
-        "search_code" | "search_commits" => {
+        "search_code" | "search_code_ff_fields_param" | "search_commits" => {
             // Repo-scoped search reads. Resolve scope from query repo qualifier first,
             // then fall back to tool_args owner/repo.
             let (s_owner, s_repo, s_repo_id) = resolve_search_scope(tool_args, &owner, &repo);
@@ -1330,6 +1345,130 @@ mod tests {
     }
 
     #[test]
+    fn apply_tool_labels_ff_fields_param_aliases_match_canonical_labels() {
+        let ctx = default_ctx();
+        let repo_id = "github/copilot";
+
+        let assert_same_labels = |canonical: &str, alias: &str, args: &Value| {
+            let (canonical_secrecy, canonical_integrity, _canonical_desc) = super::apply_tool_labels(
+                canonical,
+                args,
+                repo_id,
+                vec![],
+                vec![],
+                String::new(),
+                &ctx,
+            );
+            let (alias_secrecy, alias_integrity, _alias_desc) = super::apply_tool_labels(
+                alias,
+                args,
+                repo_id,
+                vec![],
+                vec![],
+                String::new(),
+                &ctx,
+            );
+            assert_eq!(
+                alias_secrecy, canonical_secrecy,
+                "{alias} secrecy must match {canonical}"
+            );
+            assert_eq!(
+                alias_integrity, canonical_integrity,
+                "{alias} integrity must match {canonical}"
+            );
+        };
+
+        let repo_args = serde_json::json!({ "owner": "github", "repo": "copilot" });
+        assert_same_labels("list_commits", "list_commits_ff_fields_param", &repo_args);
+        assert_same_labels("list_issues", "list_issues_ff_fields_param", &repo_args);
+        assert_same_labels(
+            "list_pull_requests",
+            "list_pull_requests_ff_fields_param",
+            &repo_args,
+        );
+        assert_same_labels("list_releases", "list_releases_ff_fields_param", &repo_args);
+
+        let file_args =
+            serde_json::json!({ "owner": "github", "repo": "copilot", "path": "README.md", "ref": "main" });
+        assert_same_labels(
+            "get_file_contents",
+            "get_file_contents_ff_fields_param",
+            &file_args,
+        );
+
+        let search_code_args = serde_json::json!({ "query": "repo:github/copilot auth" });
+        assert_same_labels("search_code", "search_code_ff_fields_param", &search_code_args);
+
+        let search_issues_args = serde_json::json!({ "query": "repo:github/copilot is:issue bug" });
+        assert_same_labels(
+            "search_issues",
+            "search_issues_ff_fields_param",
+            &search_issues_args,
+        );
+
+        let search_pr_args = serde_json::json!({ "query": "repo:github/copilot is:pr fix" });
+        assert_same_labels(
+            "search_pull_requests",
+            "search_pull_requests_ff_fields_param",
+            &search_pr_args,
+        );
+    }
+
+    #[test]
+    fn apply_tool_labels_issue_dependency_ff_aliases_match_canonical() {
+        let ctx = default_ctx();
+        let tool_args =
+            serde_json::json!({ "owner": "github", "repo": "copilot", "issue_number": 42 });
+        let repo_id = "github/copilot";
+
+        let issue_dependency_read_labels = super::apply_tool_labels(
+            "issue_dependency_read",
+            &tool_args,
+            repo_id,
+            vec![],
+            vec![],
+            String::new(),
+            &ctx,
+        );
+        let issue_dependency_read_ff_labels = super::apply_tool_labels(
+            "issue_dependency_read_ff_issue_dependencies",
+            &tool_args,
+            repo_id,
+            vec![],
+            vec![],
+            String::new(),
+            &ctx,
+        );
+        assert_eq!(
+            issue_dependency_read_ff_labels, issue_dependency_read_labels,
+            "issue_dependency_read FF alias must match canonical labels and description"
+        );
+
+        let issue_dependency_write_labels = super::apply_tool_labels(
+            "issue_dependency_write",
+            &tool_args,
+            repo_id,
+            vec![],
+            vec![],
+            String::new(),
+            &ctx,
+        );
+        let issue_dependency_write_ff_labels = super::apply_tool_labels(
+            "issue_dependency_write_ff_issue_dependencies",
+            &tool_args,
+            repo_id,
+            vec![],
+            vec![],
+            String::new(),
+            &ctx,
+        );
+        assert_eq!(
+            issue_dependency_write_ff_labels, issue_dependency_write_labels,
+            "issue_dependency_write FF alias must match canonical labels and description"
+        );
+    }
+
+    #[test]
     fn apply_tool_labels_release_management_is_repo_scoped_write() {
         let ctx = default_ctx();
         let tool_args =
@@ -1562,6 +1701,72 @@ mod tests {
             assert_eq!(
                 integrity, expected_integrity,
                 "{tool}: gist operations must have user-scoped reader integrity",
+            );
+        }
+    }
+
+    #[test]
+    fn apply_tool_labels_copilot_spaces_get_private_user_and_project_github_integrity() {
+        let ctx = default_ctx();
+        let expected_secrecy = private_user_label();
+        let expected_integrity = project_github_label(&ctx);
+
+        for tool in &["get_copilot_space", "list_copilot_spaces"] {
+            let (secrecy, integrity, _) =
+                super::apply_tool_labels(tool, &serde_json::json!({}), "", vec![], vec![], String::new(), &ctx);
+            assert_eq!(
+                secrecy, expected_secrecy,
+                "{tool}: expected private:user secrecy",
+            );
+            assert_eq!(
+                integrity, expected_integrity,
+                "{tool}: expected project:github integrity",
+            );
+        }
+    }
+
+    #[test]
+    fn apply_tool_labels_public_github_metadata_gets_empty_secrecy_and_project_github_integrity() {
+        let ctx = default_ctx();
+        let expected_integrity = project_github_label(&ctx);
+
+        for tool in &[
+            "search_orgs",
+            "list_global_security_advisories",
+            "get_global_security_advisory",
+            "github_support_docs_search",
+        ] {
+            let (secrecy, integrity, _) =
+                super::apply_tool_labels(tool, &serde_json::json!({}), "", vec![], vec![], String::new(), &ctx);
+            assert!(secrecy.is_empty(), "{tool}: expected empty secrecy");
+            assert_eq!(
+                integrity, expected_integrity,
+                "{tool}: expected project:github integrity",
+            );
+        }
+    }
+
+    #[test]
+    fn apply_tool_labels_repository_security_advisories_get_private_scope_and_writer_integrity() {
+        let ctx = default_ctx();
+        let args = serde_json::json!({"owner": "octocat", "repo": "hello-world"});
+        let repo_id = "octocat/hello-world";
+        let expected_secrecy = private_label("octocat", "hello-world", repo_id, &ctx);
+        let expected_integrity = writer_integrity(repo_id, &ctx);
+
+        for tool in &[
+            "list_repository_security_advisories",
+            "list_org_repository_security_advisories",
+        ] {
+            let (secrecy, integrity, _) =
+                super::apply_tool_labels(tool, &args, repo_id, vec![], vec![], String::new(), &ctx);
+            assert_eq!(
+                secrecy, expected_secrecy,
+                "{tool}: expected private scope secrecy",
+            );
+            assert_eq!(
+                integrity, expected_integrity,
+                "{tool}: expected writer-level integrity",
             );
         }
     }

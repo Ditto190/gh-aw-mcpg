@@ -388,6 +388,27 @@
           "minimum": 1,
           "default": 60
         },
+        "containerRuntime": {
+          "type": "string",
+          "description": "Container runtime used to launch stdio MCP servers from JSON stdin container configs. Defaults to 'docker'. Supported values: 'docker', 'podman'. Can be overridden by MCP_GATEWAY_CONTAINER_RUNTIME.",
+          "enum": [
+            "docker",
+            "podman"
+          ]
+        },
+        "containerRuntimeCommand": {
+          "type": "string",
+          "description": "Optional override for the container runtime executable/binary path (for example '/usr/bin/podman' or 'nerdctl').",
+          "minLength": 1
+        },
+        "containerRuntimeArgs": {
+          "type": "array",
+          "description": "Optional runtime-level arguments inserted before the 'run' subcommand when launching stdio containers.",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
         "payloadDir": {
           "type": "string",
           "description": "Directory path for storing large payload JSON files for authenticated clients. MUST be an absolute path: Unix paths start with '/', Windows paths start with a drive letter followed by ':\\'. Relative paths, empty strings, and paths that don't follow these conventions are not allowed.",

@@ -8,6 +8,13 @@ import (
 
 var logMCPResult = logger.ForFile()
 
+// IsErrorResult reports whether a raw MCP tool result map is marked as an
+// error result.
+func IsErrorResult(result map[string]interface{}) bool {
+	isError, _ := result["isError"].(bool)
+	return isError
+}
+
 // NormalizeContentItems normalizes an MCP "content" field into a slice of item
 // maps. It supports both []interface{} values produced by json.Unmarshal and
 // []map[string]interface{} values produced by helper constructors.
