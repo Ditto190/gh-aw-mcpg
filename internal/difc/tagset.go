@@ -1,6 +1,12 @@
 package difc
 
-import "sync"
+import (
+	"sync"
+
+	"github.com/github/gh-aw-mcpg/internal/logger"
+)
+
+var logTagSet = logger.ForFile()
 
 // tagSet is an unexported concurrent set of Tags backed by a map and a RWMutex.
 // It provides the common concurrent mutation and read operations shared by Label
@@ -22,6 +28,7 @@ func (ts *tagSet) add(tag Tag) {
 }
 
 func (ts *tagSet) addAll(tags []Tag) {
+	logTagSet.Printf("addAll: count=%d", len(tags))
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
 	for _, tag := range tags {
@@ -36,6 +43,7 @@ func (ts *tagSet) remove(tag Tag) {
 }
 
 func (ts *tagSet) removeAll(tags []Tag) {
+	logTagSet.Printf("removeAll: count=%d", len(tags))
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
 	for _, tag := range tags {
@@ -61,6 +69,7 @@ func (ts *tagSet) getAll() []Tag {
 }
 
 func (ts *tagSet) clear() {
+	logTagSet.Print("clear: removing all tags")
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
 	ts.tags = make(map[Tag]struct{})
