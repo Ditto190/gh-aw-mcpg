@@ -316,10 +316,7 @@ func isDirectStdioCommand(serverCfg *config.ServerConfig) bool {
 	// appears in supported launch shapes (for example: `run`, or `--flag run`).
 	// This avoids scanning long argument vectors for direct commands.
 	const maxRunProbeArgs = 3
-	limit := len(serverCfg.Args)
-	if limit > maxRunProbeArgs {
-		limit = maxRunProbeArgs
-	}
+	limit := min(len(serverCfg.Args), maxRunProbeArgs)
 	for _, arg := range serverCfg.Args[:limit] {
 		if strings.EqualFold(arg, "run") {
 			return false
