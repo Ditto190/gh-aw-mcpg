@@ -37,8 +37,7 @@ func isRateLimitToolResult(result interface{}) (bool, time.Time) {
 	}
 
 	// Only inspect error results.
-	isErr, _ := m["isError"].(bool)
-	if !isErr {
+	if !mcpresult.IsErrorResult(m) {
 		return false, time.Time{}
 	}
 
