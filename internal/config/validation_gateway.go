@@ -37,6 +37,14 @@ func validateGatewayConfig(gateway *StdinGatewayConfig) error {
 		}
 	}
 
+	if err := validateContainerRuntimeValue(gateway.ContainerRuntime, "gateway.containerRuntime"); err != nil {
+		return err
+	}
+	if gateway.ContainerRuntimeCommand != "" && len(strings.TrimSpace(gateway.ContainerRuntimeCommand)) == 0 {
+		return InvalidValue("containerRuntimeCommand", "containerRuntimeCommand cannot be empty or whitespace only",
+			"gateway.containerRuntimeCommand", "Provide a non-empty runtime command path/name or remove the field")
+	}
+
 	// Validate payloadDir if provided (per schema: must be absolute path)
 	if gateway.PayloadDir != "" {
 		logValidation.Printf("Validating payload directory: %s", gateway.PayloadDir)
@@ -98,24 +106,24 @@ func validateTrustedBots(bots []string) error {
 	return nil
 }
 
-// validateTOMLStdioContainerization validates that TOML stdio servers use Docker for containerization.
+// validateTOMLStdioContainerization validates that TOML stdio servers use the selected container runtime command.
 // This enforces MCP Gateway Specification Section 3.2.1: "Stdio-based MCP servers MUST be containerized."
-func validateTOMLStdioContainerization(servers map[string]*ServerConfig) error {
+func validateTOMLStdioContainerization(servers map[string]*ServerConfig, gateway *GatewayConfig) error {
 	logValidation.Print("Validating TOML stdio server containerization requirement")
+	expectedCommand := effectiveContainerRuntimeCommand(gateway)
 
 	for name, cfg := range servers {
 		// Only validate stdio servers (or empty type which defaults to stdio)
 		if IsStdioServerType(cfg.Type) {
 			logValidation.Printf("Checking stdio server: name=%s, command=%s", name, cfg.Command)
 
-			// Check if command is Docker
-			if cfg.Command != "docker" {
-				logValidation.Printf("Validation failed: %s, name=%s, type=%s", fmt.Sprintf("stdio server using non-Docker command, command=%s", cfg.Command), name, "stdio")
+			if cfg.Command != expectedCommand {
+				logValidation.Printf("Validation failed: %s, name=%s, type=%s", fmt.Sprintf("stdio server using unexpected runtime command, command=%s, expected=%s", cfg.Command, expectedCommand), name, "stdio")
 				return fmt.Errorf(
-					"server '%s': stdio servers must use containerized execution (command must be 'docker', got '%s'). "+
+					"server '%s': stdio servers must use containerized execution (command must be '%s', got '%s'). "+
 						"This is required by MCP Gateway Specification Section 3.2.1 (Containerization Requirement). "+
 						"See: https://github.com/github/gh-aw/blob/main/docs/src/content/docs/reference/mcp-gateway.md#321-containerization-requirement",
-					name, cfg.Command)
+					name, expectedCommand, cfg.Command)
 			}
 		}
 	}

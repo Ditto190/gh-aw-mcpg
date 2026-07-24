@@ -41,6 +41,7 @@ const (
 	DefaultPort              = 3000
 	DefaultStartupTimeout    = 30   // seconds (per spec §4.1.3)
 	DefaultToolTimeout       = 60   // seconds (per spec §4.1.3)
+	DefaultContainerRuntime  = "docker"
 	DefaultKeepaliveInterval = 1500 // seconds (25 minutes) — keeps HTTP backend sessions alive
 	DefaultConnectTimeout    = 30   // seconds — per-transport timeout for HTTP backend connect
 	// DefaultPayloadDir is the default directory for storing large payloads.
@@ -115,6 +116,19 @@ type GatewayConfig struct {
 
 	// ToolTimeout is the maximum time (seconds) to wait for tool execution
 	ToolTimeout int `toml:"tool_timeout" json:"tool_timeout,omitempty"`
+
+	// ContainerRuntime selects the container runtime used for stdio MCP server launches
+	// in stdin JSON configurations that specify a container image.
+	// Supported values: "docker" (default), "podman".
+	ContainerRuntime string `toml:"container_runtime" json:"containerRuntime,omitempty"`
+
+	// ContainerRuntimeCommand optionally overrides the runtime executable/binary path.
+	// Example: "/usr/bin/podman", "nerdctl".
+	ContainerRuntimeCommand string `toml:"container_runtime_command" json:"containerRuntimeCommand,omitempty"`
+
+	// ContainerRuntimeArgs are optional runtime-level arguments inserted before "run".
+	// Example: ["--events-backend=file"].
+	ContainerRuntimeArgs []string `toml:"container_runtime_args" json:"containerRuntimeArgs,omitempty"`
 
 	// KeepaliveInterval is the interval (seconds) for sending keepalive pings to HTTP
 	// backends. This prevents long-running sessions from being expired by the remote
@@ -492,7 +506,7 @@ func LoadFromFile(path string) (*Config, error) {
 		}
 	}
 	logConfig.Printf("Validating stdio server containerization requirements for %d stdio servers", stdioServerCount)
-	if err := validateTOMLStdioContainerization(cfg.Servers); err != nil {
+	if err := validateTOMLStdioContainerization(cfg.Servers, cfg.Gateway); err != nil {
 		return nil, err
 	}
 
@@ -509,6 +523,12 @@ func LoadFromFile(path string) (*Config, error) {
 		cfg.Gateway = &GatewayConfig{}
 	}
 	cfg.Gateway.normalizeAgentID(md.IsDefined("gateway", "agent_id"), md.IsDefined("gateway", "api_key"), "TOML")
+	if err := validateContainerRuntimeValue(cfg.Gateway.ContainerRuntime, "gateway.container_runtime"); err != nil {
+		return nil, err
+	}
+	if cfg.Gateway.ContainerRuntimeCommand != "" && strings.TrimSpace(cfg.Gateway.ContainerRuntimeCommand) == "" {
+		return nil, fmt.Errorf("gateway.container_runtime_command cannot be whitespace only")
+	}
 
 	// Validate trusted_bots per spec §4.1.3.4: must be non-empty array when present
 	if err := validateTrustedBots(cfg.Gateway.TrustedBots); err != nil {

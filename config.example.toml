@@ -32,6 +32,17 @@ startup_timeout = 60
 # How long to wait for a tool call to complete before timing out
 tool_timeout = 120
 
+# Optional: Container runtime for stdio MCP server launches generated from JSON stdin `container` configs.
+# Supported values: "docker" (default), "podman".
+# Can be overridden with MCP_GATEWAY_CONTAINER_RUNTIME.
+# container_runtime = "docker"
+
+# Optional: Override container runtime executable/binary path (e.g., "/usr/bin/podman", "nerdctl")
+# container_runtime_command = ""
+
+# Optional: Runtime-level args inserted before "run" for stdio container launches
+# container_runtime_args = []
+
 # Directory for storing large payload files (default: /tmp/jq-payloads)
 # Must be an absolute path
 # Payloads are segmented by session ID: {payload_dir}/{sessionID}/{queryID}/payload.json
@@ -64,7 +75,7 @@ tool_timeout = 120
 
 # Example 1: GitHub MCP Server (stdio via Docker)
 [servers.github]
-# Required: Must be "docker" for stdio servers (MCP Gateway Specification Section 3.2.1)
+# Required: Must match configured container runtime command for stdio servers (default: "docker")
 # See: https://github.com/github/gh-aw/blob/main/docs/src/content/docs/reference/mcp-gateway.md#321-containerization-requirement
 command = "docker"
 

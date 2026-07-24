@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -247,7 +248,7 @@ func GetOrLaunchForSession(l *Launcher, serverID, sessionID string) (*mcp.Connec
 // Returns the raw *mcp.Connection on success; the caller is responsible for storing it.
 func (l *Launcher) launchStdioConnection(serverID, sessionID string, serverCfg *config.ServerConfig) (*mcp.Connection, error) {
 	// Warn if using direct command in a container
-	isDirectCommand := serverCfg.Command != "docker"
+	isDirectCommand := isDirectStdioCommand(serverCfg.Command, serverCfg.Args)
 	if l.runningInContainer && isDirectCommand {
 		l.logSecurityWarning(serverID, serverCfg)
 	}
@@ -291,6 +292,17 @@ func (l *Launcher) launchStdioConnection(serverID, sessionID string, serverCfg *
 		l.logTimeoutError(serverID, sessionID)
 		return nil, fmt.Errorf("server startup timeout after %v", l.startupTimeout)
 	}
+}
+
+func isDirectStdioCommand(command string, args []string) bool {
+	switch command {
+	case "docker", "podman", "nerdctl":
+		return false
+	}
+	if len(args) > 0 && strings.EqualFold(args[0], "run") {
+		return false
+	}
+	return true
 }
 
 // ServerIDs returns all configured server IDs

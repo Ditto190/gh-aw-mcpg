@@ -819,6 +819,7 @@ func TestValidateTOMLStdioContainerization(t *testing.T) {
 	tests := []struct {
 		name      string
 		servers   map[string]*ServerConfig
+		gateway   *GatewayConfig
 		shouldErr bool
 		errorMsg  string
 	}{
@@ -852,6 +853,20 @@ func TestValidateTOMLStdioContainerization(t *testing.T) {
 					Command: "docker",
 					Args:    []string{"run", "--rm", "-i", "ghcr.io/github/github-mcp-server:latest"},
 				},
+			},
+			shouldErr: false,
+		},
+		{
+			name: "valid podman command for stdio server when runtime selected",
+			servers: map[string]*ServerConfig{
+				"github": {
+					Type:    "stdio",
+					Command: "podman",
+					Args:    []string{"run", "--rm", "-i", "ghcr.io/github/github-mcp-server:latest"},
+				},
+			},
+			gateway: &GatewayConfig{
+				ContainerRuntime: "podman",
 			},
 			shouldErr: false,
 		},
@@ -964,7 +979,7 @@ func TestValidateTOMLStdioContainerization(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := validateTOMLStdioContainerization(tt.servers)
+			err := validateTOMLStdioContainerization(tt.servers, tt.gateway)
 
 			if tt.shouldErr {
 				require.Error(t, err)

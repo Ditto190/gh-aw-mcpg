@@ -118,9 +118,18 @@ Run `./awmg --help` for full CLI options. Selected frequently-used flags (run `.
   - `"local"` - Alias for `"stdio"` (backward compatibility)
 
 - **`container`** (required for stdio in JSON format): Docker container image (e.g., `"ghcr.io/github/github-mcp-server:latest"`)
-  - Automatically wraps as `docker run --rm -i <container>`
+  - Automatically wraps as `<runtime> run --rm -i <container>` where `<runtime>` defaults to `docker`
   - **Note**: The `command` field is NOT supported in JSON stdin format (stdio servers must use `container` instead)
-  - **TOML format uses `command` and `args` fields - `command` must be `"docker"` for stdio servers**
+  - **TOML format uses `command` and `args` fields - `command` must match the configured runtime command (default: `"docker"`)**
+
+- **`gateway.containerRuntime`** (optional): Container runtime for stdio `container` launches in JSON stdin configs
+  - Supported values: `"docker"` (default), `"podman"`
+  - Can be overridden by environment variable `MCP_GATEWAY_CONTAINER_RUNTIME`
+
+- **`gateway.containerRuntimeCommand`** (optional): Override runtime binary/path (for example, `"/usr/bin/podman"` or `"nerdctl"`)
+
+- **`gateway.containerRuntimeArgs`** (optional): Additional runtime-level args inserted before `run`
+  - Example: `["--namespace", "k8s.io"]`
 
 - **`entrypoint`** (optional): Custom entrypoint for the container
   - Overrides the default container entrypoint
@@ -130,9 +139,13 @@ Run `./awmg --help` for full CLI options. Selected frequently-used flags (run `.
   - Array of strings passed after the container image
 
 - **`args`** (optional): Additional Docker runtime arguments inserted before the container image name
-  - Array of strings passed to `docker run` before the container image
+  - Array of strings passed to `<runtime> run` before the container image
   - Example: `["--network", "host", "--privileged"]`
-  - Useful for advanced Docker configurations
+  - Useful for advanced container runtime configurations
+
+### Rootless Podman Notes
+
+When using `gateway.containerRuntime: "podman"` in containerized/Kubernetes environments, ensure your runtime supports rootless execution prerequisites (for example user namespaces and `/dev/fuse` availability where required by your storage driver).
 
 - **`mounts`** (optional): Volume mounts for the container
   - Array of strings in format `"source:dest:mode"`
