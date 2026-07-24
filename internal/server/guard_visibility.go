@@ -3,13 +3,13 @@ package server
 import (
 	"context"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/github/gh-aw-mcpg/internal/config"
 	"github.com/github/gh-aw-mcpg/internal/envutil"
 	"github.com/github/gh-aw-mcpg/internal/githubhttp"
 	"github.com/github/gh-aw-mcpg/internal/logger"
+	"github.com/github/gh-aw-mcpg/internal/util"
 )
 
 // getTrustedBots returns the configured list of additional trusted bot usernames,
@@ -56,7 +56,7 @@ func (us *UnifiedServer) verifySinkVisibilityAtRuntime(serverID, configuredVisib
 		return configuredVisibility
 	}
 
-	configured := strings.ToLower(strings.TrimSpace(configuredVisibility))
+	configured := util.NormalizeStringCI(configuredVisibility)
 
 	// If actual is "public" but configured is not "public",
 	// override to "public" — this is the security-critical case.

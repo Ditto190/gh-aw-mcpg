@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/github/gh-aw-mcpg/internal/logger"
+	"github.com/github/gh-aw-mcpg/internal/util"
 )
 
 var logGuardPolicy = logger.ForFile()
@@ -30,7 +31,7 @@ func AllIntegrityLevels() []string {
 // validates it against the canonical set. If optional is true, an empty value
 // is allowed and returns an empty string.
 func NormalizeIntegrityLevel(raw string, optional bool) (string, error) {
-	normalized := strings.ToLower(strings.TrimSpace(raw))
+	normalized := util.NormalizeStringCI(raw)
 	logGuardPolicy.Printf("NormalizeIntegrityLevel: input=%q, normalized=%q, optional=%v", raw, normalized, optional)
 	if normalized == "" && optional {
 		return "", nil
