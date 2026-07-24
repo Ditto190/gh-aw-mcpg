@@ -124,7 +124,9 @@ pub fn label_response_items(
 
         // === Pull Requests - label by merged state ===
         "list_pull_requests"
+        | "list_pull_requests_ff_fields_param"
         | "search_pull_requests"
+        | "search_pull_requests_ff_fields_param"
         | "pull_request_read"
         | "get_pull_request" => {
             // For pull_request_read sub-methods that return non-PR objects (e.g.
@@ -152,7 +154,10 @@ pub fn label_response_items(
                     };
                     // All tools in this match arm use shared repo secrecy except search_pull_requests,
                     // which uses per-item secrecy derived from each PR's repository.
-                    let secrecy = if tool_name != "search_pull_requests" {
+                    let secrecy = if !matches!(
+                        tool_name,
+                        "search_pull_requests" | "search_pull_requests_ff_fields_param"
+                    ) {
                         repo_visibility_secrecy(&arg_owner, &arg_repo, &arg_repo_full, ctx)
                     } else {
                         vec![]
@@ -211,7 +216,10 @@ pub fn label_response_items(
                             data: item.clone(),
                             labels: ResourceLabels {
                                 description: format!("{}{}#{}", desc_prefix::PR, repo_full_name, number),
-                                secrecy: if tool_name == "search_pull_requests" {
+                                secrecy: if matches!(
+                                    tool_name,
+                                    "search_pull_requests" | "search_pull_requests_ff_fields_param"
+                                ) {
                                     repo_visibility_secrecy_for_repo_id(repo_full_name, ctx).into()
                                 } else {
                                     secrecy_shared.clone()
@@ -225,7 +233,12 @@ pub fn label_response_items(
         }
 
         // === Issues - label by author status ===
-        "list_issues" | "search_issues" | "get_issue" | "issue_read" => {
+        "list_issues"
+        | "list_issues_ff_fields_param"
+        | "search_issues"
+        | "search_issues_ff_fields_param"
+        | "get_issue"
+        | "issue_read" => {
             // For issue_read sub-methods that return non-issue objects (e.g.
             // get_comments, get_sub_issues, get_labels), skip per-item labeling.
             // Resource-level labels from tool_rules provide correct issue-scoped integrity.
@@ -251,7 +264,8 @@ pub fn label_response_items(
                 };
                 // All tools in this match arm use shared repo secrecy except search_issues,
                 // which uses per-item secrecy derived from each issue's repository.
-                let secrecy = if tool_name != "search_issues" {
+                let secrecy = if !matches!(tool_name, "search_issues" | "search_issues_ff_fields_param")
+                {
                     repo_visibility_secrecy(&arg_owner, &arg_repo, &default_repo_full_name, ctx)
                 } else {
                     vec![]
@@ -275,7 +289,10 @@ pub fn label_response_items(
                         data: item.clone(),
                         labels: ResourceLabels {
                             description: format!("{}{}#{}", desc_prefix::ISSUE, repo_full_name, number),
-                            secrecy: if tool_name == "search_issues" {
+                            secrecy: if matches!(
+                                tool_name,
+                                "search_issues" | "search_issues_ff_fields_param"
+                            ) {
                                 repo_visibility_secrecy_for_repo_id(&repo_full_name, ctx).into()
                             } else {
                                 secrecy_shared.clone()
@@ -288,7 +305,7 @@ pub fn label_response_items(
         }
 
         // === File Contents - repo-scoped secrecy ===
-        "get_file_contents" => {
+        "get_file_contents" | "get_file_contents_ff_fields_param" => {
             let all_items = collect_items_simple(&actual_response);
 
             let items_limited = limit_items_with_log(all_items.as_slice(), "get_file_contents");
@@ -316,7 +333,7 @@ pub fn label_response_items(
         }
 
         // === Commits - label by branch (default branch = merged) ===
-        "list_commits" | "get_commit" => {
+        "list_commits" | "list_commits_ff_fields_param" | "get_commit" => {
             let all_items = collect_items_simple(&actual_response);
 
             // Limit items to prevent WASM memory exhaustion
@@ -414,7 +431,10 @@ pub fn label_response_items(
         }
 
         // === Releases - merged-level integrity (endorsed) ===
-        "list_releases" | "get_latest_release" | "get_release_by_tag" => {
+        "list_releases"
+        | "list_releases_ff_fields_param"
+        | "get_latest_release"
+        | "get_release_by_tag" => {
             let all_items = collect_items_simple(&actual_response);
 
             // Limit items to prevent WASM memory exhaustion

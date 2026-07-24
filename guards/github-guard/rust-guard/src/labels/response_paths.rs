@@ -170,7 +170,9 @@ pub fn label_response_paths(
 
         // === Pull Requests - label by merged state ===
         "list_pull_requests"
+        | "list_pull_requests_ff_fields_param"
         | "search_pull_requests"
+        | "search_pull_requests_ff_fields_param"
         | "pull_request_read"
         | "get_pull_request" => {
             // Skip per-item labeling for pull_request_read sub-methods that return
@@ -231,7 +233,10 @@ pub fn label_response_paths(
                         path,
                         labels: crate::ResourceLabels {
                             description: format!("{}{}#{}", desc_prefix::PR, repo_for_labels, pr_number),
-                            secrecy: if tool_name == "search_pull_requests" {
+                            secrecy: if matches!(
+                                tool_name,
+                                "search_pull_requests" | "search_pull_requests_ff_fields_param"
+                            ) {
                                 repo_visibility_secrecy_for_repo_id(repo_for_labels, ctx).into()
                             } else {
                                 repo_item_ctx.default_secrecy_shared.clone()
@@ -260,7 +265,12 @@ pub fn label_response_paths(
         }
 
         // === Issues - label by author contributor status ===
-        "list_issues" | "search_issues" | "issue_read" | "get_issue" => {
+        "list_issues"
+        | "list_issues_ff_fields_param"
+        | "search_issues"
+        | "search_issues_ff_fields_param"
+        | "issue_read"
+        | "get_issue" => {
             // Skip per-item labeling for issue_read sub-methods (get_comments,
             // get_sub_issues, get_labels). Resource-level labels from tool_rules apply.
             let method = tool_args
@@ -299,7 +309,10 @@ pub fn label_response_paths(
                         path,
                         labels: crate::ResourceLabels {
                             description: format!("{}{}#{}", desc_prefix::ISSUE, repo_for_labels, issue_number),
-                            secrecy: if tool_name == "search_issues" {
+                            secrecy: if matches!(
+                                tool_name,
+                                "search_issues" | "search_issues_ff_fields_param"
+                            ) {
                                 repo_visibility_secrecy_for_repo_id(repo_for_labels, ctx).into()
                             } else {
                                 repo_item_ctx.default_secrecy_shared.clone()
@@ -328,7 +341,7 @@ pub fn label_response_paths(
         }
 
         // === Commits - label by branch ===
-        "list_commits" => {
+        "list_commits" | "list_commits_ff_fields_param" => {
             let items = actual_response.as_array();
 
             if let Some(items) = items {
@@ -402,7 +415,7 @@ pub fn label_response_paths(
         }
 
         // === File Contents - repo-scoped secrecy ===
-        "get_file_contents" => {
+        "get_file_contents" | "get_file_contents_ff_fields_param" => {
             let (arg_owner, arg_repo, arg_repo_full) = extract_repo_info(tool_args);
             let secrecy = repo_visibility_secrecy(&arg_owner, &arg_repo, &arg_repo_full, ctx);
             let branch_ref = tool_args.get("ref").and_then(|v| v.as_str()).unwrap_or("");
@@ -443,7 +456,7 @@ pub fn label_response_paths(
         }
 
         // === Releases - merged-level integrity ===
-        "list_releases" => {
+        "list_releases" | "list_releases_ff_fields_param" => {
             let items = actual_response.as_array();
 
             if let Some(items) = items {
@@ -665,10 +678,61 @@ pub fn label_response_paths(
 mod tests {
     use super::*;
     use crate::labels::constants::label_constants;
-    use serde_json::json;
+    use serde_json::{json, Value};
 
     fn ctx() -> PolicyContext {
         PolicyContext::default()
+    }
+
+    fn assert_alias_path_labels_match(
+        canonical: &str,
+        alias: &str,
+        tool_args: &Value,
+        response: &Value,
+    ) {
+        let canonical_result = label_response_paths(canonical, tool_args, response, &ctx())
+            .expect("canonical tool should produce path labels");
+        let alias_result = label_response_paths(alias, tool_args, response, &ctx())
+            .expect("alias tool should produce path labels");
+
+        assert_eq!(alias_result.items_path, canonical_result.items_path);
+        assert_eq!(
+            alias_result.labeled_paths.len(),
+            canonical_result.labeled_paths.len()
+        );
+
+        for (alias_item, canonical_item) in alias_result
+            .labeled_paths
+            .iter()
+            .zip(canonical_result.labeled_paths.iter())
+        {
+            assert_eq!(alias_item.path, canonical_item.path);
+            assert_eq!(alias_item.labels.description, canonical_item.labels.description);
+            assert_eq!(alias_item.labels.secrecy, canonical_item.labels.secrecy);
+            assert_eq!(alias_item.labels.integrity, canonical_item.labels.integrity);
+        }
+
+        assert_eq!(
+            alias_result.default_labels.as_ref().map(|labels| &labels.description),
+            canonical_result
+                .default_labels
+                .as_ref()
+                .map(|labels| &labels.description)
+        );
+        assert_eq!(
+            alias_result.default_labels.as_ref().map(|labels| &labels.secrecy),
+            canonical_result
+                .default_labels
+                .as_ref()
+                .map(|labels| &labels.secrecy)
+        );
+        assert_eq!(
+            alias_result.default_labels.as_ref().map(|labels| &labels.integrity),
+            canonical_result
+                .default_labels
+                .as_ref()
+                .map(|labels| &labels.integrity)
+        );
     }
 
     #[test]
@@ -1221,5 +1285,94 @@ mod tests {
         assert_eq!(left.labels.description, right.labels.description);
         assert_eq!(left.labels.secrecy, right.labels.secrecy);
         assert_eq!(left.labels.integrity, right.labels.integrity);
+    }
+
+    #[test]
+    fn ff_aliases_match_canonical_response_path_labels() {
+        let repo_args = json!({"owner": "octocat", "repo": "hello-world"});
+
+        let issues_response = json!({
+            "items": [{
+                "number": 42,
+                "repository_url": "https://api.github.com/repos/octocat/hello-world",
+                "author_association": "CONTRIBUTOR"
+            }]
+        });
+        assert_alias_path_labels_match(
+            "list_issues",
+            "list_issues_ff_fields_param",
+            &repo_args,
+            &issues_response,
+        );
+
+        let search_issues_args = json!({"query": "repo:octocat/hello-world is:issue bug"});
+        let search_issues_response = json!({
+            "items": [{
+                "number": 77,
+                "repository_url": "https://api.github.com/repos/octocat/hello-world",
+                "author_association": "MEMBER"
+            }]
+        });
+        assert_alias_path_labels_match(
+            "search_issues",
+            "search_issues_ff_fields_param",
+            &search_issues_args,
+            &search_issues_response,
+        );
+
+        let pr_response = json!([{
+            "number": 5,
+            "base": {"repo": {"full_name": "octocat/hello-world"}},
+            "head": {"repo": {"full_name": "octocat/hello-world"}}
+        }]);
+        assert_alias_path_labels_match(
+            "list_pull_requests",
+            "list_pull_requests_ff_fields_param",
+            &repo_args,
+            &pr_response,
+        );
+
+        let search_pr_args = json!({"query": "repo:octocat/hello-world is:pr fix"});
+        let search_pr_response = json!({
+            "items": [{
+                "number": 6,
+                "base": {"repo": {"full_name": "octocat/hello-world"}},
+                "head": {"repo": {"full_name": "octocat/hello-world"}}
+            }]
+        });
+        assert_alias_path_labels_match(
+            "search_pull_requests",
+            "search_pull_requests_ff_fields_param",
+            &search_pr_args,
+            &search_pr_response,
+        );
+
+        let commits_response = json!([{
+            "sha": "abcdef1234567890",
+            "author_association": "CONTRIBUTOR"
+        }]);
+        assert_alias_path_labels_match(
+            "list_commits",
+            "list_commits_ff_fields_param",
+            &repo_args,
+            &commits_response,
+        );
+
+        let file_args = json!({"owner": "octocat", "repo": "hello-world", "ref": "main"});
+        let files_response = json!([{"name": "README.md"}]);
+        assert_alias_path_labels_match(
+            "get_file_contents",
+            "get_file_contents_ff_fields_param",
+            &file_args,
+            &files_response,
+        );
+
+        let releases_response = json!([{"tag_name": "v1.0.0"}]);
+        assert_alias_path_labels_match(
+            "list_releases",
+            "list_releases_ff_fields_param",
+            &repo_args,
+            &releases_response,
+        );
     }
 }
