@@ -96,6 +96,24 @@ func (h *mockStreamableHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 	}
 }
 
+// TestWrapWithSessionAutoInit_PassthroughEmptyBody verifies that POST requests with
+// an empty body are forwarded unchanged (the middleware cannot parse the method).
+func TestWrapWithSessionAutoInit_PassthroughEmptyBody(t *testing.T) {
+	mock := newMockStreamableHandler()
+	handler := WrapWithSessionAutoInit(mock)
+
+	// Send a POST with no body — the middleware should fall through to the handler.
+	req := httptest.NewRequest(http.MethodPost, "/mcp", nil)
+	req.Header.Set("Authorization", "test-api-key")
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	// The mock handler returns 400 for requests it cannot parse; the important thing
+	// is that the middleware did NOT attempt auto-init (which would require a body).
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
 // TestWrapWithSessionAutoInit_PassthroughNonPOST verifies that non-POST requests are
 // forwarded unchanged.
 func TestWrapWithSessionAutoInit_PassthroughNonPOST(t *testing.T) {
