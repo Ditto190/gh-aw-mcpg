@@ -1567,6 +1567,72 @@ mod tests {
     }
 
     #[test]
+    fn apply_tool_labels_copilot_spaces_get_private_user_and_project_github_integrity() {
+        let ctx = default_ctx();
+        let expected_secrecy = private_user_label();
+        let expected_integrity = project_github_label(&ctx);
+
+        for tool in &["get_copilot_space", "list_copilot_spaces"] {
+            let (secrecy, integrity, _) =
+                super::apply_tool_labels(tool, &serde_json::json!({}), "", vec![], vec![], String::new(), &ctx);
+            assert_eq!(
+                secrecy, expected_secrecy,
+                "{tool}: expected private:user secrecy",
+            );
+            assert_eq!(
+                integrity, expected_integrity,
+                "{tool}: expected project:github integrity",
+            );
+        }
+    }
+
+    #[test]
+    fn apply_tool_labels_public_github_metadata_gets_empty_secrecy_and_project_github_integrity() {
+        let ctx = default_ctx();
+        let expected_integrity = project_github_label(&ctx);
+
+        for tool in &[
+            "search_orgs",
+            "list_global_security_advisories",
+            "get_global_security_advisory",
+            "github_support_docs_search",
+        ] {
+            let (secrecy, integrity, _) =
+                super::apply_tool_labels(tool, &serde_json::json!({}), "", vec![], vec![], String::new(), &ctx);
+            assert!(secrecy.is_empty(), "{tool}: expected empty secrecy");
+            assert_eq!(
+                integrity, expected_integrity,
+                "{tool}: expected project:github integrity",
+            );
+        }
+    }
+
+    #[test]
+    fn apply_tool_labels_repository_security_advisories_get_private_scope_and_writer_integrity() {
+        let ctx = default_ctx();
+        let args = serde_json::json!({"owner": "octocat", "repo": "hello-world"});
+        let repo_id = "octocat/hello-world";
+        let expected_secrecy = private_label("octocat", "hello-world", repo_id, &ctx);
+        let expected_integrity = writer_integrity(repo_id, &ctx);
+
+        for tool in &[
+            "list_repository_security_advisories",
+            "list_org_repository_security_advisories",
+        ] {
+            let (secrecy, integrity, _) =
+                super::apply_tool_labels(tool, &args, repo_id, vec![], vec![], String::new(), &ctx);
+            assert_eq!(
+                secrecy, expected_secrecy,
+                "{tool}: expected private scope secrecy",
+            );
+            assert_eq!(
+                integrity, expected_integrity,
+                "{tool}: expected writer-level integrity",
+            );
+        }
+    }
+
+    #[test]
     fn apply_tool_labels_delete_gist_is_user_private_with_writer_integrity() {
         let ctx = default_ctx();
         let args = serde_json::json!({});

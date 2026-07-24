@@ -145,7 +145,7 @@ pub(crate) fn is_repo_private(owner: &str, repo: &str) -> Option<bool> {
     is_repo_private_with_callback(crate::invoke_backend, owner, repo)
 }
 
-pub fn is_repo_private_with_callback(
+pub(crate) fn is_repo_private_with_callback(
     callback: GithubMcpCallback,
     owner: &str,
     repo: &str,
