@@ -650,10 +650,11 @@ func buildStdioServerConfigWithRuntime(name string, server *StdinServerConfig, r
 	logConfig.Printf("Configured stdio MCP server: name=%s, container=%s", name, server.Container)
 
 	serverCfg := &ServerConfig{
-		Type:    "stdio",
-		Command: runtimeCfg.Command,
-		Args:    args,
-		Env:     make(map[string]string),
+		Type:          "stdio",
+		Containerized: true,
+		Command:       runtimeCfg.Command,
+		Args:          args,
+		Env:           make(map[string]string),
 	}
 	applyCommonServerConfigFields(serverCfg, server)
 	return serverCfg

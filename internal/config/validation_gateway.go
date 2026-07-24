@@ -121,7 +121,7 @@ func validateTrustedBots(bots []string) error {
 // This enforces MCP Gateway Specification Section 3.2.1: "Stdio-based MCP servers MUST be containerized."
 func validateTOMLStdioContainerization(servers map[string]*ServerConfig, gateway *GatewayConfig) error {
 	logValidation.Print("Validating TOML stdio server containerization requirement")
-	expectedCommand := effectiveContainerRuntimeCommand(gateway)
+	expectedCommand := configuredContainerRuntimeCommand(gateway)
 
 	for name, cfg := range servers {
 		// Only validate stdio servers (or empty type which defaults to stdio)

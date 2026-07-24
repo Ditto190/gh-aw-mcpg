@@ -249,7 +249,7 @@ func GetOrLaunchForSession(l *Launcher, serverID, sessionID string) (*mcp.Connec
 // Returns the raw *mcp.Connection on success; the caller is responsible for storing it.
 func (l *Launcher) launchStdioConnection(serverID, sessionID string, serverCfg *config.ServerConfig) (*mcp.Connection, error) {
 	// Warn if using direct command in a container
-	isDirectCommand := isDirectStdioCommand(serverCfg.Command, serverCfg.Args)
+	isDirectCommand := isDirectStdioCommand(serverCfg)
 	if l.runningInContainer && isDirectCommand {
 		l.logSecurityWarning(serverID, serverCfg)
 	}
@@ -301,13 +301,21 @@ func (l *Launcher) launchStdioConnection(serverID, sessionID string, serverCfg *
 // Detection is intentionally dual-mode:
 //   - known runtime executable names (docker/podman/nerdctl), and
 //   - custom runtime binaries where the first argument is "run".
-func isDirectStdioCommand(command string, args []string) bool {
-	switch strings.ToLower(filepath.Base(command)) {
+func isDirectStdioCommand(serverCfg *config.ServerConfig) bool {
+	if serverCfg == nil {
+		return true
+	}
+	if serverCfg.Containerized {
+		return false
+	}
+	switch strings.ToLower(filepath.Base(serverCfg.Command)) {
 	case "docker", "podman", "nerdctl":
 		return false
 	}
-	if len(args) > 0 && strings.EqualFold(args[0], "run") {
-		return false
+	for _, arg := range serverCfg.Args {
+		if strings.EqualFold(arg, "run") {
+			return false
+		}
 	}
 	return true
 }

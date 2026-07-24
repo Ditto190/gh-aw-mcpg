@@ -271,6 +271,10 @@ type ServerConfig struct {
 	// Type is the server type: "stdio" or "http"
 	Type string `toml:"type" json:"type,omitempty"`
 
+	// Containerized indicates this stdio server entry is explicitly containerized.
+	// This is internal-only metadata used by the launcher for diagnostics.
+	Containerized bool `toml:"-" json:"-"`
+
 	// Command is the executable command (for stdio servers)
 	Command string `toml:"command" json:"command,omitempty"`
 
@@ -498,7 +502,7 @@ func LoadFromFile(path string) (*Config, error) {
 		return nil, fmt.Errorf("no servers defined in configuration")
 	}
 
-	// Validate TOML stdio servers use Docker for containerization (Spec Section 3.2.1)
+	// Validate TOML stdio servers use configured container runtime command (Spec Section 3.2.1)
 	stdioServerCount := 0
 	for _, serverCfg := range cfg.Servers {
 		if serverCfg.Type == "stdio" {
@@ -508,6 +512,11 @@ func LoadFromFile(path string) (*Config, error) {
 	logConfig.Printf("Validating stdio server containerization requirements for %d stdio servers", stdioServerCount)
 	if err := validateTOMLStdioContainerization(cfg.Servers, cfg.Gateway); err != nil {
 		return nil, err
+	}
+	for _, serverCfg := range cfg.Servers {
+		if IsStdioServerType(serverCfg.Type) {
+			serverCfg.Containerized = true
+		}
 	}
 
 	logConfig.Printf("Validating shared server configuration for %d servers", len(cfg.Servers))

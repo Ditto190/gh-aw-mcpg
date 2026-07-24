@@ -129,7 +129,7 @@ Run `./awmg --help` for full CLI options. Selected frequently-used flags (run `.
 
 - **`gateway.containerRuntimeCommand`** (optional): Override runtime binary/path (for example, `"/usr/bin/podman"` or `"nerdctl"`)
 
-- **`gateway.containerRuntimeArgs`** (optional): Additional runtime-level args inserted before `run`
+- **`gateway.containerRuntimeArgs`** (optional): Additional runtime-level args inserted before `run` for JSON stdin `container` launches
   - Example: `["--namespace", "k8s.io"]`
 
 - **`entrypoint`** (optional): Custom entrypoint for the container

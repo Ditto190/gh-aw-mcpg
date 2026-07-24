@@ -3,29 +3,30 @@ package launcher
 import (
 	"testing"
 
+	"github.com/github/gh-aw-mcpg/internal/config"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestIsDirectStdioCommand(t *testing.T) {
 	tests := []struct {
 		name     string
-		command  string
-		args     []string
+		server   *config.ServerConfig
 		expected bool
 	}{
-		{name: "docker runtime", command: "docker", args: []string{"run", "--rm"}, expected: false},
-		{name: "podman runtime", command: "podman", args: []string{"run", "--rm"}, expected: false},
-		{name: "podman runtime absolute path", command: "/usr/local/bin/podman", args: []string{"--events-backend=file", "run", "--rm"}, expected: false},
-		{name: "nerdctl runtime", command: "nerdctl", args: []string{"run", "--rm"}, expected: false},
-		{name: "custom runtime args start with run", command: "/usr/local/bin/runtime", args: []string{"run", "--rm"}, expected: false},
-		{name: "direct command", command: "python", args: []string{"-m", "server"}, expected: true},
-		{name: "direct node command", command: "node", args: []string{"server.js"}, expected: true},
-		{name: "direct shell script", command: "/app/start.sh", args: []string{}, expected: true},
+		{name: "docker runtime", server: &config.ServerConfig{Command: "docker", Args: []string{"run", "--rm"}}, expected: false},
+		{name: "podman runtime", server: &config.ServerConfig{Command: "podman", Args: []string{"run", "--rm"}}, expected: false},
+		{name: "podman runtime absolute path", server: &config.ServerConfig{Command: "/usr/local/bin/podman", Args: []string{"--events-backend=file", "run", "--rm"}}, expected: false},
+		{name: "nerdctl runtime", server: &config.ServerConfig{Command: "nerdctl", Args: []string{"run", "--rm"}}, expected: false},
+		{name: "custom runtime args start with run", server: &config.ServerConfig{Command: "/usr/local/bin/runtime", Args: []string{"run", "--rm"}}, expected: false},
+		{name: "containerized metadata bypasses arg inference", server: &config.ServerConfig{Containerized: true, Command: "/usr/local/bin/runtime", Args: []string{"--namespace", "k8s.io"}}, expected: false},
+		{name: "direct command", server: &config.ServerConfig{Command: "python", Args: []string{"-m", "server"}}, expected: true},
+		{name: "direct node command", server: &config.ServerConfig{Command: "node", Args: []string{"server.js"}}, expected: true},
+		{name: "direct shell script", server: &config.ServerConfig{Command: "/app/start.sh", Args: []string{}}, expected: true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expected, isDirectStdioCommand(tt.command, tt.args))
+			assert.Equal(t, tt.expected, isDirectStdioCommand(tt.server))
 		})
 	}
 }

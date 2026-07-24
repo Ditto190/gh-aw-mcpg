@@ -40,8 +40,8 @@ tool_timeout = 120
 # Optional: Override container runtime executable/binary path (e.g., "/usr/bin/podman", "nerdctl")
 # container_runtime_command = ""
 
-# Optional: Runtime-level args inserted before "run" for stdio container launches
-# container_runtime_args = []
+# Note: `container_runtime_args` applies only to JSON stdin `container` conversion.
+# For TOML stdio servers, put runtime-level options directly in each server's `args`.
 
 # Directory for storing large payload files (default: /tmp/jq-payloads)
 # Must be an absolute path

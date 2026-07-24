@@ -871,6 +871,18 @@ func TestValidateTOMLStdioContainerization(t *testing.T) {
 			shouldErr: false,
 		},
 		{
+			name: "env runtime override does not affect TOML validation",
+			servers: map[string]*ServerConfig{
+				"github": {
+					Type:    "stdio",
+					Command: "docker",
+					Args:    []string{"run", "--rm", "-i", "ghcr.io/github/github-mcp-server:latest"},
+				},
+			},
+			gateway:   &GatewayConfig{},
+			shouldErr: false,
+		},
+		{
 			name: "invalid node command for stdio server",
 			servers: map[string]*ServerConfig{
 				"filesystem": {
@@ -979,6 +991,7 @@ func TestValidateTOMLStdioContainerization(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("MCP_GATEWAY_CONTAINER_RUNTIME", "podman")
 			err := validateTOMLStdioContainerization(tt.servers, tt.gateway)
 
 			if tt.shouldErr {

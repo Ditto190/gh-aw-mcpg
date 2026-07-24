@@ -109,6 +109,7 @@ func TestConvertStdinServerConfig_MinimalStdioServer(t *testing.T) {
 
 	assert.Equal(t, "stdio", result.Type)
 	assert.Equal(t, "docker", result.Command)
+	assert.True(t, result.Containerized)
 	assert.Contains(t, result.Args, "minimal/container:v1")
 
 	// Should still have standard env vars
@@ -166,6 +167,23 @@ func TestConvertStdinConfig_ContainerRuntimeSelection(t *testing.T) {
 			},
 			Gateway: &StdinGatewayConfig{
 				ContainerRuntime: "docker",
+			},
+		}
+
+		cfg, err := convertStdinConfig(stdinCfg)
+		require.NoError(t, err)
+		require.NotNil(t, cfg.Servers["test"])
+		assert.Equal(t, "podman", cfg.Servers["test"].Command)
+	})
+
+	t.Run("whitespace MCP_GATEWAY_CONTAINER_RUNTIME is ignored", func(t *testing.T) {
+		t.Setenv("MCP_GATEWAY_CONTAINER_RUNTIME", "   ")
+		stdinCfg := &StdinConfig{
+			MCPServers: map[string]*StdinServerConfig{
+				"test": {Type: "stdio", Container: "ghcr.io/example/server:latest"},
+			},
+			Gateway: &StdinGatewayConfig{
+				ContainerRuntime: "podman",
 			},
 		}
 
@@ -1477,5 +1495,11 @@ func TestValidateGatewayConfig_ContainerRuntime(t *testing.T) {
 		err := validateGatewayConfig(&StdinGatewayConfig{ContainerRuntime: "containerd"})
 		require.Error(t, err)
 		assert.ErrorContains(t, err, "gateway.containerRuntime must be one of: docker, podman")
+	})
+
+	t.Run("rejects whitespace-only runtime value", func(t *testing.T) {
+		err := validateGatewayConfig(&StdinGatewayConfig{ContainerRuntime: "   "})
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "gateway.containerRuntime must not be empty or whitespace-only when set")
 	})
 }
