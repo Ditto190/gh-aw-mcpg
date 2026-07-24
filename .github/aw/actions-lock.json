@@ -70,10 +70,10 @@
       "version": "v0.24.0",
       "sha": "e22c389904149dbc22b58101806040fa8d37a610"
     },
-    "astral-sh/setup-uv@v8.3.2": {
+    "astral-sh/setup-uv@v9.0.0": {
       "repo": "astral-sh/setup-uv",
-      "version": "v8.3.2",
-      "sha": "11f9893b081a58869d3b5fccaea48c9e9e46f990"
+      "version": "v9.0.0",
+      "sha": "c771a70e6277c0a99b617c7a806ffedaca235ff9"
     },
     "denoland/setup-deno@v2.0.5": {
       "repo": "denoland/setup-deno",
@@ -85,10 +85,10 @@
       "version": "v7.3.0",
       "sha": "53b7df96c91f9c12dcc8a07bcb9ccacbed38856a"
     },
-    "docker/login-action@v4.4.0": {
+    "docker/login-action@v4.5.0": {
       "repo": "docker/login-action",
-      "version": "v4.4.0",
-      "sha": "af1e73f918a031802d376d3c8bbc3fe56130a9b0"
+      "version": "v4.5.0",
+      "sha": "06fb636fac595d6fb4b28a5dfcb21a6f5091859c"
     },
     "docker/setup-buildx-action@v4.2.0": {
       "repo": "docker/setup-buildx-action",
@@ -105,20 +105,20 @@
       "version": "v1.24.1",
       "sha": "54075bcc5e249e4758d363f27d099f55d843f124"
     },
-    "github/codeql-action/upload-sarif@v4.37.1": {
+    "github/codeql-action/upload-sarif@v4.37.3": {
       "repo": "github/codeql-action/upload-sarif",
-      "version": "v4.37.1",
-      "sha": "7188fc363630916deb702c7fdcf4e481b751f97a"
+      "version": "v4.37.3",
+      "sha": "e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81"
     },
-    "github/gh-aw-actions/setup-cli@v0.82.14": {
+    "github/gh-aw-actions/setup-cli@v0.83.2": {
       "repo": "github/gh-aw-actions/setup-cli",
-      "version": "v0.82.14",
-      "sha": "b6d1443e05b8716267fa19425b99aa4f12006b4a"
+      "version": "v0.83.2",
+      "sha": "39143c7eb25e92c0ab748285770483709db03c05"
     },
-    "github/gh-aw-actions/setup@v0.82.14": {
+    "github/gh-aw-actions/setup@v0.83.2": {
       "repo": "github/gh-aw-actions/setup",
-      "version": "v0.82.14",
-      "sha": "b6d1443e05b8716267fa19425b99aa4f12006b4a"
+      "version": "v0.83.2",
+      "sha": "39143c7eb25e92c0ab748285770483709db03c05"
     },
     "haskell-actions/setup@v2.11.0": {
       "repo": "haskell-actions/setup",
@@ -130,10 +130,10 @@
       "version": "v2.2.0",
       "sha": "0c5077e51419868618aeaa5fe8019c62421857d6"
     },
-    "ruby/setup-ruby@v1.319.0": {
+    "ruby/setup-ruby@v1.321.0": {
       "repo": "ruby/setup-ruby",
-      "version": "v1.319.0",
-      "sha": "003a5c4d8d6321bd302e38f6f0ec593f77f06600"
+      "version": "v1.321.0",
+      "sha": "95ef2b042f9d7a56d8268cba8559e2842e2ad01b"
     }
   },
   "containers": {
