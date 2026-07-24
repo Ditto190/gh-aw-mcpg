@@ -100,7 +100,7 @@ The gateway provides fail-fast validation with precise error locations (line/col
 
 ### Usage
 
-Run `./awmg --help` for full CLI options. Key flags:
+Run `./awmg --help` for full CLI options. Selected frequently-used flags (run `./awmg --help` for the complete list):
 
 ```bash
 ./awmg --config config.toml                    # TOML config file
@@ -136,7 +136,7 @@ Run `./awmg --help` for full CLI options. Key flags:
 
 - **`mounts`** (optional): Volume mounts for the container
   - Array of strings in format `"source:dest:mode"`
-  - `source` - Host path to mount (can use environment variables with `${VAR}` syntax)
+  - `source` - Host path to mount (can reference environment variables, e.g. `${HOME}`, because JSON stdin applies `${VAR}` expansion globally across all fields before parsing)
   - `dest` - Container path where the volume is mounted
   - `mode` - Either `"ro"` (read-only) or `"rw"` (read-write)
   - Example: `["/host/config:/app/config:ro", "/host/data:/app/data:rw"]`
