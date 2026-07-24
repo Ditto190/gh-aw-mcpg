@@ -24,6 +24,7 @@ import (
 
 var logProxyCmd = logger.ForFile()
 
+// DefaultProxyListenAddr is the default listen address used by the proxy command.
 const DefaultProxyListenAddr = DefaultListenIPv4 + ":8080"
 
 // Proxy subcommand flag variables
