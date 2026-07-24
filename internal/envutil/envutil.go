@@ -16,6 +16,7 @@ var logEnvUtil = logger.ForFile()
 // process environment, regardless of whether its value is empty.
 func HasEnvVar(key string) bool {
 	_, ok := os.LookupEnv(key)
+	logEnvUtil.Printf("HasEnvVar: key=%s, present=%v", key, ok)
 	return ok
 }
 
@@ -23,8 +24,10 @@ func HasEnvVar(key string) bool {
 // If the environment variable is not set or is empty, it returns the defaultValue.
 func GetEnvString(envKey, defaultValue string) string {
 	if value := os.Getenv(envKey); value != "" {
+		logEnvUtil.Printf("GetEnvString: %s found in environment", envKey)
 		return value
 	}
+	logEnvUtil.Printf("GetEnvString: %s not set, using default", envKey)
 	return defaultValue
 }
 
@@ -35,13 +38,16 @@ func GetEnvString(envKey, defaultValue string) string {
 func GetEnvIntRaw(envKey string) (int, bool, error) {
 	envValue := os.Getenv(envKey)
 	if envValue == "" {
+		logEnvUtil.Printf("GetEnvIntRaw: %s not set", envKey)
 		return 0, false, nil
 	}
 
 	value, err := strconv.Atoi(envValue)
 	if err != nil {
+		logEnvUtil.Printf("GetEnvIntRaw: %s=%q parse error: %v", envKey, sanitize.RedactSecret(envValue), err)
 		return 0, true, err
 	}
+	logEnvUtil.Printf("GetEnvIntRaw: %s=%d", envKey, value)
 	return value, true, nil
 }
 
