@@ -40,6 +40,9 @@ type StdinGatewayConfig struct {
 	Domain                      string                    `json:"domain,omitempty"`
 	StartupTimeout              *int                      `json:"startupTimeout,omitempty"`
 	ToolTimeout                 *int                      `json:"toolTimeout,omitempty"`
+	ContainerRuntime            string                    `json:"containerRuntime,omitempty"`
+	ContainerRuntimeCommand     string                    `json:"containerRuntimeCommand,omitempty"`
+	ContainerRuntimeArgs        []string                  `json:"containerRuntimeArgs,omitempty"`
 	KeepaliveInterval           *int                      `json:"keepaliveInterval,omitempty"`
 	PayloadDir                  string                    `json:"payloadDir,omitempty"`
 	PayloadPathPrefix           *string                   `json:"payloadPathPrefix,omitempty"`
@@ -403,12 +406,15 @@ func convertStdinConfig(stdinCfg *StdinConfig) (*Config, error) {
 	// Convert gateway config with defaults
 	if stdinCfg.Gateway != nil {
 		cfg.Gateway = &GatewayConfig{
-			Port:              intPtrOrDefault(stdinCfg.Gateway.Port, DefaultPort),
-			AgentID:           stdinCfg.Gateway.AgentID,
-			APIKey:            stdinCfg.Gateway.APIKey,
-			Domain:            stdinCfg.Gateway.Domain,
-			StartupTimeout:    intPtrOrDefault(stdinCfg.Gateway.StartupTimeout, DefaultStartupTimeout),
-			KeepaliveInterval: intPtrOrDefault(stdinCfg.Gateway.KeepaliveInterval, DefaultKeepaliveInterval),
+			Port:                    intPtrOrDefault(stdinCfg.Gateway.Port, DefaultPort),
+			AgentID:                 stdinCfg.Gateway.AgentID,
+			APIKey:                  stdinCfg.Gateway.APIKey,
+			Domain:                  stdinCfg.Gateway.Domain,
+			StartupTimeout:          intPtrOrDefault(stdinCfg.Gateway.StartupTimeout, DefaultStartupTimeout),
+			ContainerRuntime:        stdinCfg.Gateway.ContainerRuntime,
+			ContainerRuntimeCommand: stdinCfg.Gateway.ContainerRuntimeCommand,
+			ContainerRuntimeArgs:    append([]string{}, stdinCfg.Gateway.ContainerRuntimeArgs...),
+			KeepaliveInterval:       intPtrOrDefault(stdinCfg.Gateway.KeepaliveInterval, DefaultKeepaliveInterval),
 		}
 		cfg.Gateway.normalizeAgentID(stdinCfg.Gateway.agentIDSet, stdinCfg.Gateway.legacyAPIKeySet, "stdin JSON")
 		if stdinCfg.Gateway.ToolTimeout != nil {
@@ -454,8 +460,15 @@ func convertStdinConfig(stdinCfg *StdinConfig) (*Config, error) {
 	applyDefaults(cfg)
 
 	// Convert servers
+	stdioRuntimeCfg := stdioRuntimeConfig{
+		Command: effectiveContainerRuntimeCommand(cfg.Gateway),
+	}
+	if cfg.Gateway != nil && len(cfg.Gateway.ContainerRuntimeArgs) > 0 {
+		stdioRuntimeCfg.Args = append([]string{}, cfg.Gateway.ContainerRuntimeArgs...)
+	}
+
 	for name, server := range stdinCfg.MCPServers {
-		serverCfg, err := convertStdinServerConfig(name, server, stdinCfg.CustomSchemas)
+		serverCfg, err := convertStdinServerConfigWithRuntime(name, server, stdinCfg.CustomSchemas, stdioRuntimeCfg)
 		if err != nil {
 			return nil, err
 		}
@@ -489,6 +502,21 @@ func convertStdinConfig(stdinCfg *StdinConfig) (*Config, error) {
 
 // convertStdinServerConfig converts a single StdinServerConfig to ServerConfig.
 func convertStdinServerConfig(name string, server *StdinServerConfig, customSchemas map[string]interface{}) (*ServerConfig, error) {
+	return convertStdinServerConfigWithRuntime(name, server, customSchemas, stdioRuntimeConfig{
+		Command: DefaultContainerRuntime,
+	})
+}
+
+// stdioRuntimeConfig carries resolved container runtime settings used when
+// converting JSON stdin `container` server entries into internal stdio commands.
+type stdioRuntimeConfig struct {
+	// Command is the runtime executable/binary to invoke (e.g., docker, podman).
+	Command string
+	// Args are runtime-level arguments inserted before the "run" subcommand.
+	Args []string
+}
+
+func convertStdinServerConfigWithRuntime(name string, server *StdinServerConfig, customSchemas map[string]interface{}, runtimeCfg stdioRuntimeConfig) (*ServerConfig, error) {
 	// Validate server configuration (fail-fast) with custom schemas support
 	if err := validateServerConfigWithCustomSchemas(name, server, customSchemas); err != nil {
 		return nil, err
@@ -546,13 +574,25 @@ func convertStdinServerConfig(name string, server *StdinServerConfig, customSche
 	}
 
 	// stdio/local servers only from this point
-	// All stdio servers use Docker containers
-	return buildStdioServerConfig(name, server), nil
+	return buildStdioServerConfigWithRuntime(name, server, runtimeCfg), nil
 }
 
 // buildStdioServerConfig builds a ServerConfig for a stdio server.
 func buildStdioServerConfig(name string, server *StdinServerConfig) *ServerConfig {
-	args := []string{
+	return buildStdioServerConfigWithRuntime(name, server, stdioRuntimeConfig{
+		Command: DefaultContainerRuntime,
+	})
+}
+
+func buildStdioServerConfigWithRuntime(name string, server *StdinServerConfig, runtimeCfg stdioRuntimeConfig) *ServerConfig {
+	// Defensive fallback for unit-level callers that bypass convertStdinConfig's
+	// runtime resolution path. Production conversion always provides a command.
+	if runtimeCfg.Command == "" {
+		panic("stdio runtime command must not be empty")
+	}
+
+	args := append([]string{}, runtimeCfg.Args...)
+	args = append(args,
 		"run",
 		"--rm",
 		"-i",
@@ -560,7 +600,7 @@ func buildStdioServerConfig(name string, server *StdinServerConfig) *ServerConfi
 		"-e", "NO_COLOR=1",
 		"-e", "TERM=dumb",
 		"-e", "PYTHONUNBUFFERED=1",
-	}
+	)
 
 	// Add entrypoint override if specified
 	if server.Entrypoint != "" {
@@ -610,10 +650,11 @@ func buildStdioServerConfig(name string, server *StdinServerConfig) *ServerConfi
 	logConfig.Printf("Configured stdio MCP server: name=%s, container=%s", name, server.Container)
 
 	serverCfg := &ServerConfig{
-		Type:    "stdio",
-		Command: "docker",
-		Args:    args,
-		Env:     make(map[string]string),
+		Type:          "stdio",
+		Containerized: true,
+		Command:       runtimeCfg.Command,
+		Args:          args,
+		Env:           make(map[string]string),
 	}
 	applyCommonServerConfigFields(serverCfg, server)
 	return serverCfg

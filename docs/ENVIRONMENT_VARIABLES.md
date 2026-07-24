@@ -73,10 +73,11 @@ These variables are script-specific controls for bind address and routing mode:
 | `MCP_GATEWAY_HOST` | Bind address for the gateway in `run_containerized.sh`. | `0.0.0.0` |
 | `MCP_GATEWAY_MODE` | Routing mode flag passed to `awmg` by `run_containerized.sh` (e.g., `--routed`, `--unified`). | `--routed` |
 
-## Docker Configuration
+## Container Runtime Configuration
 
 | Variable | Description | Default |
 |----------|-------------|---------|
+| `MCP_GATEWAY_CONTAINER_RUNTIME` | Overrides gateway stdio container runtime selection (`docker` or `podman`). Applies to JSON stdin `container` launches. | `docker` |
 | `DOCKER_HOST` | Docker daemon socket path | `/var/run/docker.sock` |
 
 ### Helper/CLI Docker Variables
