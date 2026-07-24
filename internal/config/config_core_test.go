@@ -169,6 +169,21 @@ args = ["server.js"]
 	assert.ErrorContains(t, err, "localserver")
 }
 
+func TestLoadFromFile_WhitespaceGatewayContainerRuntimeRejected(t *testing.T) {
+	path := writeTempTOML(t, `
+[gateway]
+container_runtime = "   "
+
+[servers.github]
+command = "docker"
+args = ["run", "--rm", "-i", "ghcr.io/github/github-mcp-server:latest"]
+`)
+	cfg, err := LoadFromFile(path)
+	require.Error(t, err)
+	assert.Nil(t, cfg)
+	assert.ErrorContains(t, err, "gateway.container_runtime must not be empty or whitespace-only when set")
+}
+
 // TestLoadFromFile_HTTPServerValid verifies that an HTTP server does not require
 // the docker command (only stdio servers need containerization).
 func TestLoadFromFile_HTTPServerValid(t *testing.T) {

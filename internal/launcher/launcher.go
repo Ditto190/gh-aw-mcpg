@@ -312,9 +312,13 @@ func isDirectStdioCommand(serverCfg *config.ServerConfig) bool {
 	case "docker", "podman", "nerdctl":
 		return false
 	}
+	// Scan only the first few runtime-level args where the container subcommand
+	// appears in supported launch shapes (for example: `run`, or `--flag run`).
+	// This avoids scanning long argument vectors for direct commands.
+	const maxRunProbeArgs = 3
 	limit := len(serverCfg.Args)
-	if limit > 3 {
-		limit = 3
+	if limit > maxRunProbeArgs {
+		limit = maxRunProbeArgs
 	}
 	for _, arg := range serverCfg.Args[:limit] {
 		if strings.EqualFold(arg, "run") {

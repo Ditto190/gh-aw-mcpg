@@ -25,7 +25,7 @@ func runtimeCommandForName(runtime string) string {
 
 func validateContainerRuntimeValue(value, fieldName string) error {
 	normalized := normalizeContainerRuntime(value)
-	if normalized == "" && value != "" {
+	if strings.TrimSpace(value) == "" && value != "" {
 		return fmt.Errorf("%s must not be empty or whitespace-only when set", fieldName)
 	}
 	switch normalized {
