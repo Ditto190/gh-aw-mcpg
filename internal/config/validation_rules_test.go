@@ -1414,3 +1414,65 @@ func TestTimeoutRange(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateOptionalInt(t *testing.T) {
+	tests := []struct {
+		name      string
+		ptr       *int
+		validateF func(int) *ValidationError
+		wantErr   bool
+		errMsg    string
+	}{
+		{
+			name:      "nil pointer returns nil without calling validateFn",
+			ptr:       nil,
+			validateF: func(int) *ValidationError { panic("should not be called") },
+			wantErr:   false,
+		},
+		{
+			name:      "non-nil valid value returns nil",
+			ptr:       intPtr(80),
+			validateF: func(v int) *ValidationError { return PortRange(v, "gateway.port") },
+			wantErr:   false,
+		},
+		{
+			name:      "non-nil invalid value returns error",
+			ptr:       intPtr(0),
+			validateF: func(v int) *ValidationError { return PortRange(v, "gateway.port") },
+			wantErr:   true,
+			errMsg:    "port must be between 1 and 65535",
+		},
+		{
+			name: "closure can embed additional guard (zero means skip)",
+			ptr:  intPtr(0),
+			validateF: func(v int) *ValidationError {
+				if v == 0 {
+					return nil // sentinel: skip validation
+				}
+				return TimeoutMinimum(v, 10, "toolTimeout", "mcpServers.s.toolTimeout")
+			},
+			wantErr: false,
+		},
+		{
+			name: "closure returns error when value is below minimum",
+			ptr:  intPtr(5),
+			validateF: func(v int) *ValidationError {
+				return TimeoutMinimum(v, 10, "toolTimeout", "mcpServers.s.toolTimeout")
+			},
+			wantErr: true,
+			errMsg:  "toolTimeout must be at least 10",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateOptionalInt(tt.ptr, "test log message", tt.validateF)
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errMsg)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
