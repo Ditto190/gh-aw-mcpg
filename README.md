@@ -31,7 +31,7 @@ This gateway is used with [GitHub Agentic Workflows](https://github.com/github/g
    }
    ```
 
-   Note: In JSON stdin config, `gateway.port`, `gateway.domain`, and one of `gateway.agentId` or `gateway.apiKey` are schema-required fields.
+   Note: The JSON schema requires a top-level `gateway` object containing `port`, `domain`, and one of `agentId` or `apiKey`. All three are validated before any server is started.
 
    Looking for complete examples? See [`config.example.toml`](config.example.toml), [`config.example-payload-threshold.toml`](config.example-payload-threshold.toml), and [`example-http-config.json`](example-http-config.json).
 
@@ -48,7 +48,7 @@ This gateway is used with [GitHub Agentic Workflows](https://github.com/github/g
    ```
 
 > [!NOTE]
-> The container entrypoint script (`run_containerized.sh`) automatically adds `--config-stdin` when it starts `awmg`. If you run `awmg` directly (outside the container) and want to pipe JSON config, you must pass `--config-stdin` explicitly.
+> The CLI requires either `--config` or `--config-stdin`; piping JSON configuration requires `--config-stdin`. The container entrypoint script (`run_containerized.sh`) automatically adds `--config-stdin` when it starts `awmg`. If you run `awmg` directly (outside the container) and want to pipe JSON config, you must pass `--config-stdin` explicitly.
 
 Inside the container, the gateway starts in routed mode on `http://0.0.0.0:8000`, proxying MCP requests to your configured backend servers. When running `awmg` directly without `--listen`, the default listen address is `http://127.0.0.1:3000`.
 
@@ -122,7 +122,7 @@ The gateway supports OpenTelemetry distributed tracing. Set these variables to e
 | `GH_AW_OTLP_ENDPOINTS` | Comma-separated OTLP URLs (or JSON array with per-endpoint `headers`) for multi-backend fan-out; all listed endpoints receive every span. Takes precedence over `OTEL_EXPORTER_OTLP_ENDPOINT`. |
 | `OTEL_SERVICE_NAME` | Service name reported in traces (default: `mcp-gateway`) |
 
-Use `--otlp-sample-rate <float>` to control trace sampling (range `0.0`–`1.0`, default `1.0`).
+Use `--otlp-sample-rate <float>` to control trace sampling (range `0.0`–`1.0`, default `1.0`). Note: unlike `--otlp-endpoint` and `--otlp-service-name`, `--otlp-sample-rate` has no environment-variable fallback and can only be set via this flag or the `gateway.tracing.sampleRate` config field.
 
 See [`docs/ENVIRONMENT_VARIABLES.md`](docs/ENVIRONMENT_VARIABLES.md) for full details.
 
