@@ -122,7 +122,7 @@ The gateway supports OpenTelemetry distributed tracing. Set these variables to e
 | `GH_AW_OTLP_ENDPOINTS` | Comma-separated OTLP URLs (or JSON array with per-endpoint `headers`) for multi-backend fan-out; all listed endpoints receive every span. Takes precedence over `OTEL_EXPORTER_OTLP_ENDPOINT`. |
 | `OTEL_SERVICE_NAME` | Service name reported in traces (default: `mcp-gateway`) |
 
-Use `--otlp-sample-rate <float>` to control trace sampling (range `0.0`–`1.0`, default `1.0`). Note: unlike `--otlp-endpoint` and `--otlp-service-name`, `--otlp-sample-rate` has no environment-variable fallback and can only be set via this flag or the `gateway.tracing.sampleRate` config field.
+Use `--otlp-sample-rate <float>` to control trace sampling (range `0.0`–`1.0`, default `1.0`). Note: unlike `--otlp-endpoint` and `--otlp-service-name`, `--otlp-sample-rate` has no environment-variable fallback and can only be set via this flag or TOML `sample_rate` under `[gateway.opentelemetry]` (preferred) or legacy `[gateway.tracing]`; it is not supported in JSON stdin config.
 
 See [`docs/ENVIRONMENT_VARIABLES.md`](docs/ENVIRONMENT_VARIABLES.md) for full details.
 
