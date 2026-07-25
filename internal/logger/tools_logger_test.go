@@ -214,7 +214,7 @@ func TestToolsLoggerFallback(t *testing.T) {
 	assert.NoError(err, "CloseAllLoggers failed")
 }
 
-// TestWriteToFile_Success verifies writeToFile writes valid JSON atomically.
+// TestWriteToFile_Success verifies writeJSON writes valid JSON atomically.
 func TestWriteToFile_Success(t *testing.T) {
 	assert := assert.New(t)
 	require := require.New(t)
@@ -231,8 +231,8 @@ func TestWriteToFile_Success(t *testing.T) {
 		},
 	}
 
-	err := tl.writeToFile()
-	require.NoError(err, "writeToFile should succeed")
+	err := tl.writeJSON(tl.data, 0644)
+	require.NoError(err, "writeJSON should succeed")
 
 	// Verify file was written
 	data, err := os.ReadFile(filepath.Join(tmpDir, "tools.json"))
@@ -255,8 +255,8 @@ func TestWriteToFile_WriteFileFails(t *testing.T) {
 		data:         &ToolsData{Servers: make(map[string][]ToolInfo)},
 	}
 
-	err := tl.writeToFile()
-	assert.Error(err, "writeToFile should fail when logDir does not exist")
+	err := tl.writeJSON(tl.data, 0644)
+	assert.Error(err, "writeJSON should fail when logDir does not exist")
 	assert.ErrorContains(err, "failed to write temp file")
 }
 
@@ -277,8 +277,8 @@ func TestWriteToFile_RenameFails(t *testing.T) {
 		data:         &ToolsData{Servers: make(map[string][]ToolInfo)},
 	}
 
-	err := tl.writeToFile()
-	assert.Error(err, "writeToFile should fail when rename target is a directory")
+	err := tl.writeJSON(tl.data, 0644)
+	assert.Error(err, "writeJSON should fail when rename target is a directory")
 	assert.ErrorContains(err, "failed to rename temp file")
 
 	// Verify that the cleanup removed the temp file.

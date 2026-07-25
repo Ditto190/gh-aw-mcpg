@@ -30,6 +30,8 @@ func WalkDockerEnvArgs(args []string, fn func(index int, varName, value string, 
 // ExpandEnvArgs expands Docker -e flags that reference environment variables.
 // Converts "-e VAR_NAME" to "-e VAR_NAME=value" by reading from the process environment.
 // If the variable is not set, the flag is passed through unchanged.
+// This behavior is intentionally different from config expansion in internal/config/expand.go,
+// which fails hard when a referenced variable is undefined.
 func ExpandEnvArgs(args []string) []string {
 	logExpand.Printf("Expanding env args: input_count=%d", len(args))
 	expandedValues := make(map[int]string)
