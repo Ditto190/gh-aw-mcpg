@@ -205,6 +205,33 @@ func NonEmptyString(value, fieldName, jsonPath string) *ValidationError {
 		fmt.Sprintf("Provide a non-empty value for %s", fieldName))
 }
 
+// validateOptionalInt nil-guards an optional integer pointer field before
+// calling validateFn with the dereferenced value.  It replaces the repeated
+// boilerplate:
+//
+//	if ptr != nil {
+//	    logValidation.Print(logMsg)
+//	    if err := someRule(*ptr, ...); err != nil { return err }
+//	}
+//
+// validateFn receives the dereferenced value and returns a *ValidationError
+// (nil means valid).  The caller controls all validation logic through the
+// closure it passes.  logMsg is emitted at debug level only when ptr is
+// non-nil.  Note: the rule functions called inside validateFn already log the
+// field name, value, and JSON path, so logMsg is intentionally a short
+// higher-level label ("Validating gateway port") rather than a formatted string
+// containing the value.
+func validateOptionalInt(ptr *int, logMsg string, validateFn func(int) *ValidationError) error {
+	if ptr == nil {
+		return nil
+	}
+	logValidation.Print(logMsg)
+	if ve := validateFn(*ptr); ve != nil {
+		return ve
+	}
+	return nil
+}
+
 // AbsolutePath validates that a directory path is an absolute path
 // Per MCP Gateway schema: Unix paths start with '/', Windows paths start with a drive letter followed by ':\'
 // Pattern: ^(/|[A-Za-z]:\\)

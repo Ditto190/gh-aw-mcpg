@@ -15,26 +15,22 @@ func validateGatewayConfig(gateway *StdinGatewayConfig) error {
 	logValidation.Print("Validating gateway configuration")
 
 	// Validate port range using centralized rules
-	if gateway.Port != nil {
-		logValidation.Printf("Validating gateway port: %d", *gateway.Port)
-		if err := PortRange(*gateway.Port, "gateway.port"); err != nil {
-			return err
-		}
+	if err := validateOptionalInt(gateway.Port, "Validating gateway port",
+		func(v int) *ValidationError { return PortRange(v, "gateway.port") }); err != nil {
+		return err
 	}
 
 	// Validate timeout values using centralized rules
-	if gateway.StartupTimeout != nil {
-		logValidation.Printf("Validating startup timeout: %d", *gateway.StartupTimeout)
-		if err := TimeoutPositive(*gateway.StartupTimeout, "startupTimeout", "gateway.startupTimeout"); err != nil {
-			return err
-		}
+	if err := validateOptionalInt(gateway.StartupTimeout, "Validating startup timeout",
+		func(v int) *ValidationError { return TimeoutPositive(v, "startupTimeout", "gateway.startupTimeout") }); err != nil {
+		return err
 	}
 
-	if gateway.ToolTimeout != nil {
-		logValidation.Printf("Validating tool timeout: %d", *gateway.ToolTimeout)
-		if err := TimeoutMinimum(*gateway.ToolTimeout, ToolTimeoutMin, "toolTimeout", "gateway.toolTimeout"); err != nil {
-			return err
-		}
+	if err := validateOptionalInt(gateway.ToolTimeout, "Validating tool timeout",
+		func(v int) *ValidationError {
+			return TimeoutMinimum(v, ToolTimeoutMin, "toolTimeout", "gateway.toolTimeout")
+		}); err != nil {
+		return err
 	}
 
 	if err := validateContainerRuntimeValue(gateway.ContainerRuntime, "gateway.containerRuntime"); err != nil {
@@ -57,10 +53,11 @@ func validateGatewayConfig(gateway *StdinGatewayConfig) error {
 	}
 
 	// Validate payloadSizeThreshold per spec §4.1.3.3: must be a positive integer when present.
-	if gateway.PayloadSizeThreshold != nil {
-		if err := validateGatewayPayloadSizeThreshold(*gateway.PayloadSizeThreshold, "payloadSizeThreshold", "gateway.payloadSizeThreshold"); err != nil {
-			return err
-		}
+	if err := validateOptionalInt(gateway.PayloadSizeThreshold, "Validating payload size threshold",
+		func(v int) *ValidationError {
+			return PositiveInteger(v, "payloadSizeThreshold", "gateway.payloadSizeThreshold")
+		}); err != nil {
+		return err
 	}
 
 	// Validate trustedBots per spec §4.1.3.4: must be non-empty array when present

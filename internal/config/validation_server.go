@@ -85,12 +85,18 @@ func validateStandardServerConfig(name string, server *StdinServerConfig, jsonPa
 
 	// Validate per-server toolTimeout if provided and non-zero.
 	// A value of 0 means "unset – fall back to the global gateway timeout".
-	if server.ToolTimeout != nil && *server.ToolTimeout != 0 {
-		toolTimeoutField := server.toolTimeoutField()
-		if err := TimeoutMinimum(*server.ToolTimeout, ToolTimeoutMin, toolTimeoutField, jsonPath+"."+toolTimeoutField); err != nil {
-			return logValidationFail(
-				name, server.Type, fmt.Sprintf("%s %d is below minimum %d", toolTimeoutField, *server.ToolTimeout, ToolTimeoutMin), err)
-		}
+	toolTimeoutField := server.toolTimeoutField()
+	if err := validateOptionalInt(server.ToolTimeout, "Validating per-server tool timeout",
+		func(v int) *ValidationError {
+			if v == 0 {
+				return nil // 0 means inherit from global gateway timeout
+			}
+			return TimeoutMinimum(v, ToolTimeoutMin, toolTimeoutField, jsonPath+"."+toolTimeoutField)
+		}); err != nil {
+		// server.ToolTimeout is non-nil here: validateOptionalInt only invokes the
+		// callback (and can only return an error) when ptr is non-nil.
+		return logValidationFail(
+			name, server.Type, fmt.Sprintf("%s %d is below minimum %d", toolTimeoutField, *server.ToolTimeout, ToolTimeoutMin), err)
 	}
 
 	if err := validateCommonServerFields(name, server.Type, server.Auth, server.ToolResponseFilters, jsonPath); err != nil {
