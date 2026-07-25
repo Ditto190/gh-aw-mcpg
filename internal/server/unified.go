@@ -30,7 +30,7 @@ const rateLimitExceededStatus = "rate limit exceeded"
 var errRateLimitExceeded = errors.New(rateLimitExceededStatus)
 
 // MCPGatewaySpecVersion is the MCP Gateway Specification version this implementation conforms to
-const MCPGatewaySpecVersion = "1.14.0"
+const MCPGatewaySpecVersion = "1.15.0"
 
 // Session represents a MCPG session
 type Session struct {
