@@ -81,24 +81,18 @@ func readAndRestoreRequestBody(r *http.Request) ([]byte, error) {
 	return b, nil
 }
 
-// peekRequestBody reads all bytes from a POST request body and restores it
-// so downstream handlers can read it again.
-// Returns nil, nil for non-POST requests or requests with no body.
-func peekRequestBody(r *http.Request) ([]byte, error) {
-	if r.Method != http.MethodPost {
-		return nil, nil
-	}
-
-	return readAndRestoreRequestBody(r)
-}
-
 // logHTTPRequestBody logs the request body for debugging purposes.
 // It reads the body, logs it, and restores it so it can be read again.
 // The backendID parameter is optional and can be empty for unified mode.
 func logHTTPRequestBody(r *http.Request, sessionID, backendID string) {
 	logServerHelpers.Printf("Checking request body: method=%s, hasBody=%v, sessionID=%s", r.Method, r.Body != nil, util.FormatSessionIDForLog(sessionID))
 
-	bodyBytes, err := peekRequestBody(r)
+	if r.Method != http.MethodPost {
+		logServerHelpers.Printf("Skipping body logging: not a POST request, no body present, or empty body")
+		return
+	}
+
+	bodyBytes, err := readAndRestoreRequestBody(r)
 	if err != nil {
 		logServerHelpers.Printf("Body read failed: err=%v", err)
 		return

@@ -19,6 +19,7 @@ import (
 	"github.com/github/gh-aw-mcpg/internal/httputil"
 	"github.com/github/gh-aw-mcpg/internal/logger"
 	"github.com/github/gh-aw-mcpg/internal/proxy"
+	"github.com/github/gh-aw-mcpg/internal/util"
 	"github.com/spf13/cobra"
 )
 
@@ -304,7 +305,7 @@ func runProxy(cmd *cobra.Command, args []string) error {
 			if tlsCfg != nil {
 				fmt.Fprintf(stderr, "  CA cert:   %s\n", tlsCfg.CACertPath)
 				fmt.Fprintf(stderr, "\nConnect with:\n")
-				fmt.Fprintf(stderr, "  export GH_HOST=%s\n", clientAddr(actualAddr))
+				fmt.Fprintf(stderr, "  export GH_HOST=%s\n", util.ClientAddr(actualAddr))
 				fmt.Fprintf(stderr, "  export NODE_EXTRA_CA_CERTS=%s\n", tlsCfg.CACertPath)
 				fmt.Fprintf(stderr, "  export SSL_CERT_FILE=%s\n", tlsCfg.CACertPath)
 				fmt.Fprintf(stderr, "  export GIT_SSL_CAINFO=%s\n", tlsCfg.CACertPath)
@@ -324,25 +325,6 @@ func runProxy(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
-}
-
-// clientAddr returns a client-friendly address from a listener address.
-// When the host is a wildcard (0.0.0.0, ::, or empty), it substitutes
-// "localhost" so the printed GH_HOST value is usable from a client.
-//
-// Note: output.go uses "127.0.0.1" for the same wildcard substitution in
-// the gateway config output, while this function uses "localhost" because
-// GH_HOST must be a resolvable hostname for the gh CLI.
-func clientAddr(addr string) string {
-	host, port, err := net.SplitHostPort(addr)
-	if err != nil {
-		return addr
-	}
-	switch host {
-	case "", "0.0.0.0", "::", "[::]":
-		return net.JoinHostPort("localhost", port)
-	}
-	return addr
 }
 
 // proxyForcePublicReposIfNeeded checks if GITHUB_REPOSITORY is public and, if so,

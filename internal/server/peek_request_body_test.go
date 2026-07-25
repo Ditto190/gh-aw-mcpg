@@ -29,10 +29,10 @@ type errorOnCloseReader struct {
 func (r *errorOnCloseReader) Read(p []byte) (int, error) { return r.data.Read(p) }
 func (r *errorOnCloseReader) Close() error               { return r.closeErr }
 
-// TestPeekRequestBody verifies all branches of peekRequestBody: non-POST methods,
+// TestReadAndRestoreRequestBody verifies all branches of readAndRestoreRequestBody:
 // nil/NoBody bodies, read errors, close errors, empty body, and non-empty body with
 // body-restoration behaviour.
-func TestPeekRequestBody(t *testing.T) {
+func TestReadAndRestoreRequestBody(t *testing.T) {
 	t.Parallel()
 
 	readErr := errors.New("simulated read error")
@@ -47,31 +47,7 @@ func TestPeekRequestBody(t *testing.T) {
 		wantBodyVal string
 	}{
 		{
-			name: "GET request returns nil without touching body",
-			buildReq: func() *http.Request {
-				return httptest.NewRequest(http.MethodGet, "/", bytes.NewBufferString("hello"))
-			},
-			wantBytes: nil,
-			wantErr:   nil,
-		},
-		{
-			name: "PUT request returns nil without touching body",
-			buildReq: func() *http.Request {
-				return httptest.NewRequest(http.MethodPut, "/", bytes.NewBufferString("hello"))
-			},
-			wantBytes: nil,
-			wantErr:   nil,
-		},
-		{
-			name: "DELETE request returns nil",
-			buildReq: func() *http.Request {
-				return httptest.NewRequest(http.MethodDelete, "/", nil)
-			},
-			wantBytes: nil,
-			wantErr:   nil,
-		},
-		{
-			name: "POST with nil body returns nil",
+			name: "nil body returns nil",
 			buildReq: func() *http.Request {
 				req := httptest.NewRequest(http.MethodPost, "/", nil)
 				req.Body = nil
@@ -81,7 +57,7 @@ func TestPeekRequestBody(t *testing.T) {
 			wantErr:   nil,
 		},
 		{
-			name: "POST with http.NoBody returns nil",
+			name: "http.NoBody returns nil",
 			buildReq: func() *http.Request {
 				req := httptest.NewRequest(http.MethodPost, "/", nil)
 				req.Body = http.NoBody
@@ -91,7 +67,7 @@ func TestPeekRequestBody(t *testing.T) {
 			wantErr:   nil,
 		},
 		{
-			name: "POST with non-empty body returns bytes and restores body",
+			name: "non-empty body returns bytes and restores body",
 			buildReq: func() *http.Request {
 				return httptest.NewRequest(http.MethodPost, "/", bytes.NewBufferString(`{"method":"tools/list"}`))
 			},
@@ -101,7 +77,7 @@ func TestPeekRequestBody(t *testing.T) {
 			wantBodyVal: `{"method":"tools/list"}`,
 		},
 		{
-			name: "POST with binary body restores body for re-reading",
+			name: "binary body restores body for re-reading",
 			buildReq: func() *http.Request {
 				content := []byte{0x00, 0x01, 0x02, 0xFF}
 				return httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(content))
@@ -111,7 +87,7 @@ func TestPeekRequestBody(t *testing.T) {
 			checkBody: true,
 		},
 		{
-			name: "POST with empty body (reader at EOF) returns empty slice",
+			name: "empty body (reader at EOF) returns empty slice",
 			buildReq: func() *http.Request {
 				req := httptest.NewRequest(http.MethodPost, "/", bytes.NewBufferString(""))
 				// httptest.NewRequest wraps an empty buffer in a ReadCloser rather than
@@ -122,7 +98,7 @@ func TestPeekRequestBody(t *testing.T) {
 			wantErr:   nil,
 		},
 		{
-			name: "POST with read error propagates the error",
+			name: "read error propagates the error",
 			buildReq: func() *http.Request {
 				req := httptest.NewRequest(http.MethodPost, "/", nil)
 				req.Body = &errorOnReadReader{readErr: readErr}
@@ -132,7 +108,7 @@ func TestPeekRequestBody(t *testing.T) {
 			wantErr:   readErr,
 		},
 		{
-			name: "POST with close error propagates the error",
+			name: "close error propagates the error",
 			buildReq: func() *http.Request {
 				req := httptest.NewRequest(http.MethodPost, "/", nil)
 				req.Body = &errorOnCloseReader{
@@ -151,7 +127,7 @@ func TestPeekRequestBody(t *testing.T) {
 			t.Parallel()
 			req := tt.buildReq()
 
-			got, err := peekRequestBody(req)
+			got, err := readAndRestoreRequestBody(req)
 
 			if tt.wantErr != nil {
 				require.Error(t, err)
@@ -163,8 +139,8 @@ func TestPeekRequestBody(t *testing.T) {
 			assert.Equal(t, tt.wantBytes, got)
 
 			if tt.checkBody {
-				// Verify that peekRequestBody restored the body so it can be read again.
-				require.NotNil(t, req.Body, "body should not be nil after peek")
+				// Verify that readAndRestoreRequestBody restored the body so it can be read again.
+				require.NotNil(t, req.Body, "body should not be nil after read")
 				assert.NotEqual(t, http.NoBody, req.Body, "body should be readable, not NoBody")
 
 				restored, readErr := io.ReadAll(req.Body)
@@ -180,33 +156,34 @@ func TestPeekRequestBody(t *testing.T) {
 	}
 }
 
-// TestPeekRequestBody_BodyRestoredForMultipleReads confirms the fundamental contract:
-// after peekRequestBody returns, downstream handlers can still read the full body.
-func TestPeekRequestBody_BodyRestoredForMultipleReads(t *testing.T) {
+// TestReadAndRestoreRequestBody_BodyRestoredForMultipleReads confirms the fundamental
+// contract: after readAndRestoreRequestBody returns, downstream handlers can still
+// read the full body.
+func TestReadAndRestoreRequestBody_BodyRestoredForMultipleReads(t *testing.T) {
 	t.Parallel()
 
 	body := `{"jsonrpc":"2.0","method":"tools/call","id":1}`
 	req := httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewBufferString(body))
 
-	// First peek
-	b1, err := peekRequestBody(req)
+	// First read
+	b1, err := readAndRestoreRequestBody(req)
 	require.NoError(t, err)
 	assert.Equal(t, body, string(b1))
 
-	// Body must still be fully readable after the peek.
+	// Body must still be fully readable after the read.
 	b2, err := io.ReadAll(req.Body)
 	require.NoError(t, err)
 	assert.Equal(t, body, string(b2), "downstream handler should receive the complete body")
 }
 
-// TestPeekRequestBody_EmptyBodySetsNoBody confirms that when the body is empty the
-// request body is replaced with http.NoBody (not a lingering empty reader).
-func TestPeekRequestBody_EmptyBodySetsNoBody(t *testing.T) {
+// TestReadAndRestoreRequestBody_EmptyBodySetsNoBody confirms that when the body is empty
+// the request body is replaced with http.NoBody (not a lingering empty reader).
+func TestReadAndRestoreRequestBody_EmptyBodySetsNoBody(t *testing.T) {
 	t.Parallel()
 
 	req := httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewBufferString(""))
 
-	got, err := peekRequestBody(req)
+	got, err := readAndRestoreRequestBody(req)
 	require.NoError(t, err)
 	assert.Empty(t, got)
 	assert.Equal(t, http.NoBody, req.Body, "empty body should be replaced with http.NoBody")

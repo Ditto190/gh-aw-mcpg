@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strings"
 )
 
 // SortedSetKeys returns the keys of a string set (map[string]struct{}) as a sorted slice.
@@ -96,4 +97,10 @@ func InterfaceToIntString(v interface{}) (string, bool) {
 		return fmt.Sprintf("%d", i), true
 	}
 	return "", false
+}
+
+// NormalizeStringCI trims surrounding whitespace and lowercases a string for
+// case-insensitive comparisons.
+func NormalizeStringCI(value string) string {
+	return strings.ToLower(strings.TrimSpace(value))
 }

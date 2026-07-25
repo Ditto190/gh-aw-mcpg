@@ -155,12 +155,6 @@ func (us *UnifiedServer) computeForcePublicRepos() bool {
 	return vis == githubhttp.RepoVisibilityPublic
 }
 
-// isSafeOutputsServer returns true if the server ID identifies a safe-outputs
-// server. Matches "safe-outputs" and the legacy "safeoutputs" form.
-func isSafeOutputsServer(serverID string) bool {
-	return serverID == "safe-outputs" || serverID == "safeoutputs"
-}
-
 // isServerExemptFromSinkVisibility returns true if the given server should NOT
 // receive the default sink-visibility="public" enforcement. A server is exempt when:
 //   - forcePublicRepos is explicitly disabled (blanket opt-out)

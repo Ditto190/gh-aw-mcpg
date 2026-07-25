@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"math/big"
 	"os"
 	"time"
 )
@@ -61,4 +62,24 @@ func RandomHexWithFallback(n int) string {
 		return hex.EncodeToString(b)
 	}
 	return s
+}
+
+// RandomBigInt returns a cryptographically random non-negative integer with
+// the given bit width. The result is guaranteed to be strictly positive (≥ 1).
+// This centralises crypto/rand.Int usage for callers that need a *big.Int
+// (e.g. X.509 certificate serial numbers).
+func RandomBigInt(bits uint) (*big.Int, error) {
+	if bits == 0 {
+		return nil, fmt.Errorf("failed to generate random big.Int: bits must be > 0")
+	}
+	max := new(big.Int).Lsh(big.NewInt(1), bits)
+	n, err := rand.Int(rand.Reader, max)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate random big.Int(%d bits): %w", bits, err)
+	}
+	// Ensure strictly positive: a zero result (astronomically rare) becomes 1.
+	if n.Sign() == 0 {
+		n.SetInt64(1)
+	}
+	return n, nil
 }

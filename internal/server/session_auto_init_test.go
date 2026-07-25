@@ -26,7 +26,7 @@ func newMockStreamableHandler() *mockStreamableHandler {
 }
 
 func (h *mockStreamableHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	bodyBytes, _ := peekRequestBody(r)
+	bodyBytes, _ := readAndRestoreRequestBody(r)
 
 	var rpcReq struct {
 		ID     interface{} `json:"id"`
@@ -201,7 +201,7 @@ func TestWrapWithSessionAutoInit_AutoInitForToolsCall(t *testing.T) {
 func TestWrapWithSessionAutoInit_AutoInitPreservesAuthHeader(t *testing.T) {
 	var initAuthHeader string
 	handlerFunc := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		bodyBytes, _ := peekRequestBody(r)
+		bodyBytes, _ := readAndRestoreRequestBody(r)
 		var rpcReq struct {
 			Method string `json:"method"`
 		}
@@ -245,7 +245,7 @@ func TestWrapWithSessionAutoInit_AutoInitPreservesAuthHeader(t *testing.T) {
 func TestWrapWithSessionAutoInit_FallsBackOnAutoInitFailure(t *testing.T) {
 	// This handler never returns a session ID for initialize.
 	handlerFunc := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		bodyBytes, _ := peekRequestBody(r)
+		bodyBytes, _ := readAndRestoreRequestBody(r)
 		var rpcReq struct {
 			Method string `json:"method"`
 		}
@@ -285,7 +285,7 @@ func TestWrapWithSessionAutoInit_FallsBackOnAutoInitFailure(t *testing.T) {
 // header, regardless of the HTTP status code.
 func TestPerformSessionAutoInit_MissingSessionID(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		bodyBytes, _ := peekRequestBody(r)
+		bodyBytes, _ := readAndRestoreRequestBody(r)
 		var rpcReq struct {
 			Method string `json:"method"`
 		}
@@ -313,7 +313,7 @@ func TestPerformSessionAutoInit_MissingSessionID(t *testing.T) {
 // session ID check in the implementation.
 func TestPerformSessionAutoInit_NonOKStatusWithSessionID(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		bodyBytes, _ := peekRequestBody(r)
+		bodyBytes, _ := readAndRestoreRequestBody(r)
 		var rpcReq struct {
 			Method string `json:"method"`
 		}
@@ -345,7 +345,7 @@ func TestPerformSessionAutoInit_Success(t *testing.T) {
 	var receivedSessionIDs []string
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		bodyBytes, _ := peekRequestBody(r)
+		bodyBytes, _ := readAndRestoreRequestBody(r)
 		var rpcReq struct {
 			Method string `json:"method"`
 		}
@@ -389,7 +389,7 @@ func TestPerformSessionAutoInit_AuthHeaderCopied(t *testing.T) {
 	var capturedInitAgentID string
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		bodyBytes, _ := peekRequestBody(r)
+		bodyBytes, _ := readAndRestoreRequestBody(r)
 		var rpcReq struct {
 			Method string `json:"method"`
 		}

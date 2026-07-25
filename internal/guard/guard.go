@@ -62,3 +62,11 @@ type AgentLabelsPayload struct {
 // RequestState represents any state that the guard needs to pass from request to response
 // This is useful when the guard needs to carry information from LabelResource to LabelResponse
 type RequestState interface{}
+
+// IsSafeOutputsServer reports whether serverID identifies a safe-outputs server.
+// Safe-outputs servers use write-sink guards and are subject to special DIFC
+// sink-visibility policy (see internal/server/guard_init.go).
+// Matches the canonical "safe-outputs" ID and the legacy "safeoutputs" alias.
+func IsSafeOutputsServer(serverID string) bool {
+	return serverID == "safe-outputs" || serverID == "safeoutputs"
+}

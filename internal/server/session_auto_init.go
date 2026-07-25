@@ -47,7 +47,7 @@ func WrapWithSessionAutoInit(streamableHandler http.Handler) http.Handler {
 		}
 
 		// Peek at the request body to detect tools/call.
-		bodyBytes, err := peekRequestBody(r)
+		bodyBytes, err := readAndRestoreRequestBody(r)
 		if err != nil || len(bodyBytes) == 0 {
 			streamableHandler.ServeHTTP(w, r)
 			return
