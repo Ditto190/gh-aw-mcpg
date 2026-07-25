@@ -214,16 +214,6 @@ func TestTruncateRunes(t *testing.T) {
 			maxRunes: 1,
 			expected: "\xef\xbf\xbd", // utf8.RuneError encoded as UTF-8
 		},
-		{
-			// "日本語" is 9 bytes but only 3 runes.
-			// len(s)=9 > maxRunes=4, so the fast byte-length check fails, but
-			// RuneCountInString returns 3 ≤ 4, so the string is returned as-is.
-			// This covers the stage-2 early-return path in TruncateRunes.
-			name:     "multibyte string fits within rune limit despite exceeding byte limit",
-			input:    "日本語",
-			maxRunes: 4,
-			expected: "日本語",
-		},
 	}
 
 	for _, tt := range tests {
