@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/github/gh-aw-mcpg/internal/config"
+	"github.com/github/gh-aw-mcpg/internal/util"
 )
 
 // TestDetectGuardWasm_FileNotFound tests that detectGuardWasm returns empty string
@@ -527,7 +528,7 @@ func TestClientAddr(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.expected, clientAddr(tc.input))
+			assert.Equal(t, tc.expected, util.ClientAddr(tc.input))
 		})
 	}
 }

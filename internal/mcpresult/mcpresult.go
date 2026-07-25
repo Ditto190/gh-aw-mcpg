@@ -19,8 +19,18 @@ func IsErrorResult(result map[string]interface{}) bool {
 // maps. It supports both []interface{} values produced by json.Unmarshal and
 // []map[string]interface{} values produced by helper constructors.
 //
-// Non-map items in []interface{} are skipped so callers can decide whether to
-// ignore them or treat them as an error.
+// Semantics: lenient — non-map items in []interface{} are silently skipped.
+// This contrasts with the strict path in internal/mcp/tool_result.go
+// (convertMapToCallToolResult) which returns an error for non-map content items.
+// Use this function in contexts where partial results are acceptable (e.g.
+// DIFC filtering, rate-limit detection); use the strict path when producing
+// SDK-valid CallToolResult values where malformed items must surface as errors.
+//
+// Both normalization paths handle the same wire format variations:
+//   - []interface{}      — produced by json.Unmarshal on the raw backend response
+//   - []map[string]interface{} — produced by helper constructors (e.g. BuildMCPTextResponse)
+//
+// When adding new content type variants, update both paths consistently.
 func NormalizeContentItems(contentVal interface{}) ([]map[string]interface{}, bool) {
 	logMCPResult.Printf("Normalizing MCP content items from type %T", contentVal)
 

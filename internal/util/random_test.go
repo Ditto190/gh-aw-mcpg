@@ -310,3 +310,44 @@ func TestRandomBytes_Uniqueness(t *testing.T) {
 		seen[key] = true
 	}
 }
+
+// TestRandomBigInt verifies that RandomBigInt produces a positive integer within
+// the expected bit range and that successive calls produce distinct values.
+func TestRandomBigInt(t *testing.T) {
+	t.Parallel()
+
+	t.Run("128-bit produces positive integer in range", func(t *testing.T) {
+		t.Parallel()
+		n, err := RandomBigInt(128)
+		require.NoError(t, err)
+		assert.Positive(t, n.Sign(), "result should be positive")
+		assert.LessOrEqual(t, n.BitLen(), 128, "result should fit in 128 bits")
+	})
+
+	t.Run("64-bit produces positive integer in range", func(t *testing.T) {
+		t.Parallel()
+		n, err := RandomBigInt(64)
+		require.NoError(t, err)
+		assert.Positive(t, n.Sign())
+		assert.LessOrEqual(t, n.BitLen(), 64)
+	})
+
+	t.Run("successive calls produce distinct values", func(t *testing.T) {
+		t.Parallel()
+		seen := make(map[string]bool)
+		for i := 0; i < 20; i++ {
+			n, err := RandomBigInt(128)
+			require.NoError(t, err)
+			key := n.String()
+			assert.False(t, seen[key], "RandomBigInt should produce unique values")
+			seen[key] = true
+		}
+	})
+
+	t.Run("zero bits returns error", func(t *testing.T) {
+		t.Parallel()
+		_, err := RandomBigInt(0)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "bits must be > 0")
+	})
+}

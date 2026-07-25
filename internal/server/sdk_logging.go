@@ -30,7 +30,11 @@ func WithSDKLogging(handler http.Handler, mode string) http.Handler {
 			mode, util.FormatSessionIDForLog(sessionID), util.FormatSessionIDForLog(mcpSessionID), r.Method, r.URL.Path)
 
 		// Capture and log request body for POST requests
-		requestBody, err := peekRequestBody(r)
+		var requestBody []byte
+		var err error
+		if r.Method == http.MethodPost {
+			requestBody, err = readAndRestoreRequestBody(r)
+		}
 		var jsonrpcReq mcp.Request
 		if err == nil && len(requestBody) > 0 {
 			// Parse JSON-RPC request

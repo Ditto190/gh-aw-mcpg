@@ -36,6 +36,7 @@ import (
 
 	"github.com/github/gh-aw-mcpg/internal/httputil"
 	"github.com/github/gh-aw-mcpg/internal/logger"
+	"github.com/github/gh-aw-mcpg/internal/util"
 )
 
 var logTLS = logger.ForFile()
@@ -183,12 +184,9 @@ func GenerateSelfSignedTLS(dir string) (*TLSConfig, error) {
 }
 
 func randomSerial() (*big.Int, error) {
-	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	serial, err := util.RandomBigInt(128)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate serial number: %w", err)
-	}
-	if serial.Sign() == 0 {
-		serial = new(big.Int).Add(serial, big.NewInt(1))
 	}
 	logTLS.Printf("generated random serial number: %s", serial)
 	return serial, nil

@@ -64,13 +64,13 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Health check endpoint
 	if rawPath == "/health" || rawPath == "/healthz" {
-		httputil.WriteSimpleHealthResponse(w)
+		httputil.WriteJSONResponse(w, http.StatusOK, map[string]string{"status": "ok"})
 		return
 	}
 
 	// Reflect endpoint exposes a live DIFC label snapshot.
 	if r.Method == http.MethodGet && rawPath == "/reflect" {
-		httputil.WriteReflectResponse(w, h.server.DIFCComponents)
+		httputil.WriteJSONResponse(w, http.StatusOK, difc.BuildReflectResponse(h.server.DIFCComponents))
 		return
 	}
 

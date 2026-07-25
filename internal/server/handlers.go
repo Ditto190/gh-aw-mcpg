@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/github/gh-aw-mcpg/internal/difc"
 	"github.com/github/gh-aw-mcpg/internal/httputil"
 	"github.com/github/gh-aw-mcpg/internal/logger"
 )
@@ -18,7 +19,7 @@ func HandleReflect(unifiedServer *UnifiedServer) http.HandlerFunc {
 	logHandlers.Print("Creating reflect handler")
 	return func(w http.ResponseWriter, r *http.Request) {
 		logHandlers.Printf("Reflect endpoint request: remote=%s, method=%s, path=%s", r.RemoteAddr, r.Method, r.URL.Path)
-		httputil.WriteReflectResponse(w, unifiedServer.DIFCComponents)
+		httputil.WriteJSONResponse(w, http.StatusOK, difc.BuildReflectResponse(unifiedServer.DIFCComponents))
 	}
 }
 
