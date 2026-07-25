@@ -64,16 +64,15 @@ func RandomHexWithFallback(n int) string {
 	return s
 }
 
-// RandomBigInt returns a cryptographically random non-negative integer with
-// the given bit width. The result is guaranteed to be strictly positive (≥ 1).
-// This centralises crypto/rand.Int usage for callers that need a *big.Int
-// (e.g. X.509 certificate serial numbers).
-func RandomBigInt(bits uint) (*big.Int, error) {
+// randomBigIntFromRandFunc returns a cryptographically random non-negative integer
+// with the given bit width using the provided rand function. It is the testable
+// core of RandomBigInt.
+func randomBigIntFromRandFunc(bits uint, randFn func(io.Reader, *big.Int) (*big.Int, error)) (*big.Int, error) {
 	if bits == 0 {
 		return nil, fmt.Errorf("failed to generate random big.Int: bits must be > 0")
 	}
 	max := new(big.Int).Lsh(big.NewInt(1), bits)
-	n, err := rand.Int(rand.Reader, max)
+	n, err := randFn(rand.Reader, max)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate random big.Int(%d bits): %w", bits, err)
 	}
@@ -82,4 +81,12 @@ func RandomBigInt(bits uint) (*big.Int, error) {
 		n.SetInt64(1)
 	}
 	return n, nil
+}
+
+// RandomBigInt returns a cryptographically random non-negative integer with
+// the given bit width. The result is guaranteed to be strictly positive (≥ 1).
+// This centralises crypto/rand.Int usage for callers that need a *big.Int
+// (e.g. X.509 certificate serial numbers).
+func RandomBigInt(bits uint) (*big.Int, error) {
+	return randomBigIntFromRandFunc(bits, rand.Int)
 }

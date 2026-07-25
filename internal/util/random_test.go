@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"io"
+	"math/big"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -349,5 +350,51 @@ func TestRandomBigInt(t *testing.T) {
 		_, err := RandomBigInt(0)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "bits must be > 0")
+	})
+}
+
+// TestRandomBigIntFromRandFunc covers the internal randomBigIntFromRandFunc helper,
+// including the rarely-exercised zero-result normalization branch.
+func TestRandomBigIntFromRandFunc(t *testing.T) {
+	t.Run("zero bits returns error", func(t *testing.T) {
+		called := false
+		_, err := randomBigIntFromRandFunc(0, func(_ io.Reader, _ *big.Int) (*big.Int, error) {
+			called = true
+			return big.NewInt(1), nil
+		})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "bits must be > 0")
+		assert.False(t, called, "rand function should not be called when bits == 0")
+	})
+
+	t.Run("rand function error is wrapped and returned", func(t *testing.T) {
+		randErr := errors.New("simulated rand failure")
+		_, err := randomBigIntFromRandFunc(128, func(_ io.Reader, _ *big.Int) (*big.Int, error) {
+			return nil, randErr
+		})
+		require.Error(t, err)
+		assert.ErrorIs(t, err, randErr)
+		assert.Contains(t, err.Error(), "128 bits")
+	})
+
+	t.Run("normal positive result is returned unchanged", func(t *testing.T) {
+		want := big.NewInt(42)
+		got, err := randomBigIntFromRandFunc(128, func(_ io.Reader, _ *big.Int) (*big.Int, error) {
+			return new(big.Int).Set(want), nil
+		})
+		require.NoError(t, err)
+		assert.Equal(t, 0, got.Cmp(want), "positive result should be returned as-is")
+	})
+
+	t.Run("zero result is normalized to 1", func(t *testing.T) {
+		// This covers the astronomically rare defensive branch in RandomBigInt where
+		// crypto/rand.Int returns zero. We exercise it by injecting a stub that always
+		// returns zero.
+		got, err := randomBigIntFromRandFunc(128, func(_ io.Reader, _ *big.Int) (*big.Int, error) {
+			return big.NewInt(0), nil
+		})
+		require.NoError(t, err)
+		assert.Equal(t, int64(1), got.Int64(), "zero result should be normalized to 1")
+		assert.Positive(t, got.Sign(), "normalized result should be strictly positive")
 	})
 }
