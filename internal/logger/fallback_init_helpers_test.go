@@ -111,8 +111,8 @@ func TestSilentFallbackLoggerOnInitError_ReturnsProvidedFallback(t *testing.T) {
 	assert.Empty(t, output, "silentFallbackLoggerOnInitError must not emit any log output")
 }
 
-// TestSilentFallbackLoggerOnInitError_NilPointer verifies behaviour with a nil
-// pointer fallback, matching the real usage with *MarkdownLogger.
+// TestSilentFallbackLoggerOnInitError_NilPointer verifies that a nil pointer
+// fallback remains nil without producing an error or log output.
 func TestSilentFallbackLoggerOnInitError_NilPointer(t *testing.T) {
 	type placeholder struct{}
 	var fallback *placeholder // nil pointer
