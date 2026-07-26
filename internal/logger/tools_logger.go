@@ -80,14 +80,8 @@ func (tl *ToolsLogger) LogTools(serverID string, tools []ToolInfo) error {
 		tl.data.Servers[serverID] = tools
 
 		// Write the updated data to file
-		return tl.writeToFile()
+		return tl.writeJSON(tl.data, 0644)
 	})
-}
-
-// writeToFile writes the current tools data to the JSON file.
-// Caller must hold tl.mu lock.
-func (tl *ToolsLogger) writeToFile() error {
-	return tl.writeJSON(tl.data, 0644)
 }
 
 // Close is a no-op for ToolsLogger (implements closableLogger interface)

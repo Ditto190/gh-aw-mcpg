@@ -47,7 +47,7 @@ var observedURLDomainsLoggerFactory = newLoggerFactory(
 			jsonFileSink: jsonFileSink{logDir: logDir, fileName: fileName},
 			data:         make(map[string]map[string]struct{}),
 		}
-		if err := l.writeToFile(); err != nil {
+		if err := l.writeJSON(make(map[string][]string), 0600); err != nil {
 			return nil, err
 		}
 		log.Printf("Observed URL domains logging to file: %s", filepath.Join(logDir, fileName))
@@ -98,16 +98,12 @@ func (l *ObservedURLDomainsLogger) LogDomains(serverID string, domains []string)
 		if !changed {
 			return nil
 		}
-		return l.writeToFile()
+		serialized := make(map[string][]string, len(l.data))
+		for serverID, serverDomains := range l.data {
+			serialized[serverID] = util.SortedSetKeys(serverDomains)
+		}
+		return l.writeJSON(serialized, 0600)
 	})
-}
-
-func (l *ObservedURLDomainsLogger) writeToFile() error {
-	serialized := make(map[string][]string, len(l.data))
-	for serverID, domains := range l.data {
-		serialized[serverID] = util.SortedSetKeys(domains)
-	}
-	return l.writeJSON(serialized, 0600)
 }
 
 func (l *ObservedURLDomainsLogger) Close() error { return nil }

@@ -137,10 +137,10 @@ func writeJSONToFile(logDir, fileName string, data any, perm os.FileMode) error 
 //	    data  MyData
 //	}
 //
-// The embedded jsonFileSink.writeJSON method can then be called from
-// writeToFile to write data to the configured JSON file:
+// The embedded jsonFileSink.writeJSON method can then be called directly
+// at the persistence site to write data to the configured JSON file:
 //
-//	func (l *MyLogger) writeToFile() error {
+//	func (l *MyLogger) LogData() error {
 //	    return l.writeJSON(l.data, 0644)
 //	}
 type jsonFileSink struct {
