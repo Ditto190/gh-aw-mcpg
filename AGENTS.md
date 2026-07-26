@@ -401,6 +401,8 @@ DEBUG_COLORS=0 DEBUG=* ./awmg --config config.toml
 - `MCP_GATEWAY_PORT` - Used by environment validation (`--validate-env`) for container port-mapping checks (validated 1-65535); does not override the gateway listen address
 - `MCP_GATEWAY_DOMAIN` - Used by environment validation (`--validate-env`) and containerized startup checks; to set config values use `gateway.domain` (or `"${MCP_GATEWAY_DOMAIN}"` in JSON stdin config)
 - `MCP_GATEWAY_AGENT_ID` - Used by environment validation (`--validate-env`) and containerized startup checks; to enable auth set `gateway.agentId` (commonly `"${MCP_GATEWAY_AGENT_ID}"` in JSON stdin config)
+- `MCP_GATEWAY_API_KEY` - *Deprecated alias for `MCP_GATEWAY_AGENT_ID`*; still accepted with a deprecation warning (lower precedence when both are set). Use `MCP_GATEWAY_AGENT_ID` instead.
+- `MCP_GATEWAY_CONTAINER_RUNTIME` - Overrides stdio container runtime selection for JSON stdin `container` servers (`docker` default, `podman` supported)
 - `DEBUG` - Enable debug logging (e.g., `DEBUG=*`, `DEBUG=server:*,launcher:*`)
 - `DEBUG_COLORS` - Control colored output (0 to disable, auto-disabled when piping)
 - `MCP_GATEWAY_LOG_DIR` - Log file directory (sets default for `--log-dir` flag, default: `/tmp/gh-aw/mcp-logs`)
