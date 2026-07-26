@@ -279,6 +279,58 @@ func TestGetOrLaunchForSession_StdioSessionPoolHit_DifferentSessions(t *testing.
 	assert.Equal(httpConn, connB)
 }
 
+// TestGetOrLaunchForSession_ServerNotFound tests that an unknown server ID returns an error.
+func TestGetOrLaunchForSession_ServerNotFound(t *testing.T) {
+	require := require.New(t)
+
+	ctx := context.Background()
+	cfg := newTestConfig(map[string]*config.ServerConfig{})
+	l := New(ctx, cfg)
+	defer l.Close()
+
+	conn, err := GetOrLaunchForSession(l, "nonexistent-server", "session-1")
+	require.Error(err)
+	require.Nil(conn)
+	require.ErrorIs(err, ErrServerNotFound)
+}
+
+// TestGetOrLaunchForSession_HTTPBackendRecordsStart tests that GetOrLaunchForSession
+// for an HTTP backend records the server start time.
+func TestGetOrLaunchForSession_HTTPBackendRecordsStart(t *testing.T) {
+	require := require.New(t)
+	assert := assert.New(t)
+
+	mockServer := newMockHTTPMCPServer(t)
+	defer mockServer.Close()
+
+	ctx := context.Background()
+	cfg := newTestConfig(map[string]*config.ServerConfig{
+		"http-backend": {
+			Type: "http",
+			URL:  mockServer.URL,
+		},
+	})
+
+	l := New(ctx, cfg)
+	defer l.Close()
+
+	// First call: creates the connection and records start time.
+	conn1, err := GetOrLaunchForSession(l, "http-backend", "session-x")
+	require.NoError(err)
+	require.NotNil(conn1)
+
+	// Verify server state was recorded as running.
+	state := l.GetServerState("http-backend")
+	assert.Equal("running", state.Status)
+	assert.False(state.StartedAt.IsZero(), "StartedAt should be set after successful launch")
+
+	// Second call for a different session ID should return the same cached connection.
+	conn2, err := GetOrLaunchForSession(l, "http-backend", "session-y")
+	require.NoError(err)
+	require.NotNil(conn2)
+	assert.Equal(conn1, conn2, "HTTP backends reuse a single stateless connection")
+}
+
 // newMockHTTPMCPServer creates a test HTTP server that responds to MCP initialize requests.
 func newMockHTTPMCPServer(t *testing.T) *httptest.Server {
 	t.Helper()

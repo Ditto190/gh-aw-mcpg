@@ -1,10 +1,13 @@
 package launcher
 
 import (
+	"context"
 	"testing"
 
-	"github.com/github/gh-aw-mcpg/internal/config"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/github/gh-aw-mcpg/internal/config"
 )
 
 func TestIsDirectStdioCommand(t *testing.T) {
@@ -22,6 +25,7 @@ func TestIsDirectStdioCommand(t *testing.T) {
 		{name: "direct command", server: &config.ServerConfig{Command: "python", Args: []string{"-m", "server"}}, expected: true},
 		{name: "direct node command", server: &config.ServerConfig{Command: "node", Args: []string{"server.js"}}, expected: true},
 		{name: "direct shell script", server: &config.ServerConfig{Command: "/app/start.sh", Args: []string{}}, expected: true},
+		{name: "nil config", server: nil, expected: true},
 	}
 
 	for _, tt := range tests {
@@ -29,4 +33,18 @@ func TestIsDirectStdioCommand(t *testing.T) {
 			assert.Equal(t, tt.expected, isDirectStdioCommand(tt.server))
 		})
 	}
+}
+
+// TestNew_RunningInContainer verifies that New correctly detects the container
+// environment and sets runningInContainer=true when RUNNING_IN_CONTAINER=true.
+func TestNew_RunningInContainer(t *testing.T) {
+	t.Setenv("RUNNING_IN_CONTAINER", "true")
+
+	ctx := context.Background()
+	cfg := newTestConfig(map[string]*config.ServerConfig{})
+	l := New(ctx, cfg)
+	require.NotNil(t, l)
+	defer l.Close()
+
+	assert.True(t, l.runningInContainer, "Launcher should detect container environment")
 }
