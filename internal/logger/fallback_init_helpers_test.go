@@ -134,7 +134,7 @@ func TestStrictLoggerOnInitError_PropagatesError(t *testing.T) {
 	got, err := strictLoggerOnInitError[string](sentinel)
 
 	require.Error(t, err)
-	assert.Equal(t, sentinel, err, "must return the original error unchanged")
+assert.Same(t, sentinel, err, "must return the original error unchanged")
 	assert.Equal(t, "", got, "must return the zero value for the type parameter")
 }
 
