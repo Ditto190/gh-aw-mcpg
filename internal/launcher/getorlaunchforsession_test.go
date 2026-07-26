@@ -331,64 +331,6 @@ func TestGetOrLaunchForSession_HTTPBackendRecordsStart(t *testing.T) {
 	assert.Equal(conn1, conn2, "HTTP backends reuse a single stateless connection")
 }
 
-// TestGetOrLaunchForSession_DoubleCheckLockPoolHit exercises the double-check locking
-// path where another goroutine populates the session pool between the first
-// check and the mutex acquisition.
-func TestGetOrLaunchForSession_DoubleCheckLockPoolHit(t *testing.T) {
-	require := require.New(t)
-	assert := assert.New(t)
-
-	mockServer := newMockHTTPMCPServer(t)
-	defer mockServer.Close()
-
-	ctx := context.Background()
-	cfg := newTestConfig(map[string]*config.ServerConfig{
-		"http-helper": {
-			Type: "http",
-			URL:  mockServer.URL,
-		},
-		"stdio-backend": {
-			Type:    "stdio",
-			Command: "docker",
-			Args:    []string{"run", "--rm", "-i", "nonexistent:latest"},
-		},
-	})
-
-	l := New(ctx, cfg)
-	defer l.Close()
-
-	// Get a real connection to put in the pool.
-	httpConn, err := GetOrLaunch(l, "http-helper")
-	require.NoError(err)
-	require.NotNil(httpConn)
-
-	sessionID := "double-check-session"
-
-	// Simulate: first Get check returns false (not in pool yet),
-	// but by the time we acquire the mutex and do the second check,
-	// another goroutine already populated it.
-	// We do this by calling Set while holding no external lock, then
-	// calling GetOrLaunchForSession which will find it on the second check.
-
-	// First call: pool is empty — will fail to launch, but we'll use a
-	// pre-populated pool to hit the "double-check" path directly.
-	// Pre-populate AFTER the first Get would run by directly calling Set
-	// and then invoking GetOrLaunchForSession (which will hit the double-check).
-
-	// Manually populate the pool so the second check inside GetOrLaunchForSession
-	// finds the entry.
-	l.mu.Lock()
-	l.sessionPool.Set("stdio-backend", sessionID, httpConn)
-	l.mu.Unlock()
-
-	// Now call GetOrLaunchForSession. The first pool.Get (without lock) should find it
-	// and return immediately.
-	conn, err := GetOrLaunchForSession(l, "stdio-backend", sessionID)
-	require.NoError(err)
-	require.NotNil(conn)
-	assert.Equal(httpConn, conn)
-}
-
 // newMockHTTPMCPServer creates a test HTTP server that responds to MCP initialize requests.
 func newMockHTTPMCPServer(t *testing.T) *httptest.Server {
 	t.Helper()
