@@ -703,7 +703,11 @@ func TestHandleWithDIFC_AccessDenied_RecordsSpanEvent(t *testing.T) {
 			for _, attr := range ev.Attributes {
 				if string(attr.Key) == "reason" {
 					hasReason = true
-					assert.NotEmpty(t, attr.Value.AsString(), "reason attribute should not be empty")
+assert.Equal(t,
+	"Agent carries private (test-org/test-repo)-scoped data that cannot be written to 'public-resource' due to secrecy constraints. The target resource is not authorized to receive this sensitive data.",
+	attr.Value.AsString(),
+	"reason attribute must describe the denial",
+)
 				}
 			}
 			assert.True(t, hasReason, "difc.access_denied event must have a reason attribute")
