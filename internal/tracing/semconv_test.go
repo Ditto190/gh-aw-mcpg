@@ -27,10 +27,10 @@ func TestErrorType(t *testing.T) {
 			wantValue: "*errors.errorString",
 		},
 		{
-			name:      "fmt.Errorf wrapping",
-			err:       errors.New("wrapped"),
+			name:      "errors.Join wrapping",
+			err:       errors.Join(errors.New("wrapped")),
 			wantKey:   "error.type",
-			wantValue: "*errors.errorString",
+			wantValue: "*errors.joinError",
 		},
 		{
 			name:      "custom error type",
