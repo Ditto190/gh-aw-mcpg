@@ -5,9 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/github/gh-aw-mcpg/internal/difc"
 	"github.com/github/gh-aw-mcpg/internal/guard"
@@ -658,4 +660,105 @@ func TestHandleWithDIFC_UpstreamFailure_SetsSpanError(t *testing.T) {
 	require.NotNil(t, fwdSpan, "proxy.backend.forward span must be recorded")
 	assert.Equal(t, "Error", fwdSpan.Status.Code.String(), "fwd span status must be Error")
 	assert.Equal(t, "upstream request failed", fwdSpan.Status.Description)
+}
+
+// ─── Span event: access denied → difc.access_denied event ────────────────────
+
+// TestHandleWithDIFC_AccessDenied_RecordsSpanEvent verifies that when a DIFC
+// coarse-check blocks the request, the recording difcSpan emits a
+// "difc.access_denied" event (the difcSpan.IsRecording() branch at handler.go
+// line 210).
+func TestHandleWithDIFC_AccessDenied_RecordsSpanEvent(t *testing.T) {
+	upstream := mockUpstream(t, http.StatusOK, map[string]interface{}{"id": 1})
+	defer upstream.Close()
+
+	// Agent with a private secrecy tag; resource has no tag → write is denied.
+	g := &stubGuard{
+		labelResourceResult: publicResource(),
+		labelResourceOp:     difc.OperationWrite,
+	}
+	s := newTestServerWithPrivateAgent(t, upstream.URL, g, difc.EnforcementFilter)
+	h, getSpans := newRecordingProxyHandler(t, s)
+
+	req := httptest.NewRequest(http.MethodPost, "/repos/org/repo/issues",
+		bytes.NewBufferString(`{"title":"new"}`))
+	w := httptest.NewRecorder()
+	h.handleWithDIFC(w, req, "/repos/org/repo/issues", "create_issue",
+		map[string]interface{}{"owner": "org", "repo": "repo"}, nil)
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+	assert.Contains(t, w.Body.String(), "DIFC policy violation")
+
+	spans := getSpans()
+	difcSpan := spanByName(spans, "proxy.difc_pipeline")
+	require.NotNil(t, difcSpan, "proxy.difc_pipeline span must be recorded")
+
+	// Find the difc.access_denied event in the span's event list.
+	var foundEvent bool
+	for _, ev := range difcSpan.Events {
+		if ev.Name == "difc.access_denied" {
+			foundEvent = true
+			// The event must carry a "reason" attribute.
+			var hasReason bool
+			for _, attr := range ev.Attributes {
+				if string(attr.Key) == "reason" {
+					hasReason = true
+					assert.Equal(t,
+						"Agent carries private (test-org/test-repo)-scoped data that cannot be written to 'public-resource' due to secrecy constraints. The target resource is not authorized to receive this sensitive data.",
+						attr.Value.AsString(),
+						"reason attribute must describe the denial",
+					)
+				}
+			}
+			assert.True(t, hasReason, "difc.access_denied event must have a reason attribute")
+		}
+	}
+	assert.True(t, foundEvent, "difcSpan must contain a difc.access_denied event")
+}
+
+// ─── Span event: rate limit detected → rate_limit.detected event ─────────────
+
+// TestHandleWithDIFC_RateLimitDetected_RecordsSpanEvent verifies that when the
+// upstream responds with HTTP 429 and an X-Ratelimit-Reset header, the recording
+// difcSpan emits a "rate_limit.detected" event containing a "reset_at" attribute
+// (the difcSpan.IsRecording() branch at handler.go line 242-248).
+func TestHandleWithDIFC_RateLimitDetected_RecordsSpanEvent(t *testing.T) {
+	resetAt := time.Now().Add(60 * time.Second)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("X-Ratelimit-Remaining", "0")
+		w.Header().Set("X-Ratelimit-Reset", fmt.Sprintf("%d", resetAt.Unix()))
+		w.WriteHeader(http.StatusTooManyRequests)
+		w.Write([]byte(`{"message":"API rate limit exceeded"}`)) //nolint:errcheck
+	}))
+	defer upstream.Close()
+
+	s := newTestServer(t, upstream.URL)
+	h, getSpans := newRecordingProxyHandler(t, s)
+
+	req := httptest.NewRequest(http.MethodGet, "/repos/org/repo/issues", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusTooManyRequests, w.Code)
+
+	spans := getSpans()
+	difcSpan := spanByName(spans, "proxy.difc_pipeline")
+	require.NotNil(t, difcSpan, "proxy.difc_pipeline span must be recorded")
+
+	var foundEvent bool
+	for _, ev := range difcSpan.Events {
+		if ev.Name == "rate_limit.detected" {
+			foundEvent = true
+			var hasResetAt bool
+			for _, attr := range ev.Attributes {
+				if string(attr.Key) == "reset_at" {
+					hasResetAt = true
+					assert.NotEmpty(t, attr.Value.AsString(), "reset_at attribute should not be empty")
+				}
+			}
+			assert.True(t, hasResetAt, "rate_limit.detected event must have a reset_at attribute")
+		}
+	}
+	assert.True(t, foundEvent, "difcSpan must contain a rate_limit.detected event")
 }
