@@ -33,7 +33,7 @@ func SortedSetKeys(set map[string]struct{}) []string {
 // useful for maps that may use either snake_case or camelCase field names:
 //
 //	GetStringFromMap(m, "html_url", "htmlUrl")
-func GetStringFromMap(m map[string]interface{}, keys ...string) string {
+func GetStringFromMap(m map[string]any, keys ...string) string {
 	for _, k := range keys {
 		if v, ok := m[k]; ok {
 			if s, ok := v.(string); ok && s != "" {
@@ -46,19 +46,19 @@ func GetStringFromMap(m map[string]interface{}, keys ...string) string {
 
 // DeepCloneJSON creates a deep copy of a JSON-compatible value.
 // It handles the three container types used by encoding/json:
-// map[string]interface{} (JSON objects), []interface{} (JSON arrays),
+// map[string]any (JSON objects), []any (JSON arrays),
 // and any other type (JSON scalars: string, float64, bool, nil), which is
 // returned as-is since scalar values are not reference types and need no cloning.
-func DeepCloneJSON(v interface{}) interface{} {
+func DeepCloneJSON(v any) any {
 	switch val := v.(type) {
-	case map[string]interface{}:
-		clone := make(map[string]interface{}, len(val))
+	case map[string]any:
+		clone := make(map[string]any, len(val))
 		for k, v := range val {
 			clone[k] = DeepCloneJSON(v)
 		}
 		return clone
-	case []interface{}:
-		clone := make([]interface{}, len(val))
+	case []any:
+		clone := make([]any, len(val))
 		for i, v := range val {
 			clone[i] = DeepCloneJSON(v)
 		}
@@ -68,10 +68,10 @@ func DeepCloneJSON(v interface{}) interface{} {
 	}
 }
 
-// InterfaceToIntString attempts to convert a JSON-decoded numeric interface value
+// InterfaceToIntString attempts to convert a JSON-decoded numeric value
 // (float64 or json.Number) to its decimal integer string representation.
 // Returns ("", false) if the value is not a numeric type or is non-integer.
-func InterfaceToIntString(v interface{}) (string, bool) {
+func InterfaceToIntString(v any) (string, bool) {
 	switch n := v.(type) {
 	case float64:
 		// Explicitly guard against out-of-range values before conversion, since

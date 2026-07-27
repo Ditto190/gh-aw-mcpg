@@ -113,7 +113,7 @@ func TestStringsToAny(t *testing.T) {
 
 	t.Run("nil input returns empty (non-nil) slice", func(t *testing.T) {
 		t.Parallel()
-		assert.Equal(t, []interface{}{}, StringsToAny(nil))
+		assert.Equal(t, []any{}, StringsToAny(nil))
 	})
 
 	t.Run("empty input returns empty slice", func(t *testing.T) {
@@ -123,7 +123,7 @@ func TestStringsToAny(t *testing.T) {
 
 	t.Run("converts all entries preserving order", func(t *testing.T) {
 		t.Parallel()
-		assert.Equal(t, []interface{}{"octo", "hub", "bot"}, StringsToAny([]string{"octo", "hub", "bot"}))
+		assert.Equal(t, []any{"octo", "hub", "bot"}, StringsToAny([]string{"octo", "hub", "bot"}))
 	})
 }
 
