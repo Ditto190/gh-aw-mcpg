@@ -18,6 +18,7 @@ import (
 	"github.com/github/gh-aw-mcpg/internal/logger"
 	"github.com/github/gh-aw-mcpg/internal/mcp"
 	"github.com/github/gh-aw-mcpg/internal/tracing"
+	"github.com/github/gh-aw-mcpg/internal/util"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.opentelemetry.io/otel/attribute"
 	oteltrace "go.opentelemetry.io/otel/trace"
@@ -401,6 +402,11 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 	// Get guard for this backend
 	g := us.guardRegistry.Get(serverID)
 	sessionID := us.getSessionID(ctx)
+	// Propagate the session ID to the tool call span so it is queryable on child spans
+	// independently of the parent gateway.request span.
+	if toolSpan.IsRecording() {
+		toolSpan.SetAttributes(tracing.GenAIConversationID.String(util.FormatSessionIDForLog(sessionID)))
+	}
 
 	// **Allowed-tools enforcement**: reject calls for tools not in the configured list.
 	// This is a server-side guard so agents cannot bypass client-side --allowed-tools

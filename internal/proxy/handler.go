@@ -119,7 +119,7 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if match.ToolName == "graphql_introspection" {
 			logHandler.Printf("GraphQL introspection query, passing through")
 			clientAuth := r.Header.Get("Authorization")
-			resp, respBody := h.forwardAndReadBody(w, r.Context(), http.MethodPost, fullPath, bytes.NewReader(graphQLBody), "application/json", clientAuth)
+			resp, respBody := h.forwardAndReadBody(w, r.Context(), oteltrace.SpanFromContext(r.Context()), http.MethodPost, fullPath, bytes.NewReader(graphQLBody), "application/json", clientAuth)
 			if resp == nil {
 				return
 			}
@@ -155,7 +155,7 @@ func (h *proxyHandler) handleUnrecognizedPassthrough(w http.ResponseWriter, r *h
 	logger.LogUnrecognizedEndpointPassthrough(r.Method, rawPath)
 	logHandler.Printf("unrecognized REST endpoint %s, forwarding with empty labels", rawPath)
 
-	resp, respBody := h.forwardAndReadBody(w, r.Context(), r.Method, fullPath, nil, "", r.Header.Get("Authorization"))
+	resp, respBody := h.forwardAndReadBody(w, r.Context(), oteltrace.SpanFromContext(r.Context()), r.Method, fullPath, nil, "", r.Header.Get("Authorization"))
 	if resp == nil {
 		return
 	}
@@ -231,9 +231,9 @@ func (h *proxyHandler) handleWithDIFC(w http.ResponseWriter, r *http.Request, pa
 	fwdCtx, fwdSpan := tracing.StartProxyForwardSpan(ctx, h.GetTracer(), toolName, r.URL.Path, h.server.upstreamHost())
 	defer fwdSpan.End()
 	if graphQLBody != nil {
-		resp, respBody = h.forwardAndReadBody(w, fwdCtx, http.MethodPost, path, bytes.NewReader(graphQLBody), "application/json", clientAuth)
+		resp, respBody = h.forwardAndReadBody(w, fwdCtx, fwdSpan, http.MethodPost, path, bytes.NewReader(graphQLBody), "application/json", clientAuth)
 	} else {
-		resp, respBody = h.forwardAndReadBody(w, fwdCtx, r.Method, path, nil, "", clientAuth)
+		resp, respBody = h.forwardAndReadBody(w, fwdCtx, fwdSpan, r.Method, path, nil, "", clientAuth)
 	}
 	if resp != nil {
 		fwdSpan.SetAttributes(tracing.HTTPResponseStatusCodeKey.Int(resp.StatusCode))
@@ -384,7 +384,7 @@ func (h *proxyHandler) passthrough(w http.ResponseWriter, r *http.Request, path 
 		defer r.Body.Close()
 	}
 
-	resp, respBody := h.forwardAndReadBody(w, r.Context(), r.Method, path, body, r.Header.Get("Content-Type"), r.Header.Get("Authorization"))
+	resp, respBody := h.forwardAndReadBody(w, r.Context(), oteltrace.SpanFromContext(r.Context()), r.Method, path, body, r.Header.Get("Content-Type"), r.Header.Get("Authorization"))
 	if resp == nil {
 		return
 	}
@@ -430,11 +430,11 @@ func (h *proxyHandler) writeEmptyResponse(w http.ResponseWriter, resp *http.Resp
 // forwardAndReadBody forwards a request to the upstream GitHub API and reads the
 // entire response body. On success it returns the response and body bytes. It writes
 // a 502 error to w and returns nil, nil on failure.
+// span is the active tracing span for error recording; pass nil if no span is available.
 func (h *proxyHandler) forwardAndReadBody(
-	w http.ResponseWriter, ctx context.Context,
+	w http.ResponseWriter, ctx context.Context, span oteltrace.Span,
 	method, path string, body io.Reader, contentType, clientAuth string,
 ) (*http.Response, []byte) {
-	span := oteltrace.SpanFromContext(ctx)
 	logHandler.Printf("forwardAndReadBody: %s %s", method, path)
 	resp, err := h.server.forwardToGitHub(ctx, method, path, body, contentType, clientAuth)
 	if err != nil {

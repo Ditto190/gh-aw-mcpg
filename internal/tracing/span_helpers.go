@@ -15,6 +15,9 @@ import (
 // Use this instead of calling RecordError + SetStatus individually to ensure consistent
 // behavior (stack traces enabled, status always set) across all error paths.
 func RecordSpanError(span oteltrace.Span, err error, msg string) {
+	if !span.IsRecording() {
+		return
+	}
 	logTracing.Printf("Recording span error: msg=%s, err=%v", msg, err)
 	span.RecordError(err, oteltrace.WithStackTrace(true))
 	if err != nil {
