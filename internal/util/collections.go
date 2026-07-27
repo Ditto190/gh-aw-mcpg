@@ -28,9 +28,9 @@ func DeduplicateStrings(input []string, sorted bool) []string {
 	return out
 }
 
-// StringsToAny converts a []string to []interface{}.
-func StringsToAny(input []string) []interface{} {
-	out := make([]interface{}, len(input))
+// StringsToAny converts a []string to []any.
+func StringsToAny(input []string) []any {
+	out := make([]any, len(input))
 	for i, value := range input {
 		out[i] = value
 	}
