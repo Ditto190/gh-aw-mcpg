@@ -28,9 +28,9 @@ type ValidationError struct {
 
 func (e *ValidationError) Error() string {
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("Configuration error at %s: %s", e.JSONPath, e.Message))
+	fmt.Fprintf(&sb, "Configuration error at %s: %s", e.JSONPath, e.Message)
 	if e.Suggestion != "" {
-		sb.WriteString(fmt.Sprintf("\nSuggestion: %s", e.Suggestion))
+		fmt.Fprintf(&sb, "\nSuggestion: %s", e.Suggestion)
 	}
 	return sb.String()
 }
