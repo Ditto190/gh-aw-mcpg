@@ -36,6 +36,7 @@ func validateContainerRuntimeValue(value, fieldName string) error {
 	case "", containerRuntimeDocker, containerRuntimePodman:
 		return nil
 	default:
+		logConfig.Printf("validateContainerRuntimeValue: unsupported runtime %q for field %s", value, fieldName)
 		return fmt.Errorf("%s must be one of: docker, podman (got: %q)", fieldName, value)
 	}
 }
@@ -43,6 +44,7 @@ func validateContainerRuntimeValue(value, fieldName string) error {
 func configuredContainerRuntimeName(configRuntime string) string {
 	runtime := normalizeContainerRuntime(configRuntime)
 	if runtime == "" {
+		logConfig.Printf("configuredContainerRuntimeName: no runtime configured, using default=%s", DefaultContainerRuntime)
 		runtime = DefaultContainerRuntime
 	}
 	return runtime
@@ -50,6 +52,7 @@ func configuredContainerRuntimeName(configRuntime string) string {
 
 func effectiveContainerRuntimeName(configRuntime string) string {
 	runtime := configuredContainerRuntimeName(configRuntime)
+	logConfig.Printf("effectiveContainerRuntimeName: configured runtime=%s", runtime)
 
 	// Env override takes precedence over config.
 	if envRuntimeRaw := envutil.GetEnvString("MCP_GATEWAY_CONTAINER_RUNTIME", ""); envRuntimeRaw != "" {
@@ -58,6 +61,7 @@ func effectiveContainerRuntimeName(configRuntime string) string {
 		} else if err := validateContainerRuntimeValue(envRuntimeRaw, "MCP_GATEWAY_CONTAINER_RUNTIME"); err != nil {
 			logConfig.Printf("Ignoring invalid MCP_GATEWAY_CONTAINER_RUNTIME=%q: %v", envRuntimeRaw, err)
 		} else {
+			logConfig.Printf("effectiveContainerRuntimeName: env override MCP_GATEWAY_CONTAINER_RUNTIME=%s", normalizeContainerRuntime(envRuntimeRaw))
 			runtime = normalizeContainerRuntime(envRuntimeRaw)
 		}
 	}
@@ -73,9 +77,11 @@ func effectiveContainerRuntimeCommand(gateway *GatewayConfig) string {
 	if gateway != nil {
 		trimmedRuntimeCommand := strings.TrimSpace(gateway.ContainerRuntimeCommand)
 		if trimmedRuntimeCommand != "" {
+			logConfig.Printf("effectiveContainerRuntimeCommand: using custom runtime command=%s", trimmedRuntimeCommand)
 			command = trimmedRuntimeCommand
 		}
 	}
+	logConfig.Printf("effectiveContainerRuntimeCommand: resolved command=%s", command)
 	return command
 }
 
