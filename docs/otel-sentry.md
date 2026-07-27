@@ -49,7 +49,7 @@ In Sentry's trace detail view, expand a span and look under **Tags & Attributes*
 | `gen_ai.operation.name` | string | GenAI operation name (`execute_tool`) | `mcp.tool_call` |
 | `gen_ai.agent.name` | string | Gateway GenAI agent name (`mcp-gateway`) | `mcp.tool_call` |
 | `gen_ai.agent.id` | string | Backend MCP server ID (e.g., `github`, `slack`) | `mcp.tool_call`, `gateway.backend.execute` |
-| `gen_ai.conversation.id` | string | Truncated session ID for correlation | `gateway.request` |
+| `gen_ai.conversation.id` | string | Truncated session ID for correlation | `gateway.request`, `mcp.tool_call` |
 
 ### `mcp` group
 

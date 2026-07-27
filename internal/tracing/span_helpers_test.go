@@ -249,6 +249,19 @@ func TestRecordSpanErrorSafe_NoopSpan_ReturnsEarlyWithoutPanic(t *testing.T) {
 	}, "RecordSpanErrorSafe must not panic on a non-recording span")
 }
 
+// TestRecordSpanError_NoopSpan_ReturnsEarlyWithoutPanic verifies that
+// RecordSpanError returns early without panicking when the span is not
+// recording (e.g., a noop span). This mirrors the IsRecording guard on
+// RecordSpanErrorSafe and ensures both helpers are consistent.
+func TestRecordSpanError_NoopSpan_ReturnsEarlyWithoutPanic(t *testing.T) {
+	_, span := noop.NewTracerProvider().Tracer("test").Start(context.Background(), "noop-span")
+	assert.False(t, span.IsRecording(), "noop span must not be recording")
+
+	assert.NotPanics(t, func() {
+		RecordSpanError(span, errors.New("error"), "message")
+	}, "RecordSpanError must not panic on a non-recording span")
+}
+
 // TestRecordSpanError_NilError_SetsStatusWithoutAttributes verifies that
 // RecordSpanError correctly handles a nil error: it still sets the span status
 // to Error with the given message but does not attach an error.type attribute.

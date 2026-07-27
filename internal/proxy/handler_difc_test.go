@@ -762,3 +762,47 @@ func TestHandleWithDIFC_RateLimitDetected_RecordsSpanEvent(t *testing.T) {
 	}
 	assert.True(t, foundEvent, "difcSpan must contain a rate_limit.detected event")
 }
+
+// ─── forwardAndReadBody: explicit span receives error on network failure ───────
+
+// TestForwardAndReadBody_NetworkError_RecordsOnExplicitSpan verifies that when the
+// upstream is unreachable, the error is recorded on the span supplied explicitly as a
+// parameter — not on whichever span happens to be in the context.  A regression back to
+// oteltrace.SpanFromContext(ctx) would leave the supplied span unmodified, causing this
+// test to fail.
+func TestForwardAndReadBody_NetworkError_RecordsOnExplicitSpan(t *testing.T) {
+	// Build a recording tracer so we can inspect span state after the call.
+	exporter := tracetest.NewInMemoryExporter()
+	sp := sdktrace.NewSimpleSpanProcessor(exporter)
+	tp := sdktrace.NewTracerProvider(
+		sdktrace.WithSpanProcessor(sp),
+		sdktrace.WithSampler(sdktrace.AlwaysSample()),
+	)
+	t.Cleanup(func() { _ = tp.Shutdown(context.Background()) })
+
+	// Start a span with the recording tracer (not injected into the context).
+	_, testSpan := tp.Tracer("test").Start(context.Background(), "test.forward")
+
+	// Point upstream at a port with no listener so forwardToGitHub returns a network error.
+	s := newTestServer(t, "http://127.0.0.1:1")
+	h := &proxyHandler{server: s}
+
+	w := httptest.NewRecorder()
+	resp, body := h.forwardAndReadBody(w, context.Background(), testSpan, http.MethodGet, "/repos/org/repo/issues", nil, "", "")
+
+	// End the span so it is flushed to the exporter.
+	testSpan.End()
+
+	// The request must fail.
+	assert.Nil(t, resp)
+	assert.Nil(t, body)
+	assertJSONErrorResponse(t, w.Result(), http.StatusBadGateway, "bad_gateway", "upstream request failed")
+
+	// The explicitly supplied span must carry the error, proving the span is taken
+	// from the parameter rather than from the context.
+	spans := exporter.GetSpans()
+	require.Len(t, spans, 1, "exactly one span should be recorded")
+	assert.Equal(t, "Error", spans[0].Status.Code.String(), "span status must be Error after network failure")
+	require.NotEmpty(t, spans[0].Events, "span must have an exception event")
+	assert.Equal(t, "exception", spans[0].Events[0].Name, "event must be named 'exception'")
+}

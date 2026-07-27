@@ -687,7 +687,7 @@ func TestForwardAndReadBody_Success(t *testing.T) {
 	h := &proxyHandler{server: s}
 
 	w := httptest.NewRecorder()
-	resp, body := h.forwardAndReadBody(w, context.Background(), http.MethodGet, "/repos/org/repo/issues", nil, "", "")
+	resp, body := h.forwardAndReadBody(w, context.Background(), nil, http.MethodGet, "/repos/org/repo/issues", nil, "", "")
 
 	require.NotNil(t, resp)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
@@ -699,7 +699,7 @@ func TestForwardAndReadBody_NetworkError(t *testing.T) {
 	h := &proxyHandler{server: s}
 
 	w := httptest.NewRecorder()
-	resp, body := h.forwardAndReadBody(w, context.Background(), http.MethodGet, "/repos/org/repo/issues", nil, "", "")
+	resp, body := h.forwardAndReadBody(w, context.Background(), nil, http.MethodGet, "/repos/org/repo/issues", nil, "", "")
 
 	assert.Nil(t, resp)
 	assert.Nil(t, body)
@@ -782,7 +782,7 @@ func TestForwardAndReadBody_BodyReadError(t *testing.T) {
 	h := &proxyHandler{server: s}
 
 	w := httptest.NewRecorder()
-	resp, body := h.forwardAndReadBody(w, context.Background(), http.MethodGet, "/repos/org/repo/issues", nil, "", "")
+	resp, body := h.forwardAndReadBody(w, context.Background(), nil, http.MethodGet, "/repos/org/repo/issues", nil, "", "")
 
 	assert.Nil(t, resp)
 	assert.Nil(t, body)
