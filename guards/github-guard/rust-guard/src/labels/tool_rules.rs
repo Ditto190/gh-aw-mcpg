@@ -2141,4 +2141,66 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn apply_tool_labels_create_and_fork_repository_are_public_with_github_writer_integrity() {
+        let ctx = default_ctx();
+        let args = serde_json::json!({"owner": "octocat", "name": "new-repo"});
+        let expected_integrity = writer_integrity(scope_names::GITHUB, &ctx);
+
+        for op in &["create_repository", "fork_repository"] {
+            let (secrecy, integrity, _desc) =
+                super::apply_tool_labels(op, &args, "", vec![], vec![], String::new(), &ctx);
+
+            assert!(
+                secrecy.is_empty(),
+                "{op}: secrecy must be empty (public action), got: {secrecy:?}"
+            );
+            assert_eq!(
+                integrity, expected_integrity,
+                "{op}: integrity must be writer(github)"
+            );
+        }
+    }
+
+    #[test]
+    fn apply_tool_labels_enable_toolset_is_github_scoped_with_writer_integrity() {
+        let ctx = default_ctx();
+        let args = serde_json::json!({"toolset": "advanced"});
+        let (secrecy, integrity, _desc) =
+            super::apply_tool_labels("enable_toolset", &args, "", vec![], vec![], String::new(), &ctx);
+
+        assert!(
+            secrecy.is_empty(),
+            "enable_toolset must produce empty secrecy (public metadata), got: {secrecy:?}"
+        );
+        let expected = writer_integrity(scope_names::GITHUB, &ctx);
+        assert_eq!(
+            integrity, expected,
+            "enable_toolset must produce writer(github) integrity"
+        );
+    }
+
+    #[test]
+    fn apply_tool_labels_projects_write_with_owner_is_org_scoped_write() {
+        let ctx = default_ctx();
+        let args = serde_json::json!({"owner": "my-org"});
+        let repo_id = "";
+        let (_, integrity, _desc) =
+            super::apply_tool_labels("projects_write", &args, repo_id, vec![], vec![], String::new(), &ctx);
+
+        let expected = writer_integrity("my-org", &ctx);
+        assert_eq!(
+            integrity, expected,
+            "projects_write with owner must produce writer(my-org) integrity"
+        );
+
+        // Also verify a deprecated alias produces the same integrity
+        let (_, alias_integrity, _) =
+            super::apply_tool_labels("add_project_item", &args, repo_id, vec![], vec![], String::new(), &ctx);
+        assert_eq!(
+            alias_integrity, expected,
+            "add_project_item (deprecated alias) must match projects_write integrity"
+        );
+    }
 }
