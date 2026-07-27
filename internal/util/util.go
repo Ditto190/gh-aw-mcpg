@@ -68,7 +68,7 @@ func DeepCloneJSON(v any) any {
 	}
 }
 
-// InterfaceToIntString attempts to convert a JSON-decoded numeric any value
+// InterfaceToIntString attempts to convert a JSON-decoded numeric value
 // (float64 or json.Number) to its decimal integer string representation.
 // Returns ("", false) if the value is not a numeric type or is non-integer.
 func InterfaceToIntString(v any) (string, bool) {
