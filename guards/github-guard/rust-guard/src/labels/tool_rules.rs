@@ -856,6 +856,7 @@ pub fn apply_tool_labels(
             // Requires writer-level integrity to prevent low-trust agents from
             // self-escalating by enabling additional tool groups.
             // S = public (empty — no repository-scoped data); I = writer (github)
+            secrecy = vec![];
             baseline_scope = Cow::Borrowed(scope_names::GITHUB);
             integrity = writer_integrity(scope_names::GITHUB, ctx);
         }
@@ -2140,5 +2141,62 @@ mod tests {
                 "{tool}: deploy key ops must require writer-level integrity",
             );
         }
+    }
+
+    #[test]
+    fn apply_tool_labels_create_and_fork_repository_are_public_with_github_writer_integrity() {
+        let ctx = default_ctx();
+        let args = serde_json::json!({"owner": "octocat", "name": "new-repo"});
+        let expected_integrity = writer_integrity(scope_names::GITHUB, &ctx);
+        // Seed a non-empty secrecy label to verify the match arm actively clears it.
+        let inherited_secrecy = vec!["private:some/repo".to_string()];
+
+        for op in &["create_repository", "fork_repository"] {
+            let (secrecy, integrity, _desc) = super::apply_tool_labels(
+                op,
+                &args,
+                "",
+                inherited_secrecy.clone(),
+                vec![],
+                String::new(),
+                &ctx,
+            );
+
+            assert!(
+                secrecy.is_empty(),
+                "{op}: secrecy must be empty (public action), got: {secrecy:?}"
+            );
+            assert_eq!(
+                integrity, expected_integrity,
+                "{op}: integrity must be writer(github)"
+            );
+        }
+    }
+
+    #[test]
+    fn apply_tool_labels_enable_toolset_is_github_scoped_with_writer_integrity() {
+        let ctx = default_ctx();
+        let args = serde_json::json!({"toolset": "advanced"});
+        // Seed a non-empty secrecy label to verify the match arm actively clears it.
+        let inherited_secrecy = vec!["private:some/repo".to_string()];
+        let (secrecy, integrity, _desc) = super::apply_tool_labels(
+            "enable_toolset",
+            &args,
+            "",
+            inherited_secrecy,
+            vec![],
+            String::new(),
+            &ctx,
+        );
+
+        assert!(
+            secrecy.is_empty(),
+            "enable_toolset must produce empty secrecy (public metadata), got: {secrecy:?}"
+        );
+        let expected = writer_integrity(scope_names::GITHUB, &ctx);
+        assert_eq!(
+            integrity, expected,
+            "enable_toolset must produce writer(github) integrity"
+        );
     }
 }

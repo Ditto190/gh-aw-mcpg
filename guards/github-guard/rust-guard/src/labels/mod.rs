@@ -5616,6 +5616,10 @@ mod tests {
             "link_project",
             "unlink_project",
             "update_project",
+            // Deprecated aliases
+            "add_project_item",
+            "update_project_item",
+            "delete_project_item",
         ] {
             let actual = apply_tool_labels(op, &tool_args, "", vec![], vec![], String::new(), &ctx);
             assert_eq!(
