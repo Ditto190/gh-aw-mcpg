@@ -19,7 +19,7 @@ import (
 // (paginated SDK list call via listSDKItems). They cannot be merged into a single
 // method because Go does not support method-level type parameters; the pagination
 // loop itself is already unified in listSDKItems (see pagination.go).
-func (c *Connection) callSDKMethod(ctx context.Context, method string, params interface{}) (*Response, error) {
+func (c *Connection) callSDKMethod(ctx context.Context, method string, params any) (*Response, error) {
 	logConn.Printf("Dispatching SDK method: %s, serverID=%s", method, c.serverID)
 	switch method {
 	case "tools/list":
@@ -70,12 +70,12 @@ func (c *Connection) callSDKMethod(ctx context.Context, method string, params in
 	}
 }
 
-func (c *Connection) callTool(ctx context.Context, params interface{}) (*Response, error) {
-	return callParamMethod(c, params, func(p CallToolParams) (interface{}, error) {
+func (c *Connection) callTool(ctx context.Context, params any) (*Response, error) {
+	return callParamMethod(c, params, func(p CallToolParams) (any, error) {
 		// Ensure arguments is never nil - default to empty map
 		// This is required by the MCP protocol which expects arguments to always be present
 		if p.Arguments == nil {
-			p.Arguments = make(map[string]interface{})
+			p.Arguments = make(map[string]any)
 		}
 		logConn.Printf("callTool: parsed name=%s, argumentCount=%d", p.Name, len(p.Arguments))
 		return c.getSDKSession().CallTool(ctx, &sdk.CallToolParams{
@@ -85,11 +85,11 @@ func (c *Connection) callTool(ctx context.Context, params interface{}) (*Respons
 	})
 }
 
-func (c *Connection) readResource(ctx context.Context, params interface{}) (*Response, error) {
+func (c *Connection) readResource(ctx context.Context, params any) (*Response, error) {
 	type readResourceParams struct {
 		URI string `json:"uri"`
 	}
-	return callParamMethod(c, params, func(p readResourceParams) (interface{}, error) {
+	return callParamMethod(c, params, func(p readResourceParams) (any, error) {
 		logConn.Printf("readResource: reading resource uri=%s from serverID=%s", p.URI, c.serverID)
 		return c.getSDKSession().ReadResource(ctx, &sdk.ReadResourceParams{
 			URI: p.URI,
@@ -97,12 +97,12 @@ func (c *Connection) readResource(ctx context.Context, params interface{}) (*Res
 	})
 }
 
-func (c *Connection) getPrompt(ctx context.Context, params interface{}) (*Response, error) {
+func (c *Connection) getPrompt(ctx context.Context, params any) (*Response, error) {
 	type getPromptParams struct {
 		Name      string            `json:"name"`
 		Arguments map[string]string `json:"arguments"`
 	}
-	return callParamMethod(c, params, func(p getPromptParams) (interface{}, error) {
+	return callParamMethod(c, params, func(p getPromptParams) (any, error) {
 		logConn.Printf("getPrompt: getting prompt name=%s from serverID=%s", p.Name, c.serverID)
 		return c.getSDKSession().GetPrompt(ctx, &sdk.GetPromptParams{
 			Name:      p.Name,

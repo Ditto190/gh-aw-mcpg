@@ -89,7 +89,7 @@ func (c *Connection) reconnectSDKTransport() error {
 // reconnects and retries exactly once before propagating the error.
 // ctx is the per-request context (e.g. carrying a tool-timeout deadline) and is
 // forwarded to callSDKMethod so that cancellations and deadlines are respected.
-func (c *Connection) callSDKMethodWithReconnect(ctx context.Context, method string, params interface{}) (*Response, error) {
+func (c *Connection) callSDKMethodWithReconnect(ctx context.Context, method string, params any) (*Response, error) {
 	result, err := c.callSDKMethod(ctx, method, params)
 	if err != nil && isSessionNotFoundError(err) {
 		logConn.Printf("Session not found error from SDK (serverID=%s), attempting reconnect", c.serverID)

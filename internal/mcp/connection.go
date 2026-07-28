@@ -348,13 +348,13 @@ func (c *Connection) BackendHasPromptsCapability() bool {
 
 // SendRequest sends a JSON-RPC request and waits for the response
 // The serverID parameter is used for logging to associate the request with a backend server
-func (c *Connection) SendRequest(method string, params interface{}) (*Response, error) {
+func (c *Connection) SendRequest(method string, params any) (*Response, error) {
 	return c.SendRequestWithServerID(context.Background(), method, params, "unknown")
 }
 
 // SendRequestWithServerID sends a JSON-RPC request with server ID for logging
 // The ctx parameter is used to extract session ID for HTTP MCP servers
-func (c *Connection) SendRequestWithServerID(ctx context.Context, method string, params interface{}, serverID string) (*Response, error) {
+func (c *Connection) SendRequestWithServerID(ctx context.Context, method string, params any, serverID string) (*Response, error) {
 	snapshot, hasSnapshot := GetAgentTagsSnapshotFromContext(ctx)
 	shouldAttachAgentTags := hasSnapshot && difc.IsSinkServerID(serverID)
 	var loggingSnapshot *AgentTagsSnapshot
@@ -363,7 +363,7 @@ func (c *Connection) SendRequestWithServerID(ctx context.Context, method string,
 	}
 
 	// Log the outbound request to backend server
-	requestPayload, _ := json.Marshal(map[string]interface{}{
+	requestPayload, _ := json.Marshal(map[string]any{
 		"jsonrpc": "2.0",
 		"method":  method,
 		"params":  params,

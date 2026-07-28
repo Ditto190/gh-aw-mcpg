@@ -16,7 +16,7 @@ var logMCPHelpers = logger.ForFile()
 // constructed after the SDK's session.XXX() call has already resolved the
 // request–response correlation internally. The gateway never uses this ID for
 // matching; it is present solely to satisfy the JSON-RPC 2.0 structure.
-func marshalToResponse(result interface{}) (*Response, error) {
+func marshalToResponse(result any) (*Response, error) {
 	resultJSON, err := json.Marshal(result)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal result: %w", err)
@@ -30,11 +30,11 @@ func marshalToResponse(result interface{}) (*Response, error) {
 	}, nil
 }
 
-// unmarshalParams converts generic interface{} params to a specific struct type.
+// unmarshalParams converts generic any params to a specific struct type.
 // This helper reduces code duplication across MCP method wrappers and ensures
 // consistent error handling for parameter conversion. It uses marshal/unmarshal
 // to maintain JSON schema validation benefits.
-func unmarshalParams(params interface{}, target interface{}) error {
+func unmarshalParams(params any, target any) error {
 	paramsJSON, err := json.Marshal(params)
 	if err != nil {
 		return fmt.Errorf("failed to marshal params: %w", err)
@@ -49,7 +49,7 @@ func unmarshalParams(params interface{}, target interface{}) error {
 // callParamMethod is a generic helper for SDK operations that require typed parameters.
 // It handles the common pattern of: requireSDKSession → unmarshalParams → fn(params) → marshalToResponse.
 // P is the type of the parameter struct to unmarshal into.
-func callParamMethod[P any](c *Connection, rawParams interface{}, fn func(P) (interface{}, error)) (*Response, error) {
+func callParamMethod[P any](c *Connection, rawParams any, fn func(P) (any, error)) (*Response, error) {
 	logMCPHelpers.Printf("callParamMethod: validating SDK session for serverID=%s", c.serverID)
 	if err := c.requireSDKSession(); err != nil {
 		return nil, err

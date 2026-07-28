@@ -243,8 +243,8 @@ func assembleHTTPConnection(ctx context.Context, cancel context.CancelFunc, clie
 }
 
 // createJSONRPCRequest creates a JSON-RPC 2.0 request map
-func createJSONRPCRequest(requestID uint64, method string, params interface{}) map[string]interface{} {
-	return map[string]interface{}{
+func createJSONRPCRequest(requestID uint64, method string, params any) map[string]any {
+	return map[string]any{
 		"jsonrpc": "2.0",
 		"id":      requestID,
 		"method":  method,
@@ -254,9 +254,9 @@ func createJSONRPCRequest(requestID uint64, method string, params interface{}) m
 
 // ensureToolCallArguments ensures that the arguments field exists in tools/call params
 // The MCP protocol requires the arguments field to always be present, even if empty
-func ensureToolCallArguments(params interface{}) interface{} {
+func ensureToolCallArguments(params any) any {
 	// Convert params to map if it isn't already
-	paramsMap, ok := params.(map[string]interface{})
+	paramsMap, ok := params.(map[string]any)
 	if !ok {
 		// If params isn't a map, return as-is (this shouldn't happen for tools/call)
 		return params
@@ -266,11 +266,11 @@ func ensureToolCallArguments(params interface{}) interface{} {
 	if _, hasArgs := paramsMap["arguments"]; !hasArgs {
 		// Add empty arguments map if missing
 		logHTTP.Print("tools/call params missing 'arguments' field, adding empty map")
-		paramsMap["arguments"] = make(map[string]interface{})
+		paramsMap["arguments"] = make(map[string]any)
 	} else if paramsMap["arguments"] == nil {
 		// Replace nil with empty map
 		logHTTP.Print("tools/call params has nil 'arguments' field, replacing with empty map")
-		paramsMap["arguments"] = make(map[string]interface{})
+		paramsMap["arguments"] = make(map[string]any)
 	}
 
 	return paramsMap
@@ -300,7 +300,7 @@ func setupHTTPRequest(ctx context.Context, url string, requestBody []byte, heade
 // This helper consolidates the common pattern of: create request → marshal → setup HTTP → execute → read response.
 // It handles connection errors consistently and provides method-specific error messages.
 // The headerModifier function allows callers to modify headers before the request is sent.
-func (c *Connection) executeHTTPRequest(ctx context.Context, method string, params interface{}, requestID uint64, headerModifier func(*http.Request)) (*httpRequestResult, error) {
+func (c *Connection) executeHTTPRequest(ctx context.Context, method string, params any, requestID uint64, headerModifier func(*http.Request)) (*httpRequestResult, error) {
 	logHTTP.Printf("Executing HTTP request: method=%s, url=%s, id=%d", method, sanitize.RedactURL(c.httpURL), requestID)
 
 	// Create JSON-RPC request
@@ -455,10 +455,10 @@ func (c *Connection) initializeHTTPSession() (string, error) {
 	requestID := atomic.AddUint64(&requestIDCounter, 1)
 
 	// Create initialize request with MCP protocol parameters
-	initParams := map[string]interface{}{
+	initParams := map[string]any{
 		"protocolVersion": MCPProtocolVersion,
-		"capabilities":    map[string]interface{}{},
-		"clientInfo": map[string]interface{}{
+		"capabilities":    map[string]any{},
+		"clientInfo": map[string]any{
 			"name":    "awmg",
 			"version": version.Get(),
 		},
@@ -561,7 +561,7 @@ func parseHTTPResult(result *httpRequestResult) (*Response, error) {
 // The ctx parameter is used to extract session ID for the Mcp-Session-Id header.
 // If the backend returns a "session not found" (HTTP 404) response, it attempts a one-time
 // session reconnect and retries the request transparently.
-func (c *Connection) sendHTTPRequest(ctx context.Context, method string, params interface{}) (*Response, error) {
+func (c *Connection) sendHTTPRequest(ctx context.Context, method string, params any) (*Response, error) {
 	// For tools/call, ensure arguments field always exists (MCP protocol requirement)
 	if method == "tools/call" {
 		params = ensureToolCallArguments(params)
