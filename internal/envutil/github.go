@@ -12,6 +12,10 @@ import (
 
 var logGitHub = logger.ForFile()
 
+// GitHub-specific environment lookups live in envutil because this package owns
+// environment resolution semantics used by multiple layers (cmd, server, proxy)
+// without coupling callers to HTTP helper packages.
+
 // DefaultGitHubAPIBaseURL is the default GitHub API base URL.
 const DefaultGitHubAPIBaseURL = "https://api.github.com"
 
