@@ -479,15 +479,11 @@ func run(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func resolveServerMode(routed, unified bool) string {
-	switch {
-	case unified:
+func resolveServerMode(_ bool, unified bool) string {
+	if unified {
 		return "unified"
-	case routed:
-		return "routed"
-	default:
-		return "routed"
 	}
+	return "routed"
 }
 
 func applyLaunchAndGuardsOverrides(cmd *cobra.Command, cfg *config.Config) error {

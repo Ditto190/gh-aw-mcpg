@@ -47,7 +47,12 @@ PowerShell:
 `,
 		GroupID:               "utils",
 		DisableFlagsInUseLine: true,
-		ValidArgs:             []string{"bash", "zsh", "fish", "powershell"},
+		ValidArgs: []string{
+			"bash\tBourne Again SHell completion",
+			"zsh\tZ Shell completion",
+			"fish\tFish shell completion",
+			"powershell\tPowerShell completion",
+		},
 		Args:                  cobra.MatchAll(cobra.ExactArgs(1), cobra.OnlyValidArgs),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			shell := args[0]
