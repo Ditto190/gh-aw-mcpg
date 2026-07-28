@@ -127,7 +127,7 @@ func TestEffectiveContainerRuntimeCommand(t *testing.T) {
 			want:    "podman",
 		},
 		{
-			name:    "ContainerRuntimeCommand leading/trailing whitespace is preserved (trimmed)",
+			name:    "ContainerRuntimeCommand leading/trailing whitespace is trimmed",
 			gateway: &GatewayConfig{ContainerRuntimeCommand: "  /bin/docker  "},
 			want:    "/bin/docker",
 		},
