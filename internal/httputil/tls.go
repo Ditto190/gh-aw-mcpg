@@ -86,6 +86,7 @@ func ConfigureTLSTrustEnvironment(caCertPath string) error {
 // LoadGatewayTLS loads a TLS configuration for the gateway HTTP server from PEM
 // certificate and key files. When caPath is non-empty the returned config
 // requires client certificates signed by that CA (mutual TLS / mTLS).
+// For self-signed certificate generation, see internal/proxy.GenerateSelfSignedTLS.
 //
 // Pass an empty caPath to use one-way TLS (server-only authentication).
 //
