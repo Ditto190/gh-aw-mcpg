@@ -53,7 +53,7 @@ PowerShell:
 			"fish\tFish shell completion",
 			"powershell\tPowerShell completion",
 		},
-		Args:                  cobra.MatchAll(cobra.ExactArgs(1), cobra.OnlyValidArgs),
+		Args: cobra.MatchAll(cobra.ExactArgs(1), cobra.OnlyValidArgs),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			shell := args[0]
 			debugLog.Printf("Generating shell completion script: shell=%s", shell)
