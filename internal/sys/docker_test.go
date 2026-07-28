@@ -1,6 +1,8 @@
 package sys
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -204,6 +206,16 @@ func TestCheckDockerAccessible(t *testing.T) {
 func TestCheckContainerRuntimeAccessible(t *testing.T) {
 	assert.True(t, CheckContainerRuntimeAccessible("true"))
 	assert.False(t, CheckContainerRuntimeAccessible("/path/that/does/not/exist/podman"))
+}
+
+func TestCheckContainerRuntimeAccessible_PodmanWithoutDocker(t *testing.T) {
+	runtimeDir := t.TempDir()
+	podmanPath := filepath.Join(runtimeDir, "podman")
+	require.NoError(t, os.WriteFile(podmanPath, []byte("#!/bin/sh\nexit 0\n"), 0o755))
+	t.Setenv("PATH", runtimeDir)
+	t.Setenv("DOCKER_HOST", "unix:///nonexistent/docker.sock")
+
+	assert.True(t, CheckContainerRuntimeAccessible("podman"))
 }
 
 func TestCheckPortMapping(t *testing.T) {
