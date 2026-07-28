@@ -36,6 +36,7 @@ Quick reference for AI agents working with MCP Gateway (Go-based MCP proxy serve
 - `internal/githubhttp/` - GitHub API-specific HTTP helpers (auth headers, collaborator permission, rate-limit parsing)
 - `internal/guard/` - Security guards (NoopGuard, WasmGuard, WriteSinkGuard)
 - `internal/httputil/` - Generic HTTP helper utilities (server, proxy)
+- `internal/jqutil/` - Shared gojq compiler options (security: $ENV access disabled)
 - `internal/launcher/` - Backend process management
 - `internal/logger/` - Debug logging framework (micro logger)
 - `internal/mcp/` - MCP protocol types with enhanced error logging
