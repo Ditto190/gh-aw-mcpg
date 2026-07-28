@@ -16,6 +16,8 @@ import (
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+var logToolRegistry = logger.ForFile()
+
 // registerAllTools fetches and registers tools from all backend servers
 func (us *UnifiedServer) registerAllTools() error {
 	logger.LogInfo("backend", "Starting tool registration for %d backends", len(us.launcher.ServerIDs()))
@@ -44,11 +46,11 @@ func (us *UnifiedServer) registerAllTools() error {
 
 // registerAllToolsSequential registers tools from backend servers sequentially
 func (us *UnifiedServer) registerAllToolsSequential(serverIDs []string) error {
-	logUnified.Printf("Registering tools sequentially from %d backends", len(serverIDs))
+	logToolRegistry.Printf("Registering tools sequentially from %d backends", len(serverIDs))
 
 	errs := &registrationErrors{total: len(serverIDs)}
 	for _, serverID := range serverIDs {
-		logUnified.Printf("Registering tools from backend: %s", serverID)
+		logToolRegistry.Printf("Registering tools from backend: %s", serverID)
 		if err := us.registerToolsFromBackend(serverID); err != nil {
 			logger.LogError("backend", "Failed to register tools from %s: %v", serverID, err)
 			errs.record(serverID)
@@ -56,13 +58,13 @@ func (us *UnifiedServer) registerAllToolsSequential(serverIDs []string) error {
 	}
 
 	errs.finish()
-	logUnified.Printf("Tool registration complete: total tools=%d", len(us.tools))
+	logToolRegistry.Printf("Tool registration complete: total tools=%d", len(us.tools))
 	return nil
 }
 
 // registerAllToolsParallel registers tools from backend servers in parallel
 func (us *UnifiedServer) registerAllToolsParallel(serverIDs []string) error {
-	logUnified.Printf("Registering tools in parallel from %d backends", len(serverIDs))
+	logToolRegistry.Printf("Registering tools in parallel from %d backends", len(serverIDs))
 
 	var wg sync.WaitGroup
 	results := make(chan launchResult, len(serverIDs))
@@ -97,7 +99,7 @@ func (us *UnifiedServer) registerAllToolsParallel(serverIDs []string) error {
 			logger.LogErrorToServer(result.serverID, "backend", "Failed to register tools from %s (took %v): %v", result.serverID, result.duration, result.err)
 			errs.record(result.serverID)
 		} else {
-			logUnified.Printf("Successfully registered tools from %s (took %v)", result.serverID, result.duration)
+			logToolRegistry.Printf("Successfully registered tools from %s (took %v)", result.serverID, result.duration)
 			logger.LogInfoToServer(result.serverID, "backend", "Successfully registered tools from %s (took %v)", result.serverID, result.duration)
 			successCount++
 		}
@@ -111,7 +113,7 @@ func (us *UnifiedServer) registerAllToolsParallel(serverIDs []string) error {
 
 // registerToolsFromBackend registers tools from a specific backend with <server>___<tool> naming
 func (us *UnifiedServer) registerToolsFromBackend(serverID string) error {
-	logUnified.Printf("Registering tools from backend: %s", serverID)
+	logToolRegistry.Printf("Registering tools from backend: %s", serverID)
 
 	// Get connection to backend
 	conn, err := launcher.GetOrLaunch(us.launcher, serverID)
@@ -265,10 +267,10 @@ func (us *UnifiedServer) registerToolsFromBackend(serverID string) error {
 			Annotations: tool.Annotations,
 		}, finalHandler)
 
-		logUnified.Printf("Registered tool: %s", logName)
+		logToolRegistry.Printf("Registered tool: %s", logName)
 	}
 
-	logUnified.Printf("Registered %d tools from %s: %s", len(listResult.Tools), serverID, strings.Join(toolNames, ", "))
+	logToolRegistry.Printf("Registered %d tools from %s: %s", len(listResult.Tools), serverID, strings.Join(toolNames, ", "))
 
 	// Register prompts from this backend. Prompt support is optional; failures are
 	// logged but do not cause tool registration to fail.
@@ -291,7 +293,7 @@ func (us *UnifiedServer) registerPromptsFromBackend(ctx context.Context, serverI
 	// Plain JSON-RPC connections return false here too; their initialize response is
 	// not parsed into typed capabilities, so we cannot safely detect support.
 	if !conn.BackendHasPromptsCapability() {
-		logUnified.Printf("Backend %s does not declare prompts capability (skipping)", serverID)
+		logToolRegistry.Printf("Backend %s does not declare prompts capability (skipping)", serverID)
 		return nil
 	}
 
@@ -306,11 +308,11 @@ func (us *UnifiedServer) registerPromptsFromBackend(ctx context.Context, serverI
 		&listResult,
 		func(err error) error {
 			// Many backends do not implement prompts — treat as a graceful skip.
-			logUnified.Printf("Backend %s does not support prompts/list (skipping): %v", serverID, err)
+			logToolRegistry.Printf("Backend %s does not support prompts/list (skipping): %v", serverID, err)
 			return nil
 		},
 		func(code int, message string) error {
-			logUnified.Printf("Backend %s returned error for prompts/list (skipping): code=%d, message=%s",
+			logToolRegistry.Printf("Backend %s returned error for prompts/list (skipping): code=%d, message=%s",
 				serverID, code, message)
 			return nil
 		},
@@ -322,7 +324,7 @@ func (us *UnifiedServer) registerPromptsFromBackend(ctx context.Context, serverI
 	}
 
 	if len(listResult.Prompts) == 0 {
-		logUnified.Printf("Backend %s has no prompts to register", serverID)
+		logToolRegistry.Printf("Backend %s has no prompts to register", serverID)
 		return nil
 	}
 
@@ -356,14 +358,14 @@ func (us *UnifiedServer) registerPromptsFromBackend(ctx context.Context, serverI
 			return &result, nil
 		})
 
-		logUnified.Printf("Registered prompt: %s___%s", serverID, promptNameCopy)
+		logToolRegistry.Printf("Registered prompt: %s___%s", serverID, promptNameCopy)
 	}
 
-	logUnified.Printf("Registered %d prompts from %s: %s", len(listResult.Prompts), serverID, strings.Join(promptNames, ", "))
+	logToolRegistry.Printf("Registered %d prompts from %s: %s", len(listResult.Prompts), serverID, strings.Join(promptNames, ", "))
 	return nil
 }
 func (us *UnifiedServer) registerSysTool(name, description string, inputSchema map[string]interface{}, handler func(context.Context, *sdk.CallToolRequest, interface{}) (*sdk.CallToolResult, interface{}, error)) {
-	logUnified.Printf("registerSysTool: name=%s", name)
+	logToolRegistry.Printf("registerSysTool: name=%s", name)
 	// Store tool info internally only -- sys tools are intentionally NOT registered
 	// with the MCP SDK server and therefore never appear in tools/list.
 	us.toolsMu.Lock()
@@ -379,14 +381,14 @@ func (us *UnifiedServer) registerSysTool(name, description string, inputSchema m
 
 // callSysServer is a helper that directly dispatches sys tools to SysServer.
 func (us *UnifiedServer) callSysServer(toolName string) (interface{}, error) {
-	logUnified.Printf("callSysServer: dispatching tool=%s", toolName)
+	logToolRegistry.Printf("callSysServer: dispatching tool=%s", toolName)
 	switch toolName {
 	case "sys_init":
 		return us.sysServer.SysInit()
 	case "sys_list_servers":
 		return us.sysServer.ListServers()
 	default:
-		logUnified.Printf("callSysServer: unknown tool=%s", toolName)
+		logToolRegistry.Printf("callSysServer: unknown tool=%s", toolName)
 		return nil, fmt.Errorf("unknown tool: %s", toolName)
 	}
 }
@@ -431,6 +433,6 @@ func (us *UnifiedServer) registerSysTools() error {
 		us.sysListServersHandler,
 	)
 
-	logUnified.Printf("Registered 2 sys tools")
+	logToolRegistry.Printf("Registered 2 sys tools")
 	return nil
 }
