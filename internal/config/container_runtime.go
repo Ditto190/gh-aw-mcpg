@@ -59,8 +59,10 @@ func effectiveContainerRuntimeName(configRuntime string) string {
 			logConfig.Printf("Ignoring invalid MCP_GATEWAY_CONTAINER_RUNTIME=%q: %v", envRuntimeRaw, err)
 		} else {
 			runtime = normalizeContainerRuntime(envRuntimeRaw)
+			logConfig.Printf("Container runtime overridden by MCP_GATEWAY_CONTAINER_RUNTIME: %q", runtime)
 		}
 	}
+	logConfig.Printf("Effective container runtime name: %q (config=%q)", runtime, configRuntime)
 	return runtime
 }
 
@@ -73,9 +75,11 @@ func effectiveContainerRuntimeCommand(gateway *GatewayConfig) string {
 	if gateway != nil {
 		trimmedRuntimeCommand := strings.TrimSpace(gateway.ContainerRuntimeCommand)
 		if trimmedRuntimeCommand != "" {
+			logConfig.Printf("Container runtime command overridden by gateway config: %q", trimmedRuntimeCommand)
 			command = trimmedRuntimeCommand
 		}
 	}
+	logConfig.Printf("Effective container runtime command: %q", command)
 	return command
 }
 
@@ -87,5 +91,6 @@ func configuredContainerRuntimeCommand(gateway *GatewayConfig) string {
 	if gateway != nil && strings.TrimSpace(gateway.ContainerRuntimeCommand) != "" {
 		command = strings.TrimSpace(gateway.ContainerRuntimeCommand)
 	}
+	logConfig.Printf("Configured container runtime command: %q", command)
 	return command
 }
