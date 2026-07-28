@@ -2,11 +2,13 @@ package config
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/github/gh-aw-mcpg/internal/sys"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestDetectContainerID(t *testing.T) {
@@ -352,6 +354,34 @@ func TestValidateExecutionEnvironment(t *testing.T) {
 		// Should have validation errors
 		assert.NotEmpty(t, result.ValidationErrors, "Expected validation errors for missing env vars")
 	})
+}
+
+func TestValidateExecutionEnvironmentForRuntime(t *testing.T) {
+	runtimeDir := t.TempDir()
+	podmanPath := filepath.Join(runtimeDir, "podman")
+	require.NoError(t, os.WriteFile(podmanPath, []byte("#!/bin/sh\nexit 0\n"), 0o755))
+	t.Setenv("PATH", runtimeDir)
+	t.Setenv("DOCKER_HOST", "unix:///nonexistent/docker.sock")
+	t.Setenv("MCP_GATEWAY_PORT", "8080")
+	t.Setenv("MCP_GATEWAY_DOMAIN", "localhost")
+	t.Setenv("MCP_GATEWAY_AGENT_ID", "test-agent")
+
+	result := ValidateExecutionEnvironmentForRuntime("podman")
+
+	assert.True(t, result.DockerAccessible)
+	assert.Empty(t, result.ValidationErrors)
+}
+
+func TestValidateExecutionEnvironmentForRuntime_DockerPathError(t *testing.T) {
+	t.Setenv("DOCKER_HOST", "unix:///nonexistent/docker.sock")
+	t.Setenv("MCP_GATEWAY_PORT", "8080")
+	t.Setenv("MCP_GATEWAY_DOMAIN", "localhost")
+	t.Setenv("MCP_GATEWAY_AGENT_ID", "test-agent")
+
+	result := ValidateExecutionEnvironmentForRuntime("/usr/bin/docker")
+
+	assert.False(t, result.DockerAccessible)
+	assert.Contains(t, result.ValidationErrors, "Docker daemon is not accessible. Ensure the Docker socket is mounted or Docker is running.")
 }
 
 func TestValidateContainerizedEnvironment(t *testing.T) {

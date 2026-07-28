@@ -180,17 +180,6 @@ func run(cmd *cobra.Command, args []string) error {
 	defer cleanupWasmCache()
 	logger.StartupInfo("WASM compilation cache directory: %s", resolvedWasmCacheDir)
 
-	// Validate execution environment if requested
-	if validateEnv {
-		debugLog.Printf("Validating execution environment...")
-		result := config.ValidateExecutionEnvironment()
-		if !result.IsValid() {
-			logger.LogErrorToMarkdown("startup", "Environment validation failed: %s", result.Error())
-			return fmt.Errorf("environment validation failed: %s", result.Error())
-		}
-		logger.StartupInfo("Environment validation passed")
-	}
-
 	// Load configuration
 	var cfg *config.Config
 	var err error
@@ -211,6 +200,18 @@ func run(cmd *cobra.Command, args []string) error {
 
 	debugLog.Printf("Configuration loaded with %d servers", len(cfg.Servers))
 	log.Printf("Loaded %d MCP server(s)", len(cfg.Servers))
+
+	// Validate after loading configuration so dockerless mode can select Podman.
+	if validateEnv {
+		runtimeCommand := config.EffectiveContainerRuntimeCommand(cfg.Gateway)
+		debugLog.Printf("Validating execution environment with container runtime %s...", runtimeCommand)
+		result := config.ValidateExecutionEnvironmentForRuntime(runtimeCommand)
+		if !result.IsValid() {
+			logger.LogErrorToMarkdown("startup", "Environment validation failed: %s", result.Error())
+			return fmt.Errorf("environment validation failed: %s", result.Error())
+		}
+		logger.StartupInfo("Environment validation passed")
+	}
 
 	// Log server names to markdown
 	serverNames := make([]string, 0, len(cfg.Servers))

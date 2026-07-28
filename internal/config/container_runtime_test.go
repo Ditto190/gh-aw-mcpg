@@ -6,6 +6,20 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestEffectiveContainerRuntimeCommand_Dockerless(t *testing.T) {
+	t.Run("uses podman regardless of environment override", func(t *testing.T) {
+		t.Setenv("MCP_GATEWAY_CONTAINER_RUNTIME", "docker")
+		assert.Equal(t, "podman", effectiveContainerRuntimeCommand(&GatewayConfig{Dockerless: true}))
+	})
+
+	t.Run("preserves explicit podman command path", func(t *testing.T) {
+		assert.Equal(t, "/opt/bin/podman", effectiveContainerRuntimeCommand(&GatewayConfig{
+			Dockerless:              true,
+			ContainerRuntimeCommand: "/opt/bin/podman",
+		}))
+	})
+}
+
 // TestEffectiveContainerRuntimeName covers the uncovered branch where
 // MCP_GATEWAY_CONTAINER_RUNTIME is set to an invalid value (not docker/podman).
 func TestEffectiveContainerRuntimeName_InvalidEnvVar(t *testing.T) {

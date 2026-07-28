@@ -127,6 +127,20 @@ Run `./awmg --help` for full CLI options. Selected frequently-used flags (run `.
   - Can be overridden by environment variable `MCP_GATEWAY_CONTAINER_RUNTIME`
   - If `MCP_GATEWAY_CONTAINER_RUNTIME` is set to an unsupported value, it is ignored and the configured/default runtime is used
 
+- **`gateway.dockerless`** (optional, JSON stdin only): Run containerized stdio MCP servers with Podman without requiring Docker
+  - Defaults to `false`
+  - When `true`, Podman takes precedence over `MCP_GATEWAY_CONTAINER_RUNTIME`
+  - `gateway.containerRuntime`, when also set, must be `"podman"`
+  - `gateway.containerRuntimeCommand`, when also set, must point to a `podman` executable
+
+```json
+{
+  "gateway": {
+    "dockerless": true
+  }
+}
+```
+
 - **`gateway.containerRuntimeCommand`** (optional): Override runtime binary/path (for example, `"/usr/bin/podman"` or `"nerdctl"`)
 
 - **`gateway.containerRuntimeArgs`** (optional): Additional runtime-level args inserted before `run` for JSON stdin `container` launches

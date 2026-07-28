@@ -388,6 +388,11 @@
           "minimum": 1,
           "default": 60
         },
+        "dockerless": {
+          "type": "boolean",
+          "description": "When true, runs containerized stdio MCP servers with Podman and does not require Docker. This setting takes precedence over MCP_GATEWAY_CONTAINER_RUNTIME. Defaults to false.",
+          "default": false
+        },
         "containerRuntime": {
           "type": "string",
           "description": "Container runtime used to launch stdio MCP servers from JSON stdin container configs. Defaults to 'docker'. Supported values: 'docker', 'podman'. Can be overridden by MCP_GATEWAY_CONTAINER_RUNTIME.",

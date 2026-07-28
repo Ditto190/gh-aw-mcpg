@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -39,6 +40,21 @@ func CheckDockerAccessible() bool {
 	cmd.Stderr = nil
 	accessible := cmd.Run() == nil
 	logDocker.Printf("Docker daemon check: accessible=%v", accessible)
+	return accessible
+}
+
+// CheckContainerRuntimeAccessible verifies that the selected container runtime can be used.
+func CheckContainerRuntimeAccessible(command string) bool {
+	if filepath.Base(command) == "docker" {
+		return CheckDockerAccessible()
+	}
+
+	logDocker.Printf("Checking container runtime accessibility: command=%s", command)
+	cmd := exec.Command(command, "info")
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+	accessible := cmd.Run() == nil
+	logDocker.Printf("Container runtime check: command=%s, accessible=%v", command, accessible)
 	return accessible
 }
 

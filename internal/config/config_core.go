@@ -117,6 +117,10 @@ type GatewayConfig struct {
 	// ToolTimeout is the maximum time (seconds) to wait for tool execution
 	ToolTimeout int `toml:"tool_timeout" json:"tool_timeout,omitempty"`
 
+	// Dockerless forces Podman for stdin JSON container launches.
+	// It is intentionally unavailable in TOML configuration.
+	Dockerless bool `toml:"-" json:"dockerless,omitempty"`
+
 	// ContainerRuntime selects the container runtime used for stdio MCP server launches
 	// in stdin JSON configurations that specify a container image.
 	// Supported values: "docker" (default), "podman".

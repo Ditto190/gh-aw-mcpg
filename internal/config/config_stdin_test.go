@@ -119,6 +119,39 @@ func TestConvertStdinServerConfig_MinimalStdioServer(t *testing.T) {
 }
 
 func TestConvertStdinConfig_ContainerRuntimeSelection(t *testing.T) {
+	t.Run("dockerless mode defaults to podman", func(t *testing.T) {
+		stdinCfg := &StdinConfig{
+			MCPServers: map[string]*StdinServerConfig{
+				"test": {Type: "stdio", Container: "ghcr.io/example/server:latest"},
+			},
+			Gateway: &StdinGatewayConfig{
+				Dockerless: true,
+			},
+		}
+
+		cfg, err := convertStdinConfig(stdinCfg)
+		require.NoError(t, err)
+		require.NotNil(t, cfg.Servers["test"])
+		assert.True(t, cfg.Gateway.Dockerless)
+		assert.Equal(t, "podman", cfg.Servers["test"].Command)
+	})
+
+	t.Run("dockerless mode takes precedence over runtime environment override", func(t *testing.T) {
+		t.Setenv("MCP_GATEWAY_CONTAINER_RUNTIME", "docker")
+		stdinCfg := &StdinConfig{
+			MCPServers: map[string]*StdinServerConfig{
+				"test": {Type: "stdio", Container: "ghcr.io/example/server:latest"},
+			},
+			Gateway: &StdinGatewayConfig{
+				Dockerless: true,
+			},
+		}
+
+		cfg, err := convertStdinConfig(stdinCfg)
+		require.NoError(t, err)
+		assert.Equal(t, "podman", cfg.Servers["test"].Command)
+	})
+
 	t.Run("gateway.containerRuntime=podman selects podman command", func(t *testing.T) {
 		stdinCfg := &StdinConfig{
 			MCPServers: map[string]*StdinServerConfig{
@@ -191,6 +224,42 @@ func TestConvertStdinConfig_ContainerRuntimeSelection(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, cfg.Servers["test"])
 		assert.Equal(t, "podman", cfg.Servers["test"].Command)
+	})
+}
+
+func TestValidateGatewayConfig_Dockerless(t *testing.T) {
+	t.Run("accepts dockerless without explicit runtime", func(t *testing.T) {
+		assert.NoError(t, validateGatewayConfig(&StdinGatewayConfig{Dockerless: true}))
+	})
+
+	t.Run("accepts dockerless with podman runtime", func(t *testing.T) {
+		assert.NoError(t, validateGatewayConfig(&StdinGatewayConfig{
+			Dockerless:       true,
+			ContainerRuntime: "podman",
+		}))
+	})
+
+	t.Run("rejects dockerless with docker runtime", func(t *testing.T) {
+		err := validateGatewayConfig(&StdinGatewayConfig{
+			Dockerless:       true,
+			ContainerRuntime: "docker",
+		})
+		assert.ErrorContains(t, err, `gateway.containerRuntime must be "podman" when gateway.dockerless is enabled`)
+	})
+
+	t.Run("accepts dockerless with explicit podman path", func(t *testing.T) {
+		assert.NoError(t, validateGatewayConfig(&StdinGatewayConfig{
+			Dockerless:              true,
+			ContainerRuntimeCommand: "/usr/local/bin/podman",
+		}))
+	})
+
+	t.Run("rejects dockerless with non-podman command", func(t *testing.T) {
+		err := validateGatewayConfig(&StdinGatewayConfig{
+			Dockerless:              true,
+			ContainerRuntimeCommand: "nerdctl",
+		})
+		assert.ErrorContains(t, err, `gateway.containerRuntimeCommand must resolve to "podman" when gateway.dockerless is enabled`)
 	})
 }
 
