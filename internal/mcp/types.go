@@ -7,7 +7,7 @@ import (
 // Request represents a JSON-RPC 2.0 request
 type Request struct {
 	JSONRPC string          `json:"jsonrpc"`
-	ID      any     `json:"id,omitempty"`
+	ID      any             `json:"id,omitempty"`
 	Method  string          `json:"method"`
 	Params  json.RawMessage `json:"params,omitempty"`
 }
@@ -15,7 +15,7 @@ type Request struct {
 // Response represents a JSON-RPC 2.0 response
 type Response struct {
 	JSONRPC string          `json:"jsonrpc"`
-	ID      any     `json:"id"`
+	ID      any             `json:"id"`
 	Result  json.RawMessage `json:"result,omitempty"`
 	Error   *ResponseError  `json:"error,omitempty"`
 }
@@ -29,8 +29,8 @@ type ResponseError struct {
 
 // Tool represents an MCP tool definition
 type Tool struct {
-	Name        string                 `json:"name"`
-	Description string                 `json:"description,omitempty"`
+	Name        string         `json:"name"`
+	Description string         `json:"description,omitempty"`
 	InputSchema map[string]any `json:"inputSchema"`
 }
 
@@ -43,7 +43,7 @@ type Tool struct {
 // gateway's internal representation and simplifying the marshal/unmarshal roundtrip in
 // callParamMethod. See callTool in connection.go for the bridge to the SDK type.
 type CallToolParams struct {
-	Name      string                 `json:"name"`
+	Name      string         `json:"name"`
 	Arguments map[string]any `json:"arguments,omitempty"`
 }
 
