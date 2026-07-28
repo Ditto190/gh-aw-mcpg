@@ -45,7 +45,7 @@ func CheckDockerAccessible() bool {
 
 // CheckContainerRuntimeAccessible verifies that the selected container runtime can be used.
 func CheckContainerRuntimeAccessible(command string) bool {
-	if filepath.Base(command) == "docker" {
+if command == "docker" {
 		return CheckDockerAccessible()
 	}
 
