@@ -354,6 +354,29 @@ func TestValidateExecutionEnvironment(t *testing.T) {
 	})
 }
 
+func TestValidateExecutionEnvironmentForRuntime(t *testing.T) {
+	t.Setenv("MCP_GATEWAY_PORT", "8080")
+	t.Setenv("MCP_GATEWAY_DOMAIN", "localhost")
+	t.Setenv("MCP_GATEWAY_AGENT_ID", "test-agent")
+
+	result := ValidateExecutionEnvironmentForRuntime("true")
+
+	assert.True(t, result.DockerAccessible)
+	assert.Empty(t, result.ValidationErrors)
+}
+
+func TestValidateExecutionEnvironmentForRuntime_DockerPathError(t *testing.T) {
+	t.Setenv("DOCKER_HOST", "unix:///nonexistent/docker.sock")
+	t.Setenv("MCP_GATEWAY_PORT", "8080")
+	t.Setenv("MCP_GATEWAY_DOMAIN", "localhost")
+	t.Setenv("MCP_GATEWAY_AGENT_ID", "test-agent")
+
+	result := ValidateExecutionEnvironmentForRuntime("/usr/bin/docker")
+
+	assert.False(t, result.DockerAccessible)
+	assert.Contains(t, result.ValidationErrors, "Docker daemon is not accessible. Ensure the Docker socket is mounted or Docker is running.")
+}
+
 func TestValidateContainerizedEnvironment(t *testing.T) {
 	// Save original env vars
 	origPort := os.Getenv("MCP_GATEWAY_PORT")

@@ -65,6 +65,13 @@ func effectiveContainerRuntimeName(configRuntime string) string {
 }
 
 func effectiveContainerRuntimeCommand(gateway *GatewayConfig) string {
+	if gateway != nil && gateway.Dockerless {
+		if trimmedRuntimeCommand := strings.TrimSpace(gateway.ContainerRuntimeCommand); trimmedRuntimeCommand != "" {
+			return trimmedRuntimeCommand
+		}
+		return containerRuntimePodman
+	}
+
 	runtime := DefaultContainerRuntime
 	if gateway != nil {
 		runtime = gateway.ContainerRuntime
@@ -88,4 +95,9 @@ func configuredContainerRuntimeCommand(gateway *GatewayConfig) string {
 		command = strings.TrimSpace(gateway.ContainerRuntimeCommand)
 	}
 	return command
+}
+
+// EffectiveContainerRuntimeCommand returns the runtime executable used for container launches.
+func EffectiveContainerRuntimeCommand(gateway *GatewayConfig) string {
+	return effectiveContainerRuntimeCommand(gateway)
 }

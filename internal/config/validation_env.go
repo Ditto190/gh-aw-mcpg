@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/github/gh-aw-mcpg/internal/logger"
@@ -30,7 +31,7 @@ var RequiredEnvVars = []string{
 // Fields:
 //   - IsContainerized: Whether the gateway is running inside a Docker container
 //   - ContainerID: The Docker container ID if containerized
-//   - DockerAccessible: Whether the Docker daemon is accessible
+//   - DockerAccessible: Whether the selected container runtime is accessible
 //   - MissingEnvVars: List of required environment variables that are not set
 //   - PortMapped: Whether the gateway port is mapped to the host (containerized mode)
 //   - StdinInteractive: Whether stdin is interactive (containerized mode)
@@ -65,6 +66,11 @@ func (r *EnvValidationResult) Error() string {
 // ValidateExecutionEnvironment performs comprehensive validation of the execution environment
 // It checks Docker accessibility, required environment variables, and containerization status
 func ValidateExecutionEnvironment() *EnvValidationResult {
+	return ValidateExecutionEnvironmentForRuntime("docker")
+}
+
+// ValidateExecutionEnvironmentForRuntime validates the environment for the selected container runtime.
+func ValidateExecutionEnvironmentForRuntime(runtimeCommand string) *EnvValidationResult {
 	logEnv.Print("Starting execution environment validation")
 	result := &EnvValidationResult{}
 
@@ -72,12 +78,17 @@ func ValidateExecutionEnvironment() *EnvValidationResult {
 	result.IsContainerized, result.ContainerID = sys.DetectContainerID()
 	logEnv.Printf("Containerization check: isContainerized=%v, containerID=%s", result.IsContainerized, result.ContainerID)
 
-	// Check Docker daemon accessibility
-	result.DockerAccessible = sys.CheckDockerAccessible()
+	// Check selected container runtime accessibility.
+	result.DockerAccessible = sys.CheckContainerRuntimeAccessible(runtimeCommand)
 	if !result.DockerAccessible {
-		logEnv.Print("Docker daemon is not accessible")
-		result.ValidationErrors = append(result.ValidationErrors,
-			"Docker daemon is not accessible. Ensure the Docker socket is mounted or Docker is running.")
+		logEnv.Printf("Container runtime is not accessible: command=%s", runtimeCommand)
+		if filepath.Base(runtimeCommand) == "docker" {
+			result.ValidationErrors = append(result.ValidationErrors,
+				"Docker daemon is not accessible. Ensure the Docker socket is mounted or Docker is running.")
+		} else {
+			result.ValidationErrors = append(result.ValidationErrors,
+				fmt.Sprintf("Container runtime %q is not accessible. Ensure it is installed, running, and usable.", runtimeCommand))
+		}
 	}
 
 	// Check required environment variables

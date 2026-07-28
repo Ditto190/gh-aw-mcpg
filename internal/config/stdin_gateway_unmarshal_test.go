@@ -124,7 +124,8 @@ func TestStdinGatewayConfig_UnmarshalJSON_FieldValues(t *testing.T) {
 		"agentId": "test-agent",
 		"domain": "example.com",
 		"startupTimeout": 60,
-		"toolTimeout": 120
+		"toolTimeout": 120,
+		"dockerless": true
 	}`, port))
 
 	var g StdinGatewayConfig
@@ -138,6 +139,7 @@ func TestStdinGatewayConfig_UnmarshalJSON_FieldValues(t *testing.T) {
 	assert.Equal(t, 60, *g.StartupTimeout)
 	require.NotNil(t, g.ToolTimeout)
 	assert.Equal(t, 120, *g.ToolTimeout)
+	assert.True(t, g.Dockerless)
 	assert.True(t, g.agentIDSet)
 	assert.False(t, g.legacyAPIKeySet)
 }

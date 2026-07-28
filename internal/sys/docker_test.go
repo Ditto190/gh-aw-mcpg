@@ -201,6 +201,11 @@ func TestCheckDockerAccessible(t *testing.T) {
 	})
 }
 
+func TestCheckContainerRuntimeAccessible(t *testing.T) {
+	assert.True(t, CheckContainerRuntimeAccessible("true"))
+	assert.False(t, CheckContainerRuntimeAccessible("/path/that/does/not/exist/podman"))
+}
+
 func TestCheckPortMapping(t *testing.T) {
 	tests := []struct {
 		name        string

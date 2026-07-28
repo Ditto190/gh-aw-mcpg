@@ -40,6 +40,7 @@ type StdinGatewayConfig struct {
 	Domain                      string                    `json:"domain,omitempty"`
 	StartupTimeout              *int                      `json:"startupTimeout,omitempty"`
 	ToolTimeout                 *int                      `json:"toolTimeout,omitempty"`
+	Dockerless                  bool                      `json:"dockerless,omitempty"`
 	ContainerRuntime            string                    `json:"containerRuntime,omitempty"`
 	ContainerRuntimeCommand     string                    `json:"containerRuntimeCommand,omitempty"`
 	ContainerRuntimeArgs        []string                  `json:"containerRuntimeArgs,omitempty"`
@@ -411,6 +412,7 @@ func convertStdinConfig(stdinCfg *StdinConfig) (*Config, error) {
 			APIKey:                  stdinCfg.Gateway.APIKey,
 			Domain:                  stdinCfg.Gateway.Domain,
 			StartupTimeout:          intPtrOrDefault(stdinCfg.Gateway.StartupTimeout, DefaultStartupTimeout),
+			Dockerless:              stdinCfg.Gateway.Dockerless,
 			ContainerRuntime:        stdinCfg.Gateway.ContainerRuntime,
 			ContainerRuntimeCommand: stdinCfg.Gateway.ContainerRuntimeCommand,
 			ContainerRuntimeArgs:    append([]string{}, stdinCfg.Gateway.ContainerRuntimeArgs...),

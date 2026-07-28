@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 )
 
@@ -36,12 +37,22 @@ func validateGatewayConfig(gateway *StdinGatewayConfig) error {
 	if err := validateContainerRuntimeValue(gateway.ContainerRuntime, "gateway.containerRuntime"); err != nil {
 		return err
 	}
+	if gateway.Dockerless {
+		runtime := normalizeContainerRuntime(gateway.ContainerRuntime)
+		if runtime != "" && runtime != containerRuntimePodman {
+			return fmt.Errorf("gateway.containerRuntime must be %q when gateway.dockerless is enabled", containerRuntimePodman)
+		}
+	}
 	if err := validateContainerRuntimeCommandNotBlank(
 		gateway.ContainerRuntimeCommand,
 		"containerRuntimeCommand",
 		"gateway.containerRuntimeCommand",
 	); err != nil {
 		return err
+	}
+	if gateway.Dockerless && gateway.ContainerRuntimeCommand != "" &&
+		filepath.Base(strings.TrimSpace(gateway.ContainerRuntimeCommand)) != containerRuntimePodman {
+		return fmt.Errorf("gateway.containerRuntimeCommand must resolve to %q when gateway.dockerless is enabled", containerRuntimePodman)
 	}
 
 	// Validate payloadDir if provided (per schema: must be absolute path)
