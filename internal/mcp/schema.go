@@ -11,16 +11,16 @@ var logSchema = logger.ForFile()
 // even if it's empty. This function normalizes schemas to meet that requirement.
 //
 // Returns a normalized copy of the schema, never modifies the original.
-func NormalizeInputSchema(schema map[string]interface{}, toolName string) map[string]interface{} {
+func NormalizeInputSchema(schema map[string]any, toolName string) map[string]any {
 	logSchema.Printf("Normalizing input schema for tool: %s", toolName)
 
 	// If backend didn't provide a schema, use a default empty object schema
 	// This allows the tool to be registered and clients will see it accepts any parameters
 	if schema == nil {
 		logger.LogWarn("backend", "Tool schema normalized: %s - backend provided no inputSchema, using default empty object schema", toolName)
-		return map[string]interface{}{
+		return map[string]any{
 			"type":       "object",
-			"properties": map[string]interface{}{},
+			"properties": map[string]any{},
 		}
 	}
 
@@ -40,9 +40,9 @@ func NormalizeInputSchema(schema map[string]interface{}, toolName string) map[st
 		}
 		// Schema without type and without properties - assume it's an empty object schema
 		logger.LogWarn("backend", "Tool schema normalized: %s - schema missing type, assuming empty object schema", toolName)
-		return map[string]interface{}{
+		return map[string]any{
 			"type":       "object",
-			"properties": map[string]interface{}{},
+			"properties": map[string]any{},
 		}
 	}
 
@@ -63,7 +63,7 @@ func NormalizeInputSchema(schema map[string]interface{}, toolName string) map[st
 	// add an empty properties object to make it valid
 	if !hasProperties && !hasAdditionalProperties {
 		logger.LogWarn("backend", "Tool schema normalized: %s - added empty properties to object type schema", toolName)
-		return copySchemaWithKey(schema, "properties", map[string]interface{}{})
+		return copySchemaWithKey(schema, "properties", map[string]any{})
 	}
 
 	logSchema.Printf("Tool %s schema is valid, no normalization needed", toolName)
@@ -71,8 +71,8 @@ func NormalizeInputSchema(schema map[string]interface{}, toolName string) map[st
 }
 
 // copySchemaWithKey returns a shallow copy of schema with the given key set to value.
-func copySchemaWithKey(schema map[string]interface{}, key string, value interface{}) map[string]interface{} {
-	normalized := make(map[string]interface{}, len(schema)+1)
+func copySchemaWithKey(schema map[string]any, key string, value any) map[string]any {
+	normalized := make(map[string]any, len(schema)+1)
 	for k, v := range schema {
 		normalized[k] = v
 	}

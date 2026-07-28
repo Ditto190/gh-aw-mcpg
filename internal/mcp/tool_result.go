@@ -12,7 +12,7 @@ import (
 
 var logToolResult = logger.ForFile()
 
-func marshalValueToTextContentResult(value interface{}) (*sdk.CallToolResult, error) {
+func marshalValueToTextContentResult(value any) (*sdk.CallToolResult, error) {
 	dataBytes, err := json.Marshal(value)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal backend result: %w", err)
@@ -25,19 +25,19 @@ func marshalValueToTextContentResult(value interface{}) (*sdk.CallToolResult, er
 // ConvertToCallToolResult converts backend result data to SDK CallToolResult format.
 // The backend returns a JSON object with a "content" field containing an array of content items.
 //
-// Fast path: when data is already a deserialized map[string]interface{} (the common case
-// after json.Unmarshal(response.Result, &interface{})), the function skips the redundant
+// Fast path: when data is already a deserialized map[string]any (the common case
+// after json.Unmarshal(response.Result, &any)), the function skips the redundant
 // marshal/unmarshal round-trip and works with the map directly.
-func ConvertToCallToolResult(data interface{}) (*sdk.CallToolResult, error) {
+func ConvertToCallToolResult(data any) (*sdk.CallToolResult, error) {
 	logToolResult.Print("Converting backend result to CallToolResult")
 
-	// Fast path: map[string]interface{} — avoids a full marshal+3×unmarshal cycle.
-	if m, ok := data.(map[string]interface{}); ok {
+	// Fast path: map[string]any — avoids a full marshal+3×unmarshal cycle.
+	if m, ok := data.(map[string]any); ok {
 		return convertMapToCallToolResult(m)
 	}
 
-	// Fast path: []interface{} — some backends return arrays directly.
-	if _, ok := data.([]interface{}); ok {
+	// Fast path: []any — some backends return arrays directly.
+	if _, ok := data.([]any); ok {
 		logToolResult.Printf("Backend returned array, wrapping as text")
 		return marshalValueToTextContentResult(data)
 	}
@@ -47,10 +47,10 @@ func ConvertToCallToolResult(data interface{}) (*sdk.CallToolResult, error) {
 	return marshalValueToTextContentResult(data)
 }
 
-// convertMapToCallToolResult is the fast path for map[string]interface{} input.
+// convertMapToCallToolResult is the fast path for map[string]any input.
 // It inspects the map directly without marshaling, saving one marshal + up to three
 // unmarshal operations compared to the original JSON round-trip approach.
-func convertMapToCallToolResult(m map[string]interface{}) (*sdk.CallToolResult, error) {
+func convertMapToCallToolResult(m map[string]any) (*sdk.CallToolResult, error) {
 	isError := mcpresult.IsErrorResult(m)
 
 	contentVal, hasContent := m["content"]
@@ -59,8 +59,8 @@ func convertMapToCallToolResult(m map[string]interface{}) (*sdk.CallToolResult, 
 		return marshalValueToTextContentResult(m)
 	}
 
-	// Collect content items from either []interface{} (produced by json.Unmarshal) or
-	// []map[string]interface{} (produced by helpers like BuildMCPTextResponse).
+	// Collect content items from either []any (produced by json.Unmarshal) or
+	// []map[string]any (produced by helpers like BuildMCPTextResponse).
 	//
 	// Note: This switch intentionally returns an error when a non-map item is encountered
 	// (strict semantics), unlike mcpresult.NormalizeContentItems which silently skips
@@ -69,18 +69,18 @@ func convertMapToCallToolResult(m map[string]interface{}) (*sdk.CallToolResult, 
 	// backend data that should surface as an error rather than be silently dropped.
 	// Do NOT replace this switch with a call to mcpresult.NormalizeContentItems — the
 	// two have deliberately different error-handling semantics.
-	var items []map[string]interface{}
+	var items []map[string]any
 	switch v := contentVal.(type) {
-	case []interface{}:
-		items = make([]map[string]interface{}, 0, len(v))
+	case []any:
+		items = make([]map[string]any, 0, len(v))
 		for i, item := range v {
-			ci, ok := item.(map[string]interface{})
+			ci, ok := item.(map[string]any)
 			if !ok {
 				return nil, fmt.Errorf("content item %d: expected map, got %T", i, item)
 			}
 			items = append(items, ci)
 		}
-	case []map[string]interface{}:
+	case []map[string]any:
 		items = v
 	default:
 		// content field exists but is not a recognizable slice type — wrap the whole map as text.
@@ -104,7 +104,7 @@ func convertMapToCallToolResult(m map[string]interface{}) (*sdk.CallToolResult, 
 }
 
 // convertContentItem converts a single deserialized content-item map to the SDK Content type.
-func convertContentItem(ci map[string]interface{}) (sdk.Content, error) {
+func convertContentItem(ci map[string]any) (sdk.Content, error) {
 	itemType, _ := ci["type"].(string)
 	switch itemType {
 	case "text":
@@ -149,9 +149,9 @@ func convertContentItem(ci map[string]interface{}) (sdk.Content, error) {
 }
 
 // decodeContentData decodes the base64-encoded "data" field from a content item map.
-// When data arrives via json.Unmarshal into interface{}, []byte fields are stored as
+// When data arrives via json.Unmarshal into any, []byte fields are stored as
 // base64 strings; this function handles both the string and pre-decoded []byte forms.
-func decodeContentData(ci map[string]interface{}) ([]byte, error) {
+func decodeContentData(ci map[string]any) ([]byte, error) {
 	raw, exists := ci["data"]
 	if !exists || raw == nil {
 		return nil, fmt.Errorf("missing required 'data' field")
@@ -168,8 +168,8 @@ func decodeContentData(ci map[string]interface{}) ([]byte, error) {
 
 // ParseToolArguments extracts and unmarshals tool arguments from a CallToolRequest.
 // Returns the parsed arguments as a map, or an error if parsing fails.
-func ParseToolArguments(req *sdk.CallToolRequest) (map[string]interface{}, error) {
-	var toolArgs map[string]interface{}
+func ParseToolArguments(req *sdk.CallToolRequest) (map[string]any, error) {
+	var toolArgs map[string]any
 	if req.Params != nil && req.Params.Arguments != nil {
 		logToolResult.Printf("Parsing arguments for tool: %s", req.Params.Name)
 		if err := json.Unmarshal(req.Params.Arguments, &toolArgs); err != nil {
@@ -177,7 +177,7 @@ func ParseToolArguments(req *sdk.CallToolRequest) (map[string]interface{}, error
 		}
 	} else {
 		// No arguments provided, use empty map
-		toolArgs = make(map[string]interface{})
+		toolArgs = make(map[string]any)
 	}
 	logToolResult.Printf("Parsed %d arguments", len(toolArgs))
 	return toolArgs, nil
@@ -185,7 +185,7 @@ func ParseToolArguments(req *sdk.CallToolRequest) (map[string]interface{}, error
 
 // NewErrorCallToolResult creates a standard error CallToolResult with the error
 // message included as text content.
-func NewErrorCallToolResult(err error) (*sdk.CallToolResult, interface{}, error) {
+func NewErrorCallToolResult(err error) (*sdk.CallToolResult, any, error) {
 	if err == nil {
 		err = fmt.Errorf("unknown error")
 	}
@@ -198,9 +198,9 @@ func NewErrorCallToolResult(err error) (*sdk.CallToolResult, interface{}, error)
 }
 
 // BuildMCPTextResponse returns a raw MCP response map with a single text content item.
-func BuildMCPTextResponse(text string) map[string]interface{} {
-	return map[string]interface{}{
-		"content": []map[string]interface{}{
+func BuildMCPTextResponse(text string) map[string]any {
+	return map[string]any{
+		"content": []map[string]any{
 			{"type": "text", "text": text},
 		},
 	}
