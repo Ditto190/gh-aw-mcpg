@@ -43,7 +43,8 @@ func TestLoggerNamespacesMatchFileConventions(t *testing.T) {
 		// http_server.go defines two loggers: the primary one for the HTTP server itself
 		// (auto-derived via ForFile as "server:http_server") and a second one with the custom
 		// namespace "server:transport" for transport-layer events, allowing independent filtering.
-		"internal/server/http_server.go": {"server:transport"},
+		"internal/server/http_server.go":  {"server:transport"},
+		"internal/server/http_helpers.go": {"server:helpers"},
 
 		"internal/server/middleware_auth.go":   {"server:auth"},
 		"internal/server/sdk_logging.go":       {"server:sdk-frontend"},
