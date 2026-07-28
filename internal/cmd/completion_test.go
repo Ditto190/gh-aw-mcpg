@@ -82,7 +82,12 @@ func TestNewCompletionCmd_CommandStructure(t *testing.T) {
 	assert.NotEmpty(t, cmd.Long, "Long description must not be empty")
 	assert.True(t, cmd.DisableFlagsInUseLine, "DisableFlagsInUseLine must be true")
 	assert.ElementsMatch(t,
-		[]string{"bash", "zsh", "fish", "powershell"},
+		[]string{
+			"bash\tBourne Again SHell completion",
+			"zsh\tZ Shell completion",
+			"fish\tFish shell completion",
+			"powershell\tPowerShell completion",
+		},
 		cmd.ValidArgs,
 		"ValidArgs should contain exactly the four supported shells",
 	)
