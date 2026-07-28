@@ -11,9 +11,9 @@ import (
 func TestEffectiveContainerRuntimeName_InvalidEnvVar(t *testing.T) {
 	t.Run("invalid MCP_GATEWAY_CONTAINER_RUNTIME value is ignored, falls back to config", func(t *testing.T) {
 		t.Setenv("MCP_GATEWAY_CONTAINER_RUNTIME", "invalidruntime")
-		// "docker" config value → effectiveContainerRuntimeName should fall back to docker
-		got := effectiveContainerRuntimeName("docker")
-		assert.Equal(t, "docker", got, "invalid env var should be ignored, not used")
+		// A non-default config value proves the invalid environment override falls back to config.
+		got := effectiveContainerRuntimeName("podman")
+		assert.Equal(t, "podman", got, "invalid env var should be ignored, not used")
 	})
 
 	t.Run("MCP_GATEWAY_CONTAINER_RUNTIME=podman overrides config docker", func(t *testing.T) {
