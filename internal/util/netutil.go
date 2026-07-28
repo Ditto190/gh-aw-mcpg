@@ -3,12 +3,10 @@ package util
 import "net"
 
 // ClientAddr returns a client-friendly address from a listener address.
-// When the host is a wildcard (0.0.0.0, ::, or empty), it substitutes
+// When the host is a wildcard (empty, 0.0.0.0, ::, or [::]), it substitutes
 // "localhost" so the printed address is usable from a client.
-//
-// Note: output.go uses "127.0.0.1" for the same wildcard substitution in
-// the gateway config output, while this function uses "localhost" because
-// GH_HOST must be a resolvable hostname for the gh CLI.
+// Use this when a resolvable hostname is required (e.g. for GH_HOST with the gh CLI).
+// For gateway output URLs where a numeric loopback address is preferred, use ClientHost.
 func ClientAddr(addr string) string {
 	host, port, err := net.SplitHostPort(addr)
 	if err != nil {
@@ -19,4 +17,16 @@ func ClientAddr(addr string) string {
 		return net.JoinHostPort("localhost", port)
 	}
 	return addr
+}
+
+// ClientHost returns a client-friendly hostname from a listener host string.
+// When the host is a wildcard (empty, 0.0.0.0, ::, or [::]), it returns
+// "127.0.0.1" so the address is usable in client-facing URLs.
+// Use ClientAddr when you need to operate on a full host:port string.
+func ClientHost(host string) string {
+	switch host {
+	case "", "0.0.0.0", "::", "[::]":
+		return "127.0.0.1"
+	}
+	return host
 }

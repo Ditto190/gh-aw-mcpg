@@ -47,6 +47,26 @@ func ensureTracingConfig(cfg *config.Config) *config.TracingConfig {
 	return cfg.Gateway.Tracing
 }
 
+// applyTracingOverrides merges CLI flag values and non-default env var values into
+// cfg.Gateway.Tracing. It is called after config load so that explicit CLI flags and
+// env var overrides take precedence over whatever was in the config file.
+// applyFlagOrEnv applies a value when the flag was explicitly set, or when the current
+// value differs from its built-in default (i.e. an env var has overridden the default).
+func applyTracingOverrides(cmd *cobra.Command, cfg *config.Config) {
+	shouldInitTracingConfig := (cfg.Gateway != nil && cfg.Gateway.Tracing != nil) ||
+		cmd.Flags().Changed("otlp-endpoint") || otlpEndpoint != "" ||
+		cmd.Flags().Changed("otlp-service-name") || otlpServiceName != config.DefaultTracingServiceName ||
+		cmd.Flags().Changed("otlp-sample-rate")
+	if shouldInitTracingConfig {
+		tc := ensureTracingConfig(cfg)
+		applyFlagOrEnv(cmd, "otlp-endpoint", &tc.Endpoint, otlpEndpoint, "")
+		applyFlagOrEnv(cmd, "otlp-service-name", &tc.ServiceName, otlpServiceName, config.DefaultTracingServiceName)
+		if cmd.Flags().Changed("otlp-sample-rate") {
+			tc.SampleRate = &otlpSampleRate
+		}
+	}
+}
+
 func initTracingProviderWithFallback(
 	ctx context.Context,
 	tracingCfg *config.TracingConfig,

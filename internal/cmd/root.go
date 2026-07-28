@@ -1,12 +1,8 @@
 package cmd
 
 import (
-	"context"
-	"crypto/tls"
 	"fmt"
 	"log"
-	"net"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -15,7 +11,6 @@ import (
 	"github.com/github/gh-aw-mcpg/internal/config"
 	"github.com/github/gh-aw-mcpg/internal/difc"
 	"github.com/github/gh-aw-mcpg/internal/envutil"
-	"github.com/github/gh-aw-mcpg/internal/httputil"
 	"github.com/github/gh-aw-mcpg/internal/logger"
 	"github.com/github/gh-aw-mcpg/internal/server"
 	"github.com/github/gh-aw-mcpg/internal/tracing"
@@ -300,20 +295,7 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 
 	// Apply tracing flags: CLI flags and env var overrides take precedence over config values.
-	// applyFlagOrEnv applies the value when the flag was explicitly set on the CLI,
-	// or when the value differs from its built-in default (i.e. an env var has overridden it).
-	shouldInitTracingConfig := (cfg.Gateway != nil && cfg.Gateway.Tracing != nil) ||
-		cmd.Flags().Changed("otlp-endpoint") || otlpEndpoint != "" ||
-		cmd.Flags().Changed("otlp-service-name") || otlpServiceName != config.DefaultTracingServiceName ||
-		cmd.Flags().Changed("otlp-sample-rate")
-	if shouldInitTracingConfig {
-		tc := ensureTracingConfig(cfg)
-		applyFlagOrEnv(cmd, "otlp-endpoint", &tc.Endpoint, otlpEndpoint, "")
-		applyFlagOrEnv(cmd, "otlp-service-name", &tc.ServiceName, otlpServiceName, config.DefaultTracingServiceName)
-		if cmd.Flags().Changed("otlp-sample-rate") {
-			tc.SampleRate = &otlpSampleRate
-		}
-	}
+	applyTracingOverrides(cmd, cfg)
 
 	// Initialize OpenTelemetry tracer provider.
 	// When no endpoint is configured, a noop provider is used (zero overhead).
@@ -376,41 +358,8 @@ func run(cmd *cobra.Command, args []string) error {
 		unifiedServer.Close()
 	}()
 
-	// Create HTTP server based on mode
-	var httpServer *http.Server
-	if mode == "routed" {
-		logger.StartupInfo("Starting MCPG in ROUTED mode on %s", listenAddr)
-		logger.StartupInfo("Routes: /mcp/<server> where <server> is one of: %v", unifiedServer.GetServerIDs())
-
-		// Extract agent ID from gateway config (spec 7.1)
-		agentID := cfg.GetAgentID()
-
-		httpServer = server.CreateHTTPServerForRoutedMode(listenAddr, unifiedServer, agentID, hmacSecret)
-	} else {
-		logger.StartupInfo("Starting MCPG in UNIFIED mode on %s", listenAddr)
-		logger.StartupInfo("Endpoint: /mcp")
-
-		// Extract agent ID from gateway config (spec 7.1)
-		agentID := cfg.GetAgentID()
-
-		httpServer = server.CreateHTTPServerForMCP(listenAddr, unifiedServer, agentID, hmacSecret)
-	}
-	// Set BaseContext so every incoming request inherits the startup context,
-	// which carries the configured W3C parent span context (traceId/spanId).
-	// This ensures HTTP handler spans join the workflow trace even when the
-	// calling client does not send traceparent headers.
-	httpServer.BaseContext = func(_ net.Listener) context.Context {
-		return ctx
-	}
-
-	// Register the HTTP server shutdown function so the /close handler can drain
-	// in-flight requests before exiting (spec 5.1.3)
-	unifiedServer.SetHTTPShutdown(httpServer.Shutdown)
-
-	// Register exit function so /close handler cancels context instead of calling
-	// os.Exit(0). This allows deferred cleanup (TracerProvider.Shutdown) to flush
-	// buffered spans before the process terminates.
-	unifiedServer.SetExitFunc(cancel)
+	// Create HTTP server based on mode, wire BaseContext and shutdown hooks.
+	httpServer := buildHTTPServer(ctx, mode, listenAddr, unifiedServer, cfg.GetAgentID(), hmacSecret, cancel)
 
 	// Build net.Listener — optionally wrapping with TLS (ASI-07 Phase 1).
 	// Plain HTTP is still used when no TLS certificate is configured (backward compatible).
@@ -418,38 +367,9 @@ func run(cmd *cobra.Command, args []string) error {
 	// in flags_tls.go; the checks below catch env-var defaults that bypass cobra's flag
 	// parsing (MarkFlagsRequiredTogether only fires when flags are explicitly changed on
 	// the command line).
-	hasCert := tlsCertPath != ""
-	hasKey := tlsKeyPath != ""
-	hasCA := tlsCAPath != ""
-	debugLog.Printf("TLS configuration: hasCert=%v, hasKey=%v, hasCA=%v", hasCert, hasKey, hasCA)
-	if hasCert != hasKey {
-		return fmt.Errorf("--tls-cert and --tls-key must both be provided together")
-	}
-	if hasCA && !hasCert {
-		return fmt.Errorf("--tls-ca requires --tls-cert and --tls-key to also be set")
-	}
-
-	listener, err := net.Listen("tcp", listenAddr)
+	listener, tlsEnabled, err := setupTLSListener(listenAddr, tlsCertPath, tlsKeyPath, tlsCAPath)
 	if err != nil {
-		return fmt.Errorf("failed to listen on %s: %w", listenAddr, err)
-	}
-	debugLog.Printf("TCP listener created on %s", listenAddr)
-	tlsEnabled := hasCert && hasKey
-	var tlsCfg *tls.Config
-	if tlsEnabled {
-		tlsCfg, err = httputil.LoadGatewayTLS(tlsCertPath, tlsKeyPath, tlsCAPath)
-		if err != nil {
-			_ = listener.Close()
-			return fmt.Errorf("failed to configure TLS: %w", err)
-		}
-		listener = tls.NewListener(listener, tlsCfg)
-		mtlsNote := ""
-		if tlsCAPath != "" {
-			mtlsNote = " (mTLS enabled)"
-		}
-		logger.StartupInfo("TLS enabled: cert=%s, key=%s, ca=%s — listening on https://%s%s", tlsCertPath, tlsKeyPath, tlsCAPath, listenAddr, mtlsNote)
-	} else {
-		logger.StartupInfo("TLS not configured — listening on http://%s (set --tls-cert/--tls-key to enable)", listenAddr)
+		return err
 	}
 	if hmacSecret != "" {
 		logger.StartupInfo("HMAC request signing enabled (ASI-07)")

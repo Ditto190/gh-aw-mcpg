@@ -10,7 +10,9 @@ import (
 
 // String and time/duration formatting helpers live in the util package because
 // their output is used by logging and user-visible status messages throughout
-// the codebase.
+// the codebase. The time/duration formatting functions (FormatFutureTime,
+// FormatDuration) are natural candidates for an internal/timeutil package if
+// one is ever bootstrapped; no action is required until then.
 
 // FormatSessionIDForLog returns a log-safe session ID representation.
 // Empty session IDs are rendered as "(none)"; non-empty IDs are truncated to

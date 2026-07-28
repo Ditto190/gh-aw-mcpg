@@ -1,12 +1,14 @@
 // Package sanitize provides utilities for redacting sensitive information from logs.
 //
-// This package offers two complementary approaches to secret sanitization:
+// This package offers two complementary approaches to secret sanitization,
+// split across two files for cohesion:
 //
-//  1. Pattern-based detection: SanitizeString() and SanitizeJSON() use regex patterns
-//     to identify and redact secrets like API keys, tokens, and passwords.
+//  1. sanitize.go — Pattern-based detection: SanitizeString() and SanitizeJSON()
+//     use regex patterns to identify and redact secrets like API keys, tokens, and
+//     passwords from arbitrary strings/JSON.
 //
-//  2. Prefix redaction: RedactSecret() and RedactSecretMap() show only the first
-//     4 characters of values, making them safe for logging without exposing full secrets.
+//  2. redact.go — Value masking: RedactSecret(), RedactSecretMap(), and RedactURL()
+//     mask a known-sensitive value for display, showing only a short safe hint.
 //
 // Usage Guidelines:
 //
@@ -31,7 +33,6 @@ package sanitize
 import (
 	"bytes"
 	"encoding/json"
-	"net/url"
 	"regexp"
 	"strings"
 )
@@ -82,35 +83,6 @@ func SanitizeString(message string) string {
 	return result
 }
 
-// RedactSecret returns a sanitized version of the input string for safe logging.
-// It shows only the first 4 characters followed by "..." to prevent exposing sensitive data.
-// For strings with 4 or fewer characters, it returns only "...".
-// For empty strings, it returns an empty string.
-func RedactSecret(input string) string {
-	if len(input) == 0 {
-		return ""
-	}
-	const prefixLen = 4
-	if len(input) <= prefixLen {
-		return "..."
-	}
-	return input[:prefixLen] + "..."
-}
-
-// RedactSecretMap returns a sanitized version of environment variables
-// where each value is truncated to first 4 characters followed by "..."
-// This prevents sensitive information like API keys from being logged in full.
-func RedactSecretMap(env map[string]string) map[string]string {
-	if env == nil {
-		return nil
-	}
-	sanitized := make(map[string]string, len(env))
-	for key, value := range env {
-		sanitized[key] = RedactSecret(value)
-	}
-	return sanitized
-}
-
 // SanitizeJSON sanitizes a JSON payload by applying regex patterns to the entire string
 // It takes raw bytes, applies regex sanitization in one pass, and returns sanitized bytes
 func SanitizeJSON(payloadBytes []byte) json.RawMessage {
@@ -133,27 +105,6 @@ func SanitizeJSONFromString(sanitized string) json.RawMessage {
 		return json.RawMessage(wrappedBytes)
 	}
 	return json.RawMessage(buf.Bytes())
-}
-
-// RedactURL returns a safe-to-log version of a URL by retaining only the scheme,
-// host, and path. Userinfo (credentials), query parameters, and fragments are
-// removed to prevent accidental leakage of secrets (e.g. api_key=..., token=...).
-// If the input cannot be parsed as a URL, the literal string "<unparseable-url>" is
-// returned instead so callers never log raw unverified input.
-func RedactURL(rawURL string) string {
-	if rawURL == "" {
-		return ""
-	}
-	u, err := url.Parse(rawURL)
-	if err != nil {
-		return "<unparseable-url>"
-	}
-	safe := &url.URL{
-		Scheme: u.Scheme,
-		Host:   u.Host,
-		Path:   u.Path,
-	}
-	return safe.String()
 }
 
 // SanitizeArgs returns a sanitized version of command arguments for safe logging.

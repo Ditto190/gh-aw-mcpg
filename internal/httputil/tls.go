@@ -10,6 +10,9 @@
 //   - internal/proxy: certificate *generation* (GenerateSelfSignedTLS) lives
 //     there because it is only needed when the proxy runs in self-signed mode.
 //     It calls httputil.NewServerTLSConfig to assemble the final *tls.Config.
+//
+// Architectural rule: add TLS *protocol and file-loading* helpers here;
+// add TLS *certificate generation* helpers to internal/proxy/tls.go.
 package httputil
 
 import (
