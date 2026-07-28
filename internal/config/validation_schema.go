@@ -256,7 +256,7 @@ func formatSchemaError(err error) error {
 	var ve *jsonschema.ValidationError
 	if errors.As(err, &ve) {
 		var sb strings.Builder
-		sb.WriteString(fmt.Sprintf("Configuration validation error (MCP Gateway version: %s):\n\n", version.Get()))
+		fmt.Fprintf(&sb, "Configuration validation error (MCP Gateway version: %s):\n\n", version.Get())
 
 		// Recursively format all errors
 		formatValidationErrorRecursive(ve, &sb, 0)
@@ -402,7 +402,7 @@ func formatErrorContext(ve *jsonschema.ValidationError, prefix string) string {
 			return
 		}
 		for _, line := range lines {
-			sb.WriteString(fmt.Sprintf("%s%s\n", prefix, line))
+			_, _ = fmt.Fprintf(&sb, "%s%s\n", prefix, line)
 		}
 		added[key] = true
 	}

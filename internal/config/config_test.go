@@ -1132,9 +1132,9 @@ func TestLoadFromFile_StreamingLargeFile(t *testing.T) {
 	tomlContent.WriteString("[gateway]\nport = 3000\n\n")
 
 	for i := 1; i <= 100; i++ {
-		tomlContent.WriteString(fmt.Sprintf("[servers.server%d]\n", i))
+		_, _ = fmt.Fprintf(&tomlContent, "[servers.server%d]\n", i)
 		tomlContent.WriteString("command = \"docker\"\n")
-		tomlContent.WriteString(fmt.Sprintf("args = [\"run\", \"--rm\", \"-i\", \"test/server%d:latest\"]\n\n", i))
+		_, _ = fmt.Fprintf(&tomlContent, "args = [\"run\", \"--rm\", \"-i\", \"test/server%d:latest\"]\n\n", i)
 	}
 
 	path := writeTempTOML(t, tomlContent.String())

@@ -83,33 +83,33 @@ func FormatViolationError(result *EvaluationResult, agentSecrecy *SecrecyLabel, 
 	}
 
 	var msg strings.Builder
-	msg.WriteString(fmt.Sprintf("DIFC Violation: %s\n\n", result.Reason))
+	fmt.Fprintf(&msg, "DIFC Violation: %s\n\n", result.Reason)
 
 	if len(result.SecrecyToAdd) > 0 {
-		msg.WriteString(fmt.Sprintf("Required Action: Add secrecy tags %v\n", result.SecrecyToAdd))
+		fmt.Fprintf(&msg, "Required Action: Add secrecy tags %v\n", result.SecrecyToAdd)
 		msg.WriteString("\nImplications of adding secrecy tags:\n")
 		msg.WriteString("  - Agent will be restricted from writing to resources that lack these tags\n")
 		msg.WriteString("  - This includes public resources (e.g., public repositories, public internet)\n")
 		msg.WriteString("  - Agent will be marked as handling sensitive information\n")
-		msg.WriteString(fmt.Sprintf("  - Future writes must target resources with tags: %v\n", result.SecrecyToAdd))
+		fmt.Fprintf(&msg, "  - Future writes must target resources with tags: %v\n", result.SecrecyToAdd)
 	}
 
 	if len(result.IntegrityToDrop) > 0 {
-		msg.WriteString(fmt.Sprintf("\nRequired Action: Drop integrity tags %v\n", result.IntegrityToDrop))
+		fmt.Fprintf(&msg, "\nRequired Action: Drop integrity tags %v\n", result.IntegrityToDrop)
 		msg.WriteString("\nImplications of dropping integrity tags:\n")
 		msg.WriteString("  - Agent will no longer be able to write to high-integrity resources\n")
-		msg.WriteString(fmt.Sprintf("  - Specifically, agent cannot write to resources requiring tags: %v\n", result.IntegrityToDrop))
+		fmt.Fprintf(&msg, "  - Specifically, agent cannot write to resources requiring tags: %v\n", result.IntegrityToDrop)
 		msg.WriteString("  - This action acknowledges that agent has been influenced by lower-integrity data\n")
 		msg.WriteString("  - Agent's outputs will be considered less trustworthy\n")
 	}
 
 	msg.WriteString("\nCurrent Agent Labels:\n")
-	msg.WriteString(fmt.Sprintf("  Secrecy: %v\n", agentSecrecy.Label.GetTags()))
-	msg.WriteString(fmt.Sprintf("  Integrity: %v\n", agentIntegrity.Label.GetTags()))
+	fmt.Fprintf(&msg, "  Secrecy: %v\n", agentSecrecy.Label.GetTags())
+	fmt.Fprintf(&msg, "  Integrity: %v\n", agentIntegrity.Label.GetTags())
 
 	msg.WriteString("\nResource Requirements:\n")
-	msg.WriteString(fmt.Sprintf("  Secrecy: %v\n", resource.Secrecy.Label.GetTags()))
-	msg.WriteString(fmt.Sprintf("  Integrity: %v\n", resource.Integrity.Label.GetTags()))
+	fmt.Fprintf(&msg, "  Secrecy: %v\n", resource.Secrecy.Label.GetTags())
+	fmt.Fprintf(&msg, "  Integrity: %v\n", resource.Integrity.Label.GetTags())
 
 	return errors.New(msg.String())
 }

@@ -8,7 +8,7 @@ import (
 // Documentation URL constants
 const (
 	ConfigSpecURL = "https://github.com/github/gh-aw/blob/main/docs/src/content/docs/reference/mcp-gateway.md"
-	SchemaURL     = "https://raw.githubusercontent.com/github/gh-aw/v0.83.1/docs/public/schemas/mcp-gateway-config.schema.json"
+	SchemaURL     = "https://raw.githubusercontent.com/github/gh-aw/v0.83.4/docs/public/schemas/mcp-gateway-config.schema.json"
 )
 
 // ValidationError represents a configuration validation error with context.
@@ -28,9 +28,9 @@ type ValidationError struct {
 
 func (e *ValidationError) Error() string {
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("Configuration error at %s: %s", e.JSONPath, e.Message))
+	fmt.Fprintf(&sb, "Configuration error at %s: %s", e.JSONPath, e.Message)
 	if e.Suggestion != "" {
-		sb.WriteString(fmt.Sprintf("\nSuggestion: %s", e.Suggestion))
+		fmt.Fprintf(&sb, "\nSuggestion: %s", e.Suggestion)
 	}
 	return sb.String()
 }
