@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/github/gh-aw-mcpg/internal/config"
+	"github.com/github/gh-aw-mcpg/internal/util"
 	"github.com/spf13/cobra"
 )
 
@@ -41,10 +42,7 @@ func writeGatewayConfig(cfg *config.Config, listenAddr, mode string, tlsEnabled 
 	// need localhost-reachable URLs. The domain field (e.g., "host.docker.internal")
 	// is applied by the downstream converter when generating agent configs for
 	// container-side access.
-	domain := host
-	if domain == "0.0.0.0" || domain == "::" || domain == "[::]" {
-		domain = "127.0.0.1"
-	}
+	domain := util.ClientHost(host)
 
 	debugLog.Printf("Resolved gateway address: host=%s, port=%s", host, port)
 

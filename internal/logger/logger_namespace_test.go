@@ -39,7 +39,6 @@ func TestLoggerNamespacesMatchFileConventions(t *testing.T) {
 		"internal/guard/write_sink.go":         {"guard:write-sink"},
 		"internal/launcher/connection_pool.go": {"launcher:pool"},
 		"internal/launcher/health_monitor.go":  {"launcher:health"},
-		"internal/server/http_helpers.go":      {"server:helpers"},
 
 		// http_server.go defines two loggers: the primary one for the HTTP server itself
 		// (auto-derived via ForFile as "server:http_server") and a second one with the custom

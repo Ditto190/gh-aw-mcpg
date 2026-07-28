@@ -13,7 +13,7 @@ import (
 	"github.com/github/gh-aw-mcpg/internal/util"
 )
 
-var logServerHelpers = logger.New("server:helpers")
+var logServerHelpers = logger.ForFile()
 
 // logRuntimeError logs runtime errors to stdout per spec section 9.2
 func logRuntimeError(errorType, detail string, r *http.Request, serverName *string) {

@@ -17,6 +17,9 @@
 //   - internal/httputil: protocol-level helpers and file-loading helpers that
 //     apply to all TLS listeners and clients (MinTLSVersion, NewServerTLSConfig,
 //     NewClientTLSConfig, ConfigureTLSTrustEnvironment, LoadGatewayTLS).
+//
+// Architectural rule: add TLS *certificate generation* helpers here;
+// add TLS *protocol and file-loading* helpers to internal/httputil/tls.go.
 package proxy
 
 import (

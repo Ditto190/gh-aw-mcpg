@@ -54,3 +54,62 @@ func TestClientAddr(t *testing.T) {
 		})
 	}
 }
+
+func TestClientHost(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "IPv4 wildcard becomes 127.0.0.1",
+			input:    "0.0.0.0",
+			expected: "127.0.0.1",
+		},
+		{
+			name:     "IPv6 wildcard :: becomes 127.0.0.1",
+			input:    "::",
+			expected: "127.0.0.1",
+		},
+		{
+			name:     "bracketed IPv6 wildcard becomes 127.0.0.1",
+			input:    "[::]",
+			expected: "127.0.0.1",
+		},
+		{
+			name:     "empty host becomes 127.0.0.1",
+			input:    "",
+			expected: "127.0.0.1",
+		},
+		{
+			name:     "explicit 127.0.0.1 unchanged",
+			input:    "127.0.0.1",
+			expected: "127.0.0.1",
+		},
+		{
+			name:     "explicit localhost unchanged",
+			input:    "localhost",
+			expected: "localhost",
+		},
+		{
+			name:     "non-loopback host unchanged",
+			input:    "192.168.1.1",
+			expected: "192.168.1.1",
+		},
+		{
+			name:     "named host unchanged",
+			input:    "host.docker.internal",
+			expected: "host.docker.internal",
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tc.expected, ClientHost(tc.input))
+		})
+	}
+}
