@@ -1543,8 +1543,12 @@ mod tests {
             String::new(),
             &ctx,
         );
-        let _ = secrecy; // secrecy inherits from repo visibility (backend unavailable in tests)
+        let expected_secrecy = private_label("octocat", "hello-world", "octocat/hello-world", &ctx);
         let expected_integrity = super::reader_integrity("octocat/hello-world", &ctx);
+        assert_eq!(
+            secrecy, expected_secrecy,
+            "list_repository_collaborators secrecy must be private-policy-scoped"
+        );
         assert_eq!(
             integrity, expected_integrity,
             "list_repository_collaborators must produce reader-level integrity"
@@ -1868,6 +1872,7 @@ mod tests {
     fn apply_tool_labels_ui_get_labels_milestones_branches_are_repo_scoped() {
         let ctx = default_ctx();
         let repo_id = "octocat/hello-world";
+        let expected_secrecy: Vec<String> = vec![];
         let expected_integrity = writer_integrity(repo_id, &ctx);
 
         for method in &["labels", "milestones", "branches"] {
@@ -1876,7 +1881,7 @@ mod tests {
                 "repo": "hello-world",
                 "method": method,
             });
-            let (_, integrity, _) = super::apply_tool_labels(
+            let (secrecy, integrity, _) = super::apply_tool_labels(
                 "ui_get",
                 &args,
                 repo_id,
@@ -1884,6 +1889,10 @@ mod tests {
                 vec![],
                 String::new(),
                 &ctx,
+            );
+            assert_eq!(
+                secrecy, expected_secrecy,
+                "ui_get method={method}: expected repo-visibility secrecy (empty for public in tests)",
             );
             assert_eq!(
                 integrity, expected_integrity,
@@ -1896,6 +1905,7 @@ mod tests {
     fn apply_tool_labels_ui_get_issue_types_and_fields_are_github_approved() {
         let ctx = default_ctx();
         let repo_id = "octocat/hello-world";
+        let expected_secrecy: Vec<String> = vec![];
 
         for (method, standalone) in &[
             ("issue_types", "list_issue_types"),
@@ -1906,7 +1916,7 @@ mod tests {
                 "repo": "hello-world",
                 "method": method,
             });
-            let (_, integrity, _) = super::apply_tool_labels(
+            let (secrecy, integrity, _) = super::apply_tool_labels(
                 "ui_get",
                 &args,
                 repo_id,
@@ -1914,6 +1924,10 @@ mod tests {
                 vec![],
                 String::new(),
                 &ctx,
+            );
+            assert_eq!(
+                secrecy, expected_secrecy,
+                "ui_get method={method}: expected empty secrecy",
             );
             // Org-level metadata should be treated as GitHub-controlled.
             let expected_integrity = project_github_label(&ctx);
@@ -1928,6 +1942,7 @@ mod tests {
     fn apply_tool_labels_ui_get_assignees_and_reviewers_are_access_sensitive() {
         let ctx = default_ctx();
         let repo_id = "octocat/hello-world";
+        let expected_secrecy = private_label("octocat", "hello-world", repo_id, &ctx);
         let expected_integrity = reader_integrity(repo_id, &ctx);
 
         for method in &["assignees", "reviewers"] {
@@ -1945,12 +1960,43 @@ mod tests {
                 String::new(),
                 &ctx,
             );
-            let _ = secrecy; // secrecy is policy_private_scope_label (backend unavailable in tests)
+            assert_eq!(
+                secrecy, expected_secrecy,
+                "ui_get method={method}: expected private-policy-scoped secrecy",
+            );
             assert_eq!(
                 integrity, expected_integrity,
                 "ui_get method={method}: expected reader-level integrity",
             );
         }
+    }
+
+    #[test]
+    fn apply_tool_labels_ui_get_unknown_method_preserves_existing_labels() {
+        let ctx = default_ctx();
+        let repo_id = "octocat/hello-world";
+        let initial_secrecy = vec!["existing:scope".to_string()];
+        let args = serde_json::json!({
+            "owner": "octocat",
+            "repo": "hello-world",
+            "method": "unknown_method",
+        });
+
+        let (secrecy, integrity, _) = super::apply_tool_labels(
+            "ui_get",
+            &args,
+            repo_id,
+            initial_secrecy.clone(),
+            vec![],
+            String::new(),
+            &ctx,
+        );
+        assert_eq!(secrecy, initial_secrecy, "unknown ui_get method must not alter secrecy");
+        assert_eq!(
+            integrity,
+            vec![format!("none:{repo_id}")],
+            "unknown ui_get method should keep baseline-only integrity"
+        );
     }
 
     #[test]
