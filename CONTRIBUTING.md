@@ -606,8 +606,8 @@ docker run --rm -i \
 The container uses `run_containerized.sh` as the entrypoint, which:
 - Requires the `-i` flag for JSON configuration via stdin
 - Requires `MCP_GATEWAY_PORT` and `MCP_GATEWAY_DOMAIN`, plus an agent gate value via `MCP_GATEWAY_AGENT_ID` (`MCP_GATEWAY_API_KEY` is only a deprecated alias that `run_containerized.sh` maps to `MCP_GATEWAY_AGENT_ID`; reference `"gateway": {"agentId": "${MCP_GATEWAY_AGENT_ID}"}` in your JSON config to enable authentication)
-- Queries the Docker daemon API version (falls back to 1.44)
-- Validates Docker socket and environment before starting; validates port mapping only when the container ID can be determined and host networking is not in use
+- Queries the Docker daemon API version when Docker is available (falls back to 1.44)
+- Validates the Docker socket and container settings when Docker is available; Dockerless Podman mode can start without them
 
 See `config.json` for an example JSON configuration file.
 

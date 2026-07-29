@@ -5,6 +5,8 @@
 
 set -e
 
+DOCKER_AVAILABLE=false
+
 # Detect if stderr is a TTY and colors should be enabled
 # Respects NO_COLOR and DEBUG_COLORS environment variables
 USE_COLORS=false
@@ -86,7 +88,8 @@ verify_containerized() {
     log_info "Running in containerized environment"
 }
 
-# Check Docker daemon accessibility
+# Check Docker daemon accessibility. Podman mode is selected from stdin, so a
+# missing Docker daemon cannot be fatal before the gateway reads its config.
 check_docker_socket() {
     local raw_host="${DOCKER_HOST:-}"
 
@@ -94,10 +97,14 @@ check_docker_socket() {
     if echo "${raw_host}" | grep -q '^tcp://'; then
         log_info "TCP Docker host configured: ${raw_host}"
         if ! docker info > /dev/null 2>&1; then
-            log_error "Docker daemon at ${raw_host} is not accessible"
-            log_error "Ensure DOCKER_HOST is correct and the daemon is running"
+            if command -v podman > /dev/null 2>&1; then
+                log_warn "Docker daemon at ${raw_host} is not accessible; continuing with Podman available"
+                return 0
+            fi
+            log_error "Neither the Docker daemon nor Podman is accessible"
             exit 1
         fi
+        DOCKER_AVAILABLE=true
         log_info "Docker daemon is accessible"
         return 0
     fi
@@ -120,9 +127,12 @@ check_docker_socket() {
     done
 
     if [ ! -S "$socket_path" ]; then
+        if command -v podman > /dev/null 2>&1; then
+            log_warn "Docker socket not found at $socket_path; continuing with Podman available"
+            return 0
+        fi
         log_error "Docker socket not found at $socket_path after ${max_wait_seconds}s (${max_retries} attempts)"
-        log_error "Mount the Docker socket: -v /var/run/docker.sock:/var/run/docker.sock"
-        log_error "For ARC/DinD with a custom socket path, set DOCKER_HOST and mount accordingly"
+        log_error "Neither Docker nor Podman is available to launch backend MCP servers"
         exit 1
     fi
 
@@ -132,11 +142,15 @@ check_docker_socket() {
     fi
 
     if ! docker info > /dev/null 2>&1; then
-        log_error "Docker daemon is not accessible"
-        log_error "Ensure the Docker socket is properly mounted and accessible"
+        if command -v podman > /dev/null 2>&1; then
+            log_warn "Docker daemon is not accessible; continuing with Podman available"
+            return 0
+        fi
+        log_error "Neither the Docker daemon nor Podman is accessible"
         exit 1
     fi
 
+    DOCKER_AVAILABLE=true
     log_info "Docker daemon is accessible"
 }
 
@@ -426,10 +440,12 @@ main() {
     # Perform environment validation
     check_docker_socket
     check_required_env_vars
-    set_docker_api_version
+    if [ "$DOCKER_AVAILABLE" = true ]; then
+        set_docker_api_version
+    fi
 
     # Perform container-specific validation
-    if [ -n "$CONTAINER_ID" ]; then
+    if [ -n "$CONTAINER_ID" ] && [ "$DOCKER_AVAILABLE" = true ]; then
         validate_port_mapping "$CONTAINER_ID"
         validate_stdin_interactive "$CONTAINER_ID"
         validate_container_config "$CONTAINER_ID"

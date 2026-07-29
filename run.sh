@@ -44,21 +44,29 @@ detect_containerized() {
     fi
 }
 
-# Check Docker daemon accessibility
+# Check Docker daemon accessibility. Podman mode may be selected from stdin, so
+# allow startup when Docker is absent and Podman is installed.
 check_docker_socket() {
     local socket_path="${DOCKER_HOST:-/var/run/docker.sock}"
     socket_path="${socket_path#unix://}"
     
     if [ ! -S "$socket_path" ]; then
+        if command -v podman > /dev/null 2>&1; then
+            log_warn "Docker socket not found at $socket_path; continuing with Podman available"
+            return 0
+        fi
         log_error "Docker socket not found at $socket_path"
-        log_error "The MCP Gateway requires Docker to spawn backend MCP servers."
-        log_error "Make sure Docker is installed and running."
+        log_error "Neither Docker nor Podman is available to launch backend MCP servers."
         exit 1
     fi
     
     if ! docker info > /dev/null 2>&1; then
+        if command -v podman > /dev/null 2>&1; then
+            log_warn "Docker daemon is not accessible; continuing with Podman available"
+            return 0
+        fi
         log_error "Docker daemon is not accessible"
-        log_error "Make sure Docker is running and you have permission to access it."
+        log_error "Neither Docker nor Podman is available to launch backend MCP servers."
         exit 1
     fi
     
@@ -96,6 +104,9 @@ check_optional_env_vars() {
 
 # Set DOCKER_API_VERSION based on Docker daemon's current API version
 set_docker_api_version() {
+    if ! docker info > /dev/null 2>&1; then
+        return 0
+    fi
     # Get the server's current API version (what it actually supports)
     local server_api=$(docker version --format '{{.Server.APIVersion}}' 2>/dev/null || echo "")
     
