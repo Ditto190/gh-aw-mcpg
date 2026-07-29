@@ -103,35 +103,29 @@ func logWithLevel(level LogLevel, category, format string, args ...interface{}) 
 	dispatchLevelToSinks(level, category, format, args, fileLevelSink)
 }
 
-// The exported wrappers below follow the Log-Level Quad-Function Pattern
-// documented in global_state.go, with shared per-level closure registration handled
-// by newLevelLoggerFuncs.
+// The exported vars below follow the Log-Level Quad-Var Pattern documented in
+// global_state.go. Each var is bound directly to the corresponding per-level
+// closure in fileLevelLoggers, eliminating the one-liner wrapper functions.
 var fileLevelLoggers = newLevelLoggerFuncs(logWithLevel)
 
-// LogInfo logs an informational message to the unified file logger sink.
-// The underlying filename depends on logger initialization. For
-// destination-specific logging use LogInfoToMarkdown or LogInfoToServer.
-func LogInfo(category, format string, args ...interface{}) {
-	fileLevelLoggers.info(category, format, args...)
-}
+var (
+	// LogInfo logs an informational message to the unified file logger sink.
+	// The underlying filename depends on logger initialization. For
+	// destination-specific logging use LogInfoToMarkdown or LogInfoToServer.
+	LogInfo = fileLevelLoggers.info
 
-// LogWarn logs a warning message to the unified file logger sink.
-// The underlying filename depends on logger initialization. For
-// destination-specific logging use LogWarnToMarkdown or LogWarnToServer.
-func LogWarn(category, format string, args ...interface{}) {
-	fileLevelLoggers.warn(category, format, args...)
-}
+	// LogWarn logs a warning message to the unified file logger sink.
+	// The underlying filename depends on logger initialization. For
+	// destination-specific logging use LogWarnToMarkdown or LogWarnToServer.
+	LogWarn = fileLevelLoggers.warn
 
-// LogError logs an error message to the unified file logger sink.
-// The underlying filename depends on logger initialization. For
-// destination-specific logging use LogErrorToMarkdown or LogErrorToServer.
-func LogError(category, format string, args ...interface{}) {
-	fileLevelLoggers.error(category, format, args...)
-}
+	// LogError logs an error message to the unified file logger sink.
+	// The underlying filename depends on logger initialization. For
+	// destination-specific logging use LogErrorToMarkdown or LogErrorToServer.
+	LogError = fileLevelLoggers.error
 
-// LogDebug logs a debug message to the unified file logger sink.
-// The underlying filename depends on logger initialization. For
-// destination-specific logging use LogDebugToMarkdown or LogDebugToServer.
-func LogDebug(category, format string, args ...interface{}) {
-	fileLevelLoggers.debug(category, format, args...)
-}
+	// LogDebug logs a debug message to the unified file logger sink.
+	// The underlying filename depends on logger initialization. For
+	// destination-specific logging use LogDebugToMarkdown or LogDebugToServer.
+	LogDebug = fileLevelLoggers.debug
+)
