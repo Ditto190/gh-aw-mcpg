@@ -21,10 +21,10 @@ func TestLoggerRegistries(t *testing.T) {
 		assert.Equal(t, []string{
 			"file logger",
 			"server file logger",
-			"markdown logger",
-			"JSONL logger",
 			"tools logger",
 			"observed URL domains logger",
+			"markdown logger",
+			"JSONL logger",
 		}, names)
 	})
 

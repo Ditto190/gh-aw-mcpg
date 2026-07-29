@@ -10,17 +10,9 @@ type loggerCloseEntry struct {
 	close func() error
 }
 
-var gatewayLoggerInitializers = []loggerInitEntry{
-	{
-		name: "file logger",
-		init: func(logDir string) error {
-			return InitFileLogger(logDir, "mcp-gateway.log")
-		},
-	},
-	{
-		name: "server file logger",
-		init: InitServerFileLogger,
-	},
+// sharedLoggerInitializers contains logger init entries that are common to both
+// gateway and proxy modes (markdown and JSONL loggers).
+var sharedLoggerInitializers = []loggerInitEntry{
 	{
 		name: "markdown logger",
 		init: func(logDir string) error {
@@ -32,6 +24,19 @@ var gatewayLoggerInitializers = []loggerInitEntry{
 		init: func(logDir string) error {
 			return InitJSONLLogger(logDir, "rpc-messages.jsonl")
 		},
+	},
+}
+
+var gatewayLoggerInitializers = append([]loggerInitEntry{
+	{
+		name: "file logger",
+		init: func(logDir string) error {
+			return InitFileLogger(logDir, "mcp-gateway.log")
+		},
+	},
+	{
+		name: "server file logger",
+		init: InitServerFileLogger,
 	},
 	{
 		name: "tools logger",
@@ -45,28 +50,16 @@ var gatewayLoggerInitializers = []loggerInitEntry{
 			return InitObservedURLDomainsLogger(logDir, observedURLDomainsFileName)
 		},
 	},
-}
+}, sharedLoggerInitializers...)
 
-var proxyLoggerInitializers = []loggerInitEntry{
+var proxyLoggerInitializers = append([]loggerInitEntry{
 	{
 		name: "file logger",
 		init: func(logDir string) error {
 			return InitFileLogger(logDir, "proxy.log")
 		},
 	},
-	{
-		name: "markdown logger",
-		init: func(logDir string) error {
-			return InitMarkdownLogger(logDir, "gateway.md")
-		},
-	},
-	{
-		name: "JSONL logger",
-		init: func(logDir string) error {
-			return InitJSONLLogger(logDir, "rpc-messages.jsonl")
-		},
-	},
-}
+}, sharedLoggerInitializers...)
 
 var globalLoggerClosers = []loggerCloseEntry{
 	{
