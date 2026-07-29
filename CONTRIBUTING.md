@@ -318,7 +318,7 @@ gh-aw-mcpg/
     ├── proxy/                 # HTTP forward proxy for DIFC filtering
     ├── sanitize/              # Sensitive data redaction utilities for logging
     ├── server/                # HTTP server (routed/unified modes)
-    ├── util/               # String, formatting, randomness, and JSON deep-clone utilities
+    ├── util/                  # String, formatting, randomness, and JSON deep-clone utilities
     ├── syncutil/              # Concurrency utility helpers
     ├── sys/                   # System utilities
     ├── testutil/              # Test utilities and helpers
