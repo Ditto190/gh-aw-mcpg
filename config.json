@@ -1,4 +1,9 @@
 {
+    "gateway": {
+        "port": 8000,
+        "domain": "${MCP_GATEWAY_DOMAIN}",
+        "agentId": "${MCP_GATEWAY_AGENT_ID}"
+    },
     "mcpServers": {
         "github": {
             "type": "local",
