@@ -230,6 +230,18 @@ func (h *proxyHandler) handleWithDIFC(w http.ResponseWriter, r *http.Request, pa
 
 	fwdCtx, fwdSpan := tracing.StartProxyForwardSpan(ctx, h.GetTracer(), toolName, r.URL.Path, h.server.upstreamHost())
 	defer fwdSpan.End()
+
+	// Artifact ZIP downloads are streamed directly to the client after the authorization
+	// check to avoid buffering potentially large binary responses in memory via io.ReadAll.
+	if isArtifactDownload(toolName, args) {
+		if !h.streamArtifactResponse(w, r, path, fwdCtx, difcSpan, fwdSpan, clientAuth) {
+			tracing.RecordSpanError(difcSpan, errors.New("upstream request failed"), "upstream request failed")
+			return
+		}
+		guard.RunPipelinePhase6(pre, nil, s.Mode)
+		return
+	}
+
 	if graphQLBody != nil {
 		resp, respBody = h.forwardAndReadBody(w, fwdCtx, fwdSpan, http.MethodPost, path, bytes.NewReader(graphQLBody), "application/json", clientAuth)
 	} else {
@@ -449,6 +461,57 @@ func (h *proxyHandler) forwardAndReadBody(
 	}
 	logHandler.Printf("forwardAndReadBody: %s %s -> status=%d bodyLen=%d", method, path, resp.StatusCode, len(respBody))
 	return resp, respBody
+}
+
+// isArtifactDownload reports whether the tool call is for an artifact ZIP download
+// (actions_get with method=download_workflow_run_artifact). These responses are binary
+// and potentially very large; they are streamed rather than buffered via io.ReadAll.
+func isArtifactDownload(toolName string, args map[string]interface{}) bool {
+	if toolName != "actions_get" {
+		return false
+	}
+	method, _ := args["method"].(string)
+	return method == "download_workflow_run_artifact"
+}
+
+// streamArtifactResponse forwards an artifact ZIP download to the client using
+// io.Copy to stream the body without buffering it fully in memory. This is safe
+// because artifact responses are binary (no DIFC JSON filtering applies) and can
+// be arbitrarily large. Redirects (3xx) and error responses have empty or small
+// bodies and are forwarded the same way.
+// Returns true on success; on upstream failure it writes a 502 to w and returns false.
+func (h *proxyHandler) streamArtifactResponse(
+	w http.ResponseWriter, r *http.Request, path string,
+	ctx context.Context, difcSpan, fwdSpan oteltrace.Span, clientAuth string,
+) bool {
+	resp, err := h.server.forwardToGitHub(ctx, r.Method, path, nil, "", clientAuth)
+	if err != nil {
+		rejectProxyRequest(w, fwdSpan, http.StatusBadGateway, "bad_gateway", "upstream request failed",
+			fmt.Errorf("%s %s: %w", r.Method, path, err))
+		return false
+	}
+	defer resp.Body.Close()
+
+	fwdSpan.SetAttributes(tracing.HTTPResponseStatusCodeKey.Int(resp.StatusCode))
+	if rateLimited, resetHeader, _ := githubhttp.RateLimitSignal(resp); rateLimited {
+		fwdSpan.SetAttributes(tracing.RateLimitHit.Bool(true))
+		if difcSpan.IsRecording() {
+			eventAttrs := []attribute.KeyValue{}
+			if resetAt := githubhttp.ParseRateLimitResetHeader(resetHeader); !resetAt.IsZero() {
+				eventAttrs = append(eventAttrs, attribute.String("reset_at", resetAt.UTC().Format(time.RFC3339)))
+			}
+			difcSpan.AddEvent("rate_limit.detected", oteltrace.WithAttributes(eventAttrs...))
+		}
+	}
+
+	copyResponseHeaders(w, resp)
+	injectRetryAfterIfRateLimited(w, resp)
+	w.WriteHeader(resp.StatusCode)
+	if _, copyErr := io.Copy(w, resp.Body); copyErr != nil {
+		// Headers and status are already sent; log and continue.
+		logHandler.Printf("streamArtifactResponse: body copy error: %v", copyErr)
+	}
+	return true
 }
 
 // copyResponseHeaders copies relevant headers from upstream to the client response.

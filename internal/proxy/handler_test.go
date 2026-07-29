@@ -905,3 +905,27 @@ func TestHandleWithDIFC_ArtifactZipRedirectPassthrough(t *testing.T) {
 	assert.Equal(t, http.StatusFound, w.Code)
 	assert.Equal(t, "https://objects.githubusercontent.com/archive.zip", w.Header().Get("Location"))
 }
+
+func TestHandleWithDIFC_ArtifactZipUpstreamError(t *testing.T) {
+	// Point at an unreachable address to trigger a network error in streamArtifactResponse.
+	s := newTestServer(t, "http://127.0.0.1:1")
+	h := &proxyHandler{server: s}
+
+	req := httptest.NewRequest(http.MethodGet, "/repos/org/repo/actions/artifacts/123/zip", nil)
+	w := httptest.NewRecorder()
+	h.handleWithDIFC(
+		w,
+		req,
+		"/repos/org/repo/actions/artifacts/123/zip",
+		"actions_get",
+		map[string]interface{}{
+			"owner":       "org",
+			"repo":        "repo",
+			"method":      "download_workflow_run_artifact",
+			"resource_id": "123",
+		},
+		nil,
+	)
+
+	assertJSONErrorResponse(t, w.Result(), http.StatusBadGateway, "bad_gateway", "upstream request failed")
+}
