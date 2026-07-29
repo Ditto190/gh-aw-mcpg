@@ -66,10 +66,19 @@ func effectiveContainerRuntimeName(configRuntime string) string {
 	return runtime
 }
 
+// trimmedContainerRuntimeCommand returns strings.TrimSpace of gateway.ContainerRuntimeCommand,
+// or "" when gateway is nil.
+func trimmedContainerRuntimeCommand(gateway *GatewayConfig) string {
+	if gateway == nil {
+		return ""
+	}
+	return strings.TrimSpace(gateway.ContainerRuntimeCommand)
+}
+
 func effectiveContainerRuntimeCommand(gateway *GatewayConfig) string {
 	if gateway != nil && gateway.Dockerless {
-		if trimmedRuntimeCommand := strings.TrimSpace(gateway.ContainerRuntimeCommand); trimmedRuntimeCommand != "" {
-			return trimmedRuntimeCommand
+		if cmd := trimmedContainerRuntimeCommand(gateway); cmd != "" {
+			return cmd
 		}
 		return containerRuntimePodman
 	}
@@ -79,12 +88,9 @@ func effectiveContainerRuntimeCommand(gateway *GatewayConfig) string {
 		runtime = gateway.ContainerRuntime
 	}
 	command := runtimeCommandForName(effectiveContainerRuntimeName(runtime))
-	if gateway != nil {
-		trimmedRuntimeCommand := strings.TrimSpace(gateway.ContainerRuntimeCommand)
-		if trimmedRuntimeCommand != "" {
-			logConfig.Printf("Container runtime command overridden by gateway config: %q", trimmedRuntimeCommand)
-			command = trimmedRuntimeCommand
-		}
+	if cmd := trimmedContainerRuntimeCommand(gateway); cmd != "" {
+		logConfig.Printf("Container runtime command overridden by gateway config: %q", cmd)
+		command = cmd
 	}
 	logConfig.Printf("Effective container runtime command: %q", command)
 	return command
@@ -95,8 +101,8 @@ func configuredContainerRuntimeCommand(gateway *GatewayConfig) string {
 	if gateway != nil {
 		command = runtimeCommandForName(configuredContainerRuntimeName(gateway.ContainerRuntime))
 	}
-	if gateway != nil && strings.TrimSpace(gateway.ContainerRuntimeCommand) != "" {
-		command = strings.TrimSpace(gateway.ContainerRuntimeCommand)
+	if cmd := trimmedContainerRuntimeCommand(gateway); cmd != "" {
+		command = cmd
 	}
 	logConfig.Printf("Configured container runtime command: %q", command)
 	return command
