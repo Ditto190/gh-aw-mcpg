@@ -9,6 +9,7 @@ BINARY_NAME=awmg
 # Go and toolchain versions
 GO_VERSION=1.26.4
 GOLANGCI_LINT_VERSION=v2.12.2
+GOLANGCI_LINT_VERSION_NUMBER=$(patsubst v%,%,$(GOLANGCI_LINT_VERSION))
 
 # Build the CLI binary
 build:
@@ -27,9 +28,9 @@ lint:
 	@echo "Running golangci-lint..."
 	@GOPATH=$$(go env GOPATH); \
 	if [ -f "$$GOPATH/bin/golangci-lint" ]; then \
-		$$GOPATH/bin/golangci-lint run --timeout=5m || echo "⚠ Warning: golangci-lint failed (compatibility issue with Go 1.26.4). Continuing with other checks..."; \
+		$$GOPATH/bin/golangci-lint run --timeout=5m; \
 	elif command -v golangci-lint >/dev/null 2>&1; then \
-		golangci-lint run --timeout=5m || echo "⚠ Warning: golangci-lint failed (compatibility issue with Go 1.26.4). Continuing with other checks..."; \
+		golangci-lint run --timeout=5m; \
 	else \
 		echo "⚠ Warning: golangci-lint not found. Run 'make install' to install it."; \
 		echo "  Skipping golangci-lint checks..."; \
@@ -106,9 +107,9 @@ agent-finished:
 	@echo "Running golangci-lint..."
 	@GOPATH=$$(go env GOPATH); \
 	if [ -f "$$GOPATH/bin/golangci-lint" ]; then \
-		$$GOPATH/bin/golangci-lint run --timeout=5m || echo "⚠ Warning: golangci-lint failed (compatibility issue with Go 1.26.4). Continuing with other checks..."; \
+		$$GOPATH/bin/golangci-lint run --timeout=5m; \
 	elif command -v golangci-lint >/dev/null 2>&1; then \
-		golangci-lint run --timeout=5m || echo "⚠ Warning: golangci-lint failed (compatibility issue with Go 1.26.4). Continuing with other checks..."; \
+		golangci-lint run --timeout=5m; \
 	else \
 		echo "⚠ Warning: golangci-lint not found. Run 'make install' to install it."; \
 		echo "  Skipping golangci-lint checks..."; \
@@ -299,13 +300,21 @@ install:
 	@echo ""
 	@echo "Checking golangci-lint installation..."
 	@GOPATH=$$(go env GOPATH); \
+	LINTER=""; \
 	if [ -f "$$GOPATH/bin/golangci-lint" ] || command -v golangci-lint >/dev/null 2>&1; then \
 		if [ -f "$$GOPATH/bin/golangci-lint" ]; then \
-			INSTALLED_LINT_VERSION=$$($$GOPATH/bin/golangci-lint version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "unknown"); \
+			LINTER="$$GOPATH/bin/golangci-lint"; \
 		else \
-			INSTALLED_LINT_VERSION=$$(golangci-lint version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "unknown"); \
+			LINTER="golangci-lint"; \
 		fi; \
-		echo "✓ golangci-lint v$$INSTALLED_LINT_VERSION is installed"; \
+		INSTALLED_LINT_VERSION=$$($$LINTER version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "unknown"); \
+		if [ "$$INSTALLED_LINT_VERSION" = "$(GOLANGCI_LINT_VERSION_NUMBER)" ]; then \
+			echo "✓ golangci-lint v$$INSTALLED_LINT_VERSION is installed"; \
+		else \
+			echo "⚠ golangci-lint v$$INSTALLED_LINT_VERSION is installed; upgrading to $(GOLANGCI_LINT_VERSION)..."; \
+			curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $$GOPATH/bin $(GOLANGCI_LINT_VERSION); \
+			echo "✓ golangci-lint $(GOLANGCI_LINT_VERSION) installed"; \
+		fi; \
 	else \
 		echo "✗ golangci-lint is not installed"; \
 		echo "  Installing golangci-lint $(GOLANGCI_LINT_VERSION)..."; \
