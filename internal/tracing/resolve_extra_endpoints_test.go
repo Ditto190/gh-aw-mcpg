@@ -114,8 +114,8 @@ func TestResolveJSONExtraEndpoints(t *testing.T) {
 		assert.Nil(t, got[0].Headers)
 	})
 
-	t.Run("single endpoint with headers", func(t *testing.T) {
-		raw := `[{"url":"https://collector.example.com","headers":"Authorization=Bearer token123"}]`
+	t.Run("single endpoint with decoded headers", func(t *testing.T) {
+		raw := `[{"url":"https://collector.example.com","headers":"Authorization=Bearer%20token123"}]`
 		got := resolveJSONExtraEndpoints(raw, signalPath)
 		require.Len(t, got, 1)
 		assert.Equal(t, "https://collector.example.com/v1/traces", got[0].URL)
