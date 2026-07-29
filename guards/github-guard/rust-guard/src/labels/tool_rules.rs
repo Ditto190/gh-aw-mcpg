@@ -2304,6 +2304,78 @@ mod tests {
     }
 
     #[test]
+    fn apply_tool_labels_discussion_reads_are_repo_scoped_with_writer_integrity() {
+        let ctx = default_ctx();
+        let args = serde_json::json!({ "owner": "octocat", "repo": "hello-world" });
+        let repo_id = "octocat/hello-world";
+
+        for op in &[
+            "get_discussion",
+            "get_discussion_comments",
+            "list_discussion_categories",
+            "list_discussions",
+        ] {
+            let (secrecy, integrity, _desc) =
+                super::apply_tool_labels(op, &args, repo_id, vec![], vec![], String::new(), &ctx);
+
+            assert!(
+                secrecy.is_empty(),
+                "{op}: public repo should have empty secrecy, got: {secrecy:?}"
+            );
+            let expected_integrity = writer_integrity(repo_id, &ctx);
+            assert_eq!(
+                integrity, expected_integrity,
+                "{op} must produce writer_integrity for repo_id, got: {integrity:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn apply_tool_labels_projects_reads_use_owner_scoped_writer_integrity() {
+        let ctx = default_ctx();
+
+        // With owner present: integrity = writer(owner), secrecy = empty
+        for op in &[
+            "list_projects",
+            "get_project",
+            "projects_list",
+            "projects_get",
+            "list_project_fields",
+            "list_project_items",
+        ] {
+            let args = serde_json::json!({ "owner": "myorg", "repo": "myrepo" });
+            let repo_id = "myorg/myrepo";
+            let (secrecy, integrity, _desc) =
+                super::apply_tool_labels(op, &args, repo_id, vec![], vec![], String::new(), &ctx);
+
+            assert!(
+                secrecy.is_empty(),
+                "{op}: projects read should have empty secrecy, got: {secrecy:?}"
+            );
+            let expected = writer_integrity("myorg", &ctx);
+            assert_eq!(integrity, expected, "{op} must have writer_integrity(owner)");
+        }
+
+        // Without owner: the projects arm skips setting integrity (owner is empty),
+        // so integrity falls through to ensure_integrity_baseline with the provided
+        // baseline_scope (repo_id). Verify secrecy is empty and no error occurs.
+        let args_no_owner = serde_json::json!({});
+        let (secrecy, _integrity, _) = super::apply_tool_labels(
+            "list_projects",
+            &args_no_owner,
+            "",
+            vec![],
+            vec![],
+            String::new(),
+            &ctx,
+        );
+        assert!(
+            secrecy.is_empty(),
+            "no-owner projects list should have empty secrecy"
+        );
+    }
+
+    #[test]
     fn apply_tool_labels_enable_toolset_is_github_scoped_with_writer_integrity() {
         let ctx = default_ctx();
         let args = serde_json::json!({"toolset": "advanced"});
