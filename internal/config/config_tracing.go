@@ -12,6 +12,9 @@ const DefaultTracingSampleRate = 1.0
 // DefaultTracingServiceName is the default service name for tracing.
 const DefaultTracingServiceName = "mcp-gateway"
 
+// DefaultTracingExporterTimeoutSec is the default OTLP HTTP exporter timeout in seconds.
+const DefaultTracingExporterTimeoutSec = 10
+
 // TracingConfig holds OpenTelemetry tracing configuration.
 // Tracing is disabled when Endpoint is empty.
 //
@@ -65,6 +68,11 @@ type TracingConfig struct {
 	// Defaults to "/v1/traces" per the OpenTelemetry specification.
 	// Override this only if your collector uses a non-standard ingest path.
 	SignalPath string `toml:"signal_path" json:"signalPath,omitempty"`
+
+	// ExporterTimeoutSec is the per-request timeout in seconds for the OTLP HTTP exporter.
+	// This controls how long the exporter waits for each export RPC to the collector.
+	// Defaults to 10 seconds when unset or zero.
+	ExporterTimeoutSec int `toml:"exporter_timeout" json:"exporterTimeout,omitempty"`
 }
 
 // GetSampleRate returns the configured sample rate, defaulting to 1.0 if unset.

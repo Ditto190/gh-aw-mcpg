@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/github/gh-aw-mcpg/internal/config"
 )
@@ -135,21 +136,14 @@ func resolveHeaders(cfg *config.TracingConfig) map[string]string {
 	return parseOTLPHeadersWithDecoder(raw, false)
 }
 
-// resolveExtraEndpoints returns the additional OTLP endpoints from the
-// GH_AW_OTLP_ENDPOINTS environment variable as a slice of fully-qualified URL
-// strings (with the signal path appended). Each URL is normalised using the
-// same signal-path rules as resolveEndpoint. Empty and whitespace-only entries
-// are skipped. Returns nil when the variable is unset or yields no valid URLs.
-func resolveExtraEndpoints(cfg *config.TracingConfig) []string {
-	endpointConfigs := resolveExtraEndpointConfigs(cfg)
-	endpoints := make([]string, 0, len(endpointConfigs))
-	for _, endpoint := range endpointConfigs {
-		endpoints = append(endpoints, endpoint.URL)
+// resolveExporterTimeout returns the OTLP HTTP exporter per-request timeout from
+// config. When unset or zero, it defaults to DefaultTracingExporterTimeoutSec.
+func resolveExporterTimeout(cfg *config.TracingConfig) time.Duration {
+	if cfg != nil && cfg.ExporterTimeoutSec > 0 {
+		logTracing.Printf("resolveExporterTimeout: using configured timeout: %ds", cfg.ExporterTimeoutSec)
+		return time.Duration(cfg.ExporterTimeoutSec) * time.Second
 	}
-	if len(endpoints) == 0 {
-		return nil
-	}
-	return endpoints
+	return time.Duration(config.DefaultTracingExporterTimeoutSec) * time.Second
 }
 
 type extraEndpointConfig struct {

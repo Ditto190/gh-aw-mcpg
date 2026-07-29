@@ -560,6 +560,7 @@ The gateway supports OpenTelemetry tracing via a nested configuration block. For
 | `spanId` (JSON) / `span_id` (TOML) | Parent span ID (16-char lowercase hex, W3C format). Ignored without `traceId`. Supports `${VAR}` expansion. | (none) |
 | `serviceName` (JSON) / `service_name` (TOML) | The `service.name` resource attribute reported in traces. | `mcp-gateway` |
 | `sample_rate` (TOML only) | Fraction of traces sampled and exported (0.0–1.0). Also available via CLI `--otlp-sample-rate`. Gateway extension, not in spec §4.1.3.6. | `1.0` |
+| `exporter_timeout` (TOML only) | OTLP HTTP exporter per-request timeout in seconds. Valid values: positive integers. Unset, `0`, or negative values fall back to the default timeout. Gateway extension, not in spec §4.1.3.6. | `10` |
 
 **TOML example:**
 
@@ -570,6 +571,7 @@ service_name = "mcp-gateway"
 trace_id = "4bf92f3577b34da6a3ce929d0e0e4736"
 span_id = "00f067aa0ba902b7"
 headers = "Authorization=Bearer ${OTEL_TOKEN}"
+exporter_timeout = 10
 ```
 
 **JSON stdin example:**
@@ -587,7 +589,7 @@ headers = "Authorization=Bearer ${OTEL_TOKEN}"
 }
 ```
 
-> **Note:** The `headers` field is **not supported** in JSON stdin `gateway.opentelemetry` (per spec §4.1.3.6). To pass OTLP export headers when using JSON stdin config, use the `OTEL_EXPORTER_OTLP_HEADERS` environment variable.
+> **Note:** The `headers` and `exporter_timeout` fields are **not supported** in JSON stdin `gateway.opentelemetry` (per spec §4.1.3.6). To pass OTLP export headers when using JSON stdin config, use the `OTEL_EXPORTER_OTLP_HEADERS` environment variable.
 
 **TOML-only / CLI-only options** (not available in JSON stdin):
 

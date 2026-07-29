@@ -19,7 +19,6 @@ package tracing
 
 import (
 	"context"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"time"
@@ -161,7 +160,7 @@ func InitProvider(ctx context.Context, cfg *config.TracingConfig) (*Provider, er
 		exporterHeaders := mergeOTLPHeaders(headers, ep.Headers)
 		opts := []otlptracehttp.Option{
 			otlptracehttp.WithEndpointURL(ep.URL),
-			otlptracehttp.WithTimeout(10 * time.Second),
+			otlptracehttp.WithTimeout(resolveExporterTimeout(cfg)),
 		}
 		if exporterHeaders != nil {
 			opts = append(opts, otlptracehttp.WithHeaders(exporterHeaders))
@@ -304,21 +303,19 @@ func ParentContext(ctx context.Context, cfg *config.TracingConfig) context.Conte
 		return ctx
 	}
 
-	traceIDBytes, err := hex.DecodeString(cfg.TraceID)
-	if err != nil || len(traceIDBytes) != 16 {
+	traceID, err := trace.TraceIDFromHex(cfg.TraceID)
+	if err != nil {
 		logTracing.Printf("Warning: invalid traceId '%s'; skipping W3C parent context", cfg.TraceID)
 		return ctx
 	}
-	var traceID trace.TraceID
-	copy(traceID[:], traceIDBytes)
 
 	var spanID trace.SpanID
 	if cfg.SpanID != "" {
-		spanIDBytes, err := hex.DecodeString(cfg.SpanID)
-		if err != nil || len(spanIDBytes) != 8 {
+		parsed, parseErr := trace.SpanIDFromHex(cfg.SpanID)
+		if parseErr != nil {
 			logTracing.Printf("Warning: invalid spanId '%s'; generating a random span ID", cfg.SpanID)
 		} else {
-			copy(spanID[:], spanIDBytes)
+			spanID = parsed
 		}
 	}
 
