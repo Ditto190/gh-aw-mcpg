@@ -1347,3 +1347,31 @@ func TestApplyLabelAgentResult(t *testing.T) {
 		assert.Empty(t, agentLabels.GetIntegrityTags())
 	})
 }
+
+func TestIsSafeOutputsServer(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		serverID string
+		want     bool
+	}{
+		{name: "canonical safe-outputs ID", serverID: "safe-outputs", want: true},
+		{name: "legacy safeoutputs alias", serverID: "safeoutputs", want: true},
+		{name: "other server ID", serverID: "github", want: false},
+		{name: "empty string", serverID: "", want: false},
+		{name: "partial match safe-output (no trailing s)", serverID: "safe-output", want: false},
+		{name: "partial match safeoutput (no trailing s)", serverID: "safeoutput", want: false},
+		{name: "uppercase not matched", serverID: "Safe-Outputs", want: false},
+		{name: "prefix variant", serverID: "safe-outputs-v2", want: false},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := IsSafeOutputsServer(tt.serverID)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
