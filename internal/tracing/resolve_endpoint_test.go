@@ -2,11 +2,28 @@ package tracing
 
 import (
 	"testing"
+	"time"
 
 	"github.com/github/gh-aw-mcpg/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// resolveExtraEndpointURLs is a test-local helper that extracts only the URL
+// strings from resolveExtraEndpointConfigs, mirroring the behaviour of the
+// former resolveExtraEndpoints production helper that was removed because it
+// was not used by production code.
+func resolveExtraEndpointURLs(cfg *config.TracingConfig) []string {
+	configs := resolveExtraEndpointConfigs(cfg)
+	if len(configs) == 0 {
+		return nil
+	}
+	urls := make([]string, len(configs))
+	for i, c := range configs {
+		urls[i] = c.URL
+	}
+	return urls
+}
 
 func TestResolveEndpoint_AppendsV1Traces(t *testing.T) {
 	tests := []struct {
@@ -133,14 +150,14 @@ func TestResolveEndpoint_CustomSignalPath(t *testing.T) {
 // TestResolveExtraEndpoints_NotSet returns nil when GH_AW_OTLP_ENDPOINTS is unset.
 func TestResolveExtraEndpoints_NotSet(t *testing.T) {
 	t.Setenv("GH_AW_OTLP_ENDPOINTS", "")
-	got := resolveExtraEndpoints(nil)
+	got := resolveExtraEndpointURLs(nil)
 	assert.Nil(t, got)
 }
 
 // TestResolveExtraEndpoints_SingleEndpoint parses one URL and appends /v1/traces.
 func TestResolveExtraEndpoints_SingleEndpoint(t *testing.T) {
 	t.Setenv("GH_AW_OTLP_ENDPOINTS", "http://collector.example.com:4318")
-	got := resolveExtraEndpoints(nil)
+	got := resolveExtraEndpointURLs(nil)
 	require.Len(t, got, 1)
 	assert.Equal(t, "http://collector.example.com:4318/v1/traces", got[0])
 }
@@ -148,7 +165,7 @@ func TestResolveExtraEndpoints_SingleEndpoint(t *testing.T) {
 // TestResolveExtraEndpoints_MultipleEndpoints parses several comma-separated URLs.
 func TestResolveExtraEndpoints_MultipleEndpoints(t *testing.T) {
 	t.Setenv("GH_AW_OTLP_ENDPOINTS", "http://ep1:4318,https://ep2.example.com")
-	got := resolveExtraEndpoints(nil)
+	got := resolveExtraEndpointURLs(nil)
 	require.Len(t, got, 2)
 	assert.Equal(t, "http://ep1:4318/v1/traces", got[0])
 	assert.Equal(t, "https://ep2.example.com/v1/traces", got[1])
@@ -157,7 +174,7 @@ func TestResolveExtraEndpoints_MultipleEndpoints(t *testing.T) {
 // TestResolveExtraEndpoints_SkipsEmpty skips empty entries.
 func TestResolveExtraEndpoints_SkipsEmpty(t *testing.T) {
 	t.Setenv("GH_AW_OTLP_ENDPOINTS", "http://ep1:4318,,  ,http://ep2:4318")
-	got := resolveExtraEndpoints(nil)
+	got := resolveExtraEndpointURLs(nil)
 	require.Len(t, got, 2)
 	assert.Equal(t, "http://ep1:4318/v1/traces", got[0])
 	assert.Equal(t, "http://ep2:4318/v1/traces", got[1])
@@ -166,7 +183,7 @@ func TestResolveExtraEndpoints_SkipsEmpty(t *testing.T) {
 // TestResolveExtraEndpoints_AllEmpty returns nil when all entries are whitespace/empty.
 func TestResolveExtraEndpoints_AllEmpty(t *testing.T) {
 	t.Setenv("GH_AW_OTLP_ENDPOINTS", "  ,  ,")
-	got := resolveExtraEndpoints(nil)
+	got := resolveExtraEndpointURLs(nil)
 	assert.Nil(t, got)
 }
 
@@ -174,7 +191,7 @@ func TestResolveExtraEndpoints_AllEmpty(t *testing.T) {
 func TestResolveExtraEndpoints_RespectsSignalPath(t *testing.T) {
 	t.Setenv("GH_AW_OTLP_ENDPOINTS", "http://collector.example.com:4318")
 	cfg := &config.TracingConfig{SignalPath: "/v2/traces"}
-	got := resolveExtraEndpoints(cfg)
+	got := resolveExtraEndpointURLs(cfg)
 	require.Len(t, got, 1)
 	assert.Equal(t, "http://collector.example.com:4318/v2/traces", got[0])
 }
@@ -182,14 +199,14 @@ func TestResolveExtraEndpoints_RespectsSignalPath(t *testing.T) {
 // TestResolveExtraEndpoints_AlreadyHasSignalPath does not duplicate the path.
 func TestResolveExtraEndpoints_AlreadyHasSignalPath(t *testing.T) {
 	t.Setenv("GH_AW_OTLP_ENDPOINTS", "http://collector.example.com:4318/v1/traces")
-	got := resolveExtraEndpoints(nil)
+	got := resolveExtraEndpointURLs(nil)
 	require.Len(t, got, 1)
 	assert.Equal(t, "http://collector.example.com:4318/v1/traces", got[0])
 }
 
 func TestResolveExtraEndpoints_JSONArray(t *testing.T) {
 	t.Setenv("GH_AW_OTLP_ENDPOINTS", `[{"url":"http://ep1:4318","headers":"Authorization=******"},{"url":"https://ep2.example.com"}]`)
-	got := resolveExtraEndpoints(nil)
+	got := resolveExtraEndpointURLs(nil)
 	require.Len(t, got, 2)
 	assert.Equal(t, "http://ep1:4318/v1/traces", got[0])
 	assert.Equal(t, "https://ep2.example.com/v1/traces", got[1])
@@ -208,13 +225,13 @@ func TestResolveExtraEndpointConfigs_JSONHeaders(t *testing.T) {
 
 func TestResolveExtraEndpoints_InvalidJSONReturnsNil(t *testing.T) {
 	t.Setenv("GH_AW_OTLP_ENDPOINTS", `[{"url":"http://collector.example.com:4318"`)
-	got := resolveExtraEndpoints(nil)
+	got := resolveExtraEndpointURLs(nil)
 	assert.Nil(t, got)
 }
 
 func TestResolveExtraEndpoints_EmptyJSONArrayReturnsNil(t *testing.T) {
 	t.Setenv("GH_AW_OTLP_ENDPOINTS", `[]`)
-	got := resolveExtraEndpoints(nil)
+	got := resolveExtraEndpointURLs(nil)
 	assert.Nil(t, got)
 }
 
@@ -265,7 +282,7 @@ func TestNormalizeExtraEndpoint(t *testing.T) {
 // while valid entries are still returned.
 func TestResolveExtraEndpoints_JSONArray_EmptyURL(t *testing.T) {
 	t.Setenv("GH_AW_OTLP_ENDPOINTS", `[{"url":""},{"url":"http://ep1:4318"}]`)
-	got := resolveExtraEndpoints(nil)
+	got := resolveExtraEndpointURLs(nil)
 	require.Len(t, got, 1)
 	assert.Equal(t, "http://ep1:4318/v1/traces", got[0])
 }
@@ -275,7 +292,7 @@ func TestResolveExtraEndpoints_JSONArray_EmptyURL(t *testing.T) {
 // while valid entries are still returned.
 func TestResolveExtraEndpoints_JSONArray_WhitespaceURL(t *testing.T) {
 	t.Setenv("GH_AW_OTLP_ENDPOINTS", `[{"url":"   "},{"url":"http://ep1:4318"}]`)
-	got := resolveExtraEndpoints(nil)
+	got := resolveExtraEndpointURLs(nil)
 	require.Len(t, got, 1)
 	assert.Equal(t, "http://ep1:4318/v1/traces", got[0])
 }
@@ -285,6 +302,29 @@ func TestResolveExtraEndpoints_JSONArray_WhitespaceURL(t *testing.T) {
 // resolveExtraEndpoints returns nil (no valid endpoints).
 func TestResolveExtraEndpoints_JSONArray_AllEmptyURLsReturnsNil(t *testing.T) {
 	t.Setenv("GH_AW_OTLP_ENDPOINTS", `[{"url":""},{"url":"  "}]`)
-	got := resolveExtraEndpoints(nil)
+	got := resolveExtraEndpointURLs(nil)
 	assert.Nil(t, got)
+}
+
+func TestResolveExporterTimeout_Default(t *testing.T) {
+	got := resolveExporterTimeout(nil)
+	assert.Equal(t, 10*time.Second, got, "nil config should return the default 10s timeout")
+}
+
+func TestResolveExporterTimeout_Configured(t *testing.T) {
+	cfg := &config.TracingConfig{ExporterTimeoutSec: 30}
+	got := resolveExporterTimeout(cfg)
+	assert.Equal(t, 30*time.Second, got, "should use the configured exporter timeout")
+}
+
+func TestResolveExporterTimeout_Zero(t *testing.T) {
+	cfg := &config.TracingConfig{ExporterTimeoutSec: 0}
+	got := resolveExporterTimeout(cfg)
+	assert.Equal(t, 10*time.Second, got, "zero ExporterTimeoutSec should fall back to the default")
+}
+
+func TestResolveExporterTimeout_NegativeIgnored(t *testing.T) {
+	cfg := &config.TracingConfig{ExporterTimeoutSec: -5}
+	got := resolveExporterTimeout(cfg)
+	assert.Equal(t, 10*time.Second, got, "negative ExporterTimeoutSec should fall back to the default")
 }
