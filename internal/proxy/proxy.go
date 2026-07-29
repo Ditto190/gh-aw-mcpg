@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 
@@ -23,6 +24,8 @@ import (
 	"github.com/github/gh-aw-mcpg/internal/mcp"
 	"github.com/github/gh-aw-mcpg/internal/tracing"
 )
+
+var artifactZipDownloadPathPattern = regexp.MustCompile(`^/repos/[^/]+/[^/]+/actions/artifacts/\d+/zip$`)
 
 var logProxy = logger.ForFile()
 
@@ -376,6 +379,16 @@ func (s *Server) forwardToGitHub(ctx context.Context, method, path string, body 
 	if contentType != "" {
 		req.Header.Set("Content-Type", contentType)
 	}
-
+	if method == http.MethodGet && artifactZipDownloadPathPattern.MatchString(pathOnly) {
+		return doWithoutFollowingRedirects(s.httpClient, req)
+	}
 	return s.httpClient.Do(req)
+}
+
+func doWithoutFollowingRedirects(client *http.Client, req *http.Request) (*http.Response, error) {
+	noRedirectClient := *client
+	noRedirectClient.CheckRedirect = func(_ *http.Request, _ []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+	return noRedirectClient.Do(req)
 }

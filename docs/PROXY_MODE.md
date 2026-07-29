@@ -138,6 +138,7 @@ Supported path families include:
 | `/repos/:owner/:repo/contents/:path` | `get_file_contents` |
 | `/repos/:owner/:repo/branches` | `list_branches` |
 | `/repos/:owner/:repo/releases` | `list_releases` |
+| `/repos/:owner/:repo/actions/artifacts/:artifact_id/zip` | `actions_get` (`method=download_workflow_run_artifact`) |
 | `/search/issues` | `search_issues` |
 | `/search/code` | `search_code` |
 | `/search/repositories` | `search_repositories` |
@@ -149,6 +150,8 @@ Supported path families include:
 | ... | See `internal/proxy/router.go` for the complete regex list and precedence |
 
 For **read operations** (GET and GraphQL POST), unmatched routes are denied (fail-closed) to avoid accidental unfiltered data exposure. For **write operations** (non-read methods), requests pass through unchanged.
+
+For artifact ZIP downloads, authorization is evaluated before proxy forwarding and the response is passed through without JSON transformation. Binary bodies are returned unchanged, and redirect responses preserve headers needed by clients (for example `Location` and `Content-Disposition`).
 
 ## GraphQL Support
 

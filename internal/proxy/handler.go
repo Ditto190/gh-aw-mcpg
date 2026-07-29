@@ -455,6 +455,8 @@ func (h *proxyHandler) forwardAndReadBody(
 func copyResponseHeaders(w http.ResponseWriter, resp *http.Response) {
 	for _, h := range []string{
 		"Content-Type",
+		"Content-Disposition",
+		"Location",
 		"X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset",
 		"X-RateLimit-Resource", "X-RateLimit-Used",
 		"Link", // pagination

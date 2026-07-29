@@ -716,6 +716,44 @@ func TestHandleWithDIFC_AccessDenied_RecordsSpanEvent(t *testing.T) {
 	assert.True(t, foundEvent, "difcSpan must contain a difc.access_denied event")
 }
 
+func TestHandleWithDIFC_ArtifactDownloadDeniedBeforeForward(t *testing.T) {
+	var upstreamCalls int
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upstreamCalls++
+		w.WriteHeader(http.StatusOK)
+		_, err := w.Write([]byte("should-not-be-returned"))
+		require.NoError(t, err)
+	}))
+	defer upstream.Close()
+
+	g := &stubGuard{
+		labelResourceResult: publicResource(),
+		labelResourceOp:     difc.OperationWrite,
+	}
+	s := newTestServerWithPrivateAgent(t, upstream.URL, g, difc.EnforcementFilter)
+	h := &proxyHandler{server: s}
+
+	req := httptest.NewRequest(http.MethodGet, "/repos/org/repo/actions/artifacts/123/zip", nil)
+	w := httptest.NewRecorder()
+	h.handleWithDIFC(
+		w,
+		req,
+		"/repos/org/repo/actions/artifacts/123/zip",
+		"actions_get",
+		map[string]interface{}{
+			"owner":       "org",
+			"repo":        "repo",
+			"method":      "download_workflow_run_artifact",
+			"resource_id": "123",
+		},
+		nil,
+	)
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+	assert.Contains(t, w.Body.String(), "DIFC policy violation")
+	assert.Zero(t, upstreamCalls, "artifact request must be denied before forwarding to upstream")
+}
+
 // ─── Span event: rate limit detected → rate_limit.detected event ─────────────
 
 // TestHandleWithDIFC_RateLimitDetected_RecordsSpanEvent verifies that when the

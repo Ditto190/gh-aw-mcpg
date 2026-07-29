@@ -349,6 +349,13 @@ var routes = []route{
 		},
 	},
 	{
+		pattern:  regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/actions/artifacts/(\d+)/zip$`),
+		toolName: "actions_get",
+		extractArgs: func(m []string) map[string]interface{} {
+			return repoMethodResourceArgs(m[1], m[2], "download_workflow_run_artifact", m[3])
+		},
+	},
+	{
 		pattern:  regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/actions/caches$`),
 		toolName: "actions_list",
 		extractArgs: func(m []string) map[string]interface{} {

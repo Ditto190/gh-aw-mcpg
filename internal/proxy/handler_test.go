@@ -838,3 +838,70 @@ func TestHandleWithDIFC_RateLimitDetected(t *testing.T) {
 	assert.Equal(t, http.StatusTooManyRequests, w.Code)
 	assert.NotEmpty(t, w.Header().Get("Retry-After"))
 }
+
+func TestHandleWithDIFC_ArtifactZipBinaryPassthrough(t *testing.T) {
+	wantBody := []byte{0x50, 0x4b, 0x03, 0x04, 0x00, 0x00, 0x00, 0x00}
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/repos/org/repo/actions/artifacts/123/zip", r.URL.Path)
+		w.Header().Set("Content-Type", "application/zip")
+		w.Header().Set("Content-Disposition", `attachment; filename="artifact.zip"`)
+		w.WriteHeader(http.StatusOK)
+		_, err := w.Write(wantBody)
+		require.NoError(t, err)
+	}))
+	defer upstream.Close()
+
+	s := newTestServer(t, upstream.URL)
+	h := &proxyHandler{server: s}
+
+	req := httptest.NewRequest(http.MethodGet, "/repos/org/repo/actions/artifacts/123/zip", nil)
+	w := httptest.NewRecorder()
+	h.handleWithDIFC(
+		w,
+		req,
+		"/repos/org/repo/actions/artifacts/123/zip",
+		"actions_get",
+		map[string]interface{}{
+			"owner":       "org",
+			"repo":        "repo",
+			"method":      "download_workflow_run_artifact",
+			"resource_id": "123",
+		},
+		nil,
+	)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "application/zip", w.Header().Get("Content-Type"))
+	assert.Equal(t, `attachment; filename="artifact.zip"`, w.Header().Get("Content-Disposition"))
+	assert.Equal(t, wantBody, w.Body.Bytes())
+}
+
+func TestHandleWithDIFC_ArtifactZipRedirectPassthrough(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Location", "https://objects.githubusercontent.com/archive.zip")
+		w.WriteHeader(http.StatusFound)
+	}))
+	defer upstream.Close()
+
+	s := newTestServer(t, upstream.URL)
+	h := &proxyHandler{server: s}
+
+	req := httptest.NewRequest(http.MethodGet, "/repos/org/repo/actions/artifacts/123/zip", nil)
+	w := httptest.NewRecorder()
+	h.handleWithDIFC(
+		w,
+		req,
+		"/repos/org/repo/actions/artifacts/123/zip",
+		"actions_get",
+		map[string]interface{}{
+			"owner":       "org",
+			"repo":        "repo",
+			"method":      "download_workflow_run_artifact",
+			"resource_id": "123",
+		},
+		nil,
+	)
+
+	assert.Equal(t, http.StatusFound, w.Code)
+	assert.Equal(t, "https://objects.githubusercontent.com/archive.zip", w.Header().Get("Location"))
+}
