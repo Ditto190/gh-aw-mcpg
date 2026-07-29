@@ -2318,12 +2318,10 @@ mod tests {
             let (secrecy, integrity, _desc) =
                 super::apply_tool_labels(op, &args, repo_id, vec![], vec![], String::new(), &ctx);
 
-            // Public repo → empty secrecy
             assert!(
                 secrecy.is_empty(),
                 "{op}: public repo should have empty secrecy, got: {secrecy:?}"
             );
-
             let expected_integrity = writer_integrity(repo_id, &ctx);
             assert_eq!(
                 integrity, expected_integrity,
@@ -2358,8 +2356,9 @@ mod tests {
             assert_eq!(integrity, expected, "{op} must have writer_integrity(owner)");
         }
 
-        // Without owner: baseline_scope stays as repo_id ("") so the if !owner.is_empty()
-        // branch is NOT taken; integrity does NOT contain owner-scoped writer_integrity.
+        // Without owner: the projects arm skips setting integrity (owner is empty),
+        // so integrity falls through to ensure_integrity_baseline with the provided
+        // baseline_scope (repo_id). Verify secrecy is empty and no error occurs.
         let args_no_owner = serde_json::json!({});
         let (secrecy, integrity, _) = super::apply_tool_labels(
             "list_projects",
@@ -2374,10 +2373,10 @@ mod tests {
             secrecy.is_empty(),
             "no-owner projects list should have empty secrecy"
         );
-assert_eq!(
+        assert_eq!(
             integrity,
             super::super::helpers::none_integrity("", &ctx),
-            "no-owner projects list must retain only empty-scope none integrity"
+            "no-owner projects list should retain none-level integrity"
         );
     }
 
