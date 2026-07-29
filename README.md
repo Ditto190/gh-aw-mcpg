@@ -54,7 +54,8 @@ Inside the container, the gateway starts in routed mode on `http://0.0.0.0:8000`
 
 **Required flags:**
 - `-i`: Enables stdin for passing JSON configuration
-- `-v /var/run/docker.sock`: Required for spawning backend MCP servers
+- `-v /var/run/docker.sock`: Required when using the default Docker runtime
+- Dockerless Podman mode (`"gateway": {"dockerless": true}`) does not use the Docker socket; grant the container the capabilities required for nested containers (for example, `--privileged`)
 - `-p 8000:8000`: Port mapping must match `MCP_GATEWAY_PORT`
 - If you configure `payloadDir` / `MCP_GATEWAY_PAYLOAD_DIR`, use an absolute path (for example `/tmp/jq-payloads`)
 - If you configure `payloadDir`, you can also tune `payloadSizeThreshold` / `MCP_GATEWAY_PAYLOAD_SIZE_THRESHOLD` to control when payloads are written to disk (default: `524288` bytes)

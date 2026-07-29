@@ -397,6 +397,7 @@ func TestValidateContainerizedEnvironment(t *testing.T) {
 		} else {
 			os.Unsetenv("MCP_GATEWAY_PORT")
 		}
+
 		if origDomain != "" {
 			os.Setenv("MCP_GATEWAY_DOMAIN", origDomain)
 		} else {
@@ -569,4 +570,24 @@ func TestValidateContainerizedEnvironment(t *testing.T) {
 		// Each error should be on its own line with bullet point
 		assert.Contains(t, errorMsg, "\n  - ", "Errors should be formatted with bullets")
 	})
+}
+
+func TestValidateContainerizedEnvironmentForRuntime_PodmanSkipsDockerInspection(t *testing.T) {
+	tempDir := t.TempDir()
+	podmanPath := filepath.Join(tempDir, "podman")
+	require.NoError(t, os.WriteFile(podmanPath, []byte("#!/bin/sh\nexit 0\n"), 0o755))
+
+	t.Setenv("PATH", tempDir)
+	t.Setenv("MCP_GATEWAY_PORT", "8080")
+	t.Setenv("MCP_GATEWAY_DOMAIN", "localhost")
+	t.Setenv("MCP_GATEWAY_AGENT_ID", "test-key")
+	t.Setenv("DOCKER_HOST", "unix:///definitely/missing/docker.sock")
+
+	result := ValidateContainerizedEnvironmentForRuntime("abcdef123456", "podman")
+
+	assert.True(t, result.IsValid())
+	assert.True(t, result.DockerAccessible)
+	assert.False(t, result.PortMapped)
+	assert.False(t, result.StdinInteractive)
+	assert.False(t, result.LogDirMounted)
 }

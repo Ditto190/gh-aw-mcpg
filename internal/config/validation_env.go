@@ -106,8 +106,14 @@ func ValidateExecutionEnvironmentForRuntime(runtimeCommand string) *EnvValidatio
 // ValidateContainerizedEnvironment performs additional validation for containerized mode
 // This is called by run_containerized.sh through the binary or by the Go code directly
 func ValidateContainerizedEnvironment(containerID string) *EnvValidationResult {
+	return ValidateContainerizedEnvironmentForRuntime(containerID, "docker")
+}
+
+// ValidateContainerizedEnvironmentForRuntime performs runtime-aware validation
+// for a containerized gateway.
+func ValidateContainerizedEnvironmentForRuntime(containerID, runtimeCommand string) *EnvValidationResult {
 	logEnv.Printf("Starting containerized environment validation: containerID=%s", containerID)
-	result := ValidateExecutionEnvironment()
+	result := ValidateExecutionEnvironmentForRuntime(runtimeCommand)
 	result.IsContainerized = true
 	result.ContainerID = containerID
 
@@ -115,6 +121,11 @@ func ValidateContainerizedEnvironment(containerID string) *EnvValidationResult {
 		logEnv.Print("Container ID could not be determined")
 		result.ValidationErrors = append(result.ValidationErrors,
 			"Container ID could not be determined. Are you running in a Docker container?")
+		return result
+	}
+
+	if filepath.Base(runtimeCommand) != "docker" {
+		logEnv.Printf("Skipping Docker-specific container inspection for runtime %s", runtimeCommand)
 		return result
 	}
 
