@@ -2,7 +2,7 @@
 FROM golang:1.26.4-alpine3.24@sha256:3ad57304ad93bbec8548a0437ad9e06a455660655d9af011d58b993f6f615648 AS podman-builder
 
 ARG PODMAN_VERSION=6.0.2
-ARG PODMAN_SHA256=0895a541aeb7aa8e99133ed2b328c1bb40fd397b7c3b01e083396c90e8628756
+ARG PODMAN_SHA256=<REPLACE_WITH_OFFICIAL_CONTAINERS_PODMAN_V6_0_2_TARBALL_SHA256>
 
 RUN apk add --no-cache \
     bash \
@@ -16,7 +16,7 @@ RUN apk add --no-cache \
     sqlite-dev
 
 WORKDIR /src
-RUN wget -q "https://github.com/podman-container-tools/podman/archive/refs/tags/v${PODMAN_VERSION}.tar.gz" -O podman.tar.gz \
+RUN wget -q "https://github.com/containers/podman/archive/refs/tags/v${PODMAN_VERSION}.tar.gz" -O podman.tar.gz \
     && echo "${PODMAN_SHA256}  podman.tar.gz" | sha256sum -c - \
     && tar -xzf podman.tar.gz --strip-components=1 \
     && rm podman.tar.gz \
