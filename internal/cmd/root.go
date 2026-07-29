@@ -206,6 +206,9 @@ func run(cmd *cobra.Command, args []string) error {
 		runtimeCommand := config.EffectiveContainerRuntimeCommand(cfg.Gateway)
 		debugLog.Printf("Validating execution environment with container runtime %s...", runtimeCommand)
 		result := config.ValidateExecutionEnvironmentForRuntime(runtimeCommand)
+		if result.IsContainerized && result.ContainerID != "" {
+			result = config.ValidateContainerizedEnvironmentForRuntime(result.ContainerID, runtimeCommand)
+		}
 		if !result.IsValid() {
 			logger.LogErrorToMarkdown("startup", "Environment validation failed: %s", result.Error())
 			return fmt.Errorf("environment validation failed: %s", result.Error())

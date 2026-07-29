@@ -5,8 +5,6 @@
 
 set -e
 
-DOCKER_AVAILABLE=false
-
 # Detect if stderr is a TTY and colors should be enabled
 # Respects NO_COLOR and DEBUG_COLORS environment variables
 USE_COLORS=false
@@ -88,72 +86,6 @@ verify_containerized() {
     log_info "Running in containerized environment"
 }
 
-# Check Docker daemon accessibility. Podman mode is selected from stdin, so a
-# missing Docker daemon cannot be fatal before the gateway reads its config.
-check_docker_socket() {
-    local raw_host="${DOCKER_HOST:-}"
-
-    # TCP Docker hosts (e.g. tcp://localhost:2375 for ARC/DinD) have no socket file to check.
-    if echo "${raw_host}" | grep -q '^tcp://'; then
-        log_info "TCP Docker host configured: ${raw_host}"
-        if ! docker info > /dev/null 2>&1; then
-            if command -v podman > /dev/null 2>&1; then
-                log_warn "Docker daemon at ${raw_host} is not accessible; continuing with Podman available"
-                return 0
-            fi
-            log_error "Neither the Docker daemon nor Podman is accessible"
-            exit 1
-        fi
-        DOCKER_AVAILABLE=true
-        log_info "Docker daemon is accessible"
-        return 0
-    fi
-
-    local socket_path="${raw_host:-/var/run/docker.sock}"
-    socket_path="${socket_path#unix://}"
-
-    # Retry the socket check to handle ARC/DinD race conditions where the dind
-    # sidecar hasn't created the socket yet when the gateway starts.
-    local max_retries=10
-    local retry_delay=1
-    local max_wait_seconds=$((max_retries * retry_delay))
-    local attempt=0
-    while [ ! -S "$socket_path" ] && [ $attempt -lt $max_retries ]; do
-        attempt=$((attempt + 1))
-        if [ $attempt -eq 1 ]; then
-            log_info "Waiting for Docker socket at $socket_path (ARC/DinD may need a moment)..."
-        fi
-        sleep $retry_delay
-    done
-
-    if [ ! -S "$socket_path" ]; then
-        if command -v podman > /dev/null 2>&1; then
-            log_warn "Docker socket not found at $socket_path; continuing with Podman available"
-            return 0
-        fi
-        log_error "Docker socket not found at $socket_path after ${max_wait_seconds}s (${max_retries} attempts)"
-        log_error "Neither Docker nor Podman is available to launch backend MCP servers"
-        exit 1
-    fi
-
-    if [ $attempt -gt 0 ]; then
-        local waited_seconds=$((attempt * retry_delay))
-        log_info "Docker socket appeared after ${waited_seconds}s (${attempt} attempt(s))"
-    fi
-
-    if ! docker info > /dev/null 2>&1; then
-        if command -v podman > /dev/null 2>&1; then
-            log_warn "Docker daemon is not accessible; continuing with Podman available"
-            return 0
-        fi
-        log_error "Neither the Docker daemon nor Podman is accessible"
-        exit 1
-    fi
-
-    DOCKER_AVAILABLE=true
-    log_info "Docker daemon is accessible"
-}
-
 # Validate required environment variables
 check_required_env_vars() {
     local missing_vars=()
@@ -186,126 +118,6 @@ check_required_env_vars() {
     fi
 
     log_info "Required environment variables are set"
-}
-
-# Validate port mapping using docker inspect
-validate_port_mapping() {
-    local container_id="$1"
-    local port="$MCP_GATEWAY_PORT"
-
-    if ! validate_container_id "$container_id"; then
-        log_warn "Cannot validate port mapping: container ID invalid or unknown"
-        return 0
-    fi
-
-    # Host networking: ports are shared directly with the host; no port-mapping entry
-    # appears in NetworkSettings.Ports for host-networked containers.
-    local network_mode
-    network_mode=$(docker inspect --format '{{.HostConfig.NetworkMode}}' "$container_id" 2>/dev/null || echo "")
-    if [ "$network_mode" = "host" ]; then
-        log_info "Host network mode detected: skipping port-mapping validation for port $port (published ports are discarded in host mode)"
-        return 0
-    fi
-
-    local port_mapping=$(docker inspect --format '{{json .NetworkSettings.Ports}}' "$container_id" 2>/dev/null || echo "{}")
-
-    if ! echo "$port_mapping" | grep -q "\"${port}/tcp\""; then
-        log_error "Port $port is not exposed from the container"
-        log_error "Add port mapping: -p <host_port>:$port"
-        exit 1
-    fi
-
-    if ! echo "$port_mapping" | grep -q '"HostPort"'; then
-        log_error "Port $port is exposed but not mapped to a host port"
-        log_error "Add port mapping: -p <host_port>:$port"
-        exit 1
-    fi
-
-    log_info "Port $port is properly mapped"
-}
-
-# Validate stdin is interactive (requires -i flag)
-validate_stdin_interactive() {
-    local container_id="$1"
-
-    if ! validate_container_id "$container_id"; then
-        log_warn "Cannot validate stdin: container ID invalid or unknown"
-        return 0
-    fi
-
-    local stdin_open=$(docker inspect --format '{{.Config.OpenStdin}}' "$container_id" 2>/dev/null || echo "unknown")
-
-    if [ "$stdin_open" != "true" ]; then
-        log_error "Container was not started with -i flag"
-        log_error "Stdin is required for passing JSON configuration"
-        log_error "Start container with: docker run -i ..."
-        exit 1
-    fi
-
-    log_info "Stdin is interactive"
-}
-
-# Validate container mounts and environment
-validate_container_config() {
-    local container_id="$1"
-
-    if ! validate_container_id "$container_id"; then
-        log_warn "Cannot validate container config: container ID invalid or unknown"
-        return 0
-    fi
-
-    # Check for Docker socket mount
-    local mounts=$(docker inspect --format '{{json .Mounts}}' "$container_id" 2>/dev/null || echo "[]")
-
-    if ! echo "$mounts" | grep -q 'docker.sock'; then
-        log_warn "Docker socket mount not detected in container mounts"
-        log_warn "The gateway needs Docker access to spawn backend MCP servers"
-    else
-        log_info "Docker socket is mounted"
-    fi
-}
-
-# Validate log directory is mounted for persistent logging
-validate_log_directory_mount() {
-    local container_id="$1"
-    local log_dir="${MCP_GATEWAY_LOG_DIR:-/tmp/gh-aw/mcp-logs}"
-
-    if ! validate_container_id "$container_id"; then
-        log_warn "Cannot validate log directory mount: container ID invalid or unknown"
-        return 0
-    fi
-
-    # Check if log directory is a mount point
-    local mounts=$(docker inspect --format '{{json .Mounts}}' "$container_id" 2>/dev/null || echo "[]")
-
-    if ! echo "$mounts" | grep -q "$log_dir"; then
-        log_warn "Log directory $log_dir is not mounted"
-        log_warn "Gateway logs will not persist outside the container"
-        log_warn "Add mount: -v /path/on/host:$log_dir"
-    else
-        log_info "Log directory $log_dir is mounted"
-    fi
-}
-
-# Set DOCKER_API_VERSION based on architecture and Docker daemon requirements
-set_docker_api_version() {
-    # Get the server's current API version (what it actually supports)
-    local server_api=$(docker version --format '{{.Server.APIVersion}}' 2>/dev/null || echo "")
-
-    if [ -n "$server_api" ]; then
-        # Use the server's current API version for full compatibility
-        export DOCKER_API_VERSION="$server_api"
-        log_info "Set DOCKER_API_VERSION=$DOCKER_API_VERSION (server current)"
-    else
-        # Fallback: set based on architecture
-        local arch=$(uname -m)
-        if [ "$arch" = "arm64" ] || [ "$arch" = "aarch64" ]; then
-            export DOCKER_API_VERSION=1.44
-        else
-            export DOCKER_API_VERSION=1.44
-        fi
-        log_info "Set DOCKER_API_VERSION=$DOCKER_API_VERSION for $arch (fallback)"
-    fi
 }
 
 # Detect host IP and configure host.docker.internal DNS mapping
@@ -364,7 +176,7 @@ build_command_args() {
     local mode="${MCP_GATEWAY_MODE:---routed}"
     local log_dir="${MCP_GATEWAY_LOG_DIR:-/tmp/gh-aw/mcp-logs}"
 
-    local flags="$mode --listen ${host}:${port} --config-stdin --log-dir ${log_dir}"
+    local flags="$mode --listen ${host}:${port} --config-stdin --validate-env --log-dir ${log_dir}"
 
     # Add env file if specified and exists
     if [ -n "$ENV_FILE" ] && [ -f "$ENV_FILE" ]; then
@@ -437,20 +249,10 @@ main() {
         log_warn "Could not determine container ID"
     fi
 
-    # Perform environment validation
-    check_docker_socket
+    # Required deployment variables are checked before loading the config.
+    # The selected container runtime is validated by --validate-env after stdin
+    # is parsed, so Dockerless mode never probes the Docker socket.
     check_required_env_vars
-    if [ "$DOCKER_AVAILABLE" = true ]; then
-        set_docker_api_version
-    fi
-
-    # Perform container-specific validation
-    if [ -n "$CONTAINER_ID" ] && [ "$DOCKER_AVAILABLE" = true ]; then
-        validate_port_mapping "$CONTAINER_ID"
-        validate_stdin_interactive "$CONTAINER_ID"
-        validate_container_config "$CONTAINER_ID"
-        validate_log_directory_mount "$CONTAINER_ID"
-    fi
 
     # Configure DNS for host.docker.internal
     configure_host_dns

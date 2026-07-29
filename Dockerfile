@@ -2,7 +2,7 @@
 FROM golang:1.26.4-alpine3.24@sha256:3ad57304ad93bbec8548a0437ad9e06a455660655d9af011d58b993f6f615648 AS podman-builder
 
 ARG PODMAN_VERSION=6.0.2
-ARG PODMAN_SHA256=<REPLACE_WITH_OFFICIAL_CONTAINERS_PODMAN_V6_0_2_TARBALL_SHA256>
+ARG PODMAN_SHA256=0895a541aeb7aa8e99133ed2b328c1bb40fd397b7c3b01e083396c90e8628756
 
 RUN apk add --no-cache \
     bash \
@@ -77,7 +77,7 @@ RUN apk add --no-cache \
     conmon \
     containers-common \
     crun \
-    docker-cli \
+    docker-cli=29.5.3-r0 \
     fuse-overlayfs \
     gpgme \
     libgcc \
