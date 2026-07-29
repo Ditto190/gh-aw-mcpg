@@ -179,13 +179,15 @@ import (
 // See file_logger.go, jsonl_logger.go, markdown_logger.go, and server_file_logger.go
 // for complete implementation examples.
 
-// Log-Level Quad-Var Pattern
+// Log-Level Quad-Function Pattern
 //
-// Three sets of four exported package-level variables — one set per logger variant —
-// are each bound directly to the corresponding per-level closure in the logger's
-// levelLoggerFuncs or serverLevelLoggerFuncs:
+// Three sets of four public functions — one set per logger variant — share an
+// identical structure where each exported one-liner delegates to an unexported
+// per-level closure registered by helpers in this file:
 //
-//	var Log<Level> = <variant>LevelLoggers.<level>
+//	func Log<Level>(category, format string, args ...interface{}) {
+//	    log<level>(category, format, args...)
+//	}
 //
 // The three sets and their internal dispatch helpers are:
 //
@@ -193,10 +195,10 @@ import (
 //	markdown_logger.go   LogInfoToMarkdown / ... / LogDebugToMarkdown     → logWithMarkdown
 //	server_file_logger.go LogInfoToServer / ... / LogDebugToServer        → logWithLevelAndServer
 //
-// This pattern eliminates 12 near-identical one-liner wrapper functions while
-// keeping the exported public API surface (callers still invoke them as ordinary
-// function calls). The per-level closure setup is centralised in newLogFuncSet
-// and its two typed wrappers (newLevelLoggerFuncs, newServerLevelLoggerFuncs).
+// This pattern keeps exported APIs immutable (`func` declarations) while moving
+// the repetitive per-level closure setup into shared helpers. Each logger file
+// still exposes its own stable public API surface, but the registration of the
+// Info/Warn/Error/Debug closures is centralized here.
 //
 // The shared logFuncs map below centralises the LogLevel → log-function
 // mapping so that internal helpers like logWithLevelAndServer do not need
@@ -206,9 +208,9 @@ import (
 // required locations to keep the public API consistent:
 //  1. Add a new entry to the logFuncs map in this file.
 //  2. Update newLogFuncSet in this file.
-//  3. In file_logger.go: add an exported var (see LogInfo pattern).
-//  4. In markdown_logger.go: add an exported var (see LogInfoToMarkdown pattern).
-//  5. In server_file_logger.go: add an exported var (see LogInfoToServer pattern).
+//  3. In file_logger.go: add an exported wrapper (see LogInfo pattern).
+//  4. In markdown_logger.go: add an exported wrapper (see LogInfoToMarkdown pattern).
+//  5. In server_file_logger.go: add an exported wrapper (see LogInfoToServer pattern).
 //  6. Update TestLogLevelWrappers_CoverAllRegisteredLevels in log_level_wrappers_test.go.
 //
 // logFuncs maps each LogLevel to its corresponding global log function.
