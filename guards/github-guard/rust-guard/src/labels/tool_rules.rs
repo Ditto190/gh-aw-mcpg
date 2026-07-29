@@ -2374,10 +2374,10 @@ mod tests {
             secrecy.is_empty(),
             "no-owner projects list should have empty secrecy"
         );
-        let owner_scoped_writer = writer_integrity("myorg", &ctx);
-        assert_ne!(
-            integrity, owner_scoped_writer,
-            "no-owner projects list must NOT produce owner-scoped writer_integrity"
+assert_eq!(
+            integrity,
+            super::super::helpers::none_integrity("", &ctx),
+            "no-owner projects list must retain only empty-scope none integrity"
         );
     }
 
