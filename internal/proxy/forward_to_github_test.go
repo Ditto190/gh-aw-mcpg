@@ -361,3 +361,31 @@ func TestForwardToGitHub_ForwardsHTTPMethod(t *testing.T) {
 		})
 	}
 }
+
+func TestForwardToGitHub_ArtifactDownloadDoesNotFollowRedirect(t *testing.T) {
+	var requestedPaths []string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestedPaths = append(requestedPaths, r.URL.Path)
+		if r.URL.Path == "/repos/org/repo/actions/artifacts/123/zip" {
+			w.Header().Set("Location", "/redirected-artifact")
+			w.WriteHeader(http.StatusFound)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	s := &Server{
+		githubAPIURL: upstream.URL,
+		httpClient:   upstream.Client(),
+	}
+
+	resp, err := s.forwardToGitHub(context.Background(), http.MethodGet, "/repos/org/repo/actions/artifacts/123/zip", nil, "", "")
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusFound, resp.StatusCode)
+	assert.Equal(t, "/redirected-artifact", resp.Header.Get("Location"))
+	assert.Equal(t, []string{"/repos/org/repo/actions/artifacts/123/zip"}, requestedPaths)
+}

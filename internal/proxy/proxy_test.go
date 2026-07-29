@@ -247,6 +247,18 @@ func TestMatchRoute(t *testing.T) {
 			wantArgs: map[string]interface{}{"owner": "org", "repo": "repo", "method": "list_workflow_run_artifacts"},
 		},
 		{
+			name:     "download artifact zip",
+			path:     "/repos/org/repo/actions/artifacts/123456/zip",
+			wantTool: "actions_get",
+			wantArgs: map[string]interface{}{"owner": "org", "repo": "repo", "method": "download_workflow_run_artifact", "resource_id": "123456"},
+		},
+		{
+			name:     "non numeric artifact id falls back to generic repo route",
+			path:     "/repos/org/repo/actions/artifacts/not-a-number/zip",
+			wantTool: "get_file_contents",
+			wantArgs: map[string]interface{}{"owner": "org", "repo": "repo"},
+		},
+		{
 			name:     "list caches",
 			path:     "/repos/org/repo/actions/caches",
 			wantTool: "actions_list",
