@@ -178,6 +178,14 @@ func TestResolveJSONExtraEndpoints(t *testing.T) {
 		assert.Nil(t, got[0].Headers)
 	})
 
+	t.Run("malformed headers result in no headers map", func(t *testing.T) {
+		raw := `[{"url":"https://collector.example.com","headers":"malformed"}]`
+		got := resolveJSONExtraEndpoints(raw, signalPath)
+		require.Len(t, got, 1)
+		assert.Equal(t, "https://collector.example.com/v1/traces", got[0].URL)
+		assert.Nil(t, got[0].Headers)
+	})
+
 	t.Run("custom signal path is used", func(t *testing.T) {
 		raw := `[{"url":"https://collector.example.com"}]`
 		got := resolveJSONExtraEndpoints(raw, "/custom/signal")
