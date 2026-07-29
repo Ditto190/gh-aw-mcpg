@@ -2360,7 +2360,7 @@ mod tests {
         // so integrity falls through to ensure_integrity_baseline with the provided
         // baseline_scope (repo_id). Verify secrecy is empty and no error occurs.
         let args_no_owner = serde_json::json!({});
-        let (secrecy, _integrity, _) = super::apply_tool_labels(
+        let (secrecy, integrity, _) = super::apply_tool_labels(
             "list_projects",
             &args_no_owner,
             "",
@@ -2372,6 +2372,11 @@ mod tests {
         assert!(
             secrecy.is_empty(),
             "no-owner projects list should have empty secrecy"
+        );
+        assert_eq!(
+            integrity,
+            super::super::helpers::none_integrity("", &ctx),
+            "no-owner projects list should retain none-level integrity"
         );
     }
 
