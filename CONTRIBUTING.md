@@ -162,7 +162,7 @@ This runs:
 - `gofmt` check for code formatting
 - `golangci-lint` for additional static analysis (misspell, unconvert)
 
-**Note**: `make install` installs `golangci-lint` v2.12.2 only when `golangci-lint` is not already found on your PATH/GOPATH. If another version is already installed, `make lint` uses that existing binary.
+**Note**: `make install` ensures `golangci-lint` v2.12.2 is available. If another version is already found on your PATH/GOPATH, it is upgraded to v2.12.2.
 
 To run golangci-lint directly with all configured linters:
 ```bash
