@@ -31,7 +31,7 @@ This gateway is used with [GitHub Agentic Workflows](https://github.com/github/g
    }
    ```
 
-   Note: The JSON schema requires a top-level `gateway` object containing `port`, `domain`, and one of `agentId` or `apiKey`. All three are validated before any server is started.
+   Note: `port`, `domain`, and `agentId` shown above are example/recommended values; the `gateway` section and all of its fields are optional. When a field is present it is validated, but omitting `gateway` entirely is valid and uses built-in defaults. For the full list of optional server fields (`entrypoint`, `entrypointArgs`, `mounts`, `args`, `connectTimeout`, `toolTimeout`), see [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
 
    Looking for complete examples? See [`config.example.toml`](config.example.toml), [`config.example-payload-threshold.toml`](config.example-payload-threshold.toml), and [`example-http-config.json`](example-http-config.json).
 
@@ -91,7 +91,9 @@ Key operator-facing environment variables (see [AGENTS.md](AGENTS.md) for the fu
 - `ACTIONS_ID_TOKEN_REQUEST_URL`, `ACTIONS_ID_TOKEN_REQUEST_TOKEN` — required for `github-oidc` auth type (set automatically by GitHub Actions)
 - `DOCKER_HOST` — Docker daemon socket path (default: `/var/run/docker.sock`)
 - `RUNNING_IN_CONTAINER` — set to `"true"` to force container detection when `/.dockerenv` and cgroup detection are unavailable
+- `OTEL_EXPORTER_OTLP_ENDPOINT` — OTLP HTTP endpoint for trace export; tracing is disabled when empty (also sets the `--otlp-endpoint` default)
 - `OTEL_EXPORTER_OTLP_HEADERS`, `GH_AW_OTLP_ENDPOINTS` — tracing export headers and multi-endpoint OTLP fan-out
+- `GITHUB_REPOSITORY` — when set, used to detect whether the workflow repository is public; influences the `MCP_GATEWAY_FORCE_PUBLIC_REPOS` guard logic
 - `MCP_GATEWAY_SHUTDOWN_TIMEOUT`
 - `MCP_GATEWAY_WASM_CACHE_DIR`
 - `MCP_GATEWAY_PAYLOAD_PATH_PREFIX`
@@ -232,12 +234,16 @@ Key configuration fields (gateway-level under `[gateway]` in TOML / `"gateway"` 
 | `trusted_bots` / `trustedBots` | Additional bot usernames to treat as trusted with "approved" integrity. Additive to the built-in trusted bot list. Non-empty array when present. Example: `["my-bot[bot]"]` |
 | `force_public_repos` / `forcePublicRepos` | Enables/disables auto-forcing allow-only policy to `repos="public"` when the workflow repository is public (default enabled) |
 | `sink_visibility_exempt_servers` / `sinkVisibilityExemptServers` | Server IDs exempted from default sink-visibility enforcement for write-sink handling |
+| `dockerless` | **(JSON stdin only)** When `true`, runs stdio MCP servers using Podman without a Docker daemon socket. Grant the container the capabilities required for nested containers (for example, `--privileged`). Must be used with `containerRuntime`/`containerRuntimeCommand` set to `podman` (or defaults to podman). |
+| `container_runtime` / `containerRuntime` | Container runtime to use for stdio MCP server launches (default: `"docker"`; supported: `"docker"`, `"podman"`). Also overridable via `MCP_GATEWAY_CONTAINER_RUNTIME`. |
+| `container_runtime_command` / `containerRuntimeCommand` | Optional override for the runtime executable/binary path (for example, `/usr/bin/podman`). Defaults to the runtime name. |
+| `container_runtime_args` / `containerRuntimeArgs` | Optional runtime-level arguments inserted before `run` in the container launch command (for example, `["--log-level=warn"]`). |
 | `[gateway.opentelemetry]` / `[gateway.tracing]` (TOML), `gateway.opentelemetry` (JSON stdin) | Nested OpenTelemetry tracing configuration blocks (`opentelemetry` is preferred; legacy TOML `tracing` is still supported) |
 | `guards` (JSON stdin top-level / TOML top-level) | Optional guard definitions and policy configuration used for DIFC enforcement |
 | `customSchemas` (JSON stdin top-level) | Map custom server `type` names to HTTPS JSON schema URLs for custom server validation |
 
 For the full gateway field list (including rate limiting, tracing, keepalive, and more), see **[docs/CONFIGURATION.md](docs/CONFIGURATION.md)**.
-For the full server field list (including TOML-only fields such as `working_directory`, `rate_limit_threshold`, and `rate_limit_cooldown`), also see **[docs/CONFIGURATION.md](docs/CONFIGURATION.md)**.
+For the full server field list (including shared fields such as `registry` and TOML-only fields such as `working_directory`, `rate_limit_threshold`, and `rate_limit_cooldown`), also see **[docs/CONFIGURATION.md](docs/CONFIGURATION.md)**.
 
 ## Architecture
 
