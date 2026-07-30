@@ -517,7 +517,7 @@ The project has two types of tests:
 
 2. **Integration Tests** (in `test/integration/`)
    - Test the compiled `awmg` binary end-to-end
-   - Require building the binary first (`make build`)
+   - Use the compiled `awmg` binary; auto-built if not present when running `make test-integration`
    - Test actual server behavior, command-line flags, and real process execution
 
 ### Running Tests
@@ -527,10 +527,10 @@ The project has two types of tests:
 make test        # Alias for test-unit
 make test-unit
 
-# Run integration tests (requires binary build)
+# Run integration tests (auto-builds binary if not present)
 make test-integration
 
-# Run all tests (unit + integration)
+# Run all tests (unit + integration, always rebuilds the binary first)
 make test-all
 
 # Run unit tests with race detection
