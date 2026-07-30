@@ -175,7 +175,7 @@ func TestParseJSONRPCResponseWithSSE_ValidJSONStatus200(t *testing.T) {
 	require.NotNil(t, resp)
 	assert.Equal(t, "2.0", resp.JSONRPC)
 	assert.NotNil(t, resp.Result)
-	assert.Nil(t, resp.Error)
+	assert.Nil(t, resp.Error) // *ResponseError (not error) — Nil is intentional over NoError
 }
 
 func TestParseJSONRPCResponseWithSSE_ValidJSONNon200ReturnsSyntheticError(t *testing.T) {
@@ -232,7 +232,7 @@ func TestParseJSONRPCResponseWithSSE_SSEFormatStatus200(t *testing.T) {
 	require.NotNil(t, resp)
 	assert.Equal(t, "2.0", resp.JSONRPC)
 	assert.NotNil(t, resp.Result)
-	assert.Nil(t, resp.Error)
+	assert.Nil(t, resp.Error) // *ResponseError (not error) — Nil is intentional over NoError
 }
 
 func TestParseJSONRPCResponseWithSSE_SSEFormatNon200ReturnsSyntheticError(t *testing.T) {
@@ -981,7 +981,7 @@ func TestSendHTTPRequest_ReconnectsOnSessionNotFound(t *testing.T) {
 	resp, err := conn.sendHTTPRequest(context.Background(), "tools/list", nil)
 	require.NoError(t, err)
 	require.NotNil(t, resp)
-	require.Nil(t, resp.Error, "response should not contain an error after reconnect")
+	require.Nil(t, resp.Error, "response should not contain an error after reconnect") // *ResponseError (not error) — Nil is intentional over NoError
 
 	// Verify the reconnect happened: session-1 failed, session-2 succeeded.
 	require.Len(t, receivedSessionIDs, 2, "expected two tool calls: initial (failed) + retry (succeeded)")
@@ -1593,7 +1593,7 @@ func TestParseHTTPResult(t *testing.T) {
 		resp, err := parseHTTPResult(result)
 		require.NoError(t, err)
 		require.NotNil(t, resp)
-		assert.Nil(t, resp.Error, "response should have no error for 200 OK")
+		assert.Nil(t, resp.Error, "response should have no error for 200 OK") // *ResponseError (not error) — Nil is intentional over NoError
 	})
 
 	t.Run("status 200 with invalid JSON returns error", func(t *testing.T) {
@@ -1665,7 +1665,7 @@ func TestParseHTTPResult(t *testing.T) {
 		resp, err := parseHTTPResult(result)
 		require.NoError(t, err)
 		require.NotNil(t, resp)
-		assert.Nil(t, resp.Error)
+		assert.Nil(t, resp.Error) // *ResponseError (not error) — Nil is intentional over NoError
 	})
 
 	t.Run("status 200 with JSON-RPC error field passes through", func(t *testing.T) {

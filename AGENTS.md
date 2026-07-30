@@ -194,6 +194,12 @@ assert.Nil(t, err, "Error should be nil")
 assert.NoError(t, err, "Operation should succeed")
 assert.Error(t, err, "Operation should fail")
 
+// Typed-nil checking (Nil is intentional when value is not a Go error)
+// Use assert.Nil (not assert.NoError) when the field is a typed struct pointer
+// like *ResponseError — it is NOT a Go error and NoError would not compile.
+// Add an inline comment so reviewers know the choice is deliberate:
+assert.Nil(t, resp.Error) // *ResponseError (not error) — Nil is intentional over NoError
+
 // HTTP status codes
 assert.Equal(t, http.StatusOK, response.StatusCode, "Should return 200 OK")
 
