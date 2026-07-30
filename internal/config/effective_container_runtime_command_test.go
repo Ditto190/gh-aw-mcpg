@@ -229,3 +229,52 @@ func TestRuntimeCommandForName(t *testing.T) {
 		})
 	}
 }
+
+// TestEffectiveContainerRuntimeCommand_PublicWrapper verifies that the exported
+// EffectiveContainerRuntimeCommand function delegates to the private implementation
+// and returns the same result.
+func TestEffectiveContainerRuntimeCommand_PublicWrapper(t *testing.T) {
+	tests := []struct {
+		name    string
+		gateway *GatewayConfig
+		want    string
+	}{
+		{
+			name:    "nil gateway returns docker default",
+			gateway: nil,
+			want:    "docker",
+		},
+		{
+			name: "explicit docker runtime",
+			gateway: &GatewayConfig{
+				ContainerRuntime: "docker",
+			},
+			want: "docker",
+		},
+		{
+			name: "explicit podman runtime",
+			gateway: &GatewayConfig{
+				ContainerRuntime: "podman",
+			},
+			want: "podman",
+		},
+		{
+			name: "explicit command path override",
+			gateway: &GatewayConfig{
+				ContainerRuntimeCommand: "/usr/local/bin/docker",
+			},
+			want: "/usr/local/bin/docker",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := EffectiveContainerRuntimeCommand(tt.gateway)
+			assert.Equal(t, tt.want, got,
+				"EffectiveContainerRuntimeCommand should delegate to private implementation")
+			// Also verify agreement with the private function
+			assert.Equal(t, effectiveContainerRuntimeCommand(tt.gateway), got,
+				"public and private implementations must agree")
+		})
+	}
+}
