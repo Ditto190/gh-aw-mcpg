@@ -697,7 +697,7 @@ func TestParseJSONRPCResponseWithSSE(t *testing.T) {
 			checkResponse: func(t *testing.T, resp *Response) {
 				assert.Equal(t, "2.0", resp.JSONRPC)
 				assert.NotNil(t, resp.Result)
-				assert.Nil(t, resp.Error)
+				assert.Nil(t, resp.Error) // *ResponseError (not error) — Nil is intentional over NoError
 			},
 		},
 		{
@@ -712,7 +712,7 @@ data: {"jsonrpc":"2.0","id":2,"result":{"tools":[]}}
 			checkResponse: func(t *testing.T, resp *Response) {
 				assert.Equal(t, "2.0", resp.JSONRPC)
 				assert.NotNil(t, resp.Result)
-				assert.Nil(t, resp.Error)
+				assert.Nil(t, resp.Error) // *ResponseError (not error) — Nil is intentional over NoError
 			},
 		},
 		{
@@ -727,7 +727,7 @@ data: {"jsonrpc":"2.0","id":2,"result":{"tools":[]}}
 			wantError:   false, // Returns synthetic error response, not error
 			checkResponse: func(t *testing.T, resp *Response) {
 				assert.Equal(t, "2.0", resp.JSONRPC)
-				assert.Nil(t, resp.Result)
+				assert.Nil(t, resp.Result) // json.RawMessage — Nil is intentional
 				assert.NotNil(t, resp.Error)
 				assert.Equal(t, -32603, resp.Error.Code)
 				assert.Contains(t, resp.Error.Message, "HTTP 500")
@@ -815,7 +815,7 @@ data: {not valid json}
 			wantError:   false,
 			checkResponse: func(t *testing.T, resp *Response) {
 				assert.Equal(t, "2.0", resp.JSONRPC)
-				assert.Nil(t, resp.Result)
+				assert.Nil(t, resp.Result) // json.RawMessage — Nil is intentional
 				assert.NotNil(t, resp.Error)
 				assert.Equal(t, -32600, resp.Error.Code)
 				assert.Equal(t, "Invalid Request", resp.Error.Message)
