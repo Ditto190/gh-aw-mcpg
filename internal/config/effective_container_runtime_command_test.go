@@ -207,12 +207,12 @@ func TestNormalizeContainerRuntime(t *testing.T) {
 }
 
 // TestEffectiveContainerRuntimeCommand_PublicWrapper verifies that the exported
-// EffectiveContainerRuntimeCommand function delegates to the private implementation
-// and returns the same result.
+// function delegates to the private implementation for representative inputs.
 func TestEffectiveContainerRuntimeCommand_PublicWrapper(t *testing.T) {
 	tests := []struct {
 		name    string
 		gateway *GatewayConfig
+		env     string
 		want    string
 	}{
 		{
@@ -235,23 +235,27 @@ func TestEffectiveContainerRuntimeCommand_PublicWrapper(t *testing.T) {
 			want: "podman",
 		},
 		{
-			name: "explicit command path override",
+			name:    "environment overrides default runtime",
+			gateway: nil,
+			env:     "podman",
+			want:    "podman",
+		},
+		{
+			name: "explicit command path overrides environment",
 			gateway: &GatewayConfig{
-				ContainerRuntimeCommand: "/usr/local/bin/docker",
+				ContainerRuntimeCommand: "/usr/bin/docker",
 			},
-			want: "/usr/local/bin/docker",
+			env:  "podman",
+			want: "/usr/bin/docker",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Always clear the env var so the test is hermetic regardless of the
-			// parent environment (e.g. MCP_GATEWAY_CONTAINER_RUNTIME=podman).
-			t.Setenv("MCP_GATEWAY_CONTAINER_RUNTIME", "")
+			t.Setenv("MCP_GATEWAY_CONTAINER_RUNTIME", tt.env)
 			got := EffectiveContainerRuntimeCommand(tt.gateway)
 			assert.Equal(t, tt.want, got,
 				"EffectiveContainerRuntimeCommand should delegate to private implementation")
-			// Also verify agreement with the private function
 			assert.Equal(t, effectiveContainerRuntimeCommand(tt.gateway), got,
 				"public and private implementations must agree")
 		})
