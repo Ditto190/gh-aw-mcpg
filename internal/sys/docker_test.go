@@ -208,6 +208,23 @@ func TestCheckContainerRuntimeAccessible(t *testing.T) {
 	assert.False(t, CheckContainerRuntimeAccessible("/path/that/does/not/exist/podman"))
 }
 
+// TestCheckContainerRuntimeAccessible_DockerBranch verifies that when the command
+// basename is "docker", CheckContainerRuntimeAccessible delegates to CheckDockerAccessible
+// rather than running "docker info" directly.  With a nonexistent socket, both paths
+// return false, which is the observable behavior we can assert in CI.
+func TestCheckContainerRuntimeAccessible_DockerBranch(t *testing.T) {
+	// Force a nonexistent Docker socket so CheckDockerAccessible returns false.
+	t.Setenv("DOCKER_HOST", "unix:///nonexistent/docker.sock")
+
+	// "docker" basename triggers the CheckDockerAccessible path.
+	assert.False(t, CheckContainerRuntimeAccessible("docker"),
+		"docker branch should return false when Docker socket is inaccessible")
+
+	// An absolute path with docker basename also triggers the docker branch.
+	assert.False(t, CheckContainerRuntimeAccessible("/usr/local/bin/docker"),
+		"absolute docker path should also delegate to CheckDockerAccessible")
+}
+
 func TestCheckContainerRuntimeAccessible_PodmanWithoutDocker(t *testing.T) {
 	runtimeDir := t.TempDir()
 	podmanPath := filepath.Join(runtimeDir, "podman")
