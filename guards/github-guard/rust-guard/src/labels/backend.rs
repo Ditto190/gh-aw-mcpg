@@ -110,6 +110,11 @@ fn set_cached_repo_visibility(repo_id: &str, is_private: bool) {
     }
 }
 
+#[cfg(test)]
+pub(crate) fn set_cached_repo_visibility_for_tests(repo_id: &str, is_private: bool) {
+    set_cached_repo_visibility(repo_id, is_private);
+}
+
 #[derive(Debug, Clone)]
 pub struct PullRequestFacts {
     pub author_association: Option<String>,
