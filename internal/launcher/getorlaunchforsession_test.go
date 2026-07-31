@@ -480,11 +480,10 @@ func newMockHTTPMCPServer(t *testing.T) *httptest.Server {
 func TestGetOrLaunchForSession_StartupTimeout(t *testing.T) {
 	require := require.New(t)
 
-	// Use a cancellable context so that Launcher.Close (deferred below) cancels
-	// the exec.CommandContext used by mcp.NewConnection, terminating the
-	// sleep subprocess instead of leaving it running after the test.
+	// Use a cancellable context so that when the test ends, cancel() terminates
+	// the exec.CommandContext used by mcp.NewConnection and kills the sleep
+	// subprocess instead of leaving it as an orphan process.
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
 	cfg := newTestConfig(map[string]*config.ServerConfig{
 		// "sleep 60" will block waiting for MCP handshake, triggering the timeout.
@@ -496,7 +495,10 @@ func TestGetOrLaunchForSession_StartupTimeout(t *testing.T) {
 	})
 
 	l := New(ctx, cfg)
+	// Cancel the context before closing the launcher so exec.CommandContext
+	// kills the sleep subprocess before the launcher is torn down.
 	defer l.Close()
+	defer cancel()
 
 	// Set a very short startup timeout to force the timeout path.
 	l.startupTimeout = 200 * time.Millisecond
