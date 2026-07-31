@@ -66,7 +66,7 @@ func (r *EnvValidationResult) Error() string {
 // ValidateExecutionEnvironment performs comprehensive validation of the execution environment
 // It checks Docker accessibility, required environment variables, and containerization status
 func ValidateExecutionEnvironment() *EnvValidationResult {
-	return ValidateExecutionEnvironmentForRuntime("docker")
+	return ValidateExecutionEnvironmentForRuntime(DefaultContainerRuntime)
 }
 
 // ValidateExecutionEnvironmentForRuntime validates the environment for the selected container runtime.
@@ -106,7 +106,7 @@ func ValidateExecutionEnvironmentForRuntime(runtimeCommand string) *EnvValidatio
 // ValidateContainerizedEnvironment performs additional validation for containerized mode
 // This is called by run_containerized.sh through the binary or by the Go code directly
 func ValidateContainerizedEnvironment(containerID string) *EnvValidationResult {
-	return ValidateContainerizedEnvironmentForRuntime(containerID, "docker")
+	return ValidateContainerizedEnvironmentForRuntime(containerID, DefaultContainerRuntime)
 }
 
 // ValidateContainerizedEnvironmentForRuntime performs runtime-aware validation
