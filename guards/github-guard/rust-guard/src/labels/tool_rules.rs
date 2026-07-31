@@ -838,8 +838,8 @@ pub fn apply_tool_labels(
                 integrity = writer_integrity(repo_id, ctx);
             } else if !org.is_empty() {
                 secrecy = private_scope_label(&org);
-                baseline_scope = Cow::Owned(org.clone());
                 integrity = writer_integrity(&org, ctx);
+                baseline_scope = Cow::Owned(org);
             } else if matches!(tool_name, "set_secret" | "delete_secret") {
                 // Only secrets have a user-scoped CLI write path (`/user/codespaces/secrets`).
                 // Actions variables are repo/org/environment scoped, so variable writes do not

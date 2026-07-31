@@ -1251,6 +1251,52 @@ mod tests {
     }
 
     #[test]
+    fn list_releases_private_repo_gets_private_secrecy() {
+        let repo_id = "octocat/private-repo";
+        let _guard = crate::labels::backend::cache_repo_visibility_for_tests(repo_id, true);
+
+        let tool_args = json!({"owner": "octocat", "repo": "private-repo"});
+        let items = json!([{"tag_name": "v1.0.0", "name": "Secret release"}]);
+        let response = json!({
+            "content": [{
+                "type": "text",
+                "text": serde_json::to_string(&items).expect("response should serialize")
+            }]
+        });
+
+        let result = label_response_paths("list_releases", &tool_args, &response, &ctx())
+            .expect("list_releases should produce path labels");
+
+        assert_eq!(result.labeled_paths.len(), 1);
+
+        let private_label = format!("{}{}", label_constants::PRIVATE_PREFIX, repo_id);
+        let merged_label = format!("{}{}", label_constants::MERGED_PREFIX, repo_id);
+
+        for entry in &result.labeled_paths {
+            assert!(
+                entry.labels.secrecy.contains(&private_label),
+                "private repo release should carry private secrecy; got {:?}",
+                entry.labels.secrecy
+            );
+            assert!(
+                entry.labels.integrity.contains(&merged_label),
+                "release should have merged integrity; got {:?}",
+                entry.labels.integrity
+            );
+        }
+
+        let default_labels = result
+            .default_labels
+            .as_ref()
+            .expect("default_labels should be set");
+        assert!(
+            default_labels.secrecy.contains(&private_label),
+            "default_labels secrecy should be private; got {:?}",
+            default_labels.secrecy
+        );
+    }
+
+    #[test]
     fn projects_list_alias_matches_list_project_items() {
         let tool_args = json!({"owner": "octocat"});
         let response = json!({
