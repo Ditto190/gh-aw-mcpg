@@ -630,7 +630,7 @@ Required environment variables:
 - `MCP_GATEWAY_DOMAIN` - Domain name for the gateway
 - `MCP_GATEWAY_AGENT_ID` - Checked by `run_containerized.sh` as a deployment gate; must be referenced in your JSON config via `"gateway": {"agentId": "${MCP_GATEWAY_AGENT_ID}"}` to enable authentication (`MCP_GATEWAY_API_KEY` is only a deprecated alias mapped to this value)
 
-**Note:** The `DOCKER_API_VERSION` is set automatically by `run_containerized.sh` using the Docker daemon's current API version (falls back to `1.44` for all architectures if detection fails).
+**Note:** The `DOCKER_API_VERSION` is set automatically by `run.sh` using the Docker daemon's current API version (falls back to `1.44` for all architectures if detection fails).
 
 ## Pull Request Guidelines
 
