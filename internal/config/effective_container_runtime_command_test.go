@@ -207,59 +207,6 @@ func TestNormalizeContainerRuntime(t *testing.T) {
 }
 
 // TestEffectiveContainerRuntimeCommand_PublicWrapper verifies that the exported
-// EffectiveContainerRuntimeCommand delegates to the internal implementation and
-// returns the expected runtime command for representative inputs. This test
-// specifically exercises the exported wrapper (line 112 of container_runtime.go)
-// which is distinct from the internal effectiveContainerRuntimeCommand tests above.
-func TestEffectiveContainerRuntimeCommand_PublicWrapper(t *testing.T) {
-	t.Run("nil gateway returns docker", func(t *testing.T) {
-		t.Setenv("MCP_GATEWAY_CONTAINER_RUNTIME", "")
-		assert.Equal(t, "docker", EffectiveContainerRuntimeCommand(nil))
-	})
-
-	t.Run("podman ContainerRuntime returns podman", func(t *testing.T) {
-		t.Setenv("MCP_GATEWAY_CONTAINER_RUNTIME", "")
-		assert.Equal(t, "podman", EffectiveContainerRuntimeCommand(&GatewayConfig{ContainerRuntime: "podman"}))
-	})
-
-	t.Run("env override takes effect", func(t *testing.T) {
-		t.Setenv("MCP_GATEWAY_CONTAINER_RUNTIME", "podman")
-		assert.Equal(t, "podman", EffectiveContainerRuntimeCommand(nil))
-	})
-
-	t.Run("ContainerRuntimeCommand overrides env", func(t *testing.T) {
-		t.Setenv("MCP_GATEWAY_CONTAINER_RUNTIME", "podman")
-		assert.Equal(t, "/usr/bin/docker", EffectiveContainerRuntimeCommand(&GatewayConfig{
-			ContainerRuntimeCommand: "/usr/bin/docker",
-		}))
-	})
-}
-
-// TestRuntimeCommandForName covers the runtimeCommandForName helper.
-func TestRuntimeCommandForName(t *testing.T) {
-	tests := []struct {
-		name    string
-		runtime string
-		want    string
-	}{
-		{"docker returns docker", "docker", "docker"},
-		{"podman returns podman", "podman", "podman"},
-		{"empty returns docker (default)", "", "docker"},
-		{"unknown runtime returns docker (fallback)", "nerdctl", "docker"},
-		{"PODMAN uppercase returns podman (normalization)", "PODMAN", "podman"},
-		{"DOCKER uppercase returns docker (normalization)", "DOCKER", "docker"},
-		{"podman with whitespace returns podman (normalization)", "  podman  ", "podman"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := runtimeCommandForName(tt.runtime)
-			assert.Equal(t, tt.want, got)
-		})
-	}
-}
-
-// TestEffectiveContainerRuntimeCommand_PublicWrapper verifies that the exported
 // EffectiveContainerRuntimeCommand function delegates to the private implementation
 // and returns the same result.
 func TestEffectiveContainerRuntimeCommand_PublicWrapper(t *testing.T) {
@@ -307,6 +254,30 @@ func TestEffectiveContainerRuntimeCommand_PublicWrapper(t *testing.T) {
 			// Also verify agreement with the private function
 			assert.Equal(t, effectiveContainerRuntimeCommand(tt.gateway), got,
 				"public and private implementations must agree")
+		})
+	}
+}
+
+// TestRuntimeCommandForName covers the runtimeCommandForName helper.
+func TestRuntimeCommandForName(t *testing.T) {
+	tests := []struct {
+		name    string
+		runtime string
+		want    string
+	}{
+		{"docker returns docker", "docker", "docker"},
+		{"podman returns podman", "podman", "podman"},
+		{"empty returns docker (default)", "", "docker"},
+		{"unknown runtime returns docker (fallback)", "nerdctl", "docker"},
+		{"PODMAN uppercase returns podman (normalization)", "PODMAN", "podman"},
+		{"DOCKER uppercase returns docker (normalization)", "DOCKER", "docker"},
+		{"podman with whitespace returns podman (normalization)", "  podman  ", "podman"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := runtimeCommandForName(tt.runtime)
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
