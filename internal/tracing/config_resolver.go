@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/github/gh-aw-mcpg/internal/config"
+	"github.com/github/gh-aw-mcpg/internal/sanitize"
 )
 
 // defaultSignalPath is the OTLP traces signal path per the OpenTelemetry spec.
@@ -214,7 +215,7 @@ func resolveJSONExtraEndpoints(raw, signalPath string) []extraEndpointConfig {
 		if endpoint.Headers != "" {
 			if headers := parseOTLPHeadersWithDecoder(endpoint.Headers, true); len(headers) > 0 {
 				resolved.Headers = headers
-				logTracing.Printf("resolveJSONExtraEndpoints: endpoint %q has %d custom headers", normalized, len(headers))
+				logTracing.Printf("resolveJSONExtraEndpoints: endpoint %q has %d custom headers", sanitize.RedactURL(normalized), len(headers))
 			}
 		}
 		endpoints = append(endpoints, resolved)
