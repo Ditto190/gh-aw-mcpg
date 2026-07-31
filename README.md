@@ -31,7 +31,7 @@ This gateway is used with [GitHub Agentic Workflows](https://github.com/github/g
    }
    ```
 
-   Note: `port`, `domain`, and `agentId` shown above are example/recommended values; the `gateway` section and all of its fields are optional. When a field is present it is validated, but omitting `gateway` entirely is valid and uses built-in defaults. For the full list of optional server fields (`entrypoint`, `entrypointArgs`, `mounts`, `args`, `connectTimeout`, `toolTimeout`), see [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
+   Note: `port`, `domain`, and `agentId` shown above are example/recommended values; the `gateway` section and all of its fields are optional. When a field is present it is validated, but omitting `gateway` entirely is valid and uses built-in defaults. Optional server fields include `entrypoint`, `entrypointArgs`, `mounts`, `args`, `connectTimeout`, and `toolTimeout`; see [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for the complete server-field reference.
 
    Looking for complete examples? See [`config.example.toml`](config.example.toml), [`config.example-payload-threshold.toml`](config.example-payload-threshold.toml), and [`example-http-config.json`](example-http-config.json).
 
@@ -235,9 +235,9 @@ Key configuration fields (gateway-level under `[gateway]` in TOML / `"gateway"` 
 | `force_public_repos` / `forcePublicRepos` | Enables/disables auto-forcing allow-only policy to `repos="public"` when the workflow repository is public (default enabled) |
 | `sink_visibility_exempt_servers` / `sinkVisibilityExemptServers` | Server IDs exempted from default sink-visibility enforcement for write-sink handling |
 | `dockerless` | **(JSON stdin only)** When `true`, runs stdio MCP servers using Podman without a Docker daemon socket. Grant the container the capabilities required for nested containers (for example, `--privileged`). Must be used with `containerRuntime`/`containerRuntimeCommand` set to `podman` (or defaults to podman). |
-| `container_runtime` / `containerRuntime` | Container runtime to use for stdio MCP server launches (default: `"docker"`; supported: `"docker"`, `"podman"`). Also overridable via `MCP_GATEWAY_CONTAINER_RUNTIME`. |
+| `container_runtime` / `containerRuntime` | Container runtime to use for stdio MCP server launches (default: `"docker"`; supported: `"docker"`, `"podman"`). Also overridable via `MCP_GATEWAY_CONTAINER_RUNTIME` (except when `dockerless` is `true`, which always uses podman). |
 | `container_runtime_command` / `containerRuntimeCommand` | Optional override for the runtime executable/binary path (for example, `/usr/bin/podman`). Defaults to the runtime name. |
-| `container_runtime_args` / `containerRuntimeArgs` | Optional runtime-level arguments inserted before `run` in the container launch command (for example, `["--log-level=warn"]`). |
+| `containerRuntimeArgs` | **(JSON stdin only)** Optional runtime-level arguments inserted before `run` in JSON `container` server launch commands (for example, `["--log-level=warn"]`). |
 | `[gateway.opentelemetry]` / `[gateway.tracing]` (TOML), `gateway.opentelemetry` (JSON stdin) | Nested OpenTelemetry tracing configuration blocks (`opentelemetry` is preferred; legacy TOML `tracing` is still supported) |
 | `guards` (JSON stdin top-level / TOML top-level) | Optional guard definitions and policy configuration used for DIFC enforcement |
 | `customSchemas` (JSON stdin top-level) | Map custom server `type` names to HTTPS JSON schema URLs for custom server validation |
