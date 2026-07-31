@@ -102,19 +102,6 @@ type toolResponseFilterVarsCacheKey struct {
 	varNamesKey string
 }
 
-func jqParseErrorDetails(err error) string {
-	var parseErr *gojq.ParseError
-	if !errors.As(err, &parseErr) {
-		return ""
-	}
-
-	token := parseErr.Token
-	if token == "" {
-		token = "<EOF>"
-	}
-	return fmt.Sprintf(" at offset %d (token %q)", parseErr.Offset, token)
-}
-
 // secureCompileOpts delegates to jqutil.SecureCompileOpts so that all packages
 // share a single authoritative definition of the $ENV-disabled gojq compile options.
 var secureCompileOpts = jqutil.SecureCompileOpts
@@ -313,7 +300,7 @@ func compileToolResponseFilterInternal[K comparable](
 	logMiddleware.Printf("%s: parsing jq filter expression, len=%d%s", logFunctionName, len(filter), logSuffix)
 	query, err := gojq.Parse(filter)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse tool response filter%s: %w", jqParseErrorDetails(err), err)
+		return nil, fmt.Errorf("failed to parse tool response filter%s: %w", jqutil.ParseErrorDetails(err), err)
 	}
 
 	code, err := gojq.Compile(query, compileOpts...)

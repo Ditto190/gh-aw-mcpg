@@ -2,6 +2,7 @@ package jqutil
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/itchyny/gojq"
@@ -76,4 +77,37 @@ func TestCompileOptsWithVariables_DoesNotMutateSharedSlice(t *testing.T) {
 
 	assert.Equal(t, origLen, len(SecureCompileOpts), "SecureCompileOpts length should not change")
 	assert.Equal(t, origCap, cap(SecureCompileOpts), "SecureCompileOpts capacity should not change")
+}
+
+func TestParseErrorDetails_WithParseError(t *testing.T) {
+	_, err := gojq.Parse("!!!")
+	require.Error(t, err)
+
+	details := ParseErrorDetails(err)
+	assert.Contains(t, details, "offset")
+	assert.Contains(t, details, "token")
+}
+
+func TestParseErrorDetails_EOFToken(t *testing.T) {
+	// An incomplete expression produces a ParseError with an empty token (EOF).
+	_, err := gojq.Parse(".")
+	if err == nil {
+		// "." is valid; use an expression that triggers an EOF parse error
+		_, err = gojq.Parse(".foo |")
+	}
+	require.Error(t, err)
+
+	details := ParseErrorDetails(err)
+	assert.Contains(t, details, "<EOF>")
+}
+
+func TestParseErrorDetails_NonParseError(t *testing.T) {
+	// A plain non-ParseError should return an empty string.
+	details := ParseErrorDetails(fmt.Errorf("some other error"))
+	assert.Empty(t, details)
+}
+
+func TestParseErrorDetails_NilError(t *testing.T) {
+	details := ParseErrorDetails(nil)
+	assert.Empty(t, details)
 }
