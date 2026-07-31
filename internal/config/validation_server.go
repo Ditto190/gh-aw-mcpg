@@ -146,7 +146,7 @@ func validateToolResponseFiltersWithVars(filters map[string]string, jsonPath str
 
 		query, err := gojq.Parse(filter)
 		if err != nil {
-			return fmt.Errorf("%s.%s contains an invalid jq expression: %w", jsonPath, toolName, err)
+			return fmt.Errorf("%s.%s contains an invalid jq expression%s: %w", jsonPath, toolName, jqutil.ParseErrorDetails(err), err)
 		}
 		if _, err := gojq.Compile(query,
 			jqutil.CompileOptsWithVariables(varNames)...,

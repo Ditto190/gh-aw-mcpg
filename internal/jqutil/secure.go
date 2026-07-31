@@ -1,7 +1,12 @@
 // Package jqutil provides shared gojq utilities used by multiple packages.
 package jqutil
 
-import "github.com/itchyny/gojq"
+import (
+	"errors"
+	"fmt"
+
+	"github.com/itchyny/gojq"
+)
 
 // SecureCompileOpts are the gojq compiler options applied to every Compile call
 // in this project. Centralising them here ensures the security intent ($ENV
@@ -12,6 +17,23 @@ import "github.com/itchyny/gojq"
 // two copies drifting apart.
 var SecureCompileOpts = []gojq.CompilerOption{
 	gojq.WithEnvironLoader(func() []string { return nil }), // explicitly disable $ENV access (defense-in-depth)
+}
+
+// ParseErrorDetails returns a human-readable suffix (e.g. " at offset 3 (token "!")") when
+// err wraps a *gojq.ParseError, or an empty string otherwise. EOF parse failures render
+// the token as "<EOF>" for clearer diagnostics. Centralising the extraction here ensures
+// that config validation and middleware filter compilation cannot diverge in their output.
+func ParseErrorDetails(err error) string {
+	var parseErr *gojq.ParseError
+	if !errors.As(err, &parseErr) {
+		return ""
+	}
+
+	token := parseErr.Token
+	if token == "" {
+		token = "<EOF>"
+	}
+	return fmt.Sprintf(" at offset %d (token %q)", parseErr.Offset, token)
 }
 
 // CompileOptsWithVariables returns a new slice combining SecureCompileOpts with

@@ -143,6 +143,19 @@ func TestValidateToolResponseFilters_DirectCall(t *testing.T) {
 	}
 }
 
+func TestValidateToolResponseFilters_ParseErrorIncludesOffsetAndToken(t *testing.T) {
+	filters := map[string]string{
+		"my_tool": "map(",
+	}
+
+	err := validateToolResponseFilters(filters, "mcpServers.myserver.tool_response_filters")
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "contains an invalid jq expression")
+	assert.ErrorContains(t, err, "offset")
+	assert.ErrorContains(t, err, "token")
+	assert.ErrorContains(t, err, "<EOF>")
+}
+
 // TestValidateServerAuth_DirectCall tests validateServerAuth directly, covering its three
 // top-level branches: nil auth, auth on a non-HTTP server, and auth on an HTTP server.
 // These paths are never exercised through direct validateServerAuth calls in existing tests

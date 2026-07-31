@@ -247,6 +247,8 @@ func TestCompileToolResponseFilter_ParseError(t *testing.T) {
 			require.Error(t, err)
 			assert.Nil(t, code)
 			assert.ErrorContains(t, err, "failed to parse tool response filter")
+			assert.ErrorContains(t, err, "offset")
+			assert.ErrorContains(t, err, "token")
 		})
 	}
 }
@@ -282,6 +284,8 @@ func TestApplyToolResponseFilter_ParseError(t *testing.T) {
 	_, err := ApplyToolResponseFilter(context.Background(), "(.invalid", map[string]interface{}{"a": 1})
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "failed to parse tool response filter")
+	assert.ErrorContains(t, err, "offset")
+	assert.ErrorContains(t, err, "token")
 }
 
 // ---------------------------------------------------------------------------
@@ -481,6 +485,8 @@ func TestCompileToolResponseFilterWithVars_ParseError(t *testing.T) {
 	require.Error(t, err)
 	assert.Nil(t, code)
 	assert.ErrorContains(t, err, "failed to parse tool response filter")
+	assert.ErrorContains(t, err, "offset")
+	assert.ErrorContains(t, err, "token")
 }
 
 // TestCompileToolResponseFilterWithVars_UndeclaredVar verifies that a filter
