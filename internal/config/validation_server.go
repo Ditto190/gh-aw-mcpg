@@ -18,6 +18,15 @@ func logValidationFail(name, serverType, reason string, err error) error {
 	return err
 }
 
+type serverValidator struct {
+	name       string
+	serverType string
+}
+
+func (v serverValidator) fail(reason string, err error) error {
+	return logValidationFail(v.name, v.serverType, reason, err)
+}
+
 // validateMounts validates mount specifications using centralized rules
 func validateMounts(mounts []string, jsonPath string) error {
 	for i, mount := range mounts {
@@ -50,11 +59,13 @@ func validateServerConfigWithCustomSchemas(name string, server *StdinServerConfi
 
 // validateStandardServerConfig validates stdio or http server configurations
 func validateStandardServerConfig(name string, server *StdinServerConfig, jsonPath string) error {
+	validator := serverValidator{name: name, serverType: server.Type}
+
 	// For stdio servers, container is required
 	if IsStdioServerType(server.Type) {
 		if server.Container == "" {
-			return logValidationFail(
-				name, server.Type, "stdio server missing container field",
+			return validator.fail(
+				"stdio server missing container field",
 				MissingRequired("container", "stdio", jsonPath, "Add a 'container' field (e.g., \"ghcr.io/owner/image:tag\")"))
 		}
 
@@ -71,13 +82,13 @@ func validateStandardServerConfig(name string, server *StdinServerConfig, jsonPa
 	// For HTTP servers, url is required and mounts are not allowed
 	if server.Type == "http" {
 		if server.URL == "" {
-			return logValidationFail(
-				name, server.Type, "HTTP server missing url field",
+			return validator.fail(
+				"HTTP server missing url field",
 				MissingRequired("url", "HTTP", jsonPath, "Add a 'url' field (e.g., \"https://example.com/mcp\")"))
 		}
 		if len(server.Mounts) > 0 {
-			return logValidationFail(
-				name, server.Type, "HTTP server has mounts field",
+			return validator.fail(
+				"HTTP server has mounts field",
 				UnsupportedField("mounts", "mounts are only supported for stdio (containerized) servers", jsonPath, "Remove the 'mounts' field from HTTP server configuration; mounts only apply to stdio servers"))
 		}
 
@@ -95,8 +106,8 @@ func validateStandardServerConfig(name string, server *StdinServerConfig, jsonPa
 		}); err != nil {
 		// server.ToolTimeout is non-nil here: validateOptionalInt only invokes the
 		// callback (and can only return an error) when ptr is non-nil.
-		return logValidationFail(
-			name, server.Type, fmt.Sprintf("%s %d is below minimum %d", toolTimeoutField, *server.ToolTimeout, ToolTimeoutMin), err)
+		return validator.fail(
+			fmt.Sprintf("%s %d is below minimum %d", toolTimeoutField, *server.ToolTimeout, ToolTimeoutMin), err)
 	}
 
 	if err := validateCommonServerFields(name, server.Type, server.Auth, server.ToolResponseFilters, jsonPath); err != nil {
@@ -166,9 +177,10 @@ func validateServerAuth(auth *AuthConfig, serverType, name, jsonPath string) err
 	if auth == nil {
 		return nil
 	}
+	validator := serverValidator{name: name, serverType: serverType}
 	if serverType != "http" {
-		return logValidationFail(
-			name, serverType, fmt.Sprintf("auth is set on non-HTTP server type: %s", serverType),
+		return validator.fail(
+			fmt.Sprintf("auth is set on non-HTTP server type: %s", serverType),
 			UnsupportedField(
 				"auth",
 				fmt.Sprintf("server type %q", serverType),
@@ -182,16 +194,17 @@ func validateServerAuth(auth *AuthConfig, serverType, name, jsonPath string) err
 func validateAuthConfig(auth *AuthConfig, serverName, jsonPath string) error {
 	authPath := jsonPath + ".auth"
 	logValidation.Printf("Validating auth config: server=%s, type=%s", serverName, auth.Type)
+	validator := serverValidator{name: serverName, serverType: "http"}
 
 	if auth.Type == "" {
-		return logValidationFail(
-			serverName, "http", "auth.type is empty",
+		return validator.fail(
+			"auth.type is empty",
 			MissingRequired("type", "auth", authPath, "Specify the authentication type (currently only \"github-oidc\" is supported)"))
 	}
 
 	if auth.Type != "github-oidc" {
-		return logValidationFail(
-			serverName, "http", fmt.Sprintf("unsupported auth.type: %s", auth.Type),
+		return validator.fail(
+			fmt.Sprintf("unsupported auth.type: %s", auth.Type),
 			UnsupportedType("type", auth.Type, authPath, fmt.Sprintf("Unsupported auth type %q. Currently only \"github-oidc\" is supported", auth.Type)))
 	}
 
@@ -199,8 +212,8 @@ func validateAuthConfig(auth *AuthConfig, serverName, jsonPath string) error {
 	// This catches misconfigurations at config-load time rather than deferring
 	// the error to the first request against this server.
 	if os.Getenv("ACTIONS_ID_TOKEN_REQUEST_URL") == "" {
-		return logValidationFail(
-			serverName, "http", "ACTIONS_ID_TOKEN_REQUEST_URL is not set",
+		return validator.fail(
+			"ACTIONS_ID_TOKEN_REQUEST_URL is not set",
 			MissingRequired(
 				"ACTIONS_ID_TOKEN_REQUEST_URL", "github-oidc", authPath,
 				oidc.ErrMissingOIDCEnvVar(serverName).Error()))

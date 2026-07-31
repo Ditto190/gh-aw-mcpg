@@ -267,3 +267,13 @@ func TestLogValidationFail_ReturnsOriginalError(t *testing.T) {
 
 	assert.Same(wantErr, gotErr)
 }
+
+func TestServerValidatorFail_ReturnsOriginalError(t *testing.T) {
+	assert := assert.New(t)
+
+	wantErr := errors.New("validation failure")
+	validator := serverValidator{name: "my-server", serverType: "http"}
+	gotErr := validator.fail("reason", wantErr)
+
+	assert.Same(wantErr, gotErr)
+}
