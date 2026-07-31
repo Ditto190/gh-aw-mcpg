@@ -11,6 +11,9 @@ import (
 
 // TestConvertStdinServerConfig_StdioServer tests stdio server conversion with full configuration.
 func TestConvertStdinServerConfig_StdioServer(t *testing.T) {
+	require := require.New(t)
+	assert := assert.New(t)
+
 	server := &StdinServerConfig{
 		Type:           "stdio",
 		Container:      "test/container:latest",
@@ -27,95 +30,101 @@ func TestConvertStdinServerConfig_StdioServer(t *testing.T) {
 	}
 
 	result, err := convertStdinServerConfig("test-server", server, nil)
-	require.NoError(t, err)
-	require.NotNil(t, result)
+	require.NoError(err)
+	require.NotNil(result)
 
-	assert.Equal(t, "stdio", result.Type)
-	assert.Equal(t, "docker", result.Command)
-	assert.Contains(t, result.Args, "run")
-	assert.Contains(t, result.Args, "--rm")
-	assert.Contains(t, result.Args, "-i")
+	assert.Equal("stdio", result.Type)
+	assert.Equal("docker", result.Command)
+	assert.Contains(result.Args, "run")
+	assert.Contains(result.Args, "--rm")
+	assert.Contains(result.Args, "-i")
 
 	// Check standard environment variables
-	assert.Contains(t, result.Args, "NO_COLOR=1")
-	assert.Contains(t, result.Args, "TERM=dumb")
-	assert.Contains(t, result.Args, "PYTHONUNBUFFERED=1")
+	assert.Contains(result.Args, "NO_COLOR=1")
+	assert.Contains(result.Args, "TERM=dumb")
+	assert.Contains(result.Args, "PYTHONUNBUFFERED=1")
 
 	// Check custom entrypoint
-	assert.Contains(t, result.Args, "--entrypoint")
-	assert.Contains(t, result.Args, "/bin/custom")
+	assert.Contains(result.Args, "--entrypoint")
+	assert.Contains(result.Args, "/bin/custom")
 
 	// Check mounts
-	assert.Contains(t, result.Args, "-v")
-	assert.Contains(t, result.Args, "/tmp:/tmp:rw")
+	assert.Contains(result.Args, "-v")
+	assert.Contains(result.Args, "/tmp:/tmp:rw")
 
 	// Check user environment variables
-	assert.Contains(t, result.Args, "TEST_VAR=value123")
-	assert.Contains(t, result.Args, "PASSTHROUGH")
-	assert.Contains(t, result.Args, "ANOTHER_VAR=abc")
+	assert.Contains(result.Args, "TEST_VAR=value123")
+	assert.Contains(result.Args, "PASSTHROUGH")
+	assert.Contains(result.Args, "ANOTHER_VAR=abc")
 
 	// Check additional Docker args
-	assert.Contains(t, result.Args, "--network")
-	assert.Contains(t, result.Args, "host")
+	assert.Contains(result.Args, "--network")
+	assert.Contains(result.Args, "host")
 
 	// Check container name
-	assert.Contains(t, result.Args, "test/container:latest")
+	assert.Contains(result.Args, "test/container:latest")
 
 	// Check entrypoint args
-	assert.Contains(t, result.Args, "arg1")
-	assert.Contains(t, result.Args, "arg2")
+	assert.Contains(result.Args, "arg1")
+	assert.Contains(result.Args, "arg2")
 
 	// Check tools
-	assert.Equal(t, []string{"tool1", "tool2"}, result.Tools)
+	assert.Equal([]string{"tool1", "tool2"}, result.Tools)
 }
 
 // TestConvertStdinServerConfig_HTTPServer tests HTTP server conversion.
 func TestConvertStdinServerConfig_HTTPServer(t *testing.T) {
+	require := require.New(t)
+	assert := assert.New(t)
+
 	server := &StdinServerConfig{
 		Type: "http",
 		URL:  "http://example.com:8080",
 		Headers: map[string]string{
-			"Authorization": "Bearer token123",
+			"Authorization": "******",
 			"X-Custom":      "value",
 		},
 		Tools: []string{"search", "fetch"},
 	}
 
 	result, err := convertStdinServerConfig("http-server", server, nil)
-	require.NoError(t, err)
-	require.NotNil(t, result)
+	require.NoError(err)
+	require.NotNil(result)
 
-	assert.Equal(t, "http", result.Type)
-	assert.Equal(t, "http://example.com:8080", result.URL)
-	assert.Equal(t, "Bearer token123", result.Headers["Authorization"])
-	assert.Equal(t, "value", result.Headers["X-Custom"])
-	assert.Equal(t, []string{"search", "fetch"}, result.Tools)
+	assert.Equal("http", result.Type)
+	assert.Equal("http://example.com:8080", result.URL)
+	assert.Equal("******", result.Headers["Authorization"])
+	assert.Equal("value", result.Headers["X-Custom"])
+	assert.Equal([]string{"search", "fetch"}, result.Tools)
 
 	// HTTP servers should not have Command or Args
-	assert.Empty(t, result.Command)
-	assert.Empty(t, result.Args)
+	assert.Empty(result.Command)
+	assert.Empty(result.Args)
 }
 
 // TestConvertStdinServerConfig_MinimalStdioServer tests minimal stdio server configuration.
 func TestConvertStdinServerConfig_MinimalStdioServer(t *testing.T) {
+	require := require.New(t)
+	assert := assert.New(t)
+
 	server := &StdinServerConfig{
 		Type:      "stdio",
 		Container: "minimal/container:v1",
 	}
 
 	result, err := convertStdinServerConfig("minimal", server, nil)
-	require.NoError(t, err)
-	require.NotNil(t, result)
+	require.NoError(err)
+	require.NotNil(result)
 
-	assert.Equal(t, "stdio", result.Type)
-	assert.Equal(t, "docker", result.Command)
-	assert.True(t, result.Containerized)
-	assert.Contains(t, result.Args, "minimal/container:v1")
+	assert.Equal("stdio", result.Type)
+	assert.Equal("docker", result.Command)
+	assert.True(result.Containerized)
+	assert.Contains(result.Args, "minimal/container:v1")
 
 	// Should still have standard env vars
-	assert.Contains(t, result.Args, "NO_COLOR=1")
-	assert.Contains(t, result.Args, "TERM=dumb")
-	assert.Contains(t, result.Args, "PYTHONUNBUFFERED=1")
+	assert.Contains(result.Args, "NO_COLOR=1")
+	assert.Contains(result.Args, "TERM=dumb")
+	assert.Contains(result.Args, "PYTHONUNBUFFERED=1")
 }
 
 func TestConvertStdinConfig_ContainerRuntimeSelection(t *testing.T) {

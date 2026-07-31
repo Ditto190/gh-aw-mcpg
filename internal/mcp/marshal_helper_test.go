@@ -145,5 +145,5 @@ func TestMarshalToResponse_ResponseStructure(t *testing.T) {
 	assert.IsType(t, "", response.JSONRPC, "JSONRPC should be string")
 	assert.IsType(t, 0, response.ID, "ID should be integer")
 	assert.IsType(t, json.RawMessage{}, response.Result, "Result should be json.RawMessage")
-	assert.Nil(t, response.Error, "Error should be nil for successful response")
+	assert.Nil(t, response.Error, "Error should be nil for successful response") // *ResponseError (not error) — Nil is intentional over NoError
 }
