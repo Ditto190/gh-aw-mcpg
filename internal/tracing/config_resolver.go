@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/github/gh-aw-mcpg/internal/config"
+	"github.com/github/gh-aw-mcpg/internal/sanitize"
 )
 
 // defaultSignalPath is the OTLP traces signal path per the OpenTelemetry spec.
@@ -65,6 +66,7 @@ func resolveServiceName(cfg *config.TracingConfig) string {
 		logTracing.Printf("resolveServiceName: using configured service name: %q", cfg.ServiceName)
 		return cfg.ServiceName
 	}
+	logTracing.Printf("resolveServiceName: using default service name: %q", config.DefaultTracingServiceName)
 	return config.DefaultTracingServiceName
 }
 
@@ -143,6 +145,7 @@ func resolveExporterTimeout(cfg *config.TracingConfig) time.Duration {
 		logTracing.Printf("resolveExporterTimeout: using configured timeout: %ds", cfg.ExporterTimeoutSec)
 		return time.Duration(cfg.ExporterTimeoutSec) * time.Second
 	}
+	logTracing.Printf("resolveExporterTimeout: using default timeout: %ds", config.DefaultTracingExporterTimeoutSec)
 	return time.Duration(config.DefaultTracingExporterTimeoutSec) * time.Second
 }
 
@@ -212,10 +215,12 @@ func resolveJSONExtraEndpoints(raw, signalPath string) []extraEndpointConfig {
 		if endpoint.Headers != "" {
 			if headers := parseOTLPHeadersWithDecoder(endpoint.Headers, true); len(headers) > 0 {
 				resolved.Headers = headers
+				logTracing.Printf("resolveJSONExtraEndpoints: endpoint %q has %d custom headers", sanitize.RedactURL(normalized), len(headers))
 			}
 		}
 		endpoints = append(endpoints, resolved)
 	}
+	logTracing.Printf("resolveJSONExtraEndpoints: parsed %d valid endpoint(s) from %d JSON entries", len(endpoints), len(parsed))
 	return endpoints
 }
 
