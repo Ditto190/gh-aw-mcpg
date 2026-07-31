@@ -3,6 +3,7 @@ package config
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -12,6 +13,19 @@ import (
 	"github.com/itchyny/gojq"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 )
+
+func jqParseErrorDetails(err error) string {
+	var parseErr *gojq.ParseError
+	if !errors.As(err, &parseErr) {
+		return ""
+	}
+
+	token := parseErr.Token
+	if token == "" {
+		token = "<EOF>"
+	}
+	return fmt.Sprintf(" at offset %d (token %q)", parseErr.Offset, token)
+}
 
 func logValidationFail(name, serverType, reason string, err error) error {
 	logValidation.Printf("Validation failed: %s, name=%s, type=%s", reason, name, serverType)
@@ -146,7 +160,7 @@ func validateToolResponseFiltersWithVars(filters map[string]string, jsonPath str
 
 		query, err := gojq.Parse(filter)
 		if err != nil {
-			return fmt.Errorf("%s.%s contains an invalid jq expression: %w", jsonPath, toolName, err)
+			return fmt.Errorf("%s.%s contains an invalid jq expression%s: %w", jsonPath, toolName, jqParseErrorDetails(err), err)
 		}
 		if _, err := gojq.Compile(query,
 			jqutil.CompileOptsWithVariables(varNames)...,

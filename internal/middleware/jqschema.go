@@ -61,6 +61,9 @@ type PayloadMetadata struct {
 // The recursive schema-walk logic is implemented in inferSchema (see below) and registered
 // via gojq.WithFunction, so the filter itself is a single call.
 //
+// walk_schema intentionally uses WithFunction (not WithIterFunction): it has a strict
+// single-output contract and always returns exactly one schema value.
+//
 // The transformation replaces every leaf value with its jq type name:
 //
 //	Input:  {"name": "test", "count": 42, "items": [{"id": 1}]}
@@ -97,6 +100,19 @@ var filterCodeCache sync.Map
 type toolResponseFilterVarsCacheKey struct {
 	filter      string
 	varNamesKey string
+}
+
+func jqParseErrorDetails(err error) string {
+	var parseErr *gojq.ParseError
+	if !errors.As(err, &parseErr) {
+		return ""
+	}
+
+	token := parseErr.Token
+	if token == "" {
+		token = "<EOF>"
+	}
+	return fmt.Sprintf(" at offset %d (token %q)", parseErr.Offset, token)
 }
 
 // secureCompileOpts delegates to jqutil.SecureCompileOpts so that all packages
@@ -297,7 +313,7 @@ func compileToolResponseFilterInternal[K comparable](
 	logMiddleware.Printf("%s: parsing jq filter expression, len=%d%s", logFunctionName, len(filter), logSuffix)
 	query, err := gojq.Parse(filter)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse tool response filter: %w", err)
+		return nil, fmt.Errorf("failed to parse tool response filter%s: %w", jqParseErrorDetails(err), err)
 	}
 
 	code, err := gojq.Compile(query, compileOpts...)
