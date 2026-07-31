@@ -268,7 +268,7 @@ func TestRejectHMAC_UsesUnauthorizedContract(t *testing.T) {
 
 	rejectHMAC(w, req, "invalid HMAC signature", "signature_mismatch")
 
-assert.Equal(t, http.StatusUnauthorized, w.Code)
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
 	assert.JSONEq(t, `{"error":"unauthorized","message":"invalid HMAC signature"}`, w.Body.String())
 }
 
