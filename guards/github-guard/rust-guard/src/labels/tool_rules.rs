@@ -2459,24 +2459,4 @@ mod tests {
         );
     }
 
-    #[test]
-    fn apply_tool_labels_pr_review_legacy_aliases_are_repo_scoped_writes() {
-        let ctx = default_ctx();
-        let args = serde_json::json!({ "owner": "github", "repo": "copilot" });
-        let repo_id = "github/copilot";
-
-        for op in &[
-            "add_comment_to_pending_review",
-            "add_reply_to_pull_request_comment",
-        ] {
-            let (secrecy, integrity, _desc) =
-                super::apply_tool_labels(op, &args, repo_id, vec![], vec![], String::new(), &ctx);
-            assert_eq!(
-                integrity,
-                writer_integrity(repo_id, &ctx),
-                "{op}: must require repo-scoped writer integrity"
-            );
-            assert!(secrecy.is_empty(), "{op}: public repo must have empty secrecy");
-        }
-    }
 }

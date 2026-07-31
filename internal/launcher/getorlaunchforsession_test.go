@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/github/gh-aw-mcpg/internal/config"
+	"github.com/github/gh-aw-mcpg/internal/mcp"
 )
 
 // NOTE: Many tests in this file that originally used stdio backends with commands like
@@ -331,6 +332,122 @@ func TestGetOrLaunchForSession_HTTPBackendRecordsStart(t *testing.T) {
 	assert.Equal(conn1, conn2, "HTTP backends reuse a single stateless connection")
 }
 
+// TestGetOrLaunchForSession_DoubleCheckLockHit tests the double-check locking pattern in
+// GetOrLaunchForSession: when two goroutines both observe a cache miss, only one should
+// launch a new connection. The second should pick up the connection added by the first
+// via the double-check after acquiring the mutex.
+func TestGetOrLaunchForSession_DoubleCheckLockHit(t *testing.T) {
+	require := require.New(t)
+	assert := assert.New(t)
+
+	mockServer := newMockHTTPMCPServer(t)
+	defer mockServer.Close()
+
+	ctx := context.Background()
+	cfg := newTestConfig(map[string]*config.ServerConfig{
+		// Use an http-helper so we can obtain a real *mcp.Connection without Docker.
+		"http-helper": {
+			Type: "http",
+			URL:  mockServer.URL,
+		},
+		// stdio-backend: the target server whose session pool we pre-populate.
+		"stdio-backend": {
+			Type:    "stdio",
+			Command: "docker",
+			Args:    []string{"run", "--rm", "-i", "nonexistent:latest"},
+		},
+	})
+
+	l := New(ctx, cfg)
+	defer l.Close()
+
+	// Obtain a real connection to use as the cached entry.
+	cachedConn, err := GetOrLaunch(l, "http-helper")
+	require.NoError(err)
+	require.NotNil(cachedConn)
+
+	const serverID = "stdio-backend"
+	const sessionID = "session-double-check"
+
+	// missCh signals that the goroutine has done the initial pool miss and is
+	// about to call l.mu.Lock(). proceedCh gates the goroutine so we can
+	// populate the pool before it acquires the mutex.
+	missCh := make(chan struct{})
+	proceedCh := make(chan struct{})
+	l.hookAfterFirstPoolMiss = func() {
+		close(missCh) // signal: initial pool miss observed
+		<-proceedCh   // wait: test has populated the pool
+	}
+
+	// Launch GetOrLaunchForSession in a goroutine; it will:
+	//   1. Miss the pool (not yet populated).
+	//   2. Call the hook (signal + block).
+	//   3. Acquire l.mu.Lock().
+	//   4. Double-check the pool and find the connection we injected.
+	resultCh := make(chan struct {
+		conn *mcp.Connection
+		err  error
+	}, 1)
+	go func() {
+		conn, err := GetOrLaunchForSession(l, serverID, sessionID)
+		resultCh <- struct {
+			conn *mcp.Connection
+			err  error
+		}{conn, err}
+	}()
+
+	// Wait for the goroutine to reach the hook (initial miss confirmed).
+	select {
+	case <-missCh:
+	case <-time.After(5 * time.Second):
+		t.Fatal("goroutine did not reach the pool-miss hook within timeout")
+	}
+
+	// Inject the connection while the goroutine is blocked in the hook.
+	l.sessionPool.Set(serverID, sessionID, cachedConn)
+
+	// Allow the goroutine to proceed to l.mu.Lock() and the double-check.
+	close(proceedCh)
+
+	// Wait for GetOrLaunchForSession to return.
+	select {
+	case result := <-resultCh:
+		require.NoError(result.err, "double-check should return the already-set connection without error")
+		assert.Equal(cachedConn, result.conn, "should return the connection added by the concurrent goroutine")
+	case <-time.After(5 * time.Second):
+		t.Fatal("GetOrLaunchForSession did not return within timeout")
+	}
+}
+
+// TestGetOrLaunchForSession_PoolStop_CleansDrained tests that Launcher.Close calls
+// SessionConnectionPool.Stop which removes all connections from the session pool.
+func TestGetOrLaunchForSession_PoolStop_CleansDrained(t *testing.T) {
+	mockServer := newMockHTTPMCPServer(t)
+	defer mockServer.Close()
+
+	ctx := context.Background()
+	cfg := newTestConfig(map[string]*config.ServerConfig{
+		"http-helper": {Type: "http", URL: mockServer.URL},
+	})
+
+	l := New(ctx, cfg)
+
+	// Get a connection and add it to the session pool.
+	conn, err := GetOrLaunch(l, "http-helper")
+	require.NoError(t, err)
+
+	l.sessionPool.Set("http-helper", "sess-1", conn)
+	_, ok := l.sessionPool.Get("http-helper", "sess-1")
+	require.True(t, ok, "connection should be in pool before Stop")
+
+	// Stop drains the pool.
+	l.Close()
+
+	// After Stop the pool should be empty.
+	_, ok = l.sessionPool.Get("http-helper", "sess-1")
+	assert.False(t, ok, "connection should be removed from pool after Stop")
+}
+
 // newMockHTTPMCPServer creates a test HTTP server that responds to MCP initialize requests.
 func newMockHTTPMCPServer(t *testing.T) *httptest.Server {
 	t.Helper()
@@ -355,4 +472,39 @@ func newMockHTTPMCPServer(t *testing.T) *httptest.Server {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(response)
 	}))
+}
+
+// TestGetOrLaunchForSession_StartupTimeout tests that when a stdio backend command
+// hangs (doesn't respond to MCP handshake), launchStdioConnection returns a timeout
+// error via GetOrLaunchForSession.
+func TestGetOrLaunchForSession_StartupTimeout(t *testing.T) {
+	require := require.New(t)
+
+	// Use a cancellable context so that when the test ends, cancel() terminates
+	// the exec.CommandContext used by mcp.NewConnection and kills the sleep
+	// subprocess instead of leaving it as an orphan process.
+	ctx, cancel := context.WithCancel(context.Background())
+
+	cfg := newTestConfig(map[string]*config.ServerConfig{
+		// "sleep 60" will block waiting for MCP handshake, triggering the timeout.
+		"sleep-backend": {
+			Type:    "stdio",
+			Command: "sleep",
+			Args:    []string{"60"},
+		},
+	})
+
+	l := New(ctx, cfg)
+	// Cancel the context before closing the launcher so exec.CommandContext
+	// kills the sleep subprocess before the launcher is torn down.
+	defer l.Close()
+	defer cancel()
+
+	// Set a very short startup timeout to force the timeout path.
+	l.startupTimeout = 200 * time.Millisecond
+
+	conn, err := GetOrLaunchForSession(l, "sleep-backend", "session-timeout-test")
+	require.Error(err, "should return error when command exceeds startup timeout")
+	require.Nil(conn)
+	require.ErrorContains(err, "timeout", "error should mention timeout")
 }
