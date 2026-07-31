@@ -5,10 +5,14 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
+	"github.com/github/gh-aw-mcpg/internal/logger"
 )
+
+var logErrorFormat = logger.ForFile()
 
 // AppendConfigDocsFooter appends standard documentation links to an error message.
 func AppendConfigDocsFooter(sb *strings.Builder) {
+	logErrorFormat.Print("AppendConfigDocsFooter: appending documentation links to error message")
 	sb.WriteString("\n\nPlease check your configuration against the MCP Gateway specification at:")
 	sb.WriteString("\n" + ConfigSpecURL)
 	sb.WriteString("\n\nJSON Schema reference:")
@@ -33,7 +37,9 @@ func FormatConfigError(err error) string {
 	}
 	var perr toml.ParseError
 	if errors.As(err, &perr) {
+		logErrorFormat.Print("FormatConfigError: formatting TOML parse error with source snippet")
 		return perr.ErrorWithUsage()
 	}
+	logErrorFormat.Printf("FormatConfigError: non-TOML-parse error, using plain message: %v", err)
 	return err.Error()
 }
