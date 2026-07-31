@@ -262,6 +262,16 @@ func TestHMACMiddleware_WrongSecret(t *testing.T) {
 	assert.Contains(t, w.Body.String(), "invalid HMAC signature")
 }
 
+func TestRejectHMAC_UsesUnauthorizedContract(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/mcp", nil)
+	w := httptest.NewRecorder()
+
+	rejectHMAC(w, req, "invalid HMAC signature", "signature_mismatch")
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+	assert.Contains(t, w.Body.String(), "invalid HMAC signature")
+}
+
 func TestApplyHMACIfConfigured_NoSecret(t *testing.T) {
 	called := false
 	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
