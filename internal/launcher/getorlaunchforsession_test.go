@@ -369,13 +369,21 @@ func TestGetOrLaunchForSession_DoubleCheckLockHit(t *testing.T) {
 	const serverID = "stdio-backend"
 	const sessionID = "session-double-check"
 
-	// Hold the launcher mutex so GetOrLaunchForSession blocks after its initial
-	// pool miss and before the double-check inside the critical section.
-	l.mu.Lock()
+	// missCh signals that the goroutine has done the initial pool miss and is
+	// about to call l.mu.Lock(). proceedCh gates the goroutine so we can
+	// populate the pool before it acquires the mutex.
+	missCh := make(chan struct{})
+	proceedCh := make(chan struct{})
+	l.hookAfterFirstPoolMiss = func() {
+		close(missCh) // signal: initial pool miss observed
+		<-proceedCh   // wait: test has populated the pool
+	}
 
 	// Launch GetOrLaunchForSession in a goroutine; it will:
 	//   1. Miss the pool (not yet populated).
-	//   2. Block on l.mu.Lock() waiting for us to release.
+	//   2. Call the hook (signal + block).
+	//   3. Acquire l.mu.Lock().
+	//   4. Double-check the pool and find the connection we injected.
 	resultCh := make(chan struct {
 		conn *mcp.Connection
 		err  error
@@ -388,15 +396,18 @@ func TestGetOrLaunchForSession_DoubleCheckLockHit(t *testing.T) {
 		}{conn, err}
 	}()
 
-	// Give the goroutine time to reach the l.mu.Lock() call.
-	time.Sleep(50 * time.Millisecond)
+	// Wait for the goroutine to reach the hook (initial miss confirmed).
+	select {
+	case <-missCh:
+	case <-time.After(5 * time.Second):
+		t.Fatal("goroutine did not reach the pool-miss hook within timeout")
+	}
 
-	// Simulate a concurrent goroutine that already added the connection while
-	// the first goroutine was waiting for the mutex.
+	// Inject the connection while the goroutine is blocked in the hook.
 	l.sessionPool.Set(serverID, sessionID, cachedConn)
 
-	// Release the mutex so the goroutine can proceed and hit the double-check.
-	l.mu.Unlock()
+	// Allow the goroutine to proceed to l.mu.Lock() and the double-check.
+	close(proceedCh)
 
 	// Wait for GetOrLaunchForSession to return.
 	select {
@@ -408,8 +419,8 @@ func TestGetOrLaunchForSession_DoubleCheckLockHit(t *testing.T) {
 	}
 }
 
-// TestGetOrLaunchForSession_StopTimesOut tests the Stop method timeout path when the
-// cleanup goroutine does not finish within one second.
+// TestGetOrLaunchForSession_PoolStop_CleansDrained tests that Launcher.Close calls
+// SessionConnectionPool.Stop which removes all connections from the session pool.
 func TestGetOrLaunchForSession_PoolStop_CleansDrained(t *testing.T) {
 	mockServer := newMockHTTPMCPServer(t)
 	defer mockServer.Close()
@@ -469,7 +480,12 @@ func newMockHTTPMCPServer(t *testing.T) *httptest.Server {
 func TestGetOrLaunchForSession_StartupTimeout(t *testing.T) {
 	require := require.New(t)
 
-	ctx := context.Background()
+	// Use a cancellable context so that Launcher.Close (deferred below) cancels
+	// the exec.CommandContext used by mcp.NewConnection, terminating the
+	// sleep subprocess instead of leaving it running after the test.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	cfg := newTestConfig(map[string]*config.ServerConfig{
 		// "sleep 60" will block waiting for MCP handshake, triggering the timeout.
 		"sleep-backend": {

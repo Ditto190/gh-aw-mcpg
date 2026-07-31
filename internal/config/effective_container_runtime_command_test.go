@@ -269,6 +269,9 @@ func TestEffectiveContainerRuntimeCommand_PublicWrapper(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Always clear the env var so the test is hermetic regardless of the
+			// parent environment (e.g. MCP_GATEWAY_CONTAINER_RUNTIME=podman).
+			t.Setenv("MCP_GATEWAY_CONTAINER_RUNTIME", "")
 			got := EffectiveContainerRuntimeCommand(tt.gateway)
 			assert.Equal(t, tt.want, got,
 				"EffectiveContainerRuntimeCommand should delegate to private implementation")

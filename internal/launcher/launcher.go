@@ -51,6 +51,12 @@ type Launcher struct {
 	oidcProvider       *oidc.Provider
 	serverStartTimes   map[string]time.Time // tracks when each server was successfully launched
 	serverErrors       map[string]string    // tracks the most recent error per server
+
+	// hookAfterFirstPoolMiss is called in GetOrLaunchForSession after the initial
+	// session-pool miss and before the write-lock is acquired. It is nil in
+	// production; tests may set it to implement a deterministic rendezvous for
+	// the double-check locking pattern.
+	hookAfterFirstPoolMiss func()
 }
 
 // New creates a new Launcher
@@ -219,6 +225,11 @@ func GetOrLaunchForSession(l *Launcher, serverID, sessionID string) (*mcp.Connec
 
 	// Need to launch new connection for this session
 	logLauncher.Printf("Session connection not found, creating new: serverID=%s, sessionID=%s", serverID, sessionID)
+
+	// Allow tests to observe the pool miss and inject a connection before the lock.
+	if l.hookAfterFirstPoolMiss != nil {
+		l.hookAfterFirstPoolMiss()
+	}
 
 	// Lock for launching
 	l.mu.Lock()
