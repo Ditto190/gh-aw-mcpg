@@ -289,6 +289,138 @@ func TestFilterAndConvertLabeledData(t *testing.T) {
 		require.Error(t, err)
 		assert.Nil(t, result)
 	})
+
+	t.Run("empty collection filter mode returns empty slice", func(t *testing.T) {
+		t.Parallel()
+		collection := &CollectionLabeledData{Items: []LabeledItem{}}
+		result, err := FilterAndConvertLabeledData(evaluator, agentSecrecy, agentIntegrity, OperationRead, collection, EnforcementFilter)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.False(t, result.Blocked)
+		require.NotNil(t, result.Filtered)
+		assert.Equal(t, 0, result.Filtered.GetAccessibleCount())
+		assert.Equal(t, 0, result.Filtered.GetFilteredCount())
+		require.IsType(t, []interface{}{}, result.FinalResult)
+		assert.Empty(t, result.FinalResult.([]interface{}))
+	})
+
+	t.Run("empty collection strict mode does not block", func(t *testing.T) {
+		t.Parallel()
+		collection := &CollectionLabeledData{Items: []LabeledItem{}}
+		result, err := FilterAndConvertLabeledData(evaluator, agentSecrecy, agentIntegrity, OperationRead, collection, EnforcementStrict)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		// No items were filtered, so strict mode should not block.
+		assert.False(t, result.Blocked)
+		require.NotNil(t, result.Filtered)
+		assert.Equal(t, 0, result.Filtered.GetFilteredCount())
+	})
+
+	t.Run("all items filtered strict mode blocks", func(t *testing.T) {
+		t.Parallel()
+		collection := &CollectionLabeledData{
+			Items: []LabeledItem{
+				makePrivateItem(1),
+				makePrivateItem(2),
+			},
+		}
+		result, err := FilterAndConvertLabeledData(evaluator, agentSecrecy, agentIntegrity, OperationRead, collection, EnforcementStrict)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.True(t, result.Blocked)
+		require.NotNil(t, result.Filtered)
+		assert.Equal(t, 2, result.Filtered.GetFilteredCount())
+		assert.Equal(t, 0, result.Filtered.GetAccessibleCount())
+		assert.Nil(t, result.FinalResult)
+	})
+
+	t.Run("all items filtered filter mode returns empty slice", func(t *testing.T) {
+		t.Parallel()
+		collection := &CollectionLabeledData{
+			Items: []LabeledItem{
+				makePrivateItem(1),
+				makePrivateItem(2),
+			},
+		}
+		result, err := FilterAndConvertLabeledData(evaluator, agentSecrecy, agentIntegrity, OperationRead, collection, EnforcementFilter)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.False(t, result.Blocked)
+		require.NotNil(t, result.Filtered)
+		assert.Equal(t, 2, result.Filtered.GetFilteredCount())
+		assert.Equal(t, 0, result.Filtered.GetAccessibleCount())
+		require.IsType(t, []interface{}{}, result.FinalResult)
+		assert.Empty(t, result.FinalResult.([]interface{}))
+	})
+
+	t.Run("all items accessible filter mode returns all items", func(t *testing.T) {
+		t.Parallel()
+		collection := &CollectionLabeledData{
+			Items: []LabeledItem{
+				makePublicItem(1),
+				makePublicItem(2),
+				makePublicItem(3),
+			},
+		}
+		result, err := FilterAndConvertLabeledData(evaluator, agentSecrecy, agentIntegrity, OperationRead, collection, EnforcementFilter)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.False(t, result.Blocked)
+		require.NotNil(t, result.Filtered)
+		assert.Equal(t, 3, result.Filtered.GetAccessibleCount())
+		assert.Equal(t, 0, result.Filtered.GetFilteredCount())
+		require.IsType(t, []interface{}{}, result.FinalResult)
+		finalItems := result.FinalResult.([]interface{})
+		require.Len(t, finalItems, 3)
+	})
+
+	t.Run("all items accessible strict mode does not block", func(t *testing.T) {
+		t.Parallel()
+		collection := &CollectionLabeledData{
+			Items: []LabeledItem{
+				makePublicItem(1),
+				makePublicItem(2),
+			},
+		}
+		result, err := FilterAndConvertLabeledData(evaluator, agentSecrecy, agentIntegrity, OperationRead, collection, EnforcementStrict)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.False(t, result.Blocked)
+		require.NotNil(t, result.Filtered)
+		assert.Equal(t, 0, result.Filtered.GetFilteredCount())
+	})
+
+	t.Run("simple labeled data ToResult error is propagated", func(t *testing.T) {
+		t.Parallel()
+		// errorLabeledData is not a *CollectionLabeledData, so it takes the non-collection path.
+		// Verify that errors from the non-collection ToResult path are surfaced.
+		result, err := FilterAndConvertLabeledData(evaluator, agentSecrecy, agentIntegrity, OperationWrite, &errorLabeledData{}, EnforcementStrict)
+		require.Error(t, err)
+		assert.EqualError(t, err, "to result failed")
+		assert.Nil(t, result)
+	})
+
+	t.Run("nil labeled data strict mode returns empty result without blocking", func(t *testing.T) {
+		t.Parallel()
+		result, err := FilterAndConvertLabeledData(evaluator, agentSecrecy, agentIntegrity, OperationRead, nil, EnforcementStrict)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.False(t, result.Blocked)
+		assert.Nil(t, result.FinalResult)
+		assert.Nil(t, result.Filtered)
+	})
+
+	t.Run("simple data with propagate mode", func(t *testing.T) {
+		t.Parallel()
+		eval := NewEvaluatorWithMode(EnforcementPropagate)
+		labeled := &SimpleLabeledData{Data: "result-data", Labels: NewLabeledResource("simple")}
+		result, err := FilterAndConvertLabeledData(eval, agentSecrecy, agentIntegrity, OperationRead, labeled, EnforcementPropagate)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, "result-data", result.FinalResult)
+		assert.Nil(t, result.Filtered)
+		assert.False(t, result.Blocked)
+	})
 }
 
 func TestShouldAccumulateReadLabels(t *testing.T) {
