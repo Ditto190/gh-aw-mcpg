@@ -6,6 +6,8 @@
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
+#[cfg(test)]
+use std::sync::MutexGuard;
 use std::thread;
 use std::time::Duration;
 
@@ -111,8 +113,59 @@ fn set_cached_repo_visibility(repo_id: &str, is_private: bool) {
 }
 
 #[cfg(test)]
-pub(crate) fn set_cached_repo_visibility_for_tests(repo_id: &str, is_private: bool) {
-    set_cached_repo_visibility(repo_id, is_private);
+static CACHE_TEST_LOCK: Mutex<()> = Mutex::new(());
+
+#[cfg(test)]
+pub(crate) fn lock_repo_visibility_cache_for_tests() -> MutexGuard<'static, ()> {
+    CACHE_TEST_LOCK.lock().unwrap()
+}
+
+#[cfg(test)]
+pub(crate) struct RepoVisibilityCacheEntryGuard {
+    repo_id: String,
+    previous: Option<bool>,
+    _lock: MutexGuard<'static, ()>,
+}
+
+#[cfg(test)]
+impl Drop for RepoVisibilityCacheEntryGuard {
+    fn drop(&mut self) {
+        if let Ok(mut cache) = repo_visibility_cache().lock() {
+            match self.previous {
+                Some(previous) => {
+                    cache.insert(self.repo_id.clone(), previous);
+                }
+                None => {
+                    cache.remove(&self.repo_id);
+                }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+pub(crate) fn cache_repo_visibility_for_tests(
+    repo_id: &str,
+    is_private: bool,
+) -> RepoVisibilityCacheEntryGuard {
+    let lock = lock_repo_visibility_cache_for_tests();
+    let previous = repo_visibility_cache()
+        .lock()
+        .ok()
+        .and_then(|mut cache| cache.insert(repo_id.to_string(), is_private));
+
+    RepoVisibilityCacheEntryGuard {
+        repo_id: repo_id.to_string(),
+        previous,
+        _lock: lock,
+    }
+}
+
+#[cfg(test)]
+pub(crate) fn clear_repo_visibility_cache_for_tests() {
+    if let Ok(mut cache) = repo_visibility_cache().lock() {
+        cache.clear();
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -889,18 +942,6 @@ mod tests {
                 buffer,
             ),
             _ => Err(-1),
-        }
-    }
-
-    // Serializes tests that clear and depend on the global repo visibility cache.
-    // Without this, parallel test execution can cause `clear_repo_visibility_cache_for_tests`
-    // in one test to wipe a cache entry that another test has just populated, producing
-    // spurious `None` results in the cache-hit assertion.
-    static CACHE_TEST_LOCK: Mutex<()> = Mutex::new(());
-
-    fn clear_repo_visibility_cache_for_tests() {
-        if let Ok(mut cache) = repo_visibility_cache().lock() {
-            cache.clear();
         }
     }
 

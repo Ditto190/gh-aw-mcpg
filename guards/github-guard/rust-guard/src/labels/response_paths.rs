@@ -1253,7 +1253,7 @@ mod tests {
     #[test]
     fn list_releases_private_repo_gets_private_secrecy() {
         let repo_id = "octocat/private-repo";
-        crate::labels::backend::set_cached_repo_visibility_for_tests(repo_id, true);
+        let _guard = crate::labels::backend::cache_repo_visibility_for_tests(repo_id, true);
 
         let tool_args = json!({"owner": "octocat", "repo": "private-repo"});
         let items = json!([{"tag_name": "v1.0.0", "name": "Secret release"}]);
