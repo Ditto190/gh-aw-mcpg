@@ -206,6 +206,35 @@ func TestNormalizeContainerRuntime(t *testing.T) {
 	}
 }
 
+// TestEffectiveContainerRuntimeCommand_PublicWrapper verifies that the exported
+// EffectiveContainerRuntimeCommand delegates to the internal implementation and
+// returns the expected runtime command for representative inputs. This test
+// specifically exercises the exported wrapper (line 112 of container_runtime.go)
+// which is distinct from the internal effectiveContainerRuntimeCommand tests above.
+func TestEffectiveContainerRuntimeCommand_PublicWrapper(t *testing.T) {
+	t.Run("nil gateway returns docker", func(t *testing.T) {
+		t.Setenv("MCP_GATEWAY_CONTAINER_RUNTIME", "")
+		assert.Equal(t, "docker", EffectiveContainerRuntimeCommand(nil))
+	})
+
+	t.Run("podman ContainerRuntime returns podman", func(t *testing.T) {
+		t.Setenv("MCP_GATEWAY_CONTAINER_RUNTIME", "")
+		assert.Equal(t, "podman", EffectiveContainerRuntimeCommand(&GatewayConfig{ContainerRuntime: "podman"}))
+	})
+
+	t.Run("env override takes effect", func(t *testing.T) {
+		t.Setenv("MCP_GATEWAY_CONTAINER_RUNTIME", "podman")
+		assert.Equal(t, "podman", EffectiveContainerRuntimeCommand(nil))
+	})
+
+	t.Run("ContainerRuntimeCommand overrides env", func(t *testing.T) {
+		t.Setenv("MCP_GATEWAY_CONTAINER_RUNTIME", "podman")
+		assert.Equal(t, "/usr/bin/docker", EffectiveContainerRuntimeCommand(&GatewayConfig{
+			ContainerRuntimeCommand: "/usr/bin/docker",
+		}))
+	})
+}
+
 // TestRuntimeCommandForName covers the runtimeCommandForName helper.
 func TestRuntimeCommandForName(t *testing.T) {
 	tests := []struct {
