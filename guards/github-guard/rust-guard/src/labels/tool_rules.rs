@@ -34,15 +34,6 @@ fn apply_repo_visibility_secrecy(
         Some(true) => policy_private_scope_label(owner, repo, repo_id, ctx),
         Some(false) => vec![],
         None => {
-            // When policy scope is already constrained to public repos, unknown
-            // visibility should not taint with private secrecy.
-            if ctx
-                .scopes
-                .iter()
-                .any(|scope| matches!(scope.scope_kind, super::helpers::ScopeKind::Public))
-            {
-                return vec![];
-            }
             // Fail secure in runtime when visibility cannot be determined.
             // Keep tests deterministic (backend host calls are unavailable in unit tests).
             if cfg!(test) {

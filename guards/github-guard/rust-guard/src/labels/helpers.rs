@@ -1021,15 +1021,6 @@ pub(crate) fn repo_visibility_secrecy(
         Some(true) => policy_private_scope_label(owner, repo, repo_id, ctx),
         Some(false) => vec![],
         None => {
-            // When policy scope is already constrained to public repos, unknown
-            // visibility should not taint with private secrecy.
-            if ctx
-                .scopes
-                .iter()
-                .any(|scope| matches!(scope.scope_kind, ScopeKind::Public))
-            {
-                return vec![];
-            }
             if cfg!(test) {
                 vec![]
             } else {

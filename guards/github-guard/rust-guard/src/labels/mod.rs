@@ -2564,7 +2564,8 @@ mod tests {
     }
 
     #[test]
-    fn test_apply_tool_labels_actions_list_unknown_visibility_under_public_scope_stays_public() {
+    fn test_apply_tool_labels_actions_list_unknown_visibility_under_public_scope_preserves_existing(
+    ) {
         let ctx = PolicyContext {
             scopes: vec![PolicyScopeEntry {
                 scope_kind: ScopeKind::Public,
@@ -2584,15 +2585,15 @@ mod tests {
             "actions_list",
             &tool_args,
             "github/copilot",
-            initial_secrecy,
+            initial_secrecy.clone(),
             vec![],
             String::new(),
             &ctx,
         );
 
-        assert!(
-            secrecy.is_empty(),
-            "public-scope policy should keep actions_list secrecy public when visibility lookup is unknown"
+        assert_eq!(
+            secrecy, initial_secrecy,
+            "public scope must not erase existing secrecy when visibility is unknown"
         );
         assert_eq!(
             integrity,
