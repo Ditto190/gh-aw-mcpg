@@ -208,6 +208,33 @@ func TestCheckContainerRuntimeAccessible(t *testing.T) {
 	assert.False(t, CheckContainerRuntimeAccessible("/path/that/does/not/exist/podman"))
 }
 
+// TestCheckContainerRuntimeAccessible_DockerBranch verifies that when the command
+// basename is "docker", CheckContainerRuntimeAccessible delegates to CheckDockerAccessible
+// rather than running "<command> info" directly.
+//
+// The test creates a PATH-resolvable "docker" shim that exits successfully. If delegation
+// is removed, direct command execution would return true. With DOCKER_HOST pointed to a
+// nonexistent socket, delegated CheckDockerAccessible must return false.
+func TestCheckContainerRuntimeAccessible_DockerBranch(t *testing.T) {
+	runtimeDir := t.TempDir()
+	dockerPath := filepath.Join(runtimeDir, "docker")
+	require.NoError(t, os.WriteFile(dockerPath, []byte("#!/bin/sh\nexit 0\n"), 0o755))
+	t.Setenv("PATH", runtimeDir)
+
+	// Force a nonexistent Docker socket so delegated CheckDockerAccessible returns false.
+	t.Setenv("DOCKER_HOST", "unix:///nonexistent/docker.sock")
+
+	// "docker" basename should delegate to CheckDockerAccessible. Without delegation,
+	// direct command execution would hit the shim above and return true.
+	assert.False(t, CheckContainerRuntimeAccessible("docker"),
+		"docker branch should return false when Docker socket is inaccessible")
+
+	// An absolute path with docker basename should also delegate. Without delegation,
+	// direct execution of this path would return true.
+	assert.False(t, CheckContainerRuntimeAccessible(dockerPath),
+		"absolute docker path should also delegate to CheckDockerAccessible")
+}
+
 func TestCheckContainerRuntimeAccessible_PodmanWithoutDocker(t *testing.T) {
 	runtimeDir := t.TempDir()
 	podmanPath := filepath.Join(runtimeDir, "podman")
