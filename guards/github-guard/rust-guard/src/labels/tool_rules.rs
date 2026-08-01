@@ -887,10 +887,17 @@ pub fn apply_tool_labels(
         //   `gh codespace edit`   → PATCH /user/codespaces/{codespace_name}
         //   `gh codespace delete` → DELETE /user/codespaces/{name} or /orgs/{org}/members/{user}/codespaces/{name}
         //   `gh codespace stop`   → POST /user|/orgs/.../codespaces/.../stop
+        //   `gh codespace rebuild` → POST /user/codespaces/{codespace_name}/rebuild
+        //   `gh codespace ports visibility` → PUT /user/codespaces/{codespace_name}/ports/{port}
         // Codespaces expose repository content, dev-environment metadata, and user/org-billed
         // compute state. Treat conservatively as private user-scoped writes.
         // S = private:user; I = writer(user)
-        "create_codespace" | "update_codespace" | "delete_codespace" | "stop_codespace" => {
+        "create_codespace"
+        | "update_codespace"
+        | "delete_codespace"
+        | "stop_codespace"
+        | "rebuild_codespace"
+        | "update_codespace_port_visibility" => {
             secrecy = private_user_label();
             baseline_scope = Cow::Borrowed(scope_names::USER);
             integrity = writer_integrity(scope_names::USER, ctx);
@@ -2121,6 +2128,8 @@ mod tests {
             "update_codespace",
             "delete_codespace",
             "stop_codespace",
+            "rebuild_codespace",
+            "update_codespace_port_visibility",
         ] {
             let (secrecy, integrity, _) =
                 super::apply_tool_labels(tool, &args, "", vec![], vec![], String::new(), &ctx);
