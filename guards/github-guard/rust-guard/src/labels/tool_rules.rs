@@ -887,8 +887,8 @@ pub fn apply_tool_labels(
         //   `gh codespace edit`   → PATCH /user/codespaces/{codespace_name}
         //   `gh codespace delete` → DELETE /user/codespaces/{name} or /orgs/{org}/members/{user}/codespaces/{name}
         //   `gh codespace stop`   → POST /user|/orgs/.../codespaces/.../stop
-        //   `gh codespace rebuild` → POST /user/codespaces/{codespace_name}/rebuild
-        //   `gh codespace ports visibility` → PUT /user/codespaces/{codespace_name}/ports/{port}
+        //   `gh codespace rebuild` → Codespaces session RebuildContainer RPC
+        //   `gh codespace ports visibility` → Codespaces session UpdatePortVisibility RPC
         // Codespaces expose repository content, dev-environment metadata, and user/org-billed
         // compute state. Treat conservatively as private user-scoped writes.
         // S = private:user; I = writer(user)
