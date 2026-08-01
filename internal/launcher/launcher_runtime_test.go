@@ -26,6 +26,12 @@ func TestIsDirectStdioCommand(t *testing.T) {
 		{name: "direct node command", server: &config.ServerConfig{Command: "node", Args: []string{"server.js"}}, expected: true},
 		{name: "direct shell script", server: &config.ServerConfig{Command: "/app/start.sh", Args: []string{}}, expected: true},
 		{name: "nil config", server: nil, expected: true},
+		{name: "mixed-case docker command", server: &config.ServerConfig{Command: "Docker", Args: []string{"run", "--rm"}}, expected: false},
+		{name: "uppercase PODMAN command", server: &config.ServerConfig{Command: "PODMAN", Args: []string{"run"}}, expected: false},
+		{name: "run beyond probe limit is not detected", server: &config.ServerConfig{Command: "/usr/local/bin/runtime", Args: []string{"--a", "--b", "--c", "run"}}, expected: true},
+		{name: "run within probe limit at boundary index", server: &config.ServerConfig{Command: "/usr/local/bin/runtime", Args: []string{"--a", "--b", "run"}}, expected: false},
+		{name: "nil args slice", server: &config.ServerConfig{Command: "/app/start.sh", Args: nil}, expected: true},
+		{name: "mixed-case RUN argument", server: &config.ServerConfig{Command: "/usr/local/bin/runtime", Args: []string{"RUN"}}, expected: false},
 	}
 
 	for _, tt := range tests {
