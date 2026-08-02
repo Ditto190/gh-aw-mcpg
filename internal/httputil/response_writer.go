@@ -8,7 +8,9 @@ import "net/http"
 // interfaces (e.g. http.Flusher, http.Hijacker) on the underlying writer.
 //
 // Embed BaseResponseWriter in package-specific types to avoid duplicating
-// this status-capture boilerplate.
+// this status-capture boilerplate. Package-specific wrappers can then add
+// their own concerns, such as server response body buffering or tracing-only
+// status capture, while reusing the same net/http-compatible behavior.
 type BaseResponseWriter struct {
 	http.ResponseWriter
 	// StatusCode holds the captured HTTP status code. It is set by WriteHeader

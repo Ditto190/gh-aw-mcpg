@@ -9,6 +9,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+type mockFlusher struct {
+	*httptest.ResponseRecorder
+	flushed bool
+}
+
+func (m *mockFlusher) Flush() { m.flushed = true }
+
 func TestNewResponseWriter(t *testing.T) {
 	t.Parallel()
 
@@ -76,6 +83,7 @@ func TestResponseWriter_WriteImplicitStatus200(t *testing.T) {
 	require.NoError(t, err)
 
 	// net/http sets status 200 on first Write if WriteHeader wasn't called
+	assert.Equal(t, http.StatusOK, w.StatusCode)
 	assert.Equal(t, http.StatusOK, rr.Code)
 }
 
@@ -126,4 +134,20 @@ func TestResponseWriter_HeaderPassthrough(t *testing.T) {
 	w.WriteHeader(http.StatusOK)
 
 	assert.Equal(t, "application/json", rr.Header().Get("Content-Type"))
+}
+
+func TestResponseWriter_UnwrapExposesOptionalInterfaces(t *testing.T) {
+	t.Parallel()
+
+	rr := &mockFlusher{ResponseRecorder: httptest.NewRecorder()}
+	w := newResponseWriter(rr)
+
+	_, err := w.Write([]byte("content"))
+	require.NoError(t, err)
+
+	rc := http.NewResponseController(w)
+	err = rc.Flush()
+	require.NoError(t, err)
+	assert.True(t, rr.flushed)
+	assert.Equal(t, []byte("content"), w.Body())
 }
