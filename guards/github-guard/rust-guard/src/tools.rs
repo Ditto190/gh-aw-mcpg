@@ -77,6 +77,7 @@ pub const WRITE_OPERATIONS: &[&str] = &[
     "pin_issue",             // gh issue pin
     "projects_write",
     "push_files",
+    "rebuild_codespace", // gh codespace rebuild — Codespaces session RebuildContainer RPC (recreates container)
     "rename_repository", // gh repo rename    — blocked: breaks clone URLs and integrations
     "request_copilot_review",
     "rerun_failed_jobs",   // gh run rerun --failed — reruns only failed jobs
@@ -98,6 +99,7 @@ pub const WRITE_OPERATIONS: &[&str] = &[
     "unpin_issue",             // gh issue unpin
     "unstar_repository",
     "update_codespace", // gh codespace edit — PATCH /user/codespaces/{codespace_name}
+    "update_codespace_port_visibility", // gh codespace ports visibility — Codespaces session UpdatePortVisibility RPC
     "update_issue_comment", // PATCH /repos/.../issues/comments/{id}
     "update_project",       // gh project close/edit/reopen — updates Projects v2 metadata/status
     "upload_release_asset", // gh release upload
@@ -341,6 +343,8 @@ mod tests {
             "delete_release_asset",
             "delete_workflow_run",
             "stop_codespace",
+            "rebuild_codespace",
+            "update_codespace_port_visibility",
             "create_codespace",
             "create_project",
             "delete_codespace",
