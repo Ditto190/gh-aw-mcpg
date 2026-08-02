@@ -85,4 +85,14 @@ func TestConfigureTLSTrustEnvironment(t *testing.T) {
 		err := ConfigureTLSTrustEnvironment("/tmp/ca\r.crt")
 		assert.ErrorContains(t, err, "invalid TLS CA cert path contains newline")
 	})
+
+	t.Run("propagates os.Setenv failure", func(t *testing.T) {
+		// os.Setenv rejects values containing a NUL byte on all supported
+		// platforms; this exercises the wrapped-error return branch that is
+		// otherwise unreachable given the newline/carriage-return guard above.
+		err := ConfigureTLSTrustEnvironment("/tmp/ca\x00.crt")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to set")
+		assert.Contains(t, err.Error(), TLSTrustEnvKeys()[0])
+	})
 }
