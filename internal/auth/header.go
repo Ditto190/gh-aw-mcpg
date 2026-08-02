@@ -125,11 +125,13 @@ func ValidateAgentID(provided, expected string) bool {
 // use ParseAuthHeader instead.
 func ExtractAgentID(authHeader string) string {
 	if authHeader == "" {
+		logAuth.Print("ExtractAgentID: auth header empty, using default agent ID")
 		return "default"
 	}
 
 	_, agentID, err := ParseAuthHeader(authHeader)
 	if err != nil {
+		logAuth.Printf("ExtractAgentID: failed to parse auth header, using default agent ID: %v", err)
 		return "default"
 	}
 
@@ -175,11 +177,14 @@ func ExtractSessionID(authHeader string) string {
 func ExtractSessionIDFromHeaders(xAgentID, authHeader string) string {
 	if xAgentID != "" {
 		if IsMalformedHeader(xAgentID) {
+			logAuth.Print("ExtractSessionIDFromHeaders: X-Agent-ID header malformed, rejecting")
 			return ""
 		}
+		logAuth.Print("ExtractSessionIDFromHeaders: using X-Agent-ID header")
 		return xAgentID
 	}
 	if IsMalformedHeader(authHeader) {
+		logAuth.Print("ExtractSessionIDFromHeaders: Authorization header malformed, rejecting")
 		return ""
 	}
 	return ExtractSessionID(authHeader)
