@@ -211,7 +211,12 @@ pub fn label_response_items(
                         labeled_items.push(LabeledItem {
                             data: item.clone(),
                             labels: ResourceLabels {
-                                description: format!("{}{}#{}", desc_prefix::PR, repo_full_name, number),
+                                description: format!(
+                                    "{}{}#{}",
+                                    desc_prefix::PR,
+                                    repo_full_name,
+                                    number
+                                ),
                                 secrecy: if matches!(
                                     tool_name,
                                     "search_pull_requests" | "search_pull_requests_ff_fields_param"
@@ -256,12 +261,12 @@ pub fn label_response_items(
                 let default_repo_private = repo_private_fallback(&arg_owner, &arg_repo);
                 // All tools in this match arm use shared repo secrecy except search_issues,
                 // which uses per-item secrecy derived from each issue's repository.
-                let secrecy = if !matches!(tool_name, "search_issues" | "search_issues_ff_fields_param")
-                {
-                    repo_visibility_secrecy(&arg_owner, &arg_repo, &default_repo_full_name, ctx)
-                } else {
-                    vec![]
-                };
+                let secrecy =
+                    if !matches!(tool_name, "search_issues" | "search_issues_ff_fields_param") {
+                        repo_visibility_secrecy(&arg_owner, &arg_repo, &default_repo_full_name, ctx)
+                    } else {
+                        vec![]
+                    };
                 let secrecy_shared: SharedLabels = secrecy.into();
 
                 for item in items_limited.iter() {
@@ -280,7 +285,12 @@ pub fn label_response_items(
                     labeled_items.push(LabeledItem {
                         data: item.clone(),
                         labels: ResourceLabels {
-                            description: format!("{}{}#{}", desc_prefix::ISSUE, repo_full_name, number),
+                            description: format!(
+                                "{}{}#{}",
+                                desc_prefix::ISSUE,
+                                repo_full_name,
+                                number
+                            ),
                             secrecy: if matches!(
                                 tool_name,
                                 "search_issues" | "search_issues_ff_fields_param"
@@ -335,7 +345,13 @@ pub fn label_response_items(
             let (arg_owner, arg_repo, repo_full_name) = extract_repo_info(tool_args);
             let arg_branch = tool_args.get("sha").and_then(|v| v.as_str()).unwrap_or("");
             let secrecy = repo_visibility_secrecy(&arg_owner, &arg_repo, &repo_full_name, ctx);
-            let repo_private = repo_private_or_secure_default(&arg_owner, &arg_repo);
+            let repo_private = if !arg_owner.is_empty() && !arg_repo.is_empty() {
+                repo_private_or_secure_default(super::backend::is_repo_private(
+                    &arg_owner, &arg_repo,
+                ))
+            } else {
+                false
+            };
 
             // For get_commit, SHA object identifiers are treated as commit-context
             // requests, which should preserve merged-floor consistency with
@@ -353,7 +369,12 @@ pub fn label_response_items(
                 labeled_items.push(LabeledItem {
                     data: item.clone(),
                     labels: ResourceLabels {
-                        description: format!("{}{}@{}", desc_prefix::COMMIT, repo_full_name, short_sha),
+                        description: format!(
+                            "{}{}@{}",
+                            desc_prefix::COMMIT,
+                            repo_full_name,
+                            short_sha
+                        ),
                         secrecy: secrecy_shared.clone(),
                         integrity: integrity.into(),
                     },
@@ -541,8 +562,7 @@ mod tests {
         let expected_secrecy = private_user_label();
         for item in &result {
             assert_eq!(
-                item.labels.secrecy,
-                expected_secrecy,
+                item.labels.secrecy, expected_secrecy,
                 "notification secrecy should be private:user"
             );
         }
@@ -562,8 +582,7 @@ mod tests {
     #[test]
     fn get_notification_details_empty_array_returns_empty() {
         let ctx = default_ctx();
-        let result =
-            label_response_items("get_notification_details", &json!({}), &json!([]), &ctx);
+        let result = label_response_items("get_notification_details", &json!({}), &json!([]), &ctx);
         assert!(result.is_empty());
     }
 }
