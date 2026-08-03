@@ -6,9 +6,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/github/gh-aw-mcpg/internal/logger"
 	"github.com/github/gh-aw-mcpg/internal/sanitize"
 	"github.com/github/gh-aw-mcpg/internal/util"
 )
+
+var logRateLimit = logger.ForFile()
 
 // ParseRateLimitResetHeader parses the Unix-timestamp value of the
 // X-RateLimit-Reset HTTP header into a time.Time.
@@ -19,11 +22,11 @@ func ParseRateLimitResetHeader(value string) time.Time {
 	}
 	unix, err := strconv.ParseInt(strings.TrimSpace(value), 10, 64)
 	if err != nil {
-		logHTTP.Printf("Failed to parse X-RateLimit-Reset header value=%q: %v", value, err)
+		logRateLimit.Printf("Failed to parse X-RateLimit-Reset header value=%q: %v", value, err)
 		return time.Time{}
 	}
 	reset := time.Unix(unix, 0)
-	logHTTP.Printf("Parsed X-RateLimit-Reset: resetAt=%s", reset.UTC().Format(time.RFC3339))
+	logRateLimit.Printf("Parsed X-RateLimit-Reset: resetAt=%s", reset.UTC().Format(time.RFC3339))
 	return reset
 }
 
@@ -34,7 +37,7 @@ func ParseRateLimitResetFromText(text string) time.Time {
 	lower := strings.ToLower(text)
 	idx := strings.Index(lower, "rate reset in ")
 	if idx < 0 {
-		logHTTP.Printf("ParseRateLimitResetFromText: no reset time pattern found in text=%q", util.Truncate(sanitize.SanitizeString(text), 120))
+		logRateLimit.Printf("ParseRateLimitResetFromText: no reset time pattern found in text=%q", util.Truncate(sanitize.SanitizeString(text), 120))
 		return time.Time{}
 	}
 	rest := text[idx+len("rate reset in "):]
@@ -47,27 +50,37 @@ func ParseRateLimitResetFromText(text string) time.Time {
 		return time.Time{}
 	}
 	resetAt := time.Now().Add(time.Duration(secs) * time.Second)
-	logHTTP.Printf("Parsed rate limit reset time from text: resetIn=%ds, resetAt=%s", secs, resetAt.UTC().Format(time.RFC3339))
+	logRateLimit.Printf("Parsed rate limit reset time from text: resetIn=%ds, resetAt=%s", secs, resetAt.UTC().Format(time.RFC3339))
 	return resetAt
 }
 
 // IsRateLimitText returns true when the message indicates a GitHub rate-limit error.
 func IsRateLimitText(text string) bool {
 	lower := strings.ToLower(text)
-	return strings.Contains(lower, "rate limit exceeded") ||
+	isRateLimit := strings.Contains(lower, "rate limit exceeded") ||
 		(strings.Contains(lower, "rate limit") && strings.Contains(lower, "403")) ||
 		strings.Contains(lower, "api rate limit") ||
 		strings.Contains(lower, "secondary rate limit") ||
 		strings.Contains(lower, "too many requests")
+	if isRateLimit {
+		logRateLimit.Printf("IsRateLimitText: detected rate-limit indicator in text=%q", util.Truncate(sanitize.SanitizeString(text), 120))
+	}
+	return isRateLimit
 }
 
 // RateLimitSignal reports whether an HTTP response indicates an upstream rate limit.
 // It returns the reset and remaining header values for downstream retry and logging.
 func RateLimitSignal(resp *http.Response) (bool, string, string) {
 	if resp == nil {
+		logRateLimit.Print("RateLimitSignal: nil response, no rate-limit signal")
 		return false, "", ""
 	}
 	is429 := resp.StatusCode == http.StatusTooManyRequests
 	remaining := resp.Header.Get("X-Ratelimit-Remaining")
-	return is429 || remaining == "0", resp.Header.Get("X-Ratelimit-Reset"), remaining
+	limited := is429 || remaining == "0"
+	if limited {
+		logRateLimit.Printf("RateLimitSignal: rate limit detected, statusCode=%d, remaining=%s, reset=%s",
+			resp.StatusCode, remaining, resp.Header.Get("X-Ratelimit-Reset"))
+	}
+	return limited, resp.Header.Get("X-Ratelimit-Reset"), remaining
 }

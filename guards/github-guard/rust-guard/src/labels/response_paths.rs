@@ -25,7 +25,10 @@ fn default_repo_for_items(arg_repo_full: String, items: &[Value]) -> String {
     if !arg_repo_full.is_empty() {
         return arg_repo_full;
     }
-    items.first().map(extract_repo_from_item).unwrap_or_default()
+    items
+        .first()
+        .map(extract_repo_from_item)
+        .unwrap_or_default()
 }
 
 struct RepoItemsContext<'a> {
@@ -228,7 +231,12 @@ pub fn label_response_paths(
                     labeled_paths.push(crate::PathLabel {
                         path,
                         labels: crate::ResourceLabels {
-                            description: format!("{}{}#{}", desc_prefix::PR, repo_for_labels, pr_number),
+                            description: format!(
+                                "{}{}#{}",
+                                desc_prefix::PR,
+                                repo_for_labels,
+                                pr_number
+                            ),
                             secrecy: if matches!(
                                 tool_name,
                                 "search_pull_requests" | "search_pull_requests_ff_fields_param"
@@ -304,7 +312,12 @@ pub fn label_response_paths(
                     labeled_paths.push(crate::PathLabel {
                         path,
                         labels: crate::ResourceLabels {
-                            description: format!("{}{}#{}", desc_prefix::ISSUE, repo_for_labels, issue_number),
+                            description: format!(
+                                "{}{}#{}",
+                                desc_prefix::ISSUE,
+                                repo_for_labels,
+                                issue_number
+                            ),
                             secrecy: if matches!(
                                 tool_name,
                                 "search_issues" | "search_issues_ff_fields_param"
@@ -348,7 +361,9 @@ pub fn label_response_paths(
                 let default_secrecy: crate::SharedLabels =
                     repo_visibility_secrecy(&arg_owner, &arg_repo, &default_repo, ctx).into();
                 let repo_private = if !arg_owner.is_empty() && !arg_repo.is_empty() {
-                    repo_private_or_secure_default(&arg_owner, &arg_repo)
+                    repo_private_or_secure_default(super::backend::is_repo_private(
+                        &arg_owner, &arg_repo,
+                    ))
                 } else {
                     false
                 };
@@ -381,7 +396,12 @@ pub fn label_response_paths(
                     labeled_paths.push(crate::PathLabel {
                         path: format!("/{}", i),
                         labels: crate::ResourceLabels {
-                            description: format!("{}{}@{}", desc_prefix::COMMIT, repo_for_labels, short_sha),
+                            description: format!(
+                                "{}{}@{}",
+                                desc_prefix::COMMIT,
+                                repo_for_labels,
+                                short_sha
+                            ),
                             secrecy: default_secrecy.clone(),
                             integrity: integrity.into(),
                         },
@@ -485,7 +505,12 @@ pub fn label_response_paths(
                     labeled_paths.push(crate::PathLabel {
                         path: format!("/{}", i),
                         labels: crate::ResourceLabels {
-                            description: format!("{}{}@{}", desc_prefix::RELEASE, repo_for_labels, tag),
+                            description: format!(
+                                "{}{}@{}",
+                                desc_prefix::RELEASE,
+                                repo_for_labels,
+                                tag
+                            ),
                             secrecy: default_secrecy_shared.clone(),
                             integrity,
                         },
@@ -616,11 +641,8 @@ pub fn label_response_paths(
                         } else {
                             &item_repo
                         };
-                        let integrity = author_association_floor_from_str(
-                            integrity_scope,
-                            association,
-                            ctx,
-                        );
+                        let integrity =
+                            author_association_floor_from_str(integrity_scope, association, ctx);
                         (secrecy, integrity)
                     } else {
                         // DRAFT_ISSUE or unrecognised type: no underlying repo context.
@@ -700,27 +722,39 @@ mod tests {
             .zip(canonical_result.labeled_paths.iter())
         {
             assert_eq!(alias_item.path, canonical_item.path);
-            assert_eq!(alias_item.labels.description, canonical_item.labels.description);
+            assert_eq!(
+                alias_item.labels.description,
+                canonical_item.labels.description
+            );
             assert_eq!(alias_item.labels.secrecy, canonical_item.labels.secrecy);
             assert_eq!(alias_item.labels.integrity, canonical_item.labels.integrity);
         }
 
         assert_eq!(
-            alias_result.default_labels.as_ref().map(|labels| &labels.description),
+            alias_result
+                .default_labels
+                .as_ref()
+                .map(|labels| &labels.description),
             canonical_result
                 .default_labels
                 .as_ref()
                 .map(|labels| &labels.description)
         );
         assert_eq!(
-            alias_result.default_labels.as_ref().map(|labels| &labels.secrecy),
+            alias_result
+                .default_labels
+                .as_ref()
+                .map(|labels| &labels.secrecy),
             canonical_result
                 .default_labels
                 .as_ref()
                 .map(|labels| &labels.secrecy)
         );
         assert_eq!(
-            alias_result.default_labels.as_ref().map(|labels| &labels.integrity),
+            alias_result
+                .default_labels
+                .as_ref()
+                .map(|labels| &labels.integrity),
             canonical_result
                 .default_labels
                 .as_ref()
