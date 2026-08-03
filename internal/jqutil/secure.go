@@ -5,8 +5,11 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/github/gh-aw-mcpg/internal/logger"
 	"github.com/itchyny/gojq"
 )
+
+var logJQ = logger.ForFile()
 
 // SecureCompileOpts are the gojq compiler options applied to every Compile call
 // in this project. Centralising them here ensures the security intent ($ENV
@@ -26,6 +29,7 @@ var SecureCompileOpts = []gojq.CompilerOption{
 func ParseErrorDetails(err error) string {
 	var parseErr *gojq.ParseError
 	if !errors.As(err, &parseErr) {
+		logJQ.Print("ParseErrorDetails: error does not wrap a *gojq.ParseError, returning empty suffix")
 		return ""
 	}
 
@@ -33,6 +37,7 @@ func ParseErrorDetails(err error) string {
 	if token == "" {
 		token = "<EOF>"
 	}
+	logJQ.Printf("ParseErrorDetails: offset=%d, token=%q", parseErr.Offset, token)
 	return fmt.Sprintf(" at offset %d (token %q)", parseErr.Offset, token)
 }
 
@@ -41,6 +46,7 @@ func ParseErrorDetails(err error) string {
 // a fresh allocation, so callers never mutate the shared SecureCompileOpts
 // backing array.
 func CompileOptsWithVariables(varNames []string) []gojq.CompilerOption {
+	logJQ.Printf("CompileOptsWithVariables: varNames=%v", varNames)
 	opts := make([]gojq.CompilerOption, 0, len(SecureCompileOpts)+1)
 	opts = append(opts, SecureCompileOpts...)
 	opts = append(opts, gojq.WithVariables(varNames))
