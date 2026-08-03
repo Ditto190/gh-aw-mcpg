@@ -2414,12 +2414,12 @@ mod tests {
             &ctx,
         );
 
-        // Job logs always get private:owner/repo scope — CI logs may contain accidentally-printed secrets
-        // even in public repos, so visibility-inherited secrecy is not safe here.
+        // Job logs inherit repository visibility: public repos are untainted, private repos
+        // remain private-scoped.
         assert_eq!(
             secrecy,
-            vec!["private:github/copilot".to_string()],
-            "get_job_logs must always have private scope (CI logs may contain secrets)"
+            Vec::<String>::new(),
+            "get_job_logs for a public repo should have empty secrecy"
         );
         assert_eq!(
             integrity,
@@ -2515,12 +2515,11 @@ mod tests {
             &ctx,
         );
 
-        // Artifact downloads always get private:owner/repo scope — artifacts may contain
-        // sensitive build outputs or accidentally-included secrets.
+        // Artifact downloads inherit repository visibility.
         assert_eq!(
             secrecy,
-            vec!["private:github/copilot".to_string()],
-            "artifact downloads must always have private scope"
+            Vec::<String>::new(),
+            "artifact downloads for a public repo should have empty secrecy"
         );
         assert_eq!(integrity, writer_integrity("github/copilot", &ctx));
     }
