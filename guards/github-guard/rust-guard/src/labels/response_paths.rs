@@ -25,7 +25,10 @@ fn default_repo_for_items(arg_repo_full: String, items: &[Value]) -> String {
     if !arg_repo_full.is_empty() {
         return arg_repo_full;
     }
-    items.first().map(extract_repo_from_item).unwrap_or_default()
+    items
+        .first()
+        .map(extract_repo_from_item)
+        .unwrap_or_default()
 }
 
 struct RepoItemsContext<'a> {
@@ -60,11 +63,7 @@ fn resolve_repo_item_context<'a>(
 
     // Try tool_args first, fall back to extracting from first item
     let (arg_owner, arg_repo, arg_repo_full) = extract_repo_scope_with_query_fallback(tool_args);
-    let default_repo_private = if !arg_owner.is_empty() && !arg_repo.is_empty() {
-        super::backend::is_repo_private(&arg_owner, &arg_repo).unwrap_or(false)
-    } else {
-        false
-    };
+    let default_repo_private = repo_private_fallback(&arg_owner, &arg_repo);
     let default_repo = default_repo_for_items(arg_repo_full, items);
     let default_secrecy_shared: crate::SharedLabels = if tool_name != search_tool_name {
         repo_visibility_secrecy(&arg_owner, &arg_repo, &default_repo, ctx)
@@ -232,7 +231,12 @@ pub fn label_response_paths(
                     labeled_paths.push(crate::PathLabel {
                         path,
                         labels: crate::ResourceLabels {
-                            description: format!("{}{}#{}", desc_prefix::PR, repo_for_labels, pr_number),
+                            description: format!(
+                                "{}{}#{}",
+                                desc_prefix::PR,
+                                repo_for_labels,
+                                pr_number
+                            ),
                             secrecy: if matches!(
                                 tool_name,
                                 "search_pull_requests" | "search_pull_requests_ff_fields_param"
@@ -308,7 +312,12 @@ pub fn label_response_paths(
                     labeled_paths.push(crate::PathLabel {
                         path,
                         labels: crate::ResourceLabels {
-                            description: format!("{}{}#{}", desc_prefix::ISSUE, repo_for_labels, issue_number),
+                            description: format!(
+                                "{}{}#{}",
+                                desc_prefix::ISSUE,
+                                repo_for_labels,
+                                issue_number
+                            ),
                             secrecy: if matches!(
                                 tool_name,
                                 "search_issues" | "search_issues_ff_fields_param"
@@ -352,10 +361,9 @@ pub fn label_response_paths(
                 let default_secrecy: crate::SharedLabels =
                     repo_visibility_secrecy(&arg_owner, &arg_repo, &default_repo, ctx).into();
                 let repo_private = if !arg_owner.is_empty() && !arg_repo.is_empty() {
-                    match super::backend::is_repo_private(&arg_owner, &arg_repo) {
-                        Some(value) => value,
-                        None => !cfg!(test),
-                    }
+                    repo_private_or_secure_default(super::backend::is_repo_private(
+                        &arg_owner, &arg_repo,
+                    ))
                 } else {
                     false
                 };
@@ -388,7 +396,12 @@ pub fn label_response_paths(
                     labeled_paths.push(crate::PathLabel {
                         path: format!("/{}", i),
                         labels: crate::ResourceLabels {
-                            description: format!("{}{}@{}", desc_prefix::COMMIT, repo_for_labels, short_sha),
+                            description: format!(
+                                "{}{}@{}",
+                                desc_prefix::COMMIT,
+                                repo_for_labels,
+                                short_sha
+                            ),
                             secrecy: default_secrecy.clone(),
                             integrity: integrity.into(),
                         },
@@ -492,7 +505,12 @@ pub fn label_response_paths(
                     labeled_paths.push(crate::PathLabel {
                         path: format!("/{}", i),
                         labels: crate::ResourceLabels {
-                            description: format!("{}{}@{}", desc_prefix::RELEASE, repo_for_labels, tag),
+                            description: format!(
+                                "{}{}@{}",
+                                desc_prefix::RELEASE,
+                                repo_for_labels,
+                                tag
+                            ),
                             secrecy: default_secrecy_shared.clone(),
                             integrity,
                         },
@@ -623,11 +641,8 @@ pub fn label_response_paths(
                         } else {
                             &item_repo
                         };
-                        let integrity = author_association_floor_from_str(
-                            integrity_scope,
-                            association,
-                            ctx,
-                        );
+                        let integrity =
+                            author_association_floor_from_str(integrity_scope, association, ctx);
                         (secrecy, integrity)
                     } else {
                         // DRAFT_ISSUE or unrecognised type: no underlying repo context.
@@ -707,27 +722,39 @@ mod tests {
             .zip(canonical_result.labeled_paths.iter())
         {
             assert_eq!(alias_item.path, canonical_item.path);
-            assert_eq!(alias_item.labels.description, canonical_item.labels.description);
+            assert_eq!(
+                alias_item.labels.description,
+                canonical_item.labels.description
+            );
             assert_eq!(alias_item.labels.secrecy, canonical_item.labels.secrecy);
             assert_eq!(alias_item.labels.integrity, canonical_item.labels.integrity);
         }
 
         assert_eq!(
-            alias_result.default_labels.as_ref().map(|labels| &labels.description),
+            alias_result
+                .default_labels
+                .as_ref()
+                .map(|labels| &labels.description),
             canonical_result
                 .default_labels
                 .as_ref()
                 .map(|labels| &labels.description)
         );
         assert_eq!(
-            alias_result.default_labels.as_ref().map(|labels| &labels.secrecy),
+            alias_result
+                .default_labels
+                .as_ref()
+                .map(|labels| &labels.secrecy),
             canonical_result
                 .default_labels
                 .as_ref()
                 .map(|labels| &labels.secrecy)
         );
         assert_eq!(
-            alias_result.default_labels.as_ref().map(|labels| &labels.integrity),
+            alias_result
+                .default_labels
+                .as_ref()
+                .map(|labels| &labels.integrity),
             canonical_result
                 .default_labels
                 .as_ref()

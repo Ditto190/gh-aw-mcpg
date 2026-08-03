@@ -705,8 +705,9 @@ pub(crate) fn has_maintainer_reaction_with_callback(
             // gateway mode: reaction counts are available but reactor identity is not.
             if item.get("reactions").is_some() {
                 // Use reaction-kind-specific flags so each kind logs its own warning once.
-                let already_warned =
-                    reaction_kind.warning_emitted().swap(true, Ordering::Relaxed);
+                let already_warned = reaction_kind
+                    .warning_emitted()
+                    .swap(true, Ordering::Relaxed);
                 if !already_warned {
                     crate::log_warn(&format!(
                         "[integrity] {}: {}-reactions configured but reactor identity unavailable \
@@ -821,7 +822,11 @@ pub(crate) fn has_maintainer_reaction_with_callback(
 ///
 /// Uses the production backend callback. Respects `PolicyContext.endorsement_reactions`
 /// and `PolicyContext.endorser_min_integrity`.
-pub(crate) fn has_maintainer_endorsement(item: &Value, repo_full_name: &str, ctx: &PolicyContext) -> bool {
+pub(crate) fn has_maintainer_endorsement(
+    item: &Value,
+    repo_full_name: &str,
+    ctx: &PolicyContext,
+) -> bool {
     has_maintainer_reaction_with_callback(
         item,
         repo_full_name,
@@ -837,7 +842,11 @@ pub(crate) fn has_maintainer_endorsement(item: &Value, repo_full_name: &str, ctx
 ///
 /// Uses the production backend callback. Respects `PolicyContext.disapproval_reactions`
 /// and `PolicyContext.endorser_min_integrity`.
-pub(crate) fn has_maintainer_disapproval(item: &Value, repo_full_name: &str, ctx: &PolicyContext) -> bool {
+pub(crate) fn has_maintainer_disapproval(
+    item: &Value,
+    repo_full_name: &str,
+    ctx: &PolicyContext,
+) -> bool {
     has_maintainer_reaction_with_callback(
         item,
         repo_full_name,
@@ -1049,6 +1058,29 @@ pub(crate) fn repo_visibility_secrecy_for_repo_id(
 pub(crate) fn repo_visibility_private_for_repo_id(repo_id: &str) -> Option<bool> {
     let (owner, repo) = repo_id.split_once('/')?;
     super::backend::is_repo_private(owner, repo)
+}
+
+/// Best-effort repo-private lookup for default/fallback secrecy purposes only.
+/// Returns `false` (fail-open) when owner/repo are missing or visibility is unknown.
+/// Do NOT use this for security-sensitive secrecy decisions — prefer
+/// [`repo_visibility_secrecy`], which fails secure on unknown visibility.
+pub(crate) fn repo_private_fallback(owner: &str, repo: &str) -> bool {
+    if owner.is_empty() || repo.is_empty() {
+        return false;
+    }
+    super::backend::is_repo_private(owner, repo).unwrap_or(false)
+}
+
+/// Resolves a previously-attempted repo-private lookup for security-sensitive
+/// integrity decisions, failing secure (treated as private) on unknown
+/// visibility in production.
+///
+/// Callers must handle missing owner/repo scope separately when that should
+/// remain fail-open instead of being treated as an unknown-visibility lookup.
+/// In test builds, unknown visibility resolves to `false` for deterministic
+/// fixtures.
+pub(crate) fn repo_private_or_secure_default(repo_private: Option<bool>) -> bool {
+    repo_private.unwrap_or(!cfg!(test))
 }
 
 // ============================================================================
@@ -1620,7 +1652,11 @@ pub(crate) fn is_pr_merged(item: &Value) -> bool {
 /// Trusted first-party GitHub bots and any gateway-configured trusted bots are
 /// elevated to approved (writer) integrity regardless of their author_association value.
 /// Users in the trusted_users list are also elevated to approved integrity.
-pub(crate) fn author_association_floor(item: &Value, scope: &str, ctx: &PolicyContext) -> Vec<String> {
+pub(crate) fn author_association_floor(
+    item: &Value,
+    scope: &str,
+    ctx: &PolicyContext,
+) -> Vec<String> {
     let author_login = extract_author_login(item);
     if !author_login.is_empty() && is_any_trusted_actor(author_login, ctx) {
         return writer_integrity(scope, ctx);
@@ -2493,6 +2529,23 @@ mod tests {
             let s = level.as_str();
             assert_eq!(MinIntegrity::from_policy_str(s), Some(level));
         }
+    }
+
+    #[test]
+    fn test_repo_private_fallback_missing_scope_is_fail_open() {
+        assert!(!repo_private_fallback("", "repo"));
+        assert!(!repo_private_fallback("owner", ""));
+    }
+
+    #[test]
+    fn test_repo_private_or_secure_default_preserves_known_visibility() {
+        assert!(repo_private_or_secure_default(Some(true)));
+        assert!(!repo_private_or_secure_default(Some(false)));
+    }
+
+    #[test]
+    fn test_repo_private_or_secure_default_unknown_matches_build_mode() {
+        assert_eq!(repo_private_or_secure_default(None), !cfg!(test));
     }
 
     // =========================================================================
