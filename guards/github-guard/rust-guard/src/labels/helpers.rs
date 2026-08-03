@@ -2423,6 +2423,30 @@ mod tests {
     }
 
     #[test]
+    fn test_repo_private_fallback_returns_false_when_owner_or_repo_missing() {
+        assert!(!repo_private_fallback("", "repo"));
+        assert!(!repo_private_fallback("owner", ""));
+    }
+
+    #[test]
+    fn test_repo_private_fallback_uses_cached_visibility_when_present() {
+        let _guard = super::super::backend::cache_repo_visibility_for_tests("owner/repo", true);
+        assert!(repo_private_fallback("owner", "repo"));
+    }
+
+    #[test]
+    fn test_repo_private_or_secure_default_uses_cached_visibility() {
+        assert!(!repo_private_or_secure_default(Some(false)));
+        assert!(repo_private_or_secure_default(Some(true)));
+    }
+
+    #[test]
+    fn test_repo_private_or_secure_default_fails_open_in_tests_when_unknown() {
+        // In test builds, unknown visibility (None) resolves to false (fail-open for fixtures).
+        assert!(!repo_private_or_secure_default(None));
+    }
+
+    #[test]
     fn test_collaborator_permission_matches_author_association_writer() {
         let ctx = test_ctx();
         let perm_result = collaborator_permission_floor("owner/repo", Some("write"), &ctx);
