@@ -11,8 +11,9 @@ import (
 var logResponseWriter = logger.ForFile()
 
 // responseWriter wraps http.ResponseWriter to capture response body and status code.
-// It embeds httputil.BaseResponseWriter for shared status-code capture logic, and
-// adds body buffering for debug logging.
+// It embeds httputil.BaseResponseWriter for shared status-code capture logic and
+// optional-interface passthrough via Unwrap, and adds body buffering for debug
+// logging.
 type responseWriter struct {
 	httputil.BaseResponseWriter
 	body bytes.Buffer
