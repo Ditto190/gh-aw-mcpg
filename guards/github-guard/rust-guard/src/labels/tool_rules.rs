@@ -13,9 +13,8 @@ use super::helpers::{
     ensure_integrity_baseline, extract_number_as_string, extract_repo_info_from_search_query,
     format_repo_id, get_string_field, is_any_trusted_actor, is_default_branch_commit_context,
     is_default_branch_ref, max_integrity, merged_integrity, policy_private_scope_label,
-    private_scope_label, private_user_label, project_github_label, reader_integrity, short_sha,
-    writer_integrity,
-    PolicyContext,
+    private_scope_label, private_user_label, project_github_label, reader_integrity,
+    repo_private_or_secure_default, short_sha, writer_integrity, PolicyContext,
 };
 use std::borrow::Cow;
 
@@ -165,9 +164,7 @@ fn apply_issue_read_enrichment(
                 issue_num
             );
             if always_enrich {
-                if let Some(info) =
-                    super::backend::get_issue_author_info(owner, repo, &issue_num)
-                {
+                if let Some(info) = super::backend::get_issue_author_info(owner, repo, &issue_num) {
                     integrity = resolve_author_integrity(
                         owner,
                         repo,
@@ -388,10 +385,7 @@ pub fn apply_tool_labels(
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
             let is_default_ref = is_default_branch_commit_context(tool_name, sha_or_ref);
-            let repo_private_effective = match repo_private {
-                Some(value) => value,
-                None => !cfg!(test),
-            };
+            let repo_private_effective = repo_private_or_secure_default(repo_private);
 
             integrity = if is_default_ref {
                 merged_integrity(repo_id, ctx)
@@ -1356,24 +1350,18 @@ mod tests {
         let repo_id = "github/copilot";
 
         let assert_same_labels = |canonical: &str, alias: &str, args: &Value| {
-            let (canonical_secrecy, canonical_integrity, _canonical_desc) = super::apply_tool_labels(
-                canonical,
-                args,
-                repo_id,
-                vec![],
-                vec![],
-                String::new(),
-                &ctx,
-            );
-            let (alias_secrecy, alias_integrity, _alias_desc) = super::apply_tool_labels(
-                alias,
-                args,
-                repo_id,
-                vec![],
-                vec![],
-                String::new(),
-                &ctx,
-            );
+            let (canonical_secrecy, canonical_integrity, _canonical_desc) =
+                super::apply_tool_labels(
+                    canonical,
+                    args,
+                    repo_id,
+                    vec![],
+                    vec![],
+                    String::new(),
+                    &ctx,
+                );
+            let (alias_secrecy, alias_integrity, _alias_desc) =
+                super::apply_tool_labels(alias, args, repo_id, vec![], vec![], String::new(), &ctx);
             assert_eq!(
                 alias_secrecy, canonical_secrecy,
                 "{alias} secrecy must match {canonical}"
@@ -1394,8 +1382,7 @@ mod tests {
         );
         assert_same_labels("list_releases", "list_releases_ff_fields_param", &repo_args);
 
-        let file_args =
-            serde_json::json!({ "owner": "github", "repo": "copilot", "path": "README.md", "ref": "main" });
+        let file_args = serde_json::json!({ "owner": "github", "repo": "copilot", "path": "README.md", "ref": "main" });
         assert_same_labels(
             "get_file_contents",
             "get_file_contents_ff_fields_param",
@@ -1403,7 +1390,11 @@ mod tests {
         );
 
         let search_code_args = serde_json::json!({ "query": "repo:github/copilot auth" });
-        assert_same_labels("search_code", "search_code_ff_fields_param", &search_code_args);
+        assert_same_labels(
+            "search_code",
+            "search_code_ff_fields_param",
+            &search_code_args,
+        );
 
         let search_issues_args = serde_json::json!({ "query": "repo:github/copilot is:issue bug" });
         assert_same_labels(
@@ -1790,8 +1781,15 @@ mod tests {
         let expected_integrity = project_github_label(&ctx);
 
         for tool in &["get_copilot_space", "list_copilot_spaces"] {
-            let (secrecy, integrity, _) =
-                super::apply_tool_labels(tool, &serde_json::json!({}), "", vec![], vec![], String::new(), &ctx);
+            let (secrecy, integrity, _) = super::apply_tool_labels(
+                tool,
+                &serde_json::json!({}),
+                "",
+                vec![],
+                vec![],
+                String::new(),
+                &ctx,
+            );
             assert_eq!(
                 secrecy, expected_secrecy,
                 "{tool}: expected private:user secrecy",
@@ -1814,8 +1812,15 @@ mod tests {
             "get_global_security_advisory",
             "github_support_docs_search",
         ] {
-            let (secrecy, integrity, _) =
-                super::apply_tool_labels(tool, &serde_json::json!({}), "", vec![], vec![], String::new(), &ctx);
+            let (secrecy, integrity, _) = super::apply_tool_labels(
+                tool,
+                &serde_json::json!({}),
+                "",
+                vec![],
+                vec![],
+                String::new(),
+                &ctx,
+            );
             assert!(secrecy.is_empty(), "{tool}: expected empty secrecy");
             assert_eq!(
                 integrity, expected_integrity,
@@ -1947,11 +1952,7 @@ mod tests {
 
         // Seed the cache with a PRIVATE repo so apply_repo_visibility_secrecy takes
         // the Some(true) path and returns policy_private_scope_label.
-        fn private_vis_callback(
-            tool: &str,
-            _args: &str,
-            buf: &mut [u8],
-        ) -> Result<usize, i32> {
+        fn private_vis_callback(tool: &str, _args: &str, buf: &mut [u8]) -> Result<usize, i32> {
             if tool != "search_repositories" {
                 return Err(-1);
             }
@@ -2003,11 +2004,7 @@ mod tests {
 
         // Seed the cache with a PUBLIC repo so apply_repo_visibility_secrecy takes
         // the Some(false) path and returns an empty secrecy vec.
-        fn public_vis_callback(
-            tool: &str,
-            _args: &str,
-            buf: &mut [u8],
-        ) -> Result<usize, i32> {
+        fn public_vis_callback(tool: &str, _args: &str, buf: &mut [u8]) -> Result<usize, i32> {
             if tool != "search_repositories" {
                 return Err(-1);
             }
@@ -2148,7 +2145,10 @@ mod tests {
             String::new(),
             &ctx,
         );
-        assert_eq!(secrecy, initial_secrecy, "unknown ui_get method must not alter secrecy");
+        assert_eq!(
+            secrecy, initial_secrecy,
+            "unknown ui_get method must not alter secrecy"
+        );
         assert_eq!(
             integrity,
             vec![format!("none:{repo_id}")],
@@ -2236,7 +2236,10 @@ mod tests {
                 writer_integrity(repo_id, &ctx),
                 "{op} must have writer integrity"
             );
-            assert!(secrecy.is_empty(), "{op}: public repo should have empty secrecy");
+            assert!(
+                secrecy.is_empty(),
+                "{op}: public repo should have empty secrecy"
+            );
         }
     }
 
@@ -2254,19 +2257,28 @@ mod tests {
                 writer_integrity(repo_id, &ctx),
                 "{op} must require repo-scoped writer integrity"
             );
-            assert!(secrecy.is_empty(), "{op}: public repo should have empty secrecy");
+            assert!(
+                secrecy.is_empty(),
+                "{op}: public repo should have empty secrecy"
+            );
         }
     }
 
     #[test]
     fn apply_tool_labels_transfer_issue_sets_issue_desc_and_writer_integrity() {
         let ctx = default_ctx();
-        let args =
-            serde_json::json!({ "owner": "github", "repo": "copilot", "issue_number": 42 });
+        let args = serde_json::json!({ "owner": "github", "repo": "copilot", "issue_number": 42 });
         let repo_id = "github/copilot";
 
-        let (secrecy, integrity, desc) =
-            super::apply_tool_labels("transfer_issue", &args, repo_id, vec![], vec![], String::new(), &ctx);
+        let (secrecy, integrity, desc) = super::apply_tool_labels(
+            "transfer_issue",
+            &args,
+            repo_id,
+            vec![],
+            vec![],
+            String::new(),
+            &ctx,
+        );
 
         assert_eq!(desc, "issue:github/copilot#42");
         assert_eq!(integrity, writer_integrity(repo_id, &ctx));
@@ -2282,9 +2294,21 @@ mod tests {
         let user_args = serde_json::json!({});
         let repo_id = "github/copilot";
 
-        for tool in &["set_secret", "delete_secret", "set_variable", "delete_variable"] {
-            let (repo_secrecy, repo_integrity, _desc) =
-                super::apply_tool_labels(tool, &repo_args, repo_id, vec![], vec![], String::new(), &ctx);
+        for tool in &[
+            "set_secret",
+            "delete_secret",
+            "set_variable",
+            "delete_variable",
+        ] {
+            let (repo_secrecy, repo_integrity, _desc) = super::apply_tool_labels(
+                tool,
+                &repo_args,
+                repo_id,
+                vec![],
+                vec![],
+                String::new(),
+                &ctx,
+            );
             assert_eq!(
                 repo_integrity,
                 writer_integrity(repo_id, &ctx),
@@ -2428,7 +2452,10 @@ mod tests {
                 "{op}: projects read should have empty secrecy, got: {secrecy:?}"
             );
             let expected = writer_integrity("myorg", &ctx);
-            assert_eq!(integrity, expected, "{op} must have writer_integrity(owner)");
+            assert_eq!(
+                integrity, expected,
+                "{op} must have writer_integrity(owner)"
+            );
         }
 
         // Without owner: the projects arm skips setting integrity (owner is empty),
@@ -2481,7 +2508,10 @@ mod tests {
                 writer_integrity(repo_id, &ctx),
                 "{op}: must require repo-scoped writer integrity"
             );
-            assert!(secrecy.is_empty(), "{op}: public repo must have empty secrecy");
+            assert!(
+                secrecy.is_empty(),
+                "{op}: public repo must have empty secrecy"
+            );
         }
     }
 
@@ -2503,7 +2533,10 @@ mod tests {
                 writer_integrity(repo_id, &ctx),
                 "{op}: must require repo-scoped writer integrity"
             );
-            assert!(secrecy.is_empty(), "{op}: public repo must have empty secrecy");
+            assert!(
+                secrecy.is_empty(),
+                "{op}: public repo must have empty secrecy"
+            );
         }
     }
 
@@ -2533,5 +2566,4 @@ mod tests {
             "enable_toolset must produce writer(github) integrity"
         );
     }
-
 }
