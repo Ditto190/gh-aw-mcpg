@@ -1081,7 +1081,8 @@ func TestNewConnection_ErrorPaths(t *testing.T) {
 			assertError: func(t *testing.T, err error) {
 				assert.ErrorContains(t, err, "failed to connect")
 				assert.ErrorContains(t, err, "initialize")
-				assert.ErrorContains(t, err, "EOF")
+				errText := err.Error()
+				assert.True(t, strings.Contains(errText, "EOF") || strings.Contains(errText, "broken pipe"), "error should reflect process exit during handshake: %v", err)
 				assert.False(t, errors.Is(err, context.DeadlineExceeded), "error should reflect process exit rather than deadline expiry")
 			},
 			assertLogs: func(t *testing.T, logDir string) {
