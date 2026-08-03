@@ -404,16 +404,22 @@ pub fn apply_tool_labels(
 
         // === Security-sensitive data: always private regardless of repo visibility ===
         // Covers: secret scanning alerts (may contain actual secret values), code scanning
-        // and Dependabot alerts (security findings), and Actions job logs (may contain
-        // accidentally-printed CI tokens). All are private:repo + writer integrity.
+        // and Dependabot alerts (security findings). All are private:repo + writer integrity.
         "list_secret_scanning_alerts"
         | "get_secret_scanning_alert"
         | "list_code_scanning_alerts"
         | "get_code_scanning_alert"
         | "list_dependabot_alerts"
-        | "get_dependabot_alert"
-        | "get_job_logs" => {
+        | "get_dependabot_alert" => {
             secrecy = policy_private_scope_label(&owner, &repo, repo_id, ctx);
+            integrity = writer_integrity(repo_id, ctx);
+        }
+
+        // === Actions log and artifact reads (repo-scoped) ===
+        // S = S(repo) — inherits from repository visibility
+        // I = writer
+        "get_job_logs" => {
+            secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
             integrity = writer_integrity(repo_id, ctx);
         }
 
@@ -427,15 +433,7 @@ pub fn apply_tool_labels(
 
         // === Actions: Workflow/Artifact Metadata and Artifact Downloads ===
         "actions_get" => {
-            let method = tool_args.get("method").and_then(|v| v.as_str()).unwrap_or("");
-            if method == "download_workflow_run_artifact" {
-                // Artifact downloads may contain sensitive data or accidentally-included secrets.
-                // Always treat as private regardless of repository visibility.
-                // S(artifact) = private:owner/repo; I(artifact) = approved
-                secrecy = policy_private_scope_label(&owner, &repo, repo_id, ctx);
-            } else {
-                secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
-            }
+            secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
             integrity = writer_integrity(repo_id, ctx);
         }
 
@@ -1612,7 +1610,7 @@ mod tests {
     }
 
     #[test]
-    fn apply_tool_labels_get_job_logs_is_always_private() {
+    fn apply_tool_labels_get_job_logs_inherits_repo_visibility() {
         let ctx = default_ctx();
         let args = serde_json::json!({"owner": "octocat", "repo": "hello-world"});
         let repo_id = "octocat/hello-world";
@@ -1628,8 +1626,8 @@ mod tests {
         );
         assert_eq!(
             secrecy,
-            private_label("octocat", "hello-world", repo_id, &ctx),
-            "get_job_logs: expected private secrecy label (CI logs may contain tokens)",
+            Vec::<String>::new(),
+            "get_job_logs: expected public repo secrecy to be empty",
         );
         assert_eq!(
             integrity,
@@ -1639,7 +1637,35 @@ mod tests {
     }
 
     #[test]
-    fn apply_tool_labels_actions_get_artifact_download_is_always_private() {
+    fn apply_tool_labels_get_job_logs_private_repo_stays_private() {
+        let ctx = default_ctx();
+        let args = serde_json::json!({"owner": "octocat", "repo": "private-repo"});
+        let repo_id = "octocat/private-repo";
+        let _guard = crate::labels::backend::cache_repo_visibility_for_tests(repo_id, true);
+
+        let (secrecy, integrity, _) = super::apply_tool_labels(
+            "get_job_logs",
+            &args,
+            repo_id,
+            vec![],
+            vec![],
+            String::new(),
+            &ctx,
+        );
+        assert_eq!(
+            secrecy,
+            private_label("octocat", "private-repo", repo_id, &ctx),
+            "get_job_logs: expected private repo secrecy label",
+        );
+        assert_eq!(
+            integrity,
+            writer_integrity(repo_id, &ctx),
+            "get_job_logs: expected writer-level integrity",
+        );
+    }
+
+    #[test]
+    fn apply_tool_labels_actions_get_artifact_download_inherits_repo_visibility() {
         let ctx = default_ctx();
         let args = serde_json::json!({
             "owner": "octocat",
@@ -1659,8 +1685,8 @@ mod tests {
         );
         assert_eq!(
             secrecy,
-            private_label("octocat", "hello-world", repo_id, &ctx),
-            "actions_get download_workflow_run_artifact must always be private",
+            Vec::<String>::new(),
+            "actions_get download_workflow_run_artifact should inherit public repo visibility",
         );
         assert_eq!(
             integrity,
