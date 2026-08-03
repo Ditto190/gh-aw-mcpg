@@ -124,6 +124,12 @@ implementation of jq, eliminating the need to spawn external processes. The
 `walk_schema` function is bound to the native `inferSchema` Go function via
 `gojq.WithFunction` at compile time.
 
+For defense in depth, jq compilation uses secure options that disable `$ENV`
+(`gojq.WithEnvironLoader(func() []string { return nil })`), so untrusted filters
+cannot read process environment variables. Parameterized tool filters should bind
+untrusted runtime values through `CompileToolResponseFilterWithVars` (`gojq.WithVariables`)
+and `RunWithContext(...)` arguments instead of string interpolation in jq source.
+
 ## Configuration
 
 The middleware can be controlled via the `ShouldApplyMiddleware` function:

@@ -110,9 +110,22 @@ func TestApplyJqSchema_SingleOutputContract(t *testing.T) {
 	require.NotNil(jqSchemaCode, "jq schema compiled code must not be nil")
 
 	inputs := []interface{}{
+		nil,
+		true,
+		42.5,
+		"hello",
+		[]interface{}{},
 		map[string]interface{}{"name": "test", "count": 42},
 		[]interface{}{map[string]interface{}{"id": 1}},
 		map[string]interface{}{"nested": map[string]interface{}{"a": []interface{}{1, 2, 3}}},
+		map[string]interface{}{
+			"emptyObject": map[string]interface{}{},
+			"emptyArray":  []interface{}{},
+			"mixed": []interface{}{
+				map[string]interface{}{"nullable": nil, "ok": false},
+				[]interface{}{map[string]interface{}{"deep": []interface{}{"x"}}},
+			},
+		},
 	}
 
 	for _, input := range inputs {
