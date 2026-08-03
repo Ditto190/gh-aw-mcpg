@@ -329,8 +329,7 @@ func TestHTTPRequest_ErrorResponses(t *testing.T) {
 				// Read request body to determine if it's an initialize request
 				var reqBody map[string]interface{}
 				bodyBytes, err := io.ReadAll(r.Body)
-				if err != nil {
-					assert.NoError(t, err, "Failed to read request body")
+				if !assert.NoError(t, err, "Failed to read request body") {
 					http.Error(w, "Internal error", http.StatusInternalServerError)
 					return
 				}
@@ -1048,6 +1047,44 @@ func TestPaginateAll(t *testing.T) {
 		require.NoError(t, err)
 		assert.Empty(t, items)
 	})
+}
+
+// TestNewConnection_ErrorPaths verifies that NewConnection surfaces errors from
+// the underlying command transport, exercising both an exec failure (invalid
+// binary) and a handshake failure (process exits without completing the MCP
+// initialize handshake), including stderr capture/streaming.
+func TestNewConnection_ErrorPaths(t *testing.T) {
+	tests := []struct {
+		name           string
+		command        string
+		args           []string
+		errorSubstring string
+	}{
+		{
+			name:           "nonexistent binary",
+			command:        "/nonexistent-binary-xyz",
+			args:           nil,
+			errorSubstring: "failed to connect",
+		},
+		{
+			name:           "process exits before completing handshake",
+			command:        "sh",
+			args:           []string{"-c", "echo diagnostic message 1>&2; exit 1"},
+			errorSubstring: "failed to connect",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+
+			conn, err := NewConnection(ctx, "test-server", tt.command, tt.args, map[string]string{"FOO": "bar"})
+			require.Error(t, err)
+			assert.Nil(t, conn)
+			assert.ErrorContains(t, err, tt.errorSubstring)
+		})
+	}
 }
 
 // TestListMCPItems_NilSession verifies that listMCPItems returns a session error
