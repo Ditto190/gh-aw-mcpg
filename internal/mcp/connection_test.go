@@ -3,11 +3,14 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -1055,34 +1058,80 @@ func TestPaginateAll(t *testing.T) {
 // initialize handshake), including stderr capture/streaming.
 func TestNewConnection_ErrorPaths(t *testing.T) {
 	tests := []struct {
-		name           string
-		command        string
-		args           []string
-		errorSubstring string
+		name        string
+		command     string
+		args        []string
+		assertError func(t *testing.T, err error)
+		assertLogs  func(t *testing.T, logDir string)
 	}{
 		{
-			name:           "nonexistent binary",
-			command:        "/nonexistent-binary-xyz",
-			args:           nil,
-			errorSubstring: "failed to connect",
+			name:    "nonexistent binary",
+			command: "/nonexistent-binary-xyz",
+			args:    nil,
+			assertError: func(t *testing.T, err error) {
+				assert.ErrorContains(t, err, "failed to connect")
+				assert.ErrorContains(t, err, "/nonexistent-binary-xyz")
+				assert.ErrorIs(t, err, fs.ErrNotExist)
+			},
 		},
 		{
-			name:           "process exits before completing handshake",
-			command:        "sh",
-			args:           []string{"-c", "echo diagnostic message 1>&2; exit 1"},
-			errorSubstring: "failed to connect",
+			name:    "process exits before completing handshake",
+			command: "sh",
+			args:    []string{"-c", "echo diagnostic message 1>&2; exit 1"},
+			assertError: func(t *testing.T, err error) {
+				assert.ErrorContains(t, err, "failed to connect")
+				assert.ErrorContains(t, err, "initialize")
+				assert.ErrorContains(t, err, "EOF")
+				assert.False(t, errors.Is(err, context.DeadlineExceeded), "error should reflect process exit rather than deadline expiry")
+			},
+			assertLogs: func(t *testing.T, logDir string) {
+				serverLogPath := filepath.Join(logDir, "test-server.log")
+				markdownLogPath := filepath.Join(logDir, "gateway.md")
+
+				require.Eventually(t, func() bool {
+					serverLog, err := os.ReadFile(serverLogPath)
+					if err != nil {
+						return false
+					}
+					markdownLog, err := os.ReadFile(markdownLogPath)
+					if err != nil {
+						return false
+					}
+					return strings.Contains(string(serverLog), "[stderr] diagnostic message") &&
+						strings.Contains(string(markdownLog), "MCP backend stderr output") &&
+						strings.Contains(string(markdownLog), "diagnostic message")
+				}, time.Second, 10*time.Millisecond)
+
+				serverLog, err := os.ReadFile(serverLogPath)
+				require.NoError(t, err)
+				assert.Contains(t, string(serverLog), "[stderr] diagnostic message")
+
+				markdownLog, err := os.ReadFile(markdownLogPath)
+				require.NoError(t, err)
+				assert.Contains(t, string(markdownLog), "MCP backend stderr output")
+				assert.Contains(t, string(markdownLog), "diagnostic message")
+			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			if tt.assertLogs != nil {
+				logDir := t.TempDir()
+				logger.InitGatewayLoggers(logDir)
+				t.Cleanup(func() {
+					require.NoError(t, logger.CloseAllLoggers())
+				})
+				defer tt.assertLogs(t, logDir)
+			}
+
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 
 			conn, err := NewConnection(ctx, "test-server", tt.command, tt.args, map[string]string{"FOO": "bar"})
 			require.Error(t, err)
 			assert.Nil(t, conn)
-			assert.ErrorContains(t, err, tt.errorSubstring)
+			tt.assertError(t, err)
 		})
 	}
 }
