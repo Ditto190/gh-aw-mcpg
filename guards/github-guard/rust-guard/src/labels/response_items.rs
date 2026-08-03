@@ -147,11 +147,7 @@ pub fn label_response_items(
                     let items_to_process = limit_items_with_log(items, "list_pull_requests");
                     let (arg_owner, arg_repo, arg_repo_full) =
                         extract_repo_scope_with_query_fallback(tool_args);
-                    let default_repo_private = if !arg_owner.is_empty() && !arg_repo.is_empty() {
-                        super::backend::is_repo_private(&arg_owner, &arg_repo).unwrap_or(false)
-                    } else {
-                        false
-                    };
+                    let default_repo_private = repo_private_fallback(&arg_owner, &arg_repo);
                     // All tools in this match arm use shared repo secrecy except search_pull_requests,
                     // which uses per-item secrecy derived from each PR's repository.
                     let secrecy = if !matches!(
@@ -257,11 +253,7 @@ pub fn label_response_items(
                 // Get owner/repo from tool_args for contributor verification
                 let (arg_owner, arg_repo, default_repo_full_name) =
                     extract_repo_scope_with_query_fallback(tool_args);
-                let default_repo_private = if !arg_owner.is_empty() && !arg_repo.is_empty() {
-                    super::backend::is_repo_private(&arg_owner, &arg_repo).unwrap_or(false)
-                } else {
-                    false
-                };
+                let default_repo_private = repo_private_fallback(&arg_owner, &arg_repo);
                 // All tools in this match arm use shared repo secrecy except search_issues,
                 // which uses per-item secrecy derived from each issue's repository.
                 let secrecy = if !matches!(tool_name, "search_issues" | "search_issues_ff_fields_param")
@@ -344,10 +336,7 @@ pub fn label_response_items(
             let arg_branch = tool_args.get("sha").and_then(|v| v.as_str()).unwrap_or("");
             let secrecy = repo_visibility_secrecy(&arg_owner, &arg_repo, &repo_full_name, ctx);
             let repo_private = if !arg_owner.is_empty() && !arg_repo.is_empty() {
-                match super::backend::is_repo_private(&arg_owner, &arg_repo) {
-                    Some(value) => value,
-                    None => !cfg!(test),
-                }
+                repo_private_or_secure_default(&arg_owner, &arg_repo)
             } else {
                 false
             };

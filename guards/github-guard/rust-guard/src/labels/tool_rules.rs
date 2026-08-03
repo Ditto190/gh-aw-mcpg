@@ -13,8 +13,8 @@ use super::helpers::{
     ensure_integrity_baseline, extract_number_as_string, extract_repo_info_from_search_query,
     format_repo_id, get_string_field, is_any_trusted_actor, is_default_branch_commit_context,
     is_default_branch_ref, max_integrity, merged_integrity, policy_private_scope_label,
-    private_scope_label, private_user_label, project_github_label, reader_integrity, short_sha,
-    writer_integrity,
+    private_scope_label, private_user_label, project_github_label, reader_integrity,
+    repo_private_or_secure_default, short_sha, writer_integrity,
     PolicyContext,
 };
 use std::borrow::Cow;
@@ -388,10 +388,8 @@ pub fn apply_tool_labels(
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
             let is_default_ref = is_default_branch_commit_context(tool_name, sha_or_ref);
-            let repo_private_effective = match repo_private {
-                Some(value) => value,
-                None => !cfg!(test),
-            };
+            let repo_private_effective = repo_private
+                .unwrap_or_else(|| repo_private_or_secure_default(&owner, &repo));
 
             integrity = if is_default_ref {
                 merged_integrity(repo_id, ctx)

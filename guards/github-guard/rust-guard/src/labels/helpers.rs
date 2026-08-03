@@ -1051,6 +1051,27 @@ pub(crate) fn repo_visibility_private_for_repo_id(repo_id: &str) -> Option<bool>
     super::backend::is_repo_private(owner, repo)
 }
 
+/// Best-effort repo-private lookup for fallback/default behavior only.
+/// Returns `false` (fail-open) when owner/repo are missing or visibility is unknown.
+/// Do not use this for security-sensitive secrecy decisions; prefer
+/// [`repo_private_or_secure_default`] or [`repo_visibility_secrecy`].
+pub(crate) fn repo_private_fallback(owner: &str, repo: &str) -> bool {
+    if owner.is_empty() || repo.is_empty() {
+        return false;
+    }
+    super::backend::is_repo_private(owner, repo).unwrap_or(false)
+}
+
+/// Resolves repo-private visibility for security-sensitive integrity decisions.
+/// Fails secure in production (`true` when unknown), while tests resolve unknown
+/// visibility to `false` for deterministic fixtures.
+pub(crate) fn repo_private_or_secure_default(owner: &str, repo: &str) -> bool {
+    match super::backend::is_repo_private(owner, repo) {
+        Some(value) => value,
+        None => !cfg!(test),
+    }
+}
+
 // ============================================================================
 // JSON Field Extraction Helpers
 // ============================================================================
@@ -2384,6 +2405,31 @@ mod tests {
             result.is_empty(),
             "unknown permission should give empty integrity"
         );
+    }
+
+    #[test]
+    fn test_repo_private_fallback_returns_false_when_owner_or_repo_missing() {
+        assert!(!repo_private_fallback("", "repo"));
+        assert!(!repo_private_fallback("owner", ""));
+    }
+
+    #[test]
+    fn test_repo_private_fallback_uses_cached_visibility_when_present() {
+        let _guard = super::super::backend::cache_repo_visibility_for_tests("owner/repo", true);
+        assert!(repo_private_fallback("owner", "repo"));
+    }
+
+    #[test]
+    fn test_repo_private_or_secure_default_uses_cached_visibility() {
+        let _guard = super::super::backend::cache_repo_visibility_for_tests("owner/repo", false);
+        assert!(!repo_private_or_secure_default("owner", "repo"));
+    }
+
+    #[test]
+    fn test_repo_private_or_secure_default_fails_open_in_tests_when_unknown() {
+        let _lock = super::super::backend::lock_repo_visibility_cache_for_tests();
+        super::super::backend::clear_repo_visibility_cache_for_tests();
+        assert!(!repo_private_or_secure_default("owner", "repo"));
     }
 
     #[test]
