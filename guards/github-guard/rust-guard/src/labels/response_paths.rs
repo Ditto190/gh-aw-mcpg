@@ -60,11 +60,7 @@ fn resolve_repo_item_context<'a>(
 
     // Try tool_args first, fall back to extracting from first item
     let (arg_owner, arg_repo, arg_repo_full) = extract_repo_scope_with_query_fallback(tool_args);
-    let default_repo_private = if !arg_owner.is_empty() && !arg_repo.is_empty() {
-        super::backend::is_repo_private(&arg_owner, &arg_repo).unwrap_or(false)
-    } else {
-        false
-    };
+    let default_repo_private = repo_private_fallback(&arg_owner, &arg_repo);
     let default_repo = default_repo_for_items(arg_repo_full, items);
     let default_secrecy_shared: crate::SharedLabels = if tool_name != search_tool_name {
         repo_visibility_secrecy(&arg_owner, &arg_repo, &default_repo, ctx)
@@ -351,14 +347,7 @@ pub fn label_response_paths(
                 let default_repo = default_repo_for_items(arg_repo_full, items);
                 let default_secrecy: crate::SharedLabels =
                     repo_visibility_secrecy(&arg_owner, &arg_repo, &default_repo, ctx).into();
-                let repo_private = if !arg_owner.is_empty() && !arg_repo.is_empty() {
-                    match super::backend::is_repo_private(&arg_owner, &arg_repo) {
-                        Some(value) => value,
-                        None => !cfg!(test),
-                    }
-                } else {
-                    false
-                };
+                let repo_private = repo_private_or_secure_default(&arg_owner, &arg_repo);
 
                 // Commits on default branch (main/master) get merged-level integrity
                 let is_default_branch = is_default_branch_ref(sha);

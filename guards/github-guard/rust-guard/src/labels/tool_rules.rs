@@ -388,10 +388,7 @@ pub fn apply_tool_labels(
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
             let is_default_ref = is_default_branch_commit_context(tool_name, sha_or_ref);
-            let repo_private_effective = match repo_private {
-                Some(value) => value,
-                None => !cfg!(test),
-            };
+            let repo_private_effective = repo_private.unwrap_or(!cfg!(test));
 
             integrity = if is_default_ref {
                 merged_integrity(repo_id, ctx)

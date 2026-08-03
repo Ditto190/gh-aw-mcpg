@@ -1051,6 +1051,27 @@ pub(crate) fn repo_visibility_private_for_repo_id(repo_id: &str) -> Option<bool>
     super::backend::is_repo_private(owner, repo)
 }
 
+/// Best-effort repo-private lookup for default/fallback secrecy purposes only.
+/// Returns `false` (fail-open) when owner/repo are missing or visibility is unknown.
+/// Do NOT use this for security-sensitive secrecy decisions — prefer
+/// [`repo_visibility_secrecy`], which fails secure on unknown visibility.
+pub(crate) fn repo_private_fallback(owner: &str, repo: &str) -> bool {
+    if owner.is_empty() || repo.is_empty() {
+        return false;
+    }
+    super::backend::is_repo_private(owner, repo).unwrap_or(false)
+}
+
+/// Resolves repo-private visibility for security-sensitive integrity decisions,
+/// failing secure (treated as private) on unknown visibility in production.
+/// In test builds, unknown visibility resolves to `false` for deterministic fixtures.
+pub(crate) fn repo_private_or_secure_default(owner: &str, repo: &str) -> bool {
+    match super::backend::is_repo_private(owner, repo) {
+        Some(value) => value,
+        None => !cfg!(test),
+    }
+}
+
 // ============================================================================
 // JSON Field Extraction Helpers
 // ============================================================================
