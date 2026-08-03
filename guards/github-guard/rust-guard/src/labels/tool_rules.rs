@@ -1614,6 +1614,7 @@ mod tests {
         let ctx = default_ctx();
         let args = serde_json::json!({"owner": "octocat", "repo": "hello-world"});
         let repo_id = "octocat/hello-world";
+        let _guard = crate::labels::backend::cache_repo_visibility_for_tests(repo_id, false);
 
         let (secrecy, integrity, _) = super::apply_tool_labels(
             "get_job_logs",
@@ -1673,6 +1674,7 @@ mod tests {
             "method": "download_workflow_run_artifact",
         });
         let repo_id = "octocat/hello-world";
+        let _guard = crate::labels::backend::cache_repo_visibility_for_tests(repo_id, false);
 
         let (secrecy, integrity, _) = super::apply_tool_labels(
             "actions_get",
@@ -1696,6 +1698,38 @@ mod tests {
     }
 
     #[test]
+    fn apply_tool_labels_actions_get_artifact_download_private_repo_stays_private() {
+        let ctx = default_ctx();
+        let args = serde_json::json!({
+            "owner": "octocat",
+            "repo": "private-repo",
+            "method": "download_workflow_run_artifact",
+        });
+        let repo_id = "octocat/private-repo";
+        let _guard = crate::labels::backend::cache_repo_visibility_for_tests(repo_id, true);
+
+        let (secrecy, integrity, _) = super::apply_tool_labels(
+            "actions_get",
+            &args,
+            repo_id,
+            vec![],
+            vec![],
+            String::new(),
+            &ctx,
+        );
+        assert_eq!(
+            secrecy,
+            private_label("octocat", "private-repo", repo_id, &ctx),
+            "actions_get download_workflow_run_artifact: expected private repo secrecy label",
+        );
+        assert_eq!(
+            integrity,
+            writer_integrity(repo_id, &ctx),
+            "actions_get download_workflow_run_artifact: expected writer-level integrity",
+        );
+    }
+
+    #[test]
     fn apply_tool_labels_actions_get_non_artifact_inherits_repo_visibility() {
         let ctx = default_ctx();
         let args = serde_json::json!({
@@ -1704,8 +1738,9 @@ mod tests {
             "method": "list_workflow_runs",
         });
         let repo_id = "octocat/hello-world";
+        let _guard = crate::labels::backend::cache_repo_visibility_for_tests(repo_id, false);
 
-        let (_, integrity, _) = super::apply_tool_labels(
+        let (secrecy, integrity, _) = super::apply_tool_labels(
             "actions_get",
             &args,
             repo_id,
@@ -1713,6 +1748,11 @@ mod tests {
             vec![],
             String::new(),
             &ctx,
+        );
+        assert_eq!(
+            secrecy,
+            Vec::<String>::new(),
+            "actions_get non-artifact method: expected public repo secrecy to be empty",
         );
         assert_eq!(
             integrity,
