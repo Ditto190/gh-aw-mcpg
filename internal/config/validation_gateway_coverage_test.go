@@ -5,6 +5,8 @@
 //   - TrustedBots validation via validateGatewayConfig delegation
 //   - OpenTelemetry config validation via validateGatewayConfig delegation
 //   - Direct unit tests for validateTrustedBots (nil, empty, whitespace, valid)
+//   - Direct unit tests for validateGatewayPayloadSizeThreshold (valid + invalid)
+//   - Direct unit tests for validateContainerRuntimeCommandNotBlank (valid, empty, whitespace)
 //   - expandTracingVariables nil-config fast-path and partial-field expansion
 package config
 
@@ -433,6 +435,133 @@ func TestExpandTracingVariables_PartialFields(t *testing.T) {
 				if tt.validate != nil {
 					tt.validate(t, tt.input)
 				}
+			}
+		})
+	}
+}
+
+// TestValidateGatewayPayloadSizeThreshold directly tests the helper function,
+// covering both the valid (return nil) and invalid (return error) branches.
+func TestValidateGatewayPayloadSizeThreshold(t *testing.T) {
+	tests := []struct {
+		name      string
+		value     int
+		fieldName string
+		jsonPath  string
+		wantErr   bool
+		errMsg    string
+	}{
+		{
+			name:      "positive value is valid",
+			value:     1,
+			fieldName: "payloadSizeThreshold",
+			jsonPath:  "gateway.payloadSizeThreshold",
+			wantErr:   false,
+		},
+		{
+			name:      "large positive value is valid",
+			value:     524288,
+			fieldName: "payloadSizeThreshold",
+			jsonPath:  "gateway.payloadSizeThreshold",
+			wantErr:   false,
+		},
+		{
+			name:      "zero is rejected",
+			value:     0,
+			fieldName: "payloadSizeThreshold",
+			jsonPath:  "gateway.payloadSizeThreshold",
+			wantErr:   true,
+			errMsg:    "payloadSizeThreshold must be a positive integer",
+		},
+		{
+			name:      "negative value is rejected",
+			value:     -1,
+			fieldName: "payloadSizeThreshold",
+			jsonPath:  "gateway.payloadSizeThreshold",
+			wantErr:   true,
+			errMsg:    "payloadSizeThreshold must be a positive integer",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateGatewayPayloadSizeThreshold(tt.value, tt.fieldName, tt.jsonPath)
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.ErrorContains(t, err, tt.errMsg)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+// TestValidateContainerRuntimeCommandNotBlank directly tests the helper function,
+// covering valid (empty string = omitted), whitespace-only (error), and non-blank (valid) paths.
+func TestValidateContainerRuntimeCommandNotBlank(t *testing.T) {
+	tests := []struct {
+		name      string
+		command   string
+		fieldName string
+		jsonPath  string
+		wantErr   bool
+		errMsg    string
+	}{
+		{
+			name:      "empty string is valid (field omitted)",
+			command:   "",
+			fieldName: "containerRuntimeCommand",
+			jsonPath:  "gateway.containerRuntimeCommand",
+			wantErr:   false,
+		},
+		{
+			name:      "non-blank command is valid",
+			command:   "docker",
+			fieldName: "containerRuntimeCommand",
+			jsonPath:  "gateway.containerRuntimeCommand",
+			wantErr:   false,
+		},
+		{
+			name:      "command with path is valid",
+			command:   "/usr/bin/docker",
+			fieldName: "containerRuntimeCommand",
+			jsonPath:  "gateway.containerRuntimeCommand",
+			wantErr:   false,
+		},
+		{
+			name:      "whitespace-only command is rejected",
+			command:   "   ",
+			fieldName: "containerRuntimeCommand",
+			jsonPath:  "gateway.containerRuntimeCommand",
+			wantErr:   true,
+			errMsg:    "containerRuntimeCommand cannot be empty or whitespace only",
+		},
+		{
+			name:      "tab-only command is rejected",
+			command:   "\t",
+			fieldName: "containerRuntimeCommand",
+			jsonPath:  "gateway.containerRuntimeCommand",
+			wantErr:   true,
+			errMsg:    "containerRuntimeCommand cannot be empty or whitespace only",
+		},
+		{
+			name:      "single space command is rejected",
+			command:   " ",
+			fieldName: "containerRuntimeCommand",
+			jsonPath:  "gateway.containerRuntimeCommand",
+			wantErr:   true,
+			errMsg:    "containerRuntimeCommand cannot be empty or whitespace only",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateContainerRuntimeCommandNotBlank(tt.command, tt.fieldName, tt.jsonPath)
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.ErrorContains(t, err, tt.errMsg)
+			} else {
+				assert.NoError(t, err)
 			}
 		})
 	}
