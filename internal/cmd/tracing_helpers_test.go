@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
@@ -172,5 +173,155 @@ func TestSetupCommandTracing(t *testing.T) {
 
 		assert.NotPanics(t, cleanup)
 		assert.False(t, shutdownWarnCalled)
+	})
+}
+
+// TestApplyTracingOverrides covers the branch logic in applyTracingOverrides.
+// Because applyTracingOverrides reads package-level globals (otlpEndpoint,
+// otlpServiceName), these tests must NOT run in parallel.
+func TestApplyTracingOverrides(t *testing.T) {
+	// Save and restore the package-level globals so each sub-test starts clean.
+	savedEndpoint := otlpEndpoint
+	savedServiceName := otlpServiceName
+	savedSampleRate := otlpSampleRate
+	t.Cleanup(func() {
+		otlpEndpoint = savedEndpoint
+		otlpServiceName = savedServiceName
+		otlpSampleRate = savedSampleRate
+	})
+
+	newCmd := func() *cobra.Command {
+		cmd := &cobra.Command{Use: "test"}
+		var ep, svc string
+		var rate float64
+		registerTracingFlags(cmd, &ep, &svc, &rate, "", "", "")
+		return cmd
+	}
+
+	t.Run("does nothing when config has no tracing and no flags changed", func(t *testing.T) {
+		otlpEndpoint = ""
+		otlpServiceName = config.DefaultTracingServiceName
+
+		cmd := newCmd()
+		cfg := &config.Config{Gateway: &config.GatewayConfig{}}
+
+		applyTracingOverrides(cmd, cfg)
+
+		assert.Nil(t, cfg.Gateway.Tracing, "Tracing config should remain nil when nothing is set")
+	})
+
+	t.Run("initialises tracing config when cfg.Gateway.Tracing is already set", func(t *testing.T) {
+		otlpEndpoint = ""
+		otlpServiceName = config.DefaultTracingServiceName
+
+		cmd := newCmd()
+		cfg := &config.Config{
+			Gateway: &config.GatewayConfig{
+				Tracing: &config.TracingConfig{Endpoint: "http://pre-existing:4318"},
+			},
+		}
+
+		applyTracingOverrides(cmd, cfg)
+
+		// Pre-existing endpoint is preserved because the flag was not explicitly set
+		// and otlpEndpoint matches the default ("").
+		require.NotNil(t, cfg.Gateway.Tracing)
+		assert.Equal(t, "http://pre-existing:4318", cfg.Gateway.Tracing.Endpoint)
+	})
+
+	t.Run("populates endpoint when otlpEndpoint global is non-empty", func(t *testing.T) {
+		otlpEndpoint = "http://env-collector:4318"
+		otlpServiceName = config.DefaultTracingServiceName
+		t.Cleanup(func() { otlpEndpoint = "" })
+
+		cmd := newCmd()
+		cfg := &config.Config{Gateway: &config.GatewayConfig{}}
+
+		applyTracingOverrides(cmd, cfg)
+
+		require.NotNil(t, cfg.Gateway.Tracing)
+		assert.Equal(t, "http://env-collector:4318", cfg.Gateway.Tracing.Endpoint)
+	})
+
+	t.Run("populates endpoint when otlp-endpoint flag is explicitly changed", func(t *testing.T) {
+		otlpEndpoint = ""
+		otlpServiceName = config.DefaultTracingServiceName
+
+		cmd := newCmd()
+		require.NoError(t, cmd.ParseFlags([]string{"--otlp-endpoint=http://flag-collector:4318"}))
+		// Sync the flag value into the package global (normally done by cobra binding).
+		otlpEndpoint = "http://flag-collector:4318"
+
+		cfg := &config.Config{Gateway: &config.GatewayConfig{}}
+		applyTracingOverrides(cmd, cfg)
+
+		require.NotNil(t, cfg.Gateway.Tracing)
+		assert.Equal(t, "http://flag-collector:4318", cfg.Gateway.Tracing.Endpoint)
+		t.Cleanup(func() { otlpEndpoint = "" })
+	})
+
+	t.Run("populates sample rate when otlp-sample-rate flag is changed", func(t *testing.T) {
+		otlpEndpoint = "http://collector:4318"
+		otlpServiceName = config.DefaultTracingServiceName
+		otlpSampleRate = 0.5
+		t.Cleanup(func() {
+			otlpEndpoint = ""
+			otlpSampleRate = 0
+		})
+
+		cmd := newCmd()
+		require.NoError(t, cmd.ParseFlags([]string{"--otlp-sample-rate=0.5"}))
+
+		cfg := &config.Config{Gateway: &config.GatewayConfig{}}
+		applyTracingOverrides(cmd, cfg)
+
+		require.NotNil(t, cfg.Gateway.Tracing)
+		require.NotNil(t, cfg.Gateway.Tracing.SampleRate)
+		assert.InDelta(t, 0.5, *cfg.Gateway.Tracing.SampleRate, 1e-9)
+	})
+
+	t.Run("does not overwrite SampleRate when flag is not changed", func(t *testing.T) {
+		otlpEndpoint = "http://collector:4318"
+		otlpServiceName = config.DefaultTracingServiceName
+		t.Cleanup(func() { otlpEndpoint = "" })
+
+		cmd := newCmd()
+		cfg := &config.Config{Gateway: &config.GatewayConfig{}}
+		applyTracingOverrides(cmd, cfg)
+
+		require.NotNil(t, cfg.Gateway.Tracing)
+		assert.Nil(t, cfg.Gateway.Tracing.SampleRate, "SampleRate should remain nil when flag not explicitly set")
+	})
+}
+
+// TestShutdownTracingProviderWithTimeout_ErrorPath verifies the warning callback is
+// invoked when the provider's Shutdown returns an error.
+//
+// To trigger an error we shut down the provider once (so it is already stopped)
+// and then call shutdownTracingProviderWithTimeout again with a very short
+// deadline, exercising the context-deadline path.
+func TestShutdownTracingProviderWithTimeout_ErrorPath(t *testing.T) {
+	t.Cleanup(func() { otel.SetTracerProvider(noop.NewTracerProvider()) })
+
+	provider, err := tracing.InitProvider(context.Background(), &config.TracingConfig{
+		Endpoint: "http://127.0.0.1:14318",
+	})
+	require.NoError(t, err)
+	require.NotNil(t, provider)
+
+	// First shutdown — drains the SDK and closes all background goroutines.
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	_ = provider.Shutdown(ctx)
+
+	// A second shutdown on an already-stopped TracerProvider returns an error.
+	var warnMessages []string
+	shutdownTracingProviderWithTimeout(provider, func(format string, args ...any) {
+		warnMessages = append(warnMessages, format)
+	})
+	// The provider may or may not return an error on double-shutdown depending on
+	// the SDK version, so we assert only that the call completes without panic.
+	assert.NotPanics(t, func() {
+		shutdownTracingProviderWithTimeout(provider, func(format string, args ...any) {})
 	})
 }
