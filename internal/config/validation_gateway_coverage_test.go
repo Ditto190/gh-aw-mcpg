@@ -6,6 +6,8 @@
 //   - OpenTelemetry config validation via validateGatewayConfig delegation
 //   - Direct unit tests for validateTrustedBots (nil, empty, whitespace, valid)
 //   - expandTracingVariables nil-config fast-path and partial-field expansion
+//   - Direct unit tests for validateGatewayPayloadSizeThreshold (happy path)
+//   - Direct unit tests for validateContainerRuntimeCommandNotBlank (whitespace-only command)
 package config
 
 import (
@@ -433,6 +435,140 @@ func TestExpandTracingVariables_PartialFields(t *testing.T) {
 				if tt.validate != nil {
 					tt.validate(t, tt.input)
 				}
+			}
+		})
+	}
+}
+
+// TestValidateGatewayPayloadSizeThreshold directly tests the
+// validateGatewayPayloadSizeThreshold helper to cover both the error path
+// (non-positive value) and the success/return-nil path (positive value).
+func TestValidateGatewayPayloadSizeThreshold(t *testing.T) {
+	tests := []struct {
+		name    string
+		value   int
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name:    "positive value is valid and returns nil",
+			value:   1,
+			wantErr: false,
+		},
+		{
+			name:    "default threshold (524288) is valid",
+			value:   524288,
+			wantErr: false,
+		},
+		{
+			name:    "large positive value is valid",
+			value:   10485760,
+			wantErr: false,
+		},
+		{
+			name:    "zero value is rejected",
+			value:   0,
+			wantErr: true,
+			errMsg:  "must be a positive integer",
+		},
+		{
+			name:    "negative value is rejected",
+			value:   -1,
+			wantErr: true,
+			errMsg:  "must be a positive integer",
+		},
+		{
+			name:    "large negative value is rejected",
+			value:   -999999,
+			wantErr: true,
+			errMsg:  "must be a positive integer",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateGatewayPayloadSizeThreshold(tt.value, "payloadSizeThreshold", "gateway.payloadSizeThreshold")
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.ErrorContains(t, err, tt.errMsg)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+// TestValidateContainerRuntimeCommandNotBlank directly tests the
+// validateContainerRuntimeCommandNotBlank helper to cover all three branches:
+// empty string (valid/ignored), whitespace-only string (error), and
+// non-empty non-whitespace string (valid).
+func TestValidateContainerRuntimeCommandNotBlank(t *testing.T) {
+	tests := []struct {
+		name    string
+		command string
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name:    "non-empty command is valid",
+			command: "docker",
+			wantErr: false,
+		},
+		{
+			name:    "absolute path command is valid",
+			command: "/usr/bin/docker",
+			wantErr: false,
+		},
+		{
+			name:    "podman command is valid",
+			command: "podman",
+			wantErr: false,
+		},
+		{
+			name:    "empty string is valid (field omitted — caller interprets as unset)",
+			command: "",
+			wantErr: false,
+		},
+		{
+			name:    "whitespace-only command is rejected",
+			command: "   ",
+			wantErr: true,
+			errMsg:  "cannot be empty or whitespace only",
+		},
+		{
+			name:    "single space is rejected",
+			command: " ",
+			wantErr: true,
+			errMsg:  "cannot be empty or whitespace only",
+		},
+		{
+			name:    "tab-only command is rejected",
+			command: "\t",
+			wantErr: true,
+			errMsg:  "cannot be empty or whitespace only",
+		},
+		{
+			name:    "newline-only command is rejected",
+			command: "\n",
+			wantErr: true,
+			errMsg:  "cannot be empty or whitespace only",
+		},
+		{
+			name:    "mixed whitespace command is rejected",
+			command: " \t\n ",
+			wantErr: true,
+			errMsg:  "cannot be empty or whitespace only",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateContainerRuntimeCommandNotBlank(tt.command, "containerRuntimeCommand", "gateway.containerRuntimeCommand")
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.ErrorContains(t, err, tt.errMsg)
+			} else {
+				assert.NoError(t, err)
 			}
 		})
 	}
