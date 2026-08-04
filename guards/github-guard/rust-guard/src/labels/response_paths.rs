@@ -237,10 +237,7 @@ pub fn label_response_paths(
                                 repo_for_labels,
                                 pr_number
                             ),
-                            secrecy: if matches!(
-                                tool_name,
-                                "search_pull_requests" | "search_pull_requests_ff_fields_param"
-                            ) {
+                            secrecy: if is_search_pr_variant(tool_name) {
                                 repo_visibility_secrecy_for_repo_id(repo_for_labels, ctx).into()
                             } else {
                                 repo_item_ctx.default_secrecy_shared.clone()
@@ -318,10 +315,7 @@ pub fn label_response_paths(
                                 repo_for_labels,
                                 issue_number
                             ),
-                            secrecy: if matches!(
-                                tool_name,
-                                "search_issues" | "search_issues_ff_fields_param"
-                            ) {
+                            secrecy: if is_search_issue_variant(tool_name) {
                                 repo_visibility_secrecy_for_repo_id(repo_for_labels, ctx).into()
                             } else {
                                 repo_item_ctx.default_secrecy_shared.clone()

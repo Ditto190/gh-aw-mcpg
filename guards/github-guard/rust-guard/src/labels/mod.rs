@@ -39,10 +39,12 @@ pub mod tool_rules;
 // Re-export helpers that form the public API consumed by lib.rs
 pub use helpers::{
     blocked_integrity, ensure_integrity_baseline, extract_repo_info,
-    extract_repo_info_from_search_query, is_mcp_text_wrapper, is_search_result_wrapper,
-    reader_integrity, search_result_total_count, writer_integrity, MinIntegrity, PolicyContext,
-    PolicyScopeEntry, ScopeKind,
+    extract_repo_info_from_search_query, reader_integrity, search_result_total_count,
+    writer_integrity, MinIntegrity, PolicyContext, PolicyScopeEntry, ScopeKind,
 };
+// Crate-internal re-exports: consumed only within this crate (e.g. lib.rs),
+// so kept at pub(crate) visibility rather than fully public.
+pub(crate) use helpers::{is_mcp_text_wrapper, is_search_result_wrapper};
 
 #[cfg(test)]
 pub use helpers::project_github_label;

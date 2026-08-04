@@ -1382,7 +1382,7 @@ pub(crate) fn is_graphql_wrapper(response: &Value) -> bool {
 /// returned by different MCP server versions. Used to prevent treating
 /// `{"total_count":0,"incomplete_results":false}` or
 /// `{"totalCount":0,"issues":[],"pageInfo":{}}` as single data items.
-pub fn is_search_result_wrapper(response: &Value) -> bool {
+pub(crate) fn is_search_result_wrapper(response: &Value) -> bool {
     response.get("total_count").is_some() || response.get("totalCount").is_some()
 }
 
@@ -1399,7 +1399,7 @@ pub fn search_result_total_count(response: &Value) -> Option<u64> {
 /// parseable as JSON. These are `{"content":[{"type":"text","text":"..."}]}` objects
 /// that `extract_mcp_response` left unwrapped because the text field was not valid
 /// JSON (e.g. plain-text error messages or human-readable summaries).
-pub fn is_mcp_text_wrapper(response: &Value) -> bool {
+pub(crate) fn is_mcp_text_wrapper(response: &Value) -> bool {
     response
         .get("content")
         .and_then(|v| v.as_array())
@@ -1408,6 +1408,23 @@ pub fn is_mcp_text_wrapper(response: &Value) -> bool {
         .and_then(|t| t.as_str())
         .map(|t| t == "text")
         .unwrap_or(false)
+}
+
+/// Returns true if `tool_name` is one of the `search_pull_requests` tool
+/// aliases (including the `_ff_fields_param` field-filtered variant).
+/// Centralizes this alias pair so future variants only need to be added once.
+pub(crate) fn is_search_pr_variant(tool_name: &str) -> bool {
+    matches!(
+        tool_name,
+        "search_pull_requests" | "search_pull_requests_ff_fields_param"
+    )
+}
+
+/// Returns true if `tool_name` is one of the `search_issues` tool aliases
+/// (including the `_ff_fields_param` field-filtered variant). Centralizes
+/// this alias pair so future variants only need to be added once.
+pub(crate) fn is_search_issue_variant(tool_name: &str) -> bool {
+    matches!(tool_name, "search_issues" | "search_issues_ff_fields_param")
 }
 
 /// Extract a single object from a GraphQL response for singular queries.
