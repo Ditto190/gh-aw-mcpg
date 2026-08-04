@@ -150,10 +150,7 @@ pub fn label_response_items(
                     let default_repo_private = repo_private_fallback(&arg_owner, &arg_repo);
                     // All tools in this match arm use shared repo secrecy except search_pull_requests,
                     // which uses per-item secrecy derived from each PR's repository.
-                    let secrecy = if !matches!(
-                        tool_name,
-                        "search_pull_requests" | "search_pull_requests_ff_fields_param"
-                    ) {
+                    let secrecy = if !is_search_pr_variant(tool_name) {
                         repo_visibility_secrecy(&arg_owner, &arg_repo, &arg_repo_full, ctx)
                     } else {
                         vec![]
@@ -217,10 +214,7 @@ pub fn label_response_items(
                                     repo_full_name,
                                     number
                                 ),
-                                secrecy: if matches!(
-                                    tool_name,
-                                    "search_pull_requests" | "search_pull_requests_ff_fields_param"
-                                ) {
+                                secrecy: if is_search_pr_variant(tool_name) {
                                     repo_visibility_secrecy_for_repo_id(repo_full_name, ctx).into()
                                 } else {
                                     secrecy_shared.clone()
@@ -261,8 +255,7 @@ pub fn label_response_items(
                 let default_repo_private = repo_private_fallback(&arg_owner, &arg_repo);
                 // All tools in this match arm use shared repo secrecy except search_issues,
                 // which uses per-item secrecy derived from each issue's repository.
-                let secrecy =
-                    if !matches!(tool_name, "search_issues" | "search_issues_ff_fields_param") {
+                let secrecy = if !is_search_issue_variant(tool_name) {
                         repo_visibility_secrecy(&arg_owner, &arg_repo, &default_repo_full_name, ctx)
                     } else {
                         vec![]
@@ -291,10 +284,7 @@ pub fn label_response_items(
                                 repo_full_name,
                                 number
                             ),
-                            secrecy: if matches!(
-                                tool_name,
-                                "search_issues" | "search_issues_ff_fields_param"
-                            ) {
+                            secrecy: if is_search_issue_variant(tool_name) {
                                 repo_visibility_secrecy_for_repo_id(&repo_full_name, ctx).into()
                             } else {
                                 secrecy_shared.clone()
