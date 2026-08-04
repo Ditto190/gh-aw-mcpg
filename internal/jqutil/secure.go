@@ -9,7 +9,7 @@ import (
 	"github.com/itchyny/gojq"
 )
 
-var log = logger.New("jqutil:secure")
+var log = logger.ForFile()
 
 // SecureCompileOpts are the gojq compiler options applied to every Compile call
 // in this project. Centralising them here ensures the security intent ($ENV
