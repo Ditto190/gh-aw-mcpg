@@ -149,15 +149,19 @@ func extractAndValidateSession(r *http.Request) string {
 
 func isSinglePathSegmentSessionID(sessionID string) bool {
 	if sessionID == "" || sessionID == "." || sessionID == ".." {
+		logSession.Printf("isSinglePathSegmentSessionID: rejected reserved or empty value: %q", sessionID)
 		return false
 	}
 	if filepath.IsAbs(sessionID) || filepath.VolumeName(sessionID) != "" {
+		logSession.Printf("isSinglePathSegmentSessionID: rejected absolute or volume path: %q", sessionID)
 		return false
 	}
 	if strings.Contains(sessionID, "/") || strings.Contains(sessionID, "\\") {
+		logSession.Printf("isSinglePathSegmentSessionID: rejected path separator in session ID: %q", sessionID)
 		return false
 	}
 	if filepath.Base(sessionID) != sessionID {
+		logSession.Printf("isSinglePathSegmentSessionID: rejected non-base path segment: %q", sessionID)
 		return false
 	}
 	return filepath.Clean(sessionID) == sessionID
