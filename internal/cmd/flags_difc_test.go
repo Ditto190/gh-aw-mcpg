@@ -37,11 +37,10 @@ func TestRegisterGuardsModeFlag(t *testing.T) {
 		var mode string
 
 		// Pre-registering the completion func for --guards-mode before
-		// calling registerGuardsModeFlag forces RegisterFlagCompletionFunc
+		// calling registerGuardsModeCompletion forces RegisterFlagCompletionFunc
 		// to return the "already registered" error inside
-		// registerGuardsModeFlag, which is only logged via
-		// debugLog.Printf rather than propagated. Verify this does not
-		// panic and the flag is still registered with its default value.
+		// registerGuardsModeCompletion, which logs rather than propagates it.
+		// Verify that the duplicate registration does not panic.
 		assert.NotPanics(t, func() {
 			cmd.Flags().StringVar(&mode, "guards-mode", difc.DefaultEnforcementMode(), "placeholder")
 			require.NoError(t, cmd.RegisterFlagCompletionFunc("guards-mode", cobra.FixedCompletions(
