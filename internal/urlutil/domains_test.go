@@ -1,9 +1,12 @@
 package urlutil
 
 import (
+	"errors"
+	"net/url"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestExtractURLDomains(t *testing.T) {
@@ -342,4 +345,46 @@ func TestExtractURLDomainsFromValue(t *testing.T) {
 			assert.Equal(t, tt.want, got)
 		})
 	}
+}
+
+// TestExtractURLDomains_NonURLError exercises the defensive else-branch in ExtractURLDomains
+// that logs URL parse errors which are not of type *url.Error. In practice url.Parse always
+// wraps errors in *url.Error, so this path requires injecting a custom parse function.
+func TestExtractURLDomains_NonURLError(t *testing.T) {
+	// Inject a custom parser that returns a plain (non-*url.Error) error for any input.
+	// This covers the `else` defensive branch in domains.go.
+	original := urlParseFunc
+	t.Cleanup(func() { urlParseFunc = original })
+
+	plainErr := errors.New("synthetic non-url-error parse failure")
+	urlParseFunc = func(_ string) (*url.URL, error) {
+		return nil, plainErr
+	}
+
+	// All URL candidates will fail parsing with a non-*url.Error, so the result is nil.
+	got := ExtractURLDomains("https://example.com https://other.com")
+	assert.Nil(t, got, "all candidates failed with non-url.Error, expected nil result")
+}
+
+// TestExtractURLDomains_NonURLErrorPartial verifies that when some URLs succeed and some
+// fail with a non-*url.Error, only the successful domains are returned.
+func TestExtractURLDomains_NonURLErrorPartial(t *testing.T) {
+	original := urlParseFunc
+	t.Cleanup(func() { urlParseFunc = original })
+
+	realParse := url.Parse
+	plainErr := errors.New("synthetic non-url-error")
+	calls := 0
+	urlParseFunc = func(rawURL string) (*url.URL, error) {
+		calls++
+		// Fail the first call with a non-*url.Error; succeed for subsequent calls.
+		if calls == 1 {
+			return nil, plainErr
+		}
+		return realParse(rawURL)
+	}
+
+	got := ExtractURLDomains("https://first.com/path https://second.com/path")
+	require.NotNil(t, got)
+	assert.Equal(t, []string{"second.com"}, got)
 }

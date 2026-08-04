@@ -11,6 +11,10 @@ import (
 
 var logDomains = logger.ForFile()
 
+// urlParseFunc is the function used to parse URL candidates. It is a package-level
+// variable so tests can replace it to inject parsing errors for coverage of defensive paths.
+var urlParseFunc = url.Parse
+
 // urlPattern requires a non-empty hostname candidate and then captures the rest
 // of the URL until common delimiter characters. The (?i) flag makes the scheme
 // match case-insensitive (e.g. "HTTPS://"). Matches are still validated with
@@ -68,7 +72,7 @@ func ExtractURLDomains(text string) []string {
 		// blindly; trimming them from the tail of each candidate is the safest
 		// heuristic.
 		match = strings.TrimRight(match, ".,;:!?)]}\"'")
-		parsed, err := url.Parse(match)
+		parsed, err := urlParseFunc(match)
 		if err != nil {
 			if uerr, ok := err.(*url.Error); ok {
 				logDomains.Printf("ExtractURLDomains: skipping unparseable URL candidate: %v", uerr.Err)
