@@ -404,14 +404,13 @@ my_tool = "   "
 // configuration keys are rejected with an error per spec §4.3.1.
 func TestLoadFromFile_UnknownKeysAreRejectedWithError(t *testing.T) {
 	path := writeTempTOML(t, `
-[gateway]
-prot = 3000
+unexpected = true
 
 [servers.github]
 command = "docker"
 args = ["run", "--rm", "-i", "ghcr.io/github/github-mcp-server:latest"]
 `)
-	// Unknown key "prot" (typo for "port") must now return an error per spec §4.3.1
+	// An unknown top-level key must return an error per spec §4.3.1.
 	cfg, err := LoadFromFile(path)
 	require.Error(t, err)
 	assert.Nil(t, cfg)
