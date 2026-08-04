@@ -5,9 +5,55 @@ import (
 
 	"github.com/github/gh-aw-mcpg/internal/config"
 	"github.com/github/gh-aw-mcpg/internal/difc"
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestRegisterGuardsModeFlag(t *testing.T) {
+	t.Run("registers flag with default value and completion", func(t *testing.T) {
+		cmd := &cobra.Command{Use: "test"}
+		var mode string
+		registerGuardsModeFlag(cmd, &mode)
+
+		flag := cmd.Flags().Lookup("guards-mode")
+		require.NotNil(t, flag, "expected --guards-mode flag to be registered")
+		assert.Equal(t, difc.DefaultEnforcementMode(), mode, "flag default should match difc.DefaultEnforcementMode()")
+		assert.Equal(t, difc.DefaultEnforcementMode(), flag.DefValue)
+	})
+
+	t.Run("registers completion successfully", func(t *testing.T) {
+		cmd := &cobra.Command{Use: "test"}
+		var mode string
+		cmd.Flags().StringVar(&mode, "guards-mode", difc.DefaultEnforcementMode(), "placeholder")
+
+		assert.NotPanics(t, func() {
+			registerGuardsModeCompletion(cmd)
+		})
+	})
+
+	t.Run("logs but does not panic when completion func already registered", func(t *testing.T) {
+		cmd := &cobra.Command{Use: "test"}
+		var mode string
+
+		// Pre-registering the completion func for --guards-mode before
+		// calling registerGuardsModeCompletion forces RegisterFlagCompletionFunc
+		// to return the "already registered" error inside
+		// registerGuardsModeCompletion, which logs rather than propagates it.
+		// Verify that the duplicate registration does not panic.
+		assert.NotPanics(t, func() {
+			cmd.Flags().StringVar(&mode, "guards-mode", difc.DefaultEnforcementMode(), "placeholder")
+			require.NoError(t, cmd.RegisterFlagCompletionFunc("guards-mode", cobra.FixedCompletions(
+				difc.ValidModes, cobra.ShellCompDirectiveNoFileComp)))
+
+			registerGuardsModeCompletion(cmd)
+		})
+
+		flag := cmd.Flags().Lookup("guards-mode")
+		require.NotNil(t, flag)
+		assert.Equal(t, difc.DefaultEnforcementMode(), flag.DefValue)
+	})
+}
 
 func TestValidateDIFCMode(t *testing.T) {
 	tests := []struct {

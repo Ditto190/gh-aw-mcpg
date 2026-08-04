@@ -28,6 +28,14 @@ var (
 func registerGuardsModeFlag(cmd *cobra.Command, target *string) {
 	cmd.Flags().StringVar(target, "guards-mode", difc.DefaultEnforcementMode(),
 		"Guards enforcement mode: strict (deny violations), filter (remove denied tools), or propagate (auto-adjust agent labels on reads)")
+	registerGuardsModeCompletion(cmd)
+}
+
+// registerGuardsModeCompletion registers shell completion for --guards-mode.
+// Split out from registerGuardsModeFlag so the completion-registration
+// failure path (e.g. duplicate registration) can be exercised in isolation
+// without re-declaring the underlying flag.
+func registerGuardsModeCompletion(cmd *cobra.Command) {
 	if err := cmd.RegisterFlagCompletionFunc("guards-mode", cobra.FixedCompletions(
 		difc.ValidModes, cobra.ShellCompDirectiveNoFileComp)); err != nil {
 		debugLog.Printf("Failed to register completion for --guards-mode: %v", err)
