@@ -704,6 +704,38 @@ mod tests {
     }
 
     #[test]
+    fn test_apply_tool_labels_pull_request_read_matches_get_pull_request() {
+        let ctx = default_ctx();
+        let tool_args = json!({
+            "owner": "github",
+            "repo": "copilot",
+            "pullNumber": 123
+        });
+
+        let expected = apply_tool_labels(
+            "get_pull_request",
+            &tool_args,
+            "github/copilot",
+            vec![],
+            vec![],
+            String::new(),
+            &ctx,
+        );
+        let actual = apply_tool_labels(
+            "pull_request_read",
+            &tool_args,
+            "github/copilot",
+            vec![],
+            vec![],
+            String::new(),
+            &ctx,
+        );
+
+        assert_eq!(actual, expected);
+        assert_eq!(actual.2, "pr:github/copilot#123");
+    }
+
+    #[test]
     fn test_apply_tool_labels_list_issues_repo_scoped_integrity() {
         let ctx = default_ctx();
         let tool_args = json!({
