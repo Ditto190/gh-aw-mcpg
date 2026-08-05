@@ -153,6 +153,32 @@ func TestWrapWithSessionAutoInit_PassthroughWithSessionID(t *testing.T) {
 	assert.Nil(t, resp["error"], "tools/call with valid session should succeed")
 }
 
+// TestWrapWithSessionAutoInit_PassthroughStatelessProtocolVersion verifies that
+// tools/call requests advertising the stateless "2026-07-28"+ protocol (SEP-2577)
+// are forwarded unchanged, since that protocol intentionally omits
+// Mcp-Session-Id and is not the legacy-client scenario auto-init targets.
+func TestWrapWithSessionAutoInit_PassthroughStatelessProtocolVersion(t *testing.T) {
+	var handlerCalls int
+	handlerFunc := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlerCalls++
+		w.WriteHeader(http.StatusOK)
+	})
+	handler := WrapWithSessionAutoInit(handlerFunc)
+
+	body := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"test","arguments":{}}}`
+	req := httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewBufferString(body))
+	req.Header.Set("Authorization", "test-api-key")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json, text/event-stream")
+	req.Header.Set("Mcp-Protocol-Version", "2026-07-28")
+	// No Mcp-Session-Id, matching a valid stateless request.
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, 1, handlerCalls, "auto-init must not run extra requests for stateless protocol version")
+}
+
 // TestWrapWithSessionAutoInit_PassthroughNonToolsCall verifies that POST requests with
 // methods other than tools/call are forwarded unchanged even without a session.
 func TestWrapWithSessionAutoInit_PassthroughNonToolsCall(t *testing.T) {
