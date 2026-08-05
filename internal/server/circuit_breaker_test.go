@@ -574,3 +574,66 @@ func TestCircuitBreaker_RecordRateLimitWhenAlreadyOpen(t *testing.T) {
 	cb.mu.Unlock()
 	assert.Equal(t, laterReset, gotReset, "resetAt should be updated to the later reset time")
 }
+
+// TestCircuitBreaker_StrandedHalfOpenProbeRecovers verifies that if a HALF-OPEN
+// probe fails with a transport error (i.e. neither RecordSuccess nor
+// RecordRateLimit is called), the breaker does not stay wedged in HALF-OPEN
+// forever. After probeStrandedTimeout elapses, Allow releases a fresh probe.
+// Regression test for https://github.com/github/gh-aw-mcpg/issues/10686.
+func TestCircuitBreaker_StrandedHalfOpenProbeRecovers(t *testing.T) {
+	t.Parallel()
+
+	base := time.Date(2026, 8, 3, 22, 0, 0, 0, time.UTC)
+	now := base
+	cb := newCircuitBreaker("github", 1, 60*time.Second)
+	cb.nowFunc = func() time.Time { return now }
+
+	// Upstream rate limit, resetting one minute out. threshold=1 opens at once.
+	cb.RecordRateLimit(base.Add(1 * time.Minute))
+	require.Equal(t, circuitOpen, cb.State())
+
+	// Cooldown and upstream reset have both elapsed, so the probe is released.
+	now = base.Add(2 * time.Minute)
+	require.NoError(t, cb.Allow())
+	require.Equal(t, circuitHalfOpen, cb.State())
+
+	// The probe now fails with a transport error. Per unified.go that means
+	// neither Record* method is called, so we deliberately call nothing here.
+
+	// Shortly after, a second request should still be rejected (only one
+	// probe in flight at a time) and correctly reported as HALF-OPEN.
+	now = base.Add(2*time.Minute + 5*time.Second)
+	err := cb.Allow()
+	require.Error(t, err)
+	var openErr *ErrCircuitOpen
+	require.ErrorAs(t, err, &openErr)
+	assert.Contains(t, err.Error(), "HALF-OPEN", "error should report the true HALF-OPEN state, not OPEN")
+	assert.NotContains(t, err.Error(), "retry after -", "retry-after should never be negative")
+
+	// Once the stranded-probe timeout elapses, a new probe should be released
+	// rather than staying wedged forever.
+	now = base.Add(6 * time.Hour)
+	err = cb.Allow()
+	assert.NoError(t, err, "a stranded HALF-OPEN probe should eventually release a fresh probe")
+	assert.Equal(t, circuitHalfOpen, cb.State(), "should remain HALF-OPEN awaiting the new probe's outcome")
+
+	// The new probe succeeds, closing the circuit.
+	cb.RecordSuccess()
+	assert.Equal(t, circuitClosed, cb.State())
+}
+
+// TestErrCircuitOpen_ReportsHalfOpenState verifies ErrCircuitOpen.Error() does
+// not misreport a HALF-OPEN breaker as OPEN, and never renders a negative
+// retry-after even when ResetAt is in the past.
+func TestErrCircuitOpen_ReportsHalfOpenState(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 8, 3, 22, 0, 0, 0, time.UTC)
+	pastReset := now.Add(-18*time.Hour - 31*time.Minute - 29*time.Second)
+
+	err := &ErrCircuitOpen{ServerID: "github", ResetAt: pastReset, State: circuitHalfOpen, Now: now}
+	msg := err.Error()
+	assert.Contains(t, msg, "HALF-OPEN")
+	assert.NotContains(t, msg, "is OPEN")
+	assert.Contains(t, msg, "retry after 0s")
+}
