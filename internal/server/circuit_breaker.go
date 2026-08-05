@@ -197,6 +197,23 @@ func (cb *circuitBreaker) Allow() error {
 	return nil
 }
 
+// RecordProbeReleased releases an in-flight HALF-OPEN probe slot without
+// changing the breaker's state or consecutive-error count. It must be called
+// when a request completes with a transport error (connection failure, JSON
+// parse error, etc.) so the probe slot doesn't stay stranded until
+// probeStrandedTimeout elapses — see the call site in unified.go for why
+// transport errors must not affect rate-limit bookkeeping.
+func (cb *circuitBreaker) RecordProbeReleased() {
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
+
+	if cb.probeInFlight {
+		logCircuitBreaker.Printf("server %q circuit breaker releasing stranded HALF-OPEN probe after transport error", cb.serverID)
+	}
+	cb.probeInFlight = false
+	cb.probeStartedAt = time.Time{}
+}
+
 // RecordSuccess records a successful (non-rate-limited) response.
 // In HALF-OPEN state this closes the circuit.
 func (cb *circuitBreaker) RecordSuccess() {

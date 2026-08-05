@@ -502,6 +502,10 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 		// details to trace backends; the full error is returned to the caller and
 		// logged separately.
 		tracing.RecordSpanErrorSafe(execSpan, err, "tool execution failed")
+		// Explicitly release any in-flight HALF-OPEN probe slot so the breaker
+		// doesn't stay wedged until probeStrandedTimeout elapses. This does not
+		// touch the consecutive rate-limit counter or state.
+		cb.RecordProbeReleased()
 		httpStatusCode = 500
 		return mcp.NewErrorCallToolResult(err)
 	}
