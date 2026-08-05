@@ -5,9 +5,9 @@
 
 use serde_json::Value;
 use std::collections::HashMap;
-use std::sync::{Mutex, OnceLock};
 #[cfg(test)]
 use std::sync::MutexGuard;
+use std::sync::{Mutex, OnceLock};
 use std::thread;
 use std::time::Duration;
 
@@ -117,7 +117,9 @@ static CACHE_TEST_LOCK: Mutex<()> = Mutex::new(());
 
 #[cfg(test)]
 pub(crate) fn lock_repo_visibility_cache_for_tests() -> MutexGuard<'static, ()> {
-    CACHE_TEST_LOCK.lock().unwrap()
+    CACHE_TEST_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 #[cfg(test)]
@@ -203,6 +205,15 @@ pub(crate) fn is_repo_private(owner: &str, repo: &str) -> Option<bool> {
     is_repo_private_with_callback(crate::invoke_backend, owner, repo)
 }
 
+/// Renders a boolean visibility flag as its log-friendly string form.
+fn visibility_str(is_private: bool) -> &'static str {
+    if is_private {
+        "private"
+    } else {
+        "public"
+    }
+}
+
 pub(crate) fn is_repo_private_with_callback(
     callback: GithubMcpCallback,
     owner: &str,
@@ -219,7 +230,7 @@ pub(crate) fn is_repo_private_with_callback(
         crate::log_debug(&format!(
             "Repo visibility lookup cache hit for {}: {}",
             repo_id,
-            if is_private { "private" } else { "public" }
+            visibility_str(is_private)
         ));
         return Some(is_private);
     }
@@ -283,7 +294,7 @@ pub(crate) fn is_repo_private_with_callback(
                     crate::log_warn(&format!(
                         "Repo visibility lookup result for {}: using cached {} after rate-limit error",
                         repo_id,
-                        if is_private { "private" } else { "public" }
+                        visibility_str(is_private)
                     ));
                     return Some(is_private);
                 }
@@ -692,6 +703,12 @@ mod tests {
     use super::super::constants::field_names;
     use super::*;
     use std::sync::atomic::{AtomicUsize, Ordering};
+
+    #[test]
+    fn test_visibility_str() {
+        assert_eq!(visibility_str(true), "private");
+        assert_eq!(visibility_str(false), "public");
+    }
 
     /// Determine whether a pull request is from a fork.
     ///
@@ -1160,7 +1177,7 @@ mod tests {
 
     #[test]
     fn test_is_repo_private_retries_once_after_rate_limit_error() {
-        let _guard = CACHE_TEST_LOCK.lock().unwrap();
+        let _guard = lock_repo_visibility_cache_for_tests();
         clear_repo_visibility_cache_for_tests();
         RATE_LIMIT_RETRY_CALL_COUNT.store(0, Ordering::SeqCst);
 
@@ -1174,7 +1191,7 @@ mod tests {
 
     #[test]
     fn test_is_repo_private_uses_cached_visibility_when_rate_limited() {
-        let _guard = CACHE_TEST_LOCK.lock().unwrap();
+        let _guard = lock_repo_visibility_cache_for_tests();
         clear_repo_visibility_cache_for_tests();
 
         let first = is_repo_private_with_callback(
