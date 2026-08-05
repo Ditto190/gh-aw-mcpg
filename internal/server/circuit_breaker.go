@@ -43,6 +43,14 @@ const DefaultRateLimitThreshold = 3
 // before transitioning to HALF-OPEN to probe one request.
 const DefaultRateLimitCooldown = 60 * time.Second
 
+// probeStrandedTimeout bounds how long a single HALF-OPEN probe may remain
+// in flight. If the probe fails with a transport error (connection failure,
+// JSON parse error, etc.) neither RecordSuccess nor RecordRateLimit is
+// called, so without this timeout probeInFlight would never clear and the
+// breaker would stay wedged in HALF-OPEN indefinitely, rejecting all
+// subsequent requests. Once the timeout elapses, Allow re-releases a probe.
+const probeStrandedTimeout = 30 * time.Second
+
 var logCircuitBreaker = logger.ForFile()
 
 // circuitBreaker implements a per-backend rate-limit circuit breaker.
@@ -63,7 +71,12 @@ type circuitBreaker struct {
 	// the X-RateLimit-Reset header or the tool response message.
 	resetAt       time.Time
 	probeInFlight bool
-	serverID      string
+	// probeStartedAt is when the current HALF-OPEN probe was allowed through.
+	// Used to detect a stranded probe (e.g. one that failed with a transport
+	// error rather than calling RecordSuccess/RecordRateLimit) so the breaker
+	// doesn't stay wedged in HALF-OPEN forever.
+	probeStartedAt time.Time
+	serverID       string
 
 	threshold int
 	cooldown  time.Duration
@@ -93,18 +106,37 @@ func newCircuitBreaker(serverID string, threshold int, cooldown time.Duration) *
 	}
 }
 
-// ErrCircuitOpen is returned when the circuit breaker is OPEN and a request is rejected.
+// ErrCircuitOpen is returned when the circuit breaker is OPEN (or HALF-OPEN
+// with a probe already in flight) and a request is rejected.
 type ErrCircuitOpen struct {
 	ServerID string
 	ResetAt  time.Time
+	// State is the breaker's actual state at the time the error was created,
+	// so callers/log messages don't misreport a HALF-OPEN breaker as OPEN.
+	State circuitBreakerState
+	// Now is the reference time used to compute the retry-after duration.
+	// Defaults to time.Now when zero.
+	Now time.Time
 }
 
 func (e *ErrCircuitOpen) Error() string {
-	if e.ResetAt.IsZero() {
-		return fmt.Sprintf("rate limit circuit breaker is OPEN for server %q — requests temporarily rejected", e.ServerID)
+	stateLabel := "OPEN"
+	if e.State == circuitHalfOpen {
+		stateLabel = "HALF-OPEN"
 	}
-	return fmt.Sprintf("rate limit circuit breaker is OPEN for server %q — rate limit resets at %s (retry after %s)",
-		e.ServerID, e.ResetAt.UTC().Format(time.RFC3339), time.Until(e.ResetAt).Round(time.Second))
+	if e.ResetAt.IsZero() {
+		return fmt.Sprintf("rate limit circuit breaker is %s for server %q — requests temporarily rejected", stateLabel, e.ServerID)
+	}
+	now := e.Now
+	if now.IsZero() {
+		now = time.Now()
+	}
+	retryAfter := e.ResetAt.Sub(now).Round(time.Second)
+	if retryAfter < 0 {
+		retryAfter = 0
+	}
+	return fmt.Sprintf("rate limit circuit breaker is %s for server %q — rate limit resets at %s (retry after %s)",
+		stateLabel, e.ServerID, e.ResetAt.UTC().Format(time.RFC3339), retryAfter)
 }
 
 // Allow reports whether a request should be allowed through. It also handles
@@ -133,16 +165,29 @@ func (cb *circuitBreaker) Allow() error {
 			logger.LogInfo("backend", "circuit breaker for server %q transitioning OPEN → HALF-OPEN", cb.serverID)
 			cb.state = circuitHalfOpen
 			cb.probeInFlight = true
+			cb.probeStartedAt = now
 			return nil // allow the single probe
 		}
 		logCircuitBreaker.Printf("server %q circuit breaker OPEN, rejecting request (resetAt=%s)", cb.serverID, util.FormatFutureTime(cb.resetAt))
-		return &ErrCircuitOpen{ServerID: cb.serverID, ResetAt: cb.resetAt}
+		return &ErrCircuitOpen{ServerID: cb.serverID, ResetAt: cb.resetAt, State: cb.state, Now: now}
 
 	case circuitHalfOpen:
+		now := cb.nowFunc()
 		// Only one probe is allowed; further requests are blocked until the probe resolves.
 		if cb.probeInFlight {
+			// If the probe has been in flight longer than probeStrandedTimeout,
+			// it likely failed with a transport error that never called
+			// RecordSuccess/RecordRateLimit. Release a fresh probe rather than
+			// staying wedged in HALF-OPEN forever.
+			if !cb.probeStartedAt.IsZero() && now.Sub(cb.probeStartedAt) > probeStrandedTimeout {
+				logCircuitBreaker.Printf("server %q circuit breaker HALF-OPEN probe stranded (in flight for %s) — releasing a new probe",
+					cb.serverID, now.Sub(cb.probeStartedAt))
+				logger.LogWarn("backend", "circuit breaker for server %q: stranded HALF-OPEN probe detected, releasing a new probe", cb.serverID)
+				cb.probeStartedAt = now
+				return nil
+			}
 			logCircuitBreaker.Printf("server %q circuit breaker HALF-OPEN, probe already in flight — rejecting request", cb.serverID)
-			return &ErrCircuitOpen{ServerID: cb.serverID, ResetAt: cb.resetAt}
+			return &ErrCircuitOpen{ServerID: cb.serverID, ResetAt: cb.resetAt, State: cb.state, Now: now}
 		}
 		// This shouldn't normally happen (probe resolved but state wasn't updated),
 		// but allow through defensively.
@@ -164,6 +209,7 @@ func (cb *circuitBreaker) RecordSuccess() {
 	}
 	cb.consecutiveErrors = 0
 	cb.probeInFlight = false
+	cb.probeStartedAt = time.Time{}
 	if cb.state == circuitHalfOpen {
 		cb.state = circuitClosed
 		cb.resetAt = time.Time{}
@@ -183,6 +229,7 @@ func (cb *circuitBreaker) RecordRateLimit(resetAt time.Time) {
 
 	cb.consecutiveErrors++
 	cb.probeInFlight = false
+	cb.probeStartedAt = time.Time{}
 	if !resetAt.IsZero() {
 		cb.resetAt = resetAt
 	}
