@@ -206,6 +206,47 @@ func TestWritePEM_InvalidPath(t *testing.T) {
 	require.Error(t, err, "writePEM should fail when the parent directory does not exist")
 }
 
+// TestGenerateSelfSignedTLS_WritePEMErrors exercises the writePEM failure
+// branches inside GenerateSelfSignedTLS by pre-creating each target file as a
+// directory, which forces os.OpenFile to fail with "is a directory".
+func TestGenerateSelfSignedTLS_WritePEMErrors(t *testing.T) {
+	tests := []struct {
+		name        string
+		blockedFile string
+		wantErrMsg  string
+	}{
+		{
+			name:        "ca.crt write failure",
+			blockedFile: "ca.crt",
+			wantErrMsg:  "failed to write CA cert",
+		},
+		{
+			name:        "server.crt write failure",
+			blockedFile: "server.crt",
+			wantErrMsg:  "failed to write server cert",
+		},
+		{
+			name:        "server.key write failure",
+			blockedFile: "server.key",
+			wantErrMsg:  "failed to write server key",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			// Pre-create the target file as a directory so writePEM's
+			// os.OpenFile call fails with "is a directory".
+			require.NoError(t, os.MkdirAll(filepath.Join(dir, tt.blockedFile), 0755))
+
+			tlsCfg, err := GenerateSelfSignedTLS(dir)
+			require.Error(t, err)
+			assert.Nil(t, tlsCfg)
+			assert.ErrorContains(t, err, tt.wantErrMsg)
+		})
+	}
+}
+
 // TestRandomSerial_ReturnsPositive verifies that randomSerial always generates
 // a positive integer (i.e. the serial number is never zero).
 func TestRandomSerial_ReturnsPositive(t *testing.T) {
