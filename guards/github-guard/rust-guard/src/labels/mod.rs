@@ -706,6 +706,7 @@ mod tests {
     #[test]
     fn test_apply_tool_labels_pull_request_read_matches_get_pull_request() {
         let ctx = default_ctx();
+        let _guard = super::backend::cache_repo_visibility_for_tests("github/copilot", true);
         let tool_args = json!({
             "owner": "github",
             "repo": "copilot",
