@@ -1489,6 +1489,18 @@ func TestDisableStandaloneSSECanary(t *testing.T) {
 				var req map[string]interface{}
 				_ = json.NewDecoder(r.Body).Decode(&req)
 				method, _ := req["method"].(string)
+				if method == "server/discover" {
+					w.Header().Set("Content-Type", "application/json")
+					_ = json.NewEncoder(w).Encode(map[string]interface{}{
+						"jsonrpc": "2.0",
+						"id":      req["id"],
+						"error": map[string]interface{}{
+							"code":    -32601,
+							"message": `method not found: "server/discover"`,
+						},
+					})
+					return
+				}
 				if method == "initialize" {
 					resp := map[string]interface{}{
 						"jsonrpc": "2.0",

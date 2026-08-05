@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -25,7 +26,10 @@ func newMinimalTestServer(t *testing.T) *httptest.Server {
 			return
 		case http.MethodPost:
 			var req map[string]interface{}
-			require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				http.Error(w, fmt.Sprintf("failed to decode request: %v", err), http.StatusBadRequest)
+				return
+			}
 			method, _ := req["method"].(string)
 			if method == "server/discover" {
 				w.Header().Set("Content-Type", "application/json")
