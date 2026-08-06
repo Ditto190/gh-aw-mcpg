@@ -49,7 +49,7 @@ func (us *UnifiedServer) registerAllToolsSequential(serverIDs []string) error {
 	errs := &registrationErrors{total: len(serverIDs)}
 	for _, serverID := range serverIDs {
 		logUnified.Printf("Registering tools from backend: %s", serverID)
-		if err := us.registerToolsFromBackend(serverID); err != nil {
+		if err := us.ensureToolsRegistered(us.ctx, serverID); err != nil {
 			logger.LogError("backend", "Failed to register tools from %s: %v", serverID, err)
 			errs.record(serverID)
 		}
@@ -74,7 +74,7 @@ func (us *UnifiedServer) registerAllToolsParallel(serverIDs []string) error {
 			defer wg.Done()
 
 			startTime := time.Now()
-			err := us.registerToolsFromBackend(sid)
+			err := us.ensureToolsRegistered(us.ctx, sid)
 			duration := time.Since(startTime)
 
 			results <- launchResult{
@@ -109,8 +109,79 @@ func (us *UnifiedServer) registerAllToolsParallel(serverIDs []string) error {
 	return nil
 }
 
+// ensureToolsRegistered serializes discovery for a backend and remembers successful
+// registrations. Failed attempts are not cached, so routed requests can retry after an
+// HTTP backend that was unavailable during gateway startup becomes ready.
+func (us *UnifiedServer) ensureToolsRegistered(ctx context.Context, serverID string) error {
+	us.registrationMu.RLock()
+	registered := us.registeredBackends[serverID]
+	registrationLock := us.backendRegistration[serverID]
+	failure, retryDeferred := us.registrationFailures[serverID]
+	us.registrationMu.RUnlock()
+	if registered {
+		return nil
+	}
+	if us.hasToolsForBackend(serverID) {
+		us.registrationMu.Lock()
+		us.registeredBackends[serverID] = true
+		delete(us.registrationFailures, serverID)
+		us.registrationMu.Unlock()
+		return nil
+	}
+	if retryDeferred && time.Now().Before(failure.retryAfter) {
+		return failure.err
+	}
+	if registrationLock == nil {
+		return fmt.Errorf("backend %q is not configured", serverID)
+	}
+
+	registrationLock.Lock()
+	defer registrationLock.Unlock()
+
+	us.registrationMu.RLock()
+	registered = us.registeredBackends[serverID]
+	failure, retryDeferred = us.registrationFailures[serverID]
+	us.registrationMu.RUnlock()
+	if registered {
+		return nil
+	}
+	if retryDeferred && time.Now().Before(failure.retryAfter) {
+		return failure.err
+	}
+	if err := us.registerToolsFromBackendContext(ctx, serverID); err != nil {
+		us.registrationMu.Lock()
+		us.registrationFailures[serverID] = backendRegistrationFailure{
+			err:        err,
+			retryAfter: time.Now().Add(backendRegistrationRetryInterval),
+		}
+		us.registrationMu.Unlock()
+		return err
+	}
+
+	us.registrationMu.Lock()
+	us.registeredBackends[serverID] = true
+	delete(us.registrationFailures, serverID)
+	us.registrationMu.Unlock()
+	return nil
+}
+
+func (us *UnifiedServer) hasToolsForBackend(serverID string) bool {
+	us.toolsMu.RLock()
+	defer us.toolsMu.RUnlock()
+	for _, tool := range us.tools {
+		if tool.BackendID == serverID {
+			return true
+		}
+	}
+	return false
+}
+
 // registerToolsFromBackend registers tools from a specific backend with <server>___<tool> naming
 func (us *UnifiedServer) registerToolsFromBackend(serverID string) error {
+	return us.registerToolsFromBackendContext(us.ctx, serverID)
+}
+
+func (us *UnifiedServer) registerToolsFromBackendContext(ctx context.Context, serverID string) error {
 	logUnified.Printf("Registering tools from backend: %s", serverID)
 
 	// Get connection to backend
@@ -136,7 +207,7 @@ func (us *UnifiedServer) registerToolsFromBackend(serverID string) error {
 		} `json:"tools"`
 	}
 	if err := fetchBackendList(
-		context.Background(),
+		ctx,
 		conn,
 		serverID,
 		"tools/list",
@@ -272,7 +343,7 @@ func (us *UnifiedServer) registerToolsFromBackend(serverID string) error {
 
 	// Register prompts from this backend. Prompt support is optional; failures are
 	// logged but do not cause tool registration to fail.
-	if err := us.registerPromptsFromBackend(context.Background(), serverID, conn); err != nil {
+	if err := us.registerPromptsFromBackend(ctx, serverID, conn); err != nil {
 		logger.LogWarn("backend", "Failed to register prompts from %s (non-fatal): %v", serverID, err)
 	}
 

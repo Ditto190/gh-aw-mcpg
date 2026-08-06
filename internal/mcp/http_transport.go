@@ -422,7 +422,7 @@ func trySSETransport(ctx context.Context, cancel context.CancelFunc, serverID, u
 
 // tryPlainJSONTransport attempts to connect using plain JSON-RPC 2.0 over HTTP POST (non-standard)
 // This is used for compatibility with servers like safeinputs that don't implement standard MCP HTTP transports
-func tryPlainJSONTransport(ctx context.Context, cancel context.CancelFunc, serverID, url string, headers map[string]string, httpClient *http.Client) (*Connection, error) {
+func tryPlainJSONTransport(ctx context.Context, cancel context.CancelFunc, serverID, url string, headers map[string]string, httpClient *http.Client, connectTimeout time.Duration) (*Connection, error) {
 	logHTTP.Printf("Attempting plain JSON-RPC transport: serverID=%s, url=%s", serverID, sanitize.RedactURL(url))
 	conn := &Connection{
 		ctx:               ctx,
@@ -433,6 +433,7 @@ func tryPlainJSONTransport(ctx context.Context, cancel context.CancelFunc, serve
 		headers:           headers,
 		httpClient:        httpClient,
 		httpTransportType: HTTPTransportPlainJSON,
+		connectTimeout:    connectTimeout,
 	}
 
 	// Send initialize request to establish a session with the HTTP backend
@@ -451,6 +452,12 @@ func tryPlainJSONTransport(ctx context.Context, cancel context.CancelFunc, serve
 
 // initializeHTTPSession sends an initialize request to the HTTP backend and captures the session ID
 func (c *Connection) initializeHTTPSession() (string, error) {
+	connectCtx, cancel := context.WithTimeout(c.ctx, normalizeConnectTimeout(c.connectTimeout))
+	defer cancel()
+	return c.initializeHTTPSessionContext(connectCtx)
+}
+
+func (c *Connection) initializeHTTPSessionContext(ctx context.Context) (string, error) {
 	// Generate unique request ID
 	requestID := atomic.AddUint64(&requestIDCounter, 1)
 
@@ -470,7 +477,7 @@ func (c *Connection) initializeHTTPSession() (string, error) {
 	// define a session ID on the initialize request — the server assigns it in the
 	// response.  Sending a synthetic ID could cause some backends to misinterpret
 	// the request as resuming an existing (and unknown) session.
-	result, err := c.executeHTTPRequest(c.ctx, "initialize", initParams, requestID, nil)
+	result, err := c.executeHTTPRequest(ctx, "initialize", initParams, requestID, nil)
 	if err != nil {
 		return "", err
 	}
