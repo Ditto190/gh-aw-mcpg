@@ -6,6 +6,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/github/gh-aw-mcpg/internal/sanitize"
 )
 
 // Close Pattern for Logger Types
@@ -364,6 +366,11 @@ var logLinePool = sync.Pool{
 // The outer "[%s] [%s] [%s] %s" formatting is replaced by direct WriteString calls,
 // and the message is written with fmt.Fprintf directly into the pooled buffer.
 // This reduces string allocations from 2 per call to 1 (a final copy is required before returning the builder to the pool).
+//
+// The formatted message is sanitized via sanitize.SanitizeString before being
+// returned, mirroring MarkdownLogger.Log's behavior, so that secrets (tokens,
+// API keys, auth headers, etc.) are redacted from mcp-gateway.log and the
+// per-server log files just as they are from the markdown log.
 func formatLogLine(level LogLevel, category, format string, args ...interface{}) string {
 	timestamp := time.Now().UTC().Format(jsonTimestampLayout)
 
@@ -384,7 +391,7 @@ func formatLogLine(level LogLevel, category, format string, args ...interface{})
 		sb.WriteString(format)
 	}
 
-	result := strings.Clone(sb.String())
+	result := sanitize.SanitizeString(sb.String())
 	logLinePool.Put(sb)
 	return result
 }
