@@ -18,6 +18,9 @@ func (us *UnifiedServer) getTrustedBots() []string {
 	if us.cfg == nil || us.cfg.Gateway == nil {
 		return nil
 	}
+	if logGuardInit.Enabled() {
+		logGuardInit.Printf("getTrustedBots: %d trusted bot(s) configured", len(us.cfg.Gateway.TrustedBots))
+	}
 	return us.cfg.Gateway.TrustedBots
 }
 
@@ -166,10 +169,12 @@ func (us *UnifiedServer) isServerExemptFromSinkVisibility(serverID string) bool 
 	}
 	// Blanket opt-out: forcePublicRepos=false implies all servers exempt
 	if us.cfg.Gateway.ForcePublicRepos != nil && !*us.cfg.Gateway.ForcePublicRepos {
+		logGuardInit.Printf("isServerExemptFromSinkVisibility: serverID=%s exempt via blanket forcePublicRepos=false", serverID)
 		return true
 	}
 	for _, exempt := range us.cfg.Gateway.SinkVisibilityExemptServers {
 		if exempt == "*" || exempt == serverID {
+			logGuardInit.Printf("isServerExemptFromSinkVisibility: serverID=%s exempt via SinkVisibilityExemptServers entry %q", serverID, exempt)
 			return true
 		}
 	}
