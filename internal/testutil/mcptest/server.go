@@ -3,12 +3,13 @@ package mcptest
 import (
 	"context"
 	"fmt"
-	"log"
 
 	"github.com/github/gh-aw-mcpg/internal/logger"
 	"github.com/github/gh-aw-mcpg/internal/mcp"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
+
+var logMCPTest = logger.New("testutil:mcptest")
 
 // Server is a configurable MCP test server
 type Server struct {
@@ -30,7 +31,7 @@ func NewServer(config *ServerConfig) *Server {
 
 // Start initializes and starts the MCP server with configured tools and resources
 func (s *Server) Start() error {
-	log.Printf("[TestServer] Initializing %s v%s", s.config.Name, s.config.Version)
+	logMCPTest.Printf("Initializing test server: name=%s, version=%s", s.config.Name, s.config.Version)
 
 	impl := &sdk.Implementation{
 		Name:    s.config.Name,
@@ -39,7 +40,7 @@ func (s *Server) Start() error {
 
 	sdkLogger := s.config.Logger
 	if sdkLogger == nil {
-		sdkLogger = logger.NewSlogLoggerWithHandler(logger.New("testutil:mcptest"))
+		sdkLogger = logger.NewSlogLoggerWithHandler(logMCPTest)
 	}
 
 	s.server = sdk.NewServer(impl, &sdk.ServerOptions{
@@ -49,7 +50,7 @@ func (s *Server) Start() error {
 	// Register tools
 	for i, toolCfg := range s.config.Tools {
 		tool := toolCfg // Capture for closure
-		log.Printf("[TestServer] Registering tool %d: %s", i+1, tool.Name)
+		logMCPTest.Printf("Registering tool %d: %s", i+1, tool.Name)
 
 		s.server.AddTool(&sdk.Tool{
 			Name:        tool.Name,
@@ -89,7 +90,7 @@ func (s *Server) Start() error {
 	// Register resources
 	for i, resCfg := range s.config.Resources {
 		res := resCfg // Capture for closure
-		log.Printf("[TestServer] Registering resource %d: %s", i+1, res.URI)
+		logMCPTest.Printf("Registering resource %d: %s", i+1, res.URI)
 
 		s.server.AddResource(&sdk.Resource{
 			URI:         res.URI,
@@ -109,7 +110,7 @@ func (s *Server) Start() error {
 		})
 	}
 
-	log.Printf("[TestServer] Server %s initialized successfully (tools: %d, resources: %d)",
+	logMCPTest.Printf("Test server initialized successfully: name=%s, tools=%d, resources=%d",
 		s.config.Name, len(s.config.Tools), len(s.config.Resources))
 
 	return nil
@@ -123,6 +124,7 @@ func (s *Server) GetServer() *sdk.Server {
 // Stop stops the server
 func (s *Server) Stop() {
 	if s.cancel != nil {
+		logMCPTest.Printf("Stopping test server: name=%s", s.config.Name)
 		s.cancel()
 	}
 }
