@@ -259,7 +259,7 @@ fn normalize_scope<'a>(scope: &'a str, ctx: &'a PolicyContext) -> Cow<'a, str> {
 
 fn split_repo_id(repo_id: &str) -> Option<(&str, &str)> {
     let (owner, repo) = repo_id.split_once('/')?;
-    if owner.is_empty() || repo.is_empty() {
+    if owner.is_empty() || repo.is_empty() || repo.contains('/') {
         return None;
     }
     Some((owner, repo))
@@ -1014,11 +1014,7 @@ pub(crate) fn policy_private_scope_label(
 ///
 /// Malformed full names fall back to the bare private label.
 pub(crate) fn private_repo_secrecy_label(full_name: &str, ctx: &PolicyContext) -> Vec<String> {
-    if let Some((owner, repo)) = split_repo_id(full_name) {
-        policy_private_scope_label(owner, repo, full_name, ctx)
-    } else {
-        vec![label_constants::PRIVATE_BASE.to_string()]
-    }
+    policy_private_scope_label("", "", full_name, ctx)
 }
 
 // ============================================================================
@@ -2305,6 +2301,10 @@ mod tests {
         );
         assert_eq!(
             private_repo_secrecy_label("owner/", &test_ctx()),
+            vec![label_constants::PRIVATE_BASE.to_string()]
+        );
+        assert_eq!(
+            private_repo_secrecy_label("owner/repo/extra", &test_ctx()),
             vec![label_constants::PRIVATE_BASE.to_string()]
         );
     }
