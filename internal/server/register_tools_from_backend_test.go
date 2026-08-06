@@ -236,7 +236,7 @@ func TestRegisterToolsFromBackend_BackendError(t *testing.T) {
 	// Attempt to register tools should fail with backend error
 	err = us.registerToolsFromBackend("error-backend")
 	require.Error(err, "Should fail when backend returns error")
-	require.ErrorContains(err, "failed to list tools", "Error should mention failed to list tools")
+	require.ErrorContains(err, "backend error listing tools", "Error should mention the backend error")
 	require.ErrorContains(err, "unable to list tools", "Error should include backend error message")
 }
 

@@ -19,6 +19,14 @@ const autoInitProtocolVersion = "2025-11-25"
 // autoInitClientInfo is the JSON snippet for the clientInfo field in the initialize request.
 const autoInitClientInfo = `{"name":"mcpg-auto-init","version":"1.0"}`
 
+// mcpProtocolVersionHeader is the HTTP header carrying the negotiated MCP protocol version.
+const mcpProtocolVersionHeader = "Mcp-Protocol-Version"
+
+// statelessProtocolVersion is the first MCP protocol version (SEP-2577/SEP-2575)
+// that intentionally omits Mcp-Session-Id on stateless requests. Auto-init must
+// not treat these requests as missing a legacy handshake.
+const statelessProtocolVersion = "2026-07-28"
+
 // WrapWithSessionAutoInit wraps an MCP streamable HTTP handler to automatically
 // initialize sessions for clients that send tools/call before completing the MCP
 // session handshake.
@@ -42,6 +50,17 @@ func WrapWithSessionAutoInit(streamableHandler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Only handle POST requests that have no established session.
 		if r.Method != http.MethodPost || r.Header.Get("Mcp-Session-Id") != "" {
+			streamableHandler.ServeHTTP(w, r)
+			return
+		}
+
+		// SDK v1.7.0+ defaults to the stateless "2026-07-28" protocol, under
+		// which requests intentionally omit Mcp-Session-Id (see SEP-2577).
+		// Auto-init only targets legacy stateful clients (e.g. Gemini CLI
+		// v0.37.x) that skip the initialize handshake, so bypass it here to
+		// avoid allocating an unused stateful session for every stateless
+		// tools/call.
+		if r.Header.Get(mcpProtocolVersionHeader) >= statelessProtocolVersion {
 			streamableHandler.ServeHTTP(w, r)
 			return
 		}

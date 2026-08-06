@@ -13,6 +13,41 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// handleDiscoveryProbe answers the SDK's "server/discover" probe (introduced
+// in go-sdk v1.7.0 for the 2026-07-28 stateless protocol) with a JSON-RPC
+// "method not found" error and acknowledges "notifications/initialized" with
+// a 202 Accepted, so that handlers written for the pre-1.7.0 SDK still fall
+// through to the initialize response for the streamable transport. It
+// returns true if the request was fully handled by this helper.
+func handleDiscoveryProbe(w http.ResponseWriter, r *http.Request, req map[string]interface{}) bool {
+	method, _ := req["method"].(string)
+	switch method {
+	case "server/discover":
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"jsonrpc": "2.0",
+			"id":      req["id"],
+			"error": map[string]interface{}{
+				"code":    -32601,
+				"message": `method not found: "server/discover"`,
+			},
+		})
+		return true
+	case "notifications/initialized":
+		w.WriteHeader(http.StatusAccepted)
+		return true
+	}
+	return false
+}
+
+// decodeJSONRPCRequest reads and decodes the JSON-RPC request body without
+// consuming it for later use by the caller.
+func decodeJSONRPCRequest(r *http.Request) map[string]interface{} {
+	var req map[string]interface{}
+	_ = json.NewDecoder(r.Body).Decode(&req)
+	return req
+}
+
 // TestNewHTTPConnection_WithCustomHeaders tests that custom headers are injected into the
 // SDK-managed Streamable HTTP transport (not bypassed to plain JSON-RPC).
 func TestNewHTTPConnection_WithCustomHeaders(t *testing.T) {
@@ -30,10 +65,15 @@ func TestNewHTTPConnection_WithCustomHeaders(t *testing.T) {
 		assert.Equal("test-auth-token", r.Header.Get("Authorization"))
 		assert.Equal("custom-value", r.Header.Get("X-Custom-Header"))
 
+		req := decodeJSONRPCRequest(r)
+		if handleDiscoveryProbe(w, r, req) {
+			return
+		}
+
 		// Return a valid initialize response
 		response := map[string]interface{}{
 			"jsonrpc": "2.0",
-			"id":      1,
+			"id":      req["id"],
 			"result": map[string]interface{}{
 				"protocolVersion": "2024-11-05",
 				"serverInfo": map[string]interface{}{
@@ -82,9 +122,13 @@ func TestNewHTTPConnection_WithoutHeaders_FallbackSequence(t *testing.T) {
 	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Accept all POST requests with valid JSON-RPC response
 		if r.Method == "POST" {
+			req := decodeJSONRPCRequest(r)
+			if handleDiscoveryProbe(w, r, req) {
+				return
+			}
 			response := map[string]interface{}{
 				"jsonrpc": "2.0",
-				"id":      1,
+				"id":      req["id"],
 				"result": map[string]interface{}{
 					"protocolVersion": "2024-11-05",
 					"serverInfo": map[string]interface{}{
@@ -279,11 +323,15 @@ func TestHTTPConnection_SSEFormattedResponse(t *testing.T) {
 
 	// Create test server that returns SSE-formatted initialize response
 	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		req := decodeJSONRPCRequest(r)
+		if handleDiscoveryProbe(w, r, req) {
+			return
+		}
 		// Return SSE-formatted response (like Tavily backend)
-		response := `event: message
-data: {"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2024-11-05","serverInfo":{"name":"test-server","version":"1.0.0"}}}
-
-`
+		id, _ := json.Marshal(req["id"])
+		response := "event: message\ndata: " +
+			`{"jsonrpc":"2.0","id":` + string(id) + `,"result":{"protocolVersion":"2024-11-05","serverInfo":{"name":"test-server","version":"1.0.0"}}}` +
+			"\n\n"
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.Header().Set("Mcp-Session-Id", "sse-session-456")
 		w.WriteHeader(http.StatusOK)
@@ -314,9 +362,13 @@ func TestHTTPConnection_NoSessionIDInResponse(t *testing.T) {
 
 	// Create test server that doesn't return Mcp-Session-Id header
 	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		req := decodeJSONRPCRequest(r)
+		if handleDiscoveryProbe(w, r, req) {
+			return
+		}
 		response := map[string]interface{}{
 			"jsonrpc": "2.0",
-			"id":      1,
+			"id":      req["id"],
 			"result": map[string]interface{}{
 				"protocolVersion": "2024-11-05",
 				"serverInfo": map[string]interface{}{
@@ -359,9 +411,14 @@ func TestNewHTTPConnection_HeadersPropagation(t *testing.T) {
 		receivedHeaders["X-Custom-1"] = r.Header.Get("X-Custom-1")
 		receivedHeaders["X-Custom-2"] = r.Header.Get("X-Custom-2")
 
+		req := decodeJSONRPCRequest(r)
+		if handleDiscoveryProbe(w, r, req) {
+			return
+		}
+
 		response := map[string]interface{}{
 			"jsonrpc": "2.0",
-			"id":      1,
+			"id":      req["id"],
 			"result": map[string]interface{}{
 				"protocolVersion": "2024-11-05",
 				"serverInfo":      map[string]interface{}{"name": "test"},
@@ -401,9 +458,13 @@ func TestNewHTTPConnection_EmptyHeaders(t *testing.T) {
 	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Accept POST requests with valid JSON-RPC response
 		if r.Method == "POST" {
+			req := decodeJSONRPCRequest(r)
+			if handleDiscoveryProbe(w, r, req) {
+				return
+			}
 			response := map[string]interface{}{
 				"jsonrpc": "2.0",
-				"id":      1,
+				"id":      req["id"],
 				"result": map[string]interface{}{
 					"protocolVersion": "2024-11-05",
 					"serverInfo":      map[string]interface{}{"name": "test"},
@@ -443,9 +504,13 @@ func TestNewHTTPConnection_NilHeaders(t *testing.T) {
 
 	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "POST" && r.URL.Path == "/" {
+			req := decodeJSONRPCRequest(r)
+			if handleDiscoveryProbe(w, r, req) {
+				return
+			}
 			response := map[string]interface{}{
 				"jsonrpc": "2.0",
-				"id":      1,
+				"id":      req["id"],
 				"result": map[string]interface{}{
 					"protocolVersion": "2024-11-05",
 					"serverInfo":      map[string]interface{}{"name": "test"},
@@ -478,11 +543,15 @@ func TestNewHTTPConnection_HTTPClientTimeoutUnset(t *testing.T) {
 
 	// Create test server with delayed response.
 	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		req := decodeJSONRPCRequest(r)
+		if handleDiscoveryProbe(w, r, req) {
+			return
+		}
 		time.Sleep(50 * time.Millisecond)
 
 		response := map[string]interface{}{
 			"jsonrpc": "2.0",
-			"id":      1,
+			"id":      req["id"],
 			"result": map[string]interface{}{
 				"protocolVersion": "2024-11-05",
 				"serverInfo":      map[string]interface{}{"name": "test"},
@@ -532,9 +601,13 @@ func TestNewHTTPConnection_GettersAfterCreation(t *testing.T) {
 	require := require.New(t)
 
 	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		req := decodeJSONRPCRequest(r)
+		if handleDiscoveryProbe(w, r, req) {
+			return
+		}
 		response := map[string]interface{}{
 			"jsonrpc": "2.0",
-			"id":      1,
+			"id":      req["id"],
 			"result": map[string]interface{}{
 				"protocolVersion": "2024-11-05",
 				"serverInfo":      map[string]interface{}{"name": "test"},
@@ -598,9 +671,13 @@ func TestNewHTTPConnection_StreamableTransport_BadSSEEndpoint(t *testing.T) {
 		}
 
 		// POST: respond with a valid JSON-RPC initialize result.
+		req := decodeJSONRPCRequest(r)
+		if handleDiscoveryProbe(w, r, req) {
+			return
+		}
 		response := map[string]interface{}{
 			"jsonrpc": "2.0",
-			"id":      1,
+			"id":      req["id"],
 			"result": map[string]interface{}{
 				"protocolVersion": "2024-11-05",
 				"serverInfo": map[string]interface{}{
