@@ -852,6 +852,17 @@ func TestFormatLogLine(t *testing.T) {
 		result := formatLogLine(LogLevelInfo, "", "message")
 		assert.Contains(t, result, "[]", "Empty category should produce empty bracket pair")
 	})
+
+	t.Run("secrets in the formatted message are redacted", func(t *testing.T) {
+		// Regression test: FileLogger (mcp-gateway.log) and ServerFileLogger
+		// (per-server *.log files) both build their log lines via formatLogLine,
+		// but unlike MarkdownLogger.Log they previously skipped sanitize.SanitizeString,
+		// so secrets could leak into the unified/per-server log files.
+		result := formatLogLine(LogLevelInfo, "auth", "token=%s", "ghp_abcdefghijklmnopqrstuvwxyzABCDEFGH01")
+		assert.NotContains(t, result, "ghp_abcdefghijklmnopqrstuvwxyzABCDEFGH01",
+			"Log line should not contain the raw GitHub PAT")
+		assert.Contains(t, result, "[REDACTED]", "Log line should contain the redaction marker")
+	})
 }
 
 // BenchmarkFormatLogLine measures allocations and throughput for formatLogLine.
