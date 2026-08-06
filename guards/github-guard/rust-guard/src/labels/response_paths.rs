@@ -7,7 +7,7 @@
 //! Returns JSON paths like `/items/0`, `/items/1` pointing to labeled objects
 //! in the response, rather than cloning the entire data.
 
-use super::constants::{desc_prefix, field_names, label_constants, scope_names};
+use super::constants::{desc_prefix, field_names, scope_names};
 use super::extract_mcp_response;
 use super::helpers::*;
 use serde_json::Value;
@@ -133,11 +133,7 @@ pub fn label_response_paths(
                     let integrity = writer_integrity(full_name, ctx);
 
                     let secrecy = if is_private {
-                        if let Some((owner, repo)) = full_name.split_once('/') {
-                            policy_private_scope_label(owner, repo, full_name, ctx)
-                        } else {
-                            vec![label_constants::PRIVATE_BASE.to_string()]
-                        }
+                        private_repo_secrecy_label(full_name, ctx)
                     } else {
                         vec![]
                     };
