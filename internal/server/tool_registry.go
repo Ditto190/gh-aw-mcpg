@@ -121,13 +121,6 @@ func (us *UnifiedServer) ensureToolsRegistered(ctx context.Context, serverID str
 	if registered {
 		return nil
 	}
-	if us.hasToolsForBackend(serverID) {
-		us.registrationMu.Lock()
-		us.registeredBackends[serverID] = true
-		delete(us.registrationFailures, serverID)
-		us.registrationMu.Unlock()
-		return nil
-	}
 	if retryDeferred && time.Now().Before(failure.retryAfter) {
 		return failure.err
 	}
