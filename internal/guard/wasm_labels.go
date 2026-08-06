@@ -83,12 +83,14 @@ func (g *WasmGuard) LabelResource(ctx context.Context, toolName string, args any
 	const funcName = "label_resource"
 	resultJSON, err := g.callWasmGuardFunction(ctx, funcName, backend, input)
 	if err != nil {
+		logWasm.Printf("LabelResource callWasmGuardFunction failed: guard=%s, toolName=%s, error=%v", g.name, toolName, err)
 		return nil, difc.OperationWrite, err
 	}
 
 	// Parse result
 	response, err := unmarshalWasmResponse(funcName, resultJSON)
 	if err != nil {
+		logWasm.Printf("LabelResource response unmarshal failed: guard=%s, toolName=%s, error=%v", g.name, toolName, err)
 		return nil, difc.OperationWrite, err
 	}
 
@@ -118,31 +120,37 @@ func (g *WasmGuard) LabelResponse(ctx context.Context, toolName string, result a
 	const funcName = "label_response"
 	resultJSON, err := g.callWasmGuardFunction(ctx, funcName, backend, input)
 	if err != nil {
+		logWasm.Printf("LabelResponse callWasmGuardFunction failed: guard=%s, toolName=%s, error=%v", g.name, toolName, err)
 		return nil, err
 	}
 
 	// If empty result, return nil (no fine-grained labeling)
 	if len(resultJSON) == 0 {
+		logWasm.Printf("LabelResponse: empty result, no fine-grained labeling: guard=%s, toolName=%s", g.name, toolName)
 		return nil, nil
 	}
 
 	// Parse result - check for new path-based format first
 	responseMap, err := unmarshalWasmResponse(funcName, resultJSON)
 	if err != nil {
+		logWasm.Printf("LabelResponse response unmarshal failed: guard=%s, toolName=%s, error=%v", g.name, toolName, err)
 		return nil, err
 	}
 
 	// Check for path-based labeling format (preferred, more efficient)
 	if _, hasLabeledPaths := responseMap["labeled_paths"]; hasLabeledPaths {
+		logWasm.Printf("LabelResponse: using path-based labeled_paths format: guard=%s, toolName=%s", g.name, toolName)
 		return parsePathLabeledResponse(resultJSON, result)
 	}
 
 	// Legacy format: check if it's a collection with "items"
 	if items, ok := responseMap["items"].([]any); ok && len(items) > 0 {
+		logWasm.Printf("LabelResponse: using legacy collection items format: guard=%s, toolName=%s, itemCount=%d", g.name, toolName, len(items))
 		return parseCollectionLabeledData(items)
 	}
 
 	// No fine-grained labeling
+	logWasm.Printf("LabelResponse: no fine-grained labeling applied: guard=%s, toolName=%s", g.name, toolName)
 	return nil, nil
 }
 
