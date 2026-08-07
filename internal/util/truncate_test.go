@@ -274,7 +274,7 @@ func TestTruncateRunes_TruncatedResultIsAlwaysValidUTF8(t *testing.T) {
 	for _, input := range inputs {
 		for _, maxRunes := range []int{1, 2, 3, 5, 10} {
 			result := TruncateRunes(input, maxRunes)
-			if len(result) < len(input) {
+			if utf8.RuneCountInString(input) > maxRunes {
 				assert.Truef(t, utf8.ValidString(result), "TruncateRunes(%q, %d) = %q is not valid UTF-8", input, maxRunes, result)
 			}
 		}
