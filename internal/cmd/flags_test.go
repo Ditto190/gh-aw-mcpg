@@ -191,6 +191,25 @@ func TestRegisterFlagCompletions(t *testing.T) {
 		assert.Contains(t, flag.Usage, "-vv (debug)")
 		assert.Contains(t, flag.Usage, "-vvv (trace)")
 	})
+
+	t.Run("does not panic when target flags are missing", func(t *testing.T) {
+		// registerFlagCompletions references flags such as "config", "log-dir",
+		// "payload-dir", "wasm-cache-dir", "env", and "allowonly-min-integrity"
+		// by name. When those flags are not registered on the command (e.g. a
+		// bare/minimal command), MarkFlagFilename/MarkFlagDirname/
+		// RegisterFlagCompletionFunc all return errors, which should be logged
+		// via debugLog rather than causing a panic.
+		cmd := newTestCmd()
+
+		require.NotPanics(t, func() {
+			registerFlagCompletions(cmd)
+		})
+
+		// ValidArgsFunction is unconditionally assigned regardless of whether the
+		// other flag lookups succeeded, so it should still be set.
+		assert.NotNil(t, cmd.ValidArgsFunction,
+			"ValidArgsFunction should be set even when other flag completions fail to register")
+	})
 }
 
 func TestRegisterFlag(t *testing.T) {
