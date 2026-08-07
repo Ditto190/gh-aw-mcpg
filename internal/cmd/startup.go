@@ -72,6 +72,8 @@ func buildHTTPServer(
 	agentID, hmacSecret string,
 	cancel context.CancelFunc,
 ) *http.Server {
+	debugLog.Printf("buildHTTPServer: mode=%s, listenAddr=%s, agentIDConfigured=%v, hmacConfigured=%v",
+		mode, listenAddr, agentID != "", hmacSecret != "")
 	var httpServer *http.Server
 	if mode == "routed" {
 		logger.StartupInfo("Starting MCPG in ROUTED mode on %s", listenAddr)
@@ -100,5 +102,6 @@ func buildHTTPServer(
 	// buffered spans before the process terminates.
 	unifiedServer.SetExitFunc(cancel)
 
+	debugLog.Printf("buildHTTPServer: HTTP server configured for mode=%s", mode)
 	return httpServer
 }
