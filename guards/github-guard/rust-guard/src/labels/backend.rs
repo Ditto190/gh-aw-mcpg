@@ -4,6 +4,8 @@
 //! and retrieve additional information needed for labeling.
 
 use serde_json::Value;
+#[cfg(test)]
+use std::cell::RefCell;
 use std::collections::HashMap;
 #[cfg(test)]
 use std::sync::MutexGuard;
@@ -100,6 +102,11 @@ fn set_cached_collaborator_permission(key: &str, permission: Option<String>) {
 }
 
 fn get_cached_repo_visibility(repo_id: &str) -> Option<bool> {
+    #[cfg(test)]
+    if let Some(is_private) = get_test_repo_visibility_override(repo_id) {
+        return Some(is_private);
+    }
+
     repo_visibility_cache()
         .lock()
         .ok()
@@ -122,44 +129,60 @@ pub(crate) fn lock_repo_visibility_cache_for_tests() -> MutexGuard<'static, ()> 
         .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
+// Repository visibility overrides installed by `cache_repo_visibility_for_tests` are stored
+// per-thread rather than in the process-wide cache. `cargo test` runs each test on its own
+// thread, so a thread-local override cannot leak into tests running concurrently.
+#[cfg(test)]
+thread_local! {
+    static TEST_REPO_VISIBILITY_OVERRIDES: RefCell<HashMap<String, bool>> =
+        RefCell::new(HashMap::new());
+}
+
+#[cfg(test)]
+fn get_test_repo_visibility_override(repo_id: &str) -> Option<bool> {
+    TEST_REPO_VISIBILITY_OVERRIDES.with(|overrides| overrides.borrow().get(repo_id).copied())
+}
+
 #[cfg(test)]
 pub(crate) struct RepoVisibilityCacheEntryGuard {
     repo_id: String,
     previous: Option<bool>,
-    _lock: MutexGuard<'static, ()>,
 }
 
 #[cfg(test)]
 impl Drop for RepoVisibilityCacheEntryGuard {
     fn drop(&mut self) {
-        if let Ok(mut cache) = repo_visibility_cache().lock() {
+        TEST_REPO_VISIBILITY_OVERRIDES.with(|overrides| {
+            let mut overrides = overrides.borrow_mut();
             match self.previous {
                 Some(previous) => {
-                    cache.insert(self.repo_id.clone(), previous);
+                    overrides.insert(self.repo_id.clone(), previous);
                 }
                 None => {
-                    cache.remove(&self.repo_id);
+                    overrides.remove(&self.repo_id);
                 }
             }
-        }
+        });
     }
 }
 
+/// Overrides the visibility reported for `repo_id` for the duration of the returned guard.
+///
+/// The override is scoped to the calling thread so concurrently running tests are unaffected.
 #[cfg(test)]
 pub(crate) fn cache_repo_visibility_for_tests(
     repo_id: &str,
     is_private: bool,
 ) -> RepoVisibilityCacheEntryGuard {
-    let lock = lock_repo_visibility_cache_for_tests();
-    let previous = repo_visibility_cache()
-        .lock()
-        .ok()
-        .and_then(|mut cache| cache.insert(repo_id.to_string(), is_private));
+    let previous = TEST_REPO_VISIBILITY_OVERRIDES.with(|overrides| {
+        overrides
+            .borrow_mut()
+            .insert(repo_id.to_string(), is_private)
+    });
 
     RepoVisibilityCacheEntryGuard {
         repo_id: repo_id.to_string(),
         previous,
-        _lock: lock,
     }
 }
 
