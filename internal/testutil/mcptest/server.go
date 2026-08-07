@@ -12,7 +12,7 @@ import (
 
 // logServer is named to avoid colliding with the stdlib "log" package import
 // already used for user-facing test-server console messages in this file.
-var logServer = logger.New("testutil:server")
+var logServer = logger.ForFile()
 
 // Server is a configurable MCP test server
 type Server struct {
