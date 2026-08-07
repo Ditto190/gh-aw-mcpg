@@ -1,7 +1,9 @@
 package util
 
 import (
+	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -214,6 +216,33 @@ func TestTruncateRunes(t *testing.T) {
 			maxRunes: 1,
 			expected: "\xef\xbf\xbd", // utf8.RuneError encoded as UTF-8
 		},
+		{
+			// Exercises the utf8.RuneCountInString early-return path: byte length
+			// exceeds maxRunes, but the actual rune count does not, so no
+			// byte-by-byte walk should be needed.
+			name:     "multibyte string with more bytes than maxRunes but fewer runes",
+			input:    "日本語",
+			maxRunes: 4,
+			expected: "日本語",
+		},
+		{
+			name:     "mixed ASCII and multibyte truncated mid-string",
+			input:    "go言語です",
+			maxRunes: 3,
+			expected: "go言",
+		},
+		{
+			name:     "maxRunes one less than rune count truncates by one rune",
+			input:    "abcde",
+			maxRunes: 4,
+			expected: "abcd",
+		},
+		{
+			name:     "single ASCII character with maxRunes one",
+			input:    "x",
+			maxRunes: 1,
+			expected: "x",
+		},
 	}
 
 	for _, tt := range tests {
@@ -221,6 +250,34 @@ func TestTruncateRunes(t *testing.T) {
 			result := TruncateRunes(tt.input, tt.maxRunes)
 			assert.Equal(t, tt.expected, result)
 		})
+	}
+}
+
+// TestTruncateRunes_TruncatedResultIsAlwaysValidUTF8 verifies that whenever
+// TruncateRunes actually truncates a string (i.e. returns fewer bytes than the
+// input), the result never contains invalid UTF-8 byte sequences - even if the
+// input itself was malformed. This guards the invariant documented in
+// TruncateRunes's doc comment about normalizing invalid trailing bytes.
+// Note: when no truncation occurs, TruncateRunes returns the input unchanged
+// (it does not validate/repair already-short strings), so this check only
+// applies to genuinely truncated results.
+func TestTruncateRunes_TruncatedResultIsAlwaysValidUTF8(t *testing.T) {
+	inputs := []string{
+		"hello world",
+		"日本語テスト",
+		"😀😁😂😃😄",
+		"\xff\xfe\xfd",
+		"go\xfflang",
+		strings.Repeat("a", 500) + "\xff",
+	}
+
+	for _, input := range inputs {
+		for _, maxRunes := range []int{1, 2, 3, 5, 10} {
+			result := TruncateRunes(input, maxRunes)
+			if len(result) < len(input) {
+				assert.Truef(t, utf8.ValidString(result), "TruncateRunes(%q, %d) = %q is not valid UTF-8", input, maxRunes, result)
+			}
+		}
 	}
 }
 
