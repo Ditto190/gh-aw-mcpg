@@ -50,6 +50,7 @@ func NewSecrecyLabel(tags ...Tag) *SecrecyLabel {
 	if len(tags) == 0 {
 		return &SecrecyLabel{Label: NewLabel()}
 	}
+	logLabels.Printf("NewSecrecyLabel: creating with %d tags", len(tags))
 	return &SecrecyLabel{Label: newLabelWithTags(tags)}
 }
 
@@ -59,6 +60,7 @@ func NewIntegrityLabel(tags ...Tag) *IntegrityLabel {
 	if len(tags) == 0 {
 		return &IntegrityLabel{Label: NewLabel()}
 	}
+	logLabels.Printf("NewIntegrityLabel: creating with %d tags", len(tags))
 	return &IntegrityLabel{Label: newLabelWithTags(tags)}
 }
 
@@ -93,6 +95,8 @@ func (l *flowLabel[T]) CanFlowTo(target *flowLabel[T]) bool {
 //   - bool: true if flow is allowed
 //   - []Tag: violating tags (tags that prevent the flow)
 func checkFlowHelper(srcLabel *Label, targetLabel *Label, checkSubset bool, labelType string) (bool, []Tag) {
+	logLabels.Printf("%s checkFlowHelper: checkSubset=%v, srcNil=%v, targetNil=%v", labelType, checkSubset, srcLabel == nil, targetLabel == nil)
+
 	// Handle nil source
 	if srcLabel == nil {
 		if checkSubset {
