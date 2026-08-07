@@ -158,17 +158,6 @@ func (us *UnifiedServer) ensureToolsRegistered(ctx context.Context, serverID str
 	return nil
 }
 
-func (us *UnifiedServer) hasToolsForBackend(serverID string) bool {
-	us.toolsMu.RLock()
-	defer us.toolsMu.RUnlock()
-	for _, tool := range us.tools {
-		if tool.BackendID == serverID {
-			return true
-		}
-	}
-	return false
-}
-
 // registerToolsFromBackend registers tools from a specific backend with <server>___<tool> naming
 func (us *UnifiedServer) registerToolsFromBackend(serverID string) error {
 	return us.registerToolsFromBackendContext(us.ctx, serverID)
