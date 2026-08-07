@@ -166,3 +166,137 @@ func TestApplyTracingFlags_ServiceNameDefaultDoesNotOverrideConfig(t *testing.T)
 	assert.Equal(t, "toml-service", cfg.Gateway.Tracing.ServiceName,
 		"TOML config service name should not be overwritten when env var is unset and flag is unchanged")
 }
+
+// newTracingTestCmd builds a fresh cobra.Command with tracing flags registered,
+// resetting the package-level otlp* flag variables used by applyTracingOverrides.
+// It restores the previous package-level values via t.Cleanup.
+func newTracingTestCmd(t *testing.T) *cobra.Command {
+	t.Helper()
+
+	origEndpoint, origService, origSampleRate := otlpEndpoint, otlpServiceName, otlpSampleRate
+	t.Cleanup(func() {
+		otlpEndpoint, otlpServiceName, otlpSampleRate = origEndpoint, origService, origSampleRate
+	})
+
+	otlpEndpoint = ""
+	otlpServiceName = config.DefaultTracingServiceName
+	otlpSampleRate = config.DefaultTracingSampleRate
+
+	cmd := &cobra.Command{Use: "test"}
+	registerTracingFlags(cmd, &otlpEndpoint, &otlpServiceName, &otlpSampleRate,
+		"endpoint help", "service help", "sample help")
+	return cmd
+}
+
+// TestApplyTracingOverrides_NoOverridesLeavesTracingNil verifies that when no
+// CLI flags are changed, no env vars override the defaults, and cfg.Gateway.Tracing
+// starts nil, applyTracingOverrides does not allocate a TracingConfig.
+func TestApplyTracingOverrides_NoOverridesLeavesTracingNil(t *testing.T) {
+	cmd := newTracingTestCmd(t)
+	require.NoError(t, cmd.ParseFlags([]string{}))
+
+	cfg := &config.Config{Gateway: &config.GatewayConfig{}}
+	applyTracingOverrides(cmd, cfg)
+
+	assert.Nil(t, cfg.Gateway.Tracing, "Tracing config should remain nil when nothing overrides the defaults")
+}
+
+// TestApplyTracingOverrides_EndpointFlagInitializesConfig verifies that setting
+// --otlp-endpoint triggers TracingConfig initialization and propagates the value.
+func TestApplyTracingOverrides_EndpointFlagInitializesConfig(t *testing.T) {
+	cmd := newTracingTestCmd(t)
+	require.NoError(t, cmd.ParseFlags([]string{"--otlp-endpoint", "http://collector:4318"}))
+
+	cfg := &config.Config{Gateway: &config.GatewayConfig{}}
+	applyTracingOverrides(cmd, cfg)
+
+	require.NotNil(t, cfg.Gateway.Tracing)
+	assert.Equal(t, "http://collector:4318", cfg.Gateway.Tracing.Endpoint)
+}
+
+// TestApplyTracingOverrides_ServiceNameFlag verifies that setting
+// --otlp-service-name propagates through to the tracing config.
+func TestApplyTracingOverrides_ServiceNameFlag(t *testing.T) {
+	cmd := newTracingTestCmd(t)
+	require.NoError(t, cmd.ParseFlags([]string{"--otlp-service-name", "custom-service"}))
+
+	cfg := &config.Config{Gateway: &config.GatewayConfig{}}
+	applyTracingOverrides(cmd, cfg)
+
+	require.NotNil(t, cfg.Gateway.Tracing)
+	assert.Equal(t, "custom-service", cfg.Gateway.Tracing.ServiceName)
+}
+
+// TestApplyTracingOverrides_SampleRateFlag verifies that setting
+// --otlp-sample-rate stores a pointer to the sample rate on the tracing config.
+func TestApplyTracingOverrides_SampleRateFlag(t *testing.T) {
+	cmd := newTracingTestCmd(t)
+	require.NoError(t, cmd.ParseFlags([]string{"--otlp-sample-rate", "0.5"}))
+
+	cfg := &config.Config{Gateway: &config.GatewayConfig{}}
+	applyTracingOverrides(cmd, cfg)
+
+	require.NotNil(t, cfg.Gateway.Tracing)
+	require.NotNil(t, cfg.Gateway.Tracing.SampleRate)
+	assert.InDelta(t, 0.5, *cfg.Gateway.Tracing.SampleRate, 0.0001)
+}
+
+// TestApplyTracingOverrides_EndpointEnvVar verifies that a non-default value
+// coming from OTEL_EXPORTER_OTLP_ENDPOINT (without an explicit CLI flag) still
+// triggers config initialization and override, mirroring flag behavior.
+func TestApplyTracingOverrides_EndpointEnvVar(t *testing.T) {
+	original, had := os.LookupEnv("OTEL_EXPORTER_OTLP_ENDPOINT")
+	os.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://env-collector:4318")
+	t.Cleanup(func() {
+		if had {
+			os.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", original)
+		} else {
+			os.Unsetenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+		}
+	})
+
+	cmd := newTracingTestCmd(t)
+	require.NoError(t, cmd.ParseFlags([]string{}))
+
+	cfg := &config.Config{Gateway: &config.GatewayConfig{}}
+	applyTracingOverrides(cmd, cfg)
+
+	require.NotNil(t, cfg.Gateway.Tracing)
+	assert.Equal(t, "http://env-collector:4318", cfg.Gateway.Tracing.Endpoint)
+}
+
+// TestApplyTracingOverrides_PreExistingTracingConfigPreserved verifies that when
+// cfg.Gateway.Tracing is already set (e.g. loaded from TOML) and no flags/env vars
+// override it, applyTracingOverrides still initializes/keeps the config without
+// clobbering existing fields.
+func TestApplyTracingOverrides_PreExistingTracingConfigPreserved(t *testing.T) {
+	cmd := newTracingTestCmd(t)
+	require.NoError(t, cmd.ParseFlags([]string{}))
+
+	cfg := &config.Config{
+		Gateway: &config.GatewayConfig{
+			Tracing: &config.TracingConfig{Endpoint: "http://toml-endpoint:4318", ServiceName: "toml-service"},
+		},
+	}
+	applyTracingOverrides(cmd, cfg)
+
+	require.NotNil(t, cfg.Gateway.Tracing)
+	assert.Equal(t, "http://toml-endpoint:4318", cfg.Gateway.Tracing.Endpoint,
+		"existing endpoint should be preserved when no flag/env override is present")
+	assert.Equal(t, "toml-service", cfg.Gateway.Tracing.ServiceName,
+		"existing service name should be preserved when no flag/env override is present")
+}
+
+// TestApplyTracingOverrides_NilGateway verifies that applyTracingOverrides does not
+// panic when cfg.Gateway is nil and no overrides are present (shouldInitTracingConfig
+// stays false because the nil-Gateway branch of the OR condition short-circuits).
+func TestApplyTracingOverrides_NilGateway(t *testing.T) {
+	cmd := newTracingTestCmd(t)
+	require.NoError(t, cmd.ParseFlags([]string{}))
+
+	cfg := &config.Config{}
+	assert.NotPanics(t, func() {
+		applyTracingOverrides(cmd, cfg)
+	})
+	assert.Nil(t, cfg.Gateway, "Gateway should remain nil since no overrides were present")
+}
