@@ -251,7 +251,7 @@ func newPlainJSONConn(t *testing.T, serverURL string, headers map[string]string)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	httpClient := &http.Client{Timeout: 30 * time.Second}
-	conn, err := tryPlainJSONTransport(ctx, cancel, "test-server", serverURL, headers, httpClient)
+	conn, err := tryPlainJSONTransport(ctx, cancel, "test-server", serverURL, headers, httpClient, defaultConnectTimeout)
 	require.NoError(t, err)
 	return conn
 }
