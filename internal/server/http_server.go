@@ -111,6 +111,16 @@ func CreateHTTPServerForRoutedMode(addr string, unifiedServer *UnifiedServer, ap
 			backendID := serverID
 			route := fmt.Sprintf("/mcp/%s", backendID)
 
+			handlerCfg := buildDefaultHandlerConfig(unifiedServer, sessionTimeout, defaultHandlerConfigOptions{
+				handlerLog: logRouted,
+				logTag:     "routed:" + backendID,
+				apiKey:     apiKey,
+				hmacSecret: hmacSecret,
+			})
+			if serverCfg := unifiedServer.cfg.Servers[backendID]; serverCfg != nil && serverCfg.Type == "http" {
+				handlerCfg.backendID = backendID
+			}
+
 			finalHandler := buildMCPHandler(func(r *http.Request) *sdk.Server {
 				if _, ok := setupSessionCallback(r, backendID); !ok {
 					return nil
@@ -122,12 +132,7 @@ func CreateHTTPServerForRoutedMode(addr string, unifiedServer *UnifiedServer, ap
 					logRouted.Printf("[CACHE] Creating new filtered server: backend=%s, session=%s", backendID, util.FormatSessionIDForLog(sessionID))
 					return createFilteredServer(unifiedServer, backendID)
 				})
-			}, buildDefaultHandlerConfig(unifiedServer, sessionTimeout, defaultHandlerConfigOptions{
-				handlerLog: logRouted,
-				logTag:     "routed:" + backendID,
-				apiKey:     apiKey,
-				hmacSecret: hmacSecret,
-			}))
+			}, handlerCfg)
 
 			mux.Handle(route+"/", finalHandler)
 			mux.Handle(route, finalHandler)

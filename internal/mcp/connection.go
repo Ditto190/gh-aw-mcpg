@@ -274,7 +274,7 @@ func NewHTTPConnection(ctx context.Context, serverID, url string, headers map[st
 	logConn.Printf("SSE transport failed: %v", err)
 
 	// Try 3: Plain JSON-RPC over HTTP (non-standard, for fallback)
-	conn, err = tryPlainJSONTransport(ctx, cancel, serverID, url, headers, headerClient)
+	conn, err = tryPlainJSONTransport(ctx, cancel, serverID, url, headers, headerClient, connectTimeout)
 	if err == nil {
 		logger.LogInfo("backend", "Successfully connected using plain JSON-RPC transport, url=%s", url)
 		return conn, nil

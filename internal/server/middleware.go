@@ -23,6 +23,7 @@ type mcpHandlerConfig struct {
 	unifiedServer  *UnifiedServer
 	apiKey         string
 	hmacSecret     string
+	backendID      string
 }
 
 type defaultHandlerConfigOptions struct {
@@ -118,5 +119,9 @@ func buildMCPHandler(serverFactory func(*http.Request) *sdk.Server, cfg mcpHandl
 		Logger:         logger.NewSlogLoggerWithHandler(cfg.handlerLog),
 		SessionTimeout: cfg.sessionTimeout,
 	})
-	return wrapWithMiddleware(WrapWithSessionAutoInit(h), cfg.logTag, cfg.unifiedServer, cfg.apiKey, cfg.hmacSecret)
+	handler := WrapWithSessionAutoInit(h)
+	if cfg.backendID != "" {
+		handler = requireBackendRegistration(cfg.unifiedServer, cfg.backendID, handler)
+	}
+	return wrapWithMiddleware(handler, cfg.logTag, cfg.unifiedServer, cfg.apiKey, cfg.hmacSecret)
 }

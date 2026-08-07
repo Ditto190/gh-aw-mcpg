@@ -259,6 +259,52 @@ When using `gateway.containerRuntime: "podman"` in containerized/Kubernetes envi
   - Example (stdin JSON): `"toolTimeout": 600` on an HTTP MCP server that may take up to 10 minutes
   - Example (TOML): `tool_timeout = 600` under a `[servers.my-server]` section
 
+### Late-starting HTTP backends
+
+Routed mode supports HTTP MCP servers that are configured before their upstream process
+starts. A failed startup connection does not fail gateway startup or remove
+`/mcp/<server-id>`. Before creating a routed MCP session, the gateway retries backend
+initialization and `tools/list`. Until discovery succeeds, the route returns HTTP 503 with
+`backend_unavailable`; callers should retry the `initialize` handshake. Failed discovery
+attempts are coalesced per backend and rate-limited to one attempt per second.
+
+Each connection attempt uses the server's `connectTimeout`. The global
+`gateway.startupTimeout` applies to stdio process startup and does **not** extend HTTP
+backend retries. Tool execution uses the per-server `toolTimeout`, or
+`gateway.toolTimeout` when the server field is omitted. Gateway health and unrelated
+server routes remain available while one HTTP upstream is unavailable.
+
+The gh-aw-firewall enclave integration uses the following JSON stdin contract:
+
+```json
+{
+  "mcpServers": {
+    "awf-enclave": {
+      "type": "http",
+      "url": "http://awf-enclave-mcp:8080/mcp",
+      "headers": {
+        "Authorization": "Bearer ${AWF_ENCLAVE_MCP_CAPABILITY}"
+      },
+      "tools": ["enclave_run_script", "enclave_run_agent"],
+      "connectTimeout": 120,
+      "toolTimeout": 150
+    }
+  }
+}
+```
+
+- `tools` must contain only the enclave executors enabled for the run.
+- `toolTimeout` must be at least the largest enabled enclave timeout plus 30 seconds.
+- JSON stdin expands `AWF_ENCLAVE_MCP_CAPABILITY` before validation. The capability must
+  be present in the mcpg environment, but must not be passed to the primary agent.
+- The firewall readiness endpoint is the routed mcpg URL ending in
+  `/mcp/awf-enclave`. Readiness is established with `initialize`,
+  `notifications/initialized`, and a complete allowlisted `tools/list`.
+- This contract requires MCP Gateway specification version `1.15.0` and an mcpg build
+  newer than `v0.4.8` that includes late HTTP backend registration. The gh-aw compiler
+  follow-up must pin the first released image containing that change rather than
+  `v0.4.8`.
+
 - **`rate_limit_threshold`** (optional, TOML config only): Number of consecutive rate-limit errors from this backend that will trip the circuit breaker (transition CLOSED → OPEN). When OPEN, requests are immediately rejected until the breaker is eligible to transition to HALF-OPEN again; this is normally controlled by `rate_limit_cooldown`, but if the gateway knows an upstream rate-limit reset time (for example from response headers or parsed tool error text), that reset time takes precedence. **Not available in JSON stdin format.** Default: `3`.
 
 - **`rate_limit_cooldown`** (optional, TOML config only): Default number of seconds before the circuit breaker allows a single probe request (transition OPEN → HALF-OPEN). If the gateway knows an upstream rate-limit reset time, it uses that reset time instead of this cooldown to decide when to probe again. If the probe succeeds the circuit closes; if rate-limited again it re-opens. **Not available in JSON stdin format.** Default: `60`.

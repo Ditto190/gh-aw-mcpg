@@ -259,7 +259,7 @@ fn normalize_scope<'a>(scope: &'a str, ctx: &'a PolicyContext) -> Cow<'a, str> {
 
 fn split_repo_id(repo_id: &str) -> Option<(&str, &str)> {
     let (owner, repo) = repo_id.split_once('/')?;
-    if owner.is_empty() || repo.is_empty() {
+    if owner.is_empty() || repo.is_empty() || repo.contains('/') {
         return None;
     }
     Some((owner, repo))
@@ -1008,6 +1008,13 @@ pub(crate) fn policy_private_scope_label(
     } else {
         vec![label_constants::PRIVATE_BASE.to_string()]
     }
+}
+
+/// Returns the scope-aware secrecy label for a private repository full name.
+///
+/// Malformed full names fall back to the bare private label.
+pub(crate) fn private_repo_secrecy_label(full_name: &str, ctx: &PolicyContext) -> Vec<String> {
+    policy_private_scope_label("", "", full_name, ctx)
 }
 
 // ============================================================================
@@ -1879,8 +1886,7 @@ pub(crate) fn pr_integrity(
     if integrity.is_empty() && !has_author_association(item) && !repo_private {
         let number_opt = extract_item_number_opt(item);
         if let Some(number_str) = number_opt {
-            let (owner, repo) = repo_full_name.split_once('/').unwrap_or(("", ""));
-            if !owner.is_empty() && !repo.is_empty() {
+            if let Some((owner, repo)) = split_repo_id(repo_full_name) {
                 if let Some(facts) =
                     super::backend::get_pull_request_facts(owner, repo, &number_str)
                 {
@@ -2015,8 +2021,7 @@ pub(crate) fn issue_integrity(
     if integrity.is_empty() && !has_author_association(item) && !repo_private {
         let number_opt = extract_item_number_opt(item);
         if let Some(number_str) = number_opt {
-            let (owner, repo) = repo_full_name.split_once('/').unwrap_or(("", ""));
-            if !owner.is_empty() && !repo.is_empty() {
+            if let Some((owner, repo)) = split_repo_id(repo_full_name) {
                 if let Some(association) =
                     super::backend::get_issue_author_association(owner, repo, &number_str)
                 {
@@ -2264,6 +2269,44 @@ mod tests {
         let normalized = normalize_scope("owner/repo", &ctx);
         assert_eq!(normalized, "owner/repo");
         assert!(matches!(normalized, Cow::Borrowed(_)));
+    }
+
+    #[test]
+    fn test_private_repo_secrecy_label_uses_policy_scope() {
+        let ctx = PolicyContext {
+            scopes: vec![PolicyScopeEntry {
+                scope_kind: ScopeKind::Owner,
+                scope_owner: Some("octocat".to_string()),
+                scope_repo: None,
+                scope_label: "octocat".to_string(),
+            }],
+            ..Default::default()
+        };
+
+        assert_eq!(
+            private_repo_secrecy_label("octocat/hello-world", &ctx),
+            vec!["private:octocat".to_string()]
+        );
+    }
+
+    #[test]
+    fn test_private_repo_secrecy_label_falls_back_for_malformed_name() {
+        assert_eq!(
+            private_repo_secrecy_label("malformed", &test_ctx()),
+            vec![label_constants::PRIVATE_BASE.to_string()]
+        );
+        assert_eq!(
+            private_repo_secrecy_label("/repo", &test_ctx()),
+            vec![label_constants::PRIVATE_BASE.to_string()]
+        );
+        assert_eq!(
+            private_repo_secrecy_label("owner/", &test_ctx()),
+            vec![label_constants::PRIVATE_BASE.to_string()]
+        );
+        assert_eq!(
+            private_repo_secrecy_label("owner/repo/extra", &test_ctx()),
+            vec![label_constants::PRIVATE_BASE.to_string()]
+        );
     }
 
     #[test]

@@ -73,3 +73,22 @@ func createFilteredServer(unifiedServer *UnifiedServer, backendID string) *sdk.S
 
 	return server
 }
+
+// requireBackendRegistration prevents a failed startup discovery from creating a
+// long-lived routed MCP session with an empty tool set. Each request retries through
+// ensureToolsRegistered until the backend has completed initialize and tools/list.
+func requireBackendRegistration(unifiedServer *UnifiedServer, backendID string, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := unifiedServer.ensureToolsRegistered(r.Context(), backendID); err != nil {
+			logger.LogWarnToServer(backendID, "backend", "HTTP backend is not ready: %v", err)
+			httputil.WriteErrorResponse(
+				w,
+				http.StatusServiceUnavailable,
+				"backend_unavailable",
+				"Backend MCP server is not ready; retry initialization",
+			)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}

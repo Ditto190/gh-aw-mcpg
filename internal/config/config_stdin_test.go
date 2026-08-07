@@ -391,6 +391,23 @@ func TestConvertStdinServerConfig_HeadersExpansion(t *testing.T) {
 	assert.Equal(t, "static-header", result.Headers["X-Static"])
 }
 
+func TestConvertStdinServerConfig_EnclaveBearerHeaderExpansion(t *testing.T) {
+	t.Setenv("AWF_ENCLAVE_MCP_CAPABILITY", "0123456789abcdef")
+
+	server := &StdinServerConfig{
+		Type: "http",
+		URL:  "http://awf-enclave-mcp:8080/mcp",
+		Headers: map[string]string{
+			"Authorization": "Bearer ${AWF_ENCLAVE_MCP_CAPABILITY}",
+		},
+	}
+
+	result, err := convertStdinServerConfig("awf-enclave", server, nil)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Equal(t, "Bearer 0123456789abcdef", result.Headers["Authorization"])
+}
+
 // TestConvertStdinServerConfig_HeadersExpansionError tests error handling for headers with undefined variables.
 func TestConvertStdinServerConfig_HeadersExpansionError(t *testing.T) {
 	os.Unsetenv("MISSING_TOKEN")

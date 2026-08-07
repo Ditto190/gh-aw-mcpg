@@ -27,8 +27,14 @@ import (
 var logUnified = logger.ForFile()
 
 const rateLimitExceededStatus = "rate limit exceeded"
+const backendRegistrationRetryInterval = time.Second
 
 var errRateLimitExceeded = errors.New(rateLimitExceededStatus)
+
+type backendRegistrationFailure struct {
+	err        error
+	retryAfter time.Time
+}
 
 // MCPGatewaySpecVersion is the MCP Gateway Specification version this implementation conforms to
 const MCPGatewaySpecVersion = "1.15.0"
@@ -83,6 +89,10 @@ type UnifiedServer struct {
 	sessionMu            sync.RWMutex
 	tools                map[string]*ToolInfo // prefixed tool name -> tool info
 	toolsMu              sync.RWMutex
+	registrationMu       sync.RWMutex
+	registeredBackends   map[string]bool
+	backendRegistration  map[string]*sync.Mutex
+	registrationFailures map[string]backendRegistrationFailure
 	sequentialLaunch     bool   // When true, launches MCP servers sequentially during startup. Default is false (parallel launch).
 	payloadDir           string // Base directory for storing large payload files (segmented by session ID)
 	payloadPathPrefix    string // Path prefix to use when returning payloadPath to clients (allows remapping host paths to client/agent container paths)
@@ -159,6 +169,9 @@ func NewUnified(ctx context.Context, cfg *config.Config) (*UnifiedServer, error)
 		ctx:                  ctx,
 		sessions:             make(map[string]*Session),
 		tools:                make(map[string]*ToolInfo),
+		registeredBackends:   make(map[string]bool),
+		backendRegistration:  make(map[string]*sync.Mutex, len(cfg.Servers)),
+		registrationFailures: make(map[string]backendRegistrationFailure),
 		sequentialLaunch:     cfg.SequentialLaunch,
 		payloadDir:           payloadDir,
 		payloadPathPrefix:    payloadPathPrefix,
@@ -173,6 +186,9 @@ func NewUnified(ctx context.Context, cfg *config.Config) (*UnifiedServer, error)
 
 		// Cache tracer at construction to avoid calling otel.Tracer on every request.
 		CachedTracer: tracing.CachedTracer{Tracer: tracing.Tracer()},
+	}
+	for serverID := range cfg.Servers {
+		us.backendRegistration[serverID] = &sync.Mutex{}
 	}
 
 	// Create MCP server with logger

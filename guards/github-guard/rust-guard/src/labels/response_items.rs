@@ -10,7 +10,7 @@
 //! Use path-based labeling (`label_response_paths`) when possible for better
 //! performance with large result sets.
 
-use super::constants::{desc_prefix, field_names, label_constants, scope_names};
+use super::constants::{desc_prefix, field_names, scope_names};
 use super::extract_mcp_response;
 use super::helpers::*;
 use crate::{LabeledItem, ResourceLabels, SharedLabels};
@@ -87,11 +87,7 @@ pub fn label_response_items(
                     if is_private {
                         private_count += 1;
                         crate::log_info(&format!("  [{}] {} is PRIVATE", i, full_name));
-                        let secrecy = if let Some((owner, repo)) = full_name.split_once('/') {
-                            policy_private_scope_label(owner, repo, full_name, ctx)
-                        } else {
-                            vec![label_constants::PRIVATE_BASE.to_string()]
-                        };
+                        let secrecy = private_repo_secrecy_label(full_name, ctx);
                         labeled_items.push(LabeledItem {
                             data: item.clone(),
                             labels: ResourceLabels {
