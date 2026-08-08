@@ -661,7 +661,7 @@ func TestEnhancedErrorMessages(t *testing.T) {
 				"Location:",
 				"Error:",
 				"Details:",
-				"https://raw.githubusercontent.com/github/gh-aw/v0.84.3/docs/public/schemas/mcp-gateway-config.schema.json",
+				"https://raw.githubusercontent.com/github/gh-aw/v0.85.4/docs/public/schemas/mcp-gateway-config.schema.json",
 			},
 		},
 		{
