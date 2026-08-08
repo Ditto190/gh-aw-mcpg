@@ -368,6 +368,7 @@ func normalizeStringSlice(field string, input []string, caseNorm func(string) st
 // ValidateStringArrayField validates that raw is an array of non-empty strings.
 // When requireNonEmpty is true, an empty array is rejected.
 func ValidateStringArrayField(field string, raw interface{}, requireNonEmpty bool) error {
+	logGuardPolicy.Printf("ValidateStringArrayField: field=%s, requireNonEmpty=%v, rawType=%T", field, requireNonEmpty, raw)
 	arr, ok := raw.([]interface{})
 	if !ok {
 		if requireNonEmpty {
@@ -383,6 +384,7 @@ func ValidateStringArrayField(field string, raw interface{}, requireNonEmpty boo
 			return fmt.Errorf("invalid %s value: each entry must be a non-empty string", field)
 		}
 	}
+	logGuardPolicy.Printf("ValidateStringArrayField: field=%s validated successfully, entryCount=%d", field, len(arr))
 	return nil
 }
 
@@ -392,11 +394,15 @@ func IsValidAllowOnlyReposValue(repos interface{}) bool {
 	switch value := repos.(type) {
 	case string:
 		trimmed := util.NormalizeStringCI(value)
-		return trimmed == "all" || trimmed == "public"
+		valid := trimmed == "all" || trimmed == "public"
+		logGuardPolicy.Printf("IsValidAllowOnlyReposValue: string value=%q, valid=%v", value, valid)
+		return valid
 	case []interface{}:
 		_, err := normalizeAndValidateScopeArray(value)
+		logGuardPolicy.Printf("IsValidAllowOnlyReposValue: array value (count=%d), valid=%v", len(value), err == nil)
 		return err == nil
 	default:
+		logGuardPolicy.Printf("IsValidAllowOnlyReposValue: unsupported type %T, invalid", repos)
 		return false
 	}
 }
