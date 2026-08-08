@@ -2598,8 +2598,7 @@ mod tests {
     }
 
     #[test]
-    fn test_apply_tool_labels_actions_list_unknown_visibility_under_public_scope_preserves_existing(
-    ) {
+    fn test_apply_tool_labels_actions_list_unknown_visibility_under_public_scope_is_public() {
         let ctx = PolicyContext {
             scopes: vec![PolicyScopeEntry {
                 scope_kind: ScopeKind::Public,
@@ -2613,21 +2612,20 @@ mod tests {
             "owner": "github",
             "repo": "copilot"
         });
-        let initial_secrecy = vec!["private:github/copilot".to_string()];
-
         let (secrecy, integrity, _desc) = apply_tool_labels(
             "actions_list",
             &tool_args,
             "github/copilot",
-            initial_secrecy.clone(),
+            vec!["private:github/copilot".to_string()],
             vec![],
             String::new(),
             &ctx,
         );
 
         assert_eq!(
-            secrecy, initial_secrecy,
-            "public scope must not erase existing secrecy when visibility is unknown"
+            secrecy,
+            Vec::<String>::new(),
+            "public scope must not add private secrecy when visibility is unknown"
         );
         assert_eq!(
             integrity,

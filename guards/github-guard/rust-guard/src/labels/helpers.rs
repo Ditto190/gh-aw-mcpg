@@ -1022,7 +1022,8 @@ pub(crate) fn private_repo_secrecy_label(full_name: &str, ctx: &PolicyContext) -
 // ============================================================================
 
 /// Returns private secrecy labels for a repo if it is private, or an empty vec if public.
-/// On unknown visibility (None), fails secure (returns private labels) except in tests.
+/// On unknown visibility (None), returns public labels for a public-only policy scope;
+/// otherwise it fails secure (returns private labels) except in tests.
 pub(crate) fn repo_visibility_secrecy(
     owner: &str,
     repo: &str,
@@ -1037,6 +1038,14 @@ pub(crate) fn repo_visibility_secrecy(
         Some(true) => policy_private_scope_label(owner, repo, repo_id, ctx),
         Some(false) => vec![],
         None => {
+            if ctx
+                .scopes
+                .iter()
+                .any(|scope| matches!(scope.scope_kind, ScopeKind::Public))
+            {
+                return vec![];
+            }
+
             if cfg!(test) {
                 vec![]
             } else {
@@ -2492,6 +2501,24 @@ mod tests {
     fn test_repo_private_fallback_uses_cached_visibility_when_present() {
         let _guard = super::super::backend::cache_repo_visibility_for_tests("owner/repo", true);
         assert!(repo_private_fallback("owner", "repo"));
+    }
+
+    #[test]
+    fn test_repo_visibility_secrecy_unknown_under_public_scope_is_public() {
+        let ctx = PolicyContext {
+            scopes: vec![PolicyScopeEntry {
+                scope_kind: ScopeKind::Public,
+                scope_owner: None,
+                scope_repo: None,
+                scope_label: "public".to_string(),
+            }],
+            ..Default::default()
+        };
+
+        assert_eq!(
+            repo_visibility_secrecy("owner", "repo", "owner/repo", &ctx),
+            Vec::<String>::new()
+        );
     }
 
     #[test]
