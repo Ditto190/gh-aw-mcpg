@@ -252,10 +252,10 @@ pub fn label_response_items(
                 // All tools in this match arm use shared repo secrecy except search_issues,
                 // which uses per-item secrecy derived from each issue's repository.
                 let secrecy = if !is_search_issue_variant(tool_name) {
-                        repo_visibility_secrecy(&arg_owner, &arg_repo, &default_repo_full_name, ctx)
-                    } else {
-                        vec![]
-                    };
+                    repo_visibility_secrecy(&arg_owner, &arg_repo, &default_repo_full_name, ctx)
+                } else {
+                    vec![]
+                };
                 let secrecy_shared: SharedLabels = secrecy.into();
 
                 for item in items_limited.iter() {
@@ -461,6 +461,7 @@ pub fn label_response_items(
 
 #[cfg(test)]
 mod tests {
+    use super::super::constants::label_constants;
     use super::*;
     use crate::labels::helpers::PolicyContext;
     use serde_json::json;
@@ -503,9 +504,8 @@ mod tests {
         let labels = &result[0].labels;
         let secrecy: Vec<String> = labels.secrecy.iter().cloned().collect();
         assert!(
-            secrecy
-                .iter()
-                .any(|s| s == "private" || s.starts_with("private:")),
+            secrecy.iter().any(|s| s == label_constants::PRIVATE_BASE
+                || s.starts_with(label_constants::PRIVATE_PREFIX)),
             "private repo should get a private secrecy label, got: {secrecy:?}"
         );
     }
