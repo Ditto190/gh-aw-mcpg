@@ -10,6 +10,10 @@ import (
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+// logServer is named to avoid colliding with the stdlib "log" package import
+// already used for user-facing test-server console messages in this file.
+var logServer = logger.ForFile()
+
 // Server is a configurable MCP test server
 type Server struct {
 	config *ServerConfig
@@ -31,6 +35,7 @@ func NewServer(config *ServerConfig) *Server {
 // Start initializes and starts the MCP server with configured tools and resources
 func (s *Server) Start() error {
 	log.Printf("[TestServer] Initializing %s v%s", s.config.Name, s.config.Version)
+	logServer.Printf("Start: name=%s, version=%s, toolCount=%d, resourceCount=%d", s.config.Name, s.config.Version, len(s.config.Tools), len(s.config.Resources))
 
 	impl := &sdk.Implementation{
 		Name:    s.config.Name,
@@ -58,6 +63,7 @@ func (s *Server) Start() error {
 		}, func(ctx context.Context, req *sdk.CallToolRequest) (*sdk.CallToolResult, error) {
 			args, err := mcp.ParseToolArguments(req)
 			if err != nil {
+				logServer.Printf("tool call failed to parse arguments: tool=%s, err=%v", tool.Name, err)
 				return &sdk.CallToolResult{
 					IsError: true,
 					Content: []sdk.Content{
@@ -70,6 +76,7 @@ func (s *Server) Start() error {
 
 			content, err := tool.Handler(args)
 			if err != nil {
+				logServer.Printf("tool handler returned error: tool=%s, err=%v", tool.Name, err)
 				return &sdk.CallToolResult{
 					IsError: true,
 					Content: []sdk.Content{
@@ -122,6 +129,7 @@ func (s *Server) GetServer() *sdk.Server {
 
 // Stop stops the server
 func (s *Server) Stop() {
+	logServer.Print("Stop: cancelling test server context")
 	if s.cancel != nil {
 		s.cancel()
 	}
