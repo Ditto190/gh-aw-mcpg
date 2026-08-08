@@ -14,7 +14,7 @@ use super::helpers::{
     format_repo_id, get_string_field, is_any_trusted_actor, is_default_branch_commit_context,
     is_default_branch_ref, max_integrity, merged_integrity, policy_private_scope_label,
     private_scope_label, private_user_label, project_github_label, reader_integrity,
-    repo_private_or_secure_default, short_sha, writer_integrity, PolicyContext,
+    repo_private_or_secure_default, short_sha, writer_integrity, PolicyContext, ScopeKind,
 };
 use std::borrow::Cow;
 
@@ -33,6 +33,14 @@ fn apply_repo_visibility_secrecy(
         Some(true) => policy_private_scope_label(owner, repo, repo_id, ctx),
         Some(false) => vec![],
         None => {
+            if ctx
+                .scopes
+                .iter()
+                .any(|scope| matches!(scope.scope_kind, ScopeKind::Public))
+            {
+                return vec![];
+            }
+
             // Fail secure in runtime when visibility cannot be determined.
             // Keep tests deterministic (backend host calls are unavailable in unit tests).
             if cfg!(test) {
