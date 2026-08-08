@@ -661,7 +661,7 @@ func TestEnhancedErrorMessages(t *testing.T) {
 				"Location:",
 				"Error:",
 				"Details:",
-				"https://raw.githubusercontent.com/github/gh-aw/v0.84.3/docs/public/schemas/mcp-gateway-config.schema.json",
+				"https://raw.githubusercontent.com/github/gh-aw/v0.85.4/docs/public/schemas/mcp-gateway-config.schema.json",
 			},
 		},
 		{
@@ -889,4 +889,28 @@ func TestSchema_OpenTelemetryConfig(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestValidateJSONSchema_CustomSchemasPropertyNamesLocation verifies that invalid
+// customSchemas key names are reported with the propertyNames instance path.
+func TestValidateJSONSchema_CustomSchemasPropertyNamesLocation(t *testing.T) {
+	config := `{
+		"mcpServers": {
+			"github": {
+				"container": "ghcr.io/github/github-mcp-server:latest"
+			}
+		},
+		"gateway": {
+			"port": 8080,
+			"domain": "localhost",
+			"agentId": "test-key"
+		},
+		"customSchemas": {
+			"Bad_Name": "https://example.com/schema.json"
+		}
+	}`
+
+	err := validateJSONSchema([]byte(config))
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "Location: /customSchemas\n  Error: invalid propertyName 'Bad_Name'")
 }
