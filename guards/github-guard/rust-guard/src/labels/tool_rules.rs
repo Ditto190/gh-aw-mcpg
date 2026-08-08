@@ -2554,6 +2554,7 @@ mod tests {
             "pull_number": 7,
         });
         let repo_id = "github/copilot";
+        let _guard = crate::labels::backend::cache_repo_visibility_for_tests(repo_id, true);
 
         for op in &[
             "reprioritize_sub_issue",
@@ -2568,9 +2569,10 @@ mod tests {
                 writer_integrity(repo_id, &ctx),
                 "{op}: must require repo-scoped writer integrity"
             );
-            assert!(
-                secrecy.is_empty(),
-                "{op}: public repo must have empty secrecy"
+            assert_eq!(
+                secrecy,
+                private_label("github", "copilot", repo_id, &ctx),
+                "{op}: private repo must carry repo-scoped secrecy"
             );
         }
     }
