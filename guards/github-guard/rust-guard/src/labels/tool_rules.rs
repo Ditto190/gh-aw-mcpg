@@ -2549,6 +2549,73 @@ mod tests {
     }
 
     #[test]
+    fn apply_tool_labels_issue_and_pr_granular_write_ops_are_repo_scoped_writes() {
+        // Regression coverage for github-mcp-guard-coverage-checker gaps:
+        // reprioritize_sub_issue, set_issue_fields, update_pull_request_branch,
+        // and update_pull_request_title must be labeled S(repo)/writer(repo)
+        // rather than falling through to default handling.
+        let ctx = default_ctx();
+        let args = serde_json::json!({
+            "owner": "github",
+            "repo": "copilot",
+            "issue_number": 1,
+            "pull_number": 7,
+        });
+        let repo_id = "github/copilot";
+        let _guard = crate::labels::backend::cache_repo_visibility_for_tests(repo_id, true);
+
+        for op in &[
+            "reprioritize_sub_issue",
+            "set_issue_fields",
+            "update_pull_request_branch",
+            "update_pull_request_title",
+        ] {
+            let (secrecy, integrity, _desc) =
+                super::apply_tool_labels(op, &args, repo_id, vec![], vec![], String::new(), &ctx);
+            assert_eq!(
+                integrity,
+                writer_integrity(repo_id, &ctx),
+                "{op}: must require repo-scoped writer integrity"
+            );
+            assert_eq!(
+                secrecy,
+                private_label("github", "copilot", repo_id, &ctx),
+                "{op}: private repo must carry repo-scoped secrecy"
+            );
+        }
+    }
+
+    #[test]
+    fn apply_tool_labels_projects_write_is_owner_scoped_writer_integrity() {
+        // Regression coverage for github-mcp-guard-coverage-checker gap:
+        // projects_write must resolve to owner-scoped writer integrity, matching
+        // the other Projects v2 mutation aliases already covered here.
+        let ctx = default_ctx();
+        let args = serde_json::json!({ "owner": "myorg" });
+        let repo_id = "";
+
+        let (secrecy, integrity, _desc) = super::apply_tool_labels(
+            "projects_write",
+            &args,
+            repo_id,
+            vec![],
+            vec![],
+            String::new(),
+            &ctx,
+        );
+
+        assert!(
+            secrecy.is_empty(),
+            "projects_write: should have empty secrecy, got: {secrecy:?}"
+        );
+        assert_eq!(
+            integrity,
+            writer_integrity("myorg", &ctx),
+            "projects_write must have writer_integrity(owner)"
+        );
+    }
+
+    #[test]
     fn apply_tool_labels_enable_toolset_is_github_scoped_with_writer_integrity() {
         let ctx = default_ctx();
         let args = serde_json::json!({"toolset": "advanced"});
