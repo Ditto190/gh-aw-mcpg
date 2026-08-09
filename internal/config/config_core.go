@@ -279,6 +279,11 @@ type ServerConfig struct {
 	// This is internal-only metadata used by the launcher for diagnostics.
 	Containerized bool `toml:"-" json:"-"`
 
+	// ContainerRuntimeArgs contains only the arguments before the container image.
+	// It is internal-only metadata used to distinguish runtime options from
+	// arguments passed to the container process.
+	ContainerRuntimeArgs []string `toml:"-" json:"-"`
+
 	// Command is the executable command (for stdio servers)
 	Command string `toml:"command" json:"command,omitempty"`
 

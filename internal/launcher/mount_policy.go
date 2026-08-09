@@ -26,6 +26,7 @@ var mountBypassOptions = map[string]string{
 	"--volumes-from": "volumes cannot be inherited from other containers",
 	"--privileged":   "privileged containers can access arbitrary host devices",
 	"--device":       "host devices cannot be exposed to MCP servers",
+	"--rootfs":       "host directories cannot be used as container root filesystems",
 }
 
 // MountRoot is a trusted host directory that container-backed MCP servers are

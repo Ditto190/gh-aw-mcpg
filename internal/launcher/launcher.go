@@ -271,7 +271,11 @@ func (l *Launcher) launchStdioConnection(serverID, sessionID string, serverCfg *
 	// the backend process is launched. Configuration may originate from other
 	// producers or compiler versions, so syntactic validation is not sufficient.
 	if !isDirectCommand {
-		if err := l.mountPolicy.ValidateContainerArgs(serverCfg.Args); err != nil {
+		runtimeArgs := serverCfg.Args
+		if serverCfg.ContainerRuntimeArgs != nil {
+			runtimeArgs = serverCfg.ContainerRuntimeArgs
+		}
+		if err := l.mountPolicy.ValidateContainerArgs(runtimeArgs); err != nil {
 			logger.LogErrorToServer(serverID, "backend", "Mount policy violation: %v", err)
 			return nil, fmt.Errorf("server %q: %w", serverID, err)
 		}

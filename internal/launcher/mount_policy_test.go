@@ -191,6 +191,11 @@ func TestMountPolicyValidateContainerArgs(t *testing.T) {
 			args:    []string{"run", "--device=/dev/sda:/dev/sda", "image:latest"},
 			wantErr: "--device",
 		},
+		{
+			name:    "Podman --rootfs bypass rejected",
+			args:    []string{"run", "--rootfs=/etc", "image:latest"},
+			wantErr: "--rootfs",
+		},
 	}
 
 	for _, tt := range tests {
@@ -204,6 +209,26 @@ func TestMountPolicyValidateContainerArgs(t *testing.T) {
 			assert.Contains(t, err.Error(), tt.wantErr)
 		})
 	}
+}
+
+func TestLaunchStdioConnectionOnlyValidatesRuntimeArgs(t *testing.T) {
+	cfg := newTestConfig(map[string]*config.ServerConfig{
+		"entrypoint-option": {
+			Type:                 "stdio",
+			Containerized:        true,
+			ContainerRuntimeArgs: []string{"run", "--rm"},
+			Command:              "nonexistent-runtime-12345",
+			Args:                 []string{"run", "--rm", "image:latest", "--privileged"},
+		},
+	})
+
+	l := New(context.Background(), cfg)
+	defer l.Close()
+
+	_, err := GetOrLaunch(l, "entrypoint-option")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to create connection")
+	assert.NotContains(t, err.Error(), "mount policy")
 }
 
 func TestDefaultMountPolicyAllowsWorkspaceAndTemp(t *testing.T) {
