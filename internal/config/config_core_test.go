@@ -35,6 +35,18 @@ type = "http"
 url = "http://localhost:9090/mcp"
 `
 
+func TestLoadFromFileSeparatesContainerRuntimeArgs(t *testing.T) {
+	path := writeTempTOML(t, `
+[servers.github]
+command = "docker"
+args = ["run", "--rm", "-e", "NO_COLOR=1", "ghcr.io/github/github-mcp-server:latest", "--privileged"]
+`)
+
+	cfg, err := LoadFromFile(path)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"run", "--rm", "-e", "NO_COLOR=1"}, cfg.Servers["github"].ContainerRuntimeArgs)
+}
+
 // TestLoadFromFile_FileNotFound verifies that LoadFromFile returns an error
 // when the specified file path does not exist.
 func TestLoadFromFile_FileNotFound(t *testing.T) {
