@@ -18,6 +18,7 @@ network:
   allowed:
     - defaults
     - containers
+    - go
 
 steps:
   - name: Checkout full repository
