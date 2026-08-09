@@ -51,6 +51,7 @@ type Launcher struct {
 	oidcProvider       *oidc.Provider
 	serverStartTimes   map[string]time.Time // tracks when each server was successfully launched
 	serverErrors       map[string]string    // tracks the most recent error per server
+	mountPolicy        MountPolicy          // trusted allowlist of host paths for container mounts
 
 	// hookAfterFirstPoolMiss is called in GetOrLaunchForSession after the initial
 	// session-pool miss and before the write-lock is acquired. It is nil in
@@ -109,6 +110,7 @@ func New(ctx context.Context, cfg *config.Config) *Launcher {
 		oidcProvider:       oidcProvider,
 		serverStartTimes:   make(map[string]time.Time),
 		serverErrors:       serverErrors,
+		mountPolicy:        DefaultMountPolicy(),
 	}
 }
 
@@ -263,6 +265,20 @@ func (l *Launcher) launchStdioConnection(serverID, sessionID string, serverCfg *
 	isDirectCommand := isDirectStdioCommand(serverCfg)
 	if l.runningInContainer && isDirectCommand {
 		l.logSecurityWarning(serverID, serverCfg)
+	}
+
+	// Defense-in-depth: independently enforce the host-path mount policy before
+	// the backend process is launched. Configuration may originate from other
+	// producers or compiler versions, so syntactic validation is not sufficient.
+	if !isDirectCommand {
+		runtimeArgs := serverCfg.Args
+		if serverCfg.ContainerRuntimeArgs != nil {
+			runtimeArgs = serverCfg.ContainerRuntimeArgs
+		}
+		if err := l.mountPolicy.ValidateContainerArgs(runtimeArgs); err != nil {
+			logger.LogErrorToServer(serverID, "backend", "Mount policy violation: %v", err)
+			return nil, fmt.Errorf("server %q: %w", serverID, err)
+		}
 	}
 
 	// Log the command being executed

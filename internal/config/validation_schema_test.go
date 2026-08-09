@@ -912,5 +912,5 @@ func TestValidateJSONSchema_CustomSchemasPropertyNamesLocation(t *testing.T) {
 
 	err := validateJSONSchema([]byte(config))
 	require.Error(t, err)
-	assert.ErrorContains(t, err, "Location: /customSchemas\n  Error: invalid propertyName 'Bad_Name'")
+	assert.ErrorContains(t, err, "Error: 'Bad_Name' does not match pattern '^[a-z][a-z0-9-]*$'")
 }

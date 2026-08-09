@@ -155,8 +155,9 @@ Run `./awmg --help` for full CLI options. Selected frequently-used flags (run `.
 
 - **`args`** (optional): Additional Docker runtime arguments inserted before the container image name
   - Array of strings passed to `<runtime> run` before the container image
-  - Example: `["--network", "host", "--privileged"]`
+  - Example: `["--network", "host"]`
   - Useful for advanced container runtime configurations
+  - Options that would bypass the host mount policy (`--mount`, `--volumes-from`, `--privileged`, `--device`) are rejected at launch time
 
 ### Rootless Podman Notes
 
@@ -168,6 +169,32 @@ When using `gateway.containerRuntime: "podman"` in containerized/Kubernetes envi
   - `dest` - Container path where the volume is mounted
   - `mode` - Either `"ro"` (read-only) or `"rw"` (read-write)
   - Example: `["/host/config:/app/config:ro", "/host/data:/app/data:rw"]`
+  - **Enforced at launch time**: before a container-backed MCP server is started, the launcher independently validates every mount against a trusted host-path allowlist (see [Host mount policy](#host-mount-policy)). Mounts outside the allowed roots, symlink or `..` escapes, and read-write mounts under read-only roots are rejected with a configuration error.
+
+### Host Mount Policy
+
+The gateway applies a default-deny host-path policy immediately before launching a container-backed (stdio) MCP server. The allowlist is owned by the launcher and is never derived from MCP server configuration.
+
+Default allowed roots:
+
+- `$GITHUB_WORKSPACE` (read-only)
+- The gateway working directory (read-only)
+- The system temporary directory, e.g. `/tmp` (read-write; used for gateway logs and large payload exchange)
+
+Enforcement rules:
+
+- Host sources are canonicalized (symlinks and `..` components resolved) before the allowlist check.
+- Mounts whose canonicalized source is outside every allowed root are rejected.
+- Read-write mounts (`:rw`, or a declaration with no mode) are only permitted under roots explicitly marked writable.
+- Container runtime options that bypass structured mount declarations are rejected: `--mount`, `--volumes-from`, `--privileged`, and `--device`.
+
+Operators can replace the default allowlist with `MCP_GATEWAY_ALLOWED_MOUNT_ROOTS`, a comma-separated list of `path[:ro|:rw]` entries (default `ro`), for example:
+
+```bash
+MCP_GATEWAY_ALLOWED_MOUNT_ROOTS="/srv/workspace:ro,/var/lib/mcp-data:rw"
+```
+
+Non-absolute entries and the filesystem root (`/`) are ignored. When the resulting allowlist is empty, all mounts are denied.
 
 - **`env`** (optional): Environment variables
   - Set to `""` (empty string) for passthrough from host environment

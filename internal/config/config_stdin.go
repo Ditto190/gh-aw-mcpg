@@ -639,6 +639,8 @@ func buildStdioServerConfigWithRuntime(name string, server *StdinServerConfig, r
 	}
 	args = append(args, server.Args...)
 
+	runtimeArgs := append([]string(nil), args...)
+
 	// Add container name
 	args = append(args, server.Container)
 
@@ -652,11 +654,12 @@ func buildStdioServerConfigWithRuntime(name string, server *StdinServerConfig, r
 	logConfig.Printf("Configured stdio MCP server: name=%s, container=%s", name, server.Container)
 
 	serverCfg := &ServerConfig{
-		Type:          "stdio",
-		Containerized: true,
-		Command:       runtimeCfg.Command,
-		Args:          args,
-		Env:           make(map[string]string),
+		Type:                 "stdio",
+		Containerized:        true,
+		ContainerRuntimeArgs: runtimeArgs,
+		Command:              runtimeCfg.Command,
+		Args:                 args,
+		Env:                  make(map[string]string),
 	}
 	applyCommonServerConfigFields(serverCfg, server)
 	return serverCfg

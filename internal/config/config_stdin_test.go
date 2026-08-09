@@ -916,6 +916,7 @@ func TestBuildStdioServerConfig_WithEntrypointArgs(t *testing.T) {
 	serveIdx := indexOf(args, "--serve")
 	require.True(t, serveIdx >= 0, "--serve must be in args")
 	assert.Greater(t, serveIdx, containerIdx, "--serve must appear after container name")
+	assert.Equal(t, args[:containerIdx], result.ContainerRuntimeArgs)
 
 	assert.Contains(t, args, "--port")
 	assert.Contains(t, args, "8080")
