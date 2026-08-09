@@ -34,6 +34,7 @@ permissions:
 network:
   allowed:
   - defaults
+  - go
   - dotnet
   - node
   - python
