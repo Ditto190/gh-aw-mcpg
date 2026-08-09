@@ -33,11 +33,13 @@ func extractRateLimitErrorText(result interface{}) string {
 func isRateLimitToolResult(result interface{}) (bool, time.Time) {
 	m, ok := result.(map[string]interface{})
 	if !ok {
+		logCircuitBreaker.Print("isRateLimitToolResult: result is not a map, not a rate limit result")
 		return false, time.Time{}
 	}
 
 	// Only inspect error results.
 	if !mcpresult.IsErrorResult(m) {
+		logCircuitBreaker.Print("isRateLimitToolResult: result is not an error result, skipping rate-limit check")
 		return false, time.Time{}
 	}
 
@@ -47,5 +49,6 @@ func isRateLimitToolResult(result interface{}) (bool, time.Time) {
 		logCircuitBreaker.Printf("Rate limit detected in tool result: hasResetAt=%v", !resetAt.IsZero())
 		return true, resetAt
 	}
+	logCircuitBreaker.Print("isRateLimitToolResult: error result did not match rate-limit text patterns")
 	return false, time.Time{}
 }
