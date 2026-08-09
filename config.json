@@ -37,8 +37,8 @@
             "entrypoint": "/custom/entrypoint.sh",
             "entrypointArgs": ["--verbose", "--debug"],
             "mounts": [
-                "/host/config:/app/config:ro",
-                "/host/data:/app/data:rw"
+                "${PWD}/config:/app/config:ro",
+                "/tmp/custom-app-data:/app/data:rw"
             ],
             "env": {
                 "API_KEY": "${CUSTOM_API_KEY}",

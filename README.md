@@ -83,6 +83,7 @@ Key operator-facing environment variables (see [AGENTS.md](AGENTS.md) for the fu
 - `MCP_GATEWAY_SESSION_TIMEOUT` — session timeout for stateful unified/routed MCP sessions (default: `6h`)
 - `MCP_GATEWAY_TOOL_TIMEOUT` — global tool invocation timeout fallback when JSON stdin `gateway.toolTimeout` is not set (built-in default: `60`)
 - `MCP_GATEWAY_CONTAINER_RUNTIME` — overrides stdio container runtime selection for JSON stdin `container` servers (`docker` default, `podman` supported)
+- `MCP_GATEWAY_ALLOWED_MOUNT_ROOTS` — comma-separated allowlist of host roots (`path[:ro|:rw]`) that container-backed MCP servers may bind-mount (default: `$GITHUB_WORKSPACE` and working directory read-only, system temp dir read-write)
 - `MCP_GATEWAY_FORCE_PUBLIC_REPOS` — when `true` (default), auto-forces `repos="public"` allow-only policy when workflow repo is public
 - `MCP_GATEWAY_GUARDS_MODE`, `MCP_GATEWAY_WASM_GUARDS_DIR` — default guard enforcement mode and per-server WASM guard discovery root
 - `MCP_GATEWAY_ALLOWONLY_SCOPE_PUBLIC`, `MCP_GATEWAY_ALLOWONLY_SCOPE_OWNER`, `MCP_GATEWAY_ALLOWONLY_SCOPE_REPO`, `MCP_GATEWAY_ALLOWONLY_MIN_INTEGRITY` — environment defaults for allow-only policy override flags
