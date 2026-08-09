@@ -223,12 +223,15 @@ func TestDefaultMountPolicyAllowsWorkspaceAndTemp(t *testing.T) {
 func TestDefaultMountPolicyEnvOverride(t *testing.T) {
 	allowed := t.TempDir()
 	readonly := filepath.Join(allowed, "readonly")
+	require.NoError(t, os.MkdirAll(readonly, 0o755))
 	t.Setenv("GITHUB_WORKSPACE", "")
 	t.Setenv(AllowedMountRootsEnvVar, allowed+":rw, relative/path, "+readonly+":ro")
 
 	policy := DefaultMountPolicy()
 	require.Len(t, policy.Roots, 2, "non-absolute roots are ignored")
-	assert.Equal(t, readonly, policy.Roots[0].Path, "more specific roots take precedence")
+	canonicalReadonly, err := filepath.EvalSymlinks(readonly)
+	require.NoError(t, err)
+	assert.Equal(t, canonicalReadonly, policy.Roots[0].Path, "more specific roots take precedence")
 
 	assert.NoError(t, policy.ValidateMount(allowed+":/data:rw"))
 	assert.NoError(t, policy.ValidateMount(readonly+":/data:ro"))
@@ -299,4 +302,10 @@ func TestCanonicalizeRootsRejectsFilesystemRoot(t *testing.T) {
 	roots := canonicalizeRoots([]MountRoot{{Path: "/", Writable: true}, {Path: os.TempDir(), Writable: true}})
 	require.Len(t, roots, 1)
 	assert.NotEqual(t, "/", roots[0].Path)
+}
+
+func TestParseMountDeclarationRejectsConflictingModes(t *testing.T) {
+	_, err := parseMountDeclaration("/srv/data:/data:ro,rw")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "conflicting mount options")
 }

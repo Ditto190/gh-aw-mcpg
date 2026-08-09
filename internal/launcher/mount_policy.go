@@ -198,11 +198,16 @@ func parseMountDeclaration(spec string) (mountDeclaration, error) {
 
 	decl := mountDeclaration{source: source, dest: dest}
 	if len(parts) == 3 {
+		modeSet := false
 		for _, opt := range strings.Split(parts[2], ",") {
-			switch strings.TrimSpace(opt) {
-			case "ro":
-			case "rw":
-				decl.writable = true
+			opt = strings.TrimSpace(opt)
+			switch opt {
+			case "ro", "rw":
+				if modeSet {
+					return mountDeclaration{}, fmt.Errorf("conflicting mount options")
+				}
+				modeSet = true
+				decl.writable = opt == "rw"
 			case "":
 				return mountDeclaration{}, fmt.Errorf("empty mount option")
 			default:
@@ -228,6 +233,9 @@ func (p MountPolicy) ValidateMount(spec string) error {
 		return fmt.Errorf("mount %q rejected: host source cannot be canonicalized", decl.source)
 	}
 
+	// Roots are ordered most-specific first, so the closest enclosing root wins.
+	// A read-only root nested inside a writable root therefore narrows access
+	// rather than inheriting write permission from its parent.
 	for _, root := range p.Roots {
 		if !isUnderRoot(source, root.Path) {
 			continue
