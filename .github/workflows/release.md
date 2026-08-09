@@ -143,7 +143,7 @@ jobs:
 
   release:
     needs: ["activation", "create-tag"]
-    if: always() && needs.activation.result == 'success' && (needs.create-tag.result == 'success' || needs.create-tag.result == 'skipped')
+    if: always() && needs.activation.result == 'success' && ((github.event_name == 'workflow_dispatch' && needs.create-tag.result == 'success') || (github.event_name != 'workflow_dispatch' && needs.create-tag.result == 'skipped'))
     runs-on: ubuntu-latest
     permissions:
       contents: write

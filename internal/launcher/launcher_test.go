@@ -54,6 +54,52 @@ func newTestConfig(servers map[string]*config.ServerConfig) *config.Config {
 	}
 }
 
+func newTestHTTPMCPServer(t *testing.T, inspectRequest func(*http.Request)) *httptest.Server {
+	t.Helper()
+
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if inspectRequest != nil {
+			inspectRequest(r)
+		}
+
+		var request map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		switch request["method"] {
+		case "server/discover":
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"jsonrpc": "2.0",
+				"id":      request["id"],
+				"error": map[string]interface{}{
+					"code":    -32601,
+					"message": `method not found: "server/discover"`,
+				},
+			})
+		case "notifications/initialized":
+			w.WriteHeader(http.StatusAccepted)
+		default:
+			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Mcp-Session-Id", "test-session")
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"jsonrpc": "2.0",
+				"id":      request["id"],
+				"result": map[string]interface{}{
+					"protocolVersion": "2024-11-05",
+					"capabilities":    map[string]interface{}{},
+					"serverInfo": map[string]interface{}{
+						"name":    "test-server",
+						"version": "1.0.0",
+					},
+				},
+			})
+		}
+	}))
+}
+
 func TestHTTPConnection(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -100,23 +146,9 @@ func TestHTTPConnection(t *testing.T) {
 			// Setup environment if needed
 			tt.setupEnv(t)
 
-			// Create a mock HTTP server
-			mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				response := map[string]interface{}{
-					"jsonrpc": "2.0",
-					"id":      1,
-					"result": map[string]interface{}{
-						"protocolVersion": "2024-11-05",
-						"capabilities":    map[string]interface{}{},
-						"serverInfo": map[string]interface{}{
-							"name":    "test-server",
-							"version": "1.0.0",
-						},
-					},
-				}
-				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(response)
-			}))
+			mockServer := newTestHTTPMCPServer(t, func(r *http.Request) {
+				assert.Equal(t, tt.wantAuthValue, r.Header.Get(tt.authHeader))
+			})
 			defer mockServer.Close()
 
 			// Create test config with HTTP server
@@ -149,6 +181,7 @@ func TestHTTPConnection(t *testing.T) {
 			// Test launcher
 			ctx := context.Background()
 			l := New(ctx, cfg)
+			t.Cleanup(l.Close)
 
 			// Get connection
 			conn, err := GetOrLaunch(l, tt.serverID)
@@ -311,22 +344,7 @@ func TestGetOrLaunch_InvalidServerID(t *testing.T) {
 }
 
 func TestGetOrLaunch_Reuse(t *testing.T) {
-	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		response := map[string]interface{}{
-			"jsonrpc": "2.0",
-			"id":      1,
-			"result": map[string]interface{}{
-				"protocolVersion": "2024-11-05",
-				"capabilities":    map[string]interface{}{},
-				"serverInfo": map[string]interface{}{
-					"name":    "test-server",
-					"version": "1.0.0",
-				},
-			},
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
-	}))
+	mockServer := newTestHTTPMCPServer(t, nil)
 	defer mockServer.Close()
 
 	jsonConfig := fmt.Sprintf(`{
@@ -346,6 +364,7 @@ func TestGetOrLaunch_Reuse(t *testing.T) {
 	cfg := loadConfigFromJSON(t, jsonConfig)
 	ctx := context.Background()
 	l := New(ctx, cfg)
+	t.Cleanup(l.Close)
 
 	// First call - should create new connection
 	conn1, err := GetOrLaunch(l, "test-server")
@@ -412,22 +431,7 @@ func TestServerIDs_Empty(t *testing.T) {
 }
 
 func TestClose(t *testing.T) {
-	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		response := map[string]interface{}{
-			"jsonrpc": "2.0",
-			"id":      1,
-			"result": map[string]interface{}{
-				"protocolVersion": "2024-11-05",
-				"capabilities":    map[string]interface{}{},
-				"serverInfo": map[string]interface{}{
-					"name":    "test-server",
-					"version": "1.0.0",
-				},
-			},
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
-	}))
+	mockServer := newTestHTTPMCPServer(t, nil)
 	defer mockServer.Close()
 
 	jsonConfig := fmt.Sprintf(`{
@@ -469,22 +473,7 @@ func TestClose(t *testing.T) {
 
 func TestGetOrLaunchForSession_HTTPBackend(t *testing.T) {
 	// HTTP backends should use regular GetOrLaunch (stateless)
-	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		response := map[string]interface{}{
-			"jsonrpc": "2.0",
-			"id":      1,
-			"result": map[string]interface{}{
-				"protocolVersion": "2024-11-05",
-				"capabilities":    map[string]interface{}{},
-				"serverInfo": map[string]interface{}{
-					"name":    "http-test",
-					"version": "1.0.0",
-				},
-			},
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
-	}))
+	mockServer := newTestHTTPMCPServer(t, nil)
 	defer mockServer.Close()
 
 	jsonConfig := fmt.Sprintf(`{

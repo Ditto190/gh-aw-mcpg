@@ -38,10 +38,14 @@ func TestNewHTTPConnection_WithOIDCProvider(t *testing.T) {
 			w.Header().Set("Content-Type", "text/event-stream")
 			w.WriteHeader(http.StatusOK)
 		case http.MethodPost:
+			req := decodeJSONRPCRequest(r)
+			if handleDiscoveryProbe(w, r, req) {
+				return
+			}
 			// Respond with a minimal valid MCP initialize response.
 			resp := map[string]interface{}{
 				"jsonrpc": "2.0",
-				"id":      1,
+				"id":      req["id"],
 				"result": map[string]interface{}{
 					"protocolVersion": "2024-11-05",
 					"serverInfo": map[string]interface{}{
@@ -114,9 +118,13 @@ func TestNewHTTPConnection_WithOIDCAndStaticHeaders(t *testing.T) {
 			w.Header().Set("Content-Type", "text/event-stream")
 			w.WriteHeader(http.StatusOK)
 		case http.MethodPost:
+			req := decodeJSONRPCRequest(r)
+			if handleDiscoveryProbe(w, r, req) {
+				return
+			}
 			resp := map[string]interface{}{
 				"jsonrpc": "2.0",
-				"id":      1,
+				"id":      req["id"],
 				"result": map[string]interface{}{
 					"protocolVersion": "2024-11-05",
 					"serverInfo":      map[string]interface{}{"name": "test"},
