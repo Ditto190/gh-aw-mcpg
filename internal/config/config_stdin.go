@@ -639,6 +639,8 @@ func buildStdioServerConfigWithRuntime(name string, server *StdinServerConfig, r
 	}
 	args = append(args, server.Args...)
 
+	runtimeArgs := append([]string(nil), args...)
+
 	// Add container name
 	args = append(args, server.Container)
 
@@ -654,7 +656,7 @@ func buildStdioServerConfigWithRuntime(name string, server *StdinServerConfig, r
 	serverCfg := &ServerConfig{
 		Type:                 "stdio",
 		Containerized:        true,
-		ContainerRuntimeArgs: append([]string(nil), args[:len(args)-len(server.EntrypointArgs)-1]...),
+		ContainerRuntimeArgs: runtimeArgs,
 		Command:              runtimeCfg.Command,
 		Args:                 args,
 		Env:                  make(map[string]string),
