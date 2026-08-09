@@ -47,6 +47,15 @@ args = ["run", "--rm", "-e", "NO_COLOR=1", "ghcr.io/github/github-mcp-server:lat
 	assert.Equal(t, []string{"run", "--rm", "-e", "NO_COLOR=1"}, cfg.Servers["github"].ContainerRuntimeArgs)
 }
 
+func TestContainerRuntimeArgsRecognizesValueOptions(t *testing.T) {
+	args := []string{"run", "--ipc", "host", "--pids-limit", "100", "--volume", "/tmp:/tmp", "image:latest", "--privileged"}
+
+	runtimeArgs, ok := containerRuntimeArgs(args)
+
+	assert.True(t, ok)
+	assert.Equal(t, args[:7], runtimeArgs)
+}
+
 // TestLoadFromFile_FileNotFound verifies that LoadFromFile returns an error
 // when the specified file path does not exist.
 func TestLoadFromFile_FileNotFound(t *testing.T) {
