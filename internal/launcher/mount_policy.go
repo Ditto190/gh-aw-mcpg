@@ -226,11 +226,13 @@ func parseMountDeclaration(spec string) (mountDeclaration, error) {
 func (p MountPolicy) ValidateMount(spec string) error {
 	decl, err := parseMountDeclaration(spec)
 	if err != nil {
+		logMountPolicy.Printf("Rejected mount declaration: spec=%q, err=%v", spec, err)
 		return fmt.Errorf("invalid mount declaration %q: %w", spec, err)
 	}
 
 	source, err := canonicalizePath(decl.source)
 	if err != nil {
+		logMountPolicy.Printf("Rejected mount: source cannot be canonicalized: source=%q", decl.source)
 		return fmt.Errorf("mount %q rejected: host source cannot be canonicalized", decl.source)
 	}
 
@@ -242,11 +244,14 @@ func (p MountPolicy) ValidateMount(spec string) error {
 			continue
 		}
 		if decl.writable && !root.Writable {
+			logMountPolicy.Printf("Rejected mount: read-write requested under read-only root: source=%q, root=%q", source, root.Path)
 			return fmt.Errorf("mount %q rejected: read-write access to this host root is not permitted by mount policy", decl.source)
 		}
+		logMountPolicy.Printf("Allowed mount: source=%q, dest=%q, writable=%v, root=%q", source, decl.dest, decl.writable, root.Path)
 		return nil
 	}
 
+	logMountPolicy.Printf("Rejected mount: source outside allowed roots: source=%q", source)
 	return fmt.Errorf("mount %q rejected: host source is outside the allowed mount roots", decl.source)
 }
 
@@ -262,6 +267,7 @@ func (p MountPolicy) ValidateContainerArgs(args []string) error {
 			option = arg[:idx]
 		}
 		if reason, denied := mountBypassOptions[option]; denied {
+			logMountPolicy.Printf("Rejected container option as mount-policy bypass: option=%q", option)
 			return fmt.Errorf("container option %q rejected by mount policy: %s", option, reason)
 		}
 
