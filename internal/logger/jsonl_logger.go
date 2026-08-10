@@ -3,6 +3,7 @@ package logger
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"sync"
 	"time"
@@ -65,6 +66,7 @@ var jsonlLoggerFactory = newLoggerFactory(
 
 // InitJSONLLogger initializes the global JSONL logger
 func InitJSONLLogger(logDir, fileName string) error {
+	log.Printf("Initializing JSONL logger: dir=%s, file=%s", logDir, fileName)
 	return jsonlLoggerRef.initOnSuccess(logDir, fileName, os.O_APPEND, jsonlLoggerFactory)
 }
 
@@ -84,14 +86,17 @@ func (jl *JSONLLogger) logEntry(entry interface{}) error {
 	defer jl.mu.Unlock()
 
 	if jl.logFile == nil {
+		log.Print("WARNING: JSONL logEntry called but logger not initialized, dropping entry")
 		return fmt.Errorf("JSONL logger not initialized")
 	}
 
 	if err := jl.encoder.Encode(entry); err != nil {
+		log.Printf("WARNING: Failed to encode JSONL entry: %v", err)
 		return fmt.Errorf("failed to encode JSON: %w", err)
 	}
 
 	if err := jl.logFile.Sync(); err != nil {
+		log.Printf("WARNING: Failed to sync JSONL log file: %v", err)
 		return fmt.Errorf("failed to sync log file: %w", err)
 	}
 
@@ -184,6 +189,7 @@ type JSONLUnrecognizedEndpointPassthrough struct {
 func LogDifcFilteredItem(entry *JSONLFilteredItem) {
 	if entry == nil {
 		// Best-effort logging: avoid panicking on nil input.
+		log.Print("LogDifcFilteredItem called with nil entry, skipping")
 		return
 	}
 
