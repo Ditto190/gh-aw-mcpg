@@ -492,6 +492,12 @@ func TestIsValidRepoScope(t *testing.T) {
 		{"wildcard in middle", "owner/re*po", false},
 		{"wildcard at start of repo", "owner/*prefix", false},
 		{"double wildcard count", "owner/a*b*", false},
+
+		// Prefix-wildcard boundary: the repo name remaining after trimming the
+		// trailing "*" must itself be a non-empty, dot-free repo name.
+		{"prefix wildcard trims to trailing dot", "owner/prefix.*", false},
+		{"prefix wildcard trims to empty via double star", "owner/**", false},
+		{"prefix wildcard valid without trailing dot", "owner/prefix-name*", true},
 	}
 
 	for _, tt := range tests {
