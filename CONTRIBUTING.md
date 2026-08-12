@@ -191,8 +191,8 @@ Or run manually:
 ./awmg --config config.toml
 
 # Run with JSON stdin config (the CLI requires --config or --config-stdin)
-# The top-level "gateway" object and all of its fields are optional.
-# If omitted, built-in defaults are used.
+# The JSON schema requires a top-level "gateway" object with port, domain,
+# and one of agentId or apiKey before any server is started.
 echo '{
   "gateway": {"port": 3000, "domain": "localhost", "agentId": "your-agent-id"},
   "mcpServers": {"github": {"type": "stdio", "container": "ghcr.io/github/github-mcp-server:latest"}}
