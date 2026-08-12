@@ -816,21 +816,19 @@ pub fn apply_tool_labels(
         // These are synthetic guard entries for GitHub CLI writes whose backing REST endpoints
         // span multiple scopes (repo/environment, org, and for secrets only, user codespaces).
         "set_secret" | "delete_secret" | "set_variable" | "delete_variable" => {
-            let org = {
-                let explicit_org = get_first_non_empty_field(
-                    tool_args,
-                    &["org", "org_name", "organization", "organization_name"],
-                );
-                if !explicit_org.is_empty() {
-                    explicit_org
-                } else if repo.is_empty() {
-                    // Synthetic CLI coverage uses owner-only arguments for org-scoped writes.
-                    // User-scoped secret writes do not include an owner, so owner-without-repo
-                    // is treated as an org-level operation here.
-                    owner.clone()
-                } else {
-                    String::new()
-                }
+            let explicit_org = get_first_non_empty_field(
+                tool_args,
+                &["org", "org_name", "organization", "organization_name"],
+            );
+            // Synthetic CLI coverage uses owner-only arguments for org-scoped writes.
+            // User-scoped secret writes do not include an owner, so owner-without-repo
+            // is treated as an org-level operation here.
+            let org = if !explicit_org.is_empty() {
+                explicit_org
+            } else if repo.is_empty() {
+                owner.clone()
+            } else {
+                String::new()
             };
 
             if !owner.is_empty() && !repo.is_empty() {

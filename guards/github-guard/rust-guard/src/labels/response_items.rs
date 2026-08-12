@@ -40,6 +40,21 @@ fn extract_items_slice<'a>(response: &'a Value, list_field: &str) -> &'a [Value]
     }
 }
 
+/// Extract the base and head repository full names from a pull request item.
+fn base_head_repo_names(item: &Value) -> (Option<&str>, Option<&str>) {
+    let base = item
+        .get("base")
+        .and_then(|b| b.get("repo"))
+        .and_then(|r| r.get(field_names::FULL_NAME))
+        .and_then(|v| v.as_str());
+    let head = item
+        .get("head")
+        .and_then(|h| h.get("repo"))
+        .and_then(|r| r.get(field_names::FULL_NAME))
+        .and_then(|v| v.as_str());
+    (base, head)
+}
+
 /// Label individual items in a response (fine-grained labeling)
 /// This returns labeled items using the legacy format that works with MCP wrappers
 /// Format: {"items": [{"data": <item>, "labels": {...}}, ...]}
@@ -158,18 +173,8 @@ pub fn label_response_items(
 
                         // Get repo info from the PR's base or head, with fallback to
                         // extract_repo_from_item (parses repository_url, html_url, etc.)
-                        let base_head_repo = item
-                            .get("base")
-                            .and_then(|b| b.get("repo"))
-                            .and_then(|r| r.get(field_names::FULL_NAME))
-                            .and_then(|v| v.as_str())
-                            .or_else(|| {
-                                item.get("head")
-                                    .and_then(|h| h.get("repo"))
-                                    .and_then(|r| r.get(field_names::FULL_NAME))
-                                    .and_then(|v| v.as_str())
-                            })
-                            .unwrap_or("");
+                        let (base_repo, head_repo) = base_head_repo_names(item);
+                        let base_head_repo = base_repo.or(head_repo).unwrap_or("");
                         let item_repo_fallback = if base_head_repo.is_empty() {
                             extract_repo_from_item(item)
                         } else {
@@ -522,6 +527,19 @@ mod tests {
 
         assert_eq!(items.len(), 1);
         assert_eq!(items[0].get("number").and_then(|v| v.as_u64()), Some(42));
+    }
+
+    #[test]
+    fn base_head_repo_names_extracts_both_repositories() {
+        let item = json!({
+            "base": {"repo": {"full_name": "octo/base"}},
+            "head": {"repo": {"full_name": "octo/fork"}}
+        });
+
+        assert_eq!(
+            base_head_repo_names(&item),
+            (Some("octo/base"), Some("octo/fork"))
+        );
     }
 
     /// Notifications are labelled as private with a `notification:{id}` description.
