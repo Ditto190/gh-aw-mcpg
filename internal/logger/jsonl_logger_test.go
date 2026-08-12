@@ -17,17 +17,21 @@ import (
 
 func TestInitJSONLLogger(t *testing.T) {
 	require := require.New(t)
+	assert := assert.New(t)
 	tmpDir := t.TempDir()
 	logDir := filepath.Join(tmpDir, "logs")
 
 	// Test successful initialization
-	err := InitJSONLLogger(logDir, "test.jsonl")
-	require.NoError(err, "InitJSONLLogger failed")
+	output := captureStdLog(t, func() {
+		err := InitJSONLLogger(logDir, "test.jsonl")
+		require.NoError(err, "InitJSONLLogger failed")
+	})
 	defer CloseAllLoggers()
+	assert.Contains(output, "Initializing JSONL logger: dir="+logDir+", file=test.jsonl")
 
 	// Verify log file was created
 	logPath := filepath.Join(logDir, "test.jsonl")
-	_, err = os.Stat(logPath)
+	_, err := os.Stat(logPath)
 	require.NoError(err, "Log file should exist at %s", logPath)
 }
 
@@ -288,6 +292,18 @@ func TestJSONLLoggerNotInitialized(t *testing.T) {
 	// Test passes if no panic occurs
 }
 
+func TestJSONLLoggerLogEntryWithoutInitializationLogsWarning(t *testing.T) {
+	assert := assert.New(t)
+	logger := &JSONLLogger{}
+
+	output := captureStdLog(t, func() {
+		err := logger.logEntry("entry")
+		assert.Error(err)
+	})
+
+	assert.Contains(output, "WARNING: JSONL logEntry called but logger not initialized, dropping entry")
+}
+
 func TestMultipleMessagesInJSONL(t *testing.T) {
 	require := require.New(t)
 	assert := assert.New(t)
@@ -380,8 +396,11 @@ func TestInitJSONLLoggerWithInvalidPath(t *testing.T) {
 
 	// Test initialization with an invalid directory path (permission denied scenario)
 	// Using /proc/self as it's read-only and will fail to create subdirectories
-	err := InitJSONLLogger("/proc/self/invalid", "test.jsonl")
-	assert.Error(err, "InitJSONLLogger should fail with invalid directory path")
+	output := captureStdLog(t, func() {
+		err := InitJSONLLogger("/proc/self/invalid", "test.jsonl")
+		assert.Error(err, "InitJSONLLogger should fail with invalid directory path")
+	})
+	assert.Contains(output, "Initializing JSONL logger: dir=/proc/self/invalid, file=test.jsonl")
 }
 
 func TestLogRPCMessageJSONLDirectionTypes(t *testing.T) {
@@ -521,9 +540,14 @@ func TestLogRPCMessageJSONLWithNilError(t *testing.T) {
 // LogDifcFilteredItem with a nil entry is safe.  The DIFC audit log path
 // must never crash the gateway even when passed unexpected input.
 func TestLogDifcFilteredItem_NilEntryDoesNotPanic(t *testing.T) {
+	var output string
 	assert.NotPanics(t, func() {
-		LogDifcFilteredItem(nil)
+		output = captureStdLog(t, func() {
+			LogDifcFilteredItem(nil)
+		})
 	}, "LogDifcFilteredItem(nil) must not panic")
+
+	assert.Contains(t, output, "LogDifcFilteredItem called with nil entry, skipping")
 }
 
 // TestLogDifcFilteredItem_WritesAuditEntryToJSONL verifies that
