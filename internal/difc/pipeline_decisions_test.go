@@ -441,10 +441,10 @@ func TestFilterAndConvertLabeledData(t *testing.T) {
 		require.NotNil(t, result.Filtered)
 		assert.Equal(t, 2, result.Filtered.GetAccessibleCount())
 		assert.Equal(t, 0, result.Filtered.GetFilteredCount())
-assert.Equal(t, []interface{}{
-	map[string]interface{}{"id": 1},
-	map[string]interface{}{"id": 2},
-}, result.FinalResult)
+		assert.Equal(t, []interface{}{
+			map[string]interface{}{"id": 1},
+			map[string]interface{}{"id": 2},
+		}, result.FinalResult)
 	})
 }
 
