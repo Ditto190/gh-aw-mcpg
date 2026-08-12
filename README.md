@@ -238,7 +238,7 @@ Key configuration fields (gateway-level under `[gateway]` in TOML / `"gateway"` 
 | `dockerless` | **(JSON stdin only)** When `true`, runs stdio MCP servers using Podman without a Docker daemon socket. Grant the container the capabilities required for nested containers (for example, `--privileged`). Must be used with `containerRuntime`/`containerRuntimeCommand` set to `podman` (or defaults to podman). |
 | `container_runtime` / `containerRuntime` | Container runtime to use for stdio MCP server launches (default: `"docker"`; supported: `"docker"`, `"podman"`). Also overridable via `MCP_GATEWAY_CONTAINER_RUNTIME` (except when `dockerless` is `true`, which always uses podman). |
 | `container_runtime_command` / `containerRuntimeCommand` | Optional override for the runtime executable/binary path (for example, `/usr/bin/podman`). Defaults to the runtime name. |
-| `containerRuntimeArgs` | **(JSON stdin only)** Optional runtime-level arguments inserted before `run` in JSON `container` server launch commands (for example, `["--log-level=warn"]`). |
+| `container_runtime_args` / `containerRuntimeArgs` | Optional runtime-level arguments inserted before `run` in stdio `container` server launch commands (for example, `["--log-level=warn"]`). |
 | `[gateway.opentelemetry]` / `[gateway.tracing]` (TOML), `gateway.opentelemetry` (JSON stdin) | Nested OpenTelemetry tracing configuration blocks (`opentelemetry` is preferred; legacy TOML `tracing` is still supported) |
 | `guards` (JSON stdin top-level / TOML top-level) | Optional guard definitions and policy configuration used for DIFC enforcement |
 | `customSchemas` (JSON stdin top-level) | Map custom server `type` names to HTTPS JSON schema URLs for custom server validation |
