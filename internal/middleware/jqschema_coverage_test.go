@@ -498,6 +498,59 @@ func TestCompileToolResponseFilterWithVars_UndeclaredVar(t *testing.T) {
 	assert.ErrorContains(t, err, "failed to compile tool response filter")
 }
 
+// TestCompileToolResponseFilter_GojqBuiltinRegressionCoverage captures gojq
+// semantics fixed in v0.12.19 so future gojq upgrades keep compatibility for
+// user-authored filters that rely on these builtins.
+func TestCompileToolResponseFilter_GojqBuiltinRegressionCoverage(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		filter   string
+		input    any
+		expected []any
+	}{
+		{
+			name:     "gsub replacement emits multiple values",
+			filter:   `gsub("a"; ("x","y"))`,
+			input:    "ab",
+			expected: []any{"xb", "yb"},
+		},
+		{
+			name:     "sub replacement emits multiple values",
+			filter:   `sub("a"; ("x","y"))`,
+			input:    "ab",
+			expected: []any{"xb", "yb"},
+		},
+		{
+			name:     "join uses add semantics with null separator",
+			filter:   `join(null)`,
+			input:    []any{"a", nil, "b"},
+			expected: []any{"ab"},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			code, err := CompileToolResponseFilter(tc.filter)
+			require.NoError(t, err)
+			require.NotNil(t, code)
+
+			iter := code.RunWithContext(context.Background(), tc.input)
+			var actual []any
+			for {
+				v, ok := iter.Next()
+				if !ok {
+					break
+				}
+				actual = append(actual, v)
+			}
+
+			assert.Equal(t, tc.expected, actual)
+		})
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Filter compilation cache
 // ---------------------------------------------------------------------------
