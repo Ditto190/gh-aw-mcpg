@@ -2,6 +2,8 @@
 // This file is the single source of truth for go.opentelemetry.io/otel/semconv/v1.41.0
 // imports in the tracing package. All callers inside and outside this package should
 // reference these re-exports so that upgrading semconv only requires editing this file.
+// Keep this semconv version in lockstep with the pinned otel/sdk version in go.mod to
+// avoid resource schema conflicts ("conflicting Schema URL") during resource detection.
 package tracing
 
 import (
