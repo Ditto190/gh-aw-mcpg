@@ -575,6 +575,10 @@ mod tests {
             "unlock_pull_request",
         ] {
             assert!(
+                WRITE_OPERATIONS.binary_search(op).is_ok(),
+                "{op} must be explicitly listed in WRITE_OPERATIONS"
+            );
+            assert!(
                 is_write_operation(op),
                 "{op} must be classified as a write operation"
             );
