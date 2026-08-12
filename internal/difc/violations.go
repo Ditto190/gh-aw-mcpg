@@ -69,6 +69,7 @@ func (e *ViolationError) Error() string {
 
 // Detailed returns a detailed error message with full context
 func (e *ViolationError) Detailed() string {
+	logLabels.Printf("Detailed: building full context for %s violation, resource=%s", e.Type, e.Resource)
 	msg := e.Error()
 	msg += fmt.Sprintf("\n  Agent %s tags: %v", e.Type, e.AgentTags)
 	msg += fmt.Sprintf("\n  Resource %s tags: %v", e.Type, e.ResourceTags)
@@ -79,6 +80,7 @@ func (e *ViolationError) Detailed() string {
 func FormatViolationError(result *EvaluationResult, agentSecrecy *SecrecyLabel, agentIntegrity *IntegrityLabel, resource *LabeledResource) error {
 	logLabels.Printf("FormatViolationError: decision=%s, reason=%q", result.Decision, result.Reason)
 	if result.Decision == AccessAllow {
+		logLabels.Print("FormatViolationError: access allowed, no violation error to format")
 		return nil
 	}
 
