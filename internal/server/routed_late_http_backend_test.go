@@ -101,9 +101,7 @@ func TestRoutedHTTPBackendRecoversAfterLateStartup(t *testing.T) {
 		backendDone <- backendHTTPServer.Serve(backendListener)
 	}()
 	t.Cleanup(func() {
-		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer shutdownCancel()
-		require.NoError(backendHTTPServer.Shutdown(shutdownCtx))
+		require.NoError(backendHTTPServer.Close())
 		require.ErrorIs(<-backendDone, http.ErrServerClosed)
 	})
 
