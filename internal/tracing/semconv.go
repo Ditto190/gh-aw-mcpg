@@ -1,12 +1,14 @@
 // Package tracing provides OpenTelemetry OTLP trace export for the MCP Gateway.
-// This file is the single source of truth for go.opentelemetry.io/otel/semconv/v1.41.0
+// This file is the single source of truth for go.opentelemetry.io/otel/semconv/v1.43.0
 // imports in the tracing package. All callers inside and outside this package should
 // reference these re-exports so that upgrading semconv only requires editing this file.
+// Keep this semconv version in lockstep with the pinned otel/sdk version in go.mod to
+// avoid resource schema conflicts ("conflicting Schema URL") during resource detection.
 package tracing
 
 import (
 	"go.opentelemetry.io/otel/attribute"
-	semconv "go.opentelemetry.io/otel/semconv/v1.41.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.43.0"
 )
 
 // SchemaURL is the semconv schema URL for this semantic conventions version.
@@ -32,19 +34,18 @@ const (
 	ErrorTypeKey = semconv.ErrorTypeKey
 )
 
-// GenAI semantic convention attribute keys (semconv/v1.41.0).
-// gen_ai.system was removed from the spec; see GenAISystem in genai_attrs.go.
+// GenAI attribute keys used by tracing spans.
 const (
 	// GenAIToolName is the name of the tool utilized by the agent.
-	GenAIToolName = semconv.GenAIToolNameKey
+	GenAIToolName = attribute.Key("gen_ai.tool.name")
 	// GenAIOperationName is the name of the operation being performed.
-	GenAIOperationName = semconv.GenAIOperationNameKey
+	GenAIOperationName = attribute.Key("gen_ai.operation.name")
 	// GenAIConversationID is the unique identifier for a conversation (session).
-	GenAIConversationID = semconv.GenAIConversationIDKey
+	GenAIConversationID = attribute.Key("gen_ai.conversation.id")
 	// GenAIAgentName is the human-readable name of the GenAI agent.
-	GenAIAgentName = semconv.GenAIAgentNameKey
+	GenAIAgentName = attribute.Key("gen_ai.agent.name")
 	// GenAIAgentID is the unique identifier of the GenAI agent (server ID).
-	GenAIAgentID = semconv.GenAIAgentIDKey
+	GenAIAgentID = attribute.Key("gen_ai.agent.id")
 )
 
 // ErrorType returns the error.type attribute KeyValue for err.
