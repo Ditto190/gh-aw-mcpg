@@ -715,55 +715,6 @@ mod tests {
         assert_eq!(visibility_str(false), "public");
     }
 
-    /// Determine whether a pull request is from a fork.
-    ///
-    /// This helper calls `pull_request_read` through the provided backend callback,
-    /// extracts `base.repo.full_name` and `head.repo.full_name`, and returns:
-    /// - `Some(true)` if the PR is from a fork (head repo differs from base repo)
-    /// - `Some(false)` if the PR is direct (same repository)
-    /// - `None` if the result cannot be determined
-    fn is_forked_pull_request_with_callback(
-        callback: GithubMcpCallback,
-        owner: &str,
-        repo: &str,
-        pull_number: &str,
-    ) -> Option<bool> {
-        if owner.is_empty() || repo.is_empty() || pull_number.is_empty() {
-            return None;
-        }
-
-        let args = serde_json::json!({
-            "owner": owner,
-            "repo": repo,
-            "pullNumber": pull_number,
-            "method": "get",
-        });
-
-        let args_str = args.to_string();
-
-        crate::log_debug(&format!(
-            "Checking PR origin for {}/{}#{}",
-            owner, repo, pull_number
-        ));
-
-        let result = match call_backend_with_retry(
-            callback,
-            "pull_request_read",
-            &args_str,
-            SMALL_BUFFER_SIZE,
-        ) {
-            Some(result) if !result.is_empty() => result,
-            Some(_) => return None,
-            None => return None,
-        };
-
-        let response_str = std::str::from_utf8(&result).ok()?;
-        let response = serde_json::from_str::<Value>(response_str).ok()?;
-        let pr = crate::labels::extract_mcp_response(&response);
-
-        is_forked_pr(&pr)
-    }
-
     fn copy_payload(payload: Value, buffer: &mut [u8]) -> Result<usize, i32> {
         let serialized = payload.to_string();
         let bytes = serialized.as_bytes();
@@ -1056,23 +1007,26 @@ mod tests {
     }
 
     #[test]
-    fn test_is_forked_pull_request_direct() {
-        let result =
-            is_forked_pull_request_with_callback(direct_pr_callback, "owner", "repo", "123");
-        assert_eq!(result, Some(false));
+    fn test_get_pull_request_facts_direct_pr() {
+        let facts =
+            get_pull_request_facts_with_callback(direct_pr_callback, "owner", "repo", "123");
+        assert!(facts.is_some());
+        assert_eq!(facts.unwrap().is_forked, Some(false));
     }
 
     #[test]
-    fn test_is_forked_pull_request_forked() {
-        let result = is_forked_pull_request_with_callback(fork_pr_callback, "owner", "repo", "123");
-        assert_eq!(result, Some(true));
+    fn test_get_pull_request_facts_forked_pr() {
+        let facts = get_pull_request_facts_with_callback(fork_pr_callback, "owner", "repo", "123");
+        assert!(facts.is_some());
+        assert_eq!(facts.unwrap().is_forked, Some(true));
     }
 
     #[test]
-    fn test_is_forked_pull_request_wrapped_response() {
-        let result =
-            is_forked_pull_request_with_callback(wrapped_fork_pr_callback, "owner", "repo", "123");
-        assert_eq!(result, Some(true));
+    fn test_get_pull_request_facts_wrapped_forked_pr() {
+        let facts =
+            get_pull_request_facts_with_callback(wrapped_fork_pr_callback, "owner", "repo", "123");
+        assert!(facts.is_some());
+        assert_eq!(facts.unwrap().is_forked, Some(true));
     }
 
     #[test]
