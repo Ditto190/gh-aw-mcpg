@@ -125,8 +125,8 @@ func TestSemconvConstantsHaveExpectedKeys(t *testing.T) {
 	}
 }
 
-// TestGenAIConstantsHaveExpectedKeys verifies that the re-exported GenAI semconv
-// attribute keys and the custom MCP keys carry the correct wire-format strings.
+// TestGenAIConstantsHaveExpectedKeys verifies that the GenAI attribute keys and
+// the custom MCP keys carry the correct wire-format strings.
 func TestGenAIConstantsHaveExpectedKeys(t *testing.T) {
 	tests := []struct {
 		name    string

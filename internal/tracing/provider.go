@@ -183,7 +183,7 @@ func InitProvider(ctx context.Context, cfg *config.TracingConfig) (*Provider, er
 
 	// Build resource with service name, version, and SDK metadata.
 	// resource.WithTelemetrySDK(), resource.WithHost(), resource.WithProcessPID(), and
-	// resource.WithContainer() are built-in detectors that use semconv/v1.41.0 internally.
+	// resource.WithContainer() are built-in detectors that use semconv/v1.43.0 internally.
 	// Keep tracing/semconv.go in lockstep with the otel/sdk pin in go.mod so resource
 	// detection doesn't hit the "conflicting Schema URL" error that drops attributes.
 	res, err := resource.New(ctx,

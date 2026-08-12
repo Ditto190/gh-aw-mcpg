@@ -1,15 +1,14 @@
 // Package tracing provides OpenTelemetry OTLP trace export for the MCP Gateway.
 // This file defines custom and non-semconv attribute keys for gen_ai and MCP spans.
-// The semconv-derived GenAI attribute keys (GenAIToolName, GenAIOperationName, etc.)
-// are defined in semconv.go, which is the single file that imports
-// go.opentelemetry.io/otel/semconv/v1.41.0.
+// The GenAI attribute keys (GenAIToolName, GenAIOperationName, etc.) are
+// defined in semconv.go alongside the semconv re-exports.
 package tracing
 
 import "go.opentelemetry.io/otel/attribute"
 
 // GenAISystem identifies the GenAI system family for MCP spans.
-// gen_ai.system was removed from semconv/v1.41.0; the key string is preserved for
-// wire compatibility with observability backends that still expect it.
+// The key string is preserved for wire compatibility with observability backends
+// that still expect it.
 const GenAISystem = attribute.Key("gen_ai.system")
 
 // MCP-specific attribute keys (no gen_ai equivalent in the spec).
