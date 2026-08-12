@@ -185,7 +185,21 @@ pub fn label_response_items(
                         let repo_private = repo_visibility_private_for_repo_id(repo_full_name)
                             .unwrap_or(default_repo_private);
 
-                        let is_forked = is_forked_pr(item);
+                        let is_forked = is_forked_pr(item).or_else(|| {
+                            let base_full_name = item
+                                .get("base")
+                                .and_then(|b| b.get("repo"))
+                                .and_then(|r| r.get(field_names::FULL_NAME))
+                                .and_then(|v| v.as_str());
+                            let head_full_name = item
+                                .get("head")
+                                .and_then(|h| h.get("repo"))
+                                .and_then(|r| r.get(field_names::FULL_NAME))
+                                .and_then(|v| v.as_str());
+                            base_full_name
+                                .zip(head_full_name)
+                                .map(|(base, head)| !base.eq_ignore_ascii_case(head))
+                        });
 
                         let integrity =
                             pr_integrity(item, repo_full_name, repo_private, is_forked, ctx);
@@ -559,5 +573,48 @@ mod tests {
         let ctx = default_ctx();
         let result = label_response_items("get_notification_details", &json!({}), &json!([]), &ctx);
         assert!(result.is_empty());
+    }
+
+    #[test]
+    fn list_pull_requests_preserves_empty_full_name_fork_semantics() {
+        let ctx = default_ctx();
+        let tool_args = json!({
+            "owner": "owner",
+            "repo": "repo"
+        });
+
+        // Exactly one empty full_name must be treated as forked (Some(true)).
+        let one_empty_response = json!({
+            "pull_requests": [{
+                "number": 1,
+                "author_association": "NONE",
+                "base": { "repo": { "full_name": "owner/repo" } },
+                "head": { "repo": { "full_name": "" } }
+            }]
+        });
+        let one_empty_result =
+            label_response_items("list_pull_requests", &tool_args, &one_empty_response, &ctx);
+        assert_eq!(one_empty_result.len(), 1);
+        assert_eq!(
+            one_empty_result[0].labels.integrity,
+            reader_integrity("owner/repo", &ctx)
+        );
+
+        // Both empty full_name values must be treated as direct (Some(false)).
+        let both_empty_response = json!({
+            "pull_requests": [{
+                "number": 2,
+                "author_association": "NONE",
+                "base": { "repo": { "full_name": "" } },
+                "head": { "repo": { "full_name": "" } }
+            }]
+        });
+        let both_empty_result =
+            label_response_items("list_pull_requests", &tool_args, &both_empty_response, &ctx);
+        assert_eq!(both_empty_result.len(), 1);
+        assert_eq!(
+            both_empty_result[0].labels.integrity,
+            writer_integrity("owner/repo", &ctx)
+        );
     }
 }
