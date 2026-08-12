@@ -1300,6 +1300,30 @@ pub(crate) fn extract_repo_from_item(item: &Value) -> String {
     String::new()
 }
 
+/// Extracts `base.repo.full_name` and `head.repo.full_name` from a PR-shaped
+/// JSON value and reports whether the PR is from a fork (base repo != head repo).
+/// Returns `None` when either full_name is missing or empty.
+pub(crate) fn is_forked_pr(pr: &Value) -> Option<bool> {
+    let base_full_name = pr
+        .get("base")
+        .and_then(|b| b.get("repo"))
+        .and_then(|r| r.get(field_names::FULL_NAME))
+        .and_then(|v| v.as_str());
+
+    let head_full_name = pr
+        .get("head")
+        .and_then(|h| h.get("repo"))
+        .and_then(|r| r.get(field_names::FULL_NAME))
+        .and_then(|v| v.as_str());
+
+    match (base_full_name, head_full_name) {
+        (Some(base), Some(head)) if !base.is_empty() && !head.is_empty() => {
+            Some(!base.eq_ignore_ascii_case(head))
+        }
+        _ => None,
+    }
+}
+
 /// Extract items array from response, handling REST, items field, and GraphQL formats.
 /// Returns (Option<items_array>, items_path) where items_path is a JSON Pointer prefix:
 ///   - "" for root array
@@ -2850,6 +2874,39 @@ mod tests {
             "repository": { "full_name": "loser/repo" }
         });
         assert_eq!(extract_repo_from_item(&item), "winner/repo");
+    }
+
+    #[test]
+    fn test_is_forked_pr_same_repo_case_insensitive() {
+        let pr = serde_json::json!({
+            "base": { "repo": { "full_name": "Owner/Repo" } },
+            "head": { "repo": { "full_name": "owner/repo" } }
+        });
+        assert_eq!(is_forked_pr(&pr), Some(false));
+    }
+
+    #[test]
+    fn test_is_forked_pr_different_repo() {
+        let pr = serde_json::json!({
+            "base": { "repo": { "full_name": "owner/repo" } },
+            "head": { "repo": { "full_name": "fork/repo" } }
+        });
+        assert_eq!(is_forked_pr(&pr), Some(true));
+    }
+
+    #[test]
+    fn test_is_forked_pr_missing_or_empty_full_name_returns_none() {
+        let missing = serde_json::json!({
+            "base": { "repo": { "full_name": "owner/repo" } },
+            "head": { "repo": {} }
+        });
+        assert_eq!(is_forked_pr(&missing), None);
+
+        let empty = serde_json::json!({
+            "base": { "repo": { "full_name": "" } },
+            "head": { "repo": { "full_name": "fork/repo" } }
+        });
+        assert_eq!(is_forked_pr(&empty), None);
     }
 
     // Tests for reaction-based endorsement / disapproval helpers

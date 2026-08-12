@@ -185,18 +185,7 @@ pub fn label_response_items(
                         let repo_private = repo_visibility_private_for_repo_id(repo_full_name)
                             .unwrap_or(default_repo_private);
 
-                        let is_forked = item
-                            .get("base")
-                            .and_then(|b| b.get("repo"))
-                            .and_then(|r| r.get(field_names::FULL_NAME))
-                            .and_then(|v| v.as_str())
-                            .zip(
-                                item.get("head")
-                                    .and_then(|h| h.get("repo"))
-                                    .and_then(|r| r.get(field_names::FULL_NAME))
-                                    .and_then(|v| v.as_str()),
-                            )
-                            .map(|(base, head)| !base.eq_ignore_ascii_case(head));
+                        let is_forked = is_forked_pr(item);
 
                         let integrity =
                             pr_integrity(item, repo_full_name, repo_private, is_forked, ctx);
