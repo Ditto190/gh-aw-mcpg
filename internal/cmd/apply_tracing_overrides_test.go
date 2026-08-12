@@ -35,6 +35,8 @@ func resetTracingGlobals(t *testing.T) {
 // wires them up via init()/RegisterFlag.
 func newTracingTestCmd(t *testing.T) *cobra.Command {
 	t.Helper()
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "")
+	t.Setenv("OTEL_SERVICE_NAME", "")
 	cmd := &cobra.Command{Use: "test"}
 	registerTracingFlags(cmd, &otlpEndpoint, &otlpServiceName, &otlpSampleRate,
 		"endpoint help", "service help", "sample help")
