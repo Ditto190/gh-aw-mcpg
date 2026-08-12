@@ -421,6 +421,31 @@ func TestFilterAndConvertLabeledData(t *testing.T) {
 		assert.Nil(t, result.Filtered)
 		assert.False(t, result.Blocked)
 	})
+
+	t.Run("propagate mode with fully accessible collection returns all items unfiltered", func(t *testing.T) {
+		t.Parallel()
+		// Regression guard: propagate mode with an entirely accessible collection
+		// must return the full item set and report zero filtered items, matching
+		// the non-blocking, non-filtering semantics documented on FilterResult.
+		collection := &CollectionLabeledData{
+			Items: []LabeledItem{
+				makePublicItem(1),
+				makePublicItem(2),
+			},
+		}
+		eval := NewEvaluatorWithMode(EnforcementPropagate)
+		result, err := FilterAndConvertLabeledData(eval, agentSecrecy, agentIntegrity, OperationReadWrite, collection, EnforcementPropagate)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.False(t, result.Blocked)
+		require.NotNil(t, result.Filtered)
+		assert.Equal(t, 2, result.Filtered.GetAccessibleCount())
+		assert.Equal(t, 0, result.Filtered.GetFilteredCount())
+		assert.Equal(t, []interface{}{
+			map[string]interface{}{"id": 1},
+			map[string]interface{}{"id": 2},
+		}, result.FinalResult)
+	})
 }
 
 func TestShouldAccumulateReadLabels(t *testing.T) {
