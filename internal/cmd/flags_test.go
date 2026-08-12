@@ -83,6 +83,33 @@ func TestRegisterFlagCompletions(t *testing.T) {
 		return cmd
 	}
 
+	t.Run("logs but does not panic when target flags are missing", func(t *testing.T) {
+		// Calling registerFlagCompletions on a command with none of the
+		// expected flags ("config", "log-dir", "payload-dir", "wasm-cache-dir",
+		// "env", "allowonly-min-integrity") registered exercises every error
+		// branch (MarkFlagFilename, MarkFlagDirname, RegisterFlagCompletionFunc
+		// all return errors for unknown flags) without crashing, and still
+		// leaves ValidArgsFunction correctly configured.
+		cmd := newTestCmd()
+
+		assert.NotPanics(t, func() {
+			registerFlagCompletions(cmd)
+		}, "registerFlagCompletions should tolerate missing flags gracefully")
+
+		require.NotNil(t, cmd.ValidArgsFunction,
+			"ValidArgsFunction should still be set even when other completions fail")
+
+		completions, directive := cmd.ValidArgsFunction(cmd, nil, "")
+		assert.Equal(t, cobra.ShellCompDirectiveNoFileComp, directive)
+		assert.NotEmpty(t, completions, "ValidArgsFunction should still return active help text")
+
+		// None of the flags exist, so no completion annotations/functions should
+		// have been registered for them.
+		assert.Nil(t, cmd.Flags().Lookup("config"), "config flag should not exist on a bare command")
+		_, ok := cmd.GetFlagCompletionFunc("allowonly-min-integrity")
+		assert.False(t, ok, "allowonly-min-integrity completion should not register without the flag")
+	})
+
 	t.Run("ValidArgsFunction is set and returns active help tip", func(t *testing.T) {
 		cmd := setupCmd(t)
 

@@ -44,7 +44,8 @@ const MCPProtocolVersion = "2025-11-25"
 // retries"; a negative value means 0 retries (give up immediately on stream
 // close). The gateway handles reconnection itself, so SDK-level retries would
 // cause double-retry behaviour.
-// See TestMaxRetriesSentinelCanary for an automated guard against SDK changes.
+// This sentinel behaviour was verified against go-sdk v1.7.0; see
+// TestMaxRetriesSentinelCanary for an automated guard against SDK changes.
 const streamableMaxRetries = -1
 
 // requestIDCounter is used to generate unique request IDs for HTTP requests
