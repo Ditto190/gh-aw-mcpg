@@ -279,6 +279,8 @@ func executeBackendToolCall(ctx context.Context, l *launcher.Launcher, serverID,
 	})
 }
 
+var executeBackendToolCallFunc = executeBackendToolCall
+
 // guardBackendCaller implements guard.BackendCaller for guards to query backend metadata
 type guardBackendCaller struct {
 	server   *UnifiedServer
@@ -298,7 +300,7 @@ func (g *guardBackendCaller) CallTool(ctx context.Context, toolName string, args
 
 	sessionID := SessionIDFromContext(g.ctx)
 
-	return executeBackendToolCall(g.ctx, g.server.launcher, g.serverID, sessionID, toolName, args)
+	return executeBackendToolCallFunc(g.ctx, g.server.launcher, g.serverID, sessionID, toolName, args)
 }
 
 // callCollaboratorPermission makes a direct REST API call to GitHub to get a user's

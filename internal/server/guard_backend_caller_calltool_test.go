@@ -141,32 +141,38 @@ func TestGuardBackendCaller_CallTool_MetadataSuccess(t *testing.T) {
 // reads the session ID from g.ctx (not the ctx parameter) when routing the request,
 // matching the documented behavior of executeBackendToolCall(g.ctx, ...).
 func TestGuardBackendCaller_CallTool_UsesSessionIDFromContext(t *testing.T) {
-	backend := newGuardCallToolBackend(t, "session-server", func(w http.ResponseWriter, method string, reqID interface{}, _ interface{}) {
-		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(map[string]interface{}{
-			"jsonrpc": "2.0",
-			"id":      reqID,
-			"result": map[string]interface{}{
-				"content": []map[string]interface{}{
-					{"type": "text", "text": "ok"},
-				},
-			},
-		}))
-	})
-	defer backend.Close()
+	originalExecuteBackendToolCallFunc := executeBackendToolCallFunc
+	t.Cleanup(func() { executeBackendToolCallFunc = originalExecuteBackendToolCallFunc })
 
-	l := newGuardCallToolLauncher(t, "session-server", backend.URL)
+	type contextKey string
+	const sourceKey contextKey = "source"
+
+	var capturedCtx context.Context
+	var capturedSessionID string
+	executeBackendToolCallFunc = func(ctx context.Context, _ *launcher.Launcher, _ string, sessionID string, _ string, _ interface{}) (interface{}, error) {
+		capturedCtx = ctx
+		capturedSessionID = sessionID
+		return map[string]interface{}{
+			"content": []interface{}{
+				map[string]interface{}{"type": "text", "text": "ok"},
+			},
+		}, nil
+	}
+
+	cfg := &config.Config{Servers: map[string]*config.ServerConfig{}}
+	l := launcher.New(context.Background(), cfg)
+	defer l.Close()
 	us := &UnifiedServer{launcher: l}
 
 	// Put a distinct session ID on the guard's stored ctx (g.ctx), separate from the
 	// ctx argument passed to CallTool, to verify the implementation prefers g.ctx.
 	guardCtx := context.WithValue(context.Background(), SessionIDContextKey, "guard-session-1")
+	guardCtx = context.WithValue(guardCtx, sourceKey, "guard")
 	caller := &guardBackendCaller{server: us, serverID: "session-server", ctx: guardCtx}
 
-	// Passing a background context here (with no session value) to CallTool's ctx
-	// argument; the call should still succeed because the implementation uses g.ctx
-	// for session resolution, not the passed-in ctx.
-	result, err := caller.CallTool(context.Background(), "list_files", nil)
+	callCtx := context.WithValue(context.Background(), SessionIDContextKey, "call-session-1")
+	callCtx = context.WithValue(callCtx, sourceKey, "call")
+	result, err := caller.CallTool(callCtx, "list_files", nil)
 	require.NoError(t, err)
 
 	resultMap, ok := result.(map[string]interface{})
@@ -174,6 +180,8 @@ func TestGuardBackendCaller_CallTool_UsesSessionIDFromContext(t *testing.T) {
 	content, ok := resultMap["content"].([]interface{})
 	require.True(t, ok, "expected content field to be a slice")
 	require.Len(t, content, 1)
+	assert.Equal(t, "guard-session-1", capturedSessionID)
+	assert.Equal(t, "guard", capturedCtx.Value(sourceKey))
 }
 
 // TestGuardBackendCaller_CallTool_BackendError verifies that a JSON-RPC error
