@@ -22,6 +22,8 @@ pub const WRITE_OPERATIONS: &[&str] = &[
     "assign_copilot_to_issue",
     "assign_copilot_to_issue_with_intent",
     "cancel_workflow_run", // gh run cancel       — cancels an in-progress workflow run
+    "close_issue",         // gh issue close
+    "close_pull_request",  // gh pr close
     "copy_project",        // gh project copy — creates a new Projects v2 board from an existing one
     "create_branch",
     "create_codespace",  // gh codespace create — POST /user/codespaces
@@ -70,15 +72,21 @@ pub const WRITE_OPERATIONS: &[&str] = &[
     "fork_repository",
     "label_write",
     "link_project", // gh project link — links a Projects v2 board to a repository or team
+    "lock_issue",   // gh issue lock
+    "lock_pull_request", // gh pr lock
     "manage_notification_subscription",
     "manage_repository_notification_subscription",
     "mark_all_notifications_read",
     "mark_project_template", // gh project mark-template — GraphQL markProjectV2AsTemplate
+    "mark_pull_request_as_draft", // gh pr ready --undo (convert back to draft)
+    "mark_pull_request_as_ready_for_review", // gh pr ready (mark ready for review)
     "pin_issue",             // gh issue pin
     "projects_write",
     "push_files",
     "rebuild_codespace", // gh codespace rebuild — Codespaces session RebuildContainer RPC (recreates container)
     "rename_repository", // gh repo rename    — blocked: breaks clone URLs and integrations
+    "reopen_issue",  // gh issue reopen
+    "reopen_pull_request", // gh pr reopen
     "request_copilot_review",
     "rerun_failed_jobs",   // gh run rerun --failed — reruns only failed jobs
     "rerun_workflow_job",  // gh run rerun --job  — reruns a specific job
@@ -95,6 +103,8 @@ pub const WRITE_OPERATIONS: &[&str] = &[
     "unarchive_project_item", // gh project item-archive --undo — unarchives a Projects v2 item
     "unarchive_repository",  // gh repo unarchive — blocked: symmetric to archive_repository
     "unlink_project",        // gh project unlink — unlinks a Projects v2 board from a repository or team
+    "unlock_issue",          // gh issue unlock
+    "unlock_pull_request",   // gh pr unlock
     "unmark_project_template", // gh project mark-template --undo — GraphQL unmarkProjectV2AsTemplate
     "unpin_issue",             // gh issue unpin
     "unstar_repository",
@@ -546,6 +556,35 @@ mod tests {
                 !is_write_operation(op),
                 "{} should not be in WRITE_OPERATIONS (it is in READ_WRITE_OPERATIONS)",
                 op
+            );
+        }
+    }
+
+    #[test]
+    fn test_cli_issue_pr_state_transition_tools_are_write_operations() {
+        for op in &[
+            "close_issue",
+            "close_pull_request",
+            "lock_issue",
+            "lock_pull_request",
+            "mark_pull_request_as_draft",
+            "mark_pull_request_as_ready_for_review",
+            "reopen_issue",
+            "reopen_pull_request",
+            "unlock_issue",
+            "unlock_pull_request",
+        ] {
+            assert!(
+                WRITE_OPERATIONS.binary_search(op).is_ok(),
+                "{op} must be explicitly listed in WRITE_OPERATIONS"
+            );
+            assert!(
+                is_write_operation(op),
+                "{op} must be classified as a write operation"
+            );
+            assert!(
+                !is_read_write_operation(op),
+                "{op} should not be in READ_WRITE_OPERATIONS"
             );
         }
     }

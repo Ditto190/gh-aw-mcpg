@@ -666,6 +666,10 @@ pub fn apply_tool_labels(
         | "create_discussion" // gh discussion create — creates a discussion in a repository
         | "edit_discussion" // gh discussion edit   — edits title/body/labels of a discussion
         // Granular issue mutation
+        | "close_issue"
+        | "reopen_issue"
+        | "lock_issue"
+        | "unlock_issue"
         | "update_issue_assignees"
         | "update_issue_body"
         | "update_issue_labels"
@@ -683,6 +687,12 @@ pub fn apply_tool_labels(
         | "add_issue_comment_reaction"
         | "add_pull_request_review_comment_reaction"
         // Granular PR mutation
+        | "close_pull_request"
+        | "reopen_pull_request"
+        | "mark_pull_request_as_draft"
+        | "mark_pull_request_as_ready_for_review"
+        | "lock_pull_request"
+        | "unlock_pull_request"
         | "update_pull_request_body"
         | "update_pull_request_draft_state"
         | "update_pull_request_state"
@@ -2550,7 +2560,8 @@ mod tests {
     fn apply_tool_labels_issue_and_pr_granular_write_ops_are_repo_scoped_writes() {
         // Regression coverage for github-mcp-guard-coverage-checker gaps:
         // reprioritize_sub_issue, set_issue_fields, update_pull_request_branch,
-        // and update_pull_request_title must be labeled S(repo)/writer(repo)
+        // update_pull_request_title, and CLI-derived issue/PR state transitions
+        // must be labeled S(repo)/writer(repo)
         // rather than falling through to default handling.
         let ctx = default_ctx();
         let args = serde_json::json!({
@@ -2563,8 +2574,18 @@ mod tests {
         let _guard = crate::labels::backend::cache_repo_visibility_for_tests(repo_id, true);
 
         for op in &[
+            "close_issue",
+            "close_pull_request",
+            "lock_issue",
+            "lock_pull_request",
+            "mark_pull_request_as_draft",
+            "mark_pull_request_as_ready_for_review",
             "reprioritize_sub_issue",
+            "reopen_issue",
+            "reopen_pull_request",
             "set_issue_fields",
+            "unlock_issue",
+            "unlock_pull_request",
             "update_pull_request_branch",
             "update_pull_request_title",
         ] {

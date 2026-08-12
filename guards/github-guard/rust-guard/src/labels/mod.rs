@@ -5250,7 +5250,7 @@ mod tests {
     }
 
     #[test]
-    fn test_apply_tool_labels_lock_unlock_inherit_provided_labels() {
+    fn test_apply_tool_labels_lock_unlock_require_repo_writer_integrity() {
         let ctx = default_ctx();
         let repo_id = "github/copilot";
         let tool_args = json!({
@@ -5278,8 +5278,9 @@ mod tests {
 
             assert!(secrecy.is_empty(), "{op}: public repo should produce empty secrecy");
             assert_eq!(
-                integrity, provided_integrity,
-                "{op}: should inherit provided integrity unchanged"
+                integrity,
+                writer_integrity(repo_id, &ctx),
+                "{op}: should require repo writer integrity"
             );
             assert_eq!(
                 desc, expected_desc,
