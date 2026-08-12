@@ -198,23 +198,7 @@ pub fn label_response_paths(
                         &item_repo
                     };
 
-                    let base_repo = item
-                        .get("base")
-                        .and_then(|b| b.get("repo"))
-                        .and_then(|r| r.get(field_names::FULL_NAME))
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("");
-                    let head_repo = item
-                        .get("head")
-                        .and_then(|h| h.get("repo"))
-                        .and_then(|r| r.get(field_names::FULL_NAME))
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("");
-                    let is_forked = if !base_repo.is_empty() && !head_repo.is_empty() {
-                        Some(!base_repo.eq_ignore_ascii_case(head_repo))
-                    } else {
-                        None
-                    };
+                    let is_forked = is_forked_pr(item);
 
                     let item_repo_private = repo_visibility_private_for_repo_id(repo_for_labels)
                         .unwrap_or(repo_item_ctx.default_repo_private);

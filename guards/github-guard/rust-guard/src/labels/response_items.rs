@@ -190,9 +190,7 @@ pub fn label_response_items(
                         let repo_private = repo_visibility_private_for_repo_id(repo_full_name)
                             .unwrap_or(default_repo_private);
 
-                        let is_forked = base_repo
-                            .zip(head_repo)
-                            .map(|(base, head)| !base.eq_ignore_ascii_case(head));
+                        let is_forked = is_forked_pr(item);
 
                         let integrity =
                             pr_integrity(item, repo_full_name, repo_private, is_forked, ctx);
