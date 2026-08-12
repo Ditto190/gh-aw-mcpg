@@ -1300,6 +1300,25 @@ pub(crate) fn extract_repo_from_item(item: &Value) -> String {
     String::new()
 }
 
+/// Determine whether a pull request item is from a fork by comparing
+/// `base.repo.full_name` and `head.repo.full_name` case-insensitively.
+/// Returns `None` when either field is missing or empty.
+pub(crate) fn is_forked_pr(item: &Value) -> Option<bool> {
+    let base = item
+        .get("base")
+        .and_then(|b| b.get("repo"))
+        .and_then(|r| r.get(field_names::FULL_NAME))
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())?;
+    let head = item
+        .get("head")
+        .and_then(|h| h.get("repo"))
+        .and_then(|r| r.get(field_names::FULL_NAME))
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())?;
+    Some(!base.eq_ignore_ascii_case(head))
+}
+
 /// Extract items array from response, handling REST, items field, and GraphQL formats.
 /// Returns (Option<items_array>, items_path) where items_path is a JSON Pointer prefix:
 ///   - "" for root array
@@ -2850,6 +2869,42 @@ mod tests {
             "repository": { "full_name": "loser/repo" }
         });
         assert_eq!(extract_repo_from_item(&item), "winner/repo");
+    }
+
+    #[test]
+    fn test_is_forked_pr_returns_none_when_base_or_head_missing() {
+        let missing_base = serde_json::json!({ "head": { "repo": { "full_name": "fork/repo" } } });
+        let missing_head = serde_json::json!({ "base": { "repo": { "full_name": "owner/repo" } } });
+        assert_eq!(is_forked_pr(&missing_base), None);
+        assert_eq!(is_forked_pr(&missing_head), None);
+    }
+
+    #[test]
+    fn test_is_forked_pr_returns_none_when_base_or_head_empty() {
+        let empty_base = serde_json::json!({
+            "base": { "repo": { "full_name": "" } },
+            "head": { "repo": { "full_name": "fork/repo" } }
+        });
+        let empty_head = serde_json::json!({
+            "base": { "repo": { "full_name": "owner/repo" } },
+            "head": { "repo": { "full_name": "" } }
+        });
+        assert_eq!(is_forked_pr(&empty_base), None);
+        assert_eq!(is_forked_pr(&empty_head), None);
+    }
+
+    #[test]
+    fn test_is_forked_pr_compares_case_insensitively() {
+        let same_repo_diff_case = serde_json::json!({
+            "base": { "repo": { "full_name": "Owner/Repo" } },
+            "head": { "repo": { "full_name": "owner/repo" } }
+        });
+        let different_repo = serde_json::json!({
+            "base": { "repo": { "full_name": "owner/repo" } },
+            "head": { "repo": { "full_name": "fork/repo" } }
+        });
+        assert_eq!(is_forked_pr(&same_repo_diff_case), Some(false));
+        assert_eq!(is_forked_pr(&different_repo), Some(true));
     }
 
     // Tests for reaction-based endorsement / disapproval helpers

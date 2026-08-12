@@ -14,7 +14,7 @@ use std::thread;
 use std::time::Duration;
 
 use super::constants::{field_names, MEDIUM_BUFFER_SIZE, SMALL_BUFFER_SIZE};
-use super::helpers::{get_author_association, is_pr_merged};
+use super::helpers::{get_author_association, is_forked_pr, is_pr_merged};
 
 /// Backend callback signature used for GitHub MCP tool calls.
 pub type GithubMcpCallback = fn(&str, &str, &mut [u8]) -> Result<usize, i32>;
@@ -425,24 +425,7 @@ pub(crate) fn get_pull_request_facts_with_callback(
     let response = serde_json::from_str::<Value>(response_str).ok()?;
     let pr = super::extract_mcp_response(&response);
 
-    let base_full_name = pr
-        .get("base")
-        .and_then(|b| b.get("repo"))
-        .and_then(|r| r.get(field_names::FULL_NAME))
-        .and_then(|v| v.as_str());
-
-    let head_full_name = pr
-        .get("head")
-        .and_then(|h| h.get("repo"))
-        .and_then(|r| r.get(field_names::FULL_NAME))
-        .and_then(|v| v.as_str());
-
-    let is_forked = match (base_full_name, head_full_name) {
-        (Some(base), Some(head)) if !base.is_empty() && !head.is_empty() => {
-            Some(!base.eq_ignore_ascii_case(head))
-        }
-        _ => None,
-    };
+    let is_forked = is_forked_pr(&pr);
 
     let is_merged = is_pr_merged(&pr);
 
