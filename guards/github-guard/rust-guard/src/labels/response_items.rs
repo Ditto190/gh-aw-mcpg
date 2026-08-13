@@ -149,7 +149,7 @@ pub fn label_response_items(
                 .get("method")
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
-            if tool_name == "pull_request_read" && !method.is_empty() && method != "get" {
+            if is_non_get_read_sub_method(tool_name, "pull_request_read", method) {
                 // Fall through — use resource-level labels from tool_rules
             } else {
                 let items = extract_items_slice(&actual_response, "pull_requests");
@@ -245,7 +245,7 @@ pub fn label_response_items(
                 .get("method")
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
-            if tool_name == "issue_read" && !method.is_empty() && method != "get" {
+            if is_non_get_read_sub_method(tool_name, "issue_read", method) {
                 // Fall through — use resource-level labels from tool_rules
             } else {
                 let items = extract_items_slice(&actual_response, "issues");
