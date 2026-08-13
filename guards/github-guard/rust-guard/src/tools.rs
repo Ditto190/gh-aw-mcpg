@@ -238,6 +238,14 @@ mod tests {
                 None => line,
             };
             for part in code.split('"').skip(1).step_by(2) {
+                // Guard against the parser picking up anything that is not a tool name.
+                assert!(
+                    !part.is_empty()
+                        && part
+                            .chars()
+                            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_'),
+                    "unexpected token `{part}` parsed from the repo-scoped write operations arm"
+                );
                 tools.push(part.to_string());
             }
         }
