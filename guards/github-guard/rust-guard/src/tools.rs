@@ -217,6 +217,58 @@ mod tests {
         }
     }
 
+    /// Extracts the tool names matched by the "Repo-scoped write operations" arm of
+    /// `labels/tool_rules.rs`, ignoring line comments.
+    fn repo_scoped_write_arm_tools() -> Vec<String> {
+        const TOOL_RULES_SRC: &str = include_str!("labels/tool_rules.rs");
+        const MARKER: &str = "// === Repo-scoped write operations ===";
+
+        let start = TOOL_RULES_SRC
+            .find(MARKER)
+            .expect("tool_rules.rs must contain the repo-scoped write operations marker");
+        let block = &TOOL_RULES_SRC[start + MARKER.len()..];
+        let end = block
+            .find("=> {")
+            .expect("repo-scoped write operations arm must end with `=> {`");
+
+        let mut tools = Vec::new();
+        for line in block[..end].lines() {
+            let code = match line.find("//") {
+                Some(idx) => &line[..idx],
+                None => line,
+            };
+            for part in code.split('"').skip(1).step_by(2) {
+                tools.push(part.to_string());
+            }
+        }
+        tools
+    }
+
+    #[test]
+    fn repo_scoped_write_arm_tools_are_classified_in_tools_rs() {
+        let tools = repo_scoped_write_arm_tools();
+        assert!(
+            !tools.is_empty(),
+            "failed to parse tool names from the repo-scoped write operations arm"
+        );
+
+        for tool in tools {
+            // Prefix-based helpers already classify these without an explicit list entry.
+            if is_merge_operation(&tool)
+                || is_delete_operation(&tool)
+                || is_lock_operation(&tool)
+                || is_unlock_operation(&tool)
+            {
+                continue;
+            }
+            assert!(
+                is_write_operation(&tool) || is_read_write_operation(&tool),
+                "`{tool}` is a repo-scoped write in tool_rules.rs but is missing from \
+                 WRITE_OPERATIONS/READ_WRITE_OPERATIONS in tools.rs"
+            );
+        }
+    }
+
     #[test]
     fn write_operations_are_sorted() {
         let mut sorted = WRITE_OPERATIONS.to_vec();
