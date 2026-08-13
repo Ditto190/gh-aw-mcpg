@@ -3,12 +3,14 @@
 package tracing
 
 import (
+	"context"
 	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/sdk/resource"
 )
 
 // TestErrorType verifies that ErrorType wraps the semconv error.type attribute
@@ -167,6 +169,24 @@ func TestServiceName_UsedInSpanAttribute(t *testing.T) {
 		"span must carry the service.name attribute")
 	assert.True(t, hasAttr(spans[0].Attributes, attribute.Key("service.version"), "1.0.0"),
 		"span must carry the service.version attribute")
+}
+
+// expectedSchemaURL is the semconv schema URL matching the semconv version imported by
+// semconv.go. Update it together with the semconv import path when bumping the otel modules.
+const expectedSchemaURL = "https://opentelemetry.io/schemas/1.43.0"
+
+// TestSchemaURL_MatchesPinnedSemconvVersion guards against semconv version drift: the
+// re-exported SchemaURL must stay in lockstep with the semconv version used by the pinned
+// otel/sdk in go.mod, otherwise resource detection fails with a "conflicting Schema URL"
+// error. The SDK's own schema URL is read from a detected resource so that bumping only
+// otel/sdk (without updating semconv.go) fails here instead of at runtime.
+func TestSchemaURL_MatchesPinnedSemconvVersion(t *testing.T) {
+	sdkResource, err := resource.New(context.Background(), resource.WithTelemetrySDK())
+	require.NoError(t, err)
+	assert.Equal(t, sdkResource.SchemaURL(), SchemaURL,
+		"otel/sdk semconv version changed; update the semconv import in semconv.go to match")
+	assert.Equal(t, expectedSchemaURL, SchemaURL,
+		"semconv version changed; update semconv.go imports and expectedSchemaURL together")
 }
 
 // customError is a local error type used to test ErrorType with a non-stdlib error.
