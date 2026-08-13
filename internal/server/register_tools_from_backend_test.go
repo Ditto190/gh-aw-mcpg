@@ -5,9 +5,12 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/github/gh-aw-mcpg/internal/config"
+	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -792,4 +795,238 @@ func TestRegisterToolsFromBackend_HandlerCreation(t *testing.T) {
 	tool := us.tools["handler-backend___test_handler"]
 	require.NotNil(tool)
 	require.NotNil(tool.Handler, "Handler should be created during registration")
+}
+
+// TestRegisterToolsFromBackend_HandlerInvocation exercises the registered tool
+// handler closure end-to-end: successful argument parsing plus a real call
+// through to the backend, and a malformed-arguments error path that never
+// reaches the backend. This covers the handler code registered inside
+// registerToolsFromBackendContext, which is otherwise only indirectly
+// exercised via the MCP transport in integration tests.
+func TestRegisterToolsFromBackend_HandlerInvocation(t *testing.T) {
+	setupRequire := require.New(t)
+	var toolsCallCount atomic.Int32
+	var toolsCallParams []map[string]interface{}
+	var toolsCallParamsMu sync.Mutex
+
+	// Note: this handler runs on the httptest server's own goroutine(s), not the
+	// test goroutine, so it uses manual error handling (writing an HTTP error
+	// status) rather than require/assert, which are unsafe to call outside the
+	// goroutine running the test.
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		method, ok := req["method"].(string)
+		if !ok {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		switch method {
+		case "initialize":
+			response := map[string]interface{}{
+				"jsonrpc": "2.0",
+				"id":      req["id"],
+				"result": map[string]interface{}{
+					"protocolVersion": "2024-11-05",
+					"capabilities":    map[string]interface{}{},
+					"serverInfo": map[string]interface{}{
+						"name":    "invoke-backend",
+						"version": "1.0.0",
+					},
+				},
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(response)
+
+		case "tools/list":
+			response := map[string]interface{}{
+				"jsonrpc": "2.0",
+				"id":      req["id"],
+				"result": map[string]interface{}{
+					"tools": []map[string]interface{}{
+						{
+							"name":        "echo",
+							"description": "Echoes the provided message",
+							"inputSchema": map[string]interface{}{
+								"type": "object",
+								"properties": map[string]interface{}{
+									"message": map[string]interface{}{"type": "string"},
+								},
+							},
+						},
+					},
+				},
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(response)
+
+		case "tools/call":
+			toolsCallCount.Add(1)
+			params, _ := req["params"].(map[string]interface{})
+			paramsCopy := make(map[string]interface{}, len(params))
+			for key, value := range params {
+				paramsCopy[key] = value
+			}
+			toolsCallParamsMu.Lock()
+			toolsCallParams = append(toolsCallParams, paramsCopy)
+			toolsCallParamsMu.Unlock()
+
+			response := map[string]interface{}{
+				"jsonrpc": "2.0",
+				"id":      req["id"],
+				"result": map[string]interface{}{
+					"content": []map[string]interface{}{
+						{"type": "text", "text": "echoed"},
+					},
+				},
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(response)
+		}
+	}))
+	defer backend.Close()
+
+	cfg := &config.Config{
+		Servers: map[string]*config.ServerConfig{
+			"invoke-backend": {
+				Type: "http",
+				URL:  backend.URL,
+			},
+		},
+	}
+
+	us, err := NewUnified(context.Background(), cfg)
+	setupRequire.NoError(err)
+	defer us.Close()
+
+	setupRequire.NoError(us.registerToolsFromBackend("invoke-backend"))
+
+	us.toolsMu.RLock()
+	tool := us.tools["invoke-backend___echo"]
+	us.toolsMu.RUnlock()
+	setupRequire.NotNil(tool)
+	setupRequire.NotNil(tool.Handler)
+
+	toolsCallParamsAtIndex := func(t *testing.T, index int) map[string]interface{} {
+		t.Helper()
+		require := require.New(t)
+
+		toolsCallParamsMu.Lock()
+		toolsCallParamsLen := len(toolsCallParams)
+		var indexedParams map[string]interface{}
+		if toolsCallParamsLen > index {
+			indexedParams = make(map[string]interface{}, len(toolsCallParams[index]))
+			for key, value := range toolsCallParams[index] {
+				indexedParams[key] = value
+			}
+		}
+		toolsCallParamsMu.Unlock()
+
+		require.Greater(toolsCallParamsLen, index)
+		paramsJSON, err := json.Marshal(indexedParams)
+		require.NoError(err)
+
+		var params map[string]interface{}
+		require.NoError(json.Unmarshal(paramsJSON, &params))
+		return params
+	}
+
+	t.Run("valid arguments call backend and return a result", func(t *testing.T) {
+		require := require.New(t)
+		assert := assert.New(t)
+		ctx := context.WithValue(context.Background(), SessionIDContextKey, "handler-valid-session")
+
+		beforeCallCount := toolsCallCount.Load()
+		toolsCallParamsMu.Lock()
+		beforeParamsLen := len(toolsCallParams)
+		toolsCallParamsMu.Unlock()
+		us.sessionMu.RLock()
+		_, hadSession := us.sessions["handler-valid-session"]
+		us.sessionMu.RUnlock()
+		require.False(hadSession)
+
+		req := &sdk.CallToolRequest{
+			Params: &sdk.CallToolParamsRaw{
+				Name:      "invoke-backend___echo",
+				Arguments: json.RawMessage(`{"message":"hi"}`),
+			},
+		}
+		result, data, err := tool.Handler(ctx, req, nil)
+		require.NoError(err)
+		require.NotNil(result)
+		assert.False(result.IsError)
+		assert.NotNil(data)
+		assert.Equal(beforeCallCount+1, toolsCallCount.Load())
+
+		lastCallParams := toolsCallParamsAtIndex(t, beforeParamsLen)
+		assert.Equal("echo", lastCallParams["name"])
+		require.IsType(map[string]interface{}{}, lastCallParams["arguments"])
+		args := lastCallParams["arguments"].(map[string]interface{})
+		assert.Equal("hi", args["message"])
+
+		us.sessionMu.RLock()
+		_, hasSession := us.sessions["handler-valid-session"]
+		us.sessionMu.RUnlock()
+		assert.True(hasSession, "session should be auto-created during handler invocation")
+	})
+
+	t.Run("malformed arguments return an error without calling the backend", func(t *testing.T) {
+		require := require.New(t)
+		assert := assert.New(t)
+		ctx := context.WithValue(context.Background(), SessionIDContextKey, "handler-malformed-session")
+
+		beforeCallCount := toolsCallCount.Load()
+
+		req := &sdk.CallToolRequest{
+			Params: &sdk.CallToolParamsRaw{
+				Name:      "invoke-backend___echo",
+				Arguments: json.RawMessage(`{invalid`),
+			},
+		}
+		result, _, err := tool.Handler(ctx, req, nil)
+		require.Error(err, "malformed JSON arguments should produce an error")
+		require.NotNil(result, "an error CallToolResult should still be returned")
+		assert.True(result.IsError, "malformed JSON should return IsError=true")
+		assert.Equal(beforeCallCount, toolsCallCount.Load(), "malformed arguments should not reach tools/call")
+
+		us.sessionMu.RLock()
+		_, hasSession := us.sessions["handler-malformed-session"]
+		us.sessionMu.RUnlock()
+		assert.False(hasSession, "parse errors should return before session auto-initialization")
+	})
+
+	t.Run("nil params default to empty arguments", func(t *testing.T) {
+		require := require.New(t)
+		assert := assert.New(t)
+		ctx := context.WithValue(context.Background(), SessionIDContextKey, "handler-nil-session")
+
+		beforeCallCount := toolsCallCount.Load()
+		toolsCallParamsMu.Lock()
+		beforeParamsLen := len(toolsCallParams)
+		toolsCallParamsMu.Unlock()
+
+		req := &sdk.CallToolRequest{}
+		result, data, err := tool.Handler(ctx, req, nil)
+		require.NoError(err)
+		require.NotNil(result)
+		assert.False(result.IsError)
+		assert.NotNil(data)
+		assert.Equal(beforeCallCount+1, toolsCallCount.Load())
+
+		lastCallParams := toolsCallParamsAtIndex(t, beforeParamsLen)
+		assert.Equal("echo", lastCallParams["name"])
+		require.IsType(map[string]interface{}{}, lastCallParams["arguments"])
+		args := lastCallParams["arguments"].(map[string]interface{})
+		assert.Empty(args, "nil params should be forwarded as empty arguments")
+
+		us.sessionMu.RLock()
+		_, hasSession := us.sessions["handler-nil-session"]
+		us.sessionMu.RUnlock()
+		assert.True(hasSession, "nil params path should still auto-create a session")
+	})
 }
