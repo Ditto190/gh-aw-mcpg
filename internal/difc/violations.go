@@ -4,7 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/github/gh-aw-mcpg/internal/logger"
 )
+
+var logViolations = logger.ForFile()
 
 // ViolationType indicates what kind of DIFC violation occurred
 type ViolationType string
@@ -42,7 +46,7 @@ type ViolationError struct {
 }
 
 func (e *ViolationError) Error() string {
-	logLabels.Printf("Formatting %s violation: resource=%s, isWrite=%v", e.Type, e.Resource, e.IsWrite)
+	logViolations.Printf("Formatting %s violation: resource=%s, isWrite=%v", e.Type, e.Resource, e.IsWrite)
 	var msg string
 
 	if e.Type == SecrecyViolation {
@@ -69,7 +73,7 @@ func (e *ViolationError) Error() string {
 
 // Detailed returns a detailed error message with full context
 func (e *ViolationError) Detailed() string {
-	logLabels.Printf("Detailed: building full context for %s violation, resource=%s", e.Type, e.Resource)
+	logViolations.Printf("Detailed: building full context for %s violation, resource=%s", e.Type, e.Resource)
 	msg := e.Error()
 	msg += fmt.Sprintf("\n  Agent %s tags: %v", e.Type, e.AgentTags)
 	msg += fmt.Sprintf("\n  Resource %s tags: %v", e.Type, e.ResourceTags)
@@ -78,9 +82,9 @@ func (e *ViolationError) Detailed() string {
 
 // FormatViolationError creates a detailed error message explaining the violation and its implications.
 func FormatViolationError(result *EvaluationResult, agentSecrecy *SecrecyLabel, agentIntegrity *IntegrityLabel, resource *LabeledResource) error {
-	logLabels.Printf("FormatViolationError: decision=%s, reason=%q", result.Decision, result.Reason)
+	logViolations.Printf("FormatViolationError: decision=%s, reason=%q", result.Decision, result.Reason)
 	if result.Decision == AccessAllow {
-		logLabels.Print("FormatViolationError: access allowed, no violation error to format")
+		logViolations.Print("FormatViolationError: access allowed, no violation error to format")
 		return nil
 	}
 
@@ -132,7 +136,7 @@ func formatIntegrityLevel(tags []Tag) string {
 		}
 		switch s {
 		case "merged":
-			logLabels.Printf("formatIntegrityLevel: resolved to \"merged\" from tags=%v", tags)
+			logViolations.Printf("formatIntegrityLevel: resolved to \"merged\" from tags=%v", tags)
 			return "\"merged\""
 		case "approved":
 			highest = "\"approved\""
@@ -143,7 +147,7 @@ func formatIntegrityLevel(tags []Tag) string {
 		}
 	}
 	if highest != "" {
-		logLabels.Printf("formatIntegrityLevel: resolved to %s from tags=%v", highest, tags)
+		logViolations.Printf("formatIntegrityLevel: resolved to %s from tags=%v", highest, tags)
 		return highest
 	}
 	return fmt.Sprintf("%v", tags)
@@ -174,7 +178,7 @@ func formatSecrecyLevel(tags []Tag) string {
 	}
 
 	if bestScope != "" {
-		logLabels.Printf("formatSecrecyLevel: resolved to private(%s) from tags=%v", bestScope, tags)
+		logViolations.Printf("formatSecrecyLevel: resolved to private(%s) from tags=%v", bestScope, tags)
 		return fmt.Sprintf("private (%s)", bestScope)
 	}
 	if hasPrivate {
