@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/github/gh-aw-mcpg/internal/config"
+	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -792,4 +793,141 @@ func TestRegisterToolsFromBackend_HandlerCreation(t *testing.T) {
 	tool := us.tools["handler-backend___test_handler"]
 	require.NotNil(tool)
 	require.NotNil(tool.Handler, "Handler should be created during registration")
+}
+
+// TestRegisterToolsFromBackend_HandlerInvocation exercises the registered tool
+// handler closure end-to-end: successful argument parsing plus a real call
+// through to the backend, and a malformed-arguments error path that never
+// reaches the backend. This covers the handler code registered inside
+// registerToolsFromBackendContext, which is otherwise only indirectly
+// exercised via the MCP transport in integration tests.
+func TestRegisterToolsFromBackend_HandlerInvocation(t *testing.T) {
+	require := require.New(t)
+	assert := assert.New(t)
+
+	// Note: this handler runs on the httptest server's own goroutine(s), not the
+	// test goroutine, so it uses manual error handling (writing an HTTP error
+	// status) rather than require/assert, which are unsafe to call outside the
+	// goroutine running the test.
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		method, ok := req["method"].(string)
+		if !ok {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		switch method {
+		case "initialize":
+			response := map[string]interface{}{
+				"jsonrpc": "2.0",
+				"id":      req["id"],
+				"result": map[string]interface{}{
+					"protocolVersion": "2024-11-05",
+					"capabilities":    map[string]interface{}{},
+					"serverInfo": map[string]interface{}{
+						"name":    "invoke-backend",
+						"version": "1.0.0",
+					},
+				},
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(response)
+
+		case "tools/list":
+			response := map[string]interface{}{
+				"jsonrpc": "2.0",
+				"id":      req["id"],
+				"result": map[string]interface{}{
+					"tools": []map[string]interface{}{
+						{
+							"name":        "echo",
+							"description": "Echoes the provided message",
+							"inputSchema": map[string]interface{}{
+								"type": "object",
+								"properties": map[string]interface{}{
+									"message": map[string]interface{}{"type": "string"},
+								},
+							},
+						},
+					},
+				},
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(response)
+
+		case "tools/call":
+			response := map[string]interface{}{
+				"jsonrpc": "2.0",
+				"id":      req["id"],
+				"result": map[string]interface{}{
+					"content": []map[string]interface{}{
+						{"type": "text", "text": "echoed"},
+					},
+				},
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(response)
+		}
+	}))
+	defer backend.Close()
+
+	cfg := &config.Config{
+		Servers: map[string]*config.ServerConfig{
+			"invoke-backend": {
+				Type: "http",
+				URL:  backend.URL,
+			},
+		},
+	}
+
+	us, err := NewUnified(context.Background(), cfg)
+	require.NoError(err)
+	defer us.Close()
+
+	require.NoError(us.registerToolsFromBackend("invoke-backend"))
+
+	us.toolsMu.RLock()
+	tool := us.tools["invoke-backend___echo"]
+	us.toolsMu.RUnlock()
+	require.NotNil(tool)
+	require.NotNil(tool.Handler)
+
+	t.Run("valid arguments call backend and return a result", func(t *testing.T) {
+		req := &sdk.CallToolRequest{
+			Params: &sdk.CallToolParamsRaw{
+				Name:      "invoke-backend___echo",
+				Arguments: json.RawMessage(`{"message":"hi"}`),
+			},
+		}
+		result, data, err := tool.Handler(context.Background(), req, nil)
+		require.NoError(err)
+		assert.NotNil(result)
+		assert.NotNil(data)
+	})
+
+	t.Run("malformed arguments return an error without calling the backend", func(t *testing.T) {
+		req := &sdk.CallToolRequest{
+			Params: &sdk.CallToolParamsRaw{
+				Name:      "invoke-backend___echo",
+				Arguments: json.RawMessage(`{invalid`),
+			},
+		}
+		result, _, err := tool.Handler(context.Background(), req, nil)
+		require.Error(err, "malformed JSON arguments should produce an error")
+		assert.NotNil(result, "an error CallToolResult should still be returned")
+	})
+
+	t.Run("nil params default to empty arguments", func(t *testing.T) {
+		req := &sdk.CallToolRequest{}
+		result, data, err := tool.Handler(context.Background(), req, nil)
+		require.NoError(err)
+		assert.NotNil(result)
+		assert.NotNil(data)
+	})
 }
