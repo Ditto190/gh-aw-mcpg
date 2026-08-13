@@ -229,6 +229,10 @@ func InitProvider(ctx context.Context, cfg *config.TracingConfig) (*Provider, er
 	}
 
 	sdkTP := sdktrace.NewTracerProvider(
+		// NOTE: panic recording (added in otel v1.44.0, disabled via
+		// sdktrace.WithoutPanicRecording) is intentionally left enabled: the gateway has no
+		// panic-recovery middleware that records equivalent span error attributes, so the
+		// SDK's automatic exception events are the only panic telemetry available.
 		sdktrace.WithBatcher(exporter,
 			// Tune batch processor for gateway throughput: halve the default batch
 			// size (512→256) and reduce the flush interval (5s→2s) to lower tail

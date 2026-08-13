@@ -4,6 +4,15 @@
 // reference these re-exports so that upgrading semconv only requires editing this file.
 // Keep this semconv version in lockstep with the pinned otel/sdk version in go.mod to
 // avoid resource schema conflicts ("conflicting Schema URL") during resource detection.
+//
+// Upgrading semconv:
+//  1. Bump the go.opentelemetry.io/otel* modules in go.mod (all otel modules share a version).
+//  2. Update the semconv import path below to the version shipped with that release
+//     (for example semconv/v1.43.0 ships with otel v1.45.0).
+//  3. Apply any renames listed in the release's migration guide, published at
+//     https://github.com/open-telemetry/opentelemetry-go/blob/main/semconv/v1.43.0/MIGRATION.md
+//     (substitute the new version in the path), then update expectedSchemaURL in
+//     semconv_test.go so the drift guard matches the new schema URL.
 package tracing
 
 import (

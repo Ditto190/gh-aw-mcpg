@@ -169,6 +169,18 @@ func TestServiceName_UsedInSpanAttribute(t *testing.T) {
 		"span must carry the service.version attribute")
 }
 
+// expectedSchemaURL is the semconv schema URL matching the semconv version imported by
+// semconv.go. Update it together with the semconv import path when bumping the otel modules.
+const expectedSchemaURL = "https://opentelemetry.io/schemas/1.43.0"
+
+// TestSchemaURL_MatchesPinnedSemconvVersion guards against semconv version drift: the
+// re-exported SchemaURL must stay in lockstep with the pinned otel/sdk version in go.mod,
+// otherwise resource detection fails with a "conflicting Schema URL" error.
+func TestSchemaURL_MatchesPinnedSemconvVersion(t *testing.T) {
+	assert.Equal(t, expectedSchemaURL, SchemaURL,
+		"semconv version changed; update semconv.go imports and expectedSchemaURL together")
+}
+
 // customError is a local error type used to test ErrorType with a non-stdlib error.
 type customError struct {
 	msg string
