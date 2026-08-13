@@ -261,14 +261,6 @@ mod tests {
         );
 
         for tool in tools {
-            // Prefix-based helpers already classify these without an explicit list entry.
-            if is_merge_operation(&tool)
-                || is_delete_operation(&tool)
-                || is_lock_operation(&tool)
-                || is_unlock_operation(&tool)
-            {
-                continue;
-            }
             assert!(
                 is_write_operation(&tool) || is_read_write_operation(&tool),
                 "`{tool}` is a repo-scoped write in tool_rules.rs but is missing from \
