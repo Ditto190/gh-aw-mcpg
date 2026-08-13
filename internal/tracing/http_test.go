@@ -11,7 +11,6 @@ import (
 	"go.opentelemetry.io/otel"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
-	semconv "go.opentelemetry.io/otel/semconv/v1.43.0"
 
 	"github.com/github/gh-aw-mcpg/internal/httputil"
 )
@@ -111,13 +110,13 @@ func TestWrapHTTPHandler_PatternMethodMismatch_OmitsRouteAttribute(t *testing.T)
 	var foundMethod, foundPath, foundRoute bool
 	for _, attr := range spans[0].Attributes {
 		switch attr.Key {
-		case semconv.HTTPRequestMethodKey:
+		case HTTPRequestMethodKey:
 			foundMethod = true
 			assert.Equal(t, http.MethodGet, attr.Value.AsString())
-		case semconv.URLPathKey:
+		case URLPathKey:
 			foundPath = true
 			assert.Equal(t, "/some/path", attr.Value.AsString())
-		case semconv.HTTPRouteKey:
+		case HTTPRouteKey:
 			foundRoute = true
 		}
 	}

@@ -16,7 +16,6 @@ import (
 	"go.opentelemetry.io/otel/propagation"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
-	semconv "go.opentelemetry.io/otel/semconv/v1.43.0"
 	"go.opentelemetry.io/otel/trace"
 	"go.opentelemetry.io/otel/trace/noop"
 
@@ -280,7 +279,7 @@ func TestInitProvider_ResourceContainsServiceName(t *testing.T) {
 	// Find service.name in the resource attributes.
 	var gotServiceName string
 	for _, attr := range res.Attributes() {
-		if attr.Key == semconv.ServiceNameKey {
+		if attr.Key == tracing.ServiceNameKey {
 			gotServiceName = attr.Value.AsString()
 			break
 		}
@@ -563,11 +562,11 @@ func TestWrapHTTPHandler_UsesHTTPRouteWhenPatternAvailable(t *testing.T) {
 
 	var foundRoute, foundPath bool
 	for _, attr := range spans[0].Attributes {
-		if attr.Key == semconv.HTTPRouteKey {
+		if attr.Key == tracing.HTTPRouteKey {
 			assert.Equal(t, "/mcp/{serverID}", attr.Value.AsString())
 			foundRoute = true
 		}
-		if attr.Key == semconv.URLPathKey {
+		if attr.Key == tracing.URLPathKey {
 			assert.Equal(t, "/mcp/github", attr.Value.AsString())
 			foundPath = true
 		}
@@ -601,10 +600,10 @@ func TestWrapHTTPHandler_UsesURLPathWhenPatternUnavailable(t *testing.T) {
 
 	var foundRoute, foundPath bool
 	for _, attr := range spans[0].Attributes {
-		if attr.Key == semconv.HTTPRouteKey {
+		if attr.Key == tracing.HTTPRouteKey {
 			foundRoute = true
 		}
-		if attr.Key == semconv.URLPathKey {
+		if attr.Key == tracing.URLPathKey {
 			assert.Equal(t, "/unmatched/path", attr.Value.AsString())
 			foundPath = true
 		}
@@ -988,7 +987,7 @@ func TestWrapHTTPHandler_RecordsExplicitStatusCode(t *testing.T) {
 	// Span must carry http.response.status_code = 404
 	var found bool
 	for _, attr := range span.Attributes {
-		if attr.Key == semconv.HTTPResponseStatusCodeKey {
+		if attr.Key == tracing.HTTPResponseStatusCodeKey {
 			assert.Equal(t, int64(http.StatusNotFound), attr.Value.AsInt64(), "status code attribute must be 404")
 			found = true
 		}
@@ -1025,7 +1024,7 @@ func TestWrapHTTPHandler_RecordsImplicit200(t *testing.T) {
 
 	var found bool
 	for _, attr := range spans[0].Attributes {
-		if attr.Key == semconv.HTTPResponseStatusCodeKey {
+		if attr.Key == tracing.HTTPResponseStatusCodeKey {
 			assert.Equal(t, int64(http.StatusOK), attr.Value.AsInt64(), "implicit Write must record status 200")
 			found = true
 		}
@@ -1079,7 +1078,7 @@ func TestWrapHTTPHandler_5xxSetsSpanStatusError(t *testing.T) {
 
 	var found bool
 	for _, attr := range span.Attributes {
-		if attr.Key == semconv.HTTPResponseStatusCodeKey {
+		if attr.Key == tracing.HTTPResponseStatusCodeKey {
 			assert.Equal(t, int64(http.StatusInternalServerError), attr.Value.AsInt64())
 			found = true
 		}

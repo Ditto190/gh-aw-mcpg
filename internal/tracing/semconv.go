@@ -8,7 +8,10 @@
 // Upgrading semconv:
 //  1. Bump the go.opentelemetry.io/otel* modules in go.mod (all otel modules share a version).
 //  2. Update the semconv import path below to the version shipped with that release
-//     (for example semconv/v1.43.0 ships with otel v1.45.0).
+//     (for example semconv/v1.43.0 ships with otel v1.45.0). This file must remain the
+//     only direct semconv import in the repository; verify with
+//     `grep -rn "otel/semconv" --include=*.go .` and route any new usage through a
+//     re-export added here.
 //  3. Apply any renames listed in the release's migration guide, published at
 //     https://github.com/open-telemetry/opentelemetry-go/blob/main/semconv/v1.43.0/MIGRATION.md
 //     (substitute the new version in the path), then update expectedSchemaURL in
@@ -35,6 +38,12 @@ const (
 	URLPathKey = semconv.URLPathKey
 	// ServerAddressKey is the server domain name or IP address.
 	ServerAddressKey = semconv.ServerAddressKey
+)
+
+// Resource semantic convention attribute keys.
+const (
+	// ServiceNameKey is the logical name of the service.
+	ServiceNameKey = semconv.ServiceNameKey
 )
 
 // Error semantic convention keys.
