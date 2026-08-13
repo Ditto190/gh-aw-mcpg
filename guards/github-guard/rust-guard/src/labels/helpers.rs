@@ -1147,6 +1147,23 @@ pub(crate) fn limit_items_with_log<'a, T>(items: &'a [T], tool_name: &str) -> &'
     }
 }
 
+/// Returns true if `tool_name` is a `read`-style dispatch tool (e.g.
+/// `pull_request_read`, `issue_read`) invoked with a `method` other than
+/// `"get"` (e.g. `get_check_runs`, `get_comments`, `get_sub_issues`).
+///
+/// Such sub-methods return non-PR/non-issue shaped objects (check runs,
+/// comments, files, reviews, etc.), so per-item response labeling must be
+/// skipped in favor of the resource-level labels already computed by
+/// `tool_rules` (via `get_pull_request_facts`/`get_issue_facts`).
+#[inline]
+pub(crate) fn is_non_get_read_sub_method(
+    tool_name: &str,
+    read_tool_name: &str,
+    method: &str,
+) -> bool {
+    tool_name == read_tool_name && !method.is_empty() && method != "get"
+}
+
 /// Extract a string field from a JSON value
 /// Returns empty string if field doesn't exist or isn't a string
 #[inline]
@@ -4513,5 +4530,52 @@ mod tests {
         let items: &[u32] = &[];
         let result = limit_items_with_log(items, "test_tool");
         assert!(result.is_empty());
+    }
+}
+
+#[cfg(test)]
+mod is_non_get_read_sub_method_tests {
+    use super::is_non_get_read_sub_method;
+
+    #[test]
+    fn matches_non_get_sub_methods() {
+        assert!(is_non_get_read_sub_method(
+            "pull_request_read",
+            "pull_request_read",
+            "get_check_runs"
+        ));
+        assert!(is_non_get_read_sub_method(
+            "issue_read",
+            "issue_read",
+            "get_sub_issues"
+        ));
+    }
+
+    #[test]
+    fn does_not_match_get_or_empty_method() {
+        assert!(!is_non_get_read_sub_method(
+            "pull_request_read",
+            "pull_request_read",
+            "get"
+        ));
+        assert!(!is_non_get_read_sub_method(
+            "pull_request_read",
+            "pull_request_read",
+            ""
+        ));
+    }
+
+    #[test]
+    fn does_not_match_other_tools() {
+        assert!(!is_non_get_read_sub_method(
+            "issue_read",
+            "pull_request_read",
+            "get_comments"
+        ));
+        assert!(!is_non_get_read_sub_method(
+            "list_issues",
+            "issue_read",
+            "get_comments"
+        ));
     }
 }

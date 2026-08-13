@@ -177,7 +177,7 @@ pub fn label_response_paths(
                 .get("method")
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
-            if tool_name == "pull_request_read" && !method.is_empty() && method != "get" {
+            if is_non_get_read_sub_method(tool_name, "pull_request_read", method) {
                 // Fall through — use resource-level labels
             } else if let Some(repo_item_ctx) = resolve_repo_item_context(
                 tool_name,
@@ -258,7 +258,7 @@ pub fn label_response_paths(
                 .get("method")
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
-            if tool_name == "issue_read" && !method.is_empty() && method != "get" {
+            if is_non_get_read_sub_method(tool_name, "issue_read", method) {
                 // Fall through — use resource-level labels
             } else if let Some(repo_item_ctx) = resolve_repo_item_context(
                 tool_name,
