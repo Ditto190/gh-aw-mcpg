@@ -6,11 +6,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	oteltrace "go.opentelemetry.io/otel/trace"
 
+	"github.com/github/gh-aw-mcpg/internal/tracing"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -50,6 +52,95 @@ func startTestSpan(t *testing.T, name string) (context.Context, oteltrace.Span, 
 	t.Cleanup(func() { _ = tp.Shutdown(t.Context()) })
 	ctx, span := tp.Tracer("test").Start(context.Background(), name)
 	return ctx, span, func() []tracetest.SpanStub { return exporter.GetSpans() }
+}
+
+func TestRecordRateLimitSpanEvent(t *testing.T) {
+	tests := []struct {
+		name            string
+		status          int
+		remaining       string
+		reset           string
+		wantRateLimit   bool
+		wantResetAttr   bool
+		expectedResetAt string
+	}{
+		{
+			name:            "rate-limited with parseable reset header",
+			status:          http.StatusTooManyRequests,
+			remaining:       "10",
+			reset:           "1700000000",
+			wantRateLimit:   true,
+			wantResetAttr:   true,
+			expectedResetAt: time.Unix(1700000000, 0).UTC().Format(time.RFC3339),
+		},
+		{
+			name:          "remaining zero without reset header",
+			status:        http.StatusOK,
+			remaining:     "0",
+			wantRateLimit: true,
+			wantResetAttr: false,
+		},
+		{
+			name:          "not rate-limited",
+			status:        http.StatusOK,
+			remaining:     "5",
+			wantRateLimit: false,
+			wantResetAttr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, difcSpan, getDifcSpans := startTestSpan(t, "difc")
+			_, fwdSpan, getFwdSpans := startTestSpan(t, "fwd")
+
+			resp := &http.Response{
+				StatusCode: tt.status,
+				Header:     make(http.Header),
+			}
+			resp.Header.Set("X-Ratelimit-Remaining", tt.remaining)
+			if tt.reset != "" {
+				resp.Header.Set("X-Ratelimit-Reset", tt.reset)
+			}
+
+			recordRateLimitSpanEvent(resp, fwdSpan, difcSpan)
+			difcSpan.End()
+			fwdSpan.End()
+
+			fwdSpans := getFwdSpans()
+			require.Len(t, fwdSpans, 1)
+			hasRateLimitHit := false
+			for _, attr := range fwdSpans[0].Attributes {
+				if attr.Key == tracing.RateLimitHit {
+					hasRateLimitHit = true
+					assert.True(t, attr.Value.AsBool())
+				}
+			}
+			assert.Equal(t, tt.wantRateLimit, hasRateLimitHit)
+
+			difcSpans := getDifcSpans()
+			require.Len(t, difcSpans, 1)
+			hasRateLimitEvent := false
+			hasResetAttr := false
+			for _, ev := range difcSpans[0].Events {
+				if ev.Name != "rate_limit.detected" {
+					continue
+				}
+				hasRateLimitEvent = true
+				for _, attr := range ev.Attributes {
+					if string(attr.Key) != "reset_at" {
+						continue
+					}
+					hasResetAttr = true
+					if tt.expectedResetAt != "" {
+						assert.Equal(t, tt.expectedResetAt, attr.Value.AsString())
+					}
+				}
+			}
+			assert.Equal(t, tt.wantRateLimit, hasRateLimitEvent)
+			assert.Equal(t, tt.wantResetAttr, hasResetAttr)
+		})
+	}
 }
 
 // TestStreamArtifactResponse_UpstreamError verifies that a network failure while

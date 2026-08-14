@@ -249,16 +249,7 @@ func (h *proxyHandler) handleWithDIFC(w http.ResponseWriter, r *http.Request, pa
 	}
 	if resp != nil {
 		fwdSpan.SetAttributes(tracing.HTTPResponseStatusCodeKey.Int(resp.StatusCode))
-		if rateLimited, resetHeader, _ := githubhttp.RateLimitSignal(resp); rateLimited {
-			fwdSpan.SetAttributes(tracing.RateLimitHit.Bool(true))
-			if difcSpan.IsRecording() {
-				eventAttrs := []attribute.KeyValue{}
-				if resetAt := githubhttp.ParseRateLimitResetHeader(resetHeader); !resetAt.IsZero() {
-					eventAttrs = append(eventAttrs, attribute.String("reset_at", resetAt.UTC().Format(time.RFC3339)))
-				}
-				difcSpan.AddEvent("rate_limit.detected", oteltrace.WithAttributes(eventAttrs...))
-			}
-		}
+		recordRateLimitSpanEvent(resp, fwdSpan, difcSpan)
 	}
 	if resp == nil {
 		// fwdSpan already received the error via rejectProxyRequest inside forwardAndReadBody;
@@ -493,16 +484,7 @@ func (h *proxyHandler) streamArtifactResponse(
 	defer resp.Body.Close()
 
 	fwdSpan.SetAttributes(tracing.HTTPResponseStatusCodeKey.Int(resp.StatusCode))
-	if rateLimited, resetHeader, _ := githubhttp.RateLimitSignal(resp); rateLimited {
-		fwdSpan.SetAttributes(tracing.RateLimitHit.Bool(true))
-		if difcSpan.IsRecording() {
-			eventAttrs := []attribute.KeyValue{}
-			if resetAt := githubhttp.ParseRateLimitResetHeader(resetHeader); !resetAt.IsZero() {
-				eventAttrs = append(eventAttrs, attribute.String("reset_at", resetAt.UTC().Format(time.RFC3339)))
-			}
-			difcSpan.AddEvent("rate_limit.detected", oteltrace.WithAttributes(eventAttrs...))
-		}
-	}
+	recordRateLimitSpanEvent(resp, fwdSpan, difcSpan)
 
 	copyResponseHeaders(w, resp)
 	injectRetryAfterIfRateLimited(w, resp)
@@ -549,6 +531,21 @@ func injectRetryAfterIfRateLimited(w http.ResponseWriter, resp *http.Response) {
 	logger.LogError("client",
 		"upstream rate limit hit: status=%d X-Ratelimit-Remaining=%s X-Ratelimit-Reset=%s retry-after=%ds",
 		resp.StatusCode, remaining, resetHeader, retryAfter)
+}
+
+// recordRateLimitSpanEvent marks the forward span and records a DIFC span event
+// when the upstream response indicates GitHub API rate limiting.
+func recordRateLimitSpanEvent(resp *http.Response, fwdSpan, difcSpan oteltrace.Span) {
+	if rateLimited, resetHeader, _ := githubhttp.RateLimitSignal(resp); rateLimited {
+		fwdSpan.SetAttributes(tracing.RateLimitHit.Bool(true))
+		if difcSpan.IsRecording() {
+			eventAttrs := []attribute.KeyValue{}
+			if resetAt := githubhttp.ParseRateLimitResetHeader(resetHeader); !resetAt.IsZero() {
+				eventAttrs = append(eventAttrs, attribute.String("reset_at", resetAt.UTC().Format(time.RFC3339)))
+			}
+			difcSpan.AddEvent("rate_limit.detected", oteltrace.WithAttributes(eventAttrs...))
+		}
+	}
 }
 
 var metadataPassthrough = map[string]bool{
