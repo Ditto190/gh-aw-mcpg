@@ -443,7 +443,10 @@ pub fn apply_tool_labels(
         // Mirrors existing rules for list_label, list_branches, list_issue_types,
         // list_issue_fields, and list_repository_collaborators.
         "ui_get" => {
-            let method = tool_args.get("method").and_then(|v| v.as_str()).unwrap_or("");
+            let method = tool_args
+                .get(field_names::METHOD)
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
             match method {
                 // Repo-scoped metadata: labels, milestones, branches
                 // S = S(repo); I = writer
