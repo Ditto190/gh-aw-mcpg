@@ -45,7 +45,20 @@ const (
 	// embeddedSchemaID is the $id URL used when registering the embedded schema with
 	// the JSON Schema compiler. It matches the $id field in the bundled schema file.
 	embeddedSchemaID = "https://docs.github.com/gh-aw/schemas/mcp-gateway-config.schema.json"
+
+	// maxRemoteRefDocuments bounds how many remote documents a single schema
+	// compilation may load through $ref resolution.
+	maxRemoteRefDocuments = 10
+
+	// maxRemoteRefTotalBytes bounds the aggregate size of all remote documents loaded
+	// during a single schema compilation.
+	maxRemoteRefTotalBytes = 10 * 1024 * 1024 // 10 MiB
 )
+
+// requireHTTPSSchemaURLs gates the HTTPS-only policy applied to remotely resolved
+// schema references, matching the policy enforced for top-level custom schema URLs.
+// It is a variable so tests can serve fixtures from httptest's HTTP server.
+var requireHTTPSSchemaURLs = true
 
 // schemaFetchRetryDelay is the base delay between retry attempts using exponential
 // backoff (1×, 2×, 4×, …). It is a variable so tests can override it to zero for
@@ -83,6 +96,16 @@ func fetchSchema(url string) ([]byte, error) {
 
 	client := &http.Client{
 		Timeout: schemaHTTPClientTimeout,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 10 {
+				return errors.New("stopped after 10 redirects")
+			}
+			// Never allow a redirect to downgrade an HTTPS request to plain HTTP.
+			if len(via) > 0 && via[0].URL.Scheme == "https" && req.URL.Scheme != "https" {
+				return fmt.Errorf("refusing insecure redirect from HTTPS to %q", req.URL.Scheme)
+			}
+			return nil
+		},
 	}
 
 	var resp *http.Response
@@ -147,17 +170,70 @@ func fetchSchema(url string) ([]byte, error) {
 	return schemaBytes, nil
 }
 
+// schemaURLLoader adapts fetchSchema into jsonschema.URLLoader. Each instance carries
+// a per-compilation budget so a chain of remote $ref documents cannot consume unbounded
+// time or memory.
+type schemaURLLoader struct {
+	mu        sync.Mutex
+	documents int
+	bytesUsed int
+}
+
+// reserveDocument accounts for one additional remote document, returning an error when
+// the per-compilation document budget is exhausted.
+func (l *schemaURLLoader) reserveDocument() error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	if l.documents+1 > maxRemoteRefDocuments {
+		return fmt.Errorf("too many remote schema references: limit is %d documents per schema compilation", maxRemoteRefDocuments)
+	}
+	l.documents++
+	return nil
+}
+
+func (l *schemaURLLoader) Load(url string) (any, error) {
+	if requireHTTPSSchemaURLs && !strings.HasPrefix(url, "https://") {
+		return nil, fmt.Errorf("refusing to load schema reference '%s': remote schema references must use HTTPS", url)
+	}
+	// Reserve a document slot before fetching so a long $ref chain stops early.
+	if err := l.reserveDocument(); err != nil {
+		return nil, err
+	}
+	schemaBytes, err := fetchSchema(url)
+	if err != nil {
+		return nil, err
+	}
+	if err := l.reserveBytes(len(schemaBytes)); err != nil {
+		return nil, err
+	}
+	return jsonschema.UnmarshalJSON(bytes.NewReader(schemaBytes))
+}
+
+// reserveBytes charges fetched bytes against the aggregate budget.
+func (l *schemaURLLoader) reserveBytes(size int) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	if l.bytesUsed+size > maxRemoteRefTotalBytes {
+		return fmt.Errorf("remote schema references too large: limit is %d bytes per schema compilation", maxRemoteRefTotalBytes)
+	}
+	l.bytesUsed += size
+	return nil
+}
+
 // newCompiler creates a JSON Schema compiler using the library defaults (Draft 2020-12).
-//
-// Note: this compiler has no custom loader set via UseLoader(). Schemas that contain
-// remote $ref pointers fail compilation with a loader error (for example,
-// "no URLLoader set").
-// The embedded mcp-gateway-config.schema.json is self-contained, so this is not a
-// problem for the main validation path. Custom server schemas fetched by
-// validateServerAgainstSchema are also compiled with this compiler and therefore must
-// also be self-contained (no remote $ref dependencies).
 func newCompiler() *jsonschema.Compiler {
 	return jsonschema.NewCompiler()
+}
+
+// newCompilerWithSchemaLoader creates a compiler that can resolve remote $ref URLs
+// using fetchSchema (retrying and size-limiting remote loads consistently). Each
+// compiler gets its own loader instance and therefore its own remote-reference budget.
+func newCompilerWithSchemaLoader() *jsonschema.Compiler {
+	compiler := newCompiler()
+	compiler.UseLoader(&schemaURLLoader{})
+	return compiler
 }
 
 // getOrCompileSchema retrieves the cached compiled schema or compiles it on first use.
@@ -387,6 +463,16 @@ func detailForKeyword(keyword string) (string, []string) {
 			"Details: Array items must be unique — duplicate values are not allowed",
 			"  → Remove duplicate entries from the array",
 		}
+	case "format":
+		return "format", []string{
+			"Details: Value does not match the required format",
+			"  → Update the value so it satisfies the configured format",
+		}
+	case "propertyNames":
+		return "propertyNames", []string{
+			"Details: Object contains a property name that violates the propertyNames schema",
+			"  → Rename the field so it satisfies the configured property name constraints",
+		}
 	}
 	return "", nil
 }
@@ -477,6 +563,17 @@ func formatErrorContext(ve *jsonschema.ValidationError, prefix string) string {
 		}
 	case *kind.Pattern:
 		addFromKeyword("pattern")
+	case *kind.Format:
+		addFromKeyword("format")
+	case *kind.PropertyNames:
+		if k.Property != "" {
+			addDetail("propertyNames",
+				fmt.Sprintf("Details: Invalid property name %q", k.Property),
+				"  → Rename the field so it satisfies the configured property name constraints",
+			)
+		} else {
+			addFromKeyword("propertyNames")
+		}
 	case *kind.AllOf:
 		addFromKeyword("allOf")
 	case *kind.OneOf, *kind.AnyOf:

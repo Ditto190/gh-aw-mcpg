@@ -304,8 +304,8 @@ func validateAgainstCustomSchema(name string, server *StdinServerConfig, schemaU
 		}
 	}
 
-	// Compile the custom schema
-	compiler := newCompiler()
+	// Compile the custom schema (with remote $ref support via fetchSchema loader)
+	compiler := newCompilerWithSchemaLoader()
 
 	// Add the schema with the fetch URL
 	if err := compiler.AddResource(schemaURL, schemaDoc); err != nil {

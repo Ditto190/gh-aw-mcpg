@@ -107,6 +107,18 @@ func TestFormatErrorContext(t *testing.T) {
 			wantContains: []string{"Value format is incorrect", "specific format or pattern"},
 		},
 		{
+			name:         "format validation error kind",
+			errorKind:    &kind.Format{Got: "not-an-email", Want: "email", Err: errors.New("invalid email")},
+			prefix:       "",
+			wantContains: []string{"Value does not match the required format", "satisfies the configured format"},
+		},
+		{
+			name:         "propertyNames error kind includes invalid property name",
+			errorKind:    &kind.PropertyNames{Property: "Bad_Name"},
+			prefix:       "",
+			wantContains: []string{"Invalid property name", "\"Bad_Name\"", "satisfies the configured property name constraints"},
+		},
+		{
 			name:         "minProperties error kind triggers range detail",
 			errorKind:    &kind.MinProperties{Got: 0, Want: 1},
 			prefix:       "  ",
@@ -291,6 +303,20 @@ func TestDetailForKeyword(t *testing.T) {
 			wantKey:           "pattern",
 			wantLinesLen:      2,
 			wantLine0Contains: "Value format is incorrect",
+		},
+		{
+			name:              "format returns format details",
+			keyword:           "format",
+			wantKey:           "format",
+			wantLinesLen:      2,
+			wantLine0Contains: "required format",
+		},
+		{
+			name:              "propertyNames returns property name details",
+			keyword:           "propertyNames",
+			wantKey:           "propertyNames",
+			wantLinesLen:      2,
+			wantLine0Contains: "violates the propertyNames schema",
 		},
 		{
 			name:              "range returns out-of-range details",
