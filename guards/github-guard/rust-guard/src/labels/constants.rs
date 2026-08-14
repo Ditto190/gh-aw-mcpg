@@ -36,7 +36,7 @@ pub mod policy_integrity {
 
 #[cfg(test)]
 mod tests {
-    use super::{desc_prefix, policy_integrity};
+    use super::{desc_prefix, field_names, policy_integrity};
 
     /// Ensures ORDER_LOW_TO_HIGH_PIPED stays in sync with ORDER_HIGH_TO_LOW.
     /// If a new integrity level is added or reordered, this test will catch the drift.
@@ -64,6 +64,7 @@ mod tests {
         assert_eq!(desc_prefix::RELEASE, "release:");
         assert_eq!(desc_prefix::GIST, "gist:");
         assert_eq!(desc_prefix::NOTIFICATION, "notification:");
+        assert_eq!(field_names::METHOD, "method");
     }
 }
 
@@ -93,6 +94,7 @@ pub mod field_names {
     pub const SHA: &str = "sha";
     pub const MERGED_AT: &str = "merged_at";
     pub const MERGED: &str = "merged";
+    pub const METHOD: &str = "method";
     // Commonly accessed response fields
     pub const FULL_NAME: &str = "full_name";
     pub const NUMBER: &str = "number";

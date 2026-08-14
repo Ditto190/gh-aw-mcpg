@@ -174,7 +174,7 @@ pub fn label_response_paths(
             // non-PR objects (e.g. get_check_runs, get_files, get_reviews).
             // Resource-level labels from tool_rules provide correct PR integrity.
             let method = tool_args
-                .get("method")
+                .get(field_names::METHOD)
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
             if is_non_get_read_sub_method(tool_name, "pull_request_read", method) {
@@ -255,7 +255,7 @@ pub fn label_response_paths(
             // Skip per-item labeling for issue_read sub-methods (get_comments,
             // get_sub_issues, get_labels). Resource-level labels from tool_rules apply.
             let method = tool_args
-                .get("method")
+                .get(field_names::METHOD)
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
             if is_non_get_read_sub_method(tool_name, "issue_read", method) {

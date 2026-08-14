@@ -146,7 +146,7 @@ pub fn label_response_items(
             // The resource-level labels from tool_rules (which call
             // get_pull_request_facts) provide correct PR-scoped integrity.
             let method = tool_args
-                .get("method")
+                .get(field_names::METHOD)
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
             if is_non_get_read_sub_method(tool_name, "pull_request_read", method) {
@@ -242,7 +242,7 @@ pub fn label_response_items(
             // get_comments, get_sub_issues, get_labels), skip per-item labeling.
             // Resource-level labels from tool_rules provide correct issue-scoped integrity.
             let method = tool_args
-                .get("method")
+                .get(field_names::METHOD)
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
             if is_non_get_read_sub_method(tool_name, "issue_read", method) {
