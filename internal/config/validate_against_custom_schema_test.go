@@ -366,3 +366,52 @@ func TestValidateAgainstCustomSchema_CacheHitWrongType(t *testing.T) {
 	require.NoError(t, err, "validation should succeed after ignoring the wrong-type cache entry")
 	assert.Equal(t, int32(1), requestCount.Load(), "schema should be fetched once after ignoring the bad cache entry")
 }
+
+func TestValidateAgainstCustomSchema_RemoteRefIsResolved(t *testing.T) {
+	var defsRequestCount atomic.Int32
+
+	var mockServer *httptest.Server
+	mockServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/root.json":
+			schema := map[string]interface{}{
+				"$schema": "http://json-schema.org/draft-07/schema#",
+				"$id":     mockServer.URL + "/root.json",
+				"$ref":    "./defs.json#/definitions/server",
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(schema)
+		case "/defs.json":
+			defsRequestCount.Add(1)
+			schema := map[string]interface{}{
+				"$schema": "http://json-schema.org/draft-07/schema#",
+				"$id":     mockServer.URL + "/defs.json",
+				"definitions": map[string]interface{}{
+					"server": map[string]interface{}{
+						"type": "object",
+						"properties": map[string]interface{}{
+							"type":      map[string]interface{}{"type": "string"},
+							"container": map[string]interface{}{"type": "string"},
+						},
+						"required": []string{"type", "container"},
+					},
+				},
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(schema)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer mockServer.Close()
+
+	server := &StdinServerConfig{
+		Type:      "mytype",
+		Container: "ghcr.io/example/mytype:latest",
+	}
+
+	err := validateAgainstCustomSchema("test-server", server, mockServer.URL+"/root.json", "mcpServers.test-server")
+
+	require.NoError(t, err, "schema compilation should resolve remote $ref via configured loader")
+	assert.Equal(t, int32(1), defsRequestCount.Load(), "remote referenced schema should be fetched once")
+}

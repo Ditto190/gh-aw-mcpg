@@ -147,17 +147,28 @@ func fetchSchema(url string) ([]byte, error) {
 	return schemaBytes, nil
 }
 
+// schemaURLLoader adapts fetchSchema into jsonschema.URLLoader.
+type schemaURLLoader struct{}
+
+func (schemaURLLoader) Load(url string) (any, error) {
+	schemaBytes, err := fetchSchema(url)
+	if err != nil {
+		return nil, err
+	}
+	return jsonschema.UnmarshalJSON(bytes.NewReader(schemaBytes))
+}
+
 // newCompiler creates a JSON Schema compiler using the library defaults (Draft 2020-12).
-//
-// Note: this compiler has no custom loader set via UseLoader(). Schemas that contain
-// remote $ref pointers fail compilation with a loader error (for example,
-// "no URLLoader set").
-// The embedded mcp-gateway-config.schema.json is self-contained, so this is not a
-// problem for the main validation path. Custom server schemas fetched by
-// validateServerAgainstSchema are also compiled with this compiler and therefore must
-// also be self-contained (no remote $ref dependencies).
 func newCompiler() *jsonschema.Compiler {
 	return jsonschema.NewCompiler()
+}
+
+// newCompilerWithSchemaLoader creates a compiler that can resolve remote $ref URLs
+// using fetchSchema (retrying and size-limiting remote loads consistently).
+func newCompilerWithSchemaLoader() *jsonschema.Compiler {
+	compiler := newCompiler()
+	compiler.UseLoader(schemaURLLoader{})
+	return compiler
 }
 
 // getOrCompileSchema retrieves the cached compiled schema or compiles it on first use.
@@ -387,6 +398,16 @@ func detailForKeyword(keyword string) (string, []string) {
 			"Details: Array items must be unique — duplicate values are not allowed",
 			"  → Remove duplicate entries from the array",
 		}
+	case "format":
+		return "format", []string{
+			"Details: Value does not match the required format",
+			"  → Update the value so it satisfies the configured format",
+		}
+	case "propertyNames":
+		return "propertyNames", []string{
+			"Details: Object contains an invalid property name",
+			"  → Rename the field so it matches the allowed property name pattern",
+		}
 	}
 	return "", nil
 }
@@ -477,6 +498,17 @@ func formatErrorContext(ve *jsonschema.ValidationError, prefix string) string {
 		}
 	case *kind.Pattern:
 		addFromKeyword("pattern")
+	case *kind.Format:
+		addFromKeyword("format")
+	case *kind.PropertyNames:
+		if k.Property != "" {
+			addDetail("propertyNames",
+				fmt.Sprintf("Details: Invalid property name %q", k.Property),
+				"  → Rename the field so it matches the allowed property name pattern",
+			)
+		} else {
+			addFromKeyword("propertyNames")
+		}
 	case *kind.AllOf:
 		addFromKeyword("allOf")
 	case *kind.OneOf, *kind.AnyOf:
