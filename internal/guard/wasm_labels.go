@@ -83,16 +83,24 @@ func (g *WasmGuard) LabelResource(ctx context.Context, toolName string, args any
 	const funcName = "label_resource"
 	resultJSON, err := g.callWasmGuardFunction(ctx, funcName, backend, input)
 	if err != nil {
+		logWasm.Printf("LabelResource callWasmGuardFunction failed: toolName=%s, error=%v", toolName, err)
 		return nil, difc.OperationWrite, err
 	}
 
 	// Parse result
 	response, err := unmarshalWasmResponse(funcName, resultJSON)
 	if err != nil {
+		logWasm.Printf("LabelResource response parsing failed: toolName=%s, error=%v", toolName, err)
 		return nil, difc.OperationWrite, err
 	}
 
-	return parseResourceResponse(response)
+	resource, operation, err := parseResourceResponse(response)
+	if err != nil {
+		logWasm.Printf("LabelResource parseResourceResponse failed: toolName=%s, error=%v", toolName, err)
+		return nil, difc.OperationWrite, err
+	}
+	logWasm.Printf("LabelResource completed: toolName=%s, operation=%s", toolName, operation)
+	return resource, operation, nil
 }
 
 // LabelResponse calls the WASM module's label_response function
@@ -118,31 +126,37 @@ func (g *WasmGuard) LabelResponse(ctx context.Context, toolName string, result a
 	const funcName = "label_response"
 	resultJSON, err := g.callWasmGuardFunction(ctx, funcName, backend, input)
 	if err != nil {
+		logWasm.Printf("LabelResponse callWasmGuardFunction failed: toolName=%s, error=%v", toolName, err)
 		return nil, err
 	}
 
 	// If empty result, return nil (no fine-grained labeling)
 	if len(resultJSON) == 0 {
+		logWasm.Printf("LabelResponse: empty response, no fine-grained labeling: toolName=%s", toolName)
 		return nil, nil
 	}
 
 	// Parse result - check for new path-based format first
 	responseMap, err := unmarshalWasmResponse(funcName, resultJSON)
 	if err != nil {
+		logWasm.Printf("LabelResponse response parsing failed: toolName=%s, error=%v", toolName, err)
 		return nil, err
 	}
 
 	// Check for path-based labeling format (preferred, more efficient)
 	if _, hasLabeledPaths := responseMap["labeled_paths"]; hasLabeledPaths {
+		logWasm.Printf("LabelResponse: using path-based labeling format: toolName=%s", toolName)
 		return parsePathLabeledResponse(resultJSON, result)
 	}
 
 	// Legacy format: check if it's a collection with "items"
 	if items, ok := responseMap["items"].([]any); ok && len(items) > 0 {
+		logWasm.Printf("LabelResponse: using legacy collection labeling format: toolName=%s, itemCount=%d", toolName, len(items))
 		return parseCollectionLabeledData(items)
 	}
 
 	// No fine-grained labeling
+	logWasm.Printf("LabelResponse: no fine-grained labeling applied: toolName=%s", toolName)
 	return nil, nil
 }
 
