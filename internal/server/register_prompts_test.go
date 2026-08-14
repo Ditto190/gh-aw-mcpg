@@ -7,10 +7,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/github/gh-aw-mcpg/internal/config"
 	"github.com/github/gh-aw-mcpg/internal/launcher"
 	"github.com/github/gh-aw-mcpg/internal/mcp"
+	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -221,4 +223,280 @@ func TestRegisterPromptsFromBackend_RegistersPrompts(t *testing.T) {
 
 	err := us.registerPromptsFromBackend(context.Background(), "prompts-server", conn)
 	assert.NoError(t, err, "should return nil when prompts are successfully registered")
+}
+
+// TestRegisterPromptsFromBackend_JSONRPCErrorResponse verifies that a JSON-RPC-level
+// error response (result.error) for prompts/list is treated as a graceful skip and
+// returns nil, exercising the handleResponseError branch in fetchBackendList.
+func TestRegisterPromptsFromBackend_JSONRPCErrorResponse(t *testing.T) {
+	promptsListCalled := make(chan struct{}, 10)
+	t.Cleanup(func() {
+		assert.Len(t, promptsListCalled, 1, "expected prompts/list to be called exactly once")
+	})
+
+	srv := newStreamableBackendWithPromptsCapability(t, func(w http.ResponseWriter, reqID interface{}) {
+		promptsListCalled <- struct{}{}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"jsonrpc": "2.0",
+			"id":      reqID,
+			"error": map[string]interface{}{
+				"code":    -32601,
+				"message": "Method not found",
+			},
+		})
+	})
+	defer srv.Close()
+
+	conn := connectStreamableBackend(t, srv)
+	us := minimalPromptsTestServer(t)
+
+	err := us.registerPromptsFromBackend(context.Background(), "prompts-server", conn)
+	assert.NoError(t, err, "a JSON-RPC error response for prompts/list should be treated as a graceful skip, not a fatal error")
+}
+
+// TestRegisterPromptsFromBackend_PromptHandlerInvocation verifies the full round-trip:
+// a registered prompt's handler correctly forwards a prompts/get request to the backend
+// (using the unprefixed prompt name and the caller-supplied arguments) and returns the
+// backend's result to the client unmodified. This exercises the handler closure body
+// registered via us.server.AddPrompt, including the success path of
+// executeBackendRequest[sdk.GetPromptResult].
+func TestRegisterPromptsFromBackend_PromptHandlerInvocation(t *testing.T) {
+	var gotPromptsGetName string
+	var gotPromptsGetArgs map[string]interface{}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		body, err := io.ReadAll(r.Body)
+		if err != nil || len(body) == 0 {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		var req map[string]interface{}
+		require.NoError(t, json.Unmarshal(body, &req))
+
+		method, _ := req["method"].(string)
+		switch method {
+		case "initialize":
+			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Mcp-Session-Id", "test-prompts-handler-session")
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"jsonrpc": "2.0",
+				"id":      req["id"],
+				"result": map[string]interface{}{
+					"protocolVersion": "2024-11-05",
+					"capabilities": map[string]interface{}{
+						"prompts": map[string]interface{}{},
+					},
+					"serverInfo": map[string]interface{}{
+						"name":    "prompts-capable-backend",
+						"version": "1.0.0",
+					},
+				},
+			})
+		case "notifications/initialized":
+			w.WriteHeader(http.StatusAccepted)
+		case "prompts/list":
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"jsonrpc": "2.0",
+				"id":      req["id"],
+				"result": map[string]interface{}{
+					"prompts": []map[string]interface{}{
+						{
+							"name":        "greet",
+							"description": "Greets the given name",
+						},
+					},
+				},
+			})
+		case "prompts/get":
+			params, _ := req["params"].(map[string]interface{})
+			gotPromptsGetName, _ = params["name"].(string)
+			if args, ok := params["arguments"].(map[string]interface{}); ok {
+				gotPromptsGetArgs = args
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"jsonrpc": "2.0",
+				"id":      req["id"],
+				"result": map[string]interface{}{
+					"description": "A greeting",
+					"messages": []map[string]interface{}{
+						{
+							"role": "user",
+							"content": map[string]interface{}{
+								"type": "text",
+								"text": "Hello, Ada!",
+							},
+						},
+					},
+				},
+			})
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{
+		Servers: map[string]*config.ServerConfig{
+			"prompts-server": {Type: "http", URL: srv.URL},
+		},
+	}
+	l := launcher.New(context.Background(), cfg)
+	defer l.Close()
+
+	conn, err := launcher.GetOrLaunch(l, "prompts-server")
+	require.NoError(t, err)
+	require.True(t, conn.BackendHasPromptsCapability())
+
+	us := &UnifiedServer{
+		server:   newSDKServer("test-prompts-handler", logUnified),
+		launcher: l,
+	}
+
+	err = us.registerPromptsFromBackend(context.Background(), "prompts-server", conn)
+	require.NoError(t, err, "prompt registration should succeed")
+
+	// Connect an SDK client through an in-memory transport and invoke the registered
+	// prompt to exercise the handler closure body end-to-end.
+	serverTransport, clientTransport := sdk.NewInMemoryTransports()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	go func() {
+		_ = us.server.Run(ctx, serverTransport)
+	}()
+
+	client := sdk.NewClient(&sdk.Implementation{Name: "prompt-test-client", Version: "1.0"}, &sdk.ClientOptions{})
+	clientSession, err := client.Connect(ctx, clientTransport, nil)
+	require.NoError(t, err)
+	defer clientSession.Close()
+
+	result, err := clientSession.GetPrompt(ctx, &sdk.GetPromptParams{
+		Name:      "prompts-server___greet",
+		Arguments: map[string]string{"name": "Ada"},
+	})
+	require.NoError(t, err, "invoking the registered prompt should succeed")
+	require.NotNil(t, result)
+	assert.Equal(t, "A greeting", result.Description)
+	require.Len(t, result.Messages, 1)
+
+	// Verify the backend received the unprefixed prompt name and forwarded arguments.
+	assert.Equal(t, "greet", gotPromptsGetName,
+		"backend should receive the unprefixed prompt name, not the server-prefixed one")
+	require.NotNil(t, gotPromptsGetArgs)
+	assert.Equal(t, "Ada", gotPromptsGetArgs["name"])
+}
+
+// TestRegisterPromptsFromBackend_PromptHandlerBackendError verifies that when the
+// backend prompts/get call fails, the registered prompt handler returns a wrapped
+// error to the client rather than panicking or silently succeeding.
+func TestRegisterPromptsFromBackend_PromptHandlerBackendError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		body, err := io.ReadAll(r.Body)
+		if err != nil || len(body) == 0 {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		var req map[string]interface{}
+		require.NoError(t, json.Unmarshal(body, &req))
+
+		method, _ := req["method"].(string)
+		switch method {
+		case "initialize":
+			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Mcp-Session-Id", "test-prompts-handler-error-session")
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"jsonrpc": "2.0",
+				"id":      req["id"],
+				"result": map[string]interface{}{
+					"protocolVersion": "2024-11-05",
+					"capabilities": map[string]interface{}{
+						"prompts": map[string]interface{}{},
+					},
+					"serverInfo": map[string]interface{}{
+						"name":    "prompts-capable-backend",
+						"version": "1.0.0",
+					},
+				},
+			})
+		case "notifications/initialized":
+			w.WriteHeader(http.StatusAccepted)
+		case "prompts/list":
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"jsonrpc": "2.0",
+				"id":      req["id"],
+				"result": map[string]interface{}{
+					"prompts": []map[string]interface{}{
+						{
+							"name":        "broken",
+							"description": "Always fails",
+						},
+					},
+				},
+			})
+		case "prompts/get":
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"jsonrpc": "2.0",
+				"id":      req["id"],
+				"error": map[string]interface{}{
+					"code":    -32000,
+					"message": "prompt rendering failed",
+				},
+			})
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{
+		Servers: map[string]*config.ServerConfig{
+			"prompts-server": {Type: "http", URL: srv.URL},
+		},
+	}
+	l := launcher.New(context.Background(), cfg)
+	defer l.Close()
+
+	conn, err := launcher.GetOrLaunch(l, "prompts-server")
+	require.NoError(t, err)
+	require.True(t, conn.BackendHasPromptsCapability())
+
+	us := &UnifiedServer{
+		server:   newSDKServer("test-prompts-handler-error", logUnified),
+		launcher: l,
+	}
+
+	err = us.registerPromptsFromBackend(context.Background(), "prompts-server", conn)
+	require.NoError(t, err, "prompt registration should succeed even though the prompt itself will fail on invocation")
+
+	serverTransport, clientTransport := sdk.NewInMemoryTransports()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	go func() {
+		_ = us.server.Run(ctx, serverTransport)
+	}()
+
+	client := sdk.NewClient(&sdk.Implementation{Name: "prompt-error-test-client", Version: "1.0"}, &sdk.ClientOptions{})
+	clientSession, err := client.Connect(ctx, clientTransport, nil)
+	require.NoError(t, err)
+	defer clientSession.Close()
+
+	_, err = clientSession.GetPrompt(ctx, &sdk.GetPromptParams{
+		Name: "prompts-server___broken",
+	})
+	require.Error(t, err, "the client should receive an error when the backend prompts/get call fails")
+	assert.Contains(t, err.Error(), "failed to get prompt broken from backend prompts-server")
 }
