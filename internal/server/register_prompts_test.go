@@ -226,8 +226,14 @@ func TestRegisterPromptsFromBackend_RegistersPrompts(t *testing.T) {
 }
 
 // TestRegisterPromptsFromBackend_JSONRPCErrorResponse verifies that a JSON-RPC-level
-// error response (result.error) for prompts/list is treated as a graceful skip and
-// returns nil, exercising the handleResponseError branch in fetchBackendList.
+// error object returned for prompts/list is treated as a graceful skip and returns nil.
+//
+// Note: registerPromptsFromBackend only reaches prompts/list for connections that declare
+// prompts capability, which requires an SDK session. For SDK-backed connections the SDK's
+// ListPrompts converts a JSON-RPC error object into a Go error, so this scenario reaches
+// fetchBackendList's handleRequestError callback rather than handleResponseError. The
+// handleResponseError branch itself is covered directly by
+// TestFetchBackendList_BackendErrorCanGracefullySkip in tool_registry_test.go.
 func TestRegisterPromptsFromBackend_JSONRPCErrorResponse(t *testing.T) {
 	promptsListCalled := make(chan struct{}, 10)
 	t.Cleanup(func() {
@@ -276,7 +282,11 @@ func TestRegisterPromptsFromBackend_PromptHandlerInvocation(t *testing.T) {
 			return
 		}
 		var req map[string]interface{}
-		require.NoError(t, json.Unmarshal(body, &req))
+		if err := json.Unmarshal(body, &req); err != nil {
+			t.Errorf("decode request body: %v", err)
+			http.Error(w, "decode request body: "+err.Error(), http.StatusBadRequest)
+			return
+		}
 
 		method, _ := req["method"].(string)
 		switch method {
@@ -385,6 +395,10 @@ func TestRegisterPromptsFromBackend_PromptHandlerInvocation(t *testing.T) {
 	require.NotNil(t, result)
 	assert.Equal(t, "A greeting", result.Description)
 	require.Len(t, result.Messages, 1)
+	assert.Equal(t, sdk.Role("user"), result.Messages[0].Role)
+	textContent, ok := result.Messages[0].Content.(*sdk.TextContent)
+	require.True(t, ok, "message content should be text content, got %T", result.Messages[0].Content)
+	assert.Equal(t, "Hello, Ada!", textContent.Text)
 
 	// Verify the backend received the unprefixed prompt name and forwarded arguments.
 	assert.Equal(t, "greet", gotPromptsGetName,
@@ -408,7 +422,11 @@ func TestRegisterPromptsFromBackend_PromptHandlerBackendError(t *testing.T) {
 			return
 		}
 		var req map[string]interface{}
-		require.NoError(t, json.Unmarshal(body, &req))
+		if err := json.Unmarshal(body, &req); err != nil {
+			t.Errorf("decode request body: %v", err)
+			http.Error(w, "decode request body: "+err.Error(), http.StatusBadRequest)
+			return
+		}
 
 		method, _ := req["method"].(string)
 		switch method {
@@ -499,4 +517,6 @@ func TestRegisterPromptsFromBackend_PromptHandlerBackendError(t *testing.T) {
 	})
 	require.Error(t, err, "the client should receive an error when the backend prompts/get call fails")
 	assert.Contains(t, err.Error(), "failed to get prompt broken from backend prompts-server")
+	assert.Contains(t, err.Error(), "prompt rendering failed",
+		"the backend's JSON-RPC error message should be propagated to the client")
 }
