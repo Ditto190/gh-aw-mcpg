@@ -215,7 +215,7 @@ func TestNonceCache_CheckAndSet_DuplicateWithConcurrentEviction(t *testing.T) {
 	// Register the nonce we will duplicate, with a fresh (non-expired) deadline.
 	require.True(t, c.checkAndSet("dup-nonce"), "first registration of dup-nonce should succeed")
 
-	// Re-plant the stale entry since it wasn't evicted by the call above (fresh cache before it).
+	// Re-plant the stale entry because the registration above evicted it.
 	c.entries["stale-unrelated"] = past
 	require.Len(t, c.entries, 2, "cache should contain dup-nonce and the re-planted stale entry")
 
