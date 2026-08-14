@@ -199,3 +199,31 @@ func TestNonceCache_EvictExpired_CalledBySeenNonce(t *testing.T) {
 	assert.NotContains(t, c.entries, "stale", "expired entry should be evicted by seenNonce")
 	assert.Contains(t, c.entries, "live", "live entry should still be present")
 }
+
+// TestNonceCache_CheckAndSet_DuplicateWithConcurrentEviction covers the branch in
+// checkAndSet where a duplicate nonce is detected in the same call that also
+// evicted expired entries (evicted > 0 combined with seen == true). This exercises
+// the logging path guarded by `if evicted > 0` inside the "seen" branch, which is
+// otherwise unreachable from the simpler duplicate-nonce tests in hmac_test.go.
+func TestNonceCache_CheckAndSet_DuplicateWithConcurrentEviction(t *testing.T) {
+	c := newNonceCache()
+	past := time.Now().Add(-1 * time.Second)
+
+	// Plant an already-expired, unrelated entry so evictExpired reports evicted > 0.
+	c.entries["stale-unrelated"] = past
+
+	// Register the nonce we will duplicate, with a fresh (non-expired) deadline.
+	require.True(t, c.checkAndSet("dup-nonce"), "first registration of dup-nonce should succeed")
+
+	// Re-plant the stale entry since it wasn't evicted by the call above (fresh cache before it).
+	c.entries["stale-unrelated"] = past
+	require.Len(t, c.entries, 2, "cache should contain dup-nonce and the re-planted stale entry")
+
+	// This call should both evict "stale-unrelated" (evicted=1) and detect
+	// "dup-nonce" as a duplicate (seen=true), hitting the `evicted > 0` branch
+	// inside the "seen" code path.
+	ok := c.checkAndSet("dup-nonce")
+	assert.False(t, ok, "duplicate nonce should be rejected even when eviction also occurred")
+	assert.NotContains(t, c.entries, "stale-unrelated", "expired unrelated entry should be evicted")
+	assert.Contains(t, c.entries, "dup-nonce", "duplicate nonce entry should remain untouched")
+}
