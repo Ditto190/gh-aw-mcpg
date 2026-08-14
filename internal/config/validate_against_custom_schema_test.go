@@ -2,8 +2,10 @@ package config
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"sync/atomic"
 	"testing"
 
@@ -368,7 +370,65 @@ func TestValidateAgainstCustomSchema_CacheHitWrongType(t *testing.T) {
 }
 
 func TestValidateAgainstCustomSchema_RemoteRefIsResolved(t *testing.T) {
+	// httptest serves plain HTTP, so relax the HTTPS-only policy for remote refs.
+	allowInsecureSchemaRefsForTest(t)
+
 	var defsRequestCount atomic.Int32
+
+	mockServer := newRemoteRefSchemaServer(t, &defsRequestCount)
+	defer mockServer.Close()
+
+	server := &StdinServerConfig{
+		Type:      "mytype",
+		Container: "ghcr.io/example/mytype:latest",
+	}
+
+	err := validateAgainstCustomSchema("test-server", server, mockServer.URL+"/root.json", "mcpServers.test-server")
+
+	require.NoError(t, err, "schema compilation should resolve remote $ref via configured loader")
+	assert.Equal(t, int32(1), defsRequestCount.Load(), "remote referenced schema should be fetched once")
+
+	// The constraints defined in the referenced document must be enforced: `container`
+	// is required there, so omitting it fails validation using the cached schema.
+	invalidServer := &StdinServerConfig{Type: "mytype"}
+	err = validateAgainstCustomSchema("test-server", invalidServer, mockServer.URL+"/root.json", "mcpServers.test-server")
+
+	require.Error(t, err, "constraints from the referenced schema should be enforced")
+	assert.Contains(t, err.Error(), "container", "error should mention the missing required property")
+	assert.Equal(t, int32(1), defsRequestCount.Load(), "cached compiled schema should not refetch the dependency")
+}
+
+func TestValidateAgainstCustomSchema_RemoteRefRequiresHTTPS(t *testing.T) {
+	var defsRequestCount atomic.Int32
+
+	mockServer := newRemoteRefSchemaServer(t, &defsRequestCount)
+	defer mockServer.Close()
+
+	server := &StdinServerConfig{
+		Type:      "mytype",
+		Container: "ghcr.io/example/mytype:latest",
+	}
+
+	err := validateAgainstCustomSchema("test-server", server, mockServer.URL+"/root.json", "mcpServers.test-server")
+
+	require.Error(t, err, "insecure remote $ref should be rejected")
+	assert.Contains(t, err.Error(), "must use HTTPS", "error should explain the HTTPS-only policy")
+	assert.Equal(t, int32(0), defsRequestCount.Load(), "insecure dependency should never be fetched")
+}
+
+// allowInsecureSchemaRefsForTest relaxes the HTTPS-only remote $ref policy for the
+// duration of a test so httptest's HTTP server can serve schema fixtures.
+func allowInsecureSchemaRefsForTest(t *testing.T) {
+	t.Helper()
+	original := requireHTTPSSchemaURLs
+	requireHTTPSSchemaURLs = false
+	t.Cleanup(func() { requireHTTPSSchemaURLs = original })
+}
+
+// newRemoteRefSchemaServer serves a root schema whose $ref points at a second document
+// that requires the `container` field.
+func newRemoteRefSchemaServer(t *testing.T, defsRequestCount *atomic.Int32) *httptest.Server {
+	t.Helper()
 
 	var mockServer *httptest.Server
 	mockServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -403,6 +463,33 @@ func TestValidateAgainstCustomSchema_RemoteRefIsResolved(t *testing.T) {
 			http.NotFound(w, r)
 		}
 	}))
+	return mockServer
+}
+
+func TestValidateAgainstCustomSchema_RemoteRefBudgetIsEnforced(t *testing.T) {
+	// httptest serves plain HTTP, so relax the HTTPS-only policy for remote refs.
+	allowInsecureSchemaRefsForTest(t)
+
+	var requestCount atomic.Int32
+
+	// Serve an unbounded chain of documents: /chain/0.json → /chain/1.json → …
+	var mockServer *httptest.Server
+	mockServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount.Add(1)
+		next := r.URL.Path[len("/chain/"):]
+		index, err := strconv.Atoi(next[:len(next)-len(".json")])
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		schema := map[string]interface{}{
+			"$schema": "http://json-schema.org/draft-07/schema#",
+			"$id":     fmt.Sprintf("%s/chain/%d.json", mockServer.URL, index),
+			"$ref":    fmt.Sprintf("%s/chain/%d.json", mockServer.URL, index+1),
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(schema)
+	}))
 	defer mockServer.Close()
 
 	server := &StdinServerConfig{
@@ -410,8 +497,10 @@ func TestValidateAgainstCustomSchema_RemoteRefIsResolved(t *testing.T) {
 		Container: "ghcr.io/example/mytype:latest",
 	}
 
-	err := validateAgainstCustomSchema("test-server", server, mockServer.URL+"/root.json", "mcpServers.test-server")
+	err := validateAgainstCustomSchema("test-server", server, mockServer.URL+"/chain/0.json", "mcpServers.test-server")
 
-	require.NoError(t, err, "schema compilation should resolve remote $ref via configured loader")
-	assert.Equal(t, int32(1), defsRequestCount.Load(), "remote referenced schema should be fetched once")
+	require.Error(t, err, "an unbounded $ref chain must be rejected")
+	assert.Contains(t, err.Error(), "too many remote schema references", "error should report the exhausted budget")
+	// One direct fetch of the root document plus at most the loader document budget.
+	assert.LessOrEqual(t, requestCount.Load(), int32(maxRemoteRefDocuments+1), "loader must stop fetching once the budget is exhausted")
 }

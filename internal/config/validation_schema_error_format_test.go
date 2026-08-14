@@ -116,7 +116,7 @@ func TestFormatErrorContext(t *testing.T) {
 			name:         "propertyNames error kind includes invalid property name",
 			errorKind:    &kind.PropertyNames{Property: "Bad_Name"},
 			prefix:       "",
-			wantContains: []string{"Invalid property name", "\"Bad_Name\"", "allowed property name pattern"},
+			wantContains: []string{"Invalid property name", "\"Bad_Name\"", "satisfies the configured property name constraints"},
 		},
 		{
 			name:         "minProperties error kind triggers range detail",
@@ -316,7 +316,7 @@ func TestDetailForKeyword(t *testing.T) {
 			keyword:           "propertyNames",
 			wantKey:           "propertyNames",
 			wantLinesLen:      2,
-			wantLine0Contains: "invalid property name",
+			wantLine0Contains: "violates the propertyNames schema",
 		},
 		{
 			name:              "range returns out-of-range details",
