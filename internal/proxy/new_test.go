@@ -52,15 +52,15 @@ func TestNew_SuccessWithoutPolicy(t *testing.T) {
 		WasmPath: wasmPath,
 	})
 
-require.NoError(t, err)
-require.NotNil(t, s)
-wasmGuard, ok := s.guard.(interface {
-	Close(context.Context) error
-})
-require.True(t, ok)
-t.Cleanup(func() {
-	require.NoError(t, wasmGuard.Close(context.Background()))
-})
+	require.NoError(t, err)
+	require.NotNil(t, s)
+	wasmGuard, ok := s.guard.(interface {
+		Close(context.Context) error
+	})
+	require.True(t, ok)
+	t.Cleanup(func() {
+		require.NoError(t, wasmGuard.Close(context.Background()))
+	})
 	assert.NotNil(t, s.guard)
 	assert.Equal(t, DefaultGitHubAPIBase, s.githubAPIURL)
 	assert.Empty(t, s.githubToken)
