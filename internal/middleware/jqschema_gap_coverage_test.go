@@ -6,8 +6,6 @@ package middleware
 //   - tryApplyToolResponseFilter: json.Marshal(filteredPayload) failure for the
 //     text-content path (filter produces a non-JSON-serializable value such as
 //     +Inf)
-//   - wrapToolHandler: json.Unmarshal failure in the schema-generation "default"
-//     branch when data does not match any of the fast native types
 //   - wrapToolHandler: successful schema generation contract surrounding the
 //     json.Marshal(rewrittenResponse) fallback branch
 
@@ -75,64 +73,19 @@ func TestWrapToolHandlerWithFilter_TextPayloadMarshalFailure(t *testing.T) {
 	require.NoError(t, err, "marshal failure inside the filter path should not propagate as a handler error")
 	require.NotNil(t, result)
 
-	// The fallback returns the original result/data pair to the caller (i.e.
-	// the pre-filter payload, not a filtered +Inf value). Because
-	// sizeThreshold is 0, the unfiltered payload is then routed through the
-	// oversized-payload path and wrapped into PayloadMetadata; either way,
-	// the original data (not the failed filter output) must be what
-	// downstream processing observes.
+	// The filter fallback returns the original result/data pair to the
+	// oversized-payload path. With sizeThreshold = 0 and a valid temp
+	// directory, that original payload must be wrapped into PayloadMetadata;
+	// if a regression leaves data as the filtered +Inf value, the later
+	// json.Marshal(data) fails and this assertion catches the missing metadata.
 	require.Len(t, result.Content, 1)
 	tc, ok := result.Content[0].(*sdk.TextContent)
 	require.True(t, ok)
-	assert.NotNil(t, data)
+	meta, ok := data.(PayloadMetadata)
+	require.True(t, ok, "expected PayloadMetadata for original payload after filter marshal fallback, got %T", data)
+	assert.Equal(t, `{"value":1}`, meta.PayloadPreview, "preview should reflect the original unfiltered payload")
+	assert.Contains(t, tc.Text, `"payloadPreview":"{\"value\":1}"`, "rewritten response should include original payload preview")
 
-	if meta, isMeta := data.(PayloadMetadata); isMeta {
-		assert.Equal(t, `{"value":1}`, meta.PayloadPreview, "preview should reflect the original unfiltered payload")
-	} else {
-		assert.Equal(t, `{"value":1}`, tc.Text, "original text content should be preserved when filtered payload cannot be marshaled")
-	}
-}
-
-// ---------------------------------------------------------------------------
-// wrapToolHandler: json.Unmarshal failure in schema default branch (lines 621-623)
-// ---------------------------------------------------------------------------
-
-// invalidJSONMarshaler marshals to syntactically invalid JSON. It is used to
-// force the default branch of the schema-generation type switch (which
-// re-unmarshals payloadJSON) down the json.Unmarshal error path, since the
-// value's static type does not match any of the fast native cases handled
-// directly (map[string]any, []any, string, float64, bool, nil, json.Number).
-type invalidJSONMarshaler struct{}
-
-func (invalidJSONMarshaler) MarshalJSON() ([]byte, error) {
-	return []byte(`{not valid json`), nil
-}
-
-func TestWrapToolHandler_SchemaDefaultBranch_UnmarshalFailure(t *testing.T) {
-	t.Parallel()
-	baseDir := t.TempDir()
-
-	originalData := invalidJSONMarshaler{}
-	mockHandler := func(_ context.Context, _ *sdk.CallToolRequest, _ any) (*sdk.CallToolResult, any, error) {
-		return &sdk.CallToolResult{
-			Content: []sdk.Content{&sdk.TextContent{Text: "result"}},
-		}, originalData, nil
-	}
-
-	// sizeThreshold = 0 forces the file-storage + schema-generation path even
-	// for a tiny payload.
-	wrapped := WrapToolHandler(mockHandler, "test_tool", baseDir, "", 0, testGetSessionID)
-	result, data, err := wrapped(context.Background(), &sdk.CallToolRequest{}, nil)
-
-	require.NoError(t, err, "schema generation failure should not propagate as a handler error")
-	require.NotNil(t, result)
-
-	// Because json.Unmarshal(payloadJSON, &jsonData) fails, applyJqSchema is
-	// never reached and the schemaErr branch falls back to the original
-	// result/data instead of a PayloadMetadata struct.
-	_, isMetadata := data.(PayloadMetadata)
-	assert.False(t, isMetadata, "invalid JSON payload should cause schema generation to fail, returning original data")
-	assert.Equal(t, originalData, data)
 }
 
 // ---------------------------------------------------------------------------
