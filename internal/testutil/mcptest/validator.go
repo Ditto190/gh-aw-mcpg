@@ -6,6 +6,7 @@ import (
 
 	"github.com/github/gh-aw-mcpg/internal/logger"
 	"github.com/github/gh-aw-mcpg/internal/mcp"
+	"github.com/github/gh-aw-mcpg/internal/sanitize"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -96,12 +97,12 @@ func (v *ValidatorClient) CallTool(name string, arguments map[string]interface{}
 
 // ReadResource reads a resource from the MCP server
 func (v *ValidatorClient) ReadResource(uri string) (*sdk.ReadResourceResult, error) {
-	logValidator.Printf("Reading resource: uri=%s", uri)
+	logValidator.Printf("Reading resource: uri=%s", sanitize.RedactURL(uri))
 	result, err := v.session.ReadResource(v.ctx, &sdk.ReadResourceParams{
 		URI: uri,
 	})
 	if err != nil {
-		logValidator.Printf("ReadResource failed: uri=%s, err=%v", uri, err)
+		logValidator.Printf("ReadResource failed: uri=%s, err=%v", sanitize.RedactURL(uri), err)
 		return nil, fmt.Errorf("read resource %s: %w", uri, err)
 	}
 	return result, nil
