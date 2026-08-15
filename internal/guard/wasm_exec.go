@@ -13,11 +13,14 @@ import (
 // (LabelAgent, LabelResource, LabelResponse) hold g.mu for their entire
 // duration, satisfying this requirement.
 func (g *WasmGuard) callWasmFunction(ctx context.Context, funcName string, inputJSON []byte) ([]byte, error) {
+	logWasm.Printf("callWasmFunction: guard=%s, func=%s, inputSize=%d", g.name, funcName, len(inputJSON))
+
 	// If the module has already trapped, refuse further calls immediately.
 	// A WASM trap may corrupt the module's internal state (e.g. the global
 	// policy context stored by label_agent), so all subsequent calls are
 	// unsafe until the guard is reloaded.
 	if g.failed {
+		logWasm.Printf("callWasmFunction: guard=%s is unavailable after a previous trap", g.name)
 		return nil, fmt.Errorf("WASM guard '%s' is unavailable after a previous trap: %w", g.name, g.failedErr)
 	}
 
@@ -71,6 +74,7 @@ func (g *WasmGuard) callWasmFunction(ctx context.Context, funcName string, input
 
 		// If we got a result, return it
 		if result != nil {
+			logWasm.Printf("callWasmFunction: guard=%s, func=%s succeeded on attempt %d", g.name, funcName, attempt+1)
 			return result, nil
 		}
 
@@ -154,6 +158,7 @@ func (g *WasmGuard) tryCallWasmFunction(ctx context.Context, fn api.Function, me
 	}
 	if memSize < requiredMemory {
 		pages := (requiredMemory - memSize + 65535) / 65536 // Round up to pages
+		logWasm.Printf("Growing WASM memory: guard=%s, from=%d, to=%d, pages=%d", g.name, memSize, requiredMemory, pages)
 		_, success := mem.Grow(pages)
 		if !success {
 			return nil, 0, fmt.Errorf("failed to grow WASM memory from %d to %d bytes", memSize, requiredMemory)
