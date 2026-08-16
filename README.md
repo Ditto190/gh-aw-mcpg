@@ -31,7 +31,7 @@ This gateway is used with [GitHub Agentic Workflows](https://github.com/github/g
    }
    ```
 
-   Note: `port`, `domain`, and `agentId` shown above are example/recommended values; the `gateway` section and all of its fields are optional. When a field is present it is validated, but omitting `gateway` entirely is valid and uses built-in defaults. Optional server fields include `entrypoint`, `entrypointArgs`, `mounts`, `args`, `connectTimeout`, and `toolTimeout`; see [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for the complete server-field reference.
+   Note: for JSON stdin configuration the `gateway` section is **required**, and it must include `port`, `domain`, and one of `agentId` / `apiKey` (`apiKey` is a deprecated alias for `agentId`). The values shown above are examples; omitting `gateway` — or any of these required fields — fails schema validation at startup. All other `gateway` fields are optional and are validated when present. Optional server fields include `entrypoint`, `entrypointArgs`, `mounts`, `args`, `connectTimeout`, and `toolTimeout`; see [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for the complete server-field reference.
 
    Looking for complete examples? See [`config.example.toml`](config.example.toml), [`config.example-payload-threshold.toml`](config.example-payload-threshold.toml), and [`example-http-config.json`](example-http-config.json).
 
