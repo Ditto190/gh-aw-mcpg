@@ -5684,6 +5684,7 @@ mod tests {
 
         for op in &[
             "copy_project",
+            "create_project",
             "delete_project",
             "link_project",
             "unlink_project",
