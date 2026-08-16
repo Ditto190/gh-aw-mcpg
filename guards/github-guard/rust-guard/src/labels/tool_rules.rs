@@ -771,6 +771,7 @@ pub fn apply_tool_labels(
         | "delete_project_item"
         // Synthetic CLI-only coverage for additional Projects v2 mutations
         | "copy_project"
+        | "create_project"
         | "delete_project"
         | "link_project"
         | "unlink_project"
