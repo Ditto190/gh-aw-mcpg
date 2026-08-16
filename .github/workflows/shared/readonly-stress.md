@@ -72,12 +72,12 @@ recur on every future run of this test via this surface. Record it as
 confirm that guarantee; it structurally cannot exercise mcpg's own
 independent DIFC/guard enforcement layer, since the write tool call never
 reaches a write-capable backend to begin with. Independent evidence that the
-gateway's own enforcement layer blocks writes when a backend *does* expose
-them is covered by `internal/guard` and `internal/difc` unit tests and by the
-proxy-level DIFC checks in `smoke-proxy-github-script.md` (REST/GraphQL
-surface); a dedicated MCP-tool-level probe would require launching the
-backend outside gh-aw's `tools.github:` wrapper and is tracked as follow-up
-work rather than attempted here.
+gateway's own DIFC write checks work is covered by `internal/guard` and
+`internal/difc` unit tests. `smoke-proxy-github-script.md` exercises
+proxy-level REST/GraphQL read filtering, not write blocking; a dedicated
+MCP-tool-level probe would require launching the backend outside gh-aw's
+`tools.github:` wrapper and is tracked as follow-up work rather than attempted
+here.
 
 **Before attempting any write**, list the available GitHub MCP tools (e.g. via
 whatever tool-discovery mechanism the engine exposes) and record which of the
