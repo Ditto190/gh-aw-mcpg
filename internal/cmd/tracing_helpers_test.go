@@ -108,6 +108,46 @@ func TestInitTracingProviderWithFallback(t *testing.T) {
 		assert.False(t, warnCalled, "OTLP exporter construction is lazy; no warning expected")
 		assert.True(t, provider.IsEnabled(), "Configured endpoint should produce an SDK (non-noop) provider")
 	})
+
+	t.Run("InitProvider failure falls back to noop provider and invokes warnf", func(t *testing.T) {
+		// A pre-cancelled context makes otlptracehttp.New fail immediately for the
+		// configured endpoint, exercising InitProvider's "len(exporters) == 0" error
+		// path and, in turn, the err != nil fallback branch inside
+		// initTracingProviderWithFallback (previously untested at 0% coverage).
+		t.Cleanup(func() { otel.SetTracerProvider(noop.NewTracerProvider()) })
+
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		t.Setenv("GH_AW_OTLP_ENDPOINTS", "")
+
+		cfg := &config.TracingConfig{
+			Endpoint:    "http://localhost:14318",
+			ServiceName: "test-fallback-service",
+		}
+
+		var warnCalled bool
+		var warnErr error
+		provider := initTracingProviderWithFallback(
+			ctx,
+			cfg,
+			"tracing init failed, falling back to noop: %v",
+			func(format string, args ...any) {
+				warnCalled = true
+				if len(args) > 0 {
+					if e, ok := args[0].(error); ok {
+						warnErr = e
+					}
+				}
+			},
+		)
+
+		require.NotNil(t, provider, "Fallback provider must not be nil")
+		assert.True(t, warnCalled, "warnf should be invoked when InitProvider fails")
+		require.Error(t, warnErr)
+		assert.Contains(t, warnErr.Error(), "failed to create any OTLP trace exporters")
+		assert.False(t, provider.IsEnabled(), "Fallback provider should be the noop provider")
+	})
 }
 
 // TestShutdownTracingProviderWithTimeout verifies that the shutdown helper
