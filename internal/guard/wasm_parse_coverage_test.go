@@ -286,10 +286,10 @@ func TestWasmAlloc_CallError(t *testing.T) {
 	require.Error(t, err, "calling alloc on a closed module should return an error")
 }
 
-// TestWasmDealloc_CallErrorIsLoggedNotPanicked covers the error-logging branch
-// in wasmDealloc (when deallocFn.Call returns an error) and verifies it does
+// TestWasmDealloc_CallErrorDoesNotPanic covers the call-error branch in
+// wasmDealloc (when deallocFn.Call returns an error) and verifies it does
 // not panic.
-func TestWasmDealloc_CallErrorIsLoggedNotPanicked(t *testing.T) {
+func TestWasmDealloc_CallErrorDoesNotPanic(t *testing.T) {
 	g, cleanup := setupWasmGuard(t, allocGuardWasm, "dealloc-call-error-test")
 	defer cleanup() // closing an already-closed module is a documented no-op
 
