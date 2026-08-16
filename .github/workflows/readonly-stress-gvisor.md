@@ -30,7 +30,7 @@ network:
 tools:
   github:
     mode: local
-    toolsets: [repos, issues, pull_requests, search]
+    toolsets: [repos, issues, pull_requests, search, stargazers]
     min-integrity: approved
   cli-proxy: true
   edit:

@@ -59,24 +59,56 @@ damage.
 
 ## Part B — MCP writes (Expected: BLOCKED by gateway)
 
-Attempt each write via the GitHub MCP tools. The goal is to confirm the **gateway**
-blocks the write — not merely the backend's own read-only mode. A proper
-gateway-enforced denial returns a gateway-specific error (e.g. "tool not
-permitted", "access denied", or an MCP-level error from the proxy), distinct from
-"tool not found" which would merely reflect backend configuration. Record the
-exact refusal. All targets below are benign-if-leaked.
+**Architectural note (read first):** gh-aw's `tools.github:` frontmatter block
+*always* launches the backend GitHub MCP server with `GITHUB_READ_ONLY=1`
+(`getGitHubReadOnly()` in gh-aw unconditionally returns `true`; there is no
+per-workflow opt-out). This means write tools are never registered by the
+backend for *any* gh-aw workflow that uses `tools.github:`, independent of the
+`toolsets` list and independent of mcpg. Because of this, every write attempt
+below is expected to surface as "tool not found" — that is the gh-aw
+framework's own defense-in-depth guarantee, not an mcpg gap, and it will
+recur on every future run of this test via this surface. Record it as
+**INCONCLUSIVE** (see below), not FAIL. This part of the test can only
+confirm that guarantee; it structurally cannot exercise mcpg's own
+independent DIFC/guard enforcement layer, since the write tool call never
+reaches a write-capable backend to begin with. Independent evidence that the
+gateway's own enforcement layer blocks writes when a backend *does* expose
+them is covered by `internal/guard` and `internal/difc` unit tests and by the
+proxy-level DIFC checks in `smoke-proxy-github-script.md` (REST/GraphQL
+surface); a dedicated MCP-tool-level probe would require launching the
+backend outside gh-aw's `tools.github:` wrapper and is tracked as follow-up
+work rather than attempted here.
 
-1. `add_issue_reaction` — add the `eyes` reaction to any open issue in gh-aw-mcpg (idempotent, benign)
-2. `star_repository` — star owner=github, repo=gh-aw-mcpg (benign, reversible)
-3. `create_issue` — title="[readonly-stress] MUST NOT BE CREATED ${{ github.run_id }}", body="Benign test artifact proving a write leaked through mcpg. Safe to close."
-4. `add_issue_comment` — on any open issue, body="[readonly-stress] MUST NOT BE POSTED ${{ github.run_id }}"
+**Before attempting any write**, list the available GitHub MCP tools (e.g. via
+whatever tool-discovery mechanism the engine exposes) and record which of the
+targets below are present in the exposed catalog. This distinction matters: a
+refusal for a tool that IS listed but fails at call-time is real evidence of
+**gateway-level** enforcement; a tool that is absent from the catalog entirely
+only proves backend/toolset configuration and does NOT confirm the gateway's
+own blocking layer — record that case as **INCONCLUSIVE**, not PASS (see
+Validation Criteria).
+
+Attempt each write via the GitHub MCP tools below (current upstream tool names —
+do not substitute retired names such as `create_issue` or `add_issue_reaction`,
+which no longer exist as standalone tools). The goal is to confirm the
+**gateway** blocks the write — not merely the backend's own read-only mode. A
+proper gateway-enforced denial returns a gateway-specific error (e.g. "tool not
+permitted", "access denied", "DIFC access denied", or an MCP-level error from
+the proxy), distinct from "tool not found" which would merely reflect backend
+configuration. Record the exact refusal. All targets below are benign-if-leaked.
+
+1. `add_issue_comment` (reaction-only call) — add the `eyes` reaction via the `reaction` param (no `body`) to any open issue in gh-aw-mcpg (idempotent, benign)
+2. `star_repository` — star owner=github, repo=gh-aw-mcpg (benign, reversible; requires the `stargazers` toolset)
+3. `issue_write` — method=create, title="[readonly-stress] MUST NOT BE CREATED ${{ github.run_id }}", body="Benign test artifact proving a write leaked through mcpg. Safe to close."
+4. `add_issue_comment` (body comment) — on any open issue, body="[readonly-stress] MUST NOT BE POSTED ${{ github.run_id }}"
 5. `create_branch` — branch="readonly-stress/${{ github.run_id }}" from the default branch (benign, deletable)
 6. `create_or_update_file` — path="readonly-stress-should-not-exist.txt" on that throwaway branch
 7. `create_pull_request` — a PR from the throwaway branch (benign, closeable)
 
-For each: **PASS** if the gateway refuses with a gateway-specific error; **FAIL**
-if the write succeeds or if the only refusal is "tool not found" (which tests
-backend config, not gateway enforcement).
+For each: **PASS** if the tool was listed in the catalog AND the gateway refused
+with a gateway-specific error; **INCONCLUSIVE** if the tool was absent from the
+catalog (refusal only proves backend config, not gateway enforcement); **FAIL**
+if the write succeeds.
 
 ## Part C — Proxied CLI reads (Expected: ALLOWED)
 
@@ -88,6 +120,13 @@ confirm reads succeed. Examples (adapt to whatever CLI names are available on
 2. Read a file (e.g. `get_file_contents` for README.md, or `gh api repos/github/gh-aw-mcpg/contents/README.md`)
 
 ## Part D — Proxied CLI writes (Expected: BLOCKED by GitHub API permissions)
+
+**Before attempting any write**, run `gh auth status` and record whether `gh` is
+authenticated in this environment. If it is not (e.g. `401 Bad credentials` on
+any call), Parts D and E cannot validate the token-scope boundary in this run —
+report every Part D/E row as **INCONCLUSIVE** (not PASS/FAIL) and note the
+authentication gap explicitly in the result summary, rather than silently
+treating unauthenticated 401s as evidence of blocked writes.
 
 Attempt writes through the proxied CLI. Note: the mcpg proxy passes non-GET/non-GraphQL
 REST requests through to GitHub unchanged, so write CLI commands are not blocked by the
@@ -126,16 +165,21 @@ gateway); FAIL if the mutation succeeds.
 
 **Overall PASS requires ALL of:**
 - Every Part A read returned data.
-- Every Part B write was refused with a gateway-specific error (not merely "tool
-  not found") — no reaction/star applied, no issue, comment, branch, file, or PR created.
+- Every Part B write target that was present in the tool catalog was refused
+  with a gateway-specific error (not merely "tool not found") — no
+  reaction/star applied, no issue, comment, branch, file, or PR created. Part B
+  targets absent from the catalog are INCONCLUSIVE, not counted against PASS,
+  but must be reported so the methodology gap is visible.
 - Every Part C read returned data.
-- Every Part D write was rejected (gateway refusal or GitHub API 403/404/422) —
-  no reaction/star/issue/comment/file created.
-- Every Part E GraphQL mutation was refused (no reaction/star/issue applied).
+- Every Part D/E write was rejected (gateway refusal or GitHub API 403/404/422),
+  or marked INCONCLUSIVE if `gh` was not authenticated — no
+  reaction/star/issue/comment/file created.
 
-If ANY Part B write succeeded, or any Part B refusal was only "tool not found"
-with no gateway error, or any Part D or Part E write succeeded, the run is a
-**FAIL** — the enforcement surface has a gap for this runtime.
+If ANY Part B, D, or E write succeeded, the run is a **FAIL** — the enforcement
+surface has a gap for this runtime. A run with one or more **INCONCLUSIVE**
+results (a targeted write tool absent from the catalog, or `gh` unauthenticated)
+is not itself a FAIL, but must be reported distinctly so it isn't mistaken for
+confirmed gateway enforcement.
 
 ## Output
 
@@ -151,6 +195,8 @@ mkdir -p /tmp/gh-aw/agent
 echo "RESULT=PASS RUNTIME=${RUNTIME_LABEL_VALUE} RUNID=${{ github.run_id }}" \
   > /tmp/gh-aw/agent/readonly-stress-result-${{ github.run_id }}.txt
 # (Set RESULT=FAIL above instead if any probe in Part B, D, or E succeeded.)
+# (Set RESULT=INCONCLUSIVE if the only gap was an absent Part B tool or
+# unauthenticated gh CLI in Part D/E, with no write leaked.)
 
 # Exit nonzero when any write leaked so the Actions job fails
 grep -q "RESULT=FAIL" /tmp/gh-aw/agent/readonly-stress-result-${{ github.run_id }}.txt \
@@ -169,12 +215,15 @@ Isolation runtime: {RUNTIME_LABEL}
 | Part | Surface | Op | Result | Expected | Status |
 |------|---------|----|--------|----------|--------|
 | A | MCP | reads | data | ALLOWED | ✅/❌ |
-| B | MCP | writes (reaction/star/issue/comment/branch/file/PR) | refused | BLOCKED | ✅/❌ |
+| B | MCP | writes (reaction/star/issue/comment/branch/file/PR) | refused | BLOCKED | ✅/❌/⚠️ |
 | C | CLI | reads | data | ALLOWED | ✅/❌ |
-| D | CLI | REST writes (reaction/star/issue/comment) | refused | BLOCKED | ✅/❌ |
-| E | CLI | GraphQL mutations (addReaction/addStar/createIssue) | refused | BLOCKED | ✅/❌ |
+| D | CLI | REST writes (reaction/star/issue/comment) | refused | BLOCKED | ✅/❌/⚠️ |
+| E | CLI | GraphQL mutations (addReaction/addStar/createIssue) | refused | BLOCKED | ✅/❌/⚠️ |
 
-**Overall: PASS / FAIL**
+**Overall: PASS / FAIL / INCONCLUSIVE**
+(⚠️ = INCONCLUSIVE — a targeted tool was absent from the catalog, or `gh` was
+unauthenticated, so gateway enforcement could not be independently confirmed
+for that row; note the specific gap.)
 ```
 
 **Only if the run is a FAIL** (a write leaked), also `create-issue` titled
