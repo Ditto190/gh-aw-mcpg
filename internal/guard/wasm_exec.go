@@ -158,7 +158,7 @@ func (g *WasmGuard) tryCallWasmFunction(ctx context.Context, fn api.Function, me
 	}
 	if memSize < requiredMemory {
 		pages := (requiredMemory - memSize + 65535) / 65536 // Round up to pages
-		logWasm.Printf("Growing WASM memory: guard=%s, from=%d, to=%d, pages=%d", g.name, memSize, requiredMemory, pages)
+		logWasm.Printf("Growing WASM memory: guard=%s, current=%d, required=%d, pages=%d", g.name, memSize, requiredMemory, pages)
 		_, success := mem.Grow(pages)
 		if !success {
 			return nil, 0, fmt.Errorf("failed to grow WASM memory from %d to %d bytes", memSize, requiredMemory)
