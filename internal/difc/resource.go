@@ -106,33 +106,16 @@ type LabeledItem struct {
 }
 
 func (c *CollectionLabeledData) Overall() *LabeledResource {
-	// Aggregate labels from all items - most restrictive
 	if len(c.Items) == 0 {
 		logResource.Print("CollectionLabeledData.Overall: empty collection, returning empty labels")
-		return NewLabeledResource("empty collection")
+	} else {
+		logResource.Printf("CollectionLabeledData.Overall: aggregating labels from %d items", len(c.Items))
 	}
-
-	logResource.Printf("CollectionLabeledData.Overall: aggregating labels from %d items", len(c.Items))
-	overall := NewLabeledResource("collection")
-	for _, item := range c.Items {
-		if item.Labels != nil {
-			// Union all secrecy tags (most restrictive)
-			overall.Secrecy.Label.Union(item.Labels.Secrecy.Label)
-			// Union all integrity tags (most restrictive)
-			overall.Integrity.Label.Union(item.Labels.Integrity.Label)
-		}
-	}
-
-	return overall
+	return aggregateLabels(c.Items, "empty collection", "collection")
 }
 
 func (c *CollectionLabeledData) ToResult() (interface{}, error) {
-	// Return all items as a slice
-	result := make([]interface{}, 0, len(c.Items))
-	for _, item := range c.Items {
-		result = append(result, item.Data)
-	}
-	return result, nil
+	return itemsToResult(c.Items), nil
 }
 
 // FilteredItemDetail pairs a filtered item with the reason it was denied
@@ -151,32 +134,40 @@ type FilteredCollectionLabeledData struct {
 }
 
 func (f *FilteredCollectionLabeledData) Overall() *LabeledResource {
-	// Only aggregate labels from accessible items
 	if len(f.Accessible) == 0 {
 		logResource.Print("FilteredCollectionLabeledData.Overall: no accessible items, returning empty labels")
-		return NewLabeledResource("empty filtered collection")
+	} else {
+		logResource.Printf("FilteredCollectionLabeledData.Overall: aggregating labels from %d accessible items (%d filtered)", len(f.Accessible), len(f.Filtered))
+	}
+	return aggregateLabels(f.Accessible, "empty filtered collection", "filtered collection")
+}
+
+func aggregateLabels(items []LabeledItem, emptyDescription, description string) *LabeledResource {
+	if len(items) == 0 {
+		return NewLabeledResource(emptyDescription)
 	}
 
-	logResource.Printf("FilteredCollectionLabeledData.Overall: aggregating labels from %d accessible items (%d filtered)", len(f.Accessible), len(f.Filtered))
-	overall := NewLabeledResource("filtered collection")
-	for _, item := range f.Accessible {
+	overall := NewLabeledResource(description)
+	for _, item := range items {
 		if item.Labels != nil {
 			overall.Secrecy.Label.Union(item.Labels.Secrecy.Label)
 			overall.Integrity.Label.Union(item.Labels.Integrity.Label)
 		}
 	}
-
 	return overall
 }
 
 func (f *FilteredCollectionLabeledData) ToResult() (interface{}, error) {
-	// Return only accessible items
 	logResource.Printf("FilteredCollectionLabeledData.ToResult: returning %d accessible items (filter_reason=%s)", len(f.Accessible), f.FilterReason)
-	result := make([]interface{}, 0, len(f.Accessible))
-	for _, item := range f.Accessible {
+	return itemsToResult(f.Accessible), nil
+}
+
+func itemsToResult(items []LabeledItem) []interface{} {
+	result := make([]interface{}, 0, len(items))
+	for _, item := range items {
 		result = append(result, item.Data)
 	}
-	return result, nil
+	return result
 }
 
 // GetAccessibleCount returns the number of accessible items
