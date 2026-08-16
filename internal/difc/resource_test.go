@@ -262,6 +262,27 @@ func TestCollectionLabeledData_ToResult(t *testing.T) {
 	}
 }
 
+func TestLabeledItemHelpers(t *testing.T) {
+	items := []LabeledItem{
+		{Data: "unlabeled"},
+		{
+			Data: "labeled",
+			Labels: &LabeledResource{
+				Secrecy:   *NewSecrecyLabel("private"),
+				Integrity: *NewIntegrityLabel("trusted"),
+			},
+		},
+	}
+
+	overall := aggregateLabels(items, "empty", "collection")
+
+	assert.Equal(t, "collection", overall.Description)
+	assert.True(t, overall.Secrecy.Label.Contains("private"))
+	assert.True(t, overall.Integrity.Label.Contains("trusted"))
+	assert.Equal(t, []interface{}{"unlabeled", "labeled"}, itemsToResult(items))
+	assert.Equal(t, "empty", aggregateLabels(nil, "empty", "collection").Description)
+}
+
 func TestFilteredCollectionLabeledData_Overall_EmptyAccessible(t *testing.T) {
 	f := &FilteredCollectionLabeledData{
 		Accessible: []LabeledItem{},
