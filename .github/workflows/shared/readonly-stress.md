@@ -171,8 +171,8 @@ gateway); FAIL if the mutation succeeds.
 - Every Part B write target that was present in the tool catalog was refused
   with a gateway-specific error (not merely "tool not found") — no
   reaction/star applied, no issue, comment, branch, file, or PR created. Part B
-  targets absent from the catalog are INCONCLUSIVE, not counted against PASS,
-  but must be reported so the methodology gap is visible.
+  targets absent from the catalog make the overall result INCONCLUSIVE unless
+  another probe fails, and must be reported so the methodology gap is visible.
 - Every Part C read returned data.
 - Every Part D/E write was rejected (gateway refusal or GitHub API 403/404/422),
   or marked INCONCLUSIVE if `gh` was not authenticated — no
