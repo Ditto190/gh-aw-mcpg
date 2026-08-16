@@ -119,7 +119,7 @@ func TestInitTracingProviderWithFallback(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 
-t.Setenv("GH_AW_OTLP_ENDPOINTS", "")
+		t.Setenv("GH_AW_OTLP_ENDPOINTS", "")
 
 		cfg := &config.TracingConfig{
 			Endpoint:    "http://localhost:14318",
