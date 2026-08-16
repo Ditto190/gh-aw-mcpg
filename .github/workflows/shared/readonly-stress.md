@@ -97,7 +97,10 @@ permitted", "access denied", "DIFC access denied", or an MCP-level error from
 the proxy), distinct from "tool not found" which would merely reflect backend
 configuration. Record the exact refusal. All targets below are benign-if-leaked.
 
-1. `add_issue_comment` (reaction-only call) — add the `eyes` reaction via the `reaction` param (no `body`) to any open issue in gh-aw-mcpg (idempotent, benign)
+1. `add_issue_comment` — call with `reaction="eyes"` and omit `body` (the tool
+   adds only a reaction, not a comment, when `body` is omitted; see the
+   upstream tool description: "at least one of body or reaction is required")
+   on any open issue in gh-aw-mcpg (idempotent, benign)
 2. `star_repository` — star owner=github, repo=gh-aw-mcpg (benign, reversible; requires the `stargazers` toolset)
 3. `issue_write` — method=create, title="[readonly-stress] MUST NOT BE CREATED ${{ github.run_id }}", body="Benign test artifact proving a write leaked through mcpg. Safe to close."
 4. `add_issue_comment` (body comment) — on any open issue, body="[readonly-stress] MUST NOT BE POSTED ${{ github.run_id }}"
