@@ -265,3 +265,65 @@ func TestWasmMemorySize_NilMemory(t *testing.T) {
 	assert.False(t, ok, "nil memory should return ok=false")
 	assert.Equal(t, uint32(0), size, "nil memory should return size=0")
 }
+
+// TestWasmAlloc_CallError covers the error path in wasmAlloc when the
+// underlying allocFn.Call itself returns an error (e.g. because the module
+// has already been closed), as opposed to returning a null pointer or no
+// result.
+func TestWasmAlloc_CallError(t *testing.T) {
+	g, cleanup := setupWasmGuard(t, allocGuardWasm, "alloc-call-error-test")
+	defer cleanup() // closing an already-closed module is a documented no-op
+
+	allocFn := g.module.ExportedFunction("alloc")
+	require.NotNil(t, allocFn)
+
+	// Close the module to force fn.Call to fail, then verify wasmAlloc
+	// surfaces that error rather than panicking.
+	ctx := context.Background()
+	require.NoError(t, g.module.Close(ctx))
+
+	_, err := g.wasmAlloc(ctx, allocFn, 4)
+	require.Error(t, err, "calling alloc on a closed module should return an error")
+}
+
+// TestWasmDealloc_CallErrorDoesNotPanic covers the call-error branch in
+// wasmDealloc (when deallocFn.Call returns an error) and verifies it does
+// not panic.
+func TestWasmDealloc_CallErrorDoesNotPanic(t *testing.T) {
+	g, cleanup := setupWasmGuard(t, allocGuardWasm, "dealloc-call-error-test")
+	defer cleanup() // closing an already-closed module is a documented no-op
+
+	deallocFn := g.module.ExportedFunction("dealloc")
+	require.NotNil(t, deallocFn)
+
+	ctx := context.Background()
+	require.NoError(t, g.module.Close(ctx))
+
+	// Should not panic even though the underlying call fails because the
+	// module has been closed.
+	assert.NotPanics(t, func() {
+		g.wasmDealloc(ctx, deallocFn, 256, 128)
+	})
+}
+
+// TestDecodeWasmCallResult_FunctionCallError covers the branch in
+// decodeWasmCallResult where fn.Call itself returns an error (e.g. because
+// the module has been closed), distinct from the module returning a negative
+// result code.
+func TestDecodeWasmCallResult_FunctionCallError(t *testing.T) {
+	g, cleanup := setupWasmGuard(t, allocGuardWasm, "decode-call-error-test")
+	defer cleanup() // closing an already-closed module is a documented no-op
+
+	fn := g.module.ExportedFunction("label_agent")
+	mem := g.module.Memory()
+	require.NotNil(t, fn)
+	require.NotNil(t, mem)
+
+	ctx := context.Background()
+	require.NoError(t, g.module.Close(ctx))
+
+	_, requiredSize, err := decodeWasmCallResult(ctx, fn, mem, 0, 0, 256, 4096)
+	require.Error(t, err, "calling a function on a closed module should return an error")
+	assert.ErrorContains(t, err, "WASM function call failed")
+	assert.Equal(t, uint32(0), requiredSize)
+}
