@@ -58,6 +58,7 @@ func WrapHTTPHandler(next http.Handler, spanName string, extraAttrs ...attribute
 			if strings.EqualFold(method, r.Method) {
 				route = path
 			} else {
+				logTracing.Printf("Route pattern method mismatch: span=%s, patternMethod=%s, requestMethod=%s", spanName, method, r.Method)
 				route = ""
 			}
 		}
@@ -86,6 +87,7 @@ func WrapHTTPHandler(next http.Handler, spanName string, extraAttrs ...attribute
 				if msg == "" {
 					msg = fmt.Sprintf("HTTP %d", srw.StatusCode)
 				}
+				logTracing.Printf("Recording span error: span=%s, statusCode=%d, msg=%s", spanName, srw.StatusCode, msg)
 				RecordSpanError(span, errors.New(msg), msg)
 			}
 		}()
