@@ -136,3 +136,15 @@ pub const MEDIUM_BUFFER_SIZE: usize = 512 * 1024; // 512KB
 
 /// Maximum items to process per response to prevent WASM memory exhaustion
 pub const MAX_ITEMS_PER_RESPONSE: usize = 100;
+
+/// Canonical tool-name strings for the granular `*_read` sub-tools and their
+/// non-granular legacy counterparts. Centralizing these prevents a typo in
+/// any one copy (e.g. `"pull_requests_read"`) from silently breaking a
+/// match arm or the `is_non_get_read_sub_method` skip-check, since these
+/// are plain `&str` comparisons with no compiler-checked exhaustiveness.
+pub mod tool_names {
+    pub const PULL_REQUEST_READ: &str = "pull_request_read";
+    pub const GET_PULL_REQUEST: &str = "get_pull_request";
+    pub const ISSUE_READ: &str = "issue_read";
+    pub const GET_ISSUE: &str = "get_issue";
+}

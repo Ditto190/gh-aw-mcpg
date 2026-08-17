@@ -7,7 +7,7 @@
 //! Returns JSON paths like `/items/0`, `/items/1` pointing to labeled objects
 //! in the response, rather than cloning the entire data.
 
-use super::constants::{desc_prefix, field_names, scope_names};
+use super::constants::{desc_prefix, field_names, scope_names, tool_names};
 use super::extract_mcp_response;
 use super::helpers::*;
 use serde_json::Value;
@@ -168,8 +168,8 @@ pub fn label_response_paths(
         | "list_pull_requests_ff_fields_param"
         | "search_pull_requests"
         | "search_pull_requests_ff_fields_param"
-        | "pull_request_read"
-        | "get_pull_request" => {
+        | tool_names::PULL_REQUEST_READ
+        | tool_names::GET_PULL_REQUEST => {
             // Skip per-item labeling for pull_request_read sub-methods that return
             // non-PR objects (e.g. get_check_runs, get_files, get_reviews).
             // Resource-level labels from tool_rules provide correct PR integrity.
@@ -177,7 +177,7 @@ pub fn label_response_paths(
                 .get(field_names::METHOD)
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
-            if is_non_get_read_sub_method(tool_name, "pull_request_read", method) {
+            if is_non_get_read_sub_method(tool_name, tool_names::PULL_REQUEST_READ, method) {
                 // Fall through — use resource-level labels
             } else if let Some(repo_item_ctx) = resolve_repo_item_context(
                 tool_name,
@@ -250,15 +250,15 @@ pub fn label_response_paths(
         | "list_issues_ff_fields_param"
         | "search_issues"
         | "search_issues_ff_fields_param"
-        | "issue_read"
-        | "get_issue" => {
+        | tool_names::ISSUE_READ
+        | tool_names::GET_ISSUE => {
             // Skip per-item labeling for issue_read sub-methods (get_comments,
             // get_sub_issues, get_labels). Resource-level labels from tool_rules apply.
             let method = tool_args
                 .get(field_names::METHOD)
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
-            if is_non_get_read_sub_method(tool_name, "issue_read", method) {
+            if is_non_get_read_sub_method(tool_name, tool_names::ISSUE_READ, method) {
                 // Fall through — use resource-level labels
             } else if let Some(repo_item_ctx) = resolve_repo_item_context(
                 tool_name,
