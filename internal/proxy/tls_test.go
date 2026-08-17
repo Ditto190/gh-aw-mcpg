@@ -3,6 +3,7 @@ package proxy
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/pem"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -245,6 +246,77 @@ func TestGenerateSelfSignedTLS_WritePEMErrors(t *testing.T) {
 			assert.ErrorContains(t, err, tt.wantErrMsg)
 		})
 	}
+}
+
+// TestWritePEM_Success verifies that writePEM writes a well-formed PEM file
+// to disk with the correct block type, permissions, and content, exercising
+// the full happy path (open, encode, close, and the final success log).
+func TestWritePEM_Success(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "cert.pem")
+	derBytes := []byte("dummy DER bytes for testing purposes")
+
+	err := writePEM(path, "CERTIFICATE", derBytes, 0600)
+	require.NoError(t, err, "writePEM should succeed for a valid path and writable directory")
+
+	info, statErr := os.Stat(path)
+	require.NoError(t, statErr, "the PEM file should exist after writePEM succeeds")
+	assert.Equal(t, os.FileMode(0600), info.Mode().Perm(), "file should be created with the requested permissions")
+
+	content, readErr := os.ReadFile(path)
+	require.NoError(t, readErr)
+	assert.Contains(t, string(content), "-----BEGIN CERTIFICATE-----")
+	assert.Contains(t, string(content), "-----END CERTIFICATE-----")
+
+	// Decoding back should recover the original DER bytes and block type.
+	block, _ := decodePEMBlock(t, content)
+	require.NotNil(t, block)
+	assert.Equal(t, "CERTIFICATE", block.Type)
+	assert.Equal(t, derBytes, block.Bytes)
+}
+
+// TestWritePEM_TruncatesExistingFile verifies that writePEM truncates and
+// overwrites a pre-existing file rather than appending to it (os.O_TRUNC).
+func TestWritePEM_TruncatesExistingFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "cert.pem")
+
+	// Pre-create the file with content much longer than the new content,
+	// so a failure to truncate would leave stale trailing bytes.
+	require.NoError(t, os.WriteFile(path, []byte(
+		"-----BEGIN OLD-----\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n-----END OLD-----\n"), 0644))
+
+	err := writePEM(path, "CERTIFICATE", []byte("new"), 0644)
+	require.NoError(t, err)
+
+	content, readErr := os.ReadFile(path)
+	require.NoError(t, readErr)
+	assert.NotContains(t, string(content), "OLD", "old content should be truncated, not appended to")
+	assert.Contains(t, string(content), "CERTIFICATE")
+}
+
+// TestWritePEM_EncodeFailure exercises the pem.Encode failure branch (and the
+// subsequent best-effort Close on the error path) by writing to /dev/full,
+// a special device that always reports "no space left on device" on write.
+// This branch was previously uncovered because ordinary filesystem writes
+// essentially never fail once the file has been opened successfully.
+func TestWritePEM_EncodeFailure(t *testing.T) {
+	if _, err := os.Stat("/dev/full"); err != nil {
+		t.Skip("/dev/full is not available on this platform")
+	}
+
+	err := writePEM("/dev/full", "CERTIFICATE", []byte("dummy DER payload padding padding padding"), 0644)
+	require.Error(t, err, "writePEM should surface the pem.Encode error when the underlying write fails")
+	assert.Contains(t, err.Error(), "no space left on device")
+}
+
+// decodePEMBlock is a small test helper that decodes the first PEM block from
+// data, failing the test if no block is found.
+func decodePEMBlock(t *testing.T, data []byte) (*pem.Block, []byte) {
+	t.Helper()
+	block, rest := pem.Decode(data)
+	require.NotNil(t, block, "expected data to contain a valid PEM block")
+	return block, rest
 }
 
 // TestRandomSerial_ReturnsPositive verifies that randomSerial always generates
