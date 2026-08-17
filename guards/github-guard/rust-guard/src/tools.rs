@@ -642,6 +642,33 @@ mod tests {
     }
 
     #[test]
+    fn test_release_issue_comment_and_repository_write_tools_are_write_operations() {
+        for op in &[
+            "create_release",
+            "delete_issue",
+            "delete_issue_comment",
+            "delete_release",
+            "delete_repository",
+            "edit_release",
+            "update_issue_comment",
+            "upload_release_asset",
+        ] {
+            assert!(
+                WRITE_OPERATIONS.binary_search(op).is_ok(),
+                "{op} must be explicitly listed in WRITE_OPERATIONS"
+            );
+            assert!(
+                is_write_operation(op),
+                "{op} must be classified as a write operation"
+            );
+            assert!(
+                !is_read_write_operation(op),
+                "{op} should not be in READ_WRITE_OPERATIONS"
+            );
+        }
+    }
+
+    #[test]
     fn test_is_merge_operation() {
         assert!(is_merge_operation("merge_pull_request"));
         assert!(is_merge_operation("merge_upstream"));
