@@ -642,7 +642,7 @@ mod tests {
     }
 
     #[test]
-    fn test_release_issue_comment_and_repository_delete_tools_are_write_operations() {
+    fn test_release_issue_comment_and_repository_write_tools_are_write_operations() {
         for op in &[
             "create_release",
             "delete_issue",
