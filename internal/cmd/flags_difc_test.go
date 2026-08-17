@@ -198,6 +198,65 @@ func TestParseDIFCSinkServerIDs(t *testing.T) {
 	}
 }
 
+// setupAllowOnlyScopeCmd builds a command with the AllowOnly scope flags
+// registered, mirroring how rootCmd is initialized in production.
+func setupAllowOnlyScopeCmd(t *testing.T) *cobra.Command {
+	t.Helper()
+	cmd := &cobra.Command{
+		Use:          "test",
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(new(bool), "allowonly-scope-public", false, "Use public AllowOnly scope")
+	cmd.Flags().StringVar(new(string), "allowonly-scope-owner", "", "AllowOnly owner scope value")
+	cmd.MarkFlagsMutuallyExclusive("allowonly-scope-public", "allowonly-scope-owner")
+	return cmd
+}
+
+// TestAllowOnlyScopeFlagsMutuallyExclusive verifies that cobra's
+// MarkFlagsMutuallyExclusive constraint on --allowonly-scope-public and
+// --allowonly-scope-owner is wired up correctly.
+func TestAllowOnlyScopeFlagsMutuallyExclusive(t *testing.T) {
+	t.Run("public and owner together are rejected by cobra", func(t *testing.T) {
+		cmd := setupAllowOnlyScopeCmd(t)
+		cmd.SetArgs([]string{"--allowonly-scope-public", "--allowonly-scope-owner", "octocat"})
+		err := cmd.Execute()
+		require.Error(t, err, "should fail when both --allowonly-scope-public and --allowonly-scope-owner are provided")
+		assert.Contains(t, err.Error(), "allowonly-scope-public", "error should mention allowonly-scope-public")
+		assert.Contains(t, err.Error(), "allowonly-scope-owner", "error should mention allowonly-scope-owner")
+	})
+
+	t.Run("public alone is accepted", func(t *testing.T) {
+		cmd := setupAllowOnlyScopeCmd(t)
+		cmd.SetArgs([]string{"--allowonly-scope-public"})
+		err := cmd.Execute()
+		require.NoError(t, err, "should succeed when only --allowonly-scope-public is provided")
+	})
+
+	t.Run("owner alone is accepted", func(t *testing.T) {
+		cmd := setupAllowOnlyScopeCmd(t)
+		cmd.SetArgs([]string{"--allowonly-scope-owner", "octocat"})
+		err := cmd.Execute()
+		require.NoError(t, err, "should succeed when only --allowonly-scope-owner is provided")
+	})
+
+	t.Run("neither flag is accepted", func(t *testing.T) {
+		cmd := setupAllowOnlyScopeCmd(t)
+		cmd.SetArgs([]string{})
+		err := cmd.Execute()
+		require.NoError(t, err, "should succeed when neither AllowOnly scope flag is provided")
+	})
+}
+
+// TestAllowOnlyScopeFlagsRegistered verifies that the AllowOnly scope flags
+// exist on the root command.
+func TestAllowOnlyScopeFlagsRegistered(t *testing.T) {
+	assert.NotNil(t, rootCmd.Flags().Lookup("allowonly-scope-public"), "allowonly-scope-public flag should be registered on rootCmd")
+	assert.NotNil(t, rootCmd.Flags().Lookup("allowonly-scope-owner"), "allowonly-scope-owner flag should be registered on rootCmd")
+}
+
 func TestBuildAllowOnlyPolicy(t *testing.T) {
 	t.Run("public scope valid", func(t *testing.T) {
 		policy, err := config.BuildAllowOnlyPolicy(true, "", "", "none")
