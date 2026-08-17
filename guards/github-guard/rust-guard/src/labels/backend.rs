@@ -13,7 +13,7 @@ use std::sync::{Mutex, OnceLock};
 use std::thread;
 use std::time::Duration;
 
-use super::constants::{field_names, MEDIUM_BUFFER_SIZE, SMALL_BUFFER_SIZE};
+use super::constants::{field_names, tool_names, MEDIUM_BUFFER_SIZE, SMALL_BUFFER_SIZE};
 use super::helpers::{get_author_association, is_forked_pr, is_pr_merged};
 
 /// Backend callback signature used for GitHub MCP tool calls.
@@ -415,8 +415,12 @@ pub(crate) fn get_pull_request_facts_with_callback(
     });
 
     let args_str = args.to_string();
-    let result =
-        call_backend_with_retry(callback, "pull_request_read", &args_str, MEDIUM_BUFFER_SIZE)?;
+    let result = call_backend_with_retry(
+        callback,
+        tool_names::PULL_REQUEST_READ,
+        &args_str,
+        MEDIUM_BUFFER_SIZE,
+    )?;
     if result.is_empty() {
         return None;
     }
@@ -481,7 +485,12 @@ pub(crate) fn get_issue_author_info_with_callback(
     });
 
     let args_str = args.to_string();
-    let result = call_backend_with_retry(callback, "issue_read", &args_str, SMALL_BUFFER_SIZE)?;
+    let result = call_backend_with_retry(
+        callback,
+        tool_names::ISSUE_READ,
+        &args_str,
+        SMALL_BUFFER_SIZE,
+    )?;
     if result.is_empty() {
         return None;
     }

@@ -6,7 +6,8 @@
 use serde_json::Value;
 
 use super::constants::{
-    desc_prefix, field_names, scope_names, SENSITIVE_FILE_KEYWORDS, SENSITIVE_FILE_PATTERNS,
+    desc_prefix, field_names, scope_names, tool_names, SENSITIVE_FILE_KEYWORDS,
+    SENSITIVE_FILE_PATTERNS,
 };
 use super::helpers::{
     author_association_floor_from_str, elevate_via_collaborator_permission,
@@ -179,7 +180,7 @@ fn apply_issue_read_enrichment(
                         repo_id,
                         info.author_login.as_deref(),
                         info.author_association.as_deref(),
-                        "issue_read",
+                        tool_names::ISSUE_READ,
                         &issue_num,
                         integrity,
                         ctx,
@@ -216,8 +217,8 @@ pub fn apply_tool_labels(
 
     match tool_name {
         // === Issues (repo-scoped) ===
-        "get_issue"
-        | "issue_read"
+        tool_names::GET_ISSUE
+        | tool_names::ISSUE_READ
         | "list_issues"
         | "list_issues_ff_remote_mcp_issue_fields"
         | "list_issues_ff_fields_param" => {
@@ -226,7 +227,10 @@ pub fn apply_tool_labels(
             // S(issue) = S(repo) - inherits from repository visibility
             secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
             integrity = private_writer_integrity(repo_id, repo_private, ctx);
-            let enrich = matches!(tool_name, "get_issue" | "issue_read");
+            let enrich = matches!(
+                tool_name,
+                tool_names::GET_ISSUE | tool_names::ISSUE_READ
+            );
             (desc, integrity) =
                 apply_issue_read_enrichment(&owner, &repo, repo_id, tool_args, desc, integrity, enrich, ctx);
         }
@@ -293,8 +297,8 @@ pub fn apply_tool_labels(
         }
 
         // === Pull Requests ===
-        "get_pull_request"
-        | "pull_request_read"
+        tool_names::GET_PULL_REQUEST
+        | tool_names::PULL_REQUEST_READ
         | "list_pull_requests"
         | "list_pull_requests_ff_fields_param" => {
             // I(PR) = merged if merged; otherwise approved/unapproved/contributor floor by evidence
@@ -310,7 +314,10 @@ pub fn apply_tool_labels(
                 }
             }
             secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
-            if matches!(tool_name, "get_pull_request" | "pull_request_read") {
+            if matches!(
+                tool_name,
+                tool_names::GET_PULL_REQUEST | tool_names::PULL_REQUEST_READ
+            ) {
                 if let Some(ref number) = pull_number {
                     if let Some(facts) =
                         super::backend::get_pull_request_facts(&owner, &repo, number)
@@ -319,7 +326,7 @@ pub fn apply_tool_labels(
                             &owner, &repo, repo_id,
                             facts.author_login.as_deref(),
                             facts.author_association.as_deref(),
-                            "pull_request_read", number,
+                            tool_names::PULL_REQUEST_READ, number,
                             integrity, ctx,
                         );
 

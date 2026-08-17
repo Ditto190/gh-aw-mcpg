@@ -10,7 +10,7 @@
 //! Use path-based labeling (`label_response_paths`) when possible for better
 //! performance with large result sets.
 
-use super::constants::{desc_prefix, field_names, scope_names};
+use super::constants::{desc_prefix, field_names, scope_names, tool_names};
 use super::extract_mcp_response;
 use super::helpers::*;
 use crate::{LabeledItem, ResourceLabels, SharedLabels};
@@ -138,8 +138,8 @@ pub fn label_response_items(
         | "list_pull_requests_ff_fields_param"
         | "search_pull_requests"
         | "search_pull_requests_ff_fields_param"
-        | "pull_request_read"
-        | "get_pull_request" => {
+        | tool_names::PULL_REQUEST_READ
+        | tool_names::GET_PULL_REQUEST => {
             // For pull_request_read sub-methods that return non-PR objects (e.g.
             // get_check_runs, get_commits, get_files, get_review_comments, get_reviews,
             // get_comments, get_diff, get_status), skip per-item response labeling.
@@ -149,7 +149,7 @@ pub fn label_response_items(
                 .get(field_names::METHOD)
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
-            if is_non_get_read_sub_method(tool_name, "pull_request_read", method) {
+            if is_non_get_read_sub_method(tool_name, tool_names::PULL_REQUEST_READ, method) {
                 // Fall through — use resource-level labels from tool_rules
             } else {
                 let items = extract_items_slice(&actual_response, "pull_requests");
@@ -236,8 +236,8 @@ pub fn label_response_items(
         | "list_issues_ff_fields_param"
         | "search_issues"
         | "search_issues_ff_fields_param"
-        | "get_issue"
-        | "issue_read" => {
+        | tool_names::GET_ISSUE
+        | tool_names::ISSUE_READ => {
             // For issue_read sub-methods that return non-issue objects (e.g.
             // get_comments, get_sub_issues, get_labels), skip per-item labeling.
             // Resource-level labels from tool_rules provide correct issue-scoped integrity.
@@ -245,7 +245,7 @@ pub fn label_response_items(
                 .get(field_names::METHOD)
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
-            if is_non_get_read_sub_method(tool_name, "issue_read", method) {
+            if is_non_get_read_sub_method(tool_name, tool_names::ISSUE_READ, method) {
                 // Fall through — use resource-level labels from tool_rules
             } else {
                 let items = extract_items_slice(&actual_response, "issues");
