@@ -47,6 +47,7 @@ type IntegrityLabel = flowLabel[integrityKind]
 // NewSecrecyLabel creates a new secrecy label, optionally pre-populated with tags.
 // Zero arguments produce an empty label; one or more arguments add those tags.
 func NewSecrecyLabel(tags ...Tag) *SecrecyLabel {
+	logLabels.Printf("Creating secrecy label with %d tag(s)", len(tags))
 	if len(tags) == 0 {
 		return &SecrecyLabel{Label: NewLabel()}
 	}
@@ -56,6 +57,7 @@ func NewSecrecyLabel(tags ...Tag) *SecrecyLabel {
 // NewIntegrityLabel creates a new integrity label, optionally pre-populated with tags.
 // Zero arguments produce an empty label; one or more arguments add those tags.
 func NewIntegrityLabel(tags ...Tag) *IntegrityLabel {
+	logLabels.Printf("Creating integrity label with %d tag(s)", len(tags))
 	if len(tags) == 0 {
 		return &IntegrityLabel{Label: NewLabel()}
 	}
@@ -76,6 +78,9 @@ func (l *flowLabel[T]) getLabel() *Label {
 func (l *flowLabel[T]) CanFlowTo(target *flowLabel[T]) bool {
 	var kind T
 	ok, _ := checkFlowHelper(l.getLabel(), target.getLabel(), kind.isSubset(), kind.typeName())
+	if !ok {
+		logLabels.Printf("%s CanFlowTo returned false", kind.typeName())
+	}
 	return ok
 }
 
@@ -171,7 +176,11 @@ func checkFlowHelper(srcLabel *Label, targetLabel *Label, checkSubset bool, labe
 // CheckFlow checks if this label can flow to target and returns violation details if not.
 func (l *flowLabel[T]) CheckFlow(target *flowLabel[T]) (bool, []Tag) {
 	var kind T
-	return checkFlowHelper(l.getLabel(), target.getLabel(), kind.isSubset(), kind.typeName())
+	ok, violatingTags := checkFlowHelper(l.getLabel(), target.getLabel(), kind.isSubset(), kind.typeName())
+	if !ok {
+		logLabels.Printf("%s CheckFlow found %d violating tag(s)", kind.typeName(), len(violatingTags))
+	}
+	return ok, violatingTags
 }
 
 // Clone creates an independent copy of the label.
