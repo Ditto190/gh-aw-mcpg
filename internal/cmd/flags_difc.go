@@ -51,6 +51,17 @@ func init() {
 		cmd.Flags().StringVar(&allowOnlyOwner, "allowonly-scope-owner", envutil.GetEnvString(config.EnvAllowOnlyScopeOwner, ""), "AllowOnly owner scope value")
 		cmd.Flags().StringVar(&allowOnlyRepo, "allowonly-scope-repo", envutil.GetEnvString(config.EnvAllowOnlyScopeRepo, ""), "AllowOnly repo name (requires owner)")
 		cmd.Flags().StringVar(&allowOnlyMinInt, "allowonly-min-integrity", envutil.GetEnvString(config.EnvAllowOnlyMinIntegrity, ""), "AllowOnly integrity: none|unapproved|approved|merged")
+
+		// --allowonly-scope-public and --allowonly-scope-owner select mutually
+		// exclusive AllowOnly scope variants (config.BuildAllowOnlyPolicy already
+		// rejects both being set, but MarkFlagsMutuallyExclusive surfaces the
+		// error natively via cobra's flag parsing/usage output).
+		// Note: MarkFlagsMutuallyExclusive only fires when flags are explicitly
+		// set on the command line; the env-var-driven combination (e.g. both
+		// MCP_GATEWAY_ALLOWONLY_SCOPE_PUBLIC and MCP_GATEWAY_ALLOWONLY_SCOPE_OWNER
+		// set) is still validated at runtime by config.BuildAllowOnlyPolicy via
+		// resolveGuardPolicyFromFlags.
+		cmd.MarkFlagsMutuallyExclusive("allowonly-scope-public", "allowonly-scope-owner")
 	})
 }
 
