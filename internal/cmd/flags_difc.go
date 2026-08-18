@@ -52,7 +52,7 @@ func registerAllowOnlyScopeFlags(cmd *cobra.Command, public *bool, owner, repo, 
 	// resolved values. When either value has an environment-derived default,
 	// leave value-based validation to BuildAllowOnlyPolicy so CLI flags can
 	// clear that default while selecting the other scope.
-	if !envutil.HasEnvVar(config.EnvAllowOnlyScopePublic) && !envutil.HasEnvVar(config.EnvAllowOnlyScopeOwner) {
+	if !envutil.GetEnvBool(config.EnvAllowOnlyScopePublic, false) && envutil.GetEnvString(config.EnvAllowOnlyScopeOwner, "") == "" {
 		cmd.MarkFlagsMutuallyExclusive("allowonly-scope-public", "allowonly-scope-owner")
 	}
 }

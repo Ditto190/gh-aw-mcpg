@@ -240,6 +240,15 @@ func TestAllowOnlyScopeFlagsMutuallyExclusive(t *testing.T) {
 		assert.Contains(t, err.Error(), "allowonly-scope-owner", "error should mention allowonly-scope-owner")
 	})
 
+	t.Run("empty owner environment value does not disable cobra validation", func(t *testing.T) {
+		clearEnv(t)
+		t.Setenv(config.EnvAllowOnlyScopeOwner, "")
+		cmd, _, _ := setupAllowOnlyScopeCmd(t)
+		cmd.SetArgs([]string{"--allowonly-scope-public", "--allowonly-scope-owner", "octocat"})
+
+		require.Error(t, cmd.Execute())
+	})
+
 	t.Run("public alone is accepted", func(t *testing.T) {
 		clearEnv(t)
 		cmd, _, _ := setupAllowOnlyScopeCmd(t)
@@ -265,8 +274,8 @@ func TestAllowOnlyScopeFlagsMutuallyExclusive(t *testing.T) {
 	})
 
 	t.Run("public environment default can be cleared for owner scope", func(t *testing.T) {
+		clearEnv(t)
 		t.Setenv(config.EnvAllowOnlyScopePublic, "true")
-		t.Setenv(config.EnvAllowOnlyScopeOwner, "")
 		cmd, public, owner := setupAllowOnlyScopeCmd(t)
 		cmd.SetArgs([]string{"--allowonly-scope-public=false", "--allowonly-scope-owner", "octocat"})
 
@@ -276,7 +285,7 @@ func TestAllowOnlyScopeFlagsMutuallyExclusive(t *testing.T) {
 	})
 
 	t.Run("owner environment default can be cleared for public scope", func(t *testing.T) {
-		t.Setenv(config.EnvAllowOnlyScopePublic, "")
+		clearEnv(t)
 		t.Setenv(config.EnvAllowOnlyScopeOwner, "octocat")
 		cmd, public, owner := setupAllowOnlyScopeCmd(t)
 		cmd.SetArgs([]string{"--allowonly-scope-owner=", "--allowonly-scope-public"})
