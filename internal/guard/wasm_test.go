@@ -1800,6 +1800,30 @@ func TestWasmGuardCompilationCache(t *testing.T) {
 		assert.True(t, failingCache.closed, "expected failing cache to be closed")
 	})
 
+	t.Run("returns error immediately when new cache creation fails", func(t *testing.T) {
+		ctx := context.Background()
+		origCache := globalCompilationCache
+		t.Cleanup(func() {
+			globalCompilationCache = origCache
+		})
+
+		// Passing a path to a regular file (not a directory) causes
+		// wazero.NewCompilationCacheWithDir to fail during creation, which
+		// must short-circuit ConfigureGlobalCompilationCache before it ever
+		// touches the existing global cache.
+		tempFile, err := os.CreateTemp(t.TempDir(), "not-a-dir")
+		require.NoError(t, err)
+		require.NoError(t, tempFile.Close())
+
+		sentinelCache := &mockCompilationCache{}
+		globalCompilationCache = sentinelCache
+
+		err = ConfigureGlobalCompilationCache(ctx, tempFile.Name())
+		require.Error(t, err)
+		assert.Same(t, sentinelCache, globalCompilationCache, "global cache must be left untouched when new cache creation fails")
+		assert.False(t, sentinelCache.closed, "previous cache must not be closed when new cache creation fails")
+	})
+
 	t.Run("cache is disabled when DisableCompilationCache is true", func(t *testing.T) {
 		ctx := context.Background()
 
