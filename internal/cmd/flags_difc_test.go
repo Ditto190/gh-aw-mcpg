@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"os"
 	"testing"
 
 	"github.com/github/gh-aw-mcpg/internal/config"
@@ -198,9 +199,7 @@ func TestParseDIFCSinkServerIDs(t *testing.T) {
 	}
 }
 
-// setupAllowOnlyScopeCmd builds a command with the AllowOnly scope flags
-// registered, mirroring how rootCmd is initialized in production.
-func setupAllowOnlyScopeCmd(t *testing.T) *cobra.Command {
+func setupAllowOnlyScopeCmd(t *testing.T) (*cobra.Command, *bool, *string) {
 	t.Helper()
 	cmd := &cobra.Command{
 		Use:          "test",
@@ -209,18 +208,31 @@ func setupAllowOnlyScopeCmd(t *testing.T) *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().BoolVar(new(bool), "allowonly-scope-public", false, "Use public AllowOnly scope")
-	cmd.Flags().StringVar(new(string), "allowonly-scope-owner", "", "AllowOnly owner scope value")
-	cmd.MarkFlagsMutuallyExclusive("allowonly-scope-public", "allowonly-scope-owner")
-	return cmd
+	public := new(bool)
+	owner := new(string)
+	registerAllowOnlyScopeFlags(cmd, public, owner, new(string), new(string))
+	return cmd, public, owner
 }
 
-// TestAllowOnlyScopeFlagsMutuallyExclusive verifies that cobra's
-// MarkFlagsMutuallyExclusive constraint on --allowonly-scope-public and
-// --allowonly-scope-owner is wired up correctly.
 func TestAllowOnlyScopeFlagsMutuallyExclusive(t *testing.T) {
+	clearEnv := func(t *testing.T) {
+		t.Helper()
+		for _, name := range []string{config.EnvAllowOnlyScopePublic, config.EnvAllowOnlyScopeOwner} {
+			value, wasSet := os.LookupEnv(name)
+			require.NoError(t, os.Unsetenv(name))
+			t.Cleanup(func() {
+				if wasSet {
+					require.NoError(t, os.Setenv(name, value))
+					return
+				}
+				require.NoError(t, os.Unsetenv(name))
+			})
+		}
+	}
+
 	t.Run("public and owner together are rejected by cobra", func(t *testing.T) {
-		cmd := setupAllowOnlyScopeCmd(t)
+		clearEnv(t)
+		cmd, _, _ := setupAllowOnlyScopeCmd(t)
 		cmd.SetArgs([]string{"--allowonly-scope-public", "--allowonly-scope-owner", "octocat"})
 		err := cmd.Execute()
 		require.Error(t, err, "should fail when both --allowonly-scope-public and --allowonly-scope-owner are provided")
@@ -229,24 +241,49 @@ func TestAllowOnlyScopeFlagsMutuallyExclusive(t *testing.T) {
 	})
 
 	t.Run("public alone is accepted", func(t *testing.T) {
-		cmd := setupAllowOnlyScopeCmd(t)
+		clearEnv(t)
+		cmd, _, _ := setupAllowOnlyScopeCmd(t)
 		cmd.SetArgs([]string{"--allowonly-scope-public"})
 		err := cmd.Execute()
 		require.NoError(t, err, "should succeed when only --allowonly-scope-public is provided")
 	})
 
 	t.Run("owner alone is accepted", func(t *testing.T) {
-		cmd := setupAllowOnlyScopeCmd(t)
+		clearEnv(t)
+		cmd, _, _ := setupAllowOnlyScopeCmd(t)
 		cmd.SetArgs([]string{"--allowonly-scope-owner", "octocat"})
 		err := cmd.Execute()
 		require.NoError(t, err, "should succeed when only --allowonly-scope-owner is provided")
 	})
 
 	t.Run("neither flag is accepted", func(t *testing.T) {
-		cmd := setupAllowOnlyScopeCmd(t)
+		clearEnv(t)
+		cmd, _, _ := setupAllowOnlyScopeCmd(t)
 		cmd.SetArgs([]string{})
 		err := cmd.Execute()
 		require.NoError(t, err, "should succeed when neither AllowOnly scope flag is provided")
+	})
+
+	t.Run("public environment default can be cleared for owner scope", func(t *testing.T) {
+		t.Setenv(config.EnvAllowOnlyScopePublic, "true")
+		t.Setenv(config.EnvAllowOnlyScopeOwner, "")
+		cmd, public, owner := setupAllowOnlyScopeCmd(t)
+		cmd.SetArgs([]string{"--allowonly-scope-public=false", "--allowonly-scope-owner", "octocat"})
+
+		require.NoError(t, cmd.Execute())
+		assert.False(t, *public)
+		assert.Equal(t, "octocat", *owner)
+	})
+
+	t.Run("owner environment default can be cleared for public scope", func(t *testing.T) {
+		t.Setenv(config.EnvAllowOnlyScopePublic, "")
+		t.Setenv(config.EnvAllowOnlyScopeOwner, "octocat")
+		cmd, public, owner := setupAllowOnlyScopeCmd(t)
+		cmd.SetArgs([]string{"--allowonly-scope-owner=", "--allowonly-scope-public"})
+
+		require.NoError(t, cmd.Execute())
+		assert.True(t, *public)
+		assert.Empty(t, *owner)
 	})
 }
 
