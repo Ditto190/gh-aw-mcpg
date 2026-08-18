@@ -153,7 +153,7 @@ The goal is to build a **CLI write-operations list**: a mapping of `{cli_command
 
 A CLI write operation has a **guard coverage gap** if:
 1. It uses a mutating HTTP method (POST, PATCH, PUT, DELETE) against the GitHub API, AND
-2. There is no equivalent MCP tool name in the guard's `WRITE_OPERATIONS` or `READ_WRITE_OPERATIONS`, AND
+2. There is no equivalent MCP tool name in the guard's upstream MCP buckets (`WRITE_OPERATIONS` or `READ_WRITE_OPERATIONS`), CLI buckets (`CLI_WRITE_OPERATIONS` or `CLI_READ_WRITE_OPERATIONS`), synthetic bucket (`SYNTHETIC_WRITE_OPERATIONS`), or deprecated alias buckets (`DEPRECATED_WRITE_ALIASES` or `DEPRECATED_READ_WRITE_ALIASES`), AND
 3. The operation is not covered by a prefix pattern (`merge_*`, `delete_*`, `update_*`, `create_*`)
 
 **Important**: You are looking for *semantic equivalences*, not exact name matches. For example, `gh issue comment --edit` maps to editing an issue comment, which might map to an `edit_issue_comment` MCP tool. Check whether the guard covers the underlying GitHub API operation, not just the CLI command name.
@@ -169,8 +169,11 @@ cat guards/github-guard/rust-guard/src/tools.rs
 ```
 
 This file contains:
-- `WRITE_OPERATIONS`: explicit list of write tools
-- `READ_WRITE_OPERATIONS`: explicit list of read-write tools
+- `WRITE_OPERATIONS`: upstream github-mcp-server write tools
+- `READ_WRITE_OPERATIONS`: upstream github-mcp-server read-write tools
+- `CLI_WRITE_OPERATIONS` / `CLI_READ_WRITE_OPERATIONS`: GitHub CLI-only synthetic coverage
+- `SYNTHETIC_WRITE_OPERATIONS`: guard/runtime-specific synthetic writes
+- `DEPRECATED_WRITE_ALIASES` / `DEPRECATED_READ_WRITE_ALIASES`: compatibility names that should not be compared against upstream MCP
 - Pattern functions: `is_merge_operation`, `is_delete_operation`, `is_update_operation`, `is_create_operation`
 
 ### 4.2 Read tool_rules.rs (per-tool DIFC labeling)
@@ -185,18 +188,20 @@ This file contains the `apply_tool_labels` function with a `match tool_name { ..
 
 From reading the code, produce:
 
-1. **write_ops**: set of tool names in `WRITE_OPERATIONS`
-2. **read_write_ops**: set of tool names in `READ_WRITE_OPERATIONS`
-3. **pattern_covered**: tools from the upstream list that match any pattern (`merge_*`, `delete_*`, `update_*`, `create_*`)
-4. **label_ruled**: set of tool names with explicit match arms in `apply_tool_labels`
+1. **mcp_write_ops**: set of upstream MCP tool names in `WRITE_OPERATIONS`
+2. **mcp_read_write_ops**: set of upstream MCP tool names in `READ_WRITE_OPERATIONS`
+3. **cli_write_ops**: set of CLI-only synthetic names in `CLI_WRITE_OPERATIONS` and `CLI_READ_WRITE_OPERATIONS`
+4. **synthetic_write_ops**: set of guard/runtime-specific names in `SYNTHETIC_WRITE_OPERATIONS`
+5. **deprecated_aliases**: set of compatibility names in `DEPRECATED_WRITE_ALIASES` and `DEPRECATED_READ_WRITE_ALIASES`
+6. **pattern_covered**: tools from the upstream list that match any pattern (`merge_*`, `delete_*`, `update_*`, `create_*`)
+7. **label_ruled**: set of tool names with explicit match arms in `apply_tool_labels`
 
 ## Step 5: Identify Coverage Gaps
 
 ### 5.1 MCP tool classification gaps (tools.rs)
 
 A tool has a **classification gap** if it is in the upstream MCP tool list AND:
-- It is NOT in `WRITE_OPERATIONS`
-- It is NOT in `READ_WRITE_OPERATIONS`
+- It is NOT in the upstream MCP buckets (`WRITE_OPERATIONS` or `READ_WRITE_OPERATIONS`)
 - It does NOT match any prefix pattern (`merge_*`, `delete_*`, `update_*`, `create_*`)
 - AND it appears to perform write or mutating operations based on its name or description (e.g., tools with verbs like "add", "set", "enable", "disable", "submit", "publish", "request", "approve", "reject", "resolve", "reopen", "close", "lock", "unlock", "pin", "unpin", "convert")
 
@@ -214,11 +219,11 @@ For each write operation discovered in Step 3.4, determine if the underlying Git
 - If there is an equivalent MCP tool but it is NOT in the guard lists and not covered by any pattern → **MCP classification gap** (already captured in 5.1).
 - If there is **no equivalent MCP tool** for a CLI write command → flag as a **CLI-only gap**: the guard does not model this operation at all. Note the CLI command, the REST endpoint, and the GitHub API action it performs.
 
-For CLI-only gaps, the fix is to add a new entry to `WRITE_OPERATIONS` (or `READ_WRITE_OPERATIONS`) using a descriptive MCP-style tool name (snake_case) that maps to the CLI operation — or to file an issue requesting that the GitHub MCP server add a corresponding tool.
+For CLI-only gaps, the fix is to add a new entry to `CLI_WRITE_OPERATIONS` (or `CLI_READ_WRITE_OPERATIONS`) using a descriptive MCP-style tool name (snake_case) that maps to the CLI operation — or to file an issue requesting that the GitHub MCP server add a corresponding tool.
 
 ### 5.4 Stale entries (bonus check)
 
-Check if any entries in `WRITE_OPERATIONS` or `READ_WRITE_OPERATIONS` are **no longer in the upstream MCP tool list** and also have no equivalent in the CLI write-operations list. These are stale guard entries that should be removed.
+Check if any entries in the upstream MCP buckets (`WRITE_OPERATIONS` or `READ_WRITE_OPERATIONS`) are **no longer in the upstream MCP tool list**. Do not report entries from `CLI_WRITE_OPERATIONS`, `CLI_READ_WRITE_OPERATIONS`, `SYNTHETIC_WRITE_OPERATIONS`, or the deprecated alias buckets as MCP drift; audit those against their explicit source buckets instead.
 
 ### 5.5 Filter known gaps and detect regressions
 
@@ -261,7 +266,8 @@ The GitHub guard does not fully cover **[N]** operation(s) from the [github-mcp-
 
 - **MCP tools scanned**: [total count from github-mcp-server]
 - **CLI write commands scanned**: [total count from cli/cli]
-- **Guard-covered write tools (tools.rs)**: [count in WRITE_OPERATIONS + READ_WRITE_OPERATIONS]
+- **Guard-covered upstream MCP write tools (tools.rs)**: [count in WRITE_OPERATIONS + READ_WRITE_OPERATIONS]
+- **Guard-covered CLI/synthetic write tools (tools.rs)**: [count in CLI_WRITE_OPERATIONS + CLI_READ_WRITE_OPERATIONS + SYNTHETIC_WRITE_OPERATIONS + deprecated alias buckets]
 - **Tools with explicit DIFC rules (tool_rules.rs)**: [count of match arms]
 - **New gaps found this run**: [N]
 
@@ -269,7 +275,7 @@ The GitHub guard does not fully cover **[N]** operation(s) from the [github-mcp-
 
 ## MCP Tool Classification Gaps (tools.rs)
 
-These MCP tools perform write or mutating operations but are missing from `WRITE_OPERATIONS` or `READ_WRITE_OPERATIONS` in `guards/github-guard/rust-guard/src/tools.rs`:
+These MCP tools perform write or mutating operations but are missing from the upstream MCP buckets (`WRITE_OPERATIONS` or `READ_WRITE_OPERATIONS`) in `guards/github-guard/rust-guard/src/tools.rs`:
 
 | Tool Name | Operation Type | Suggested Classification | Notes |
 |-----------|---------------|--------------------------|-------|
@@ -312,14 +318,14 @@ These write operations are reachable via the GitHub CLI but have no correspondin
 ### Suggested remediation
 
 For each CLI-only gap, either:
-1. Add a new entry to `WRITE_OPERATIONS` using a descriptive MCP-style name (e.g., `transfer_issue`) — this pre-emptively guards the operation when/if a matching MCP tool is added, OR
+1. Add a new entry to `CLI_WRITE_OPERATIONS` using a descriptive MCP-style name (e.g., `transfer_issue`) — this pre-emptively guards the operation when/if a matching MCP tool is added, OR
 2. File a request to add the equivalent tool to the GitHub MCP server so it can be properly guarded
 
 ---
 
 ## Stale Guard Entries (bonus)
 
-These tools are in `WRITE_OPERATIONS` or `READ_WRITE_OPERATIONS` but no longer appear in the upstream github-mcp-server or CLI write-operations list. Consider removing them to keep the guard clean:
+These tools are in the upstream MCP buckets (`WRITE_OPERATIONS` or `READ_WRITE_OPERATIONS`) but no longer appear in the upstream github-mcp-server tool list. Entries in the CLI/synthetic/deprecated buckets are not MCP drift and should be audited against their explicit source:
 
 - `stale_tool_name` — not found in upstream
 

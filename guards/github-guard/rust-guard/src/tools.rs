@@ -3,7 +3,7 @@
 //! This module provides functions to classify GitHub MCP tools
 //! by their operation type (read, write, merge, delete, etc.)
 
-/// Write operations that modify data
+/// Upstream github-mcp-server write operations that modify data.
 pub const WRITE_OPERATIONS: &[&str] = &[
     // Keep sorted for binary_search correctness.
     "actions_run_trigger",
@@ -11,117 +11,131 @@ pub const WRITE_OPERATIONS: &[&str] = &[
     "add_deploy_key",
     "add_gpg_key", // gh gpg-key add — adds a user GPG signing key
     "add_issue_comment",
-    "add_issue_comment_reaction",        // POST /repos/.../issues/comments/{id}/reactions
-    "add_issue_reaction",                // POST /repos/.../issues/{number}/reactions
-    "add_project_item", // deprecated alias for projects_write (addProjectV2ItemById)
+    "add_issue_comment_reaction", // POST /repos/.../issues/comments/{id}/reactions
+    "add_issue_reaction",         // POST /repos/.../issues/{number}/reactions
     "add_pull_request_review_comment_reaction", // POST /repos/.../pulls/comments/{id}/reactions
     "add_reply_to_pull_request_comment",
-    "add_ssh_key",           // gh ssh-key add — adds a user SSH auth/signing key
-    "archive_project_item",  // gh project item-archive — archives a Projects v2 item
-    "archive_repository",    // gh repo archive — blocked: repo settings change unsupported
+    "add_ssh_key",          // gh ssh-key add — adds a user SSH auth/signing key
+    "archive_project_item", // gh project item-archive — archives a Projects v2 item
     "assign_copilot_to_issue",
     "assign_copilot_to_issue_with_intent",
-    "cancel_workflow_run", // gh run cancel       — cancels an in-progress workflow run
-    "close_issue",         // gh issue close
-    "close_pull_request",  // gh pr close
-    "copy_project",        // gh project copy — creates a new Projects v2 board from an existing one
+    "close_issue",        // gh issue close
+    "close_pull_request", // gh pr close
     "create_branch",
     "create_codespace",  // gh codespace create — POST /user/codespaces
     "create_discussion", // gh discussion create — creates a discussion in a repository
     "create_gist",
     "create_issue",
-    "create_linked_branch",  // gh issue develop — creates a linked branch via GraphQL createLinkedBranch
+    "create_linked_branch", // gh issue develop — creates a linked branch via GraphQL createLinkedBranch
     "create_or_update_file",
-    "create_project",            // gh project create — GraphQL createProjectV2
     "create_project_draft_item", // gh project item-create — adds a draft issue via GraphQL addProjectV2DraftIssue
     "create_project_field",      // gh project field-create — creates a Projects v2 field
     "create_pull_request",
     "create_pull_request_with_copilot",
     "create_release", // POST /repos/.../releases
     "create_repository",
-    "create_repository_autolink", // gh repo autolink create — POST /repos/.../autolinks
-    "delete_actions_cache", // gh cache delete — DELETE /repos/.../actions/caches/{id|?key=...}
+    "create_repository_autolink", // gh repo autolink create — POST /repos/.../autolinks/{id}
     "delete_codespace", // gh codespace delete — DELETE /user/codespaces/{name} or /orgs/{org}/members/{user}/codespaces/{name}
     "delete_deploy_key",
     "delete_file",
-    "delete_gist",              // DELETE /gists/{gist_id}
-    "delete_gpg_key",           // gh gpg-key delete — removes a user GPG signing key
-    "delete_issue",             // gh issue delete — deletes an issue via GraphQL deleteIssue
-    "delete_issue_comment",     // DELETE /repos/.../issues/comments/{id}
-    "delete_project",           // gh project delete — deletes a Projects v2 project
-    "delete_project_field",     // gh project field-delete — deletes a Projects v2 field
-    "delete_project_item",      // deprecated alias for projects_write (deleteProjectV2Item)
-    "delete_release",           // DELETE /repos/.../releases/{id}
-    "delete_release_asset",     // gh release delete-asset — deletes a release asset
-    "delete_repository",           // gh repo delete — permanently deletes a repository
-    "delete_repository_autolink",  // gh repo autolink delete — DELETE /repos/.../autolinks/{id}
-    "delete_secret",               // gh secret delete — deletes org/repo/env/user codespaces secrets
-    "delete_ssh_key",              // gh ssh-key delete — removes a user SSH auth/signing key
-    "delete_variable",             // gh variable delete — deletes org/repo/environment Actions variables
-    "delete_workflow_run",      // gh run delete — deletes a workflow run record
-    "delete_workflow_run_logs", // deprecated alias for actions_run_trigger (DELETE run logs)
-    "disable_workflow",         // gh workflow disable
+    "delete_gpg_key",       // gh gpg-key delete — removes a user GPG signing key
+    "delete_issue",         // gh issue delete — deletes an issue via GraphQL deleteIssue
+    "delete_issue_comment", // DELETE /repos/.../issues/comments/{id}
+    "delete_project_field", // gh project field-delete — deletes a Projects v2 field
+    "delete_release",       // DELETE /repos/.../releases/{id}
+    "delete_release_asset", // gh release delete-asset — deletes a release asset
+    "delete_repository",    // gh repo delete — permanently deletes a repository
+    "delete_repository_autolink", // gh repo autolink delete — DELETE /repos/.../autolinks/{id}
+    "delete_ssh_key",       // gh ssh-key delete — removes a user SSH auth/signing key
+    "delete_workflow_run",  // gh run delete — deletes a workflow run record
     "discussion_comment_write", // creates or edits GitHub Discussion comments
     "dismiss_notification",
     "edit_discussion", // gh discussion edit   — edits title/body/labels of a discussion
     "edit_release",    // PATCH /repos/.../releases/{id}
     "edit_repository", // gh repo edit — can change visibility, security settings
-    "enable_toolset", // Dynamically enables additional toolsets, expanding the agent's capability set
-    "enable_workflow", // gh workflow enable
-    "force_cancel_workflow_run", // gh run cancel --force — force-cancels a workflow run
     "fork_repository",
     "label_write",
-    "link_project", // gh project link — links a Projects v2 board to a repository or team
-    "lock_issue",   // gh issue lock
+    "lock_issue",        // gh issue lock
     "lock_pull_request", // gh pr lock
     "manage_notification_subscription",
     "manage_repository_notification_subscription",
     "mark_all_notifications_read",
     "mark_project_template", // gh project mark-template — GraphQL markProjectV2AsTemplate
-    "mark_pull_request_as_draft", // gh pr ready --undo (convert back to draft)
-    "mark_pull_request_as_ready_for_review", // gh pr ready (mark ready for review)
-    "pin_issue",             // gh issue pin
     "projects_write",
     "push_files",
-    "rebuild_codespace", // gh codespace rebuild — Codespaces session RebuildContainer RPC (recreates container)
-    "rename_repository", // gh repo rename    — blocked: breaks clone URLs and integrations
-    "reopen_issue",  // gh issue reopen
+    "reopen_issue",        // gh issue reopen
     "reopen_pull_request", // gh pr reopen
     "request_copilot_review",
-    "rerun_failed_jobs",   // gh run rerun --failed — reruns only failed jobs
-    "rerun_workflow_job",  // gh run rerun --job  — reruns a specific job
-    "rerun_workflow_run",  // gh run rerun        — reruns a completed workflow run
     "revert_pull_request", // gh pr revert — creates revert branch + PR
-    "run_workflow",        // deprecated alias for actions_run_trigger (POST workflow dispatch)
-    "set_secret",          // gh secret set
-    "set_variable",        // gh variable set
     "star_repository",
-    "stop_codespace",      // gh codespace stop — POST /user|/orgs/.../codespaces/.../stop
-    "sync_fork",            // gh repo sync
-    "transfer_issue",       // gh issue transfer
-    "transfer_repository",   // gh repo transfer  — blocked: repo ownership transfer is irreversible
+    "stop_codespace", // gh codespace stop — POST /user|/orgs/.../codespaces/.../stop
     "unarchive_project_item", // gh project item-archive --undo — unarchives a Projects v2 item
-    "unarchive_repository",  // gh repo unarchive — blocked: symmetric to archive_repository
-    "unlink_project",        // gh project unlink — unlinks a Projects v2 board from a repository or team
-    "unlock_issue",          // gh issue unlock
-    "unlock_pull_request",   // gh pr unlock
+    "unlock_issue",   // gh issue unlock
+    "unlock_pull_request", // gh pr unlock
     "unmark_project_template", // gh project mark-template --undo — GraphQL unmarkProjectV2AsTemplate
-    "unpin_issue",             // gh issue unpin
     "unstar_repository",
     "update_codespace", // gh codespace edit — PATCH /user/codespaces/{codespace_name}
-    "update_codespace_port_visibility", // gh codespace ports visibility — Codespaces session UpdatePortVisibility RPC
     "update_issue_comment", // PATCH /repos/.../issues/comments/{id}
-    "update_project",       // gh project close/edit/reopen — updates Projects v2 metadata/status
     "upload_release_asset", // gh release upload
 ];
 
-/// Read-write operations that both read and modify data
+/// Synthetic write operations reachable through GitHub CLI but not current upstream MCP tools.
+pub const CLI_WRITE_OPERATIONS: &[&str] = &[
+    // Keep sorted for binary_search correctness.
+    "archive_repository", // gh repo archive — blocked: repo settings change unsupported
+    "cancel_workflow_run", // gh run cancel — cancels an in-progress workflow run
+    "copy_project",       // gh project copy — creates a new Projects v2 board
+    "create_project",     // gh project create — GraphQL createProjectV2
+    "delete_actions_cache", // gh cache delete — DELETE /repos/.../actions/caches/{id|?key=...}
+    "delete_gist",        // gh gist delete
+    "delete_project",     // gh project delete — deletes a Projects v2 project
+    "delete_secret",      // gh secret delete — deletes org/repo/env/user codespaces secrets
+    "delete_variable",    // gh variable delete — deletes org/repo/environment Actions variables
+    "disable_workflow",   // gh workflow disable
+    "enable_workflow",    // gh workflow enable
+    "force_cancel_workflow_run", // gh run cancel --force — force-cancels a workflow run
+    "link_project",       // gh project link — links a Projects v2 board to a repository or team
+    "mark_pull_request_as_draft", // gh pr ready --undo (convert back to draft)
+    "mark_pull_request_as_ready_for_review", // gh pr ready (mark ready for review)
+    "pin_issue",          // gh issue pin
+    "rebuild_codespace",  // gh codespace rebuild — Codespaces session RebuildContainer RPC
+    "rename_repository",  // gh repo rename — blocked: breaks clone URLs and integrations
+    "rerun_failed_jobs",  // gh run rerun --failed — reruns only failed jobs
+    "rerun_workflow_job", // gh run rerun --job — reruns a specific job
+    "rerun_workflow_run", // gh run rerun — reruns a completed workflow run
+    "set_secret",         // gh secret set
+    "set_variable",       // gh variable set
+    "sync_fork",          // gh repo sync
+    "transfer_issue",     // gh issue transfer
+    "transfer_repository", // gh repo transfer — blocked: repo ownership transfer is irreversible
+    "unarchive_repository", // gh repo unarchive — blocked: symmetric to archive_repository
+    "unlink_project",     // gh project unlink — unlinks a Projects v2 board
+    "unpin_issue",        // gh issue unpin
+    "update_codespace_port_visibility", // gh codespace ports visibility — session UpdatePortVisibility RPC
+    "update_project", // gh project close/edit/reopen — updates Projects v2 metadata/status
+];
+
+/// Synthetic non-MCP write operations owned by the guard/runtime.
+pub const SYNTHETIC_WRITE_OPERATIONS: &[&str] = &[
+    // Keep sorted for binary_search correctness.
+    "enable_toolset", // Dynamically enables additional toolsets, expanding agent capabilities
+];
+
+/// Deprecated compatibility aliases for write operations.
+pub const DEPRECATED_WRITE_ALIASES: &[&str] = &[
+    // Keep sorted for binary_search correctness.
+    "add_project_item", // deprecated alias for projects_write (addProjectV2ItemById)
+    "delete_project_item", // deprecated alias for projects_write (deleteProjectV2Item)
+    "delete_workflow_run_logs", // deprecated alias for actions_run_trigger (DELETE run logs)
+    "run_workflow",     // deprecated alias for actions_run_trigger (POST workflow dispatch)
+];
+
+/// Upstream github-mcp-server read-write operations that both read and modify data.
 pub const READ_WRITE_OPERATIONS: &[&str] = &[
     // Keep sorted for binary_search correctness.
     "add_pull_request_review_comment", // POST /repos/.../pulls/{number}/comments
     "add_sub_issue",                   // POST  /repos/.../issues/{number}/sub_issues
-    "create_agent_task", // gh agent-task create — creates a Copilot coding-agent job (branch + PR); blocked as unsupported
-    "create_pull_request_review", // POST /repos/.../pulls/{number}/reviews
+    "create_pull_request_review",      // POST /repos/.../pulls/{number}/reviews
     "delete_pending_pull_request_review", // DELETE /repos/.../pulls/{number}/reviews/{id}
     "issue_dependency_write", // GraphQL addBlockedBy/removeBlockedBy after resolving issue IDs
     "issue_write",
@@ -144,8 +158,6 @@ pub const READ_WRITE_OPERATIONS: &[&str] = &[
     "update_issue_state",     // PATCH — opens or closes an issue
     "update_issue_title",     // PATCH — modifies issue title
     "update_issue_type",      // PATCH — modifies issue type
-    "update_project_draft_issue", // gh project item-edit --title/--body — GraphQL updateProjectV2DraftIssue
-    "update_project_item",    // deprecated alias for projects_write (updateProjectV2ItemFieldValue)
     "update_pull_request",
     "update_pull_request_body", // PATCH — modifies PR body
     "update_pull_request_branch",
@@ -154,9 +166,25 @@ pub const READ_WRITE_OPERATIONS: &[&str] = &[
     "update_pull_request_title",       // PATCH — modifies PR title
 ];
 
+/// Synthetic read-write operations reachable through GitHub CLI but not current upstream MCP tools.
+pub const CLI_READ_WRITE_OPERATIONS: &[&str] = &[
+    // Keep sorted for binary_search correctness.
+    "create_agent_task", // gh agent-task create — creates a Copilot coding-agent job; blocked as unsupported
+    "update_project_draft_issue", // gh project item-edit --title/--body — GraphQL updateProjectV2DraftIssue
+];
+
+/// Deprecated compatibility aliases for read-write operations.
+pub const DEPRECATED_READ_WRITE_ALIASES: &[&str] = &[
+    // Keep sorted for binary_search correctness.
+    "update_project_item", // deprecated alias for projects_write (updateProjectV2ItemFieldValue)
+];
+
 /// Check if a tool is a write operation
 pub(crate) fn is_write_operation(tool_name: &str) -> bool {
     WRITE_OPERATIONS.binary_search(&tool_name).is_ok()
+        || CLI_WRITE_OPERATIONS.binary_search(&tool_name).is_ok()
+        || SYNTHETIC_WRITE_OPERATIONS.binary_search(&tool_name).is_ok()
+        || DEPRECATED_WRITE_ALIASES.binary_search(&tool_name).is_ok()
         || is_lock_operation(tool_name)
         || is_unlock_operation(tool_name)
 }
@@ -164,6 +192,10 @@ pub(crate) fn is_write_operation(tool_name: &str) -> bool {
 /// Check if a tool is a read-write operation
 pub(crate) fn is_read_write_operation(tool_name: &str) -> bool {
     READ_WRITE_OPERATIONS.binary_search(&tool_name).is_ok()
+        || CLI_READ_WRITE_OPERATIONS.binary_search(&tool_name).is_ok()
+        || DEPRECATED_READ_WRITE_ALIASES
+            .binary_search(&tool_name)
+            .is_ok()
 }
 
 /// Check if a tool is a merge operation
@@ -189,7 +221,7 @@ pub(crate) fn is_unlock_operation(tool_name: &str) -> bool {
 /// Tools that are unconditionally blocked regardless of agent integrity.
 ///
 /// Keep sorted for `binary_search` correctness (see `blocked_tools_are_sorted` test).
-/// Entries here should also appear in `WRITE_OPERATIONS` or `READ_WRITE_OPERATIONS`.
+/// Entries here should also be classified by `is_write_operation` or `is_read_write_operation`.
 pub const BLOCKED_TOOLS: &[&str] = &[
     "archive_repository",   // repo settings change; unsupported
     "create_agent_task",    // unsupported agent-task creation
@@ -211,8 +243,8 @@ mod tests {
     fn blocked_tools_are_classified_as_write_or_read_write() {
         for &tool in BLOCKED_TOOLS {
             assert!(
-                WRITE_OPERATIONS.contains(&tool) || READ_WRITE_OPERATIONS.contains(&tool),
-                "blocked tool `{tool}` must also be classified in WRITE_OPERATIONS or READ_WRITE_OPERATIONS"
+                is_write_operation(tool) || is_read_write_operation(tool),
+                "blocked tool `{tool}` must also be classified as a write or read-write operation"
             );
         }
     }
@@ -264,31 +296,60 @@ mod tests {
             assert!(
                 is_write_operation(&tool) || is_read_write_operation(&tool),
                 "`{tool}` is a repo-scoped write in tool_rules.rs but is missing from \
-                 WRITE_OPERATIONS/READ_WRITE_OPERATIONS in tools.rs"
+                 a write/read-write source bucket in tools.rs"
             );
         }
     }
 
-    #[test]
-    fn write_operations_are_sorted() {
-        let mut sorted = WRITE_OPERATIONS.to_vec();
-        sorted.sort_unstable();
-        assert_eq!(
-            WRITE_OPERATIONS,
-            sorted.as_slice(),
-            "WRITE_OPERATIONS must be kept in sorted order for binary_search correctness"
-        );
+    fn write_source_buckets() -> [(&'static str, &'static [&'static str]); 7] {
+        [
+            ("WRITE_OPERATIONS", WRITE_OPERATIONS),
+            ("CLI_WRITE_OPERATIONS", CLI_WRITE_OPERATIONS),
+            ("SYNTHETIC_WRITE_OPERATIONS", SYNTHETIC_WRITE_OPERATIONS),
+            ("DEPRECATED_WRITE_ALIASES", DEPRECATED_WRITE_ALIASES),
+            ("READ_WRITE_OPERATIONS", READ_WRITE_OPERATIONS),
+            ("CLI_READ_WRITE_OPERATIONS", CLI_READ_WRITE_OPERATIONS),
+            (
+                "DEPRECATED_READ_WRITE_ALIASES",
+                DEPRECATED_READ_WRITE_ALIASES,
+            ),
+        ]
     }
 
     #[test]
-    fn read_write_operations_are_sorted() {
-        let mut sorted = READ_WRITE_OPERATIONS.to_vec();
-        sorted.sort_unstable();
-        assert_eq!(
-            READ_WRITE_OPERATIONS,
-            sorted.as_slice(),
-            "READ_WRITE_OPERATIONS must be kept in sorted order for binary_search correctness"
-        );
+    fn write_entries_belong_to_a_single_source_bucket() {
+        for (bucket_name, bucket) in write_source_buckets() {
+            for &tool in bucket {
+                let matching_buckets: Vec<&str> = write_source_buckets()
+                    .iter()
+                    .filter_map(|(candidate_name, candidate_bucket)| {
+                        candidate_bucket.contains(&tool).then_some(*candidate_name)
+                    })
+                    .collect();
+                assert_eq!(
+                    matching_buckets.len(),
+                    1,
+                    "`{tool}` from {bucket_name} must belong to exactly one write source bucket, found {matching_buckets:?}"
+                );
+                assert!(
+                    is_write_operation(tool) || is_read_write_operation(tool),
+                    "`{tool}` from {bucket_name} must be classified as write or read-write"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn write_source_buckets_are_sorted() {
+        for (bucket_name, bucket) in write_source_buckets() {
+            let mut sorted = bucket.to_vec();
+            sorted.sort_unstable();
+            assert_eq!(
+                bucket,
+                sorted.as_slice(),
+                "{bucket_name} must be kept in sorted order for binary_search correctness"
+            );
+        }
     }
 
     #[test]
@@ -627,8 +688,9 @@ mod tests {
             "unlock_pull_request",
         ] {
             assert!(
-                WRITE_OPERATIONS.binary_search(op).is_ok(),
-                "{op} must be explicitly listed in WRITE_OPERATIONS"
+                WRITE_OPERATIONS.binary_search(op).is_ok()
+                    || CLI_WRITE_OPERATIONS.binary_search(op).is_ok(),
+                "{op} must be explicitly listed in an upstream or CLI write bucket"
             );
             assert!(
                 is_write_operation(op),
