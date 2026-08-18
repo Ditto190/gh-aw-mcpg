@@ -34,7 +34,7 @@ pub const WRITE_OPERATIONS: &[&str] = &[
     "create_pull_request_with_copilot",
     "create_release", // POST /repos/.../releases
     "create_repository",
-    "create_repository_autolink", // gh repo autolink create — POST /repos/.../autolinks/{id}
+    "create_repository_autolink", // gh repo autolink create — POST /repos/.../autolinks
     "delete_codespace", // gh codespace delete — DELETE /user/codespaces/{name} or /orgs/{org}/members/{user}/codespaces/{name}
     "delete_deploy_key",
     "delete_file",
