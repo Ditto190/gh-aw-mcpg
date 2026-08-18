@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"os"
 	"testing"
 
 	"github.com/github/gh-aw-mcpg/internal/config"
@@ -196,6 +197,110 @@ func TestParseDIFCSinkServerIDs(t *testing.T) {
 			assert.Equal(t, tt.expect, result)
 		})
 	}
+}
+
+func setupAllowOnlyScopeCmd(t *testing.T) (*cobra.Command, *bool, *string) {
+	t.Helper()
+	cmd := &cobra.Command{
+		Use:          "test",
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return nil
+		},
+	}
+	public := new(bool)
+	owner := new(string)
+	registerAllowOnlyScopeFlags(cmd, public, owner, new(string), new(string))
+	return cmd, public, owner
+}
+
+func TestAllowOnlyScopeFlagsMutuallyExclusive(t *testing.T) {
+	clearEnv := func(t *testing.T) {
+		t.Helper()
+		for _, name := range []string{config.EnvAllowOnlyScopePublic, config.EnvAllowOnlyScopeOwner} {
+			value, wasSet := os.LookupEnv(name)
+			require.NoError(t, os.Unsetenv(name))
+			t.Cleanup(func() {
+				if wasSet {
+					require.NoError(t, os.Setenv(name, value))
+					return
+				}
+				require.NoError(t, os.Unsetenv(name))
+			})
+		}
+	}
+
+	t.Run("public and owner together are rejected by cobra", func(t *testing.T) {
+		clearEnv(t)
+		cmd, _, _ := setupAllowOnlyScopeCmd(t)
+		cmd.SetArgs([]string{"--allowonly-scope-public", "--allowonly-scope-owner", "octocat"})
+		err := cmd.Execute()
+		require.Error(t, err, "should fail when both --allowonly-scope-public and --allowonly-scope-owner are provided")
+		assert.Contains(t, err.Error(), "allowonly-scope-public", "error should mention allowonly-scope-public")
+		assert.Contains(t, err.Error(), "allowonly-scope-owner", "error should mention allowonly-scope-owner")
+	})
+
+	t.Run("empty owner environment value does not disable cobra validation", func(t *testing.T) {
+		clearEnv(t)
+		t.Setenv(config.EnvAllowOnlyScopeOwner, "")
+		cmd, _, _ := setupAllowOnlyScopeCmd(t)
+		cmd.SetArgs([]string{"--allowonly-scope-public", "--allowonly-scope-owner", "octocat"})
+
+		require.Error(t, cmd.Execute())
+	})
+
+	t.Run("public alone is accepted", func(t *testing.T) {
+		clearEnv(t)
+		cmd, _, _ := setupAllowOnlyScopeCmd(t)
+		cmd.SetArgs([]string{"--allowonly-scope-public"})
+		err := cmd.Execute()
+		require.NoError(t, err, "should succeed when only --allowonly-scope-public is provided")
+	})
+
+	t.Run("owner alone is accepted", func(t *testing.T) {
+		clearEnv(t)
+		cmd, _, _ := setupAllowOnlyScopeCmd(t)
+		cmd.SetArgs([]string{"--allowonly-scope-owner", "octocat"})
+		err := cmd.Execute()
+		require.NoError(t, err, "should succeed when only --allowonly-scope-owner is provided")
+	})
+
+	t.Run("neither flag is accepted", func(t *testing.T) {
+		clearEnv(t)
+		cmd, _, _ := setupAllowOnlyScopeCmd(t)
+		cmd.SetArgs([]string{})
+		err := cmd.Execute()
+		require.NoError(t, err, "should succeed when neither AllowOnly scope flag is provided")
+	})
+
+	t.Run("public environment default can be cleared for owner scope", func(t *testing.T) {
+		clearEnv(t)
+		t.Setenv(config.EnvAllowOnlyScopePublic, "true")
+		cmd, public, owner := setupAllowOnlyScopeCmd(t)
+		cmd.SetArgs([]string{"--allowonly-scope-public=false", "--allowonly-scope-owner", "octocat"})
+
+		require.NoError(t, cmd.Execute())
+		assert.False(t, *public)
+		assert.Equal(t, "octocat", *owner)
+	})
+
+	t.Run("owner environment default can be cleared for public scope", func(t *testing.T) {
+		clearEnv(t)
+		t.Setenv(config.EnvAllowOnlyScopeOwner, "octocat")
+		cmd, public, owner := setupAllowOnlyScopeCmd(t)
+		cmd.SetArgs([]string{"--allowonly-scope-owner=", "--allowonly-scope-public"})
+
+		require.NoError(t, cmd.Execute())
+		assert.True(t, *public)
+		assert.Empty(t, *owner)
+	})
+}
+
+// TestAllowOnlyScopeFlagsRegistered verifies that the AllowOnly scope flags
+// exist on the root command.
+func TestAllowOnlyScopeFlagsRegistered(t *testing.T) {
+	assert.NotNil(t, rootCmd.Flags().Lookup("allowonly-scope-public"), "allowonly-scope-public flag should be registered on rootCmd")
+	assert.NotNil(t, rootCmd.Flags().Lookup("allowonly-scope-owner"), "allowonly-scope-owner flag should be registered on rootCmd")
 }
 
 func TestBuildAllowOnlyPolicy(t *testing.T) {
