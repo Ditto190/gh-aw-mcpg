@@ -97,6 +97,7 @@ pub mod field_names {
     pub const METHOD: &str = "method";
     // Commonly accessed response fields
     pub const FULL_NAME: &str = "full_name";
+    pub const FULL_NAME_CAMEL: &str = "fullName";
     pub const NUMBER: &str = "number";
     pub const PRIVATE: &str = "private";
     pub const LOGIN: &str = "login";

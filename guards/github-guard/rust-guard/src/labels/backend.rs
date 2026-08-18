@@ -1635,7 +1635,7 @@ fn owner_type_from_repo_object(item: &Value) -> Option<bool> {
 }
 
 fn repo_id_from_repo_object(item: &Value) -> Option<String> {
-    for field in ["full_name", "fullName"] {
+    for field in [field_names::FULL_NAME, field_names::FULL_NAME_CAMEL] {
         if let Some(full_name) = item.get(field).and_then(|v| v.as_str()) {
             if !full_name.is_empty() {
                 return Some(full_name.to_string());
