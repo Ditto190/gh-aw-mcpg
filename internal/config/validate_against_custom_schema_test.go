@@ -466,6 +466,82 @@ func newRemoteRefSchemaServer(t *testing.T, defsRequestCount *atomic.Int32) *htt
 	return mockServer
 }
 
+// TestValidateAgainstCustomSchema_RemoteRefByteBudgetIsEnforced covers the
+// reserveBytes error path in schemaURLLoader.Load (validation_schema.go), which is
+// distinct from the document-count budget covered by
+// TestValidateAgainstCustomSchema_RemoteRefBudgetIsEnforced above. Each individual
+// document here stays under fetchSchema's own per-fetch size limit
+// (maxSchemaFetchBytes), but the aggregate size across two remote $ref documents
+// exceeds maxRemoteRefTotalBytes, so the loader's cumulative byte budget must reject
+// the second fetch.
+func TestValidateAgainstCustomSchema_RemoteRefByteBudgetIsEnforced(t *testing.T) {
+	// httptest serves plain HTTP, so relax the HTTPS-only policy for remote refs.
+	allowInsecureSchemaRefsForTest(t)
+
+	var requestCount atomic.Int32
+
+	// Each padding blob is safely under maxSchemaFetchBytes (10 MiB) on its own, but
+	// two of them together exceed maxRemoteRefTotalBytes (10 MiB aggregate).
+	paddingSize := (maxRemoteRefTotalBytes / 2) + (64 * 1024)
+	padding := make([]byte, paddingSize)
+	for i := range padding {
+		padding[i] = 'a'
+	}
+	paddingStr := string(padding)
+
+	var mockServer *httptest.Server
+	mockServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount.Add(1)
+		switch r.URL.Path {
+		case "/root.json":
+			schema := map[string]interface{}{
+				"$schema": "http://json-schema.org/draft-07/schema#",
+				"$id":     mockServer.URL + "/root.json",
+				"$ref":    "./big1.json",
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(schema)
+		case "/big1.json":
+			schema := map[string]interface{}{
+				"$schema": "http://json-schema.org/draft-07/schema#",
+				"$id":     mockServer.URL + "/big1.json",
+				"$ref":    "./big2.json",
+				// Padding is embedded as a description string to inflate the
+				// serialized document size without affecting validation semantics.
+				"description": paddingStr,
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(schema)
+		case "/big2.json":
+			schema := map[string]interface{}{
+				"$schema":     "http://json-schema.org/draft-07/schema#",
+				"$id":         mockServer.URL + "/big2.json",
+				"type":        "object",
+				"description": paddingStr,
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(schema)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer mockServer.Close()
+
+	server := &StdinServerConfig{
+		Type:      "mytype",
+		Container: "ghcr.io/example/mytype:latest",
+	}
+
+	err := validateAgainstCustomSchema("test-server", server, mockServer.URL+"/root.json", "mcpServers.test-server")
+
+	require.Error(t, err, "aggregate remote $ref bytes exceeding the budget must be rejected")
+	assert.Contains(t, err.Error(), "too large", "error should report the exhausted byte budget")
+	// root.json, big1.json, and big2.json are each fetched once: the budget check
+	// happens after big2.json's bytes are read (reserveBytes rejects the overage
+	// post-fetch), so exactly 3 requests are made before compilation fails.
+	assert.Equal(t, int32(3), requestCount.Load(), "loader must stop fetching once the aggregate byte budget is exhausted")
+}
+
 func TestValidateAgainstCustomSchema_RemoteRefBudgetIsEnforced(t *testing.T) {
 	// httptest serves plain HTTP, so relax the HTTPS-only policy for remote refs.
 	allowInsecureSchemaRefsForTest(t)
