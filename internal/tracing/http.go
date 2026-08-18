@@ -14,7 +14,10 @@ import (
 	oteltrace "go.opentelemetry.io/otel/trace"
 
 	"github.com/github/gh-aw-mcpg/internal/httputil"
+	"github.com/github/gh-aw-mcpg/internal/logger"
 )
+
+var logHTTP = logger.ForFile()
 
 // statusResponseWriter wraps http.ResponseWriter to capture the HTTP response
 // status code. It embeds httputil.BaseResponseWriter which provides WriteHeader,
@@ -42,7 +45,7 @@ type statusResponseWriter struct {
 // GitHub API proxy. Callers that need session-level attributes (e.g. session.id)
 // should add them as extra attrs or extend the context themselves.
 func WrapHTTPHandler(next http.Handler, spanName string, extraAttrs ...attribute.KeyValue) http.Handler {
-	logTracing.Printf("Registering HTTP handler with OTel span: span=%s, extraAttrs=%d", spanName, len(extraAttrs))
+	logHTTP.Printf("Registering HTTP handler with OTel span: span=%s, extraAttrs=%d", spanName, len(extraAttrs))
 	t := Tracer()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Extract incoming W3C trace context (traceparent / tracestate).
@@ -51,13 +54,14 @@ func WrapHTTPHandler(next http.Handler, spanName string, extraAttrs ...attribute
 		ctx := otel.GetTextMapPropagator().Extract(r.Context(), propagation.HeaderCarrier(r.Header))
 
 		hasRemoteParent := oteltrace.SpanContextFromContext(ctx).IsRemote()
-		logTracing.Printf("Handling request: span=%s, method=%s, path=%s, remoteParent=%v", spanName, r.Method, r.URL.Path, hasRemoteParent)
+		logHTTP.Printf("Handling request: span=%s, method=%s, path=%s, remoteParent=%v", spanName, r.Method, r.URL.Path, hasRemoteParent)
 
 		route := r.Pattern
 		if method, path, ok := strings.Cut(route, " "); ok {
 			if strings.EqualFold(method, r.Method) {
 				route = path
 			} else {
+				logHTTP.Printf("Route pattern method mismatch: span=%s, patternMethod=%s, requestMethod=%s", spanName, method, r.Method)
 				route = ""
 			}
 		}
@@ -76,7 +80,7 @@ func WrapHTTPHandler(next http.Handler, spanName string, extraAttrs ...attribute
 		)
 		defer span.End()
 
-		logTracing.Printf("Span started: span=%s, traceID=%s", spanName, span.SpanContext().TraceID())
+		logHTTP.Printf("Span started: span=%s, traceID=%s", spanName, span.SpanContext().TraceID())
 
 		srw := &statusResponseWriter{BaseResponseWriter: httputil.BaseResponseWriter{ResponseWriter: w, StatusCode: http.StatusOK}}
 		defer func() {
@@ -86,6 +90,7 @@ func WrapHTTPHandler(next http.Handler, spanName string, extraAttrs ...attribute
 				if msg == "" {
 					msg = fmt.Sprintf("HTTP %d", srw.StatusCode)
 				}
+				logHTTP.Printf("5xx response observed: span=%s, statusCode=%d, msg=%s", spanName, srw.StatusCode, msg)
 				RecordSpanError(span, errors.New(msg), msg)
 			}
 		}()
