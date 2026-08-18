@@ -120,6 +120,17 @@ func FormatViolationError(result *EvaluationResult, agentSecrecy *SecrecyLabel, 
 	return errors.New(msg.String())
 }
 
+// splitTagScope splits a tag into its base level and optional scope suffix
+// (e.g., "approved:all" → ("approved", "all"), "public" → ("public", "")).
+// A tag whose only colon is at the start (e.g., ":all") is returned unsplit.
+func splitTagScope(tag Tag) (base, scope string) {
+	s := string(tag)
+	if idx := strings.Index(s, ":"); idx > 0 {
+		return s[:idx], s[idx+1:]
+	}
+	return s, ""
+}
+
 // formatIntegrityLevel converts a list of integrity tags into a human-readable
 // integrity level description (e.g., `"approved"` instead of "[unapproved:all approved:all]").
 func formatIntegrityLevel(tags []Tag) string {
@@ -129,11 +140,7 @@ func formatIntegrityLevel(tags []Tag) string {
 	// Find the highest integrity level mentioned in the tags
 	highest := ""
 	for _, tag := range tags {
-		s := string(tag)
-		// Strip scope suffix (e.g., "approved:all" → "approved")
-		if idx := strings.Index(s, ":"); idx > 0 {
-			s = s[:idx]
-		}
+		s, _ := splitTagScope(tag)
 		switch s {
 		case "merged":
 			logViolations.Printf("formatIntegrityLevel: resolved to \"merged\" from tags=%v", tags)
@@ -164,15 +171,18 @@ func formatSecrecyLevel(tags []Tag) string {
 	hasPrivate := false
 
 	for _, tag := range tags {
-		s := string(tag)
-		if strings.HasPrefix(s, "private:") {
-			scope := strings.TrimPrefix(s, "private:")
-			if scope != "" && len(scope) > len(bestScope) {
+		base, scope := splitTagScope(tag)
+		if base != "private" {
+			continue
+		}
+		if scope != "" {
+			if len(scope) > len(bestScope) {
 				bestScope = scope
 			}
 			continue
 		}
-		if s == "private" {
+		// No scope suffix at all (as opposed to an empty "private:" scope)
+		if string(tag) == "private" {
 			hasPrivate = true
 		}
 	}
