@@ -177,3 +177,58 @@ func TestFormatSecrecyLevel(t *testing.T) {
 		})
 	}
 }
+
+// TestSplitTagScope tests the shared tag/scope splitting helper.
+func TestSplitTagScope(t *testing.T) {
+	tests := []struct {
+		name      string
+		tag       Tag
+		wantBase  string
+		wantScope string
+	}{
+		{
+			name:      "tag without scope",
+			tag:       "public",
+			wantBase:  "public",
+			wantScope: "",
+		},
+		{
+			name:      "tag with scope",
+			tag:       "approved:all",
+			wantBase:  "approved",
+			wantScope: "all",
+		},
+		{
+			name:      "scope containing colons is preserved",
+			tag:       "private:org/repo:extra",
+			wantBase:  "private",
+			wantScope: "org/repo:extra",
+		},
+		{
+			name:      "empty scope suffix",
+			tag:       "private:",
+			wantBase:  "private",
+			wantScope: "",
+		},
+		{
+			name:      "leading colon is not split",
+			tag:       ":all",
+			wantBase:  ":all",
+			wantScope: "",
+		},
+		{
+			name:      "empty tag",
+			tag:       "",
+			wantBase:  "",
+			wantScope: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			base, scope := splitTagScope(tt.tag)
+			assert.Equal(t, tt.wantBase, base)
+			assert.Equal(t, tt.wantScope, scope)
+		})
+	}
+}
