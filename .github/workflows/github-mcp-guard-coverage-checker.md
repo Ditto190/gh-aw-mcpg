@@ -195,6 +195,7 @@ From reading the code, produce:
 5. **deprecated_aliases**: set of compatibility names in `DEPRECATED_WRITE_ALIASES` and `DEPRECATED_READ_WRITE_ALIASES`
 6. **pattern_covered**: tools from the upstream list that match any pattern (`merge_*`, `delete_*`, `update_*`, `create_*`)
 7. **label_ruled**: set of tool names with explicit match arms in `apply_tool_labels`
+8. **source_catalog**: a mapping from each guard entry to exactly one source category: upstream MCP, CLI-only, synthetic guard/runtime, or deprecated alias
 
 ## Step 5: Identify Coverage Gaps
 
@@ -223,7 +224,14 @@ For CLI-only gaps, the fix is to add a new entry to `CLI_WRITE_OPERATIONS` (or `
 
 ### 5.4 Stale entries (bonus check)
 
-Check if any entries in the upstream MCP buckets (`WRITE_OPERATIONS` or `READ_WRITE_OPERATIONS`) are **no longer in the upstream MCP tool list**. Do not report entries from `CLI_WRITE_OPERATIONS`, `CLI_READ_WRITE_OPERATIONS`, `SYNTHETIC_WRITE_OPERATIONS`, or the deprecated alias buckets as MCP drift; audit those against their explicit source buckets instead.
+Run reverse checks for each source category:
+
+1. **Upstream MCP stale entries**: Check if any entries in the upstream MCP buckets (`WRITE_OPERATIONS` or `READ_WRITE_OPERATIONS`) are **no longer in the upstream MCP tool list**. Do not report entries from `CLI_WRITE_OPERATIONS`, `CLI_READ_WRITE_OPERATIONS`, `SYNTHETIC_WRITE_OPERATIONS`, or the deprecated alias buckets as MCP drift.
+2. **CLI bucket stale entries**: Check every entry in `CLI_WRITE_OPERATIONS` and `CLI_READ_WRITE_OPERATIONS` against the CLI write-operation mapping from Steps 3.3-3.4. Report any entry that no longer corresponds to a CLI mutating operation, has gained an upstream MCP equivalent and should move to an upstream MCP bucket, or is better represented by a prefix pattern.
+3. **Synthetic bucket stale entries**: Check every entry in `SYNTHETIC_WRITE_OPERATIONS` against local guard/runtime usage and documentation. Report any entry that is not referenced outside the inventory/tests, is no longer emitted by runtime code, or should move to a CLI or upstream MCP bucket.
+4. **Deprecated alias stale entries**: Check every entry in `DEPRECATED_WRITE_ALIASES` and `DEPRECATED_READ_WRITE_ALIASES` for an active compatibility rationale (for example, a former upstream tool name, a documented migration, or compatibility test coverage). Report any alias with no remaining compatibility purpose or whose replacement is fully covered by a non-deprecated source bucket.
+
+Keep the finding type source-specific. For example, report an obsolete CLI-only entry as a stale CLI bucket entry, not as MCP drift.
 
 ### 5.5 Filter known gaps and detect regressions
 
@@ -325,9 +333,33 @@ For each CLI-only gap, either:
 
 ## Stale Guard Entries (bonus)
 
-These tools are in the upstream MCP buckets (`WRITE_OPERATIONS` or `READ_WRITE_OPERATIONS`) but no longer appear in the upstream github-mcp-server tool list. Entries in the CLI/synthetic/deprecated buckets are not MCP drift and should be audited against their explicit source:
+These tools are in the upstream MCP buckets (`WRITE_OPERATIONS` or `READ_WRITE_OPERATIONS`) but no longer appear in the upstream github-mcp-server tool list. Entries in the CLI/synthetic/deprecated buckets are not MCP drift and are reported in the source-specific sections below:
 
 - `stale_tool_name` — not found in upstream
+
+### Stale CLI Bucket Entries
+
+These guard entries are in `CLI_WRITE_OPERATIONS` or `CLI_READ_WRITE_OPERATIONS` but no longer match a CLI-only mutating operation discovered from `cli/cli`, have gained upstream MCP coverage, or are covered by a prefix pattern:
+
+| Guard Entry | Source Bucket | Current CLI Evidence | Suggested Action |
+|-------------|---------------|----------------------|------------------|
+| `stale_cli_entry` | `CLI_WRITE_OPERATIONS` | No matching CLI mutating endpoint found | Remove or move to the correct bucket |
+
+### Stale Synthetic Bucket Entries
+
+These guard/runtime synthetic entries are in `SYNTHETIC_WRITE_OPERATIONS` but no longer have local runtime usage, documentation, or another synthetic source that justifies keeping them:
+
+| Guard Entry | Current Evidence | Suggested Action |
+|-------------|------------------|------------------|
+| `stale_synthetic_entry` | Not referenced outside inventory/tests | Remove or document the synthetic source |
+
+### Deprecated Alias Review Findings
+
+These compatibility aliases are in `DEPRECATED_WRITE_ALIASES` or `DEPRECATED_READ_WRITE_ALIASES` but no longer have an active compatibility rationale:
+
+| Alias | Replacement / Current Coverage | Suggested Action |
+|-------|--------------------------------|------------------|
+| `obsolete_alias` | Replacement is fully covered by `WRITE_OPERATIONS` | Remove the alias or document why compatibility is still required |
 
 ---
 
