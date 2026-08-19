@@ -469,7 +469,7 @@ func newRemoteRefSchemaServer(t *testing.T, defsRequestCount *atomic.Int32) *htt
 // TestValidateAgainstCustomSchema_RemoteRefByteBudgetIsEnforced covers the
 // reserveBytes error path in schemaURLLoader.Load (validation_schema.go), which is
 // distinct from the document-count budget covered by
-// TestValidateAgainstCustomSchema_RemoteRefBudgetIsEnforced above. Each individual
+// TestValidateAgainstCustomSchema_RemoteRefBudgetIsEnforced below. Each individual
 // document here stays under fetchSchema's own per-fetch size limit
 // (maxSchemaFetchBytes), but the aggregate size across two remote $ref documents
 // exceeds maxRemoteRefTotalBytes, so the loader's cumulative byte budget must reject
