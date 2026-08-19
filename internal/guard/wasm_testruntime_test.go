@@ -25,8 +25,8 @@ func newTestWasmModuleConfig(name string) wazero.ModuleConfig {
 	return wazero.NewModuleConfig().WithName(name)
 }
 
-// instantiateTestWasmModule instantiates wasmBytes in rt and registers module
-// cleanup with t.
+// instantiateTestWasmModule instantiates wasmBytes in rt. The caller is
+// responsible for closing the returned module.
 func instantiateTestWasmModule(t *testing.T, ctx context.Context, rt wazero.Runtime, wasmBytes []byte, name string) api.Module {
 	t.Helper()
 	mod, err := rt.InstantiateWithConfig(ctx, wasmBytes, newTestWasmModuleConfig(name))
