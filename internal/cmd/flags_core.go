@@ -32,6 +32,8 @@ func init() {
 }
 
 func registerCoreFlags(cmd *cobra.Command) {
+	debugLog.Print("Registering core flags")
+
 	cmd.Flags().StringVarP(&configFile, "config", "c", defaultConfigFile, "Path to config file")
 	cmd.Flags().BoolVar(&configStdin, "config-stdin", defaultConfigStdin, "Read MCP server configuration from stdin (JSON format). When enabled, overrides --config")
 	cmd.Flags().StringVarP(&listenAddr, "listen", "l", defaultListenAddr, "HTTP server listen address")
@@ -48,4 +50,6 @@ func registerCoreFlags(cmd *cobra.Command) {
 	// when neither flag is set.
 	cmd.MarkFlagsMutuallyExclusive("routed", "unified")
 	cmd.MarkFlagsOneRequired("config", "config-stdin")
+
+	debugLog.Print("Core flags registered, marked routed/unified mutually exclusive and config/config-stdin required")
 }
