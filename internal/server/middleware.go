@@ -53,6 +53,7 @@ func buildDefaultHandlerConfig(unifiedServer *UnifiedServer, sessionTimeout time
 // agent-originated trace is continued; if no such headers are present a fresh
 // root span (and new trace ID) is created automatically.
 func WithOTELTracing(next http.Handler, tag string) http.Handler {
+	logServerHelpers.Printf("WithOTELTracing: wrapping handler with tag=%s", tag)
 	// Wrap next with an enrichment handler that adds session ID to the span
 	// after the inner handler returns (once the session has been attached to the context).
 	// This works because setupSessionCallback uses pointer mutation (*r = *injectSessionContext(...))
@@ -114,6 +115,7 @@ func wrapWithMiddleware(handler http.Handler, logTag string, unifiedServer *Unif
 //  3. wrapWithMiddleware - standard middleware chain (OTEL -> auth -> HMAC ->
 //     shutdown check -> SDK logging)
 func buildMCPHandler(serverFactory func(*http.Request) *sdk.Server, cfg mcpHandlerConfig) http.Handler {
+	logServerHelpers.Printf("buildMCPHandler: logTag=%s, backendID=%s, sessionTimeout=%s", cfg.logTag, cfg.backendID, cfg.sessionTimeout)
 	h := sdk.NewStreamableHTTPHandler(serverFactory, &sdk.StreamableHTTPOptions{
 		Stateless:      false,
 		Logger:         logger.NewSlogLoggerWithHandler(cfg.handlerLog),
@@ -121,6 +123,7 @@ func buildMCPHandler(serverFactory func(*http.Request) *sdk.Server, cfg mcpHandl
 	})
 	handler := WrapWithSessionAutoInit(h)
 	if cfg.backendID != "" {
+		logServerHelpers.Printf("buildMCPHandler: requiring backend registration for backendID=%s", cfg.backendID)
 		handler = requireBackendRegistration(cfg.unifiedServer, cfg.backendID, handler)
 	}
 	return wrapWithMiddleware(handler, cfg.logTag, cfg.unifiedServer, cfg.apiKey, cfg.hmacSecret)
