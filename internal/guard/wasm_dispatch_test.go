@@ -10,7 +10,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/tetratelabs/wazero"
 )
 
 // labelResourceReturnsZeroWasm exports "label_resource" and "memory"; the function
@@ -68,15 +67,7 @@ var labelResponseReturnsTwoWasm = []byte{
 // and returns a WasmGuard wired to it plus a cleanup function.
 func setupRawWasmModule(t *testing.T, wasmBytes []byte, name string) (*WasmGuard, func()) {
 	t.Helper()
-	ctx := context.Background()
-	rt := newTestInterpreterRuntime(ctx)
-	mod, err := rt.InstantiateWithConfig(ctx, wasmBytes, wazero.NewModuleConfig().WithName(name))
-	require.NoError(t, err, "failed to instantiate WASM module %s", name)
-	g := &WasmGuard{name: name, module: mod}
-	return g, func() {
-		require.NoError(t, mod.Close(ctx))
-		require.NoError(t, rt.Close(ctx))
-	}
+	return setupTestWasmGuard(t, wasmBytes, name)
 }
 
 // --- TestUnmarshalWasmResponse ---

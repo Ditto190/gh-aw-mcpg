@@ -148,6 +148,15 @@ func ConfigureGlobalCompilationCache(ctx context.Context, dir string) error {
 	return nil
 }
 
+// getGlobalCompilationCache returns the process-level compilation cache under
+// the lock so it cannot be read while ConfigureGlobalCompilationCache or
+// CloseGlobalCompilationCache is swapping it out.
+func getGlobalCompilationCache() wazero.CompilationCache {
+	globalCompilationCacheMu.Lock()
+	defer globalCompilationCacheMu.Unlock()
+	return globalCompilationCache
+}
+
 // CloseGlobalCompilationCache releases JIT resources held by the shared
 // compilation cache. It should be called during graceful shutdown, after all
 // WasmGuard runtimes have been closed (i.e., after Registry.Close()).
@@ -169,6 +178,55 @@ func CloseGlobalCompilationCache(ctx context.Context) error {
 	}
 	logWasm.Print("Global compilation cache closed")
 	return nil
+}
+
+// guardMemoryLimitPages caps guest memory at 512 pages (32 MiB), which
+// accommodates the max input/output buffers plus overhead.
+const guardMemoryLimitPages = 512
+
+// newGuardRuntimeConfig builds the wazero runtime configuration used for guard
+// runtimes. It applies the memory cap, context-cancellation cleanup, and
+// compilation cache selection (explicit opt-out, injected cache, or shared
+// global cache).
+//
+// DWARF debug info is disabled unless guard debug logging is enabled: guard
+// binaries are untrusted third-party artifacts and the gateway never
+// symbolicates guest stack traces, so skipping DWARF parsing saves compile
+// time and memory without any functional loss.
+func newGuardRuntimeConfig(opts *WasmGuardOptions) wazero.RuntimeConfig {
+	runtimeConfig := wazero.NewRuntimeConfigCompiler().
+		WithCloseOnContextDone(true).
+		WithMemoryLimitPages(guardMemoryLimitPages).
+		WithDebugInfoEnabled(logWasm.Enabled())
+
+	switch {
+	case opts != nil && opts.DisableCompilationCache:
+		// Caller explicitly disabled caching
+	case opts != nil && opts.CompilationCache != nil:
+		runtimeConfig = runtimeConfig.WithCompilationCache(opts.CompilationCache)
+	default:
+		runtimeConfig = runtimeConfig.WithCompilationCache(getGlobalCompilationCache())
+	}
+
+	return runtimeConfig
+}
+
+// newGuardModuleConfig builds the wazero module configuration used to
+// instantiate guard modules. It keeps the stdin/stdout isolation guarantees
+// consistent across every instantiation site.
+func newGuardModuleConfig(name string, stdout, stderr io.Writer) wazero.ModuleConfig {
+	guardName := name
+	if guardName == "" {
+		guardName = "guard"
+	}
+	return wazero.NewModuleConfig().
+		WithName(guardName).
+		// WithStartFunctions with no args suppresses automatic _start execution
+		// so guard loading cannot block on stdin or perform unexpected I/O.
+		WithStartFunctions().
+		WithStdin(strings.NewReader("")). // Isolate stdin
+		WithStdout(stdout).               // Keep WASM stdout off gateway stdout (MCP stream)
+		WithStderr(stderr)
 }
 
 // WasmGuardOptions configures optional settings for WASM guard creation
@@ -249,18 +307,7 @@ func NewWasmGuardFromBytes(ctx context.Context, name string, wasmBytes []byte, b
 func NewWasmGuardWithOptions(ctx context.Context, name string, wasmBytes []byte, backend BackendCaller, opts *WasmGuardOptions) (*WasmGuard, error) {
 	logWasm.Printf("Creating WASM guard from bytes: name=%s, size=%d", name, len(wasmBytes))
 
-	// Select compilation cache: explicit opt-out, injected cache, or shared global.
-	runtimeConfig := wazero.NewRuntimeConfigCompiler().
-		WithCloseOnContextDone(true).
-		WithMemoryLimitPages(512) // 32 MiB hard cap; accommodates max input/output buffers + overhead
-	if opts != nil && opts.DisableCompilationCache {
-		// Caller explicitly disabled caching
-	} else if opts != nil && opts.CompilationCache != nil {
-		runtimeConfig = runtimeConfig.WithCompilationCache(opts.CompilationCache)
-	} else {
-		runtimeConfig = runtimeConfig.WithCompilationCache(globalCompilationCache)
-	}
-	runtime := wazero.NewRuntimeWithConfig(ctx, runtimeConfig)
+	runtime := wazero.NewRuntimeWithConfig(ctx, newGuardRuntimeConfig(opts))
 
 	// Instantiate WASI
 	if _, err := wasi_snapshot_preview1.Instantiate(ctx, runtime); err != nil {
@@ -293,18 +340,7 @@ func NewWasmGuardWithOptions(ctx context.Context, name string, wasmBytes []byte,
 	}
 
 	// WithStdin prevents WASM from accidentally reading gateway's MCP protocol stdin
-	guardName := name
-	if guardName == "" {
-		guardName = "guard"
-	}
-	moduleConfig := wazero.NewModuleConfig().
-		WithName(guardName).
-		// WithStartFunctions with no args suppresses automatic _start execution
-		// so guard loading cannot block on stdin or perform unexpected I/O.
-		WithStartFunctions().
-		WithStdin(strings.NewReader("")). // Isolate stdin
-		WithStdout(stdoutWriter).         // Keep WASM stdout off gateway stdout (MCP stream)
-		WithStderr(stderrWriter)
+	moduleConfig := newGuardModuleConfig(name, stdoutWriter, stderrWriter)
 
 	// Compile and instantiate the WASM module
 	module, err := runtime.InstantiateWithConfig(ctx, wasmBytes, moduleConfig)
