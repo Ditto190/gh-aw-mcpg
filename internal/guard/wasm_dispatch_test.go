@@ -69,7 +69,7 @@ var labelResponseReturnsTwoWasm = []byte{
 func setupRawWasmModule(t *testing.T, wasmBytes []byte, name string) (*WasmGuard, func()) {
 	t.Helper()
 	ctx := context.Background()
-	rt := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfigInterpreter())
+	rt := newTestInterpreterRuntime(ctx)
 	mod, err := rt.InstantiateWithConfig(ctx, wasmBytes, wazero.NewModuleConfig().WithName(name))
 	require.NoError(t, err, "failed to instantiate WASM module %s", name)
 	g := &WasmGuard{name: name, module: mod}

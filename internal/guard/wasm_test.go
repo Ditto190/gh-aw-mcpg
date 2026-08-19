@@ -19,6 +19,13 @@ import (
 	"github.com/tetratelabs/wazero/sys"
 )
 
+// newTestInterpreterRuntime creates a wazero interpreter runtime for tests.
+// The interpreter engine is preferred over the compiler engine in tests
+// because it has faster startup and doesn't require JIT support.
+func newTestInterpreterRuntime(ctx context.Context) wazero.Runtime {
+	return wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfigInterpreter())
+}
+
 func TestMain(m *testing.M) {
 	code := m.Run()
 	if err := globalCompilationCache.Close(context.Background()); err != nil {
@@ -1191,7 +1198,7 @@ func TestWasmGuardClose(t *testing.T) {
 
 	t.Run("close ignores caller cancellation during cleanup", func(t *testing.T) {
 		ctx := context.Background()
-		rt := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfigInterpreter())
+		rt := newTestInterpreterRuntime(ctx)
 		mod, err := rt.InstantiateWithConfig(ctx, minimalGuardWasm, wazero.NewModuleConfig().WithName("close-guard"))
 		require.NoError(t, err)
 
@@ -1318,7 +1325,7 @@ func TestBufferRetryLogic(t *testing.T) {
 	setupModule := func(t *testing.T, wasmBytes []byte, moduleName string) (*WasmGuard, func()) {
 		t.Helper()
 		ctx := context.Background()
-		rt := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfigInterpreter())
+		rt := newTestInterpreterRuntime(ctx)
 		mod, err := rt.InstantiateWithConfig(ctx, wasmBytes, wazero.NewModuleConfig().WithName(moduleName))
 		require.NoError(t, err)
 		g := &WasmGuard{name: moduleName, module: mod}
@@ -1332,7 +1339,7 @@ func TestBufferRetryLogic(t *testing.T) {
 	t.Run("function not exported from module", func(t *testing.T) {
 		// minimalGuardWasm has no exports at all; ExportedFunction returns nil.
 		ctx := context.Background()
-		rt := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfigInterpreter())
+		rt := newTestInterpreterRuntime(ctx)
 		t.Cleanup(func() { require.NoError(t, rt.Close(ctx)) })
 		mod, err := rt.InstantiateWithConfig(ctx, minimalGuardWasm, wazero.NewModuleConfig().WithName("minimal-retry"))
 		require.NoError(t, err)
@@ -1465,7 +1472,7 @@ func TestWasmMemoryLayout(t *testing.T) {
 
 func TestTryCallWasmFunctionDirectMemoryFallback(t *testing.T) {
 	ctx := context.Background()
-	runtime := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfigInterpreter())
+	runtime := newTestInterpreterRuntime(ctx)
 	t.Cleanup(func() {
 		require.NoError(t, runtime.Close(ctx))
 	})
@@ -1598,7 +1605,7 @@ func TestJSONMarshaling(t *testing.T) {
 func TestIsWasmTrap(t *testing.T) {
 	t.Run("actual wazero trap still uses wasm error prefix (verified with wazero v1.12.0)", func(t *testing.T) {
 		ctx := context.Background()
-		runtime := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfigInterpreter())
+		runtime := newTestInterpreterRuntime(ctx)
 		t.Cleanup(func() {
 			require.NoError(t, runtime.Close(ctx))
 		})
