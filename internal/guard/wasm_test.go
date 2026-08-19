@@ -259,7 +259,7 @@ func TestWasmGuardContextPropagation(t *testing.T) {
 		}()
 
 		// Instantiate the blocking WASM module.
-		moduleConfig := wazero.NewModuleConfig().WithName("blocking_guard")
+		moduleConfig := newTestWasmModuleConfig("blocking_guard")
 		mod, err := runtime.InstantiateWithConfig(ctx, blockingGuardWasm, moduleConfig)
 		require.NoError(t, err, "failed to instantiate blocking WASM module")
 
@@ -1191,8 +1191,8 @@ func TestWasmGuardClose(t *testing.T) {
 
 	t.Run("close ignores caller cancellation during cleanup", func(t *testing.T) {
 		ctx := context.Background()
-		rt := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfigInterpreter())
-		mod, err := rt.InstantiateWithConfig(ctx, minimalGuardWasm, wazero.NewModuleConfig().WithName("close-guard"))
+		rt := newTestWasmRuntime(ctx)
+		mod, err := rt.InstantiateWithConfig(ctx, minimalGuardWasm, newTestWasmModuleConfig("close-guard"))
 		require.NoError(t, err)
 
 		guard := &WasmGuard{runtime: rt, module: mod}
@@ -1315,26 +1315,14 @@ func TestHostCallBackendCallLimit(t *testing.T) {
 
 func TestBufferRetryLogic(t *testing.T) {
 	// helper instantiates a module for the retry-logic tests.
-	setupModule := func(t *testing.T, wasmBytes []byte, moduleName string) (*WasmGuard, func()) {
-		t.Helper()
-		ctx := context.Background()
-		rt := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfigInterpreter())
-		mod, err := rt.InstantiateWithConfig(ctx, wasmBytes, wazero.NewModuleConfig().WithName(moduleName))
-		require.NoError(t, err)
-		g := &WasmGuard{name: moduleName, module: mod}
-		cleanup := func() {
-			require.NoError(t, mod.Close(ctx))
-			require.NoError(t, rt.Close(ctx))
-		}
-		return g, cleanup
-	}
+	setupModule := setupTestWasmGuard
 
 	t.Run("function not exported from module", func(t *testing.T) {
 		// minimalGuardWasm has no exports at all; ExportedFunction returns nil.
 		ctx := context.Background()
-		rt := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfigInterpreter())
+		rt := newTestWasmRuntime(ctx)
 		t.Cleanup(func() { require.NoError(t, rt.Close(ctx)) })
-		mod, err := rt.InstantiateWithConfig(ctx, minimalGuardWasm, wazero.NewModuleConfig().WithName("minimal-retry"))
+		mod, err := rt.InstantiateWithConfig(ctx, minimalGuardWasm, newTestWasmModuleConfig("minimal-retry"))
 		require.NoError(t, err)
 		t.Cleanup(func() { require.NoError(t, mod.Close(ctx)) })
 		g := &WasmGuard{name: "minimal-retry", module: mod}
@@ -1465,12 +1453,12 @@ func TestWasmMemoryLayout(t *testing.T) {
 
 func TestTryCallWasmFunctionDirectMemoryFallback(t *testing.T) {
 	ctx := context.Background()
-	runtime := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfigInterpreter())
+	runtime := newTestWasmRuntime(ctx)
 	t.Cleanup(func() {
 		require.NoError(t, runtime.Close(ctx))
 	})
 
-	module, err := runtime.InstantiateWithConfig(ctx, directMemoryFallbackGuardWasm, wazero.NewModuleConfig().WithName("direct-memory-fallback"))
+	module, err := runtime.InstantiateWithConfig(ctx, directMemoryFallbackGuardWasm, newTestWasmModuleConfig("direct-memory-fallback"))
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		require.NoError(t, module.Close(ctx))
@@ -1598,7 +1586,7 @@ func TestJSONMarshaling(t *testing.T) {
 func TestIsWasmTrap(t *testing.T) {
 	t.Run("actual wazero trap still uses wasm error prefix (verified with wazero v1.12.0)", func(t *testing.T) {
 		ctx := context.Background()
-		runtime := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfigInterpreter())
+		runtime := newTestWasmRuntime(ctx)
 		t.Cleanup(func() {
 			require.NoError(t, runtime.Close(ctx))
 		})
@@ -1611,7 +1599,7 @@ func TestIsWasmTrap(t *testing.T) {
 			0x0a, 0x05, 0x01, 0x03, 0x00, 0x00, 0x0b,
 		}
 
-		mod, err := runtime.InstantiateWithConfig(ctx, trapWasm, wazero.NewModuleConfig().WithName("trap-check"))
+		mod, err := runtime.InstantiateWithConfig(ctx, trapWasm, newTestWasmModuleConfig("trap-check"))
 		require.NoError(t, err)
 		t.Cleanup(func() {
 			require.NoError(t, mod.Close(ctx))

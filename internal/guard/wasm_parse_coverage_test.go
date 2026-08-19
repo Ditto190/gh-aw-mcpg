@@ -6,7 +6,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/tetratelabs/wazero"
 )
 
 // allocGuardWasm is a WASM module that exports alloc, dealloc, label_agent, and memory.
@@ -93,16 +92,7 @@ var labelReturnsNeg1Wasm = []byte{
 // bound to it. The caller must invoke the returned cleanup function.
 func setupWasmGuard(t *testing.T, wasmBytes []byte, name string) (*WasmGuard, func()) {
 	t.Helper()
-	ctx := context.Background()
-	rt := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfigInterpreter())
-	mod, err := rt.InstantiateWithConfig(ctx, wasmBytes, wazero.NewModuleConfig().WithName(name))
-	require.NoError(t, err, "failed to instantiate WASM module %s", name)
-	g := &WasmGuard{name: name, module: mod}
-	cleanup := func() {
-		require.NoError(t, mod.Close(ctx))
-		require.NoError(t, rt.Close(ctx))
-	}
-	return g, cleanup
+	return setupTestWasmGuard(t, wasmBytes, name)
 }
 
 // TestParsePathLabeledResponse_NewPathLabeledDataError covers the branch where
