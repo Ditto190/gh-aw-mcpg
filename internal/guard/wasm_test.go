@@ -19,6 +19,13 @@ import (
 	"github.com/tetratelabs/wazero/sys"
 )
 
+// newTestInterpreterRuntime creates a wazero interpreter runtime for tests.
+// The interpreter engine is preferred over the compiler engine in tests
+// because it has faster startup and doesn't require JIT support.
+func newTestInterpreterRuntime(ctx context.Context) wazero.Runtime {
+	return wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfigInterpreter())
+}
+
 func TestMain(m *testing.M) {
 	code := m.Run()
 	if err := globalCompilationCache.Close(context.Background()); err != nil {
