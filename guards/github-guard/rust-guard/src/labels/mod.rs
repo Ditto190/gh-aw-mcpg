@@ -162,7 +162,7 @@ mod tests {
         get_bool_or, get_nested_str, get_str_or, has_author_association, make_item_path,
     };
     use super::*;
-    use crate::labels::constants::{label_constants, scope_names};
+    use crate::labels::constants::{label_constants, scope_names, tool_names};
     use serde_json::json;
 
     fn default_ctx() -> PolicyContext {
@@ -640,7 +640,7 @@ mod tests {
             "issue_number": "123"
         });
         let (_s1, _i1, desc1) = apply_tool_labels(
-            "get_issue",
+            tool_names::GET_ISSUE,
             &tool_args_str,
             "github/copilot",
             vec![],
@@ -656,7 +656,7 @@ mod tests {
             "issue_number": 456
         });
         let (_s2, _i2, desc2) = apply_tool_labels(
-            "get_issue",
+            tool_names::GET_ISSUE,
             &tool_args_i64,
             "github/copilot",
             vec![],
@@ -714,7 +714,7 @@ mod tests {
         });
 
         let expected = apply_tool_labels(
-            "get_pull_request",
+            tool_names::GET_PULL_REQUEST,
             &tool_args,
             "github/copilot",
             vec![],

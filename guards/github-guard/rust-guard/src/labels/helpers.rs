@@ -1061,7 +1061,7 @@ pub(crate) fn repo_visibility_secrecy_for_repo_id(
     repo_id: &str,
     ctx: &PolicyContext,
 ) -> Vec<String> {
-    if let Some((owner, repo)) = repo_id.split_once('/') {
+    if let Some((owner, repo)) = split_repo_id(repo_id) {
         repo_visibility_secrecy(owner, repo, repo_id, ctx)
     } else {
         // Malformed repo_id: treat as unknown visibility and fail secure
@@ -1072,7 +1072,7 @@ pub(crate) fn repo_visibility_secrecy_for_repo_id(
 /// Returns `Some(true)` if the repo identified by `repo_id` ("owner/repo") is private,
 /// `Some(false)` if public, or `None` if the visibility is unknown.
 pub(crate) fn repo_visibility_private_for_repo_id(repo_id: &str) -> Option<bool> {
-    let (owner, repo) = repo_id.split_once('/')?;
+    let (owner, repo) = split_repo_id(repo_id)?;
     super::backend::is_repo_private(owner, repo)
 }
 
@@ -1208,13 +1208,11 @@ pub fn extract_repo_info_from_search_query(query: &str) -> (String, String, Stri
 
         if let Some(repo_ref) = cleaned.strip_prefix("repo:") {
             let repo_ref = strip_query_punctuation(repo_ref);
-            if let Some((owner, repo)) = repo_ref.split_once('/') {
-                if !owner.is_empty() && !repo.is_empty() {
-                    let owner = owner.to_string();
-                    let repo = repo.to_string();
-                    let repo_id = format_repo_id(&owner, &repo);
-                    return (owner, repo, repo_id);
-                }
+            if let Some((owner, repo)) = split_repo_id(repo_ref) {
+                let owner = owner.to_string();
+                let repo = repo.to_string();
+                let repo_id = format_repo_id(&owner, &repo);
+                return (owner, repo, repo_id);
             }
         }
     }
@@ -2159,7 +2157,7 @@ pub(crate) fn commit_integrity(
     // For public personal repositories, commit payloads often omit
     // `author_association`. Ensure owner-authored commits still get writer floor.
     if !repo_private {
-        if let Some((owner, _repo)) = repo_full_name.split_once('/') {
+        if let Some((owner, _repo)) = split_repo_id(repo_full_name) {
             if author_login.eq_ignore_ascii_case(owner) {
                 integrity = max_integrity(
                     repo_full_name,
@@ -2563,6 +2561,24 @@ mod tests {
     }
 
     #[test]
+    fn test_repo_visibility_helpers_reject_malformed_repo_ids() {
+        let ctx = PolicyContext::default();
+
+        for repo_id in ["owner/", "/repo", "owner/repo/extra"] {
+            assert_eq!(
+                repo_visibility_private_for_repo_id(repo_id),
+                None,
+                "malformed repo ID must not be looked up: {repo_id}"
+            );
+            assert_eq!(
+                repo_visibility_secrecy_for_repo_id(repo_id, &ctx),
+                vec![label_constants::PRIVATE_BASE.to_string()],
+                "malformed repo ID must fail secure: {repo_id}"
+            );
+        }
+    }
+
+    #[test]
     fn test_repo_private_or_secure_default_uses_cached_visibility() {
         assert!(!repo_private_or_secure_default(Some(false)));
         assert!(repo_private_or_secure_default(Some(true)));
@@ -2828,6 +2844,24 @@ mod tests {
         let result = commit_integrity(&item, "owner/repo", false, false, &ctx);
 
         assert_eq!(integrity_rank("owner/repo", &result, &ctx), 3);
+    }
+
+    #[test]
+    fn test_commit_integrity_rejects_malformed_owner_authored_repo_id() {
+        let ctx = PolicyContext::default();
+        let item = serde_json::json!({
+            "sha": "abc1234def",
+            "author": { "login": "owner" }
+        });
+
+        for repo_id in ["owner/", "/repo", "owner/repo/extra"] {
+            let result = commit_integrity(&item, repo_id, false, false, &ctx);
+            assert_eq!(
+                integrity_rank(repo_id, &result, &ctx),
+                1,
+                "malformed repo ID must not grant owner-authored writer elevation: {repo_id}"
+            );
+        }
     }
 
     // =========================================================================
@@ -3832,6 +3866,18 @@ mod tests {
             extract_repo_info_from_search_query("repo:first/one repo:second/two");
         assert_eq!(owner, "first");
         assert_eq!(repo, "one");
+    }
+
+    #[test]
+    fn test_extract_repo_info_from_search_query_rejects_malformed_repo_ids() {
+        for repo_id in ["owner/", "/repo", "owner/repo/extra"] {
+            let result = extract_repo_info_from_search_query(&format!("repo:{repo_id}"));
+            assert_eq!(
+                result,
+                (String::new(), String::new(), String::new()),
+                "malformed repo ID must be rejected: {repo_id}"
+            );
+        }
     }
 
     #[test]
