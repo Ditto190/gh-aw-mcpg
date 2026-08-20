@@ -1061,7 +1061,7 @@ pub(crate) fn repo_visibility_secrecy_for_repo_id(
     repo_id: &str,
     ctx: &PolicyContext,
 ) -> Vec<String> {
-    if let Some((owner, repo)) = repo_id.split_once('/') {
+    if let Some((owner, repo)) = split_repo_id(repo_id) {
         repo_visibility_secrecy(owner, repo, repo_id, ctx)
     } else {
         // Malformed repo_id: treat as unknown visibility and fail secure
@@ -1072,7 +1072,7 @@ pub(crate) fn repo_visibility_secrecy_for_repo_id(
 /// Returns `Some(true)` if the repo identified by `repo_id` ("owner/repo") is private,
 /// `Some(false)` if public, or `None` if the visibility is unknown.
 pub(crate) fn repo_visibility_private_for_repo_id(repo_id: &str) -> Option<bool> {
-    let (owner, repo) = repo_id.split_once('/')?;
+    let (owner, repo) = split_repo_id(repo_id)?;
     super::backend::is_repo_private(owner, repo)
 }
 
@@ -1208,13 +1208,11 @@ pub fn extract_repo_info_from_search_query(query: &str) -> (String, String, Stri
 
         if let Some(repo_ref) = cleaned.strip_prefix("repo:") {
             let repo_ref = strip_query_punctuation(repo_ref);
-            if let Some((owner, repo)) = repo_ref.split_once('/') {
-                if !owner.is_empty() && !repo.is_empty() {
-                    let owner = owner.to_string();
-                    let repo = repo.to_string();
-                    let repo_id = format_repo_id(&owner, &repo);
-                    return (owner, repo, repo_id);
-                }
+            if let Some((owner, repo)) = split_repo_id(repo_ref) {
+                let owner = owner.to_string();
+                let repo = repo.to_string();
+                let repo_id = format_repo_id(&owner, &repo);
+                return (owner, repo, repo_id);
             }
         }
     }
@@ -2159,7 +2157,7 @@ pub(crate) fn commit_integrity(
     // For public personal repositories, commit payloads often omit
     // `author_association`. Ensure owner-authored commits still get writer floor.
     if !repo_private {
-        if let Some((owner, _repo)) = repo_full_name.split_once('/') {
+        if let Some((owner, _repo)) = split_repo_id(repo_full_name) {
             if author_login.eq_ignore_ascii_case(owner) {
                 integrity = max_integrity(
                     repo_full_name,
