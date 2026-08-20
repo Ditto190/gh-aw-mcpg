@@ -421,7 +421,7 @@ func TestIsUnderRoot(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "root is parent of path root itself",
+			name: "path is parent of root path",
 			path: "/",
 			root: "/data/workspace",
 			want: false,
