@@ -334,3 +334,116 @@ func TestParseMountDeclarationRejectsConflictingModes(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "conflicting mount options")
 }
+
+// TestCanonicalizeRootsDropsUncanonicalizableRoots covers the branch in
+// canonicalizeRoots where canonicalizePath fails (non-absolute root path):
+// the root must be silently dropped rather than causing a panic or being
+// included in the resulting allowlist.
+func TestCanonicalizeRootsDropsUncanonicalizableRoots(t *testing.T) {
+	tmp := t.TempDir()
+
+	roots := canonicalizeRoots([]MountRoot{
+		{Path: "relative/not-absolute", Writable: true},
+		{Path: tmp, Writable: false},
+	})
+
+	require.Len(t, roots, 1, "the non-absolute root must be dropped, leaving only the valid one")
+	canonicalTmp, err := filepath.EvalSymlinks(tmp)
+	require.NoError(t, err)
+	assert.Equal(t, canonicalTmp, roots[0].Path)
+	assert.False(t, roots[0].Writable)
+}
+
+// TestCanonicalizeRootsDeduplicatesEquivalentPaths covers the "seen[path]"
+// dedup branch: two distinct MountRoot entries that canonicalize to the same
+// underlying path (e.g. via a symlink) must collapse into a single root,
+// keeping the writability of whichever entry was seen first.
+func TestCanonicalizeRootsDeduplicatesEquivalentPaths(t *testing.T) {
+	base := t.TempDir()
+	real := filepath.Join(base, "real")
+	require.NoError(t, os.MkdirAll(real, 0o755))
+	link := filepath.Join(base, "link")
+	require.NoError(t, os.Symlink(real, link))
+
+	roots := canonicalizeRoots([]MountRoot{
+		{Path: real, Writable: false},
+		{Path: link, Writable: true},
+	})
+
+	require.Len(t, roots, 1, "real path and its symlink alias must dedupe to one root")
+	canonicalReal, err := filepath.EvalSymlinks(real)
+	require.NoError(t, err)
+	assert.Equal(t, canonicalReal, roots[0].Path)
+	assert.False(t, roots[0].Writable, "the first-seen entry's writability wins")
+}
+
+// TestCanonicalizeRootsEmptyInput covers the zero-iteration loop case: an
+// empty input slice must yield an empty (not nil-panicking) result.
+func TestCanonicalizeRootsEmptyInput(t *testing.T) {
+	roots := canonicalizeRoots(nil)
+	assert.Empty(t, roots)
+}
+
+// TestIsUnderRoot directly exercises isUnderRoot's branches: exact match,
+// nested path, sibling path with a shared prefix (must not be treated as
+// "under" merely due to string prefix matching), parent traversal escape,
+// and the filepath.Rel error branch triggered by mixing an absolute path
+// with a relative root (or vice versa).
+func TestIsUnderRoot(t *testing.T) {
+	tests := []struct {
+		name string
+		path string
+		root string
+		want bool
+	}{
+		{
+			name: "path equals root",
+			path: "/data/workspace",
+			root: "/data/workspace",
+			want: true,
+		},
+		{
+			name: "path nested under root",
+			path: "/data/workspace/repo/file.go",
+			root: "/data/workspace",
+			want: true,
+		},
+		{
+			name: "sibling path sharing string prefix is not under root",
+			path: "/data/workspace-other",
+			root: "/data/workspace",
+			want: false,
+		},
+		{
+			name: "path escapes root via parent traversal",
+			path: "/data/etc",
+			root: "/data/workspace",
+			want: false,
+		},
+		{
+			name: "path is parent of root path",
+			path: "/",
+			root: "/data/workspace",
+			want: false,
+		},
+		{
+			name: "filepath.Rel error from mixing absolute path and relative root",
+			path: "/data/workspace",
+			root: "relative/root",
+			want: false,
+		},
+		{
+			name: "filepath.Rel error from mixing relative path and absolute root",
+			path: "relative/path",
+			root: "/data/workspace",
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isUnderRoot(tt.path, tt.root)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}

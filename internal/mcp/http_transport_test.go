@@ -1763,10 +1763,9 @@ func TestBuildHTTPClientWithHeaders_NilTransport(t *testing.T) {
 func TestExecuteHTTPRequest_ConnectionError(t *testing.T) {
 	t.Parallel()
 
-	// Start a server, record the URL, then close it so subsequent requests will fail.
-	deadSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
-	deadURL := deadSrv.URL
-	deadSrv.Close() // connection will now be refused
+	// Use localhost port 0, which is not a valid listening port target for clients.
+	// This makes the test deterministic under parallel/race runs (no port-reuse race).
+	deadURL := "http://127.0.0.1:0"
 
 	// Bootstrap a plain JSON connection using a real init server.
 	initSrv := newPlainJSONInitServer(t)
