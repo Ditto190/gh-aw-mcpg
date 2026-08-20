@@ -191,6 +191,104 @@ func TestNewWasmGuardWithOptions_InvalidExportedFunctionSignature(t *testing.T) 
 	assert.ErrorContains(t, err, "label_resource")
 }
 
+// labelResponseBadSignatureWasm exports label_resource (valid signature), label_agent
+// (valid signature), and label_response with signature ()->() instead of the required
+// (i32,i32,i32,i32)->i32. Triggers the label_response signature-validation error branch
+// in NewWasmGuardWithOptions.
+//
+// Compiled from:
+//
+//	(module
+//	  (memory (export "memory") 1)
+//	  (func (export "label_resource") (param i32 i32 i32 i32) (result i32) i32.const 0)
+//	  (func (export "label_response"))
+//	  (func (export "label_agent") (param i32 i32 i32 i32) (result i32) i32.const 0))
+var labelResponseBadSignatureWasm = []byte{
+	0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
+	0x01, 0x0c, 0x02, 0x60, 0x04, 0x7f, 0x7f, 0x7f, 0x7f, 0x01, 0x7f, 0x60, 0x00, 0x00,
+	0x03, 0x04, 0x03, 0x00, 0x01, 0x00,
+	0x05, 0x03, 0x01, 0x00, 0x01,
+	0x07, 0x3a, 0x04,
+	0x0e, 0x6c, 0x61, 0x62, 0x65, 0x6c, 0x5f, 0x72, 0x65, 0x73, 0x6f, 0x75, 0x72, 0x63, 0x65, 0x00, 0x00,
+	0x0e, 0x6c, 0x61, 0x62, 0x65, 0x6c, 0x5f, 0x72, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x00, 0x01,
+	0x0b, 0x6c, 0x61, 0x62, 0x65, 0x6c, 0x5f, 0x61, 0x67, 0x65, 0x6e, 0x74, 0x00, 0x02,
+	0x06, 0x6d, 0x65, 0x6d, 0x6f, 0x72, 0x79, 0x02, 0x00,
+	0x0a, 0x0e, 0x03,
+	0x04, 0x00, 0x41, 0x00, 0x0b,
+	0x02, 0x00, 0x0b,
+	0x04, 0x00, 0x41, 0x00, 0x0b,
+}
+
+// labelAgentBadSignatureWasm exports label_resource and label_response (both with valid
+// signatures) and label_agent with signature ()->() instead of the required
+// (i32,i32,i32,i32)->i32. Triggers the label_agent signature-validation error branch
+// in NewWasmGuardWithOptions.
+//
+// Compiled from:
+//
+//	(module
+//	  (memory (export "memory") 1)
+//	  (func (export "label_resource") (param i32 i32 i32 i32) (result i32) i32.const 0)
+//	  (func (export "label_response") (param i32 i32 i32 i32) (result i32) i32.const 0)
+//	  (func (export "label_agent")))
+var labelAgentBadSignatureWasm = []byte{
+	0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
+	0x01, 0x0c, 0x02, 0x60, 0x04, 0x7f, 0x7f, 0x7f, 0x7f, 0x01, 0x7f, 0x60, 0x00, 0x00,
+	0x03, 0x04, 0x03, 0x00, 0x00, 0x01,
+	0x05, 0x03, 0x01, 0x00, 0x01,
+	0x07, 0x3a, 0x04,
+	0x0e, 0x6c, 0x61, 0x62, 0x65, 0x6c, 0x5f, 0x72, 0x65, 0x73, 0x6f, 0x75, 0x72, 0x63, 0x65, 0x00, 0x00,
+	0x0e, 0x6c, 0x61, 0x62, 0x65, 0x6c, 0x5f, 0x72, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x00, 0x01,
+	0x0b, 0x6c, 0x61, 0x62, 0x65, 0x6c, 0x5f, 0x61, 0x67, 0x65, 0x6e, 0x74, 0x00, 0x02,
+	0x06, 0x6d, 0x65, 0x6d, 0x6f, 0x72, 0x79, 0x02, 0x00,
+	0x0a, 0x0e, 0x03,
+	0x04, 0x00, 0x41, 0x00, 0x0b,
+	0x04, 0x00, 0x41, 0x00, 0x0b,
+	0x02, 0x00, 0x0b,
+}
+
+// TestNewWasmGuardWithOptions_InvalidSignature_TableDriven exercises all three
+// signature-validation error branches (label_resource, label_response, label_agent)
+// in NewWasmGuardWithOptions using a table-driven structure with bound assertions.
+func TestNewWasmGuardWithOptions_InvalidSignature_TableDriven(t *testing.T) {
+	tests := []struct {
+		name       string
+		wasm       []byte
+		wantFnName string
+	}{
+		{
+			name:       "label_resource bad signature",
+			wasm:       func() []byte { b := append([]byte(nil), fullGuardWasm...); b[14] = 0x7e; return b }(),
+			wantFnName: "label_resource",
+		},
+		{
+			name:       "label_response bad signature",
+			wasm:       labelResponseBadSignatureWasm,
+			wantFnName: "label_response",
+		},
+		{
+			name:       "label_agent bad signature",
+			wasm:       labelAgentBadSignatureWasm,
+			wantFnName: "label_agent",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert := assert.New(t)
+			require := require.New(t)
+
+			ctx := context.Background()
+			opts := &WasmGuardOptions{DisableCompilationCache: true}
+
+			_, err := NewWasmGuardWithOptions(ctx, "bad-signature-"+tt.wantFnName, tt.wasm, &mockBackendCaller{}, opts)
+			require.Error(err)
+			assert.ErrorContains(err, "must have signature (i32,i32,i32,i32)->i32")
+			assert.ErrorContains(err, tt.wantFnName)
+		})
+	}
+}
+
 // TestNewWasmGuardWithOptions_SuccessPath verifies that a WASM module exporting all
 // three required guard functions is successfully loaded and usable.
 func TestNewWasmGuardWithOptions_SuccessPath(t *testing.T) {
