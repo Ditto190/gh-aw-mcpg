@@ -30,6 +30,7 @@ func init() {
 }
 
 func registerTracingFlags(cmd *cobra.Command, endpoint *string, serviceName *string, sampleRate *float64, endpointUsage string, serviceUsage string, sampleUsage string) {
+	debugLog.Printf("Registering tracing flags for command: %s", cmd.Name())
 	flags := cmd.Flags()
 	flags.StringVar(endpoint, "otlp-endpoint", envutil.GetEnvString("OTEL_EXPORTER_OTLP_ENDPOINT", ""),
 		endpointUsage)
@@ -57,14 +58,18 @@ func applyTracingOverrides(cmd *cobra.Command, cfg *config.Config) {
 		cmd.Flags().Changed("otlp-endpoint") || otlpEndpoint != "" ||
 		cmd.Flags().Changed("otlp-service-name") || otlpServiceName != config.DefaultTracingServiceName ||
 		cmd.Flags().Changed("otlp-sample-rate")
-	if shouldInitTracingConfig {
-		tc := ensureTracingConfig(cfg)
-		applyFlagOrEnv(cmd, "otlp-endpoint", &tc.Endpoint, otlpEndpoint, "")
-		applyFlagOrEnv(cmd, "otlp-service-name", &tc.ServiceName, otlpServiceName, config.DefaultTracingServiceName)
-		if cmd.Flags().Changed("otlp-sample-rate") {
-			tc.SampleRate = &otlpSampleRate
-		}
+	if !shouldInitTracingConfig {
+		debugLog.Print("applyTracingOverrides: no tracing overrides to apply, skipping")
+		return
 	}
+	tc := ensureTracingConfig(cfg)
+	applyFlagOrEnv(cmd, "otlp-endpoint", &tc.Endpoint, otlpEndpoint, "")
+	applyFlagOrEnv(cmd, "otlp-service-name", &tc.ServiceName, otlpServiceName, config.DefaultTracingServiceName)
+	if cmd.Flags().Changed("otlp-sample-rate") {
+		tc.SampleRate = &otlpSampleRate
+		debugLog.Printf("applyTracingOverrides: otlp-sample-rate overridden via CLI flag: %v", otlpSampleRate)
+	}
+	debugLog.Printf("applyTracingOverrides: tracing config applied, endpoint set=%v, serviceName=%s", tc.Endpoint != "", tc.ServiceName)
 }
 
 func initTracingProviderWithFallback(
