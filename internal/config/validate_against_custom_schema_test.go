@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -477,6 +478,11 @@ func newRemoteRefSchemaServer(t *testing.T, defsRequestCount *atomic.Int32) *htt
 func TestValidateAgainstCustomSchema_RemoteRefByteBudgetIsEnforced(t *testing.T) {
 	// httptest serves plain HTTP, so relax the HTTPS-only policy for remote refs.
 	allowInsecureSchemaRefsForTest(t)
+	originalTimeout := schemaHTTPClientTimeout
+	schemaHTTPClientTimeout = 5 * time.Second
+	t.Cleanup(func() {
+		schemaHTTPClientTimeout = originalTimeout
+	})
 
 	var requestCount atomic.Int32
 
