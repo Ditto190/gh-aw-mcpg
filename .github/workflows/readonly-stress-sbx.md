@@ -50,7 +50,6 @@ sandbox:
   agent:
     id: awf
     runtime: docker-sbx
-    sudo: true
   mcp:
     container: "ghcr.io/github/gh-aw-mcpg"
     version: "latest"
