@@ -42,6 +42,7 @@ func registerTracingFlags(cmd *cobra.Command, endpoint *string, serviceName *str
 // ensureTracingConfig returns cfg.Gateway.Tracing, initializing it if nil.
 func ensureTracingConfig(cfg *config.Config) *config.TracingConfig {
 	if cfg.Gateway.Tracing == nil {
+		debugLog.Print("Gateway tracing config was nil, initializing empty TracingConfig")
 		cfg.Gateway.Tracing = &config.TracingConfig{}
 	}
 	return cfg.Gateway.Tracing
@@ -57,13 +58,18 @@ func applyTracingOverrides(cmd *cobra.Command, cfg *config.Config) {
 		cmd.Flags().Changed("otlp-endpoint") || otlpEndpoint != "" ||
 		cmd.Flags().Changed("otlp-service-name") || otlpServiceName != config.DefaultTracingServiceName ||
 		cmd.Flags().Changed("otlp-sample-rate")
+	debugLog.Printf("Applying tracing overrides: shouldInitTracingConfig=%v", shouldInitTracingConfig)
 	if shouldInitTracingConfig {
 		tc := ensureTracingConfig(cfg)
 		applyFlagOrEnv(cmd, "otlp-endpoint", &tc.Endpoint, otlpEndpoint, "")
 		applyFlagOrEnv(cmd, "otlp-service-name", &tc.ServiceName, otlpServiceName, config.DefaultTracingServiceName)
 		if cmd.Flags().Changed("otlp-sample-rate") {
+			debugLog.Printf("Tracing sample rate explicitly set via flag: %v", otlpSampleRate)
 			tc.SampleRate = &otlpSampleRate
 		}
+		debugLog.Printf("Tracing overrides applied: endpoint=%q, serviceName=%q", tc.Endpoint, tc.ServiceName)
+	} else {
+		debugLog.Print("No tracing overrides needed, skipping tracing config initialization")
 	}
 }
 
