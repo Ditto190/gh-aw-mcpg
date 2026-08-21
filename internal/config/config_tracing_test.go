@@ -1,12 +1,12 @@
 // Package config provides configuration loading and parsing.
-// This file contains compliance tests for OpenTelemetry configuration per spec §4.1.3.6
-// (MCP Gateway Specification v1.11.0).
+// This file contains compliance tests for OpenTelemetry configuration per spec §4.1.3.7
+// (MCP Gateway Specification v1.16.0).
 //
 // Test IDs correspond to the compliance matrix in the issue:
 //   - T-OTEL-001: Gateway starts when opentelemetry is omitted
-//   - T-OTEL-002: Gateway starts with valid HTTPS endpoint
+//   - T-OTEL-002: Gateway starts with valid HTTP or HTTPS endpoint
 //   - T-OTEL-003: Reject missing endpoint when opentelemetry is present
-//   - T-OTEL-004: Reject non-HTTPS endpoint
+//   - T-OTEL-004: Reject non-HTTP(S) endpoint
 //   - T-OTEL-005: TracingConfig carries required fields (headers, traceId, spanId)
 //   - T-OTEL-006: Headers are preserved in TracingConfig
 //   - T-OTEL-007: Valid traceId + spanId pass validation
@@ -29,14 +29,23 @@ func TestOTEL001_NoOpenTelemetryConfig_NoError(t *testing.T) {
 	require.NoError(t, err, "T-OTEL-001: nil config must not produce an error")
 }
 
-// T-OTEL-002: Gateway starts (validates) with a valid HTTPS endpoint.
-func TestOTEL002_ValidHTTPSEndpoint_NoError(t *testing.T) {
-	cfg := &TracingConfig{
-		Endpoint:    "https://otel-collector.example.com",
-		ServiceName: "mcp-gateway",
+// T-OTEL-002: Gateway starts (validates) with valid HTTP or HTTPS endpoints.
+func TestOTEL002_ValidHTTPOrHTTPSEndpoint_NoError(t *testing.T) {
+	endpoints := []string{
+		"https://otel-collector.example.com",
+		"http://127.0.0.1:4318",
 	}
-	err := validateOpenTelemetryConfig(cfg, true)
-	require.NoError(t, err, "T-OTEL-002: valid HTTPS endpoint must be accepted")
+
+	for _, endpoint := range endpoints {
+		t.Run(endpoint, func(t *testing.T) {
+			cfg := &TracingConfig{
+				Endpoint:    endpoint,
+				ServiceName: "mcp-gateway",
+			}
+			err := validateOpenTelemetryConfig(cfg, true)
+			require.NoError(t, err, "T-OTEL-002: valid HTTP(S) endpoint must be accepted")
+		})
+	}
 }
 
 // T-OTEL-003: Reject missing endpoint when the opentelemetry section is present.
@@ -50,17 +59,17 @@ func TestOTEL003_MissingEndpoint_Error(t *testing.T) {
 	assert.ErrorContains(t, err, "endpoint", "error must mention the missing field")
 }
 
-// T-OTEL-004: Reject non-HTTPS endpoint.
-func TestOTEL004_NonHTTPSEndpoint_Error(t *testing.T) {
+// T-OTEL-004: Reject non-HTTP(S) endpoint.
+func TestOTEL004_NonHTTPOrHTTPSEndpoint_Error(t *testing.T) {
 	cfg := &TracingConfig{
-		Endpoint: "http://otel-collector.example.com", // HTTP, not HTTPS
+		Endpoint: "grpc://otel-collector.example.com", // Non-HTTP(S) scheme
 	}
 	err := validateOpenTelemetryConfig(cfg, true)
-	require.Error(t, err, "T-OTEL-004: non-HTTPS endpoint must be rejected")
-	assert.ErrorContains(t, err, "HTTPS", "error must mention the HTTPS requirement")
+	require.Error(t, err, "T-OTEL-004: non-HTTP(S) endpoint must be rejected")
+	assert.ErrorContains(t, err, "HTTP or HTTPS", "error must mention the HTTP/HTTPS requirement")
 }
 
-// T-OTEL-005: TracingConfig struct carries all required spec §4.1.3.6 fields.
+// T-OTEL-005: TracingConfig struct carries all required spec §4.1.3.7 fields.
 func TestOTEL005_TracingConfigFields(t *testing.T) {
 	headers := "Authorization=Bearer token"
 	cfg := &TracingConfig{
@@ -286,13 +295,13 @@ func TestGetSampleRate_NewFields(t *testing.T) {
 }
 
 // TestValidateOpenTelemetryConfig_NonEnforcing verifies that when enforceHTTPS is false,
-// a non-HTTPS endpoint is allowed (backward compat with legacy tracing section).
+// endpoint scheme validation is skipped (backward compat with legacy tracing section).
 func TestValidateOpenTelemetryConfig_NonEnforcing(t *testing.T) {
 	cfg := &TracingConfig{
-		Endpoint: "http://localhost:4318", // HTTP is OK in legacy mode
+		Endpoint: "grpc://collector.local:4317", // Non-HTTP(S) is still allowed in legacy mode
 	}
 	err := validateOpenTelemetryConfig(cfg, false)
-	require.NoError(t, err, "Non-enforcing mode should accept HTTP endpoints for backward compat")
+	require.NoError(t, err, "Non-enforcing mode should skip endpoint scheme checks for backward compat")
 }
 
 // TestGetSampleRate_NilReceiver verifies that calling GetSampleRate on a nil

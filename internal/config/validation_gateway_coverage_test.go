@@ -168,6 +168,13 @@ func TestValidateGatewayConfig_OpenTelemetry(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name: "valid HTTP endpoint passes",
+			otel: &StdinOpenTelemetryConfig{
+				Endpoint: "http://127.0.0.1:4318",
+			},
+			wantErr: false,
+		},
+		{
 			name: "valid endpoint with traceId and spanId passes",
 			otel: &StdinOpenTelemetryConfig{
 				Endpoint: "https://otel-collector.example.com",
@@ -183,12 +190,12 @@ func TestValidateGatewayConfig_OpenTelemetry(t *testing.T) {
 			errMsg:  "endpoint",
 		},
 		{
-			name: "non-HTTPS endpoint is rejected",
+			name: "non-http(s) endpoint is rejected",
 			otel: &StdinOpenTelemetryConfig{
-				Endpoint: "http://otel-collector.example.com",
+				Endpoint: "grpc://otel-collector.example.com",
 			},
 			wantErr: true,
-			errMsg:  "HTTPS",
+			errMsg:  "HTTP or HTTPS",
 		},
 		{
 			name: "invalid traceId is rejected",

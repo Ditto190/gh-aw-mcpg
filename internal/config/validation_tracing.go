@@ -15,9 +15,9 @@ var (
 	allZeroSpanID  = regexp.MustCompile(`^0{16}$`)
 )
 
-// validateOpenTelemetryConfig validates OpenTelemetry configuration per spec §4.1.3.6.
+// validateOpenTelemetryConfig validates OpenTelemetry configuration per spec §4.1.3.7.
 // When enforceHTTPS is true (i.e. the config came from the opentelemetry section),
-// the endpoint is required and MUST use HTTPS.
+// the endpoint is required and MUST use HTTP or HTTPS.
 // Non-empty traceId and spanId values are validated as W3C hex strings; variables
 // must be expanded before validation, and unexpanded ${VAR} expressions are rejected.
 func validateOpenTelemetryConfig(cfg *TracingConfig, enforceHTTPS bool) error {
@@ -25,22 +25,22 @@ func validateOpenTelemetryConfig(cfg *TracingConfig, enforceHTTPS bool) error {
 		return nil
 	}
 
-	logValidation.Print("Validating OpenTelemetry configuration (spec §4.1.3.6)")
+	logValidation.Print("Validating OpenTelemetry configuration (spec §4.1.3.7)")
 
 	// endpoint is required when opentelemetry section is present
 	if enforceHTTPS && cfg.Endpoint == "" {
 		return MissingRequired("endpoint", "opentelemetry", "gateway.opentelemetry.endpoint",
-			"Provide an HTTPS OTLP endpoint (e.g., \"https://otel-collector.example.com\")")
+			"Provide an HTTP or HTTPS OTLP endpoint (e.g., \"http://127.0.0.1:4318\")")
 	}
 
-	// endpoint MUST be HTTPS (spec §4.1.3.6)
+	// endpoint MUST be HTTP or HTTPS (spec §4.1.3.7)
 	if enforceHTTPS && cfg.Endpoint != "" {
-		if !strings.HasPrefix(cfg.Endpoint, "https://") {
-			logValidation.Printf("Non-HTTPS endpoint in opentelemetry config: %s", cfg.Endpoint)
+		if !strings.HasPrefix(cfg.Endpoint, "https://") && !strings.HasPrefix(cfg.Endpoint, "http://") {
+			logValidation.Printf("Non-HTTP(S) endpoint in opentelemetry config: %s", cfg.Endpoint)
 			return InvalidValue("endpoint",
-				fmt.Sprintf("opentelemetry endpoint must use HTTPS, got '%s'", cfg.Endpoint),
+				fmt.Sprintf("opentelemetry endpoint must use HTTP or HTTPS, got '%s'", cfg.Endpoint),
 				"gateway.opentelemetry.endpoint",
-				"Use an HTTPS URL (e.g., \"https://otel-collector.example.com\")")
+				"Use an HTTP or HTTPS URL (e.g., \"https://otel-collector.example.com\" or \"http://127.0.0.1:4318\")")
 		}
 	}
 
