@@ -1627,7 +1627,7 @@ fn owner_is_org_from_items(value: &Value, repo_id: &str) -> Option<bool> {
 /// GitHub API returns owner.type as "Organization" or "User".
 fn owner_type_from_repo_object(item: &Value) -> Option<bool> {
     let owner_type = item
-        .get("owner")
+        .get(field_names::OWNER)
         .and_then(|o| o.get("type"))
         .and_then(|v| v.as_str())?;
 
@@ -1649,7 +1649,7 @@ fn repo_id_from_repo_object(item: &Value) -> Option<String> {
     }
 
     if let Some(owner_login) = item
-        .get("owner")
+        .get(field_names::OWNER)
         .and_then(|owner| owner.get(field_names::LOGIN))
         .and_then(|v| v.as_str())
     {
@@ -1658,7 +1658,7 @@ fn repo_id_from_repo_object(item: &Value) -> Option<String> {
         }
     }
 
-    if let Some(owner_name) = item.get("owner").and_then(|v| v.as_str()) {
+    if let Some(owner_name) = item.get(field_names::OWNER).and_then(|v| v.as_str()) {
         if !owner_name.is_empty() {
             return Some(format!("{}/{}", owner_name, name));
         }
