@@ -360,8 +360,8 @@ func TestRequireSession_SessionManagement(t *testing.T) {
 	t.Run("session is still created when ensureSessionDirectory fails for new session", func(t *testing.T) {
 		us := newSessionTestUnifiedServer(t)
 
-		// Point payloadDir at a regular file so that ensureSessionDirectory's
-		// os.MkdirAll(sessionDir, ...) call fails with ENOTDIR.
+		// Point payloadDir at a regular file so that os.Stat(sessionDir)
+		// fails with ENOTDIR before directory creation is attempted.
 		f, err := os.CreateTemp(t.TempDir(), "not-a-dir")
 		require.NoError(t, err)
 		require.NoError(t, f.Close())
