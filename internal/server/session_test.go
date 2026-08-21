@@ -353,6 +353,58 @@ func TestRequireSession_SessionManagement(t *testing.T) {
 		us.sessionMu.RUnlock()
 		assert.Equal(t, 1, count, "concurrent requireSession calls should create exactly one session")
 	})
+
+	// Covers the isNew branch where ensureSessionDirectory fails: the failure
+	// is logged as a warning but requireSession still succeeds and the session
+	// is still recorded in us.sessions (payload creation is retried lazily later).
+	t.Run("session is still created when ensureSessionDirectory fails for new session", func(t *testing.T) {
+		us := newSessionTestUnifiedServer(t)
+
+		// Point payloadDir at a regular file so that os.Stat(sessionDir)
+		// fails with ENOTDIR before directory creation is attempted.
+		f, err := os.CreateTemp(t.TempDir(), "not-a-dir")
+		require.NoError(t, err)
+		require.NoError(t, f.Close())
+		us.payloadDir = f.Name()
+
+		ctx := context.WithValue(context.Background(), SessionIDContextKey, "dir-failure-session")
+
+		err = us.requireSession(ctx)
+		require.NoError(t, err, "requireSession should not fail even when ensureSessionDirectory errors")
+
+		us.sessionMu.RLock()
+		_, exists := us.sessions["dir-failure-session"]
+		us.sessionMu.RUnlock()
+		assert.True(t, exists, "session should still be recorded despite directory creation failure")
+	})
+
+	// Covers the !isNew branch combined with a previously-failed directory:
+	// a second call for the same session ID must reuse the cached session and
+	// must NOT attempt ensureSessionDirectory again (isNew is only set on creation).
+	t.Run("second call for existing session skips ensureSessionDirectory", func(t *testing.T) {
+		us := newSessionTestUnifiedServer(t)
+
+		f, err := os.CreateTemp(t.TempDir(), "not-a-dir")
+		require.NoError(t, err)
+		require.NoError(t, f.Close())
+		us.payloadDir = f.Name()
+
+		ctx := context.WithValue(context.Background(), SessionIDContextKey, "reused-session")
+
+		require.NoError(t, us.requireSession(ctx))
+		us.sessionMu.RLock()
+		first := us.sessions["reused-session"]
+		us.sessionMu.RUnlock()
+
+		// Second call should succeed without error, reusing the same session,
+		// even though payloadDir is still invalid for directory creation.
+		require.NoError(t, us.requireSession(ctx))
+		us.sessionMu.RLock()
+		second := us.sessions["reused-session"]
+		us.sessionMu.RUnlock()
+
+		assert.Same(t, first, second, "requireSession should reuse the existing session on subsequent calls")
+	})
 }
 
 // TestGetSessionKeys verifies that getSessionKeys returns all currently active
