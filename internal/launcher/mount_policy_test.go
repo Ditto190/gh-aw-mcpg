@@ -384,6 +384,38 @@ func TestCanonicalizeRootsEmptyInput(t *testing.T) {
 	assert.Empty(t, roots)
 }
 
+// TestParseMountRootsSkipsEmptyEntries covers the empty-entry continue branch
+// in parseMountRoots: blank entries from stray/trailing commas must be
+// silently skipped rather than producing a malformed root.
+func TestParseMountRootsSkipsEmptyEntries(t *testing.T) {
+	allowed := t.TempDir()
+
+	policy := parseMountRoots(allowed + ":rw,, ,")
+	require.Len(t, policy.Roots, 1, "blank entries must be skipped")
+	canonicalAllowed, err := filepath.EvalSymlinks(allowed)
+	require.NoError(t, err)
+	assert.Equal(t, canonicalAllowed, policy.Roots[0].Path)
+	assert.True(t, policy.Roots[0].Writable)
+}
+
+// TestCanonicalizePathFilesystemRoot covers the branch in canonicalizePath
+// where traversal reaches "/" without ever finding an existing ancestor
+// (parent == current): the cleaned path must be returned as-is.
+func TestCanonicalizePathFilesystemRoot(t *testing.T) {
+	got, err := canonicalizePath("/")
+	require.NoError(t, err)
+	assert.Equal(t, "/", got)
+}
+
+// TestParseMountDeclarationRejectsEmptyModeOption covers the opt == "" branch
+// in parseMountDeclaration's mode-option loop, triggered by a stray comma
+// within the mode segment (e.g. "ro,,").
+func TestParseMountDeclarationRejectsEmptyModeOption(t *testing.T) {
+	_, err := parseMountDeclaration("/srv/data:/data:ro,,rw")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "empty mount option")
+}
+
 // TestIsUnderRoot directly exercises isUnderRoot's branches: exact match,
 // nested path, sibling path with a shared prefix (must not be treated as
 // "under" merely due to string prefix matching), parent traversal escape,
