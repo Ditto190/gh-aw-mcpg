@@ -499,12 +499,12 @@
     },
     "opentelemetryConfig": {
       "type": "object",
-      "description": "OpenTelemetry configuration for the MCP Gateway. When present, the gateway emits distributed tracing spans for each MCP tool invocation and exports them via OTLP/HTTP to the configured collector endpoint. Per MCP Gateway Specification section 4.1.3.6.",
+      "description": "OpenTelemetry configuration for the MCP Gateway. When present, the gateway emits distributed tracing spans for each MCP tool invocation and exports them via OTLP/HTTP to the configured collector endpoint. Per MCP Gateway Specification section 4.1.3.7.",
       "properties": {
         "endpoint": {
           "type": "string",
-          "description": "OTLP/HTTP endpoint URL for the OpenTelemetry collector (e.g., 'https://collector.example.com:4318/v1/traces'). MUST be an HTTPS URL. Supports variable expressions using '${VARIABLE_NAME}' syntax.",
-          "pattern": "^(https://.+|\\$\\{[A-Z_][A-Z0-9_]*\\})$",
+          "description": "OTLP/HTTP endpoint URL for the OpenTelemetry collector (e.g., 'https://collector.example.com:4318/v1/traces' or 'http://127.0.0.1:4318/v1/traces'). MUST use HTTP or HTTPS. Supports variable expressions using '${VARIABLE_NAME}' syntax.",
+          "pattern": "^(https?://.+|\\$\\{[A-Z_][A-Z0-9_]*\\})$",
           "minLength": 1
         },
         "traceId": {

@@ -22,7 +22,7 @@ const DefaultTracingExporterTimeoutSec = 10
 //   - OTEL_EXPORTER_OTLP_ENDPOINT — overrides Endpoint
 //   - OTEL_SERVICE_NAME — overrides ServiceName
 //
-// Example TOML (spec §4.1.3.6, using the opentelemetry section):
+// Example TOML (spec §4.1.3.7, using the opentelemetry section):
 //
 //	[gateway.opentelemetry]
 //	endpoint = "https://otel-collector.example.com"
@@ -32,7 +32,7 @@ const DefaultTracingExporterTimeoutSec = 10
 //	headers = "Authorization=Bearer ${OTEL_TOKEN}"
 type TracingConfig struct {
 	// Endpoint is the OTLP HTTP endpoint to export traces to.
-	// When using the opentelemetry section (spec §4.1.3.6), this MUST be an HTTPS URL.
+	// When using the opentelemetry section (spec §4.1.3.7), this MUST be an HTTP or HTTPS URL.
 	// If empty, tracing is disabled and a noop tracer is used.
 	Endpoint string `toml:"endpoint" json:"endpoint,omitempty"`
 
@@ -61,7 +61,7 @@ type TracingConfig struct {
 	// Valid range: 0.0 (no sampling) to 1.0 (sample everything).
 	// Defaults to 1.0 (100% sampling).
 	// Uses a pointer so that 0.0 can be distinguished from "unset".
-	// Note: SampleRate is a gateway extension field not present in spec §4.1.3.6.
+	// Note: SampleRate is a gateway extension field not present in spec §4.1.3.7.
 	SampleRate *float64 `toml:"sample_rate" json:"sampleRate,omitempty"`
 
 	// SignalPath is the OTLP signal path appended to the base endpoint URL.

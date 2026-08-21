@@ -8,7 +8,7 @@ import (
 )
 
 // TestValidateOpenTelemetryConfig tests all branches of validateOpenTelemetryConfig.
-// The function validates W3C traceId/spanId formats and enforces HTTPS when required.
+// The function validates W3C traceId/spanId formats and enforces HTTP(S) when required.
 func TestValidateOpenTelemetryConfig(t *testing.T) {
 	validTraceID := "4bf92f3577b34da6a3ce929d0e0e4736" // 32 lowercase hex chars
 	validSpanID := "00f067aa0ba902b7"                  // 16 lowercase hex chars
@@ -34,7 +34,7 @@ func TestValidateOpenTelemetryConfig(t *testing.T) {
 			wantErr:      false,
 		},
 
-		// enforceHTTPS branch: endpoint required and must be HTTPS
+		// enforceHTTPS branch: endpoint required and must be HTTP or HTTPS
 		{
 			name:         "missing endpoint when enforceHTTPS is true",
 			cfg:          &TracingConfig{},
@@ -43,13 +43,12 @@ func TestValidateOpenTelemetryConfig(t *testing.T) {
 			errContains:  "endpoint",
 		},
 		{
-			name: "http endpoint rejected when enforceHTTPS is true",
+			name: "http endpoint accepted when enforceHTTPS is true",
 			cfg: &TracingConfig{
 				Endpoint: "http://otel-collector.example.com",
 			},
 			enforceHTTPS: true,
-			wantErr:      true,
-			errContains:  "HTTPS",
+			wantErr:      false,
 		},
 		{
 			name: "non-URL endpoint rejected when enforceHTTPS is true",
@@ -58,7 +57,16 @@ func TestValidateOpenTelemetryConfig(t *testing.T) {
 			},
 			enforceHTTPS: true,
 			wantErr:      true,
-			errContains:  "HTTPS",
+			errContains:  "HTTP or HTTPS",
+		},
+		{
+			name: "non-http(s) endpoint rejected when enforceHTTPS is true",
+			cfg: &TracingConfig{
+				Endpoint: "grpc://otel-collector.example.com",
+			},
+			enforceHTTPS: true,
+			wantErr:      true,
+			errContains:  "HTTP or HTTPS",
 		},
 		{
 			name: "https endpoint accepted when enforceHTTPS is true",

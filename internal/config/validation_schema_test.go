@@ -846,6 +846,11 @@ func TestSchema_OpenTelemetryConfig(t *testing.T) {
 			shouldErr: false,
 		},
 		{
+			name:      "valid opentelemetry with http endpoint",
+			otel:      `{"endpoint": "http://127.0.0.1:4318/v1/traces"}`,
+			shouldErr: false,
+		},
+		{
 			name:      "invalid opentelemetry with headers",
 			otel:      `{"endpoint": "https://otel.example.com", "headers": "Authorization=Bearer token"}`,
 			shouldErr: true,
@@ -872,6 +877,12 @@ func TestSchema_OpenTelemetryConfig(t *testing.T) {
 			otel:      `{"endpoint": "https://otel.example.com", "unknownField": "value"}`,
 			shouldErr: true,
 			errMsg:    "unknownField",
+		},
+		{
+			name:      "invalid opentelemetry non-http scheme",
+			otel:      `{"endpoint": "grpc://otel.example.com:4317"}`,
+			shouldErr: true,
+			errMsg:    "endpoint",
 		},
 	}
 
