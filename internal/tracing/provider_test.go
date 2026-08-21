@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/baggage"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/propagation"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -407,8 +408,8 @@ func TestInitProvider_SampleRateNil_DefaultsToAlwaysSample(t *testing.T) {
 }
 
 // TestInitProvider_GlobalPropagatorRegistration verifies that InitProvider registers the
-// W3C TraceContext propagator globally, so that incoming traceparent headers are
-// respected by downstream HTTP middleware.
+// W3C TraceContext and Baggage propagators globally, so that incoming propagation
+// headers are respected by downstream HTTP middleware.
 func TestInitProvider_GlobalPropagatorRegistration(t *testing.T) {
 	ctx := context.Background()
 
@@ -420,7 +421,13 @@ func TestInitProvider_GlobalPropagatorRegistration(t *testing.T) {
 	prop := otel.GetTextMapPropagator()
 	require.NotNil(t, prop)
 
-	// Round-trip: inject a known span context, then extract it.
+	member, err := baggage.NewMember("test-key", "test-value")
+	require.NoError(t, err)
+	bag, err := baggage.New(member)
+	require.NoError(t, err)
+	ctx = baggage.ContextWithBaggage(ctx, bag)
+
+	// Round-trip: inject a known span context and baggage, then extract them.
 	exporter := tracetest.NewInMemoryExporter()
 	sp := sdktrace.NewSimpleSpanProcessor(exporter)
 	tp := sdktrace.NewTracerProvider(
@@ -449,6 +456,8 @@ func TestInitProvider_GlobalPropagatorRegistration(t *testing.T) {
 
 	assert.Equal(t, parentSpanCtx.TraceID(), extractedSpanCtx.TraceID(),
 		"extracted trace ID must match the injected parent trace ID")
+	assert.Equal(t, "test-value", baggage.FromContext(extractedCtx).Member("test-key").Value(),
+		"extracted baggage must match the injected baggage")
 }
 
 // TestWrapHTTPHandler_ContinuesRemoteTrace verifies that WrapHTTPHandler extracts an
