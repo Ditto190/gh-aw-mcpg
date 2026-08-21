@@ -174,6 +174,24 @@ func TestExtractURLDomains(t *testing.T) {
 			input: "https://valid.com/path https://example.com/%ZZ",
 			want:  []string{"valid.com"},
 		},
+		{
+			// url.Parse returns a non-*url.Error error for malformed bracketed
+			// IPv6-style hosts (missing closing bracket), exercising the
+			// non-*url.Error branch of ExtractURLDomains's error handling.
+			name:  "malformed IPv6 host missing closing bracket returns non-url.Error",
+			input: "see http://[::1/oops here",
+			want:  nil,
+		},
+		{
+			// The regex greedily matches only up to the space, so "http://exa"
+			// is itself a valid (if truncated) URL candidate that parses
+			// successfully; the text after the space is not part of the match.
+			// This still exercises extraction continuing past a short/odd
+			// candidate to pick up the subsequent valid URL.
+			name:  "short URL candidate alongside valid URL",
+			input: "broken http://exa mple.com and https://good.example.org/path",
+			want:  []string{"exa", "good.example.org"},
+		},
 	}
 
 	for _, tt := range tests {
