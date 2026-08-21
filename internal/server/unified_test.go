@@ -574,4 +574,12 @@ func TestUnifiedServer_GetTrustedBots(t *testing.T) {
 		bots := us.getTrustedBots()
 		assert.Nil(t, bots)
 	})
+
+	t.Run("returns nil when cfg itself is nil", func(t *testing.T) {
+		// Exercises the us.cfg == nil branch directly, which NewUnified never
+		// produces (it always sets a non-nil cfg), so a bare struct is used here.
+		us := &UnifiedServer{}
+		bots := us.getTrustedBots()
+		assert.Nil(t, bots)
+	})
 }
