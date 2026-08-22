@@ -67,7 +67,7 @@ func applyTracingOverrides(cmd *cobra.Command, cfg *config.Config) {
 			debugLog.Printf("Tracing sample rate explicitly set via flag: %v", otlpSampleRate)
 			tc.SampleRate = &otlpSampleRate
 		}
-		debugLog.Printf("Tracing overrides applied: endpoint=%q, serviceName=%q", tc.Endpoint, tc.ServiceName)
+		debugLog.Printf("Tracing overrides applied: endpointConfigured=%v, serviceName=%q", tc.Endpoint != "", tc.ServiceName)
 	} else {
 		debugLog.Print("No tracing overrides needed, skipping tracing config initialization")
 	}
