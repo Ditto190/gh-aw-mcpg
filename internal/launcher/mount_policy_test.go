@@ -404,7 +404,9 @@ func TestParseMountRootsSkipsEmptyEntries(t *testing.T) {
 // are appended to it. The parent == current branch is unreachable on a real
 // filesystem because "/" always exists.
 func TestCanonicalizePathWalksUpToFilesystemRoot(t *testing.T) {
-	missing := "/gh-aw-mcpg-missing-root-8f2c/nested/leaf"
+	missing := filepath.Join(string(filepath.Separator), "gh-aw-mcpg-missing-root-8f2c", "nested", "leaf")
+	_, statErr := os.Lstat(filepath.Dir(filepath.Dir(missing)))
+	require.True(t, os.IsNotExist(statErr), "test requires a top-level path that does not exist")
 
 	got, err := canonicalizePath(missing)
 	require.NoError(t, err)
