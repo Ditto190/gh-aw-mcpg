@@ -40,6 +40,7 @@ func GetEnvIntRaw(envKey string) (int, bool, error) {
 
 	value, err := strconv.Atoi(envValue)
 	if err != nil {
+		logEnvUtil.Printf("GetEnvIntRaw: %s=%q could not be parsed as an integer: %v", envKey, sanitize.RedactSecret(envValue), err)
 		return 0, true, err
 	}
 	return value, true, nil
@@ -55,6 +56,9 @@ func GetEnvInt(envKey string, defaultValue int) int {
 		return defaultValue
 	}
 	if err == nil && value > 0 {
+		if logEnvUtil.Enabled() {
+			logEnvUtil.Printf("GetEnvInt: %s=%d", envKey, value)
+		}
 		return value
 	}
 	logEnvUtil.Printf("GetEnvInt: %s=%q is not a valid positive integer, using default=%d", envKey, sanitize.RedactSecret(os.Getenv(envKey)), defaultValue)
@@ -68,6 +72,9 @@ func GetEnvInt(envKey string, defaultValue int) int {
 func GetEnvDuration(envKey string, defaultValue time.Duration) time.Duration {
 	if envValue := os.Getenv(envKey); envValue != "" {
 		if d, err := time.ParseDuration(envValue); err == nil && d > 0 {
+			if logEnvUtil.Enabled() {
+				logEnvUtil.Printf("GetEnvDuration: %s=%v", envKey, d)
+			}
 			return d
 		}
 		logEnvUtil.Printf("GetEnvDuration: %s=%q is not a valid positive duration, using default=%v", envKey, sanitize.RedactSecret(envValue), defaultValue)
