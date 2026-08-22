@@ -6,12 +6,17 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/github/gh-aw-mcpg/internal/jqutil"
 	"github.com/github/gh-aw-mcpg/internal/oidc"
 	"github.com/itchyny/gojq"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 )
+
+// customSchemaCache stores compiled custom schemas by schema URL to avoid
+// repeated fetch + compile work across validations.
+var customSchemaCache sync.Map
 
 func logValidationFail(name, serverType, reason string, err error) error {
 	logValidation.Printf("Validation failed: %s, name=%s, type=%s", reason, name, serverType)
