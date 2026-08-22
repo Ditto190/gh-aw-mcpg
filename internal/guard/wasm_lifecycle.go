@@ -111,11 +111,18 @@ func newCompilationCache(dir string) (wazero.CompilationCache, error) {
 	return wazero.NewCompilationCacheWithDir(dir)
 }
 
+// newCompilationCacheFn is a package-level indirection over newCompilationCache
+// so that tests can inject a cache implementation whose Close() fails, in
+// order to exercise ConfigureGlobalCompilationCache's error-joining branch
+// (both the previous and replacement caches failing to close). Production
+// code must not reassign this; it always points at newCompilationCache.
+var newCompilationCacheFn = newCompilationCache
+
 // ConfigureGlobalCompilationCache replaces the process-level compilation cache.
 // This should be called during process startup before any guards are created.
 func ConfigureGlobalCompilationCache(ctx context.Context, dir string) error {
 	logWasm.Printf("Configuring global compilation cache: dir=%q", dir)
-	cache, err := newCompilationCache(dir)
+	cache, err := newCompilationCacheFn(dir)
 	if err != nil {
 		return err
 	}

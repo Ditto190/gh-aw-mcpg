@@ -1788,6 +1788,34 @@ func TestWasmGuardCompilationCache(t *testing.T) {
 		assert.True(t, failingCache.closed, "expected failing cache to be closed")
 	})
 
+	t.Run("joins errors when both previous and replacement cache close fail", func(t *testing.T) {
+		ctx := context.Background()
+		origCache := globalCompilationCache
+		origNewCacheFn := newCompilationCacheFn
+		previousCloseErr := errors.New("previous close failed")
+		replacementCloseErr := errors.New("replacement close failed")
+		failingCache := &mockCompilationCache{closeErr: previousCloseErr}
+		replacementFailingCache := &mockCompilationCache{closeErr: replacementCloseErr}
+		globalCompilationCache = failingCache
+		newCompilationCacheFn = func(string) (wazero.CompilationCache, error) {
+			return replacementFailingCache, nil
+		}
+		t.Cleanup(func() {
+			globalCompilationCache = origCache
+			newCompilationCacheFn = origNewCacheFn
+		})
+
+		err := ConfigureGlobalCompilationCache(ctx, "")
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "failed to close previous compilation cache")
+		assert.ErrorContains(t, err, "failed to close replacement compilation cache")
+		assert.ErrorIs(t, err, previousCloseErr)
+		assert.ErrorIs(t, err, replacementCloseErr)
+		assert.True(t, failingCache.closed, "expected previous cache to be closed")
+		assert.True(t, replacementFailingCache.closed, "expected replacement cache to be closed")
+		assert.Same(t, failingCache, globalCompilationCache, "global cache must remain the old cache when both closes fail")
+	})
+
 	t.Run("returns error immediately when new cache creation fails", func(t *testing.T) {
 		ctx := context.Background()
 		origCache := globalCompilationCache
