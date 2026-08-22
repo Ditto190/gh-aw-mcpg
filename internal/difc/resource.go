@@ -4,31 +4,6 @@ import "github.com/github/gh-aw-mcpg/internal/logger"
 
 var logResource = logger.ForFile()
 
-// Resource represents an external system with label requirements (deprecated - use LabeledResource)
-type Resource struct {
-	Description string
-	Secrecy     SecrecyLabel
-	Integrity   IntegrityLabel
-}
-
-// NewResource creates a new resource with the given description
-func NewResource(description string) *Resource {
-	return &Resource{
-		Description: description,
-		Secrecy:     *NewSecrecyLabel(),
-		Integrity:   *NewIntegrityLabel(),
-	}
-}
-
-// Empty returns a resource with no label requirements
-func EmptyResource() *Resource {
-	return &Resource{
-		Description: "empty resource",
-		Secrecy:     *NewSecrecyLabel(),
-		Integrity:   *NewIntegrityLabel(),
-	}
-}
-
 // LabeledResource represents a resource with DIFC labels
 // This can be a simple label pair or a complex nested structure for fine-grained filtering
 type LabeledResource struct {

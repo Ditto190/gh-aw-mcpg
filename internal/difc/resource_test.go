@@ -7,37 +7,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestNewResource(t *testing.T) {
-	tests := []struct {
-		name        string
-		description string
-	}{
-		{name: "basic description", description: "my-resource"},
-		{name: "empty description", description: ""},
-		{name: "long description", description: "a very long resource description with spaces and special chars: @#$%"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			r := NewResource(tt.description)
-
-			require.NotNil(t, r)
-			assert.Equal(t, tt.description, r.Description)
-			assert.True(t, r.Secrecy.Label.IsEmpty(), "NewResource should have empty secrecy label")
-			assert.True(t, r.Integrity.Label.IsEmpty(), "NewResource should have empty integrity label")
-		})
-	}
-}
-
-func TestEmptyResource(t *testing.T) {
-	r := EmptyResource()
-
-	require.NotNil(t, r)
-	assert.Equal(t, "empty resource", r.Description)
-	assert.True(t, r.Secrecy.Label.IsEmpty(), "EmptyResource should have empty secrecy label")
-	assert.True(t, r.Integrity.Label.IsEmpty(), "EmptyResource should have empty integrity label")
-}
-
 func TestNewLabeledResource(t *testing.T) {
 	r := NewLabeledResource("labeled-resource")
 
