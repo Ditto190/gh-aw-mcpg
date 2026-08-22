@@ -384,6 +384,44 @@ func TestCanonicalizeRootsEmptyInput(t *testing.T) {
 	assert.Empty(t, roots)
 }
 
+// TestParseMountRootsSkipsEmptyEntries covers the empty-entry continue branch
+// in parseMountRoots: blank entries from stray/trailing commas must be
+// silently skipped rather than producing a malformed root.
+func TestParseMountRootsSkipsEmptyEntries(t *testing.T) {
+	allowed := t.TempDir()
+
+	policy := parseMountRoots(allowed + ":rw,, ,")
+	require.Len(t, policy.Roots, 1, "blank entries must be skipped")
+	canonicalAllowed, err := filepath.EvalSymlinks(allowed)
+	require.NoError(t, err)
+	assert.Equal(t, canonicalAllowed, policy.Roots[0].Path)
+	assert.True(t, policy.Roots[0].Writable)
+}
+
+// TestCanonicalizePathWalksUpToFilesystemRoot covers the ancestor-walk loop in
+// canonicalizePath when no component of the path exists: traversal continues
+// until the filesystem root, which always resolves, and the missing components
+// are appended to it. The parent == current branch is unreachable on a real
+// filesystem because "/" always exists.
+func TestCanonicalizePathWalksUpToFilesystemRoot(t *testing.T) {
+	missing := filepath.Join(string(filepath.Separator), "gh-aw-mcpg-missing-root-8f2c", "nested", "leaf")
+	_, statErr := os.Lstat(filepath.Dir(filepath.Dir(missing)))
+	require.True(t, os.IsNotExist(statErr), "test requires a top-level path that does not exist")
+
+	got, err := canonicalizePath(missing)
+	require.NoError(t, err)
+	assert.Equal(t, missing, got)
+}
+
+// TestParseMountDeclarationRejectsEmptyModeOption covers the opt == "" branch
+// in parseMountDeclaration's mode-option loop, triggered by a stray comma
+// within the mode segment (e.g. "ro,,").
+func TestParseMountDeclarationRejectsEmptyModeOption(t *testing.T) {
+	_, err := parseMountDeclaration("/srv/data:/data:ro,,rw")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "empty mount option")
+}
+
 // TestIsUnderRoot directly exercises isUnderRoot's branches: exact match,
 // nested path, sibling path with a shared prefix (must not be treated as
 // "under" merely due to string prefix matching), parent traversal escape,
