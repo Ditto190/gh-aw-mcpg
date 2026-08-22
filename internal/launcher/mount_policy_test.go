@@ -398,13 +398,17 @@ func TestParseMountRootsSkipsEmptyEntries(t *testing.T) {
 	assert.True(t, policy.Roots[0].Writable)
 }
 
-// TestCanonicalizePathFilesystemRoot covers the branch in canonicalizePath
-// where traversal reaches "/" without ever finding an existing ancestor
-// (parent == current): the cleaned path must be returned as-is.
-func TestCanonicalizePathFilesystemRoot(t *testing.T) {
-	got, err := canonicalizePath("/")
+// TestCanonicalizePathWalksUpToFilesystemRoot covers the ancestor-walk loop in
+// canonicalizePath when no component of the path exists: traversal continues
+// until the filesystem root, which always resolves, and the missing components
+// are appended to it. The parent == current branch is unreachable on a real
+// filesystem because "/" always exists.
+func TestCanonicalizePathWalksUpToFilesystemRoot(t *testing.T) {
+	missing := "/gh-aw-mcpg-missing-root-8f2c/nested/leaf"
+
+	got, err := canonicalizePath(missing)
 	require.NoError(t, err)
-	assert.Equal(t, "/", got)
+	assert.Equal(t, missing, got)
 }
 
 // TestParseMountDeclarationRejectsEmptyModeOption covers the opt == "" branch
