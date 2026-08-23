@@ -1,9 +1,12 @@
 package server
 
 import (
+	"os"
+	"os/exec"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestIsSingularReadTool(t *testing.T) {
@@ -168,4 +171,27 @@ func TestIsSingularReadTool(t *testing.T) {
 			assert.Equal(t, tt.want, IsSingularReadTool(tt.toolName))
 		})
 	}
+}
+
+// TestIsSingularReadTool_DebugLoggingEnabled exercises the debug-log branch
+// (logToolPolicy.Enabled()) which is otherwise never taken in normal test
+// runs. logToolPolicy is a package-level *logger.Logger whose enabled state
+// is computed once at package init time from the DEBUG environment variable
+// present when the test binary started, so t.Setenv here cannot retroactively
+// flip it. Instead we re-exec this test in a subprocess with DEBUG=* set
+// beforehand, verifying the debug branch runs without panicking and produces
+// the expected result.
+func TestIsSingularReadTool_DebugLoggingEnabled(t *testing.T) {
+	if os.Getenv("GO_WANT_DEBUG_SUBPROCESS") == "1" {
+		require.True(t, logToolPolicy.Enabled(), "expected logger to be enabled when DEBUG=* is set before process start")
+		assert.True(t, IsSingularReadTool("get_issue"))
+		assert.False(t, IsSingularReadTool("list_issues"))
+		return
+	}
+
+	cmd := exec.Command(os.Args[0], "-test.run=TestIsSingularReadTool_DebugLoggingEnabled", "-test.v")
+	cmd.Env = append(os.Environ(), "GO_WANT_DEBUG_SUBPROCESS=1", "DEBUG=*")
+	out, err := cmd.CombinedOutput()
+	require.NoError(t, err, "subprocess output:\n%s", out)
+	assert.Contains(t, string(out), "PASS")
 }
