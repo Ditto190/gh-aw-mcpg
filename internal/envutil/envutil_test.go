@@ -2,10 +2,12 @@ package envutil
 
 import (
 	"os"
+	"os/exec"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestHasEnvVar(t *testing.T) {
@@ -609,6 +611,47 @@ func TestGetEnvIntRealWorldScenarios(t *testing.T) {
 		result = GetEnvInt("MCP_GATEWAY_PAYLOAD_SIZE_THRESHOLD", 10240)
 		assert.Equal(t, 10240, result)
 	})
+}
+
+// TestGetEnvInt_DebugLoggingEnabled exercises the logEnvUtil.Enabled() debug-log
+// branch in GetEnvInt, which is otherwise never taken in normal test runs.
+// logEnvUtil is a package-level *logger.Logger whose enabled state is computed
+// once at package init time from the DEBUG environment variable present when
+// the test binary started, so t.Setenv cannot retroactively flip it. Instead
+// this test re-execs itself in a subprocess with DEBUG=* set beforehand,
+// verifying the debug branch runs without panicking and produces the expected
+// result.
+func TestGetEnvInt_DebugLoggingEnabled(t *testing.T) {
+	if os.Getenv("GO_WANT_DEBUG_SUBPROCESS") == "1" {
+		require.True(t, logEnvUtil.Enabled(), "expected logger to be enabled when DEBUG=* is set before process start")
+		os.Setenv("TEST_INT_DEBUG_VAR", "42")
+		assert.Equal(t, 42, GetEnvInt("TEST_INT_DEBUG_VAR", 7))
+		return
+	}
+
+	cmd := exec.Command(os.Args[0], "-test.run=TestGetEnvInt_DebugLoggingEnabled", "-test.v")
+	cmd.Env = append(os.Environ(), "GO_WANT_DEBUG_SUBPROCESS=1", "DEBUG=*")
+	out, err := cmd.CombinedOutput()
+	require.NoError(t, err, "subprocess output:\n%s", out)
+	assert.Contains(t, string(out), "PASS")
+}
+
+// TestGetEnvDuration_DebugLoggingEnabled exercises the logEnvUtil.Enabled()
+// debug-log branch in GetEnvDuration using the same subprocess re-exec
+// technique as TestGetEnvInt_DebugLoggingEnabled.
+func TestGetEnvDuration_DebugLoggingEnabled(t *testing.T) {
+	if os.Getenv("GO_WANT_DEBUG_SUBPROCESS") == "1" {
+		require.True(t, logEnvUtil.Enabled(), "expected logger to be enabled when DEBUG=* is set before process start")
+		os.Setenv("TEST_DURATION_DEBUG_VAR", "5m")
+		assert.Equal(t, 5*time.Minute, GetEnvDuration("TEST_DURATION_DEBUG_VAR", time.Hour))
+		return
+	}
+
+	cmd := exec.Command(os.Args[0], "-test.run=TestGetEnvDuration_DebugLoggingEnabled", "-test.v")
+	cmd.Env = append(os.Environ(), "GO_WANT_DEBUG_SUBPROCESS=1", "DEBUG=*")
+	out, err := cmd.CombinedOutput()
+	require.NoError(t, err, "subprocess output:\n%s", out)
+	assert.Contains(t, string(out), "PASS")
 }
 
 // TestGetEnvBoolRealWorldScenarios tests realistic usage scenarios
