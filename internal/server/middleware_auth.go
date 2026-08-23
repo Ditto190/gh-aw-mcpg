@@ -14,8 +14,10 @@ var logAuth = logger.New("server:auth")
 // If key is empty the handler is returned unchanged.
 func applyIfConfigured(key string, handler http.HandlerFunc, middleware func(string, http.HandlerFunc) http.HandlerFunc) http.HandlerFunc {
 	if key != "" {
+		logAuth.Print("Wrapping handler with configured middleware")
 		return middleware(key, handler)
 	}
+	logAuth.Print("No key configured, returning handler unwrapped")
 	return handler
 }
 
