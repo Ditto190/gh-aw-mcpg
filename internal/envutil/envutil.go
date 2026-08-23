@@ -40,7 +40,7 @@ func GetEnvIntRaw(envKey string) (int, bool, error) {
 
 	value, err := strconv.Atoi(envValue)
 	if err != nil {
-		logEnvUtil.Printf("GetEnvIntRaw: %s=%q could not be parsed as an integer: %v", envKey, sanitize.RedactSecret(envValue), err)
+		logEnvUtil.Printf("GetEnvIntRaw: %s=%q could not be parsed as an integer", envKey, sanitize.RedactSecret(envValue))
 		return 0, true, err
 	}
 	return value, true, nil
