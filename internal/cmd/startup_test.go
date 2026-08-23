@@ -1,11 +1,16 @@
 package cmd
 
 import (
+	"context"
 	"net"
+	"net/http"
 	"path/filepath"
 	"testing"
+	"time"
 
+	"github.com/github/gh-aw-mcpg/internal/config"
 	"github.com/github/gh-aw-mcpg/internal/proxy"
+	"github.com/github/gh-aw-mcpg/internal/server"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -114,6 +119,116 @@ func TestSetupTLSListener_ClosesListenerOnTLSFailure(t *testing.T) {
 	rebound, reboundErr := net.Listen("tcp", listenAddr)
 	require.NoError(t, reboundErr, "listener should be closed on TLS setup failure")
 	assert.NoError(t, rebound.Close())
+}
+
+// newTestUnifiedServer builds a minimal UnifiedServer with no backend servers
+// configured, suitable for exercising HTTP-server wiring without Docker.
+func newTestUnifiedServer(t *testing.T) *server.UnifiedServer {
+	t.Helper()
+	cfg := &config.Config{
+		Servers: map[string]*config.ServerConfig{},
+	}
+	us, err := server.NewUnified(context.Background(), cfg)
+	require.NoError(t, err)
+	t.Cleanup(func() { us.Close() })
+	return us
+}
+
+func TestBuildHTTPServer_RoutedMode(t *testing.T) {
+	t.Parallel()
+
+	us := newTestUnifiedServer(t)
+	ctx := context.Background()
+	listenAddr := availableLoopbackAddr(t)
+
+	httpServer := buildHTTPServer(ctx, "routed", listenAddr, us, "test-agent-id", "", func() {})
+
+	require.NotNil(t, httpServer)
+	assert.Equal(t, listenAddr, httpServer.Addr)
+	require.NotNil(t, httpServer.BaseContext)
+	assert.Equal(t, ctx, httpServer.BaseContext(nil))
+}
+
+func TestBuildHTTPServer_UnifiedMode(t *testing.T) {
+	t.Parallel()
+
+	us := newTestUnifiedServer(t)
+	ctx := context.Background()
+	listenAddr := availableLoopbackAddr(t)
+
+	cancelCalled := false
+	cancel := func() { cancelCalled = true }
+
+	httpServer := buildHTTPServer(ctx, "unified", listenAddr, us, "", "", cancel)
+
+	require.NotNil(t, httpServer)
+	assert.Equal(t, listenAddr, httpServer.Addr)
+	require.NotNil(t, httpServer.BaseContext)
+	assert.Equal(t, ctx, httpServer.BaseContext(nil))
+
+	// buildHTTPServer must wire the cancel func into the unified server's exit
+	// hook so that the /close handler can invoke it during shutdown.
+	exitFn := us.GetExitFunc()
+	require.NotNil(t, exitFn, "expected buildHTTPServer to register an exit function")
+	exitFn()
+	assert.True(t, cancelCalled, "expected cancel to be invoked via the registered exit hook")
+}
+
+func TestBuildHTTPServer_BaseContextPropagatesAcrossRequests(t *testing.T) {
+	t.Parallel()
+
+	us := newTestUnifiedServer(t)
+	type ctxKey string
+	key := ctxKey("test-key")
+	ctx := context.WithValue(context.Background(), key, "test-value")
+	listenAddr := availableLoopbackAddr(t)
+
+	httpServer := buildHTTPServer(ctx, "unified", listenAddr, us, "", "", func() {})
+	require.NotNil(t, httpServer.BaseContext)
+
+	gotCtx := httpServer.BaseContext(nil)
+	assert.Equal(t, "test-value", gotCtx.Value(key))
+}
+
+func TestBuildHTTPServer_WithHMACSecret(t *testing.T) {
+	t.Parallel()
+
+	us := newTestUnifiedServer(t)
+	ctx := context.Background()
+	listenAddr := availableLoopbackAddr(t)
+
+	httpServer := buildHTTPServer(ctx, "routed", listenAddr, us, "agent-id", "hmac-secret", func() {})
+	require.NotNil(t, httpServer)
+	assert.Equal(t, listenAddr, httpServer.Addr)
+}
+
+// ensure the returned server actually serves requests via the unified server's
+// mux (sanity check that CreateHTTPServerForRoutedMode/CreateHTTPServerForMCP
+// wiring is intact and buildHTTPServer doesn't break the handler).
+func TestBuildHTTPServer_ServesRequests(t *testing.T) {
+	t.Parallel()
+
+	us := newTestUnifiedServer(t)
+	ctx := context.Background()
+	listenAddr := availableLoopbackAddr(t)
+
+	httpServer := buildHTTPServer(ctx, "unified", listenAddr, us, "", "", func() {})
+	require.NotNil(t, httpServer)
+
+	ln, err := net.Listen("tcp", listenAddr)
+	require.NoError(t, err)
+	go func() { _ = httpServer.Serve(ln) }()
+	defer func() { _ = httpServer.Close() }()
+
+	// Give the server a brief moment to start accepting connections.
+	require.Eventually(t, func() bool {
+		resp, err := http.Get("http://" + listenAddr + "/nonexistent")
+		if err != nil {
+			return false
+		}
+		defer resp.Body.Close()
+		return true
+	}, 2*time.Second, 50*time.Millisecond)
 }
 
 func availableLoopbackAddr(t *testing.T) string {
