@@ -291,7 +291,7 @@ func compileToolResponseFilterInternal[K comparable](
 		code, ok := cached.(*gojq.Code)
 		if !ok {
 			// Should never happen; the cache only stores *gojq.Code values.
-			return nil, fmt.Errorf("internal error: unexpected cached value type for filter (len=%d)", len(filter))
+			return nil, fmt.Errorf("internal error: unexpected cached value type %T for filter (len=%d)", cached, len(filter))
 		}
 		logMiddleware.Printf("%s: cache hit, len=%d%s", logFunctionName, len(filter), logSuffix)
 		return code, nil

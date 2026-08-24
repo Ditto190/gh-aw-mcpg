@@ -40,7 +40,7 @@ func TestCompileToolResponseFilter_PoisonedCacheEntry(t *testing.T) {
 	code, err := CompileToolResponseFilter(filter)
 	require.Error(t, err, "poisoned cache entry should produce an error rather than panicking")
 	assert.Nil(t, code)
-	assert.ErrorContains(t, err, "internal error: unexpected cached value type for filter")
+	assert.ErrorContains(t, err, "internal error: unexpected cached value type string for filter")
 }
 
 // ---------------------------------------------------------------------------
