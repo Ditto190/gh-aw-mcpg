@@ -1,12 +1,11 @@
 package middleware
 
-// Regression tests for the "continue iterating after an error value" pattern.
+// Regression tests for error-valued gojq iterator results.
 //
-// runJqCode calls iter.Next() more than once when CheckMultipleResults is set,
-// so it can observe an error value and then keep pulling from the same iterator.
-// gojq v0.12.19 fixed a panic in exactly that situation (continuing iteration
-// after an invalid path error). These tests pin the interaction down so a
-// regression in gojq — or in runJqCode's follow-up Next() call — is caught here.
+// CheckMultipleResults makes runJqCode call iter.Next() a second time, and that
+// extra value may be an invalid-path error. gojq v0.12.19 separately fixed a
+// panic when callers continued iteration after such an error. The direct test
+// pins that upstream behavior, while the filter tests pin runJqCode's handling.
 
 import (
 	"context"
