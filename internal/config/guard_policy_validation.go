@@ -249,8 +249,11 @@ func normalizeAndValidateScopeArray(scopes []interface{}) ([]string, error) {
 			return nil, err
 		}
 
-		if !isValidRepoScope(scopeString) {
-			return nil, fmt.Errorf("allow-only.repos scope %q is invalid; expected owner/*, owner/repo, or owner/re*", scopeString)
+		if scopeString == "all" {
+			return nil, fmt.Errorf("allow-only.repos scope %q cannot be combined with other scopes", scopeString)
+		}
+		if scopeString != "public" && !isValidRepoScope(scopeString) {
+			return nil, fmt.Errorf("allow-only.repos scope %q is invalid; expected public, owner/*, owner/repo, or owner/re*", scopeString)
 		}
 
 		if _, exists := seen[scopeString]; exists {

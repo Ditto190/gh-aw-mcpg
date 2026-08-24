@@ -3836,6 +3836,58 @@ mod tests {
     }
 
     #[test]
+    fn test_issue_read_comments_are_labeled_per_author() {
+        let ctx = default_ctx();
+        let tool_args = json!({
+            "owner": "github",
+            "repo": "gh-aw-mcpg",
+            "issue_number": 2278,
+            "method": "get_comments"
+        });
+        let response = json!([
+            {
+                "id": 1,
+                "user": {"login": "github-actions[bot]"},
+                "author_association": "NONE",
+                "body": "trusted"
+            },
+            {
+                "id": 2,
+                "user": {"login": "external"},
+                "author_association": "CONTRIBUTOR",
+                "body": "untrusted"
+            }
+        ]);
+
+        let items = label_response_items("issue_read", &tool_args, &response, &ctx);
+        assert_eq!(items.len(), 2);
+        assert!(items[0]
+            .labels
+            .integrity
+            .iter()
+            .any(|label| label.starts_with("approved:")));
+        assert!(items[1]
+            .labels
+            .integrity
+            .iter()
+            .any(|label| label.starts_with("unapproved:")));
+
+        let paths = label_response_paths("issue_read", &tool_args, &response, &ctx)
+            .expect("comment arrays must receive path labels");
+        assert_eq!(paths.labeled_paths.len(), 2);
+        assert!(paths.labeled_paths[0]
+            .labels
+            .integrity
+            .iter()
+            .any(|label| label.starts_with("approved:")));
+        assert!(paths.labeled_paths[1]
+            .labels
+            .integrity
+            .iter()
+            .any(|label| label.starts_with("unapproved:")));
+    }
+
+    #[test]
     fn test_label_response_items_pull_request_read_member() {
         // pull_request_read should label responses the same as get_pull_request
         let ctx = default_ctx();

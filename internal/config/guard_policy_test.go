@@ -146,6 +146,24 @@ func TestNormalizeGuardPolicy(t *testing.T) {
 			wantIntegrity: "approved",
 		},
 		{
+			name: "repos array combines exact repo and public",
+			policy: &GuardPolicy{AllowOnly: &AllowOnlyPolicy{
+				Repos:        []string{"myorg/repo", "public"},
+				MinIntegrity: "approved",
+			}},
+			wantScopeKind: "scoped",
+			wantScopes:    []string{"myorg/repo", "public"},
+			wantIntegrity: "approved",
+		},
+		{
+			name: "repos array rejects all composite",
+			policy: &GuardPolicy{AllowOnly: &AllowOnlyPolicy{
+				Repos:        []string{"myorg/repo", "all"},
+				MinIntegrity: "approved",
+			}},
+			wantErr: "cannot be combined",
+		},
+		{
 			name: "repos empty array",
 			policy: &GuardPolicy{AllowOnly: &AllowOnlyPolicy{
 				Repos:        []interface{}{},

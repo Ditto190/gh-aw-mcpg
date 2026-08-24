@@ -119,10 +119,39 @@ func TestWrapHTTPHandler_PatternMethodMismatch_OmitsRouteAttribute(t *testing.T)
 		case HTTPRouteKey:
 			foundRoute = true
 		}
+
 	}
 	assert.True(t, foundMethod, "http.request.method attribute must be present on the span")
 	assert.True(t, foundPath, "url.path attribute must be present on the span")
 	assert.False(t, foundRoute, "http.route attribute must be omitted when the pattern method mismatches the request method")
+}
+
+func TestWrapHTTPHandlerWithoutPath_OmitsPathAndRouteAttributes(t *testing.T) {
+	exporter := tracetest.NewInMemoryExporter()
+	tp := sdktrace.NewTracerProvider(
+		sdktrace.WithSpanProcessor(sdktrace.NewSimpleSpanProcessor(exporter)),
+		sdktrace.WithSampler(sdktrace.AlwaysSample()),
+	)
+	previousProvider := otel.GetTracerProvider()
+	otel.SetTracerProvider(tp)
+	t.Cleanup(func() {
+		otel.SetTracerProvider(previousProvider)
+		require.NoError(t, tp.Shutdown(context.Background()))
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/repos/private/hidden/issues", nil)
+	req.Pattern = "GET /repos/{owner}/{repo}/issues"
+	recorder := httptest.NewRecorder()
+	WrapHTTPHandlerWithoutPath(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}), "test.redacted").ServeHTTP(recorder, req)
+
+	spans := exporter.GetSpans()
+	require.Len(t, spans, 1)
+	for _, attr := range spans[0].Attributes {
+		assert.NotEqual(t, URLPathKey, attr.Key)
+		assert.NotEqual(t, HTTPRouteKey, attr.Key)
+	}
 }
 
 func TestStatusResponseWriter_Unwrap_ExposesOptionalInterfaces(t *testing.T) {

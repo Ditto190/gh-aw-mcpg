@@ -52,19 +52,35 @@ type proxyHandler struct {
 }
 
 func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// Strip the /api/v3 prefix that GH_HOST adds
-	rawPath := StripGHHostPrefix(r.URL.Path)
+	// Avoid logging enclave paths before capability and repository authorization.
+	rawPath := r.URL.Path
+	if h.server.enclave != nil {
+		if normalizedPath, ok := enclavePath(r.URL.Path, r.URL.RawPath); ok {
+			rawPath = normalizedPath
+		}
+	} else {
+		// Strip the /api/v3 prefix that GH_HOST adds.
+		rawPath = StripGHHostPrefix(r.URL.Path)
+	}
 	// Preserve query string for upstream forwarding
 	fullPath := rawPath
 	if r.URL.RawQuery != "" {
 		fullPath = rawPath + "?" + r.URL.RawQuery
 	}
 
-	logHandler.Printf("incoming %s %s", r.Method, rawPath)
+	if h.server.enclave != nil {
+		logHandler.Printf("incoming enclave request: method=%s", r.Method)
+	} else {
+		logHandler.Printf("incoming %s %s", r.Method, rawPath)
+	}
 
 	// Health check endpoint
 	if rawPath == "/health" || rawPath == "/healthz" {
 		httputil.WriteJSONResponse(w, http.StatusOK, map[string]string{"status": "ok"})
+		return
+	}
+	if h.server.enclave != nil {
+		h.handleEnclaveRequest(w, r)
 		return
 	}
 
@@ -179,7 +195,11 @@ func (h *proxyHandler) handleUnrecognizedPassthrough(w http.ResponseWriter, r *h
 func (h *proxyHandler) handleWithDIFC(w http.ResponseWriter, r *http.Request, path, toolName string, args map[string]interface{}, graphQLBody []byte) {
 	ctx := r.Context()
 	s := h.server
-	backend := &restBackendCaller{server: s, clientAuth: r.Header.Get("Authorization")}
+	clientAuth := r.Header.Get("Authorization")
+	if s.enclave != nil {
+		clientAuth = ""
+	}
+	backend := &restBackendCaller{server: s, clientAuth: clientAuth}
 
 	// Start a DIFC pipeline span covering all phases for this request
 	ctx, difcSpan := tracing.StartDIFCPipelineSpan(ctx, h.GetTracer(), toolName, r.URL.Path)
@@ -192,7 +212,7 @@ func (h *proxyHandler) handleWithDIFC(w http.ResponseWriter, r *http.Request, pa
 
 	// **Phases 0–2: Get agent labels, label resource, coarse access check**
 	pipelineIn := guard.PipelineInput{
-		AgentID:         proxyAgentID,
+		AgentID:         agentIDFromContext(ctx),
 		ToolName:        toolName,
 		Args:            args,
 		Guard:           s.guard,
@@ -204,6 +224,10 @@ func (h *proxyHandler) handleWithDIFC(w http.ResponseWriter, r *http.Request, pa
 	}
 	ctx, pre, err := guard.RunPipelinePrePhases(ctx, pipelineIn)
 	if err != nil {
+		if s.enclave != nil {
+			writeEnclaveDenied(w)
+			return
+		}
 		if denied, _ := guard.HandlePrePhaseError(err); denied != nil {
 			logHandler.Printf("[DIFC] Phase 2: BLOCKED %s %s — %s", r.Method, path, denied.EvalResult.Reason)
 			deniedErr := fmt.Errorf("DIFC policy violation: %s", denied.EvalResult.Reason)
@@ -224,7 +248,6 @@ func (h *proxyHandler) handleWithDIFC(w http.ResponseWriter, r *http.Request, pa
 	}
 
 	// **Phase 3: Forward to upstream GitHub API**
-	clientAuth := r.Header.Get("Authorization")
 	var resp *http.Response
 	var respBody []byte
 
@@ -260,6 +283,10 @@ func (h *proxyHandler) handleWithDIFC(w http.ResponseWriter, r *http.Request, pa
 
 	// For non-200 responses, pass through as-is
 	if resp.StatusCode >= 300 {
+		if s.enclave != nil && resp.StatusCode < 400 {
+			writeEnclaveDenied(w)
+			return
+		}
 		h.writeResponse(w, resp, respBody)
 		return
 	}
@@ -267,6 +294,10 @@ func (h *proxyHandler) handleWithDIFC(w http.ResponseWriter, r *http.Request, pa
 	// Parse the response as JSON for DIFC filtering
 	var responseData interface{}
 	if err := json.Unmarshal(respBody, &responseData); err != nil {
+		if s.enclave != nil {
+			writeEnclaveDenied(w)
+			return
+		}
 		// Non-JSON response — pass through
 		logHandler.Printf("[DIFC] response is not JSON, passing through")
 		h.writeResponse(w, resp, respBody)
@@ -276,6 +307,10 @@ func (h *proxyHandler) handleWithDIFC(w http.ResponseWriter, r *http.Request, pa
 	// **Phase 4: Guard labels the response**
 	labeledData, err := guard.RunPipelinePhase4(ctx, pipelineIn, pre, responseData)
 	if err != nil {
+		if s.enclave != nil {
+			writeEnclaveDenied(w)
+			return
+		}
 		logHandler.Printf("[DIFC] Phase 4 failed: %v", err)
 		// On labeling failure, fall back to coarse-grained result
 		if pre.EvalResult.IsAllowed() {
@@ -299,6 +334,10 @@ func (h *proxyHandler) handleWithDIFC(w http.ResponseWriter, r *http.Request, pa
 	)
 	if err != nil {
 		logHandler.Printf("[DIFC] Phase 5 ToResult failed: %v", err)
+		if s.enclave != nil {
+			writeEnclaveDenied(w)
+			return
+		}
 		h.writeEmptyResponse(w, resp, responseData)
 		return
 	}

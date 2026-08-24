@@ -14,6 +14,7 @@ import (
 
 	"github.com/github/gh-aw-mcpg/internal/config"
 	"github.com/github/gh-aw-mcpg/internal/difc"
+	"github.com/github/gh-aw-mcpg/internal/enclavegithub"
 	"github.com/github/gh-aw-mcpg/internal/envutil"
 	"github.com/github/gh-aw-mcpg/internal/githubhttp"
 	"github.com/github/gh-aw-mcpg/internal/httputil"
@@ -146,20 +147,82 @@ Local usage:
 	return cmd
 }
 
+func resolveEnclaveProxyConfig(
+	policyRaw string,
+	capabilityKey string,
+	explicitGuardPolicy string,
+	trustedBots []string,
+	trustedUsers []string,
+) (*proxy.EnclaveConfig, string, bool, error) {
+	enabled := policyRaw != "" || capabilityKey != ""
+	if !enabled {
+		return nil, "", false, nil
+	}
+	if policyRaw == "" || capabilityKey == "" {
+		return nil, "", true, fmt.Errorf(
+			"%s and %s must be configured together",
+			enclavegithub.EnvPolicyJSON,
+			enclavegithub.EnvCapabilityKey,
+		)
+	}
+	if explicitGuardPolicy != "" {
+		return nil, "", true, fmt.Errorf(
+			"--policy and %s cannot be combined",
+			enclavegithub.EnvPolicyJSON,
+		)
+	}
+	if len(trustedBots) != 0 || len(trustedUsers) != 0 {
+		return nil, "", true, fmt.Errorf(
+			"trusted bot and user overrides are not supported in enclave proxy mode",
+		)
+	}
+
+	policy, err := enclavegithub.ParsePolicy(policyRaw)
+	if err != nil {
+		return nil, "", true, err
+	}
+	verifier, err := enclavegithub.NewVerifier(capabilityKey, policy)
+	if err != nil {
+		return nil, "", true, err
+	}
+	guardPolicy, err := policy.GuardPolicyJSON()
+	if err != nil {
+		return nil, "", true, err
+	}
+	return &proxy.EnclaveConfig{Policy: policy, Verifier: verifier}, guardPolicy, true, nil
+}
+
 func runProxy(cmd *cobra.Command, args []string) error {
 	ctx, cancel := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	logProxyCmd.Printf("Starting proxy: listen=%s, guard=%s, mode=%s, tls=%v", proxyListen, proxyGuardWasm, proxyDIFCMode, proxyTLS)
+	enclavePolicyRaw := os.Getenv(enclavegithub.EnvPolicyJSON)
+	enclaveCapabilityKey := os.Getenv(enclavegithub.EnvCapabilityKey)
+	enclaveConfig, enclaveGuardPolicy, enclaveEnabled, err := resolveEnclaveProxyConfig(
+		enclavePolicyRaw,
+		enclaveCapabilityKey,
+		proxyPolicy,
+		proxyTrustedBots,
+		proxyTrustedUsers,
+	)
+	if err != nil {
+		return err
+	}
+	effectiveDIFCMode := proxyDIFCMode
+	if enclaveEnabled {
+		effectiveDIFCMode = difc.ModePropagate
+	}
 
-	if _, err := difc.ParseEnforcementMode(proxyDIFCMode); err != nil {
+	logProxyCmd.Printf("Starting proxy: listen=%s, guard=%s, mode=%s, tls=%v, enclave=%v", proxyListen, proxyGuardWasm, effectiveDIFCMode, proxyTLS, enclaveEnabled)
+
+	if _, err := difc.ParseEnforcementMode(effectiveDIFCMode); err != nil {
 		return fmt.Errorf("invalid --guards-mode flag: %w", err)
 	}
 
 	// Initialize loggers
 	logger.InitProxyLoggers(proxyLogDir)
 
-	logger.LogInfo("startup", "MCPG Proxy starting: listen=%s, guard=%s, mode=%s, tls=%v", proxyListen, proxyGuardWasm, proxyDIFCMode, proxyTLS)
+	logger.LogInfo("startup", "MCPG Proxy starting: listen=%s, guard=%s, mode=%s, tls=%v, enclave=%v", proxyListen, proxyGuardWasm, effectiveDIFCMode, proxyTLS, enclaveEnabled)
 
 	resolvedWasmCacheDir, cleanupWasmCache, err := setupWasmCompilationCache(ctx, cmd.Flags().Changed("wasm-cache-dir"), proxyWasmCacheDir, proxyLogDir)
 	if err != nil {
@@ -199,8 +262,11 @@ func runProxy(cmd *cobra.Command, args []string) error {
 		token = envutil.LookupGitHubToken()
 	}
 	if token != "" {
-		logger.LogInfo("startup", "Fallback GitHub token configured from flag/env")
+		logger.LogInfo("startup", "GitHub token configured from flag/env")
 	} else {
+		if enclaveEnabled {
+			return fmt.Errorf("GitHub token is required for enclave proxy mode")
+		}
 		logger.LogInfo("startup", "No fallback token — proxy will forward client Authorization headers")
 	}
 
@@ -219,21 +285,24 @@ func runProxy(cmd *cobra.Command, args []string) error {
 	// This overrides the compiled policy to prevent agents from reading private
 	// repos, even if the compiler misconfigured the allow-only scope.
 	effectivePolicy := proxyPolicy
-	if effectivePolicy != "" {
+	if enclaveEnabled {
+		effectivePolicy = enclaveGuardPolicy
+	} else if effectivePolicy != "" {
 		effectivePolicy = proxyForcePublicReposIfNeeded(ctx, effectivePolicy, token, apiURL)
 	}
 
 	// Create the proxy server
 	logProxyCmd.Printf("Creating proxy server: guard=%s, hasPolicy=%v, mode=%s, trustedBots=%d, trustedUsers=%d",
-		proxyGuardWasm, effectivePolicy != "", proxyDIFCMode, len(proxyTrustedBots), len(proxyTrustedUsers))
+		proxyGuardWasm, effectivePolicy != "", effectiveDIFCMode, len(proxyTrustedBots), len(proxyTrustedUsers))
 	proxySrv, err := proxy.New(ctx, proxy.Config{
 		WasmPath:     proxyGuardWasm,
 		Policy:       effectivePolicy,
 		GitHubToken:  token,
 		GitHubAPIURL: apiURL,
-		DIFCMode:     proxyDIFCMode,
+		DIFCMode:     effectiveDIFCMode,
 		TrustedBots:  proxyTrustedBots,
 		TrustedUsers: proxyTrustedUsers,
+		Enclave:      enclaveConfig,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create proxy server: %w", err)
