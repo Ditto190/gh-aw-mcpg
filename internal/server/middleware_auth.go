@@ -13,22 +13,24 @@ var logAuth = logger.New("server:auth")
 // applyIfConfigured wraps handler with middleware(key, handler) when key is non-empty.
 // If key is empty the handler is returned unchanged.
 func applyIfConfigured(key string, handler http.HandlerFunc, middleware func(string, http.HandlerFunc) http.HandlerFunc) http.HandlerFunc {
-	if key != "" {
-		logAuth.Print("Wrapping handler with configured middleware")
-		return middleware(key, handler)
-	}
-	logAuth.Print("No key configured, returning handler unwrapped")
-	return handler
+	return applyIfConfiguredWithLog(
+		key,
+		handler,
+		middleware,
+		logAuth.Print,
+		"Wrapping handler with configured middleware",
+		"No key configured, returning handler unwrapped",
+	)
 }
 
 // applyIfConfiguredWithLog logs whether a middleware is active before applying it.
 func applyIfConfiguredWithLog(key string, handler http.HandlerFunc, middleware func(string, http.HandlerFunc) http.HandlerFunc, logFn func(...any), enabledMsg, disabledMsg string) http.HandlerFunc {
 	if key != "" {
 		logFn(enabledMsg)
-	} else {
-		logFn(disabledMsg)
+		return middleware(key, handler)
 	}
-	return applyIfConfigured(key, handler, middleware)
+	logFn(disabledMsg)
+	return handler
 }
 
 // authMiddleware implements API key authentication per spec section 7.1
