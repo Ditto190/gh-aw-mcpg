@@ -49,6 +49,7 @@ func logRuntimeError(errorType, detail string, r *http.Request, serverName *stri
 //   - runtimeDetail: detail field for runtime error log (e.g. "missing_auth_header")
 //   - msg: human-readable message sent back in the HTTP response
 func rejectRequest(w http.ResponseWriter, r *http.Request, status int, code, msg, logCategory, runtimeErrType, runtimeDetail string) {
+	logServerHelpers.Printf("rejectRequest: status=%d, code=%s, category=%s, path=%s", status, code, logCategory, r.URL.Path)
 	logger.LogErrorToMarkdown(logCategory, "Request rejected: %s, remote=%s, path=%s", msg, r.RemoteAddr, r.URL.Path)
 	logRuntimeError(runtimeErrType, runtimeDetail, r, nil)
 	httputil.WriteErrorResponse(w, status, code, msg)
@@ -59,6 +60,7 @@ func rejectRequest(w http.ResponseWriter, r *http.Request, status int, code, msg
 // Returns nil, nil for requests with no body.
 func readAndRestoreRequestBody(r *http.Request) ([]byte, error) {
 	if r.Body == nil || r.Body == http.NoBody {
+		logServerHelpers.Print("readAndRestoreRequestBody: request has no body, skipping read")
 		return nil, nil
 	}
 
@@ -66,9 +68,11 @@ func readAndRestoreRequestBody(r *http.Request) ([]byte, error) {
 	b, err := io.ReadAll(origBody)
 	closeErr := origBody.Close()
 	if err != nil {
+		logServerHelpers.Printf("readAndRestoreRequestBody: failed to read body: %v", err)
 		return nil, err
 	}
 	if closeErr != nil {
+		logServerHelpers.Printf("readAndRestoreRequestBody: failed to close original body: %v", closeErr)
 		return nil, closeErr
 	}
 
@@ -77,6 +81,7 @@ func readAndRestoreRequestBody(r *http.Request) ([]byte, error) {
 		return b, nil
 	}
 
+	logServerHelpers.Printf("readAndRestoreRequestBody: read and restored %d bytes", len(b))
 	r.Body = io.NopCloser(bytes.NewReader(b))
 	return b, nil
 }
