@@ -8,7 +8,11 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+
+	"github.com/github/gh-aw-mcpg/internal/logger"
 )
+
+var log = logger.ForFile()
 
 const (
 	ProfileIssuesReadV1 = "issues-read-v1"
@@ -69,10 +73,12 @@ type Policy struct {
 
 // ParsePolicy parses and validates a compiler-generated enclave policy.
 func ParsePolicy(raw string) (*Policy, error) {
+	log.Printf("Parsing enclave policy: %d bytes", len(raw))
 	if len(raw) == 0 {
 		return nil, fmt.Errorf("enclave policy is required")
 	}
 	if len(raw) > maxPolicyJSONBytes {
+		log.Printf("Enclave policy rejected: %d bytes exceeds limit of %d bytes", len(raw), maxPolicyJSONBytes)
 		return nil, fmt.Errorf("enclave policy exceeds %d bytes", maxPolicyJSONBytes)
 	}
 
@@ -86,8 +92,10 @@ func ParsePolicy(raw string) (*Policy, error) {
 		return nil, err
 	}
 	if err := policy.Validate(); err != nil {
+		log.Printf("Enclave policy validation failed for profile %q: %v", policy.Profile, err)
 		return nil, err
 	}
+	log.Printf("Enclave policy parsed successfully: profile=%s workflow_run_id=%s repositories=%d", policy.Profile, policy.WorkflowRunID, len(policy.Repositories))
 	return &policy, nil
 }
 
@@ -207,9 +215,11 @@ func (p *Policy) GuardPolicyJSON() (string, error) {
 	if err := p.Validate(); err != nil {
 		return "", err
 	}
+	repos := p.GuardRepos()
+	log.Printf("Generating guard policy JSON: repos=%d min_integrity=%s", len(repos), p.PublicMinIntegrity)
 	policy := map[string]interface{}{
 		"allow-only": map[string]interface{}{
-			"repos":         p.GuardRepos(),
+			"repos":         repos,
 			"min-integrity": p.PublicMinIntegrity,
 		},
 	}
