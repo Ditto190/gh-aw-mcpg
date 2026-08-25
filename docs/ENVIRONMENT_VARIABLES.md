@@ -107,6 +107,10 @@ When running `awmg proxy`, these variables configure the upstream GitHub API:
 |----------|-------------|---------|
 | `GITHUB_API_URL` | Explicit GitHub API endpoint (e.g., `https://api.mycompany.ghe.com`); used by proxy to set upstream target | (auto-derived) |
 | `GITHUB_SERVER_URL` | GitHub server URL; proxy auto-derives API endpoint: `*.ghe.com` → `api.*.ghe.com`, GHES → `<host>/api/v3`, `github.com` → `api.github.com` | (falls back to `api.github.com`) |
+| `MCP_GATEWAY_ENCLAVE_POLICY_JSON` | Enables the fail-closed `issues-read-v1` enclave profile with a compiler-generated workflow/run/repository/operation policy. Must be paired with `MCP_GATEWAY_ENCLAVE_CAPABILITY_KEY`. | (disabled) |
+| `MCP_GATEWAY_ENCLAVE_CAPABILITY_KEY` | Workflow-run root key used only to verify AWF-minted invocation capabilities. Must be exactly 64 lowercase hex characters and must not be exposed to the enclave. | (disabled) |
+
+When either enclave variable is set, both are required and proxy startup also requires a GitHub token. Enclave mode rejects `--policy`, trusted-bot overrides, and trusted-user overrides; it synthesizes the guard policy from the enclave policy and forces DIFC propagation mode.
 
 ## GitHub Actions Runtime Variables
 

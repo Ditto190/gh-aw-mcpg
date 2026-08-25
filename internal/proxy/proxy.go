@@ -17,6 +17,7 @@ import (
 
 	"github.com/github/gh-aw-mcpg/internal/config"
 	"github.com/github/gh-aw-mcpg/internal/difc"
+	"github.com/github/gh-aw-mcpg/internal/enclavegithub"
 	"github.com/github/gh-aw-mcpg/internal/githubhttp"
 	"github.com/github/gh-aw-mcpg/internal/guard"
 	"github.com/github/gh-aw-mcpg/internal/httputil"
@@ -53,6 +54,14 @@ type Server struct {
 
 	// guardInitialized tracks whether LabelAgent has been called
 	guardInitialized bool
+
+	enclave *enclaveState
+}
+
+// EnclaveConfig enables the fail-closed issues-read-v1 proxy profile.
+type EnclaveConfig struct {
+	Policy   *enclavegithub.Policy
+	Verifier *enclavegithub.Verifier
 }
 
 // Config holds the configuration for creating a proxy Server.
@@ -83,6 +92,9 @@ type Config struct {
 	// (writer) integrity, regardless of their author_association. These are injected
 	// into the allow-only policy's trusted-users field during LabelAgent initialization.
 	TrustedUsers []string
+
+	// Enclave enables invocation-capability enforcement for issues-read-v1.
+	Enclave *EnclaveConfig
 }
 
 // New creates a new proxy Server from the given Config.
@@ -92,6 +104,17 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 
 	if cfg.WasmPath == "" {
 		return nil, fmt.Errorf("guard WASM path is required")
+	}
+	if cfg.Enclave != nil {
+		if cfg.Enclave.Policy == nil || cfg.Enclave.Verifier == nil {
+			return nil, fmt.Errorf("enclave policy and verifier are required")
+		}
+		if err := cfg.Enclave.Policy.Validate(); err != nil {
+			return nil, fmt.Errorf("invalid enclave policy: %w", err)
+		}
+		if cfg.GitHubToken == "" {
+			return nil, fmt.Errorf("GitHub token is required for enclave proxy mode")
+		}
 	}
 
 	apiURL := cfg.GitHubAPIURL
@@ -129,6 +152,12 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 			},
 		},
 	}
+	if cfg.Enclave != nil {
+		s.enclave = newEnclaveState(cfg.Enclave.Policy, cfg.Enclave.Verifier)
+		s.httpClient.CheckRedirect = func(_ *http.Request, _ []*http.Request) error {
+			return http.ErrUseLastResponse
+		}
+	}
 
 	// Initialize guard policy (LabelAgent)
 	if cfg.Policy != "" {
@@ -138,6 +167,18 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 		}
 	} else {
 		logProxy.Printf("No guard policy configured, running without policy enforcement")
+	}
+	if s.enclave != nil {
+		if !s.guardInitialized {
+			return nil, fmt.Errorf("guard policy is required for enclave proxy mode")
+		}
+		initialLabels, ok := s.AgentRegistry.Get(proxyAgentID)
+		if !ok {
+			return nil, fmt.Errorf("enclave guard did not initialize agent labels")
+		}
+		s.AgentRegistry.SetDefaultLabels(nil, initialLabels.GetIntegrityTags())
+		s.Mode = difc.EnforcementPropagate
+		s.Evaluator.SetMode(difc.EnforcementPropagate)
 	}
 
 	logProxy.Printf("Proxy server created successfully: mode=%s", difcComponents.Mode)
@@ -209,10 +250,14 @@ func (s *Server) initGuardPolicy(ctx context.Context, policyJSON string, trusted
 // Every request is wrapped with an OTEL "proxy.request" span so the full
 // proxy lifecycle (DIFC pipeline + GitHub API round-trip) appears in traces.
 func (s *Server) Handler() http.Handler {
-	return tracing.WrapHTTPHandler(&proxyHandler{
+	handler := &proxyHandler{
 		server:       s,
 		CachedTracer: tracing.CachedTracer{Tracer: tracing.Tracer()},
-	}, "proxy.request")
+	}
+	if s.enclave != nil {
+		return tracing.WrapHTTPHandlerWithoutPath(handler, "proxy.request")
+	}
+	return tracing.WrapHTTPHandler(handler, "proxy.request")
 }
 
 // restBackendCaller translates guard CallTool requests into GitHub REST API
@@ -253,11 +298,20 @@ func (r *restBackendCaller) CallTool(ctx context.Context, toolName string, args 
 		if query == "" {
 			return nil, fmt.Errorf("search_repositories: missing query")
 		}
-		perPage := "10"
-		if pp, ok := argsMap["perPage"].(float64); ok {
-			perPage = fmt.Sprintf("%d", int(pp))
+		if r.server.enclave != nil {
+			repoQuery, ok := strings.CutPrefix(query, "repo:")
+			repo, valid := enclavegithub.NormalizeRepository(repoQuery)
+			if !ok || !valid {
+				return nil, fmt.Errorf("search_repositories: enclave lookup must use an exact repository")
+			}
+			apiPath = "/repos/" + repo
+		} else {
+			perPage := "10"
+			if pp, ok := argsMap["perPage"].(float64); ok {
+				perPage = fmt.Sprintf("%d", int(pp))
+			}
+			apiPath = fmt.Sprintf("/search/repositories?q=%s&per_page=%s", url.QueryEscape(query), perPage)
 		}
-		apiPath = fmt.Sprintf("/search/repositories?q=%s&per_page=%s", url.QueryEscape(query), perPage)
 
 	case "get_collaborator_permission":
 		var parseErr error
@@ -368,9 +422,11 @@ func (s *Server) forwardToGitHub(ctx context.Context, method, path string, body 
 		return nil, fmt.Errorf("failed to create upstream request: %w", err)
 	}
 
-	// Prefer the client's own Authorization header; fall back to configured token.
+	// Enclave mode always replaces the invocation capability with mcpg's token.
 	var authHeader string
-	if clientAuth != "" {
+	if s.enclave != nil {
+		authHeader = "token " + s.githubToken
+	} else if clientAuth != "" {
 		authHeader = clientAuth
 	} else if s.githubToken != "" {
 		authHeader = "token " + s.githubToken

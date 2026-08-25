@@ -146,6 +146,24 @@ func TestNormalizeGuardPolicy(t *testing.T) {
 			wantIntegrity: "approved",
 		},
 		{
+			name: "repos array combines exact repo and public",
+			policy: &GuardPolicy{AllowOnly: &AllowOnlyPolicy{
+				Repos:        []string{"myorg/repo", "public"},
+				MinIntegrity: "approved",
+			}},
+			wantScopeKind: "scoped",
+			wantScopes:    []string{"myorg/repo", "public"},
+			wantIntegrity: "approved",
+		},
+		{
+			name: "repos array rejects all composite",
+			policy: &GuardPolicy{AllowOnly: &AllowOnlyPolicy{
+				Repos:        []string{"myorg/repo", "all"},
+				MinIntegrity: "approved",
+			}},
+			wantErr: "cannot be combined",
+		},
+		{
 			name: "repos empty array",
 			policy: &GuardPolicy{AllowOnly: &AllowOnlyPolicy{
 				Repos:        []interface{}{},
@@ -483,7 +501,7 @@ func TestIsValidRepoScope(t *testing.T) {
 
 		// Invalid repo
 		{"repo too long 101 chars", "owner/" + strings.Repeat("a", 101), false},
-		{"repo with dot", "owner/repo.name", false},
+		{"repo with dot", "owner/repo.name", true},
 		{"repo with uppercase", "owner/Repo", false},
 		{"repo with space", "owner/repo name", false},
 
@@ -548,7 +566,7 @@ func TestIsValidRepoName(t *testing.T) {
 		{"hyphen", "my-repo", true},
 		{"underscore", "my_repo", true},
 		{"uppercase letter", "MyRepo", false},
-		{"dot", "my.repo", false},
+		{"dot", "my.repo", true},
 		{"space", "my repo", false},
 		{"mixed valid chars", "my-repo_123", true},
 	}
@@ -590,9 +608,9 @@ func TestNormalizeAndValidateScopeArray(t *testing.T) {
 			wantErr: "repos is required",
 		},
 		{
-			name:    "invalid scope pattern",
-			scopes:  []interface{}{"owner/repo.invalid"},
-			wantErr: "is invalid",
+			name:       "scope with dotted repo",
+			scopes:     []interface{}{"owner/repo.invalid"},
+			wantResult: []string{"owner/repo.invalid"},
 		},
 		{
 			name:    "duplicate scopes",

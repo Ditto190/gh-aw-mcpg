@@ -249,8 +249,11 @@ func normalizeAndValidateScopeArray(scopes []interface{}) ([]string, error) {
 			return nil, err
 		}
 
-		if !isValidRepoScope(scopeString) {
-			return nil, fmt.Errorf("allow-only.repos scope %q is invalid; expected owner/*, owner/repo, or owner/re*", scopeString)
+		if scopeString == "all" {
+			return nil, fmt.Errorf("allow-only.repos scope %q cannot be combined with other scopes", scopeString)
+		}
+		if scopeString != "public" && !isValidRepoScope(scopeString) {
+			return nil, fmt.Errorf("allow-only.repos scope %q is invalid; expected public, owner/*, owner/repo, or owner/re*", scopeString)
 		}
 
 		if _, exists := seen[scopeString]; exists {
@@ -328,7 +331,15 @@ func isValidRepoOwner(owner string) bool {
 }
 
 func isValidRepoName(repo string) bool {
-	return isValidTokenString(repo, 100)
+	if len(repo) < 1 || len(repo) > 100 {
+		return false
+	}
+	for i := 0; i < len(repo); i++ {
+		if !isScopeTokenChar(repo[i]) && repo[i] != '.' {
+			return false
+		}
+	}
+	return true
 }
 
 func isScopeTokenChar(char byte) bool {

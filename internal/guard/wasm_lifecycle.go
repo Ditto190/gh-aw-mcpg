@@ -629,7 +629,7 @@ func isWasmTrap(err error) bool {
 }
 
 // callWasmGuardFunction serialises WASM access, sets the backend reference, marshals
-// inputData, logs the input, calls the named WASM export, and returns the raw result.
+// inputData, logs its size, calls the named WASM export, and returns the raw result.
 // All three public dispatch methods (LabelAgent, LabelResource, LabelResponse) share
 // this preamble; keeping it in one place ensures locking and backend-update logic
 // cannot drift between them.
@@ -644,7 +644,7 @@ func (g *WasmGuard) callWasmGuardFunction(ctx context.Context, funcName string, 
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal %s input: %w", funcName, err)
 	}
-	logWasm.Printf("%s input JSON (%d bytes): %s", funcName, len(inputJSON), string(inputJSON))
+	logWasm.Printf("%s input JSON: %d bytes", funcName, len(inputJSON))
 
 	return g.callWasmFunction(ctx, funcName, inputJSON)
 }

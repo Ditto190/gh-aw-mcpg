@@ -60,12 +60,81 @@ gh CLI  →  awmg proxy (localhost:8443, TLS)  →  api.github.com
 
 Write operations (PUT, POST, DELETE, PATCH) pass through unmodified.
 
+## Single-use enclave profile (`issues-read-v1`)
+
+`issues-read-v1` is a separate fail-closed profile for an AWF enclave. Generic proxy mode does not provide this profile's capability or repository boundary and must not be used as a substitute.
+
+### Topology and startup
+
+The gh-aw compiler owns a dedicated mcpg proxy containing the GitHub PAT, policy, and root capability key. AWF attaches it to the private `awf-enclave-github-control` network with alias `awf-enclave-github-proxy:18443`. The enclave connects only to an AWF-owned PAT-free CLI proxy; it never connects directly to mcpg and never receives the PAT or root key.
+
+The compiler labels the mcpg container with:
+
+```text
+com.github.gh-aw.enclave-github.run=<workflow-run-identity>
+```
+
+It provides `MCP_GATEWAY_ENCLAVE_CAPABILITY_KEY` as exactly 64 lowercase hex characters and supplies this mcpg-only policy in `MCP_GATEWAY_ENCLAVE_POLICY_JSON`:
+
+```json
+{
+  "version": 1,
+  "profile": "issues-read-v1",
+  "audience": "gh-aw-enclave-github",
+  "workflow_run_id": "<workflow-run-identity>",
+  "repositories": [
+    {"repo": "owner/name", "sensitivity": "confidential"}
+  ],
+  "public_min_integrity": "approved",
+  "allowed_operations": [
+    "issues.comments.list",
+    "issues.get",
+    "issues.list"
+  ],
+  "max_capability_ttl_seconds": 600
+}
+```
+
+Startup fails if the policy, root key, or trusted upstream GitHub token is absent or invalid. `--policy`, `--trusted-bots`, and `--trusted-users` cannot be combined with this profile. mcpg derives the composite guard scope from the assigned repositories plus `public`, initializes each invocation with its capability-bound `private:<owner>/<repo>` secrecy label and the configured integrity baseline, and forces bounded `propagate` mode after guard initialization.
+
+### Invocation capability
+
+`enclave-mcp-server` mints one capability per invocation, writes it to a mode `0600` file, and removes it with the single-use enclave. The wrapper sends it through AWF's CLI proxy as `Authorization: Bearer <token>`. The compact format is:
+
+```text
+awf-egh1.<base64url-unpadded claims JSON>.<base64url-unpadded HMAC-SHA256>
+```
+
+The signature covers the ASCII `awf-egh1.<encoded-claims>` value using the decoded 32-byte root key. Claims bind `v`, `aud`, `run`, `inv`, assigned `repo`, `profile`, lexicographically sorted `ops`, `nbf`, and `exp`. The `run` claim is compared byte-for-byte with policy `workflow_run_id`, which gh-aw sets to `AWF_ENCLAVE_GITHUB_PROXY_IDENTITY` in the form `gh-aw-egh-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${JOB_HASH}` and validates against `^[a-z0-9][a-z0-9-]{0,63}$`; AWF's internal container run ID is not used. mcpg verifies the signature, workflow run, repository assignment, operation subset, ordering, and compiler-capped lifetime before route authorization. The capability can be reused for the HTTP calls made by that invocation until `exp`; it is never forwarded upstream.
+
+### Supported REST and CLI surface
+
+Only canonical lowercase repository paths using `GET` are accepted:
+
+| Operation | REST path |
+|-----------|-----------|
+| `issues.list` | `/repos/{owner}/{repo}/issues` |
+| `issues.get` | `/repos/{owner}/{repo}/issues/{number}` |
+| `issues.comments.list` | `/repos/{owner}/{repo}/issues/{number}/comments` |
+
+The profile supports `gh api --method GET` for those endpoints, including allowlisted issue filters and pagination. It does **not** support `gh issue list`, `gh issue view`, GraphQL, search, metadata, `/reflect`, writes, downloads, arbitrary repository routes, encoded paths, or redirects.
+
+The capability initializes its invocation agent with the assigned repository secrecy label `private:<owner>/<repo>`. The DIFC read rule requires resource secrecy to be a subset of agent secrecy: the assigned private repository carries the same tag and is allowed, public resources carry no secrecy tag and are allowed, and any other private repository carries a different tag and is denied before issue data is fetched. Propagate mode cannot expand an enclave invocation beyond its capability-bound assigned-repository secrecy maximum. Every other target also receives an exact PAT-backed `GET /repos/{owner}/{repo}` visibility check and is allowed only when GitHub positively reports `public`. Private, internal, unknown, malformed, rate-limited, and failed lookups return the same generic denial without exposing the upstream status or body. Only negative visibility decisions are cached; cache entries contain a normalized repository and expiry, never credentials or response bodies.
+
+All accepted upstream and guard-enrichment requests discard the inbound Bearer value and use mcpg's PAT. Request traces omit paths until authorization succeeds, and guard logs record payload sizes rather than response bodies.
+
+### DIFC labels
+
+Assigned private repository responses use the existing `private:<owner>/<repo>` secrecy vocabulary. The signed capability binds the invocation's sole private repository label, and the DIFC evaluator hard-denies any resource whose secrecy is not a subset of that label. Confirmed public response data remains public. Per-invocation state is keyed by a non-revealing digest of the run and invocation IDs. Sequential or collection reads preserve the existing aggregation rules: secrecy is a union and integrity is an intersection, so mixed data receives the strongest secrecy and weakest integrity.
+
 ## Reflect Endpoint
 
 Proxy mode exposes an unauthenticated DIFC reflection endpoint:
 
 - `GET /reflect`
 - `GET /api/v3/reflect` (`GH_HOST` style REST base path used by `gh` against GHES/proxy targets; normalized to `/reflect`)
+
+The enclave profile disables `/reflect`; only `/health` and `/healthz` remain unauthenticated.
 
 Response schema:
 

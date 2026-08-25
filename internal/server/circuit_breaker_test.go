@@ -535,7 +535,8 @@ func TestCircuitBreaker_RecordSuccessFromOpenState(t *testing.T) {
 
 // TestCircuitBreaker_HalfOpenAllowsWhenNoProbeInFlight exercises the defensive
 // fallback path in Allow() where the circuit is HALF-OPEN but probeInFlight is false.
-// This shouldn't normally occur, but the circuit should allow through defensively.
+// This shouldn't normally occur, but the circuit should allow one probe through
+// defensively while continuing to enforce the single-probe limit.
 func TestCircuitBreaker_HalfOpenAllowsWhenNoProbeInFlight(t *testing.T) {
 	t.Parallel()
 	cb := newCircuitBreaker("test", 1, time.Minute)
@@ -548,6 +549,7 @@ func TestCircuitBreaker_HalfOpenAllowsWhenNoProbeInFlight(t *testing.T) {
 
 	err := cb.Allow()
 	assert.NoError(t, err, "HALF-OPEN with no probe in flight should allow through defensively")
+	assert.Error(t, cb.Allow(), "a second request should be rejected while the defensive probe is in flight")
 }
 
 // TestCircuitBreaker_RecordRateLimitWhenAlreadyOpen verifies that calling RecordRateLimit
@@ -636,4 +638,79 @@ func TestErrCircuitOpen_ReportsHalfOpenState(t *testing.T) {
 	assert.Contains(t, msg, "HALF-OPEN")
 	assert.NotContains(t, msg, "is OPEN")
 	assert.Contains(t, msg, "retry after 0s")
+}
+
+// TestCircuitBreaker_RecordProbeReleased covers RecordProbeReleased, which is
+// called from unified.go when a HALF-OPEN probe request fails with a
+// transport error (connection failure, JSON parse error, etc.) rather than a
+// rate-limit or success outcome. It must clear the in-flight probe slot so a
+// fresh probe can be issued instead of waiting out probeStrandedTimeout.
+func TestCircuitBreaker_RecordProbeReleased(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name             string
+		setupProbeFlight bool
+	}{
+		{
+			name:             "releases an in-flight probe",
+			setupProbeFlight: true,
+		},
+		{
+			name:             "no-op when no probe is in flight",
+			setupProbeFlight: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			cb := newCircuitBreaker("github", 1, 60*time.Second)
+			if tc.setupProbeFlight {
+				cb.probeInFlight = true
+				cb.probeStartedAt = time.Now()
+			}
+
+			cb.RecordProbeReleased()
+
+			cb.mu.Lock()
+			defer cb.mu.Unlock()
+			assert.False(t, cb.probeInFlight, "probeInFlight should always be cleared")
+			assert.True(t, cb.probeStartedAt.IsZero(), "probeStartedAt should always be reset to zero")
+		})
+	}
+}
+
+// TestCircuitBreaker_RecordProbeReleased_AllowsFreshProbe verifies the
+// end-to-end effect: after a HALF-OPEN probe fails with a transport error and
+// RecordProbeReleased is called, a subsequent Allow() immediately releases a
+// new probe rather than waiting for probeStrandedTimeout to elapse.
+func TestCircuitBreaker_RecordProbeReleased_AllowsFreshProbe(t *testing.T) {
+	t.Parallel()
+
+	base := time.Date(2026, 8, 3, 22, 0, 0, 0, time.UTC)
+	now := base
+	cb := newCircuitBreaker("github", 1, 60*time.Second)
+	cb.nowFunc = func() time.Time { return now }
+
+	cb.RecordRateLimit(base.Add(1 * time.Minute))
+	require.Equal(t, circuitOpen, cb.State())
+
+	now = base.Add(2 * time.Minute)
+	require.NoError(t, cb.Allow())
+	require.Equal(t, circuitHalfOpen, cb.State())
+	require.True(t, cb.probeInFlight, "Allow should mark a probe as in flight")
+
+	// A concurrent request should be rejected while the probe is in flight.
+	now = base.Add(2*time.Minute + 5*time.Second)
+	require.Error(t, cb.Allow())
+
+	// The transport error path releases the probe without waiting for
+	// probeStrandedTimeout.
+	cb.RecordProbeReleased()
+
+	now = base.Add(2*time.Minute + 6*time.Second)
+	assert.NoError(t, cb.Allow(), "a released probe should allow a fresh request immediately")
+	assert.Equal(t, circuitHalfOpen, cb.State())
 }
