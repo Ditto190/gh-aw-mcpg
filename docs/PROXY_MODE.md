@@ -119,13 +119,13 @@ Only canonical lowercase repository paths using `GET` are accepted:
 
 The profile supports `gh api --method GET` for those endpoints, including allowlisted issue filters and pagination. It does **not** support `gh issue list`, `gh issue view`, GraphQL, search, metadata, `/reflect`, writes, downloads, arbitrary repository routes, encoded paths, or redirects.
 
-The capability's assigned repository is authorized directly. Every other target receives an exact PAT-backed `GET /repos/{owner}/{repo}` visibility check and is allowed only when GitHub positively reports `public`. Private, internal, unknown, malformed, rate-limited, and failed lookups return the same generic denial without exposing the upstream status or body. Only negative visibility decisions are cached; cache entries contain a normalized repository and boolean decision, never credentials or response bodies.
+The capability initializes its invocation agent with the assigned repository secrecy label `private:<owner>/<repo>`. The DIFC read rule requires resource secrecy to be a subset of agent secrecy: the assigned private repository carries the same tag and is allowed, public resources carry no secrecy tag and are allowed, and any other private repository carries a different tag and is denied before issue data is fetched. Propagate mode cannot expand an enclave invocation beyond its capability-bound assigned-repository secrecy maximum. Every other target also receives an exact PAT-backed `GET /repos/{owner}/{repo}` visibility check and is allowed only when GitHub positively reports `public`. Private, internal, unknown, malformed, rate-limited, and failed lookups return the same generic denial without exposing the upstream status or body. Only negative visibility decisions are cached; cache entries contain a normalized repository and expiry, never credentials or response bodies.
 
 All accepted upstream and guard-enrichment requests discard the inbound Bearer value and use mcpg's PAT. Request traces omit paths until authorization succeeds, and guard logs record payload sizes rather than response bodies.
 
 ### DIFC labels
 
-Assigned private repository responses use the existing `private:<owner>/<repo>` secrecy vocabulary. Confirmed public reads remain public. Per-invocation state is keyed by a non-revealing digest of the run and invocation IDs. Sequential or collection reads preserve the existing aggregation rules: secrecy is a union and integrity is an intersection, so mixed data receives the strongest secrecy and weakest integrity.
+Assigned private repository responses use the existing `private:<owner>/<repo>` secrecy vocabulary. The signed capability binds the invocation's sole private repository label, and the DIFC evaluator hard-denies any resource whose secrecy is not a subset of that label. Confirmed public response data remains public. Per-invocation state is keyed by a non-revealing digest of the run and invocation IDs. Sequential or collection reads preserve the existing aggregation rules: secrecy is a union and integrity is an intersection, so mixed data receives the strongest secrecy and weakest integrity.
 
 ## Reflect Endpoint
 

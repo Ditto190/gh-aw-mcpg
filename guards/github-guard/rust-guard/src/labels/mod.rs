@@ -2634,6 +2634,44 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_unknown_visibility_with_exact_and_public_scopes_is_not_assumed_public() {
+        let ctx = PolicyContext {
+            scopes: vec![
+                PolicyScopeEntry {
+                    scope_kind: ScopeKind::Repo,
+                    scope_owner: Some("assigned".to_string()),
+                    scope_repo: Some("private".to_string()),
+                    scope_label: "assigned/private".to_string(),
+                },
+                PolicyScopeEntry {
+                    scope_kind: ScopeKind::Public,
+                    scope_owner: None,
+                    scope_repo: None,
+                    scope_label: "public".to_string(),
+                },
+            ],
+            ..Default::default()
+        };
+        let inherited = vec!["private:other/repo".to_string()];
+        let tool_args = json!({"owner": "other", "repo": "repo"});
+
+        let (secrecy, _, _) = apply_tool_labels(
+            "actions_list",
+            &tool_args,
+            "other/repo",
+            inherited.clone(),
+            vec![],
+            String::new(),
+            &ctx,
+        );
+
+        assert_eq!(
+            secrecy, inherited,
+            "a composite exact-plus-public policy must not treat unknown visibility as public"
+        );
+    }
+
     // -------------------------------------------------------------------------
     // Context: get_me
     // -------------------------------------------------------------------------

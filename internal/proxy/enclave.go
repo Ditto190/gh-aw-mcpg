@@ -41,9 +41,11 @@ func newEnclaveState(policy *enclavegithub.Policy, verifier *enclavegithub.Verif
 }
 
 type enclaveAgentIDContextKey struct{}
+type enclaveAssignedRepoContextKey struct{}
 
-func withEnclaveAgentID(ctx context.Context, agentID string) context.Context {
-	return context.WithValue(ctx, enclaveAgentIDContextKey{}, agentID)
+func withEnclaveAuthorization(ctx context.Context, agentID, assignedRepo string) context.Context {
+	ctx = context.WithValue(ctx, enclaveAgentIDContextKey{}, agentID)
+	return context.WithValue(ctx, enclaveAssignedRepoContextKey{}, assignedRepo)
 }
 
 func agentIDFromContext(ctx context.Context) string {
@@ -52,6 +54,11 @@ func agentIDFromContext(ctx context.Context) string {
 		return proxyAgentID
 	}
 	return agentID
+}
+
+func enclaveAssignedRepoFromContext(ctx context.Context) string {
+	repo, _ := ctx.Value(enclaveAssignedRepoContextKey{}).(string)
+	return repo
 }
 
 func (s *Server) enclaveRepositoryIsPublic(ctx context.Context, repo string) bool {
@@ -210,16 +217,13 @@ func (h *proxyHandler) handleEnclaveRequest(w http.ResponseWriter, r *http.Reque
 		writeEnclaveDenied(w)
 		return
 	}
+	h.server.seedEnclaveAssignedRepositorySecrecy(claims.AgentID(), claims.Repo)
 
 	targetRepo := route.FullRepo()
 	if targetRepo != claims.Repo && !h.server.enclaveRepositoryIsPublic(r.Context(), targetRepo) {
 		writeEnclaveDenied(w)
 		return
 	}
-	if targetRepo == claims.Repo {
-		h.server.seedEnclaveAssignedRepositorySecrecy(claims.AgentID(), claims.Repo)
-	}
-
 	toolName, args := enclaveToolAndArgs(route)
 	if toolName == "" {
 		writeEnclaveDenied(w)
@@ -229,7 +233,7 @@ func (h *proxyHandler) handleEnclaveRequest(w http.ResponseWriter, r *http.Reque
 	if r.URL.RawQuery != "" {
 		fullPath += "?" + r.URL.RawQuery
 	}
-	ctx := withEnclaveAgentID(r.Context(), claims.AgentID())
+	ctx := withEnclaveAuthorization(r.Context(), claims.AgentID(), claims.Repo)
 	h.handleWithDIFC(w, r.WithContext(ctx), fullPath, toolName, args, nil)
 }
 

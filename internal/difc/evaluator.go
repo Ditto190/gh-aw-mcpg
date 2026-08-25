@@ -164,6 +164,7 @@ type EvaluationResult struct {
 	SecrecyToAdd    []Tag  // Secrecy tags agent must add to proceed
 	IntegrityToDrop []Tag  // Integrity tags agent must drop to proceed
 	Reason          string // Human-readable reason for denial
+	hardDeny        bool
 }
 
 // IsAllowed returns true if access is allowed (either directly or with propagation)
@@ -176,9 +177,15 @@ func (e *EvaluationResult) RequiresPropagation() bool {
 	return e.Decision == AccessAllowWithPropagate
 }
 
+// MustDeny reports whether a policy boundary forbids propagation.
+func (e *EvaluationResult) MustDeny() bool {
+	return e.hardDeny
+}
+
 // Evaluator performs DIFC policy evaluation
 type Evaluator struct {
-	mode EnforcementMode
+	mode                  EnforcementMode
+	secrecyPropagationMax *SecrecyLabel
 }
 
 // NewEvaluator creates a new DIFC evaluator with strict enforcement mode
@@ -189,6 +196,15 @@ func NewEvaluator() *Evaluator {
 // NewEvaluatorWithMode creates a new DIFC evaluator with the specified enforcement mode
 func NewEvaluatorWithMode(mode EnforcementMode) *Evaluator {
 	return &Evaluator{mode: mode}
+}
+
+// WithSecrecyPropagationMax returns an evaluator that may propagate only the
+// supplied secrecy tags. Reads requiring any other secrecy tag are denied.
+func (e *Evaluator) WithSecrecyPropagationMax(tags ...Tag) *Evaluator {
+	return &Evaluator{
+		mode:                  e.mode,
+		secrecyPropagationMax: NewSecrecyLabel(tags...),
+	}
 }
 
 // SetMode sets the enforcement mode
@@ -266,6 +282,20 @@ func (e *Evaluator) evaluateRead(
 
 	// In propagate mode, reads are allowed but may require label changes
 	if e.mode == EnforcementPropagate {
+		if e.secrecyPropagationMax != nil {
+			withinMax, unauthorizedTags := resource.Secrecy.CheckFlow(e.secrecyPropagationMax)
+			if !withinMax {
+				result.Decision = AccessDeny
+				result.SecrecyToAdd = unauthorizedTags
+				result.Reason = fmt.Sprintf(
+					"Resource '%s' requires secrecy tags outside the invocation capability.",
+					resource.Description,
+				)
+				result.hardDeny = true
+				return result
+			}
+		}
+
 		// Propagate mode: allow the read and record which labels need to change
 		if !integrityOk || !secrecyOk {
 			result.Decision = AccessAllowWithPropagate

@@ -34,10 +34,11 @@ fn apply_repo_visibility_secrecy(
         Some(true) => policy_private_scope_label(owner, repo, repo_id, ctx),
         Some(false) => vec![],
         None => {
-            if ctx
+            if !ctx.scopes.is_empty()
+                && ctx
                 .scopes
                 .iter()
-                .any(|scope| matches!(scope.scope_kind, ScopeKind::Public))
+                .all(|scope| matches!(scope.scope_kind, ScopeKind::Public))
             {
                 return vec![];
             }

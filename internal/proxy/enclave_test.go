@@ -101,8 +101,10 @@ func (g *enclaveLabelGuard) LabelResource(
 ) (*difc.LabeledResource, difc.OperationType, error) {
 	resource := difc.NewLabeledResource("issue data")
 	argsMap, _ := args.(map[string]interface{})
-	if argsMap["owner"] == "assigned" && argsMap["repo"] == "private" {
-		resource.Secrecy = *difc.NewSecrecyLabel("private:assigned/private")
+	owner, _ := argsMap["owner"].(string)
+	repo, _ := argsMap["repo"].(string)
+	if owner != "public" || repo != "repo" {
+		resource.Secrecy = *difc.NewSecrecyLabel(difc.Tag("private:" + owner + "/" + repo))
 	}
 	return resource, difc.OperationRead, nil
 }
@@ -128,6 +130,7 @@ func newEnclaveHandlerForTest(
 		labelResourceOp:     difc.OperationRead,
 	}
 	server := newTestServerWithStub(t, upstreamURL, g, difc.EnforcementPropagate)
+	server.guard = &enclaveLabelGuard{}
 	server.githubToken = enclaveTestUpstreamToken
 	server.enclave = newEnclaveState(policy, verifier)
 	server.httpClient.CheckRedirect = func(_ *http.Request, _ []*http.Request) error {
@@ -219,6 +222,7 @@ func TestEnclaveUniformlyDeniesNonPublicRepositories(t *testing.T) {
 		default:
 			t.Fatalf("unexpected upstream request: %s", r.URL.Path)
 		}
+
 	}))
 	defer upstream.Close()
 
@@ -241,6 +245,53 @@ func TestEnclaveUniformlyDeniesNonPublicRepositories(t *testing.T) {
 	for _, deniedUntil := range handler.server.enclave.visibilityDecisions {
 		assert.False(t, deniedUntil.IsZero())
 	}
+}
+
+func TestEnclaveDIFCRejectsRepositoryOutsideCapabilityBeforeIssueFetch(t *testing.T) {
+	var upstreamCalls int
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		upstreamCalls++
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[]`))
+	}))
+	defer upstream.Close()
+
+	policy, verifier, _ := newEnclaveTestPolicy(t)
+	server := newTestServer(t, upstream.URL)
+	server.guard = &enclaveLabelGuard{}
+	server.Mode = difc.EnforcementPropagate
+	server.Evaluator.SetMode(difc.EnforcementPropagate)
+	server.githubToken = enclaveTestUpstreamToken
+	server.enclave = newEnclaveState(policy, verifier)
+	handler := &proxyHandler{server: server}
+	server.AgentRegistry.GetOrCreate("enclave-test-agent").
+		AddSecrecyTag("private:assigned/private")
+
+	ctx := withEnclaveAuthorization(
+		context.Background(),
+		"enclave-test-agent",
+		"assigned/private",
+	)
+	req := httptest.NewRequest(http.MethodGet, "/repos/other/private/issues", nil).
+		WithContext(ctx)
+	recorder := httptest.NewRecorder()
+	handler.handleWithDIFC(
+		recorder,
+		req,
+		"/repos/other/private/issues",
+		"list_issues",
+		repoArgs("other", "private"),
+		nil,
+	)
+
+	assert.Equal(t, http.StatusForbidden, recorder.Code)
+	assert.Contains(t, recorder.Body.String(), "enclave_access_denied")
+	assert.Zero(t, upstreamCalls, "DIFC must deny before fetching issue data")
+	assert.Equal(
+		t,
+		[]difc.Tag{"private:assigned/private"},
+		server.AgentRegistry.GetOrCreate("enclave-test-agent").GetSecrecyTags(),
+	)
 }
 
 func TestEnclaveVisibilityDenialCacheIsBoundedAndExpires(t *testing.T) {
@@ -385,5 +436,5 @@ func TestEnclaveMaintainsPerInvocationDIFCState(t *testing.T) {
 	publicLabels, ok := server.AgentRegistry.Get(publicAgentID)
 	require.True(t, ok)
 	assert.Equal(t, []difc.Tag{"private:assigned/private"}, privateLabels.GetSecrecyTags())
-	assert.Empty(t, publicLabels.GetSecrecyTags())
+	assert.Equal(t, []difc.Tag{"private:assigned/private"}, publicLabels.GetSecrecyTags())
 }

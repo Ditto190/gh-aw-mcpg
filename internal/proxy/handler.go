@@ -200,6 +200,10 @@ func (h *proxyHandler) handleWithDIFC(w http.ResponseWriter, r *http.Request, pa
 		clientAuth = ""
 	}
 	backend := &restBackendCaller{server: s, clientAuth: clientAuth}
+	evaluator := s.Evaluator
+	if assignedRepo := enclaveAssignedRepoFromContext(ctx); assignedRepo != "" {
+		evaluator = s.Evaluator.WithSecrecyPropagationMax(difc.Tag("private:" + assignedRepo))
+	}
 
 	// Start a DIFC pipeline span covering all phases for this request
 	ctx, difcSpan := tracing.StartDIFCPipelineSpan(ctx, h.GetTracer(), toolName, r.URL.Path)
@@ -216,7 +220,7 @@ func (h *proxyHandler) handleWithDIFC(w http.ResponseWriter, r *http.Request, pa
 		ToolName:        toolName,
 		Args:            args,
 		Guard:           s.guard,
-		Evaluator:       s.Evaluator,
+		Evaluator:       evaluator,
 		AgentRegistry:   s.AgentRegistry,
 		Capabilities:    s.Capabilities,
 		EnforcementMode: s.Mode,
@@ -325,7 +329,7 @@ func (h *proxyHandler) handleWithDIFC(w http.ResponseWriter, r *http.Request, pa
 	var finalData interface{}
 	var useOriginalBody bool // GraphQL responses need original format preserved
 	filterResult, err := difc.FilterAndConvertLabeledData(
-		s.Evaluator,
+		pipelineIn.Evaluator,
 		pre.AgentLabels.Secrecy,
 		pre.AgentLabels.Integrity,
 		pre.Operation,
