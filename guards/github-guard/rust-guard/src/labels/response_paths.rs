@@ -258,7 +258,9 @@ pub fn label_response_paths(
                 .get(field_names::METHOD)
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
-            if is_non_get_read_sub_method(tool_name, tool_names::ISSUE_READ, method) {
+            if is_non_get_read_sub_method(tool_name, tool_names::ISSUE_READ, method)
+                && method != "get_comments"
+            {
                 // Fall through — use resource-level labels
             } else if let Some(repo_item_ctx) = resolve_repo_item_context(
                 tool_name,

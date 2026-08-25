@@ -2634,6 +2634,44 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_unknown_visibility_with_exact_and_public_scopes_is_not_assumed_public() {
+        let ctx = PolicyContext {
+            scopes: vec![
+                PolicyScopeEntry {
+                    scope_kind: ScopeKind::Repo,
+                    scope_owner: Some("assigned".to_string()),
+                    scope_repo: Some("private".to_string()),
+                    scope_label: "assigned/private".to_string(),
+                },
+                PolicyScopeEntry {
+                    scope_kind: ScopeKind::Public,
+                    scope_owner: None,
+                    scope_repo: None,
+                    scope_label: "public".to_string(),
+                },
+            ],
+            ..Default::default()
+        };
+        let inherited = vec!["private:other/repo".to_string()];
+        let tool_args = json!({"owner": "other", "repo": "repo"});
+
+        let (secrecy, _, _) = apply_tool_labels(
+            "actions_list",
+            &tool_args,
+            "other/repo",
+            inherited.clone(),
+            vec![],
+            String::new(),
+            &ctx,
+        );
+
+        assert_eq!(
+            secrecy, inherited,
+            "a composite exact-plus-public policy must not treat unknown visibility as public"
+        );
+    }
+
     // -------------------------------------------------------------------------
     // Context: get_me
     // -------------------------------------------------------------------------
@@ -3833,6 +3871,58 @@ mod tests {
             "issue_read for trusted bot should get approved integrity, got: {:?}",
             items[0].labels.integrity
         );
+    }
+
+    #[test]
+    fn test_issue_read_comments_are_labeled_per_author() {
+        let ctx = default_ctx();
+        let tool_args = json!({
+            "owner": "github",
+            "repo": "gh-aw-mcpg",
+            "issue_number": 2278,
+            "method": "get_comments"
+        });
+        let response = json!([
+            {
+                "id": 1,
+                "user": {"login": "github-actions[bot]"},
+                "author_association": "NONE",
+                "body": "trusted"
+            },
+            {
+                "id": 2,
+                "user": {"login": "external"},
+                "author_association": "CONTRIBUTOR",
+                "body": "untrusted"
+            }
+        ]);
+
+        let items = label_response_items("issue_read", &tool_args, &response, &ctx);
+        assert_eq!(items.len(), 2);
+        assert!(items[0]
+            .labels
+            .integrity
+            .iter()
+            .any(|label| label.starts_with("approved:")));
+        assert!(items[1]
+            .labels
+            .integrity
+            .iter()
+            .any(|label| label.starts_with("unapproved:")));
+
+        let paths = label_response_paths("issue_read", &tool_args, &response, &ctx)
+            .expect("comment arrays must receive path labels");
+        assert_eq!(paths.labeled_paths.len(), 2);
+        assert!(paths.labeled_paths[0]
+            .labels
+            .integrity
+            .iter()
+            .any(|label| label.starts_with("approved:")));
+        assert!(paths.labeled_paths[1]
+            .labels
+            .integrity
+            .iter()
+            .any(|label| label.starts_with("unapproved:")));
     }
 
     #[test]

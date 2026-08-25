@@ -22,6 +22,7 @@ use serde::{Deserialize, Serialize, Serializer};
 use serde_json::Value;
 use std::alloc::{alloc as std_alloc, dealloc as std_dealloc, Layout};
 use std::borrow::Cow;
+use std::collections::HashSet;
 use std::ops::Deref;
 use std::slice;
 use std::sync::{Arc, Mutex};
@@ -29,23 +30,6 @@ use std::sync::{Arc, Mutex};
 const POLICY_SCOPE_ALL: &str = "all";
 const POLICY_SCOPE_PUBLIC: &str = "public";
 const DIFC_MODE: &str = "filter";
-
-/// Maximum number of bytes to include in a log preview of serialized JSON.
-const PREVIEW_MAX_BYTES: usize = 500;
-
-/// Truncate a string to at most `max_bytes` bytes on a valid UTF-8 character
-/// boundary. Returns the full string when it is shorter than the limit.
-fn safe_preview(s: &str, max_bytes: usize) -> &str {
-    if s.len() <= max_bytes {
-        return s;
-    }
-
-    let mut end = max_bytes;
-    while end > 0 && !s.is_char_boundary(end) {
-        end -= 1;
-    }
-    &s[..end]
-}
 
 fn should_fallback_to_single_item_label(response: &Value) -> bool {
     !response.is_array()
@@ -751,8 +735,28 @@ fn parse_scope(scope: ReposValue) -> Result<Vec<PolicyScopeEntry>, String> {
                 return Err("AllowOnly.repos array must contain at least one scope".to_string());
             }
 
+            let mut seen = HashSet::with_capacity(scopes.len());
             for scope_entry in scopes {
-                let (scope_kind, scope_owner, scope_repo) = parse_scoped_entry(scope_entry.trim())?;
+                let scope_entry = scope_entry.trim();
+                if !seen.insert(scope_entry.to_string()) {
+                    return Err("AllowOnly.repos entries must be unique".to_string());
+                }
+                if scope_entry == POLICY_SCOPE_ALL {
+                    return Err(
+                        "AllowOnly.repos 'all' cannot be combined with other scopes".to_string()
+                    );
+                }
+                if scope_entry == POLICY_SCOPE_PUBLIC {
+                    entries.push(PolicyScopeEntry {
+                        scope_kind: ScopeKind::Public,
+                        scope_owner: None,
+                        scope_repo: None,
+                        scope_label: POLICY_SCOPE_PUBLIC.to_string(),
+                    });
+                    continue;
+                }
+
+                let (scope_kind, scope_owner, scope_repo) = parse_scoped_entry(scope_entry)?;
                 let scope_label =
                     scope_string(scope_kind, scope_owner.as_deref(), scope_repo.as_deref());
                 entries.push(PolicyScopeEntry {
@@ -962,24 +966,7 @@ pub extern "C" fn label_response(
     // Read input bytes
     let input_bytes = unsafe { slice::from_raw_parts(input_ptr as *const u8, input_len as usize) };
 
-    // Log a bounded preview of the input for debugging.
-    // Only decode up to PREVIEW_MAX_BYTES so logging stays cheap, and
-    // if the prefix ends mid-codepoint, fall back to the valid UTF-8 prefix.
-    let preview_bytes = &input_bytes[..input_bytes.len().min(PREVIEW_MAX_BYTES)];
-    let preview = match std::str::from_utf8(preview_bytes) {
-        Ok(s) => s,
-        Err(e) => {
-            let valid_up_to = e.valid_up_to();
-            if valid_up_to == 0 {
-                ""
-            } else {
-                std::str::from_utf8(&preview_bytes[..valid_up_to]).unwrap_or("")
-            }
-        }
-    };
-    if !preview.is_empty() {
-        log_info(&format!("    input_preview={}", preview));
-    }
+    log_info(&format!("    input_bytes={}", input_bytes.len()));
 
     // Parse input JSON
     let input: LabelResponseInput = match serde_json::from_slice(input_bytes) {
@@ -1020,9 +1007,7 @@ pub extern "C" fn label_response(
             }
         };
 
-        // Log output preview for debugging
-        let output_preview = safe_preview(&output_json, PREVIEW_MAX_BYTES);
-        log_info(&format!("    path_output_preview={}", output_preview));
+        log_info(&format!("    path_output_bytes={}", output_json.len()));
 
         let n = try_write_json_output(&output_json, output_ptr, output_size, "label_response/path");
         if n < 0 {
@@ -1070,9 +1055,7 @@ pub extern "C" fn label_response(
         }
     };
 
-    // Log output preview for debugging
-    let output_preview = safe_preview(&output_json, PREVIEW_MAX_BYTES);
-    log_info(&format!("    output_preview={}", output_preview));
+    log_info(&format!("    output_bytes={}", output_json.len()));
 
     let n = try_write_json_output(
         &output_json,
@@ -1214,6 +1197,30 @@ mod tests {
         assert_eq!(parsed.len(), 1);
         assert_eq!(parsed[0].scope_kind, ScopeKind::Public);
         assert_eq!(parsed[0].scope_label, "public");
+    }
+
+    #[test]
+    fn parse_scope_accepts_exact_repo_plus_public() {
+        let parsed = parse_scope(ReposValue::ScopedList(vec![
+            "octocat/hello-world".to_string(),
+            "public".to_string(),
+        ]))
+        .expect("exact repo plus public should parse");
+
+        assert_eq!(parsed.len(), 2);
+        assert_eq!(parsed[0].scope_kind, ScopeKind::Repo);
+        assert_eq!(parsed[1].scope_kind, ScopeKind::Public);
+    }
+
+    #[test]
+    fn parse_scope_rejects_all_in_composite() {
+        let err = parse_scope(ReposValue::ScopedList(vec![
+            "octocat/hello-world".to_string(),
+            "all".to_string(),
+        ]))
+        .expect_err("all must not be combined with scoped entries");
+
+        assert!(err.contains("cannot be combined"));
     }
 
     #[test]
@@ -1657,89 +1664,6 @@ mod tests {
              got: {:?}",
             final_integrity
         );
-    }
-
-    // === UTF-8 safe preview tests (issue #3711) ===
-
-    #[test]
-    fn test_safe_preview_ascii_under_limit() {
-        let s = "hello";
-        assert_eq!(safe_preview(s, 500), "hello");
-    }
-
-    #[test]
-    fn test_safe_preview_ascii_at_limit() {
-        let s = "a".repeat(500);
-        assert_eq!(safe_preview(&s, 500), s.as_str());
-    }
-
-    #[test]
-    fn test_safe_preview_ascii_over_limit() {
-        let s = "a".repeat(600);
-        assert_eq!(safe_preview(&s, 500).len(), 500);
-    }
-
-    #[test]
-    fn test_safe_preview_cjk_boundary() {
-        // Each CJK character is 3 bytes in UTF-8. Build a string where byte 500
-        // falls in the middle of a character (500 is not divisible by 3).
-        // 166 chars = 498 bytes, 167 chars = 501 bytes.
-        let cjk = "中".repeat(167); // 501 bytes
-        assert_eq!(cjk.len(), 501);
-
-        let preview = safe_preview(&cjk, 500);
-        // Must truncate to 498 bytes (166 chars) — the last valid boundary before 500.
-        assert_eq!(preview.len(), 498);
-        assert_eq!(preview.chars().count(), 166);
-    }
-
-    #[test]
-    fn test_safe_preview_emoji_boundary() {
-        // 🎉 is 4 bytes in UTF-8. 125 emojis = 500 bytes exactly (boundary safe).
-        // 126 emojis = 504 bytes; truncating at 500 would split the 126th emoji.
-        let emoji = "🎉".repeat(126); // 504 bytes
-        assert_eq!(emoji.len(), 504);
-
-        let preview = safe_preview(&emoji, 500);
-        // Must truncate to 500 bytes (125 complete emojis).
-        assert_eq!(preview.len(), 500);
-        assert_eq!(preview.chars().count(), 125);
-    }
-
-    #[test]
-    fn test_safe_preview_mixed_content_near_boundary() {
-        // Simulate a JSON string with ASCII keys and a CJK value crossing byte 500.
-        // {"body":"<padding>中中中..."}
-        let prefix = "{\"body\":\""; // 9 bytes
-        let padding = "x".repeat(489); // 489 bytes — total so far: 498
-        let cjk_tail = "中中中中中"; // 5 × 3 = 15 bytes — subtotal: 513
-
-        let json = format!("{}{}{}\"}}", prefix, padding, cjk_tail); // +3 bytes for "\"}}" => 516 total
-        assert!(json.len() > 500);
-
-        let preview = safe_preview(&json, 500);
-        // Byte 498 is the start of the first CJK char (498..501). Byte 500 is
-        // mid-character, so floor_char_boundary(500) should give 498.
-        assert_eq!(preview.len(), 498);
-        // Verify it's valid UTF-8 (implicit — it's a &str).
-        assert!(preview.ends_with('x'));
-    }
-
-    #[test]
-    fn test_safe_preview_empty_string() {
-        assert_eq!(safe_preview("", 500), "");
-    }
-
-    #[test]
-    fn test_safe_preview_two_byte_chars() {
-        // é is 2 bytes in UTF-8. 250 chars = 500 bytes (exact boundary).
-        // 251 chars = 502 bytes; byte 500 is the first byte of the 251st char.
-        let accented = "é".repeat(251); // 502 bytes
-        assert_eq!(accented.len(), 502);
-
-        let preview = safe_preview(&accented, 500);
-        assert_eq!(preview.len(), 500);
-        assert_eq!(preview.chars().count(), 250);
     }
 
     #[test]

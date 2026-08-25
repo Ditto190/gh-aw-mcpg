@@ -316,11 +316,17 @@ fn first_matching_scope<'a>(
     repo: &str,
     ctx: &'a PolicyContext,
 ) -> Option<&'a PolicyScopeEntry> {
-    ctx.scopes.iter().find(|scope| {
+    let matches = |scope: &&PolicyScopeEntry| {
         let scoped_owner = scope.scope_owner.as_deref().unwrap_or("");
         let scoped_repo = scope.scope_repo.as_deref().unwrap_or("");
         repo_matches_scope(scope.scope_kind, owner, repo, scoped_owner, scoped_repo)
-    })
+    };
+
+    ctx.scopes
+        .iter()
+        .filter(|scope| !matches!(scope.scope_kind, ScopeKind::All | ScopeKind::Public))
+        .find(matches)
+        .or_else(|| ctx.scopes.iter().find(matches))
 }
 
 fn format_integrity_label(prefix: &str, scope: &str, base: &str) -> String {
@@ -1038,10 +1044,11 @@ pub(crate) fn repo_visibility_secrecy(
         Some(true) => policy_private_scope_label(owner, repo, repo_id, ctx),
         Some(false) => vec![],
         None => {
-            if ctx
-                .scopes
-                .iter()
-                .any(|scope| matches!(scope.scope_kind, ScopeKind::Public))
+            if !ctx.scopes.is_empty()
+                && ctx
+                    .scopes
+                    .iter()
+                    .all(|scope| matches!(scope.scope_kind, ScopeKind::Public))
             {
                 return vec![];
             }
@@ -2557,6 +2564,40 @@ mod tests {
         assert_eq!(
             repo_visibility_secrecy("owner", "repo", "owner/repo", &ctx),
             Vec::<String>::new()
+        );
+    }
+
+    #[test]
+    fn test_concrete_scope_precedes_public_scope() {
+        let owner = "enclave-scope-owner";
+        let repo = "enclave-scope-repo";
+        let repo_id = format!("{owner}/{repo}");
+        let ctx = PolicyContext {
+            scopes: vec![
+                PolicyScopeEntry {
+                    scope_kind: ScopeKind::Public,
+                    scope_owner: None,
+                    scope_repo: None,
+                    scope_label: "public".to_string(),
+                },
+                PolicyScopeEntry {
+                    scope_kind: ScopeKind::Repo,
+                    scope_owner: Some(owner.to_string()),
+                    scope_repo: Some(repo.to_string()),
+                    scope_label: repo_id.clone(),
+                },
+            ],
+            ..Default::default()
+        };
+        let _guard = super::super::backend::cache_repo_visibility_for_tests(&repo_id, true);
+
+        assert_eq!(
+            policy_private_scope_label(owner, repo, &repo_id, &ctx),
+            vec![format!("private:{repo_id}")]
+        );
+        assert_eq!(
+            repo_visibility_secrecy(owner, repo, &repo_id, &ctx),
+            vec![format!("private:{repo_id}")]
         );
     }
 

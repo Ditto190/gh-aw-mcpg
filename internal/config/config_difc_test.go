@@ -478,10 +478,15 @@ func TestParseGuardPolicyJSON_UpdatedRepoRegex(t *testing.T) {
 		assert.Equal(t, IntegrityUnapproved, normalized.MinIntegrity)
 	})
 
-	t.Run("rejects dot in repo scope", func(t *testing.T) {
-		_, err := ParseGuardPolicyJSON(`{"allow-only":{"repos":["owner/repo.name"],"min-integrity":"unapproved"}}`)
-		require.Error(t, err)
-		assert.ErrorContains(t, err, "invalid")
+	t.Run("accepts dot in repo scope", func(t *testing.T) {
+		policy, err := ParseGuardPolicyJSON(`{"allow-only":{"repos":["owner/repo.name"],"min-integrity":"unapproved"}}`)
+		require.NoError(t, err)
+		require.NotNil(t, policy)
+
+		normalized, err := NormalizeGuardPolicy(policy)
+		require.NoError(t, err)
+		assert.Equal(t, "scoped", normalized.ScopeKind)
+		assert.Equal(t, []string{"owner/repo.name"}, normalized.ScopeValues)
 	})
 }
 

@@ -35,6 +35,10 @@ func EvaluateCoarseAccess(
 		logPipeline.Printf("EvaluateCoarseAccess: outcome=allowed, operation=%s", operation)
 		return CoarseAllowed, result
 	}
+	if result.MustDeny() {
+		logPipeline.Printf("EvaluateCoarseAccess: outcome=hard-denied, operation=%s, reason=%s", operation, result.Reason)
+		return CoarseDenied, result
+	}
 	if ShouldBypassCoarseDeny(operation) {
 		logPipeline.Printf("EvaluateCoarseAccess: outcome=bypass-for-read, operation=%s", operation)
 		return CoarseBypassForRead, result

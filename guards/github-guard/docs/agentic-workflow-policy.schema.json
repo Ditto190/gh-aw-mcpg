@@ -31,6 +31,10 @@
                 "type": "string",
                 "oneOf": [
                   {
+                    "description": "Public repository catch-all. May be combined with exact or wildcard private scopes.",
+                    "const": "public"
+                  },
+                  {
                     "description": "Owner wildcard scope. Example: owner/*",
                     "pattern": "^[a-z0-9_-]{1,39}/\\*$"
                   },

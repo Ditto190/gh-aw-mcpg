@@ -98,6 +98,34 @@ func TestEvaluateCoarseAccess(t *testing.T) {
 	}
 }
 
+func TestEvaluateCoarseAccessEnforcesSecrecyPropagationMaximum(t *testing.T) {
+	t.Parallel()
+
+	evaluator := NewEvaluatorWithMode(EnforcementPropagate).
+		WithSecrecyPropagationMax("private:assigned/repo")
+	agentSecrecy := NewSecrecyLabel("private:assigned/repo")
+	agentIntegrity := NewIntegrityLabel()
+
+	assigned := NewLabeledResource("assigned repository")
+	assigned.Secrecy = *NewSecrecyLabel("private:assigned/repo")
+	outcome, result := EvaluateCoarseAccess(
+		evaluator, agentSecrecy, agentIntegrity, assigned, OperationRead,
+	)
+	assert.Equal(t, CoarseAllowed, outcome)
+	assert.False(t, result.RequiresPropagation())
+	assert.False(t, result.MustDeny())
+
+	other := NewLabeledResource("other private repository")
+	other.Secrecy = *NewSecrecyLabel("private:other/repo")
+	outcome, result = EvaluateCoarseAccess(
+		evaluator, agentSecrecy, agentIntegrity, other, OperationRead,
+	)
+	assert.Equal(t, CoarseDenied, outcome)
+	assert.False(t, result.IsAllowed())
+	assert.True(t, result.MustDeny())
+	assert.Equal(t, []Tag{"private:other/repo"}, result.SecrecyToAdd)
+}
+
 func TestShouldBypassCoarseDeny(t *testing.T) {
 	t.Parallel()
 

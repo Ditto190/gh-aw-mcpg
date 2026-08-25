@@ -1,0 +1,440 @@
+package proxy
+
+import (
+	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/github/gh-aw-mcpg/internal/difc"
+	"github.com/github/gh-aw-mcpg/internal/enclavegithub"
+	"github.com/github/gh-aw-mcpg/internal/guard"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+const enclaveTestUpstreamToken = "upstream-pat"
+
+func newEnclaveTestPolicy(t *testing.T) (*enclavegithub.Policy, *enclavegithub.Verifier, []byte) {
+	t.Helper()
+	policy, err := enclavegithub.ParsePolicy(`{
+		"version": 1,
+		"profile": "issues-read-v1",
+		"audience": "gh-aw-enclave-github",
+		"workflow_run_id": "run-123",
+		"repositories": [{"repo": "assigned/private", "sensitivity": "confidential"}],
+		"public_min_integrity": "approved",
+		"allowed_operations": ["issues.comments.list", "issues.get", "issues.list"],
+		"max_capability_ttl_seconds": 600
+	}`)
+	require.NoError(t, err)
+	key := make([]byte, sha256.Size)
+	for i := range key {
+		key[i] = 0x42
+	}
+	verifier, err := enclavegithub.NewVerifier(hex.EncodeToString(key), policy)
+	require.NoError(t, err)
+	return policy, verifier, key
+}
+
+func signEnclaveTestCapability(t *testing.T, key []byte, operations ...string) string {
+	return signEnclaveTestCapabilityForInvocation(t, key, "invocation-456", operations...)
+}
+
+func signEnclaveTestCapabilityForInvocation(
+	t *testing.T,
+	key []byte,
+	invocation string,
+	operations ...string,
+) string {
+	t.Helper()
+	now := time.Now()
+	claims := enclavegithub.Claims{
+		Version:    1,
+		Audience:   enclavegithub.DefaultAudience,
+		Run:        "run-123",
+		Invocation: invocation,
+		Repo:       "assigned/private",
+		Profile:    enclavegithub.ProfileIssuesReadV1,
+		Operations: operations,
+		NotBefore:  now.Add(-time.Minute).Unix(),
+		Expires:    now.Add(time.Minute).Unix(),
+	}
+
+	payload, err := json.Marshal(claims)
+	require.NoError(t, err)
+	encoded := base64.RawURLEncoding.EncodeToString(payload)
+	signingInput := enclavegithub.CapabilityPrefix + "." + encoded
+	mac := hmac.New(sha256.New, key)
+	_, err = mac.Write([]byte(signingInput))
+	require.NoError(t, err)
+	return signingInput + "." + base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+}
+
+type enclaveLabelGuard struct{}
+
+func (g *enclaveLabelGuard) Name() string { return "enclave-label-test" }
+
+func (g *enclaveLabelGuard) LabelAgent(
+	_ context.Context,
+	_ interface{},
+	_ guard.BackendCaller,
+	_ *difc.Capabilities,
+) (*guard.LabelAgentResult, error) {
+	return &guard.LabelAgentResult{}, nil
+}
+
+func (g *enclaveLabelGuard) LabelResource(
+	_ context.Context,
+	_ string,
+	args interface{},
+	_ guard.BackendCaller,
+	_ *difc.Capabilities,
+) (*difc.LabeledResource, difc.OperationType, error) {
+	resource := difc.NewLabeledResource("issue data")
+	argsMap, _ := args.(map[string]interface{})
+	owner, _ := argsMap["owner"].(string)
+	repo, _ := argsMap["repo"].(string)
+	if owner != "public" || repo != "repo" {
+		resource.Secrecy = *difc.NewSecrecyLabel(difc.Tag("private:" + owner + "/" + repo))
+	}
+	return resource, difc.OperationRead, nil
+}
+
+func (g *enclaveLabelGuard) LabelResponse(
+	_ context.Context,
+	_ string,
+	_ interface{},
+	_ guard.BackendCaller,
+	_ *difc.Capabilities,
+) (difc.LabeledData, error) {
+	return nil, nil
+}
+
+func newEnclaveHandlerForTest(
+	t *testing.T,
+	upstreamURL string,
+) (*proxyHandler, string) {
+	t.Helper()
+	policy, verifier, key := newEnclaveTestPolicy(t)
+	g := &stubGuard{
+		labelResourceResult: publicResource(),
+		labelResourceOp:     difc.OperationRead,
+	}
+	server := newTestServerWithStub(t, upstreamURL, g, difc.EnforcementPropagate)
+	server.guard = &enclaveLabelGuard{}
+	server.githubToken = enclaveTestUpstreamToken
+	server.enclave = newEnclaveState(policy, verifier)
+	server.httpClient.CheckRedirect = func(_ *http.Request, _ []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+	return &proxyHandler{server: server}, signEnclaveTestCapability(
+		t,
+		key,
+		enclavegithub.OperationIssueCommentsList,
+		enclavegithub.OperationIssuesGet,
+		enclavegithub.OperationIssuesList,
+	)
+}
+
+func enclaveRequest(t *testing.T, h http.Handler, method, path, capability string) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(method, path, nil)
+	if capability != "" {
+		req.Header.Set("Authorization", "Bearer "+capability)
+	}
+	recorder := httptest.NewRecorder()
+	h.ServeHTTP(recorder, req)
+	return recorder
+}
+
+func TestEnclaveAssignedAndPublicIssueReadsReplaceAuthorization(t *testing.T) {
+	var (
+		mu       sync.Mutex
+		requests []string
+		auth     []string
+	)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		requests = append(requests, r.URL.Path)
+		auth = append(auth, r.Header.Get("Authorization"))
+		mu.Unlock()
+
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/repos/public/repo" {
+			_, _ = w.Write([]byte(`{"visibility":"public"}`))
+			return
+		}
+		_, _ = w.Write([]byte(`[]`))
+	}))
+	defer upstream.Close()
+
+	handler, capability := newEnclaveHandlerForTest(t, upstream.URL)
+	assigned := enclaveRequest(t, handler, http.MethodGet, "/api/v3/repos/assigned/private/issues?page=2", capability)
+	public := enclaveRequest(t, handler, http.MethodGet, "/repos/public/repo/issues", capability)
+
+	assert.Equal(t, http.StatusOK, assigned.Code)
+	assert.Equal(t, http.StatusOK, public.Code)
+	assert.Equal(t, []string{
+		"/repos/assigned/private/issues",
+		"/repos/public/repo",
+		"/repos/public/repo/issues",
+	}, requests)
+	assert.Equal(t, []string{
+		"token " + enclaveTestUpstreamToken,
+		"token " + enclaveTestUpstreamToken,
+		"token " + enclaveTestUpstreamToken,
+	}, auth)
+	assert.NotContains(t, auth, "Bearer "+capability)
+	assert.Equal(t, 1, handler.server.AgentRegistry.Count())
+
+	agentID := (&enclavegithub.Claims{
+		Run:        "run-123",
+		Invocation: "invocation-456",
+	}).AgentID()
+	labels, ok := handler.server.AgentRegistry.Get(agentID)
+	require.True(t, ok)
+	assert.Equal(t, []difc.Tag{"private:assigned/private"}, labels.GetSecrecyTags())
+}
+
+func TestEnclaveUniformlyDeniesNonPublicRepositories(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/repos/other/private":
+			_, _ = w.Write([]byte(`{"visibility":"private","secret":"must-not-leak"}`))
+		case "/repos/other/internal":
+			_, _ = w.Write([]byte(`{"visibility":"internal"}`))
+		case "/repos/other/missing":
+			http.NotFound(w, r)
+		case "/repos/other/rate-limited":
+			http.Error(w, "rate limit details", http.StatusTooManyRequests)
+		case "/repos/other/malformed":
+			_, _ = w.Write([]byte(`{"visibility":`))
+		default:
+			t.Fatalf("unexpected upstream request: %s", r.URL.Path)
+		}
+
+	}))
+	defer upstream.Close()
+
+	handler, capability := newEnclaveHandlerForTest(t, upstream.URL)
+	var canonicalBody string
+	for _, repo := range []string{"private", "internal", "missing", "rate-limited", "malformed"} {
+		recorder := enclaveRequest(t, handler, http.MethodGet, "/repos/other/"+repo+"/issues", capability)
+		assert.Equal(t, http.StatusForbidden, recorder.Code)
+		if canonicalBody == "" {
+			canonicalBody = recorder.Body.String()
+		}
+		assert.Equal(t, canonicalBody, recorder.Body.String())
+		assert.NotContains(t, recorder.Body.String(), repo)
+		assert.NotContains(t, recorder.Body.String(), "must-not-leak")
+	}
+
+	handler.server.enclave.visibilityMu.RLock()
+	defer handler.server.enclave.visibilityMu.RUnlock()
+	assert.Len(t, handler.server.enclave.visibilityDecisions, 5)
+	for _, deniedUntil := range handler.server.enclave.visibilityDecisions {
+		assert.False(t, deniedUntil.IsZero())
+	}
+}
+
+func TestEnclaveDIFCRejectsRepositoryOutsideCapabilityBeforeIssueFetch(t *testing.T) {
+	var upstreamCalls int
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		upstreamCalls++
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[]`))
+	}))
+	defer upstream.Close()
+
+	policy, verifier, _ := newEnclaveTestPolicy(t)
+	server := newTestServer(t, upstream.URL)
+	server.guard = &enclaveLabelGuard{}
+	server.Mode = difc.EnforcementPropagate
+	server.Evaluator.SetMode(difc.EnforcementPropagate)
+	server.githubToken = enclaveTestUpstreamToken
+	server.enclave = newEnclaveState(policy, verifier)
+	handler := &proxyHandler{server: server}
+	server.AgentRegistry.GetOrCreate("enclave-test-agent").
+		AddSecrecyTag("private:assigned/private")
+
+	ctx := withEnclaveAuthorization(
+		context.Background(),
+		"enclave-test-agent",
+		"assigned/private",
+	)
+	req := httptest.NewRequest(http.MethodGet, "/repos/other/private/issues", nil).
+		WithContext(ctx)
+	recorder := httptest.NewRecorder()
+	handler.handleWithDIFC(
+		recorder,
+		req,
+		"/repos/other/private/issues",
+		"list_issues",
+		repoArgs("other", "private"),
+		nil,
+	)
+
+	assert.Equal(t, http.StatusForbidden, recorder.Code)
+	assert.Contains(t, recorder.Body.String(), "enclave_access_denied")
+	assert.Zero(t, upstreamCalls, "DIFC must deny before fetching issue data")
+	assert.Equal(
+		t,
+		[]difc.Tag{"private:assigned/private"},
+		server.AgentRegistry.GetOrCreate("enclave-test-agent").GetSecrecyTags(),
+	)
+}
+
+func TestEnclaveVisibilityDenialCacheIsBoundedAndExpires(t *testing.T) {
+	var currentTime = time.Unix(1_800_000_000, 0)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer upstream.Close()
+
+	handler, _ := newEnclaveHandlerForTest(t, upstream.URL)
+	handler.server.enclave.now = func() time.Time { return currentTime }
+
+	for i := 0; i < maxEnclaveVisibilityDeniedCacheItems+5; i++ {
+		handler.server.cacheEnclaveVisibilityDenial(fmt.Sprintf("org/repo-%d", i))
+	}
+
+	handler.server.enclave.visibilityMu.RLock()
+	assert.Len(t, handler.server.enclave.visibilityDecisions, maxEnclaveVisibilityDeniedCacheItems)
+	handler.server.enclave.visibilityMu.RUnlock()
+
+	handler.server.cacheEnclaveVisibilityDenial("org/expiring")
+	currentTime = currentTime.Add(enclaveVisibilityDeniedCacheTTL + time.Second)
+
+	handler.server.enclave.visibilityMu.RLock()
+	_, expiredStillCached := handler.server.enclave.visibilityDecisions["org/expiring"]
+	handler.server.enclave.visibilityMu.RUnlock()
+	assert.True(t, expiredStillCached)
+
+	assert.False(t, handler.server.enclaveRepositoryIsPublic(context.Background(), "org/expiring"))
+
+	handler.server.enclave.visibilityMu.RLock()
+	refreshedDeniedUntil, refreshedCached := handler.server.enclave.visibilityDecisions["org/expiring"]
+	handler.server.enclave.visibilityMu.RUnlock()
+	assert.True(t, refreshedCached)
+	assert.True(t, refreshedDeniedUntil.After(currentTime))
+}
+
+func TestEnclaveRejectsUnsupportedAndAmbiguousRequestsBeforeUpstream(t *testing.T) {
+	var upstreamCalls int
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upstreamCalls++
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	handler, capability := newEnclaveHandlerForTest(t, upstream.URL)
+	tests := []struct {
+		method string
+		path   string
+		auth   string
+	}{
+		{http.MethodGet, "/graphql", capability},
+		{http.MethodGet, "/search/issues?q=x", capability},
+		{http.MethodPost, "/repos/assigned/private/issues", capability},
+		{http.MethodGet, "/repos/assigned/private/pulls", capability},
+		{http.MethodGet, "/repos/assigned/private/issues?unknown=1", capability},
+		{http.MethodGet, "/repos/assigned/private/issues?page=1&page=2", capability},
+		{http.MethodGet, "/api/v3evil/repos/assigned/private/issues", capability},
+		{http.MethodGet, "/repos/assigned%2Fprivate/issues", capability},
+		{http.MethodGet, "/repos/assigned/private/issues", ""},
+	}
+	for _, test := range tests {
+		recorder := enclaveRequest(t, handler, test.method, test.path, test.auth)
+		assert.Equal(t, http.StatusForbidden, recorder.Code, "%s %s", test.method, test.path)
+		assert.Contains(t, recorder.Body.String(), "enclave_access_denied")
+	}
+	assert.Zero(t, upstreamCalls)
+}
+
+func TestEnclaveFailsClosedOnRedirectAndNonJSONSuccess(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/repos/assigned/private/issues/1":
+			http.Redirect(w, r, "/private-location", http.StatusFound)
+		case "/repos/assigned/private/issues/2":
+			_, _ = w.Write([]byte("private plain text"))
+		default:
+			t.Fatalf("unexpected upstream request: %s", r.URL.Path)
+		}
+
+	}))
+	defer upstream.Close()
+
+	handler, capability := newEnclaveHandlerForTest(t, upstream.URL)
+	for _, number := range []string{"1", "2"} {
+		recorder := enclaveRequest(t, handler, http.MethodGet, "/repos/assigned/private/issues/"+number, capability)
+		assert.Equal(t, http.StatusForbidden, recorder.Code)
+		assert.NotContains(t, recorder.Body.String(), "private")
+		assert.NotContains(t, recorder.Header().Get("Location"), "private-location")
+	}
+}
+
+func TestEnclaveMaintainsPerInvocationDIFCState(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/repos/public/repo" {
+			_, _ = w.Write([]byte(`{"visibility":"public"}`))
+			return
+		}
+		_, _ = w.Write([]byte(`[]`))
+	}))
+	defer upstream.Close()
+
+	policy, verifier, key := newEnclaveTestPolicy(t)
+	server := newTestServer(t, upstream.URL)
+	server.guard = &enclaveLabelGuard{}
+	server.Mode = difc.EnforcementPropagate
+	server.Evaluator.SetMode(difc.EnforcementPropagate)
+	server.githubToken = enclaveTestUpstreamToken
+	server.enclave = newEnclaveState(policy, verifier)
+	handler := &proxyHandler{server: server}
+
+	privateInvocation := "private-invocation"
+	publicInvocation := "public-invocation"
+	privateCapability := signEnclaveTestCapabilityForInvocation(
+		t,
+		key,
+		privateInvocation,
+		enclavegithub.OperationIssuesList,
+	)
+	publicCapability := signEnclaveTestCapabilityForInvocation(
+		t,
+		key,
+		publicInvocation,
+		enclavegithub.OperationIssuesList,
+	)
+
+	assert.Equal(t, http.StatusOK, enclaveRequest(
+		t, handler, http.MethodGet, "/repos/assigned/private/issues", privateCapability,
+	).Code)
+	assert.Equal(t, http.StatusOK, enclaveRequest(
+		t, handler, http.MethodGet, "/repos/public/repo/issues", privateCapability,
+	).Code)
+	assert.Equal(t, http.StatusOK, enclaveRequest(
+		t, handler, http.MethodGet, "/repos/public/repo/issues", publicCapability,
+	).Code)
+
+	privateAgentID := (&enclavegithub.Claims{Run: "run-123", Invocation: privateInvocation}).AgentID()
+	publicAgentID := (&enclavegithub.Claims{Run: "run-123", Invocation: publicInvocation}).AgentID()
+	privateLabels, ok := server.AgentRegistry.Get(privateAgentID)
+	require.True(t, ok)
+	publicLabels, ok := server.AgentRegistry.Get(publicAgentID)
+	require.True(t, ok)
+	assert.Equal(t, []difc.Tag{"private:assigned/private"}, privateLabels.GetSecrecyTags())
+	assert.Equal(t, []difc.Tag{"private:assigned/private"}, publicLabels.GetSecrecyTags())
+}

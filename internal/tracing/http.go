@@ -45,6 +45,15 @@ type statusResponseWriter struct {
 // GitHub API proxy. Callers that need session-level attributes (e.g. session.id)
 // should add them as extra attrs or extend the context themselves.
 func WrapHTTPHandler(next http.Handler, spanName string, extraAttrs ...attribute.KeyValue) http.Handler {
+	return wrapHTTPHandler(next, spanName, true, extraAttrs...)
+}
+
+// WrapHTTPHandlerWithoutPath instruments a handler without recording request paths.
+func WrapHTTPHandlerWithoutPath(next http.Handler, spanName string, extraAttrs ...attribute.KeyValue) http.Handler {
+	return wrapHTTPHandler(next, spanName, false, extraAttrs...)
+}
+
+func wrapHTTPHandler(next http.Handler, spanName string, includePath bool, extraAttrs ...attribute.KeyValue) http.Handler {
 	logHTTP.Printf("Registering HTTP handler with OTel span: span=%s, extraAttrs=%d", spanName, len(extraAttrs))
 	t := Tracer()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -54,7 +63,11 @@ func WrapHTTPHandler(next http.Handler, spanName string, extraAttrs ...attribute
 		ctx := otel.GetTextMapPropagator().Extract(r.Context(), propagation.HeaderCarrier(r.Header))
 
 		hasRemoteParent := oteltrace.SpanContextFromContext(ctx).IsRemote()
-		logHTTP.Printf("Handling request: span=%s, method=%s, path=%s, remoteParent=%v", spanName, r.Method, r.URL.Path, hasRemoteParent)
+		if includePath {
+			logHTTP.Printf("Handling request: span=%s, method=%s, path=%s, remoteParent=%v", spanName, r.Method, r.URL.Path, hasRemoteParent)
+		} else {
+			logHTTP.Printf("Handling request: span=%s, method=%s, remoteParent=%v", spanName, r.Method, hasRemoteParent)
+		}
 
 		route := r.Pattern
 		if method, path, ok := strings.Cut(route, " "); ok {
@@ -66,11 +79,11 @@ func WrapHTTPHandler(next http.Handler, spanName string, extraAttrs ...attribute
 			}
 		}
 
-		attrs := append([]attribute.KeyValue{
-			HTTPRequestMethodKey.String(r.Method),
-			URLPathKey.String(r.URL.Path),
-		}, extraAttrs...)
-		if route != "" {
+		attrs := append([]attribute.KeyValue{HTTPRequestMethodKey.String(r.Method)}, extraAttrs...)
+		if includePath {
+			attrs = append(attrs, URLPathKey.String(r.URL.Path))
+		}
+		if includePath && route != "" {
 			attrs = append(attrs, HTTPRouteKey.String(route))
 		}
 
