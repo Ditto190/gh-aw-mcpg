@@ -662,6 +662,18 @@ pub(crate) fn get_collaborator_permission(
     get_collaborator_permission_with_callback(crate::invoke_backend, owner, repo, username)
 }
 
+/// Extract the raw `content[0].text` string from an MCP-wrapped response,
+/// e.g. `{"content":[{"type":"text","text":"..."}]}`. Returns None if the
+/// response isn't in that shape.
+fn mcp_wrapped_text(response: &Value) -> Option<&str> {
+    response
+        .get("content")
+        .and_then(|v| v.as_array())
+        .and_then(|arr| arr.first())
+        .and_then(|item| item.get("text"))
+        .and_then(|v| v.as_str())
+}
+
 fn extract_repo_private_flag(response: &Value, repo_id: &str) -> Option<bool> {
     // Direct object response
     if let Some(is_private) = repo_visibility_from_items(response, repo_id) {
@@ -669,28 +681,22 @@ fn extract_repo_private_flag(response: &Value, repo_id: &str) -> Option<bool> {
     }
 
     // Some MCP backends return { content: [{ text: "{...json...}" }] }
-    let text_payload = response
-        .get("content")
-        .and_then(|v| v.as_array())
-        .and_then(|arr| arr.first())
-        .and_then(|item| item.get("text"))
-        .and_then(|v| v.as_str())?;
+    let text_payload = mcp_wrapped_text(response)?;
 
     let parsed = serde_json::from_str::<Value>(text_payload).ok()?;
     repo_visibility_from_items(&parsed, repo_id)
 }
 
 fn extract_backend_error_text(response: &Value) -> Option<&str> {
-    if response.get("isError").and_then(|v| v.as_bool()) != Some(true) {
+    if response
+        .get(field_names::IS_ERROR)
+        .and_then(|v| v.as_bool())
+        != Some(true)
+    {
         return None;
     }
 
-    response
-        .get("content")
-        .and_then(|v| v.as_array())
-        .and_then(|arr| arr.first())
-        .and_then(|item| item.get("text"))
-        .and_then(|v| v.as_str())
+    mcp_wrapped_text(response)
 }
 
 fn is_rate_limit_error(error_text: &str) -> bool {
@@ -1573,12 +1579,7 @@ fn extract_owner_is_org(response: &Value, repo_id: &str) -> Option<bool> {
     }
 
     // MCP-wrapped response
-    let text_payload = response
-        .get("content")
-        .and_then(|v| v.as_array())
-        .and_then(|arr| arr.first())
-        .and_then(|item| item.get("text"))
-        .and_then(|v| v.as_str())?;
+    let text_payload = mcp_wrapped_text(response)?;
 
     let parsed = serde_json::from_str::<Value>(text_payload).ok()?;
     owner_is_org_from_items(&parsed, repo_id)

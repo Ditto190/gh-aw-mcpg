@@ -101,6 +101,7 @@ pub mod field_names {
     pub const NUMBER: &str = "number";
     pub const PRIVATE: &str = "private";
     pub const LOGIN: &str = "login";
+    pub const IS_ERROR: &str = "isError";
 }
 
 /// Canonical description prefix strings used in `ResourceLabels::description`.

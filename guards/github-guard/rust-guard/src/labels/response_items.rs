@@ -68,7 +68,11 @@ pub fn label_response_items(
 
     // Skip labeling for error responses (e.g. 404 Not Found).
     // Resource-level labels from tool_rules handle these cases.
-    if response.get("isError").and_then(|v| v.as_bool()) == Some(true) {
+    if response
+        .get(field_names::IS_ERROR)
+        .and_then(|v| v.as_bool())
+        == Some(true)
+    {
         crate::log_info("label_response_items: skipping error response (isError=true)");
         return labeled_items;
     }
