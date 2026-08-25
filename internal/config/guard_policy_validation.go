@@ -331,7 +331,15 @@ func isValidRepoOwner(owner string) bool {
 }
 
 func isValidRepoName(repo string) bool {
-	return isValidTokenString(repo, 100)
+	if len(repo) < 1 || len(repo) > 100 {
+		return false
+	}
+	for i := 0; i < len(repo); i++ {
+		if !isScopeTokenChar(repo[i]) && repo[i] != '.' {
+			return false
+		}
+	}
+	return true
 }
 
 func isScopeTokenChar(char byte) bool {

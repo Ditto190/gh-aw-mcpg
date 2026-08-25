@@ -8,27 +8,35 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"time"
 
+	"github.com/github/gh-aw-mcpg/internal/difc"
 	"github.com/github/gh-aw-mcpg/internal/enclavegithub"
 	"github.com/github/gh-aw-mcpg/internal/githubhttp"
 	"github.com/github/gh-aw-mcpg/internal/httputil"
 )
 
-const maxEnclaveVisibilityResponseBytes = 1024 * 1024
+const (
+	maxEnclaveVisibilityResponseBytes    = 1024 * 1024
+	maxEnclaveVisibilityDeniedCacheItems = 1024
+	enclaveVisibilityDeniedCacheTTL      = 5 * time.Minute
+)
 
 type enclaveState struct {
 	policy   *enclavegithub.Policy
 	verifier *enclavegithub.Verifier
 
 	visibilityMu        sync.RWMutex
-	visibilityDecisions map[string]bool
+	visibilityDecisions map[string]time.Time
+	now                 func() time.Time
 }
 
 func newEnclaveState(policy *enclavegithub.Policy, verifier *enclavegithub.Verifier) *enclaveState {
 	return &enclaveState{
 		policy:              policy,
 		verifier:            verifier,
-		visibilityDecisions: make(map[string]bool),
+		visibilityDecisions: make(map[string]time.Time),
+		now:                 time.Now,
 	}
 }
 
@@ -47,11 +55,16 @@ func agentIDFromContext(ctx context.Context) string {
 }
 
 func (s *Server) enclaveRepositoryIsPublic(ctx context.Context, repo string) bool {
+	now := s.enclave.now()
+
 	s.enclave.visibilityMu.RLock()
-	decision, cached := s.enclave.visibilityDecisions[repo]
+	deniedUntil, denied := s.enclave.visibilityDecisions[repo]
 	s.enclave.visibilityMu.RUnlock()
-	if cached {
-		return decision
+	if denied {
+		if now.Before(deniedUntil) {
+			return false
+		}
+		s.clearEnclaveVisibilityDenial(repo)
 	}
 
 	resp, err := s.forwardEnclaveVisibilityLookup(ctx, repo)
@@ -96,7 +109,35 @@ func (s *Server) forwardEnclaveVisibilityLookup(ctx context.Context, repo string
 
 func (s *Server) cacheEnclaveVisibilityDenial(repo string) {
 	s.enclave.visibilityMu.Lock()
-	s.enclave.visibilityDecisions[repo] = false
+	defer s.enclave.visibilityMu.Unlock()
+
+	now := s.enclave.now()
+	for cachedRepo, deniedUntil := range s.enclave.visibilityDecisions {
+		if !now.Before(deniedUntil) {
+			delete(s.enclave.visibilityDecisions, cachedRepo)
+		}
+	}
+
+	if len(s.enclave.visibilityDecisions) >= maxEnclaveVisibilityDeniedCacheItems {
+		var oldestRepo string
+		var oldestDeniedUntil time.Time
+		for cachedRepo, deniedUntil := range s.enclave.visibilityDecisions {
+			if oldestRepo == "" || deniedUntil.Before(oldestDeniedUntil) {
+				oldestRepo = cachedRepo
+				oldestDeniedUntil = deniedUntil
+			}
+		}
+		if oldestRepo != "" {
+			delete(s.enclave.visibilityDecisions, oldestRepo)
+		}
+	}
+
+	s.enclave.visibilityDecisions[repo] = now.Add(enclaveVisibilityDeniedCacheTTL)
+}
+
+func (s *Server) clearEnclaveVisibilityDenial(repo string) {
+	s.enclave.visibilityMu.Lock()
+	delete(s.enclave.visibilityDecisions, repo)
 	s.enclave.visibilityMu.Unlock()
 }
 
@@ -175,6 +216,9 @@ func (h *proxyHandler) handleEnclaveRequest(w http.ResponseWriter, r *http.Reque
 		writeEnclaveDenied(w)
 		return
 	}
+	if targetRepo == claims.Repo {
+		h.server.seedEnclaveAssignedRepositorySecrecy(claims.AgentID(), claims.Repo)
+	}
 
 	toolName, args := enclaveToolAndArgs(route)
 	if toolName == "" {
@@ -187,4 +231,12 @@ func (h *proxyHandler) handleEnclaveRequest(w http.ResponseWriter, r *http.Reque
 	}
 	ctx := withEnclaveAgentID(r.Context(), claims.AgentID())
 	h.handleWithDIFC(w, r.WithContext(ctx), fullPath, toolName, args, nil)
+}
+
+func (s *Server) seedEnclaveAssignedRepositorySecrecy(agentID, repo string) {
+	sensitivity, ok := s.enclave.policy.RepositorySensitivity(repo)
+	if !ok || sensitivity == "public" {
+		return
+	}
+	s.AgentRegistry.GetOrCreate(agentID).AddSecrecyTag(difc.Tag("private:" + repo))
 }

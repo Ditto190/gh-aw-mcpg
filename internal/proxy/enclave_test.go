@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -191,6 +192,14 @@ func TestEnclaveAssignedAndPublicIssueReadsReplaceAuthorization(t *testing.T) {
 	}, auth)
 	assert.NotContains(t, auth, "Bearer "+capability)
 	assert.Equal(t, 1, handler.server.AgentRegistry.Count())
+
+	agentID := (&enclavegithub.Claims{
+		Run:        "run-123",
+		Invocation: "invocation-456",
+	}).AgentID()
+	labels, ok := handler.server.AgentRegistry.Get(agentID)
+	require.True(t, ok)
+	assert.Equal(t, []difc.Tag{"private:assigned/private"}, labels.GetSecrecyTags())
 }
 
 func TestEnclaveUniformlyDeniesNonPublicRepositories(t *testing.T) {
@@ -229,9 +238,44 @@ func TestEnclaveUniformlyDeniesNonPublicRepositories(t *testing.T) {
 	handler.server.enclave.visibilityMu.RLock()
 	defer handler.server.enclave.visibilityMu.RUnlock()
 	assert.Len(t, handler.server.enclave.visibilityDecisions, 5)
-	for _, decision := range handler.server.enclave.visibilityDecisions {
-		assert.False(t, decision)
+	for _, deniedUntil := range handler.server.enclave.visibilityDecisions {
+		assert.False(t, deniedUntil.IsZero())
 	}
+}
+
+func TestEnclaveVisibilityDenialCacheIsBoundedAndExpires(t *testing.T) {
+	var currentTime = time.Unix(1_800_000_000, 0)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer upstream.Close()
+
+	handler, _ := newEnclaveHandlerForTest(t, upstream.URL)
+	handler.server.enclave.now = func() time.Time { return currentTime }
+
+	for i := 0; i < maxEnclaveVisibilityDeniedCacheItems+5; i++ {
+		handler.server.cacheEnclaveVisibilityDenial(fmt.Sprintf("org/repo-%d", i))
+	}
+
+	handler.server.enclave.visibilityMu.RLock()
+	assert.Len(t, handler.server.enclave.visibilityDecisions, maxEnclaveVisibilityDeniedCacheItems)
+	handler.server.enclave.visibilityMu.RUnlock()
+
+	handler.server.cacheEnclaveVisibilityDenial("org/expiring")
+	currentTime = currentTime.Add(enclaveVisibilityDeniedCacheTTL + time.Second)
+
+	handler.server.enclave.visibilityMu.RLock()
+	_, expiredStillCached := handler.server.enclave.visibilityDecisions["org/expiring"]
+	handler.server.enclave.visibilityMu.RUnlock()
+	assert.True(t, expiredStillCached)
+
+	assert.False(t, handler.server.enclaveRepositoryIsPublic(context.Background(), "org/expiring"))
+
+	handler.server.enclave.visibilityMu.RLock()
+	refreshedDeniedUntil, refreshedCached := handler.server.enclave.visibilityDecisions["org/expiring"]
+	handler.server.enclave.visibilityMu.RUnlock()
+	assert.True(t, refreshedCached)
+	assert.True(t, refreshedDeniedUntil.After(currentTime))
 }
 
 func TestEnclaveRejectsUnsupportedAndAmbiguousRequestsBeforeUpstream(t *testing.T) {

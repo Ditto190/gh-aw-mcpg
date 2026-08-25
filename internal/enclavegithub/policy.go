@@ -171,6 +171,16 @@ func (p *Policy) HasRepository(repo string) bool {
 	})
 }
 
+// RepositorySensitivity returns the configured sensitivity for repo.
+func (p *Policy) RepositorySensitivity(repo string) (string, bool) {
+	for _, candidate := range p.Repositories {
+		if candidate.Repo == repo {
+			return candidate.Sensitivity, true
+		}
+	}
+	return "", false
+}
+
 // NormalizeRepository returns a canonical lowercase owner/name repository.
 func NormalizeRepository(repo string) (string, bool) {
 	normalized := strings.ToLower(repo)
