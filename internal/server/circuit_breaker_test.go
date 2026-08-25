@@ -535,7 +535,8 @@ func TestCircuitBreaker_RecordSuccessFromOpenState(t *testing.T) {
 
 // TestCircuitBreaker_HalfOpenAllowsWhenNoProbeInFlight exercises the defensive
 // fallback path in Allow() where the circuit is HALF-OPEN but probeInFlight is false.
-// This shouldn't normally occur, but the circuit should allow through defensively.
+// This shouldn't normally occur, but the circuit should allow one probe through
+// defensively while continuing to enforce the single-probe limit.
 func TestCircuitBreaker_HalfOpenAllowsWhenNoProbeInFlight(t *testing.T) {
 	t.Parallel()
 	cb := newCircuitBreaker("test", 1, time.Minute)
@@ -548,6 +549,7 @@ func TestCircuitBreaker_HalfOpenAllowsWhenNoProbeInFlight(t *testing.T) {
 
 	err := cb.Allow()
 	assert.NoError(t, err, "HALF-OPEN with no probe in flight should allow through defensively")
+	assert.Error(t, cb.Allow(), "a second request should be rejected while the defensive probe is in flight")
 }
 
 // TestCircuitBreaker_RecordRateLimitWhenAlreadyOpen verifies that calling RecordRateLimit

@@ -190,7 +190,9 @@ func (cb *circuitBreaker) Allow() error {
 			return &ErrCircuitOpen{ServerID: cb.serverID, ResetAt: cb.resetAt, State: cb.state, Now: now}
 		}
 		// This shouldn't normally happen (probe resolved but state wasn't updated),
-		// but allow through defensively.
+		// but reserve a fresh probe defensively.
+		cb.probeInFlight = true
+		cb.probeStartedAt = now
 		return nil
 	}
 
