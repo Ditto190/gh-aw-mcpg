@@ -489,7 +489,7 @@ The project uses:
 
 - `github.com/spf13/cobra` - CLI framework
 - `github.com/BurntSushi/toml` - TOML parser
-- `github.com/modelcontextprotocol/go-sdk` - MCP protocol implementation
+- `github.com/modelcontextprotocol/go-sdk` v1.7.0 - MCP protocol implementation
 - `github.com/itchyny/gojq` - JQ schema processing
 - `github.com/santhosh-tekuri/jsonschema/v6` - JSON schema validation
 - `github.com/stretchr/testify` - Test assertions
