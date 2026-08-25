@@ -669,22 +669,26 @@ fn extract_repo_private_flag(response: &Value, repo_id: &str) -> Option<bool> {
     }
 
     // Some MCP backends return { content: [{ text: "{...json...}" }] }
-    let text_payload = response
-        .get("content")
-        .and_then(|v| v.as_array())
-        .and_then(|arr| arr.first())
-        .and_then(|item| item.get("text"))
-        .and_then(|v| v.as_str())?;
+    let text_payload = mcp_wrapped_text(response)?;
 
     let parsed = serde_json::from_str::<Value>(text_payload).ok()?;
     repo_visibility_from_items(&parsed, repo_id)
 }
 
 fn extract_backend_error_text(response: &Value) -> Option<&str> {
-    if response.get("isError").and_then(|v| v.as_bool()) != Some(true) {
+    if response
+        .get(field_names::IS_ERROR)
+        .and_then(|v| v.as_bool())
+        != Some(true)
+    {
         return None;
     }
 
+    mcp_wrapped_text(response)
+}
+
+/// Extract the raw `content[0].text` string from an MCP-wrapped response.
+fn mcp_wrapped_text(response: &Value) -> Option<&str> {
     response
         .get("content")
         .and_then(|v| v.as_array())
@@ -997,6 +1001,32 @@ mod tests {
     #[test]
     fn test_is_rate_limit_error_matches_secondary_rate_limit() {
         assert!(is_rate_limit_error("Secondary Rate Limit exceeded"));
+    }
+
+    #[test]
+    fn test_mcp_wrapped_text_extracts_first_text_value() {
+        let response = serde_json::json!({
+            "content": [
+                { "type": "text", "text": "payload" },
+                { "type": "text", "text": "ignored" }
+            ]
+        });
+
+        assert_eq!(mcp_wrapped_text(&response), Some("payload"));
+    }
+
+    #[test]
+    fn test_mcp_wrapped_text_rejects_non_wrapped_responses() {
+        let responses = [
+            serde_json::json!({ "items": [] }),
+            serde_json::json!({ "content": [] }),
+            serde_json::json!({ "content": [{ "type": "image" }] }),
+            serde_json::json!({ "content": [{ "text": 42 }] }),
+        ];
+
+        for response in responses {
+            assert_eq!(mcp_wrapped_text(&response), None);
+        }
     }
 
     #[test]
@@ -1573,12 +1603,7 @@ fn extract_owner_is_org(response: &Value, repo_id: &str) -> Option<bool> {
     }
 
     // MCP-wrapped response
-    let text_payload = response
-        .get("content")
-        .and_then(|v| v.as_array())
-        .and_then(|arr| arr.first())
-        .and_then(|item| item.get("text"))
-        .and_then(|v| v.as_str())?;
+    let text_payload = mcp_wrapped_text(response)?;
 
     let parsed = serde_json::from_str::<Value>(text_payload).ok()?;
     owner_is_org_from_items(&parsed, repo_id)

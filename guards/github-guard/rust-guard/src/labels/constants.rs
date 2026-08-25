@@ -65,6 +65,7 @@ mod tests {
         assert_eq!(desc_prefix::GIST, "gist:");
         assert_eq!(desc_prefix::NOTIFICATION, "notification:");
         assert_eq!(field_names::METHOD, "method");
+        assert_eq!(field_names::IS_ERROR, "isError");
     }
 }
 
@@ -101,6 +102,7 @@ pub mod field_names {
     pub const NUMBER: &str = "number";
     pub const PRIVATE: &str = "private";
     pub const LOGIN: &str = "login";
+    pub const IS_ERROR: &str = "isError";
 }
 
 /// Canonical description prefix strings used in `ResourceLabels::description`.
