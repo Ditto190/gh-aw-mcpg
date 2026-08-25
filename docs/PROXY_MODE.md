@@ -95,7 +95,7 @@ It provides `MCP_GATEWAY_ENCLAVE_CAPABILITY_KEY` as exactly 64 lowercase hex cha
 }
 ```
 
-Startup fails if the policy, root key, or trusted upstream GitHub token is absent or invalid. `--policy`, `--trusted-bots`, and `--trusted-users` cannot be combined with this profile. mcpg derives the composite guard scope from the assigned repositories plus `public`, initializes each invocation with empty secrecy and the configured integrity baseline, and forces `propagate` mode after guard initialization.
+Startup fails if the policy, root key, or trusted upstream GitHub token is absent or invalid. `--policy`, `--trusted-bots`, and `--trusted-users` cannot be combined with this profile. mcpg derives the composite guard scope from the assigned repositories plus `public`, initializes each invocation with its capability-bound `private:<owner>/<repo>` secrecy label and the configured integrity baseline, and forces bounded `propagate` mode after guard initialization.
 
 ### Invocation capability
 
