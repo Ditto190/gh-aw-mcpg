@@ -74,7 +74,7 @@ func TestNewVerifier(t *testing.T) {
 	})
 
 	t.Run("non-hex characters", func(t *testing.T) {
-		badKey := "zz23456789abcdef0123456789abcdef0123456789abcdef0123456789abcd"
+		badKey := "zz" + testRootKeyHex[2:]
 		_, err := NewVerifier(badKey, policy)
 		assert.Error(t, err)
 	})
@@ -289,8 +289,8 @@ func TestVerifier_ValidateClaims(t *testing.T) {
 			c.Expires = now.Unix() + policy.MaxCapabilityTTLSeconds + 1
 		})},
 		{"not yet valid", mutate(func(c *Claims) {
-			c.NotBefore = now.Add(time.Hour).Unix()
-			c.Expires = now.Add(2 * time.Hour).Unix()
+			c.NotBefore = now.Add(time.Minute).Unix()
+			c.Expires = now.Add(2 * time.Minute).Unix()
 		})},
 		{"already expired", mutate(func(c *Claims) {
 			c.NotBefore = now.Add(-2 * time.Hour).Unix()
