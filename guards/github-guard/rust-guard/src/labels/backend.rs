@@ -1006,6 +1006,32 @@ mod tests {
     }
 
     #[test]
+    fn test_mcp_wrapped_text_extracts_first_text_value() {
+        let response = serde_json::json!({
+            "content": [
+                { "type": "text", "text": "payload" },
+                { "type": "text", "text": "ignored" }
+            ]
+        });
+
+        assert_eq!(mcp_wrapped_text(&response), Some("payload"));
+    }
+
+    #[test]
+    fn test_mcp_wrapped_text_rejects_non_wrapped_responses() {
+        let responses = [
+            serde_json::json!({ "items": [] }),
+            serde_json::json!({ "content": [] }),
+            serde_json::json!({ "content": [{ "type": "image" }] }),
+            serde_json::json!({ "content": [{ "text": 42 }] }),
+        ];
+
+        for response in responses {
+            assert_eq!(mcp_wrapped_text(&response), None);
+        }
+    }
+
+    #[test]
     fn test_extract_rate_reset_seconds_parses_leading_digits_without_allocating() {
         assert_eq!(
             extract_rate_reset_seconds("failed: [rate reset in 42s]"),
