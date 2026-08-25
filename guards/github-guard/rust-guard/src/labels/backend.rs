@@ -699,16 +699,6 @@ fn extract_backend_error_text(response: &Value) -> Option<&str> {
     mcp_wrapped_text(response)
 }
 
-/// Extract the raw `content[0].text` string from an MCP-wrapped response.
-fn mcp_wrapped_text(response: &Value) -> Option<&str> {
-    response
-        .get("content")
-        .and_then(|v| v.as_array())
-        .and_then(|arr| arr.first())
-        .and_then(|item| item.get("text"))
-        .and_then(|v| v.as_str())
-}
-
 fn is_rate_limit_error(error_text: &str) -> bool {
     let lower = error_text.to_ascii_lowercase();
     lower.contains("rate limit")
