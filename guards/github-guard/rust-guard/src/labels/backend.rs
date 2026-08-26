@@ -1611,6 +1611,18 @@ mod tests_private_flag {
     #[test]
     fn test_private_flag_from_repo_object_field_priority_and_visibility() {
         assert_eq!(
+            private_flag_from_repo_object(&json!({"private": false, "is_private": true, "isPrivate": true, "visibility": "private"})),
+            Some(false)
+        );
+        assert_eq!(
+            private_flag_from_repo_object(&json!({"is_private": false, "isPrivate": true, "visibility": "private"})),
+            Some(false)
+        );
+        assert_eq!(
+            private_flag_from_repo_object(&json!({"isPrivate": false, "visibility": "private"})),
+            Some(false)
+        );
+        assert_eq!(
             private_flag_from_repo_object(&json!({"private": true})),
             Some(true)
         );
