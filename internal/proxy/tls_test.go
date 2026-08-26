@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -122,14 +123,84 @@ func TestGenerateSelfSignedTLS(t *testing.T) {
 		assert.True(t, foundLoopback6, "server cert should cover ::1")
 	})
 
-	t.Run("key files have restricted permissions", func(t *testing.T) {
+	t.Run("server cert includes requested DNS names", func(t *testing.T) {
+		tests := []struct {
+			name      string
+			requested []string
+			want      []string
+		}{
+			{
+				name:      "one",
+				requested: []string{"awf-enclave-github-proxy"},
+				want:      []string{"localhost", "awf-enclave-github-proxy"},
+			},
+			{
+				name:      "multiple normalized and deduplicated",
+				requested: []string{"awf-enclave-github-proxy", "Proxy.Internal", "awf-enclave-github-proxy", "LOCALHOST"},
+				want:      []string{"localhost", "awf-enclave-github-proxy", "proxy.internal"},
+			},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				dir := t.TempDir()
+				tlsCfg, err := GenerateSelfSignedTLS(dir, tt.requested...)
+				require.NoError(t, err)
+
+				leaf, err := x509.ParseCertificate(tlsCfg.Config.Certificates[0].Certificate[0])
+				require.NoError(t, err)
+				assert.Equal(t, tt.want, leaf.DNSNames)
+				assert.True(t, containsIP(leaf.IPAddresses, net.IPv4(127, 0, 0, 1)))
+				assert.True(t, containsIP(leaf.IPAddresses, net.IPv6loopback))
+			})
+		}
+	})
+
+	t.Run("invalid requested DNS names fail before writing files", func(t *testing.T) {
+		invalidNames := []string{
+			"",
+			" proxy.internal",
+			"proxy.internal ",
+			"*.internal",
+			"127.0.0.1",
+			"::1",
+			"999.1.2.3",
+			"12345",
+			".internal",
+			"internal.",
+			"proxy..internal",
+			"-proxy.internal",
+			"proxy-.internal",
+			"proxy_internal",
+			"proxy/internal",
+			"prøxy.internal",
+			strings.Repeat("a", 64) + ".internal",
+			strings.Repeat("a", 254),
+		}
+		for _, name := range invalidNames {
+			t.Run(name, func(t *testing.T) {
+				dir := filepath.Join(t.TempDir(), "tls")
+				tlsCfg, err := GenerateSelfSignedTLS(dir, name)
+				require.Error(t, err)
+				assert.Nil(t, tlsCfg)
+				assert.NoDirExists(t, dir)
+			})
+		}
+	})
+
+	t.Run("generated files preserve certificate and key permissions", func(t *testing.T) {
 		dir := t.TempDir()
 		tlsCfg, err := GenerateSelfSignedTLS(dir)
 		require.NoError(t, err)
 
-		info, err := os.Stat(tlsCfg.KeyPath)
-		require.NoError(t, err)
-		assert.Equal(t, os.FileMode(0600), info.Mode().Perm(), "private key should be owner-only")
+		for path, expected := range map[string]os.FileMode{
+			tlsCfg.CACertPath: 0644,
+			tlsCfg.CertPath:   0644,
+			tlsCfg.KeyPath:    0600,
+		} {
+			info, err := os.Stat(path)
+			require.NoError(t, err)
+			assert.Equal(t, expected, info.Mode().Perm())
+		}
 	})
 
 	t.Run("creates directory if missing", func(t *testing.T) {
@@ -196,6 +267,15 @@ func TestGenerateSelfSignedTLS(t *testing.T) {
 		require.NotEmpty(t, serverCert.Issuer.Organization)
 		assert.Equal(t, "MCPG Proxy", serverCert.Issuer.Organization[0])
 	})
+}
+
+func containsIP(ips []net.IP, target net.IP) bool {
+	for _, ip := range ips {
+		if ip.Equal(target) {
+			return true
+		}
+	}
+	return false
 }
 
 // TestWritePEM_InvalidPath verifies that writePEM returns an error when the

@@ -128,6 +128,7 @@ func TestNewProxyCmd_AllFlagsRegistered(t *testing.T) {
 		"github-api-url",
 		"tls",
 		"tls-dir",
+		"tls-dns-name",
 		"trusted-bots",
 		"trusted-users",
 		"otlp-endpoint",
@@ -157,6 +158,18 @@ func TestNewProxyCmd_CommandMetadata(t *testing.T) {
 	// Long description should mention proxy and DIFC
 	assert.Contains(t, cmd.Long, "proxy", "Long description should mention 'proxy'")
 	assert.Contains(t, cmd.Long, "DIFC", "Long description should mention 'DIFC'")
+}
+
+func TestNewProxyCmd_TLSDNSNameAcceptsRepeatedAndCommaSeparatedValues(t *testing.T) {
+	cmd := newProxyCmd()
+	require.NoError(t, cmd.Flags().Parse([]string{
+		"--tls-dns-name", "proxy.internal",
+		"--tls-dns-name", "proxy-a.internal,proxy-b.internal",
+	}))
+
+	got, err := cmd.Flags().GetStringSlice("tls-dns-name")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"proxy.internal", "proxy-a.internal", "proxy-b.internal"}, got)
 }
 
 // TestNewProxyCmd_DefaultFlagValues verifies that flags have the expected defaults
@@ -234,6 +247,15 @@ func TestNewProxyCmd_DefaultFlagValues(t *testing.T) {
 				val, err := cmd.Flags().GetString("tls-dir")
 				require.NoError(t, err)
 				assert.Equal(t, "", val, "--tls-dir default should be empty")
+			},
+		},
+		{
+			flagName: "tls-dns-name",
+			validate: func(t *testing.T, cmd *cobra.Command) {
+				t.Helper()
+				val, err := cmd.Flags().GetStringSlice("tls-dns-name")
+				require.NoError(t, err)
+				assert.Empty(t, val, "--tls-dns-name default should be empty")
 			},
 		},
 		{

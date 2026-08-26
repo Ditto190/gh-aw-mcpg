@@ -169,6 +169,7 @@ Response schema:
 | `--github-api-url` | `https://api.github.com` | Upstream GitHub API URL |
 | `--tls` | `false` | Enable HTTPS with auto-generated self-signed certificates |
 | `--tls-dir` | `<log-dir>/proxy-tls` | Directory for generated TLS certificate files |
+| `--tls-dns-name` | *(disabled)* | Additional DNS SAN for the generated certificate; repeat the flag or use a comma-separated list |
 | `--trusted-bots` | *(disabled)* | Additional trusted bot usernames (comma-separated, extends built-in list) |
 | `--trusted-users` | *(disabled)* | User logins that receive approved integrity (comma-separated) |
 
@@ -307,7 +308,7 @@ curl -H "Authorization: token $GITHUB_TOKEN" \
 
 ## TLS Support
 
-The `gh` CLI forces HTTPS when connecting to a custom `GH_HOST`. The `--tls` flag generates a short-lived (24h) self-signed CA and server certificate at startup, enabling direct `gh` CLI integration without an external TLS terminator.
+The `gh` CLI forces HTTPS when connecting to a custom `GH_HOST`. The `--tls` flag generates a short-lived (24h) self-signed CA and server certificate at startup, enabling direct `gh` CLI integration without an external TLS terminator. When clients connect through a DNS name other than `localhost`, pass each required DNS SAN with `--tls-dns-name <name>` (repeatable and comma-separated values are both accepted). Requested names are validated as ASCII DNS hostnames, normalized to lowercase, and deduplicated in first-seen order; IP addresses and wildcards are rejected.
 
 ### Generated Files
 
@@ -316,7 +317,7 @@ When `--tls` is enabled, the proxy writes to `--tls-dir` (default: `<log-dir>/pr
 | File | Purpose |
 |------|---------|
 | `ca.crt` | CA certificate — add to client trust store |
-| `server.crt` | Server certificate (localhost, 127.0.0.1, ::1) |
+| `server.crt` | Server certificate (`localhost`, `127.0.0.1`, `::1`, and requested `--tls-dns-name` values) |
 | `server.key` | Server private key (0600 permissions) |
 
 ### Trusting the CA
