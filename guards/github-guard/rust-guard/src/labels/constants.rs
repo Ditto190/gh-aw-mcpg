@@ -101,8 +101,18 @@ pub mod field_names {
     pub const FULL_NAME_CAMEL: &str = "fullName";
     pub const NUMBER: &str = "number";
     pub const PRIVATE: &str = "private";
+    pub const IS_PRIVATE: &str = "is_private";
+    pub const IS_PRIVATE_CAMEL: &str = "isPrivate";
     pub const LOGIN: &str = "login";
     pub const IS_ERROR: &str = "isError";
+}
+
+/// Canonical repo `visibility` field string values, used to avoid silent
+/// typos when matching against the visibility string returned by the API.
+pub mod visibility_values {
+    pub const PRIVATE: &str = "private";
+    pub const INTERNAL: &str = "internal";
+    pub const PUBLIC: &str = "public";
 }
 
 /// Canonical description prefix strings used in `ResourceLabels::description`.

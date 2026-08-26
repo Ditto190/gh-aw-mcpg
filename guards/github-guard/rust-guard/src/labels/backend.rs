@@ -13,7 +13,9 @@ use std::sync::{Mutex, OnceLock};
 use std::thread;
 use std::time::Duration;
 
-use super::constants::{field_names, tool_names, MEDIUM_BUFFER_SIZE, SMALL_BUFFER_SIZE};
+use super::constants::{
+    field_names, tool_names, visibility_values, MEDIUM_BUFFER_SIZE, SMALL_BUFFER_SIZE,
+};
 use super::helpers::{get_author_association, is_forked_pr, is_pr_merged};
 
 /// Backend callback signature used for GitHub MCP tool calls.
@@ -1577,23 +1579,62 @@ fn repo_visibility_from_items(value: &Value, repo_id: &str) -> Option<bool> {
 }
 
 fn private_flag_from_repo_object(item: &Value) -> Option<bool> {
-    for field in &["private", "is_private", "isPrivate"] {
+    for field in &[
+        field_names::PRIVATE,
+        field_names::IS_PRIVATE,
+        field_names::IS_PRIVATE_CAMEL,
+    ] {
         if let Some(is_private) = item.get(*field).and_then(|v| v.as_bool()) {
             return Some(is_private);
         }
     }
 
     if let Some(visibility) = item.get("visibility").and_then(|v| v.as_str()) {
-        if visibility.eq_ignore_ascii_case("private") || visibility.eq_ignore_ascii_case("internal")
+        if visibility.eq_ignore_ascii_case(visibility_values::PRIVATE)
+            || visibility.eq_ignore_ascii_case(visibility_values::INTERNAL)
         {
             return Some(true);
         }
-        if visibility.eq_ignore_ascii_case("public") {
+        if visibility.eq_ignore_ascii_case(visibility_values::PUBLIC) {
             return Some(false);
         }
     }
 
     None
+}
+
+#[cfg(test)]
+mod tests_private_flag {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn test_private_flag_from_repo_object_field_priority_and_visibility() {
+        assert_eq!(
+            private_flag_from_repo_object(&json!({"private": true})),
+            Some(true)
+        );
+        assert_eq!(
+            private_flag_from_repo_object(&json!({"is_private": true})),
+            Some(true)
+        );
+        assert_eq!(
+            private_flag_from_repo_object(&json!({"isPrivate": false})),
+            Some(false)
+        );
+        assert_eq!(
+            private_flag_from_repo_object(&json!({"visibility": "internal"})),
+            Some(true)
+        );
+        assert_eq!(
+            private_flag_from_repo_object(&json!({"visibility": "PUBLIC"})),
+            Some(false)
+        );
+        assert_eq!(
+            private_flag_from_repo_object(&json!({"description": "no visibility info"})),
+            None
+        );
+    }
 }
 
 /// Extract owner.type from a search_repositories response.
