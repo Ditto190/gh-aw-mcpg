@@ -65,6 +65,41 @@ func TestParsePolicyRejectsInvalidContracts(t *testing.T) {
 	}
 }
 
+func TestPolicyRepositorySensitivity(t *testing.T) {
+	policy, err := ParsePolicy(validPolicyJSON())
+	require.NoError(t, err)
+
+	sensitivity, ok := policy.RepositorySensitivity("github/gh-aw")
+	assert.True(t, ok)
+	assert.Equal(t, "confidential", sensitivity)
+
+	sensitivity, ok = policy.RepositorySensitivity("unknown/repo")
+	assert.False(t, ok)
+	assert.Empty(t, sensitivity)
+}
+
+func TestPolicyGuardPolicyJSON(t *testing.T) {
+	policy, err := ParsePolicy(validPolicyJSON())
+	require.NoError(t, err)
+
+	encoded, err := policy.GuardPolicyJSON()
+	require.NoError(t, err)
+
+	var decoded map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(encoded), &decoded))
+	allowOnly, ok := decoded["allow-only"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "approved", allowOnly["min-integrity"])
+	assert.ElementsMatch(t, []interface{}{"github/gh-aw", "public"}, allowOnly["repos"])
+}
+
+func TestPolicyGuardPolicyJSONPropagatesValidationError(t *testing.T) {
+	invalid := &Policy{Version: 2}
+	_, err := invalid.GuardPolicyJSON()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "version must be 1")
+}
+
 func TestVerifierValidatesInvocationBinding(t *testing.T) {
 	policy, err := ParsePolicy(validPolicyJSON())
 	require.NoError(t, err)
