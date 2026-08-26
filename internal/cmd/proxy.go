@@ -41,6 +41,7 @@ var (
 	proxyAPIURL          string
 	proxyTLS             bool
 	proxyTLSDir          string
+	proxyTLSDNSNames     []string
 	proxyTrustedBots     []string
 	proxyTrustedUsers    []string
 	proxyOTLPEndpoint    string
@@ -125,6 +126,7 @@ Local usage:
 	cmd.Flags().BoolVar(&proxyForcePublicRepo, "force-public-repos", envutil.GetEnvBool(config.EnvForcePublicRepos, true), "When true (default), forces repos=\"public\" at runtime if the workflow repo is public. Set to false to disable.")
 	cmd.Flags().BoolVar(&proxyTLS, "tls", false, "Enable HTTPS with auto-generated self-signed certificates")
 	cmd.Flags().StringVar(&proxyTLSDir, "tls-dir", "", "Directory for TLS certificates (default: <log-dir>/proxy-tls)")
+	cmd.Flags().StringSliceVar(&proxyTLSDNSNames, "tls-dns-name", nil, "Additional DNS name for the generated TLS certificate (repeatable or comma-separated; requires --tls)")
 	cmd.Flags().StringSliceVar(&proxyTrustedBots, "trusted-bots", nil, "Additional trusted bot usernames (comma-separated, extends built-in list)")
 	cmd.Flags().StringSliceVar(&proxyTrustedUsers, "trusted-users", nil, "User logins that receive approved integrity (comma-separated)")
 	registerTracingFlags(cmd, &proxyOTLPEndpoint, &proxyOTLPService, &proxyOTLPSampleRate,
@@ -195,6 +197,10 @@ func resolveEnclaveProxyConfig(
 func runProxy(cmd *cobra.Command, args []string) error {
 	ctx, cancel := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
+
+	if len(proxyTLSDNSNames) > 0 && !proxyTLS {
+		return fmt.Errorf("--tls-dns-name requires --tls")
+	}
 
 	enclavePolicyRaw := os.Getenv(enclavegithub.EnvPolicyJSON)
 	enclaveCapabilityKey := os.Getenv(enclavegithub.EnvCapabilityKey)
@@ -317,7 +323,7 @@ func runProxy(cmd *cobra.Command, args []string) error {
 			tlsDir = filepath.Join(proxyLogDir, "proxy-tls")
 		}
 		logProxyCmd.Printf("Generating TLS certificates in: %s", tlsDir)
-		tlsCfg, err = proxy.GenerateSelfSignedTLS(tlsDir)
+		tlsCfg, err = proxy.GenerateSelfSignedTLS(tlsDir, proxyTLSDNSNames...)
 		if err != nil {
 			return fmt.Errorf("failed to generate TLS certificates: %w", err)
 		}

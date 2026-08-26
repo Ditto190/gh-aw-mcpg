@@ -35,6 +35,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/github/gh-aw-mcpg/internal/httputil"
@@ -61,15 +62,19 @@ type TLSConfig struct {
 }
 
 // GenerateSelfSignedTLS creates a self-signed CA and server certificate for
-// localhost. All files are written to dir. The CA cert is suitable for
-// injection into client trust stores.
+// localhost and any additional DNS names. All files are written to dir. The CA
+// cert is suitable for injection into client trust stores.
 //
 // Generated files:
 //   - ca.crt    — CA certificate (share with clients)
-//   - server.crt — Server certificate (localhost + 127.0.0.1)
+//   - server.crt — Server certificate (localhost + 127.0.0.1 + ::1)
 //   - server.key — Server private key
-func GenerateSelfSignedTLS(dir string) (*TLSConfig, error) {
-	logTLS.Print("generating self-signed TLS certificates for localhost")
+func GenerateSelfSignedTLS(dir string, additionalDNSNames ...string) (*TLSConfig, error) {
+	dnsNames, err := normalizeTLSDNSNames(additionalDNSNames)
+	if err != nil {
+		return nil, err
+	}
+	logTLS.Printf("generating self-signed TLS certificates for DNS names: %v", dnsNames)
 
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create TLS directory %s: %w", dir, err)
@@ -132,7 +137,7 @@ func GenerateSelfSignedTLS(dir string) (*TLSConfig, error) {
 			Organization: []string{"MCPG Proxy"},
 			CommonName:   "localhost",
 		},
-		DNSNames:    []string{"localhost"},
+		DNSNames:    dnsNames,
 		IPAddresses: []net.IP{net.IPv4(127, 0, 0, 1), net.IPv6loopback},
 		NotBefore:   time.Now().Add(-1 * time.Hour),
 		NotAfter:    time.Now().Add(24 * time.Hour),
@@ -184,6 +189,79 @@ func GenerateSelfSignedTLS(dir string) (*TLSConfig, error) {
 		KeyPath:    keyPath,
 		Config:     tlsCfg,
 	}, nil
+}
+
+func normalizeTLSDNSNames(additionalDNSNames []string) ([]string, error) {
+	dnsNames := []string{"localhost"}
+	seen := map[string]struct{}{"localhost": {}}
+
+	for _, name := range additionalDNSNames {
+		if err := validateTLSDNSName(name); err != nil {
+			return nil, fmt.Errorf("invalid TLS DNS name %q: %w", name, err)
+		}
+		normalized := strings.ToLower(name)
+		if _, exists := seen[normalized]; exists {
+			continue
+		}
+		seen[normalized] = struct{}{}
+		dnsNames = append(dnsNames, normalized)
+	}
+	return dnsNames, nil
+}
+
+func validateTLSDNSName(name string) error {
+	if name == "" {
+		return fmt.Errorf("must not be empty")
+	}
+	if name != strings.TrimSpace(name) {
+		return fmt.Errorf("must not contain surrounding whitespace")
+	}
+	if len(name) > 253 {
+		return fmt.Errorf("must not exceed 253 characters")
+	}
+	if strings.HasPrefix(name, ".") || strings.HasSuffix(name, ".") {
+		return fmt.Errorf("must not begin or end with a dot")
+	}
+	if net.ParseIP(name) != nil || isIPLikeTLSName(name) {
+		return fmt.Errorf("must be a DNS name, not an IP address")
+	}
+
+	hasLetter := false
+	for _, label := range strings.Split(name, ".") {
+		if len(label) == 0 || len(label) > 63 {
+			return fmt.Errorf("labels must contain 1 to 63 characters")
+		}
+		if label[0] == '-' || label[len(label)-1] == '-' {
+			return fmt.Errorf("labels must not begin or end with a hyphen")
+		}
+		for _, char := range label {
+			switch {
+			case char >= 'a' && char <= 'z', char >= 'A' && char <= 'Z':
+				hasLetter = true
+			case char >= '0' && char <= '9', char == '-':
+			default:
+				return fmt.Errorf("must contain only ASCII letters, digits, hyphens, and dots")
+			}
+		}
+	}
+	if !hasLetter {
+		return fmt.Errorf("must contain at least one ASCII letter")
+	}
+	return nil
+}
+
+func isIPLikeTLSName(name string) bool {
+	hasSeparator := false
+	for _, char := range name {
+		if char == '.' || char == ':' {
+			hasSeparator = true
+			continue
+		}
+		if char < '0' || char > '9' {
+			return false
+		}
+	}
+	return hasSeparator
 }
 
 func randomSerial() (*big.Int, error) {
