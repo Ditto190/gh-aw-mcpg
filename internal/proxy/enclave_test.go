@@ -438,3 +438,102 @@ func TestEnclaveMaintainsPerInvocationDIFCState(t *testing.T) {
 	assert.Equal(t, []difc.Tag{"private:assigned/private"}, privateLabels.GetSecrecyTags())
 	assert.Equal(t, []difc.Tag{"private:assigned/private"}, publicLabels.GetSecrecyTags())
 }
+
+func TestEnclaveToolAndArgs(t *testing.T) {
+	tests := []struct {
+		name        string
+		route       *enclavegithub.Route
+		wantTool    string
+		wantArgs    map[string]interface{}
+		wantArgsNil bool
+	}{
+		{
+			name: "issues list maps to list_issues with owner/repo args",
+			route: &enclavegithub.Route{
+				Operation: enclavegithub.OperationIssuesList,
+				Owner:     "github",
+				Repo:      "gh-aw",
+			},
+			wantTool: "list_issues",
+			wantArgs: map[string]interface{}{
+				"owner": "github",
+				"repo":  "gh-aw",
+			},
+		},
+		{
+			name: "issues get maps to issue_read with owner/repo/issue_number args",
+			route: &enclavegithub.Route{
+				Operation: enclavegithub.OperationIssuesGet,
+				Owner:     "github",
+				Repo:      "gh-aw",
+				Number:    "42",
+			},
+			wantTool: "issue_read",
+			wantArgs: map[string]interface{}{
+				"owner":        "github",
+				"repo":         "gh-aw",
+				"issue_number": "42",
+			},
+		},
+		{
+			name: "issue comments list maps to issue_read with get_comments method",
+			route: &enclavegithub.Route{
+				Operation: enclavegithub.OperationIssueCommentsList,
+				Owner:     "github",
+				Repo:      "gh-aw",
+				Number:    "7",
+			},
+			wantTool: "issue_read",
+			wantArgs: map[string]interface{}{
+				"owner":        "github",
+				"repo":         "gh-aw",
+				"issue_number": "7",
+				"method":       "get_comments",
+			},
+		},
+		{
+			name: "unsupported operation returns empty tool name and nil args",
+			route: &enclavegithub.Route{
+				Operation: "repos.delete",
+				Owner:     "github",
+				Repo:      "gh-aw",
+			},
+			wantTool:    "",
+			wantArgsNil: true,
+		},
+		{
+			name: "empty operation returns empty tool name and nil args",
+			route: &enclavegithub.Route{
+				Owner: "github",
+				Repo:  "gh-aw",
+			},
+			wantTool:    "",
+			wantArgsNil: true,
+		},
+		{
+			name: "issue get with empty owner and repo still builds args map",
+			route: &enclavegithub.Route{
+				Operation: enclavegithub.OperationIssuesGet,
+				Number:    "1",
+			},
+			wantTool: "issue_read",
+			wantArgs: map[string]interface{}{
+				"owner":        "",
+				"repo":         "",
+				"issue_number": "1",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotTool, gotArgs := enclaveToolAndArgs(tt.route)
+			assert.Equal(t, tt.wantTool, gotTool)
+			if tt.wantArgsNil {
+				assert.Nil(t, gotArgs)
+				return
+			}
+			assert.Equal(t, tt.wantArgs, gotArgs)
+		})
+	}
+}
