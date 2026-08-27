@@ -1683,12 +1683,6 @@ pub(crate) fn author_association_floor_from_str(
     }
 }
 
-/// Returns `true` if `raw` (case-insensitively, after trimming) matches any of `values`.
-fn matches_any_ci(raw: &str, values: &[&str]) -> bool {
-    let raw = raw.trim();
-    values.iter().any(|value| raw.eq_ignore_ascii_case(value))
-}
-
 /// Extract the author login from an item, checking common GitHub API fields.
 /// Returns empty string if no login found.
 fn extract_author_login(item: &Value) -> &str {

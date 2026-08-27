@@ -107,8 +107,6 @@ pub mod field_names {
     pub const AUTHOR_ASSOCIATION_CAMEL: &str = "authorAssociation";
     pub const LOGIN: &str = "login";
     pub const IS_ERROR: &str = "isError";
-    pub const AUTHOR_ASSOCIATION: &str = "author_association";
-    pub const AUTHOR_ASSOCIATION_CAMEL: &str = "authorAssociation";
 }
 
 /// Canonical repo `visibility` field string values, used to avoid silent
