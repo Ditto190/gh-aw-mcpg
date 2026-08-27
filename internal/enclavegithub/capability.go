@@ -71,12 +71,19 @@ func (v *Verifier) VerifyAuthorization(header string) (*Claims, error) {
 }
 
 func (v *Verifier) verifyAuthorizationAt(header string, now time.Time) (*Claims, error) {
-	const prefix = "Bearer "
-	if !strings.HasPrefix(header, prefix) || len(header) == len(prefix) ||
-		strings.ContainsAny(header[len(prefix):], " \t\r\n") {
-		return nil, fmt.Errorf("invalid enclave capability")
+	// Stock gh sends configured tokens as "token <value>"; both exact,
+	// case-sensitive schemes carry the same capability.
+	for _, prefix := range []string{"Bearer ", "token "} {
+		if !strings.HasPrefix(header, prefix) {
+			continue
+		}
+		token := header[len(prefix):]
+		if len(token) == 0 || strings.ContainsAny(token, " \t\r\n") {
+			return nil, fmt.Errorf("invalid enclave capability")
+		}
+		return v.verifyTokenAt(token, now)
 	}
-	return v.verifyTokenAt(header[len(prefix):], now)
+	return nil, fmt.Errorf("invalid enclave capability")
 }
 
 func (v *Verifier) verifyTokenAt(token string, now time.Time) (*Claims, error) {

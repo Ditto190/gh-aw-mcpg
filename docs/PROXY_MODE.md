@@ -99,7 +99,7 @@ Startup fails if the policy, root key, or trusted upstream GitHub token is absen
 
 ### Invocation capability
 
-`enclave-mcp-server` mints one capability per invocation, writes it to a mode `0600` file, and removes it with the single-use enclave. The wrapper sends it through AWF's CLI proxy as `Authorization: Bearer <token>`. The compact format is:
+`enclave-mcp-server` mints one capability per invocation, writes it to a mode `0600` file, and removes it with the single-use enclave. The wrapper sends it through AWF's CLI proxy as `Authorization: Bearer <token>`; the `Authorization: token <token>` scheme sent by stock `gh` is also accepted. The compact format is:
 
 ```text
 awf-egh1.<base64url-unpadded claims JSON>.<base64url-unpadded HMAC-SHA256>

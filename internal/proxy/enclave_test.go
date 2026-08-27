@@ -205,6 +205,33 @@ func TestEnclaveAssignedAndPublicIssueReadsReplaceAuthorization(t *testing.T) {
 	assert.Equal(t, []difc.Tag{"private:assigned/private"}, labels.GetSecrecyTags())
 }
 
+func TestEnclaveAcceptsGHStyleTokenAuthorizationScheme(t *testing.T) {
+	// Stock gh sends GH_ENTERPRISE_TOKEN values as "Authorization: token <capability>".
+	var (
+		mu   sync.Mutex
+		auth []string
+	)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		auth = append(auth, r.Header.Get("Authorization"))
+		mu.Unlock()
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[]`))
+	}))
+	defer upstream.Close()
+
+	handler, capability := newEnclaveHandlerForTest(t, upstream.URL)
+	req := httptest.NewRequest(http.MethodGet, "/api/v3/repos/assigned/private/issues", nil)
+	req.Header.Set("Authorization", "token "+capability)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, req)
+
+	assert.Equal(t, http.StatusOK, recorder.Code)
+	assert.Equal(t, []string{"token " + enclaveTestUpstreamToken}, auth)
+	assert.NotContains(t, auth, "token "+capability)
+}
+
 func TestEnclaveUniformlyDeniesNonPublicRepositories(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
