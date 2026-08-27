@@ -65,6 +65,93 @@ func TestParsePolicyRejectsInvalidContracts(t *testing.T) {
 	}
 }
 
+func TestParsePolicyRejectsEmptyInput(t *testing.T) {
+	_, err := ParsePolicy("")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "enclave policy is required")
+}
+
+func TestParsePolicyRejectsOversizedInput(t *testing.T) {
+	huge := `{"padding":"` + strings.Repeat("a", maxPolicyJSONBytes) + `"}`
+	_, err := ParsePolicy(huge)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "exceeds")
+}
+
+func TestParsePolicyRejectsTrailingGarbage(t *testing.T) {
+	// Valid policy JSON followed by a non-JSON trailing token must be rejected
+	// by ensureJSONEOF's err != io.EOF, err != nil branch.
+	raw := validPolicyJSON() + "not-json"
+	_, err := ParsePolicy(raw)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid enclave policy JSON")
+}
+
+func TestParsePolicyRejectsMultipleJSONValues(t *testing.T) {
+	// Two back-to-back valid JSON values must be rejected by ensureJSONEOF's
+	// err == nil branch (exactly one JSON value required).
+	raw := validPolicyJSON() + `{}`
+	_, err := ParsePolicy(raw)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "exactly one JSON value")
+}
+
+func TestPolicyValidate_NilReceiver(t *testing.T) {
+	var p *Policy
+	err := p.Validate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "enclave policy is required")
+}
+
+func TestPolicyValidate_FieldErrors(t *testing.T) {
+	validRepositories := []RepositoryPolicy{{Repo: "github/gh-aw", Sensitivity: "confidential"}}
+	basePolicy := func() *Policy {
+		return &Policy{
+			Version:                 1,
+			Profile:                 ProfileIssuesReadV1,
+			Audience:                DefaultAudience,
+			WorkflowRunID:           "run-123",
+			Repositories:            append([]RepositoryPolicy(nil), validRepositories...),
+			PublicMinIntegrity:      "approved",
+			AllowedOperations:       []string{OperationIssuesGet},
+			MaxCapabilityTTLSeconds: 600,
+		}
+	}
+
+	tests := []struct {
+		name      string
+		mutate    func(*Policy)
+		errSubstr string
+	}{
+		{"wrong profile", func(p *Policy) { p.Profile = "other-profile" }, "unsupported enclave profile"},
+		{"wrong audience", func(p *Policy) { p.Audience = "other-audience" }, "unsupported enclave audience"},
+		{"no repositories", func(p *Policy) { p.Repositories = nil }, "repositories must contain at least one entry"},
+		{"duplicate repo", func(p *Policy) {
+			p.Repositories = []RepositoryPolicy{
+				{Repo: "github/gh-aw", Sensitivity: "confidential"},
+				{Repo: "github/gh-aw", Sensitivity: "public"},
+			}
+		}, "must not contain duplicate repo"},
+		{"invalid sensitivity", func(p *Policy) {
+			p.Repositories = []RepositoryPolicy{{Repo: "github/gh-aw", Sensitivity: "bogus"}}
+		}, "sensitivity is invalid"},
+		{"invalid public_min_integrity", func(p *Policy) { p.PublicMinIntegrity = "bogus" }, "public_min_integrity must be one of"},
+		{"no allowed operations", func(p *Policy) { p.AllowedOperations = nil }, "allowed_operations must contain at least one operation"},
+		{"duplicate operation", func(p *Policy) {
+			p.AllowedOperations = []string{OperationIssuesGet, OperationIssuesGet}
+		}, "must not contain duplicate operation"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			policy := basePolicy()
+			tt.mutate(policy)
+			err := policy.Validate()
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.errSubstr)
+		})
+	}
+}
+
 func TestPolicyRepositorySensitivity(t *testing.T) {
 	policy, err := ParsePolicy(validPolicyJSON())
 	require.NoError(t, err)
