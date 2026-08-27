@@ -132,6 +132,24 @@ func TestVerifier_VerifyAuthorization_PublicEntryPoint(t *testing.T) {
 	assert.Equal(t, claims.Invocation, got.Invocation)
 }
 
+func TestVerifier_VerifyAuthorization_TokenScheme(t *testing.T) {
+	// Stock gh sends configured tokens as "Authorization: token <value>".
+	policy := testPolicy(t)
+	v, err := NewVerifier(testRootKeyHex, policy)
+	require.NoError(t, err)
+
+	now := time.Now()
+	claims := validClaims(policy, now)
+	token := mintToken(t, v.key, claims)
+
+	got, err := v.verifyAuthorizationAt("token "+token, now)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Equal(t, claims.Invocation, got.Invocation)
+	assert.Equal(t, claims.Repo, got.Repo)
+	assert.Equal(t, claims.Operations, got.Operations)
+}
+
 func TestVerifier_VerifyAuthorization_HeaderFormat(t *testing.T) {
 	policy := testPolicy(t)
 	v, err := NewVerifier(testRootKeyHex, policy)
@@ -150,6 +168,12 @@ func TestVerifier_VerifyAuthorization_HeaderFormat(t *testing.T) {
 		{"bearer with tab", "Bearer " + token + "\t"},
 		{"bearer with newline", "Bearer " + token + "\n"},
 		{"wrong scheme", "Basic " + token},
+		{"token scheme with nothing after", "token "},
+		{"token scheme with wrong case", "Token " + token},
+		{"uppercase bearer scheme", "BEARER " + token},
+		{"token scheme with embedded space", "token " + strings.Replace(token, ".", " ", 1)},
+		{"token scheme with newline", "token " + token + "\n"},
+		{"duplicated schemes", "Bearer token " + token},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
