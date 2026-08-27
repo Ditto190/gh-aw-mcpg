@@ -1631,6 +1631,12 @@ pub(crate) fn max_integrity(
     )
 }
 
+/// Returns true if `raw`, after trimming, matches any value case-insensitively.
+fn matches_any_ci(raw: &str, values: &[&str]) -> bool {
+    let raw = raw.trim();
+    values.iter().any(|value| raw.eq_ignore_ascii_case(value))
+}
+
 /// Map a GitHub `author_association` value to initial integrity labels.
 ///
 /// Mapping (case-insensitive):
@@ -1668,16 +1674,9 @@ pub(crate) fn author_association_floor_from_str(
         return vec![];
     };
 
-    let raw = raw.trim();
-    if ["OWNER", "MEMBER", "COLLABORATOR"]
-        .iter()
-        .any(|value| raw.eq_ignore_ascii_case(value))
-    {
+    if matches_any_ci(raw, &["OWNER", "MEMBER", "COLLABORATOR"]) {
         writer_integrity(scope, ctx)
-    } else if ["CONTRIBUTOR", "FIRST_TIME_CONTRIBUTOR", "NONE"]
-        .iter()
-        .any(|value| raw.eq_ignore_ascii_case(value))
-    {
+    } else if matches_any_ci(raw, &["CONTRIBUTOR", "FIRST_TIME_CONTRIBUTOR", "NONE"]) {
         reader_integrity(scope, ctx)
     } else {
         vec![] // FIRST_TIMER or any unrecognised value
@@ -1700,9 +1699,12 @@ fn extract_author_login(item: &Value) -> &str {
 /// snake_case REST form (`author_association`) and the camelCase GraphQL form
 /// (`authorAssociation`). Returns `None` if neither is present or is not a string.
 pub(crate) fn get_author_association(item: &Value) -> Option<&str> {
-    item.get("author_association")
+    item.get(field_names::AUTHOR_ASSOCIATION)
         .and_then(|v| v.as_str())
-        .or_else(|| item.get("authorAssociation").and_then(|v| v.as_str()))
+        .or_else(|| {
+            item.get(field_names::AUTHOR_ASSOCIATION_CAMEL)
+                .and_then(|v| v.as_str())
+        })
 }
 
 /// Check whether an item contains an `author_association` (or `authorAssociation`) field.
@@ -1763,16 +1765,9 @@ pub(crate) fn collaborator_permission_floor(
         return vec![];
     };
 
-    let raw = raw.trim();
-    if ["admin", "maintain", "write"]
-        .iter()
-        .any(|value| raw.eq_ignore_ascii_case(value))
-    {
+    if matches_any_ci(raw, &["admin", "maintain", "write"]) {
         writer_integrity(scope, ctx)
-    } else if ["triage", "read"]
-        .iter()
-        .any(|value| raw.eq_ignore_ascii_case(value))
-    {
+    } else if matches_any_ci(raw, &["triage", "read"]) {
         reader_integrity(scope, ctx)
     } else {
         vec![] // "none" or any unrecognised value → no integrity
@@ -2431,6 +2426,35 @@ mod tests {
         });
 
         assert!(is_pr_merged(&item));
+    }
+
+    #[test]
+    fn test_get_author_association_supports_rest_and_graphql_fields() {
+        assert_eq!(
+            get_author_association(&serde_json::json!({
+                field_names::AUTHOR_ASSOCIATION: "CONTRIBUTOR"
+            })),
+            Some("CONTRIBUTOR")
+        );
+        assert_eq!(
+            get_author_association(&serde_json::json!({
+                field_names::AUTHOR_ASSOCIATION_CAMEL: "MEMBER"
+            })),
+            Some("MEMBER")
+        );
+        assert_eq!(
+            get_author_association(&serde_json::json!({
+                field_names::AUTHOR_ASSOCIATION: 42,
+                field_names::AUTHOR_ASSOCIATION_CAMEL: "OWNER"
+            })),
+            Some("OWNER")
+        );
+    }
+
+    #[test]
+    fn test_matches_any_ci_trims_and_matches_case_insensitively() {
+        assert!(matches_any_ci("  MEMBER ", &["owner", "member"]));
+        assert!(!matches_any_ci("contributor", &["owner", "member"]));
     }
 
     #[test]
