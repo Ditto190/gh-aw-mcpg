@@ -1668,20 +1668,19 @@ pub(crate) fn author_association_floor_from_str(
         return vec![];
     };
 
-    let raw = raw.trim();
-    if ["OWNER", "MEMBER", "COLLABORATOR"]
-        .iter()
-        .any(|value| raw.eq_ignore_ascii_case(value))
-    {
+    if matches_any_ci(raw, &["OWNER", "MEMBER", "COLLABORATOR"]) {
         writer_integrity(scope, ctx)
-    } else if ["CONTRIBUTOR", "FIRST_TIME_CONTRIBUTOR", "NONE"]
-        .iter()
-        .any(|value| raw.eq_ignore_ascii_case(value))
-    {
+    } else if matches_any_ci(raw, &["CONTRIBUTOR", "FIRST_TIME_CONTRIBUTOR", "NONE"]) {
         reader_integrity(scope, ctx)
     } else {
         vec![] // FIRST_TIMER or any unrecognised value
     }
+}
+
+/// Returns `true` if `raw` (case-insensitively, after trimming) matches any of `values`.
+fn matches_any_ci(raw: &str, values: &[&str]) -> bool {
+    let raw = raw.trim();
+    values.iter().any(|value| raw.eq_ignore_ascii_case(value))
 }
 
 /// Extract the author login from an item, checking common GitHub API fields.
@@ -1700,9 +1699,12 @@ fn extract_author_login(item: &Value) -> &str {
 /// snake_case REST form (`author_association`) and the camelCase GraphQL form
 /// (`authorAssociation`). Returns `None` if neither is present or is not a string.
 pub(crate) fn get_author_association(item: &Value) -> Option<&str> {
-    item.get("author_association")
+    item.get(field_names::AUTHOR_ASSOCIATION)
         .and_then(|v| v.as_str())
-        .or_else(|| item.get("authorAssociation").and_then(|v| v.as_str()))
+        .or_else(|| {
+            item.get(field_names::AUTHOR_ASSOCIATION_CAMEL)
+                .and_then(|v| v.as_str())
+        })
 }
 
 /// Check whether an item contains an `author_association` (or `authorAssociation`) field.
@@ -1763,16 +1765,9 @@ pub(crate) fn collaborator_permission_floor(
         return vec![];
     };
 
-    let raw = raw.trim();
-    if ["admin", "maintain", "write"]
-        .iter()
-        .any(|value| raw.eq_ignore_ascii_case(value))
-    {
+    if matches_any_ci(raw, &["admin", "maintain", "write"]) {
         writer_integrity(scope, ctx)
-    } else if ["triage", "read"]
-        .iter()
-        .any(|value| raw.eq_ignore_ascii_case(value))
-    {
+    } else if matches_any_ci(raw, &["triage", "read"]) {
         reader_integrity(scope, ctx)
     } else {
         vec![] // "none" or any unrecognised value → no integrity
