@@ -17,7 +17,7 @@ import (
 	"github.com/github/gh-aw-mcpg/internal/logger"
 )
 
-var logEnclave = logger.New("proxy:enclave")
+var logEnclave = logger.ForFile()
 
 const (
 	maxEnclaveVisibilityResponseBytes    = 1024 * 1024
