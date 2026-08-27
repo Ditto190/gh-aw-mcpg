@@ -103,6 +103,8 @@ pub mod field_names {
     pub const PRIVATE: &str = "private";
     pub const IS_PRIVATE: &str = "is_private";
     pub const IS_PRIVATE_CAMEL: &str = "isPrivate";
+    pub const AUTHOR_ASSOCIATION: &str = "author_association";
+    pub const AUTHOR_ASSOCIATION_CAMEL: &str = "authorAssociation";
     pub const LOGIN: &str = "login";
     pub const IS_ERROR: &str = "isError";
     pub const AUTHOR_ASSOCIATION: &str = "author_association";

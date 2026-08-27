@@ -1631,6 +1631,12 @@ pub(crate) fn max_integrity(
     )
 }
 
+/// Returns true if `raw`, after trimming, matches any value case-insensitively.
+fn matches_any_ci(raw: &str, values: &[&str]) -> bool {
+    let raw = raw.trim();
+    values.iter().any(|value| raw.eq_ignore_ascii_case(value))
+}
+
 /// Map a GitHub `author_association` value to initial integrity labels.
 ///
 /// Mapping (case-insensitive):
@@ -2426,6 +2432,35 @@ mod tests {
         });
 
         assert!(is_pr_merged(&item));
+    }
+
+    #[test]
+    fn test_get_author_association_supports_rest_and_graphql_fields() {
+        assert_eq!(
+            get_author_association(&serde_json::json!({
+                field_names::AUTHOR_ASSOCIATION: "CONTRIBUTOR"
+            })),
+            Some("CONTRIBUTOR")
+        );
+        assert_eq!(
+            get_author_association(&serde_json::json!({
+                field_names::AUTHOR_ASSOCIATION_CAMEL: "MEMBER"
+            })),
+            Some("MEMBER")
+        );
+        assert_eq!(
+            get_author_association(&serde_json::json!({
+                field_names::AUTHOR_ASSOCIATION: 42,
+                field_names::AUTHOR_ASSOCIATION_CAMEL: "OWNER"
+            })),
+            Some("OWNER")
+        );
+    }
+
+    #[test]
+    fn test_matches_any_ci_trims_and_matches_case_insensitively() {
+        assert!(matches_any_ci("  MEMBER ", &["owner", "member"]));
+        assert!(!matches_any_ci("contributor", &["owner", "member"]));
     }
 
     #[test]
