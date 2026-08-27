@@ -193,8 +193,10 @@ func TestSchemaURL_MatchesPinnedSemconvVersion(t *testing.T) {
 		ServiceName("mcp-gateway"),
 		ServiceVersion("1.0.0"),
 	)
-	_, err = resource.Merge(sdkResource, serviceResource)
+	mergedResource, err := resource.Merge(sdkResource, serviceResource)
 	require.NoError(t, err, "SDK and service resources must use the same schema URL")
+	assert.Equal(t, SchemaURL, mergedResource.SchemaURL(),
+		"merged resource must preserve the shared schema URL")
 }
 
 // customError is a local error type used to test ErrorType with a non-stdlib error.
