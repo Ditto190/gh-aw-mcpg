@@ -181,6 +181,8 @@ const expectedSchemaURL = "https://opentelemetry.io/schemas/1.43.0"
 // error. The SDK's own schema URL is read from a detected resource so that bumping only
 // otel/sdk (without updating semconv.go) fails here instead of at runtime.
 func TestSchemaURL_MatchesPinnedSemconvVersion(t *testing.T) {
+	const testServiceVersion = "test-version"
+
 	sdkResource, err := resource.New(context.Background(), resource.WithTelemetrySDK())
 	require.NoError(t, err)
 	assert.Equal(t, sdkResource.SchemaURL(), SchemaURL,
@@ -191,15 +193,13 @@ func TestSchemaURL_MatchesPinnedSemconvVersion(t *testing.T) {
 	serviceResource := resource.NewWithAttributes(
 		SchemaURL,
 		ServiceName("mcp-gateway"),
-		ServiceVersion(expectedServiceVersion),
+		ServiceVersion(testServiceVersion),
 	)
 	mergedResource, err := resource.Merge(sdkResource, serviceResource)
 	require.NoError(t, err, "SDK and service resources must use the same schema URL")
 	assert.Equal(t, SchemaURL, mergedResource.SchemaURL(),
 		"merged resource must preserve the shared schema URL")
 }
-
-const expectedServiceVersion = "test-version"
 
 // customError is a local error type used to test ErrorType with a non-stdlib error.
 type customError struct {
