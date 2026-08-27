@@ -199,7 +199,7 @@ func TestSchemaURL_MatchesPinnedSemconvVersion(t *testing.T) {
 		"merged resource must preserve the shared schema URL")
 }
 
-const expectedServiceVersion = "1.0.0"
+const expectedServiceVersion = "test-version"
 
 // customError is a local error type used to test ErrorType with a non-stdlib error.
 type customError struct {
