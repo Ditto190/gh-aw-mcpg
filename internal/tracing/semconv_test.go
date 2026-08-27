@@ -187,6 +187,14 @@ func TestSchemaURL_MatchesPinnedSemconvVersion(t *testing.T) {
 		"otel/sdk semconv version changed; update the semconv import in semconv.go to match")
 	assert.Equal(t, expectedSchemaURL, SchemaURL,
 		"semconv version changed; update semconv.go imports and expectedSchemaURL together")
+
+	serviceResource := resource.NewWithAttributes(
+		SchemaURL,
+		ServiceName("mcp-gateway"),
+		ServiceVersion("1.0.0"),
+	)
+	_, err = resource.Merge(sdkResource, serviceResource)
+	require.NoError(t, err, "SDK and service resources must use the same schema URL")
 }
 
 // customError is a local error type used to test ErrorType with a non-stdlib error.
