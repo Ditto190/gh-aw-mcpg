@@ -14,7 +14,10 @@ import (
 	"github.com/github/gh-aw-mcpg/internal/enclavegithub"
 	"github.com/github/gh-aw-mcpg/internal/githubhttp"
 	"github.com/github/gh-aw-mcpg/internal/httputil"
+	"github.com/github/gh-aw-mcpg/internal/logger"
 )
+
+var logEnclave = logger.ForFile()
 
 const (
 	maxEnclaveVisibilityResponseBytes    = 1024 * 1024
@@ -76,6 +79,7 @@ func (s *Server) enclaveRepositoryIsPublic(ctx context.Context, repo string) boo
 
 	resp, err := s.forwardEnclaveVisibilityLookup(ctx, repo)
 	if err != nil {
+		logEnclave.Printf("Enclave visibility lookup failed for repo=%s: %v", repo, err)
 		s.cacheEnclaveVisibilityDenial(repo)
 		return false
 	}
@@ -100,6 +104,7 @@ func (s *Server) enclaveRepositoryIsPublic(ctx context.Context, repo string) boo
 		return false
 	}
 
+	logEnclave.Printf("Enclave repository confirmed public: repo=%s", repo)
 	// Positive visibility is deliberately not cached because a repository can
 	// become private during a workflow run.
 	return true
@@ -193,12 +198,14 @@ func hasEnclaveGETBody(r *http.Request) bool {
 func (h *proxyHandler) handleEnclaveRequest(w http.ResponseWriter, r *http.Request) {
 	path, ok := enclavePath(r.URL.Path, r.URL.RawPath)
 	if !ok {
+		logEnclave.Printf("Enclave request denied: invalid path %q", r.URL.Path)
 		writeEnclaveDenied(w)
 		return
 	}
 
 	claims, err := h.server.enclave.verifier.VerifyAuthorization(r.Header.Get("Authorization"))
 	if err != nil {
+		logEnclave.Print("Enclave request denied: authorization verification failed")
 		writeEnclaveDenied(w)
 		return
 	}
@@ -214,6 +221,7 @@ func (h *proxyHandler) handleEnclaveRequest(w http.ResponseWriter, r *http.Reque
 	}
 	route, err := enclavegithub.MatchRoute(path, query)
 	if err != nil || !claims.AllowsOperation(route.Operation) {
+		logEnclave.Printf("Enclave request denied: agentID=%s, path=%q not permitted by route/operation policy", claims.AgentID(), path)
 		writeEnclaveDenied(w)
 		return
 	}
@@ -221,6 +229,7 @@ func (h *proxyHandler) handleEnclaveRequest(w http.ResponseWriter, r *http.Reque
 
 	targetRepo := route.FullRepo()
 	if targetRepo != claims.Repo && !h.server.enclaveRepositoryIsPublic(r.Context(), targetRepo) {
+		logEnclave.Printf("Enclave request denied: agentID=%s attempted cross-repo access to non-public repo=%s (assigned=%s)", claims.AgentID(), targetRepo, claims.Repo)
 		writeEnclaveDenied(w)
 		return
 	}
@@ -233,6 +242,7 @@ func (h *proxyHandler) handleEnclaveRequest(w http.ResponseWriter, r *http.Reque
 	if r.URL.RawQuery != "" {
 		fullPath += "?" + r.URL.RawQuery
 	}
+	logEnclave.Printf("Enclave request authorized: agentID=%s, tool=%s, repo=%s", claims.AgentID(), toolName, targetRepo)
 	ctx := withEnclaveAuthorization(r.Context(), claims.AgentID(), claims.Repo)
 	h.handleWithDIFC(w, r.WithContext(ctx), fullPath, toolName, args, nil)
 }
