@@ -77,10 +77,19 @@ func TestIsMalformedHeader(t *testing.T) {
 			header: "key\x00",
 			want:   true,
 		},
+		{
+			name:   "Unicode chars above 0x7F are valid",
+			header: "key-with-\u00e9-accent",
+			want:   false,
+		},
+		{
+			name:   "Control char 0x1F (unit separator) is malformed",
+			header: "key\x1fvalue",
+			want:   true,
+		},
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			got := IsMalformedHeader(tt.header)
@@ -145,7 +154,6 @@ func TestRedactSecret(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			got := sanitize.RedactSecret(tt.input)
@@ -258,7 +266,6 @@ func TestParseAuthHeader(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			gotAPIKey, gotAgentID, gotErr := ParseAuthHeader(tt.authHeader)
@@ -335,7 +342,6 @@ func TestValidateAgentID(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			got := ValidateAgentID(tt.provided, tt.expected)
@@ -382,10 +388,19 @@ func TestExtractAgentID(t *testing.T) {
 			authHeader: "key!@#$%^&*()",
 			want:       "key!@#$%^&*()",
 		},
+		{
+			name:       "Bearer format extracts token as agent ID",
+			authHeader: "Bearer bearer-token-value",
+			want:       "bearer-token-value",
+		},
+		{
+			name:       "whitespace only returns trimmed value as agent ID",
+			authHeader: "   ",
+			want:       "   ",
+		},
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			got := ExtractAgentID(tt.authHeader)
@@ -460,7 +475,6 @@ func TestExtractSessionID(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			got := ExtractSessionID(tt.authHeader)
@@ -584,7 +598,6 @@ func TestStripAuthScheme(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			scheme, value, matched := stripAuthScheme(tt.authHeader)
