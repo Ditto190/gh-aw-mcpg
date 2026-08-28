@@ -13,7 +13,11 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/github/gh-aw-mcpg/internal/logger"
 )
+
+var logCapability = logger.ForFile()
 
 const (
 	maxCapabilityTokenBytes = 16 * 1024
@@ -62,6 +66,7 @@ func NewVerifier(rootKeyHex string, policy *Policy) (*Verifier, error) {
 	if err := policy.Validate(); err != nil {
 		return nil, err
 	}
+	logCapability.Printf("Created enclave capability verifier: audience=%s, run=%s, profile=%s", policy.Audience, policy.WorkflowRunID, policy.Profile)
 	return &Verifier{key: key, policy: policy}, nil
 }
 
@@ -79,51 +84,62 @@ func (v *Verifier) verifyAuthorizationAt(header string, now time.Time) (*Claims,
 		}
 		token := header[len(prefix):]
 		if len(token) == 0 || strings.ContainsAny(token, " \t\r\n") {
+			logCapability.Print("Rejected enclave capability: malformed token after scheme prefix")
 			return nil, fmt.Errorf("invalid enclave capability")
 		}
 		return v.verifyTokenAt(token, now)
 	}
+	logCapability.Print("Rejected enclave capability: missing Bearer/token authorization scheme")
 	return nil, fmt.Errorf("invalid enclave capability")
 }
 
 func (v *Verifier) verifyTokenAt(token string, now time.Time) (*Claims, error) {
 	if len(token) == 0 || len(token) > maxCapabilityTokenBytes {
+		logCapability.Print("Rejected enclave capability: token size out of bounds")
 		return nil, fmt.Errorf("invalid enclave capability")
 	}
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 || parts[0] != CapabilityPrefix {
+		logCapability.Print("Rejected enclave capability: malformed token shape")
 		return nil, fmt.Errorf("invalid enclave capability")
 	}
 
 	signingInput := parts[0] + "." + parts[1]
 	providedSignature, err := base64.RawURLEncoding.DecodeString(parts[2])
 	if err != nil || len(providedSignature) != sha256.Size {
+		logCapability.Print("Rejected enclave capability: malformed signature encoding")
 		return nil, fmt.Errorf("invalid enclave capability")
 	}
 	mac := hmac.New(sha256.New, v.key)
 	_, _ = mac.Write([]byte(signingInput))
 	expectedSignature := mac.Sum(nil)
 	if subtle.ConstantTimeCompare(providedSignature, expectedSignature) != 1 {
+		logCapability.Print("Rejected enclave capability: HMAC signature mismatch")
 		return nil, fmt.Errorf("invalid enclave capability")
 	}
 
 	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
 	if err != nil {
+		logCapability.Print("Rejected enclave capability: malformed payload encoding")
 		return nil, fmt.Errorf("invalid enclave capability")
 	}
 	var claims Claims
 	decoder := json.NewDecoder(bytes.NewReader(payload))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&claims); err != nil {
+		logCapability.Print("Rejected enclave capability: malformed claims JSON")
 		return nil, fmt.Errorf("invalid enclave capability")
 	}
 	var extra interface{}
 	if err := decoder.Decode(&extra); err != io.EOF {
+		logCapability.Print("Rejected enclave capability: trailing data after claims JSON")
 		return nil, fmt.Errorf("invalid enclave capability")
 	}
 	if err := v.validateClaims(&claims, now); err != nil {
+		logCapability.Printf("Rejected enclave capability: claims validation failed: %v", err)
 		return nil, fmt.Errorf("invalid enclave capability")
 	}
+	logCapability.Printf("Verified enclave capability: agent=%s, invocation=%s, ops=%d", claims.AgentID(), claims.Invocation, len(claims.Operations))
 	return &claims, nil
 }
 
