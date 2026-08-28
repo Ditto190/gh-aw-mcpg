@@ -16,4 +16,5 @@ func TestSignAndVerify(t *testing.T) {
 	assert.False(t, Verify(key, message+" changed", signature))
 	assert.False(t, Verify([]byte("other-key"), message, signature))
 	assert.False(t, Verify(key, message, signature[:len(signature)-1]))
+	assert.False(t, Verify(key, message, nil))
 }
