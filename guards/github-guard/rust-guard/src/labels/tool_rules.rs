@@ -1836,6 +1836,7 @@ mod tests {
 
         for tool in &[
             "search_orgs",
+            "search_users",
             "list_global_security_advisories",
             "get_global_security_advisory",
             "github_support_docs_search",
