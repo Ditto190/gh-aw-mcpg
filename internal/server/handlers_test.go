@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -210,6 +211,94 @@ func TestHandleClose_InvokesExitFuncInProductionMode(t *testing.T) {
 	case <-exitCalled:
 	case <-time.After(2 * time.Second):
 		require.Fail("expected exit function to be called")
+	}
+}
+
+// TestHandleClose_ShutdownFnErrorIsLoggedNotFatal verifies that an error returned
+// by the configured HTTP shutdown function during /close is logged (via
+// logger.LogWarn) but does not prevent the exit function from still running.
+func TestHandleClose_ShutdownFnErrorIsLoggedNotFatal(t *testing.T) {
+	assert := assert.New(t)
+	require := require.New(t)
+
+	ctx := context.Background()
+	mockLauncher := launcher.New(ctx, &config.Config{})
+
+	unifiedServer := &UnifiedServer{
+		launcher:  mockLauncher,
+		sysServer: NewSysServer([]string{}),
+		ctx:       ctx,
+		testMode:  false, // Ensure ShouldExit() is true and goroutine path runs
+	}
+
+	exitCalled := make(chan struct{}, 1)
+	unifiedServer.SetHTTPShutdown(func(context.Context) error {
+		return errors.New("simulated shutdown failure")
+	})
+	unifiedServer.SetExitFunc(func() {
+		exitCalled <- struct{}{}
+	})
+
+	logOutput := captureServerLog(t, func() {
+		handler := handleClose(unifiedServer)
+
+		req := httptest.NewRequest(http.MethodPost, "/close", nil)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		assert.Equal(http.StatusOK, rec.Code)
+
+		// Despite the shutdown error, the exit function must still run afterward.
+		select {
+		case <-exitCalled:
+		case <-time.After(2 * time.Second):
+			require.Fail("expected exit function to be called even after shutdown error")
+		}
+	})
+
+	assert.Contains(logOutput, "WARN")
+	assert.Contains(logOutput, "HTTP server shutdown error during /close: simulated shutdown failure")
+}
+
+// TestHandleClose_NoHTTPShutdownFallsBackToSleep verifies that when no HTTP
+// shutdown function is configured, /close falls back to a brief sleep before
+// invoking the exit function (rather than skipping the drain step entirely).
+func TestHandleClose_NoHTTPShutdownFallsBackToSleep(t *testing.T) {
+	assert := assert.New(t)
+	require := require.New(t)
+
+	ctx := context.Background()
+	mockLauncher := launcher.New(ctx, &config.Config{})
+
+	unifiedServer := &UnifiedServer{
+		launcher:  mockLauncher,
+		sysServer: NewSysServer([]string{}),
+		ctx:       ctx,
+		testMode:  false,
+	}
+
+	exitCalled := make(chan struct{}, 1)
+	// Intentionally do not call SetHTTPShutdown, so GetHTTPShutdown() returns nil.
+	unifiedServer.SetExitFunc(func() {
+		exitCalled <- struct{}{}
+	})
+
+	handler := handleClose(unifiedServer)
+
+	req := httptest.NewRequest(http.MethodPost, "/close", nil)
+	rec := httptest.NewRecorder()
+
+	start := time.Now()
+	handler.ServeHTTP(rec, req)
+
+	assert.Equal(http.StatusOK, rec.Code)
+
+	select {
+	case <-exitCalled:
+		elapsed := time.Since(start)
+		assert.GreaterOrEqual(elapsed, 80*time.Millisecond, "expected exit function to be called after fallback sleep, took %v", elapsed)
+	case <-time.After(2 * time.Second):
+		require.Fail("expected exit function to be called via the sleep fallback path")
 	}
 }
 
