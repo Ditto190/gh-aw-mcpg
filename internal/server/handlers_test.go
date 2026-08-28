@@ -239,20 +239,25 @@ func TestHandleClose_ShutdownFnErrorIsLoggedNotFatal(t *testing.T) {
 		exitCalled <- struct{}{}
 	})
 
-	handler := handleClose(unifiedServer)
+	logOutput := captureServerLog(t, func() {
+		handler := handleClose(unifiedServer)
 
-	req := httptest.NewRequest(http.MethodPost, "/close", nil)
-	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
+		req := httptest.NewRequest(http.MethodPost, "/close", nil)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
 
-	assert.Equal(http.StatusOK, rec.Code)
+		assert.Equal(http.StatusOK, rec.Code)
 
-	// Despite the shutdown error, the exit function must still run afterward.
-	select {
-	case <-exitCalled:
-	case <-time.After(2 * time.Second):
-		require.Fail("expected exit function to be called even after shutdown error")
-	}
+		// Despite the shutdown error, the exit function must still run afterward.
+		select {
+		case <-exitCalled:
+		case <-time.After(2 * time.Second):
+			require.Fail("expected exit function to be called even after shutdown error")
+		}
+	})
+
+	assert.Contains(logOutput, "WARN")
+	assert.Contains(logOutput, "HTTP server shutdown error during /close: simulated shutdown failure")
 }
 
 // TestHandleClose_NoHTTPShutdownFallsBackToSleep verifies that when no HTTP
@@ -282,12 +287,16 @@ func TestHandleClose_NoHTTPShutdownFallsBackToSleep(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/close", nil)
 	rec := httptest.NewRecorder()
+
+	start := time.Now()
 	handler.ServeHTTP(rec, req)
 
 	assert.Equal(http.StatusOK, rec.Code)
 
 	select {
 	case <-exitCalled:
+		elapsed := time.Since(start)
+		assert.GreaterOrEqual(elapsed, 80*time.Millisecond, "expected exit function to be called after fallback sleep, took %v", elapsed)
 	case <-time.After(2 * time.Second):
 		require.Fail("expected exit function to be called via the sleep fallback path")
 	}
