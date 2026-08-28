@@ -95,16 +95,19 @@ func (v *Verifier) verifyAuthorizationAt(header string, now time.Time) (*Claims,
 
 func (v *Verifier) verifyTokenAt(token string, now time.Time) (*Claims, error) {
 	if len(token) == 0 || len(token) > maxCapabilityTokenBytes {
+		logCapability.Print("Rejected enclave capability: token size out of bounds")
 		return nil, fmt.Errorf("invalid enclave capability")
 	}
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 || parts[0] != CapabilityPrefix {
+		logCapability.Print("Rejected enclave capability: malformed token shape")
 		return nil, fmt.Errorf("invalid enclave capability")
 	}
 
 	signingInput := parts[0] + "." + parts[1]
 	providedSignature, err := base64.RawURLEncoding.DecodeString(parts[2])
 	if err != nil || len(providedSignature) != sha256.Size {
+		logCapability.Print("Rejected enclave capability: malformed signature encoding")
 		return nil, fmt.Errorf("invalid enclave capability")
 	}
 	mac := hmac.New(sha256.New, v.key)
@@ -117,16 +120,19 @@ func (v *Verifier) verifyTokenAt(token string, now time.Time) (*Claims, error) {
 
 	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
 	if err != nil {
+		logCapability.Print("Rejected enclave capability: malformed payload encoding")
 		return nil, fmt.Errorf("invalid enclave capability")
 	}
 	var claims Claims
 	decoder := json.NewDecoder(bytes.NewReader(payload))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&claims); err != nil {
+		logCapability.Print("Rejected enclave capability: malformed claims JSON")
 		return nil, fmt.Errorf("invalid enclave capability")
 	}
 	var extra interface{}
 	if err := decoder.Decode(&extra); err != io.EOF {
+		logCapability.Print("Rejected enclave capability: trailing data after claims JSON")
 		return nil, fmt.Errorf("invalid enclave capability")
 	}
 	if err := v.validateClaims(&claims, now); err != nil {
