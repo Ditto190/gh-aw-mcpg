@@ -1,7 +1,6 @@
 package server
 
 import (
-	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
 	"net/http"
@@ -9,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/github/gh-aw-mcpg/internal/hmacutil"
 	"github.com/github/gh-aw-mcpg/internal/logger"
 )
 
@@ -107,12 +107,12 @@ func (c *nonceCache) seenNonce(nonce string) bool {
 //
 // Signed payload: "<timestamp>\n<nonce>\n<path>\n<hex(sha256(body))>"
 func computeHMAC(secret, timestamp, nonce, path string, body []byte) string {
-	bodyHash := sha256.Sum256(body)
-	msg := timestamp + "\n" + nonce + "\n" + path + "\n" + hex.EncodeToString(bodyHash[:])
+	return hex.EncodeToString(hmacutil.Sign([]byte(secret), hmacMessage(timestamp, nonce, path, body)))
+}
 
-	mac := hmac.New(sha256.New, []byte(secret))
-	mac.Write([]byte(msg))
-	return hex.EncodeToString(mac.Sum(nil))
+func hmacMessage(timestamp, nonce, path string, body []byte) string {
+	bodyHash := sha256.Sum256(body)
+	return timestamp + "\n" + nonce + "\n" + path + "\n" + hex.EncodeToString(bodyHash[:])
 }
 
 // rejectHMAC rejects a request that fails HMAC validation, always using
@@ -179,8 +179,8 @@ func hmacMiddleware(secret string, next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		expected := computeHMAC(secret, timestamp, nonce, r.URL.Path, body)
-		if !hmac.Equal([]byte(sig), []byte(expected)) {
+		providedMAC, err := hex.DecodeString(sig)
+		if err != nil || !hmacutil.Verify([]byte(secret), hmacMessage(timestamp, nonce, r.URL.Path, body), providedMAC) {
 			logHMAC.Printf("HMAC rejected: signature mismatch, remote=%s path=%s", r.RemoteAddr, r.URL.Path)
 			rejectHMAC(w, r, "invalid HMAC signature", "signature_mismatch")
 			return

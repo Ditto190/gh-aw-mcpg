@@ -2,9 +2,7 @@ package enclavegithub
 
 import (
 	"bytes"
-	"crypto/hmac"
 	"crypto/sha256"
-	"crypto/subtle"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -14,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/github/gh-aw-mcpg/internal/hmacutil"
 	"github.com/github/gh-aw-mcpg/internal/logger"
 )
 
@@ -110,10 +109,7 @@ func (v *Verifier) verifyTokenAt(token string, now time.Time) (*Claims, error) {
 		logCapability.Print("Rejected enclave capability: malformed signature encoding")
 		return nil, fmt.Errorf("invalid enclave capability")
 	}
-	mac := hmac.New(sha256.New, v.key)
-	_, _ = mac.Write([]byte(signingInput))
-	expectedSignature := mac.Sum(nil)
-	if subtle.ConstantTimeCompare(providedSignature, expectedSignature) != 1 {
+	if !hmacutil.Verify(v.key, signingInput, providedSignature) {
 		logCapability.Print("Rejected enclave capability: HMAC signature mismatch")
 		return nil, fmt.Errorf("invalid enclave capability")
 	}
