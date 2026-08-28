@@ -13,7 +13,11 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/github/gh-aw-mcpg/internal/logger"
 )
+
+var logCapability = logger.ForFile()
 
 const (
 	maxCapabilityTokenBytes = 16 * 1024
@@ -62,6 +66,7 @@ func NewVerifier(rootKeyHex string, policy *Policy) (*Verifier, error) {
 	if err := policy.Validate(); err != nil {
 		return nil, err
 	}
+	logCapability.Printf("Created enclave capability verifier: audience=%s, run=%s, profile=%s", policy.Audience, policy.WorkflowRunID, policy.Profile)
 	return &Verifier{key: key, policy: policy}, nil
 }
 
@@ -79,10 +84,12 @@ func (v *Verifier) verifyAuthorizationAt(header string, now time.Time) (*Claims,
 		}
 		token := header[len(prefix):]
 		if len(token) == 0 || strings.ContainsAny(token, " \t\r\n") {
+			logCapability.Print("Rejected enclave capability: malformed token after scheme prefix")
 			return nil, fmt.Errorf("invalid enclave capability")
 		}
 		return v.verifyTokenAt(token, now)
 	}
+	logCapability.Print("Rejected enclave capability: missing Bearer/token authorization scheme")
 	return nil, fmt.Errorf("invalid enclave capability")
 }
 
@@ -104,6 +111,7 @@ func (v *Verifier) verifyTokenAt(token string, now time.Time) (*Claims, error) {
 	_, _ = mac.Write([]byte(signingInput))
 	expectedSignature := mac.Sum(nil)
 	if subtle.ConstantTimeCompare(providedSignature, expectedSignature) != 1 {
+		logCapability.Print("Rejected enclave capability: HMAC signature mismatch")
 		return nil, fmt.Errorf("invalid enclave capability")
 	}
 
@@ -122,8 +130,10 @@ func (v *Verifier) verifyTokenAt(token string, now time.Time) (*Claims, error) {
 		return nil, fmt.Errorf("invalid enclave capability")
 	}
 	if err := v.validateClaims(&claims, now); err != nil {
+		logCapability.Printf("Rejected enclave capability: claims validation failed: %v", err)
 		return nil, fmt.Errorf("invalid enclave capability")
 	}
+	logCapability.Printf("Verified enclave capability: agent=%s, invocation=%s, ops=%d", claims.AgentID(), claims.Invocation, len(claims.Operations))
 	return &claims, nil
 }
 
