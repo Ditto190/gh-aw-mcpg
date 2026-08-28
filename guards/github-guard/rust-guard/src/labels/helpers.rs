@@ -2328,7 +2328,7 @@ mod tests {
     }
 
     #[test]
-    fn test_gist_secrecy_for_item_defaults_missing_public_to_empty_secrecy() {
+    fn test_gist_secrecy_for_item_public_private_and_missing() {
         assert!(gist_secrecy_for_item(&serde_json::json!({
             "id": "public-gist",
             "public": true
