@@ -166,3 +166,103 @@ func TestApplyTracingFlags_ServiceNameDefaultDoesNotOverrideConfig(t *testing.T)
 	assert.Equal(t, "toml-service", cfg.Gateway.Tracing.ServiceName,
 		"TOML config service name should not be overwritten when env var is unset and flag is unchanged")
 }
+
+// resetTracingFlagVars resets the package-level tracing flag variables to their
+// zero values so each subtest of TestApplyTracingOverrides starts from a clean
+// state, since these are shared package-level vars set by registerTracingFlags.
+func resetTracingFlagVars(t *testing.T) {
+	t.Helper()
+	originalEndpoint := otlpEndpoint
+	originalService := otlpServiceName
+	originalSampleRate := otlpSampleRate
+	t.Cleanup(func() {
+		otlpEndpoint = originalEndpoint
+		otlpServiceName = originalService
+		otlpSampleRate = originalSampleRate
+	})
+	otlpEndpoint = ""
+	otlpServiceName = config.DefaultTracingServiceName
+	otlpSampleRate = config.DefaultTracingSampleRate
+}
+
+// newTracingTestCmd builds a cobra.Command with the tracing flags registered,
+// mirroring how the real root/proxy commands wire them up via registerTracingFlags.
+func newTracingTestCmd(t *testing.T) *cobra.Command {
+	t.Helper()
+	cmd := &cobra.Command{Use: "test"}
+	registerTracingFlags(cmd, &otlpEndpoint, &otlpServiceName, &otlpSampleRate,
+		"endpoint help", "service help", "sample help")
+	return cmd
+}
+
+func TestApplyTracingOverrides(t *testing.T) {
+	t.Run("no flags changed and no existing config leaves Tracing nil", func(t *testing.T) {
+		resetTracingFlagVars(t)
+		cmd := newTracingTestCmd(t)
+		require.NoError(t, cmd.ParseFlags([]string{}))
+
+		cfg := &config.Config{Gateway: &config.GatewayConfig{}}
+		applyTracingOverrides(cmd, cfg)
+
+		assert.Nil(t, cfg.Gateway.Tracing,
+			"Tracing config should remain nil when no flags/env overrides are present")
+	})
+
+	t.Run("explicit otlp-endpoint flag initializes and sets tracing config", func(t *testing.T) {
+		resetTracingFlagVars(t)
+		cmd := newTracingTestCmd(t)
+		require.NoError(t, cmd.ParseFlags([]string{"--otlp-endpoint=http://collector:4318"}))
+
+		cfg := &config.Config{Gateway: &config.GatewayConfig{}}
+		applyTracingOverrides(cmd, cfg)
+
+		require.NotNil(t, cfg.Gateway.Tracing, "Tracing config should be initialized when endpoint flag is set")
+		assert.Equal(t, "http://collector:4318", cfg.Gateway.Tracing.Endpoint)
+	})
+
+	t.Run("explicit otlp-sample-rate flag sets SampleRate pointer", func(t *testing.T) {
+		resetTracingFlagVars(t)
+		cmd := newTracingTestCmd(t)
+		require.NoError(t, cmd.ParseFlags([]string{"--otlp-sample-rate=0.5"}))
+
+		cfg := &config.Config{Gateway: &config.GatewayConfig{}}
+		applyTracingOverrides(cmd, cfg)
+
+		require.NotNil(t, cfg.Gateway.Tracing, "Tracing config should be initialized when sample-rate flag is set")
+		require.NotNil(t, cfg.Gateway.Tracing.SampleRate)
+		assert.InDelta(t, 0.5, *cfg.Gateway.Tracing.SampleRate, 0.0001)
+	})
+
+	t.Run("existing Tracing config triggers override even without flags", func(t *testing.T) {
+		resetTracingFlagVars(t)
+		cmd := newTracingTestCmd(t)
+		require.NoError(t, cmd.ParseFlags([]string{}))
+
+		cfg := &config.Config{
+			Gateway: &config.GatewayConfig{
+				Tracing: &config.TracingConfig{ServiceName: "toml-service"},
+			},
+		}
+		applyTracingOverrides(cmd, cfg)
+
+		require.NotNil(t, cfg.Gateway.Tracing)
+		assert.Equal(t, "toml-service", cfg.Gateway.Tracing.ServiceName,
+			"Existing TOML service name should be preserved when no flag/env overrides it")
+	})
+
+	t.Run("non-default otlpServiceName variable (env override) triggers init", func(t *testing.T) {
+		resetTracingFlagVars(t)
+		cmd := newTracingTestCmd(t)
+		require.NoError(t, cmd.ParseFlags([]string{}))
+		// Simulate an env-var-derived default that differs from the built-in default,
+		// without the flag having been explicitly "Changed" via CLI parsing.
+		otlpServiceName = "env-derived-service"
+
+		cfg := &config.Config{Gateway: &config.GatewayConfig{}}
+		applyTracingOverrides(cmd, cfg)
+
+		require.NotNil(t, cfg.Gateway.Tracing,
+			"Tracing config should be initialized when otlpServiceName differs from the built-in default")
+		assert.Equal(t, "env-derived-service", cfg.Gateway.Tracing.ServiceName)
+	})
+}
