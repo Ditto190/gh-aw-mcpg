@@ -687,7 +687,7 @@ func TestSeedEnclaveAssignedRepositorySecrecy_AccumulatesAcrossCalls(t *testing.
 	labels, ok := server.AgentRegistry.Get("agent-multi")
 	require.True(t, ok)
 	tags := labels.GetSecrecyTags()
-assert.ElementsMatch(t, []difc.Tag{
+	assert.ElementsMatch(t, []difc.Tag{
 		difc.Tag("private:org/repo-a"),
 		difc.Tag("private:org/repo-b"),
 	}, tags)
