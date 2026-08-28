@@ -564,3 +564,131 @@ func TestEnclaveToolAndArgs(t *testing.T) {
 		})
 	}
 }
+
+func TestSeedEnclaveAssignedRepositorySecrecy(t *testing.T) {
+	tests := []struct {
+		name           string
+		policyJSON     string
+		agentID        string
+		repo           string
+		wantSecrecyTag *difc.Tag
+	}{
+		{
+			name: "confidential repo adds private secrecy tag",
+			policyJSON: `{
+				"version": 1,
+				"profile": "issues-read-v1",
+				"audience": "gh-aw-enclave-github",
+				"workflow_run_id": "run-123",
+				"repositories": [{"repo": "assigned/private", "sensitivity": "confidential"}],
+				"public_min_integrity": "approved",
+				"allowed_operations": ["issues.get"],
+				"max_capability_ttl_seconds": 600
+			}`,
+			agentID: "agent-confidential",
+			repo:    "assigned/private",
+			wantSecrecyTag: func() *difc.Tag {
+				tag := difc.Tag("private:assigned/private")
+				return &tag
+			}(),
+		},
+		{
+			name: "public repo does not add a secrecy tag",
+			policyJSON: `{
+				"version": 1,
+				"profile": "issues-read-v1",
+				"audience": "gh-aw-enclave-github",
+				"workflow_run_id": "run-123",
+				"repositories": [{"repo": "assigned/public", "sensitivity": "public"}],
+				"public_min_integrity": "approved",
+				"allowed_operations": ["issues.get"],
+				"max_capability_ttl_seconds": 600
+			}`,
+			agentID:        "agent-public",
+			repo:           "assigned/public",
+			wantSecrecyTag: nil,
+		},
+		{
+			name: "repo not present in policy does not add a secrecy tag",
+			policyJSON: `{
+				"version": 1,
+				"profile": "issues-read-v1",
+				"audience": "gh-aw-enclave-github",
+				"workflow_run_id": "run-123",
+				"repositories": [{"repo": "assigned/private", "sensitivity": "confidential"}],
+				"public_min_integrity": "approved",
+				"allowed_operations": ["issues.get"],
+				"max_capability_ttl_seconds": 600
+			}`,
+			agentID:        "agent-unknown-repo",
+			repo:           "other/repo",
+			wantSecrecyTag: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			policy, err := enclavegithub.ParsePolicy(tt.policyJSON)
+			require.NoError(t, err)
+
+			server := &Server{
+				DIFCComponents: difc.DIFCComponents{
+					AgentRegistry: difc.NewAgentRegistry(),
+				},
+				enclave: newEnclaveState(policy, nil),
+			}
+
+			server.seedEnclaveAssignedRepositorySecrecy(tt.agentID, tt.repo)
+
+			labels, ok := server.AgentRegistry.Get(tt.agentID)
+			if tt.wantSecrecyTag == nil {
+				// The function returns early (no sensitivity entry, or public
+				// sensitivity) without ever calling GetOrCreate, so no agent
+				// labels should have been created.
+				assert.False(t, ok, "agent labels should not be created when no secrecy tag is added")
+				return
+			}
+
+			require.True(t, ok, "agent labels should be created by GetOrCreate")
+			tags := labels.GetSecrecyTags()
+			assert.Contains(t, tags, *tt.wantSecrecyTag)
+		})
+	}
+}
+
+func TestSeedEnclaveAssignedRepositorySecrecy_AccumulatesAcrossCalls(t *testing.T) {
+	policy, err := enclavegithub.ParsePolicy(`{
+		"version": 1,
+		"profile": "issues-read-v1",
+		"audience": "gh-aw-enclave-github",
+		"workflow_run_id": "run-123",
+		"repositories": [
+			{"repo": "org/repo-a", "sensitivity": "confidential"},
+			{"repo": "org/repo-b", "sensitivity": "confidential"}
+		],
+		"public_min_integrity": "approved",
+		"allowed_operations": ["issues.get"],
+		"max_capability_ttl_seconds": 600
+	}`)
+	require.NoError(t, err)
+
+	server := &Server{
+		DIFCComponents: difc.DIFCComponents{
+			AgentRegistry: difc.NewAgentRegistry(),
+		},
+		enclave: newEnclaveState(policy, nil),
+	}
+
+	server.seedEnclaveAssignedRepositorySecrecy("agent-multi", "org/repo-a")
+	server.seedEnclaveAssignedRepositorySecrecy("agent-multi", "org/repo-b")
+	// Calling again with the same repo should not error or duplicate incorrectly.
+	server.seedEnclaveAssignedRepositorySecrecy("agent-multi", "org/repo-a")
+
+	labels, ok := server.AgentRegistry.Get("agent-multi")
+	require.True(t, ok)
+	tags := labels.GetSecrecyTags()
+	assert.ElementsMatch(t, []difc.Tag{
+		difc.Tag("private:org/repo-a"),
+		difc.Tag("private:org/repo-b"),
+	}, tags)
+}
