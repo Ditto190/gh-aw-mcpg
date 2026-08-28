@@ -220,6 +220,56 @@ func TestRegisterFlagCompletions(t *testing.T) {
 	})
 }
 
+// TestRegisterFlagCompletions_MissingFlags verifies that registerFlagCompletions
+// logs (rather than panics on) each error branch when the target flag has not
+// been registered on the command. cobra's MarkFlagFilename, MarkFlagDirname, and
+// RegisterFlagCompletionFunc all return an error for unknown flag names, and the
+// function is expected to swallow those errors via debugLog rather than failing.
+func TestRegisterFlagCompletions_MissingFlags(t *testing.T) {
+	t.Run("does not panic when config, log-dir/payload-dir/wasm-cache-dir, env, and allowonly-min-integrity flags are all missing", func(t *testing.T) {
+		cmd := newTestCmd()
+		// Deliberately skip registerAllFlags so every flag lookup inside
+		// registerFlagCompletions fails and each error branch executes.
+		assert.NotPanics(t, func() {
+			registerFlagCompletions(cmd)
+		})
+
+		// None of the target flags exist, so no annotations/completions should
+		// have been attached to the (non-existent) flags.
+		assert.Nil(t, cmd.Flags().Lookup("config"))
+		assert.Nil(t, cmd.Flags().Lookup("log-dir"))
+		assert.Nil(t, cmd.Flags().Lookup("allowonly-min-integrity"))
+	})
+
+	t.Run("ValidArgsFunction is still set even when all flag registrations fail", func(t *testing.T) {
+		cmd := newTestCmd()
+		registerFlagCompletions(cmd)
+
+		require.NotNil(t, cmd.ValidArgsFunction,
+			"ValidArgsFunction should be set unconditionally regardless of earlier flag-lookup failures")
+		completions, directive := cmd.ValidArgsFunction(cmd, nil, "")
+		assert.Equal(t, cobra.ShellCompDirectiveNoFileComp, directive)
+		assert.NotEmpty(t, completions)
+	})
+
+	t.Run("partial registration: only config flag exists, dir/env/enum completions fail", func(t *testing.T) {
+		cmd := newTestCmd()
+		cmd.Flags().String("config", "", "config file")
+
+		assert.NotPanics(t, func() {
+			registerFlagCompletions(cmd)
+		})
+
+		flag := cmd.Flags().Lookup("config")
+		require.NotNil(t, flag)
+		require.NotNil(t, flag.Annotations, "config flag should still get its filename annotation")
+		assert.Equal(t, []string{"toml"}, flag.Annotations[cobra.BashCompFilenameExt])
+
+		// log-dir was never registered, so no dirname completion should exist for it
+		assert.Nil(t, cmd.Flags().Lookup("log-dir"))
+	})
+}
+
 func TestRegisterFlag(t *testing.T) {
 	t.Run("appended registrar is called during registerAllFlags", func(t *testing.T) {
 		cmd := newTestCmd()
