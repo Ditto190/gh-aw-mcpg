@@ -392,14 +392,8 @@ pub fn label_response_items(
             let gist_integrity = reader_integrity(scope_names::USER, ctx);
             let gist_integrity_shared: SharedLabels = gist_integrity.into();
             for item in items_limited.iter().copied() {
-                let is_public = get_bool_or(item, "public", true);
+                let secrecy = gist_secrecy_for_item(item);
                 let id = get_str_or(item, "id", "unknown");
-
-                let secrecy = if is_public {
-                    vec![]
-                } else {
-                    private_user_label()
-                };
 
                 // Gists have contributor-level integrity (user content)
                 labeled_items.push(LabeledItem {

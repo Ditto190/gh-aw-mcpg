@@ -66,6 +66,7 @@ mod tests {
         assert_eq!(desc_prefix::NOTIFICATION, "notification:");
         assert_eq!(field_names::METHOD, "method");
         assert_eq!(field_names::IS_ERROR, "isError");
+        assert_eq!(field_names::PUBLIC, "public");
     }
 }
 
@@ -100,6 +101,7 @@ pub mod field_names {
     pub const FULL_NAME: &str = "full_name";
     pub const FULL_NAME_CAMEL: &str = "fullName";
     pub const NUMBER: &str = "number";
+    pub const PUBLIC: &str = "public";
     pub const PRIVATE: &str = "private";
     pub const IS_PRIVATE: &str = "is_private";
     pub const IS_PRIVATE_CAMEL: &str = "isPrivate";
