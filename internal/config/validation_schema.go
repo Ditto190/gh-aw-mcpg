@@ -70,6 +70,8 @@ var schemaFetchRetryDelay = time.Second
 var schemaHTTPClientTimeout = 10 * time.Second
 
 // schemaErrPrinter is used to format localized error messages from ValidationError kinds.
+// language.English is required to construct the printer; without a registered catalog,
+// it does not enable translations.
 var schemaErrPrinter = message.NewPrinter(language.English)
 
 var (
