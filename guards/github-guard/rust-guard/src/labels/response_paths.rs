@@ -556,21 +556,16 @@ pub fn label_response_paths(
                 let gist_integrity: crate::SharedLabels =
                     reader_integrity(scope_names::USER, ctx).into();
                 let public_gist_secrecy: crate::SharedLabels = vec![].into();
-                let private_gist_secrecy: crate::SharedLabels = private_user_label().into();
 
                 for (i, item) in limited_items.iter().enumerate() {
-                    let is_public = get_bool_or(item, "public", true);
+                    let secrecy: crate::SharedLabels = gist_secrecy_for_item(item).into();
                     let id = get_str_or(item, "id", "unknown");
 
                     labeled_paths.push(crate::PathLabel {
                         path: format!("/{}", i),
                         labels: crate::ResourceLabels {
                             description: format!("{}{}", desc_prefix::GIST, id),
-                            secrecy: if is_public {
-                                public_gist_secrecy.clone()
-                            } else {
-                                private_gist_secrecy.clone()
-                            },
+                            secrecy,
                             integrity: gist_integrity.clone(),
                         },
                     });

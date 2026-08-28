@@ -961,6 +961,20 @@ pub(crate) fn private_user_label() -> Vec<String> {
     vec![label_constants::PRIVATE_USER.to_string()]
 }
 
+/// Returns the secrecy labels for a gist item.
+///
+/// Public gists have empty secrecy. Private gists carry `private:user` secrecy.
+/// Missing or non-boolean `public` fields default to public, matching the
+/// existing fail-open handling for GitHub gist API responses.
+#[inline]
+pub(crate) fn gist_secrecy_for_item(item: &Value) -> Vec<String> {
+    if get_bool_or(item, field_names::PUBLIC, true) {
+        vec![]
+    } else {
+        private_user_label()
+    }
+}
+
 /// Returns a vec with the "approved:github" label
 #[inline]
 pub fn project_github_label(ctx: &PolicyContext) -> Vec<String> {
@@ -2311,6 +2325,26 @@ mod tests {
         let token = policy_scope_token(&scopes);
         assert_eq!(token, "octocat | octocat/hello*");
         assert!(matches!(token, Cow::Owned(_)));
+    }
+
+    #[test]
+    fn test_gist_secrecy_for_item_public_private_and_missing() {
+        assert!(gist_secrecy_for_item(&serde_json::json!({
+            "id": "public-gist",
+            "public": true
+        }))
+        .is_empty());
+        assert_eq!(
+            gist_secrecy_for_item(&serde_json::json!({
+                "id": "private-gist",
+                "public": false
+            })),
+            private_user_label()
+        );
+        assert!(gist_secrecy_for_item(&serde_json::json!({
+            "id": "missing-public-gist"
+        }))
+        .is_empty());
     }
 
     #[test]
