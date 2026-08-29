@@ -59,7 +59,7 @@ func TestBuildMCPHTTPServer_ReturnsServerWithCorrectAddr(t *testing.T) {
 	t.Cleanup(func() { us.Close() })
 
 	const addr = "127.0.0.1:0"
-	server := buildMCPHTTPServer(addr, us, "", "", func(_ *http.ServeMux, _ time.Duration) {})
+	server := buildMCPHTTPServer(addr, us, nil, "", func(_ *http.ServeMux, _ time.Duration) {})
 
 	require.NotNil(t, server)
 	assert.Equal(t, addr, server.Addr)
@@ -73,7 +73,7 @@ func TestBuildMCPHTTPServer_RouteBuilderIsCalled(t *testing.T) {
 	t.Cleanup(func() { us.Close() })
 
 	called := false
-	buildMCPHTTPServer("127.0.0.1:0", us, "", "", func(_ *http.ServeMux, _ time.Duration) {
+	buildMCPHTTPServer("127.0.0.1:0", us, nil, "", func(_ *http.ServeMux, _ time.Duration) {
 		called = true
 	})
 
@@ -90,7 +90,7 @@ func TestBuildMCPHTTPServer_RouteBuilderReceivesSessionTimeout(t *testing.T) {
 	t.Setenv("MCP_GATEWAY_SESSION_TIMEOUT", "15m")
 
 	var capturedTimeout time.Duration
-	buildMCPHTTPServer("127.0.0.1:0", us, "", "", func(_ *http.ServeMux, sessionTimeout time.Duration) {
+	buildMCPHTTPServer("127.0.0.1:0", us, nil, "", func(_ *http.ServeMux, sessionTimeout time.Duration) {
 		capturedTimeout = sessionTimeout
 	})
 
@@ -104,7 +104,7 @@ func TestBuildMCPHTTPServer_CustomRouteFromBuilder(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { us.Close() })
 
-	server := buildMCPHTTPServer("127.0.0.1:0", us, "", "", func(mux *http.ServeMux, _ time.Duration) {
+	server := buildMCPHTTPServer("127.0.0.1:0", us, nil, "", func(mux *http.ServeMux, _ time.Duration) {
 		mux.HandleFunc("/custom-test-route", func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusTeapot)
 		})

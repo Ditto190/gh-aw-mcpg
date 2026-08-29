@@ -11,7 +11,9 @@ import (
 var logAuth = logger.New("server:auth")
 
 // applyIfConfigured wraps handler with middleware(key, handler) when key is non-empty.
-// If key is empty the handler is returned unchanged.
+// If key is empty the handler is returned unchanged. Used by single-value-keyed
+// middleware (e.g. HMAC) that is unrelated to the multi-key API key auth handled
+// by applyAuthIfConfigured below.
 func applyIfConfigured(key string, handler http.HandlerFunc, middleware func(string, http.HandlerFunc) http.HandlerFunc) http.HandlerFunc {
 	return applyIfConfiguredWithLog(
 		key,
@@ -24,6 +26,8 @@ func applyIfConfigured(key string, handler http.HandlerFunc, middleware func(str
 }
 
 // applyIfConfiguredWithLog logs whether a middleware is active before applying it.
+// Used by single-value-keyed middleware (e.g. HMAC) that is unrelated to the
+// multi-key API key auth handled by applyAuthIfConfigured below.
 func applyIfConfiguredWithLog(key string, handler http.HandlerFunc, middleware func(string, http.HandlerFunc) http.HandlerFunc, logFn func(...any), enabledMsg, disabledMsg string) http.HandlerFunc {
 	if key != "" {
 		logFn(enabledMsg)
@@ -33,6 +37,17 @@ func applyIfConfiguredWithLog(key string, handler http.HandlerFunc, middleware f
 	return handler
 }
 
+// matchesAnyKey reports whether authHeader constant-time-equals any of the
+// configured keys. Every candidate is compared (no early return) so the
+// check's timing does not leak which key, if any, matched.
+func matchesAnyKey(authHeader string, keys []string) bool {
+	matched := 0
+	for _, key := range keys {
+		matched |= subtle.ConstantTimeCompare([]byte(authHeader), []byte(key))
+	}
+	return matched == 1
+}
+
 // authMiddleware implements API key authentication per spec section 7.1
 // Per spec: Authorization header MUST contain the API key directly.
 //
@@ -40,9 +55,11 @@ func applyIfConfiguredWithLog(key string, handler http.HandlerFunc, middleware f
 //   - ParseAuthHeader() for extracting API keys and agent IDs
 //   - IsMalformedHeader() for malformed header detection
 //
-// This middleware validates credentials by directly comparing parsed API key
-// values to the configured key.
-func authMiddleware(apiKey string, next http.HandlerFunc) http.HandlerFunc {
+// This middleware validates credentials by directly comparing the parsed
+// Authorization header value against each configured key (gateway.agentIds
+// allows multiple concurrent identities, e.g. primary/enclave, to each
+// authenticate with their own identifier).
+func authMiddleware(apiKeys []string, next http.HandlerFunc) http.HandlerFunc {
 	logAuth.Printf("Initialized auth middleware")
 	return func(w http.ResponseWriter, r *http.Request) {
 		logAuth.Printf("Authenticating request: method=%s, path=%s, remote=%s", r.Method, r.URL.Path, r.RemoteAddr)
@@ -65,8 +82,8 @@ func authMiddleware(apiKey string, next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		// Spec 7.1: Authorization header must contain API key directly.
-		if subtle.ConstantTimeCompare([]byte(authHeader), []byte(apiKey)) != 1 {
+		// Spec 7.1: Authorization header must contain one of the configured API keys directly.
+		if !matchesAnyKey(authHeader, apiKeys) {
 			logAuth.Printf("Rejecting auth request: status=%d, code=%s, detail=%s, path=%s, remote=%s", http.StatusUnauthorized, "unauthorized", "invalid_api_key", r.URL.Path, r.RemoteAddr)
 			rejectRequest(w, r, http.StatusUnauthorized, "unauthorized", "invalid API key", "auth", "authentication_failed", "invalid_api_key")
 			return
@@ -78,15 +95,13 @@ func authMiddleware(apiKey string, next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// applyAuthIfConfigured applies authentication middleware if an API key is provided
-// Returns the handler unchanged if apiKey is empty
-func applyAuthIfConfigured(apiKey string, handler http.HandlerFunc) http.HandlerFunc {
-	return applyIfConfiguredWithLog(
-		apiKey,
-		handler,
-		authMiddleware,
-		logAuth.Print,
-		"Auth key configured, applying middleware",
-		"No auth key configured, skipping middleware",
-	)
+// applyAuthIfConfigured applies authentication middleware if at least one API key is provided.
+// Returns the handler unchanged if apiKeys is empty.
+func applyAuthIfConfigured(apiKeys []string, handler http.HandlerFunc) http.HandlerFunc {
+	if len(apiKeys) > 0 {
+		logAuth.Print("Auth key configured, applying middleware")
+		return authMiddleware(apiKeys, handler)
+	}
+	logAuth.Print("No auth key configured, skipping middleware")
+	return handler
 }

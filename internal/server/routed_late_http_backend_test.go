@@ -49,7 +49,7 @@ func TestRoutedHTTPBackendRecoversAfterLateStartup(t *testing.T) {
 	defer us.Close()
 	assert.Empty(us.GetToolsForBackend("awf-enclave"))
 
-	gateway := CreateHTTPServerForRoutedMode("127.0.0.1:0", us, "", "")
+	gateway := CreateHTTPServerForRoutedMode("127.0.0.1:0", us, nil, "")
 	gatewayServer := httptest.NewServer(gateway.Handler)
 	defer gatewayServer.Close()
 	route := gatewayServer.URL + "/mcp/awf-enclave"

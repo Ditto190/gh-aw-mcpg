@@ -222,6 +222,24 @@ func (c *Config) GetAgentID() string {
 	return c.Gateway.effectiveAgentID()
 }
 
+// GetAgentIDs returns every configured gateway identity that should authenticate
+// successfully. When gateway.agentIds (plural) is configured, each entry is a
+// valid credential, enabling concurrent primary/enclave sessions that each
+// authenticate with their own identifier. Otherwise, it falls back to the
+// singular effective agent ID (which may be empty when none is configured).
+func (c *Config) GetAgentIDs() []string {
+	if c.Gateway == nil {
+		return nil
+	}
+	if len(c.Gateway.AgentIDs) > 0 {
+		return append([]string{}, c.Gateway.AgentIDs...)
+	}
+	if id := c.Gateway.effectiveAgentID(); id != "" {
+		return []string{id}
+	}
+	return nil
+}
+
 func (g *GatewayConfig) effectiveAgentID() string {
 	if g == nil {
 		return ""

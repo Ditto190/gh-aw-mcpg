@@ -17,7 +17,7 @@ import (
 func TestReflectEndpoint_BothModes_NoAuthRequired(t *testing.T) {
 	tests := []struct {
 		name         string
-		createServer func(addr string, us *UnifiedServer, apiKey, hmacSecret string) *http.Server
+		createServer func(addr string, us *UnifiedServer, apiKeys []string, hmacSecret string) *http.Server
 	}{
 		{name: "routed mode", createServer: CreateHTTPServerForRoutedMode},
 		{name: "gateway mode", createServer: CreateHTTPServerForMCP},
@@ -32,7 +32,7 @@ func TestReflectEndpoint_BothModes_NoAuthRequired(t *testing.T) {
 			us.AgentRegistry.Register("proxy", []difc.Tag{"repo:github/private-repo"}, []difc.Tag{"approved"})
 			us.AgentRegistry.Register("abc123def456", nil, []difc.Tag{"unapproved"})
 
-			httpServer := tt.createServer(":0", us, "test-api-key", "")
+			httpServer := tt.createServer(":0", us, []string{"test-api-key"}, "")
 			req := httptest.NewRequest(http.MethodGet, "/reflect", nil)
 			w := httptest.NewRecorder()
 
@@ -59,7 +59,7 @@ func TestReflectEndpoint_EmptyRegistry(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { us.Close() })
 
-	httpServer := CreateHTTPServerForMCP(":0", us, "", "")
+	httpServer := CreateHTTPServerForMCP(":0", us, nil, "")
 	req := httptest.NewRequest(http.MethodGet, "/reflect", nil)
 	w := httptest.NewRecorder()
 	httpServer.Handler.ServeHTTP(w, req)

@@ -216,12 +216,12 @@ func TestRun_InvalidGuardsMode(t *testing.T) {
 	assert.Contains(t, err.Error(), "invalid --guards-mode flag")
 }
 
-// TestRun_PluralAgentIDsFailsClosed verifies that run() refuses to start when
-// only gateway.agentIds (plural) is configured. Multi-identity authentication
-// is not yet implemented, so run() must fail closed instead of silently
-// ignoring the configured identities and falling back to a random singular
-// agent ID that would leave the configured agents unauthenticated.
-func TestRun_PluralAgentIDsFailsClosed(t *testing.T) {
+// TestRun_PluralAgentIDsStartsSuccessfully verifies that run() starts normally
+// when only gateway.agentIds (plural) is configured: every configured
+// identifier is accepted as a valid Authorization credential (see
+// config.Config.GetAgentIDs and authMiddleware's matchesAnyKey), enabling
+// concurrent primary/enclave sessions that each authenticate independently.
+func TestRun_PluralAgentIDsStartsSuccessfully(t *testing.T) {
 	resetRunFlagsForTest(t)
 
 	dir := t.TempDir()
@@ -247,10 +247,22 @@ url = "http://127.0.0.1:1"
 	shutdownTimeout = 2 * time.Second
 	difcMode = "strict"
 
-	rootCmd.SetContext(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
+	rootCmd.SetContext(ctx)
 	t.Cleanup(func() { rootCmd.SetContext(context.Background()) })
 
-	err := run(rootCmd, nil)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "gateway.agentIds is configured but multi-identity authentication is not yet supported")
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- run(rootCmd, nil)
+	}()
+
+	time.Sleep(200 * time.Millisecond)
+	cancel()
+
+	select {
+	case err := <-errCh:
+		assert.NoError(t, err, "run() should start successfully with only gateway.agentIds configured")
+	case <-time.After(5 * time.Second):
+		t.Fatal("run() did not return within the expected shutdown window")
+	}
 }

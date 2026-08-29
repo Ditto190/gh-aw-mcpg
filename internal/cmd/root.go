@@ -285,18 +285,12 @@ func run(cmd *cobra.Command, args []string) error {
 
 	debugLog.Printf("Server mode: %s, guards mode: %s", mode, cfg.DIFCMode)
 
-	// gateway.agentIds (plural) is validated during config parsing but multi-identity
-	// authentication/routing is not implemented yet. Fail closed here instead of
-	// silently ignoring the configured identities and falling back to a random
-	// singular agent ID, which would leave the configured agents unauthenticated.
-	if len(cfg.Gateway.AgentIDs) > 0 {
-		return fmt.Errorf("gateway.agentIds is configured but multi-identity authentication is not yet supported; configure a single gateway.agentId instead")
-	}
-
 	// Per spec §7.3: generate a random agent identifier on startup if none is configured.
 	// The generated value is set in the config so it propagates to both the HTTP
 	// server authentication and the stdout configuration output (spec §5.4).
-	if cfg.GetAgentID() == "" {
+	// gateway.agentIds (plural) counts as configured here, so a random ID is only
+	// generated when neither the singular nor plural form is set.
+	if len(cfg.GetAgentIDs()) == 0 {
 		randomKey, err := auth.GenerateRandomAgentID()
 		if err != nil {
 			return fmt.Errorf("failed to generate random agent ID: %w", err)
@@ -371,7 +365,7 @@ func run(cmd *cobra.Command, args []string) error {
 	}()
 
 	// Create HTTP server based on mode, wire BaseContext and shutdown hooks.
-	httpServer := buildHTTPServer(ctx, mode, listenAddr, unifiedServer, cfg.GetAgentID(), hmacSecret, cancel)
+	httpServer := buildHTTPServer(ctx, mode, listenAddr, unifiedServer, cfg.GetAgentIDs(), hmacSecret, cancel)
 
 	// Build net.Listener — optionally wrapping with TLS (ASI-07 Phase 1).
 	// Plain HTTP is still used when no TLS certificate is configured (backward compatible).

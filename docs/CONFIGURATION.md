@@ -609,7 +609,7 @@ The `customSchemas` top-level field allows you to define custom server types bey
 |-------|-------------|---------|
 | `port` | Validated and stored for metadata purposes only. The actual listen address is always set by the `--listen` CLI flag (default `127.0.0.1:3000`). **Note:** When using JSON stdin format, `gateway.port` is required by schema validation even though TOML configs have an internal default of `3000`. | `3000` (informational only; required in JSON stdin) |
 | `agentId` | Agent/session identifier used for routing and optional auth matching | (disabled) |
-| `agentIds` (JSON stdin) / `agent_ids` (TOML) | Agent/session identifiers for concurrent session isolation. Configure exactly one of this field or `agentId` / `agent_id`; it must contain at least one non-blank string. **Not yet functional:** multi-identity authentication/routing is not implemented, so the gateway currently fails to start (fails closed) rather than silently falling back to a single random agent ID when only this field is set. | (disabled) |
+| `agentIds` (JSON stdin) / `agent_ids` (TOML) | Agent/session identifiers for concurrent session isolation. Configure exactly one of this field or `agentId` / `agent_id`; it must contain at least one non-blank string. Each configured identifier authenticates independently against the gateway (e.g. primary/enclave), enabling concurrent sessions that don't share a single credential. | (disabled) |
 | `domain` | Gateway domain (`"localhost"`, `"host.docker.internal"`, or `"${VAR}"`) | (unset) |
 | `startupTimeout` | Seconds to wait for backend startup | `30` |
 | `toolTimeout` | Maximum seconds for a single tool call, enforced as a context deadline on all backend requests (stdio and HTTP) | `60` |

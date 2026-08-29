@@ -604,7 +604,7 @@ func TestWrapWithMiddleware(t *testing.T) {
 			})
 
 			// Wrap with middleware
-			finalHandler := wrapWithMiddleware(mockHandler, "test", us, tt.apiKey, "")
+			finalHandler := wrapWithMiddleware(mockHandler, "test", us, keysOrNil(tt.apiKey), "")
 
 			// Create test request
 			req := httptest.NewRequest("GET", "/test", nil)
@@ -654,7 +654,7 @@ func TestWrapWithMiddleware_MiddlewareOrder(t *testing.T) {
 	})
 
 	// Wrap with middleware that requires auth
-	finalHandler := wrapWithMiddleware(mockHandler, "test", us, "test-key", "")
+	finalHandler := wrapWithMiddleware(mockHandler, "test", us, []string{"test-key"}, "")
 
 	// Create request with valid auth
 	req := httptest.NewRequest("GET", "/test", nil)
@@ -708,7 +708,7 @@ func TestWrapWithMiddleware_LogTagVariations(t *testing.T) {
 
 			// Should not panic with any log tag
 			assert.NotPanics(t, func() {
-				finalHandler := wrapWithMiddleware(mockHandler, tt.logTag, us, "", "")
+				finalHandler := wrapWithMiddleware(mockHandler, tt.logTag, us, nil, "")
 				req := httptest.NewRequest("GET", "/test", nil)
 				w := httptest.NewRecorder()
 				finalHandler(w, req)
@@ -907,4 +907,14 @@ func TestRejectRequest(t *testing.T) {
 			assert.Equal(t, tt.msg, body["message"], "response body 'message' field should match msg")
 		})
 	}
+}
+
+// keysOrNil adapts a single test-configured API key string to the []string
+// form expected by CreateHTTPServerForMCP/CreateHTTPServerForRoutedMode,
+// returning nil (auth disabled) for an empty key.
+func keysOrNil(key string) []string {
+	if key == "" {
+		return nil
+	}
+	return []string{key}
 }

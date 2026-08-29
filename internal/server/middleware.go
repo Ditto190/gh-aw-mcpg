@@ -21,7 +21,7 @@ type mcpHandlerConfig struct {
 	sessionTimeout time.Duration
 	logTag         string
 	unifiedServer  *UnifiedServer
-	apiKey         string
+	apiKeys        []string
 	hmacSecret     string
 	backendID      string
 }
@@ -29,7 +29,7 @@ type mcpHandlerConfig struct {
 type defaultHandlerConfigOptions struct {
 	handlerLog *logger.Logger
 	logTag     string
-	apiKey     string
+	apiKeys    []string
 	hmacSecret string
 }
 
@@ -39,7 +39,7 @@ func buildDefaultHandlerConfig(unifiedServer *UnifiedServer, sessionTimeout time
 		sessionTimeout: sessionTimeout,
 		logTag:         opts.logTag,
 		unifiedServer:  unifiedServer,
-		apiKey:         opts.apiKey,
+		apiKeys:        opts.apiKeys,
 		hmacSecret:     opts.hmacSecret,
 	}
 }
@@ -79,8 +79,8 @@ func WithOTELTracing(next http.Handler, tag string) http.Handler {
 // without paying the body-read cost of HMAC validation.
 //
 // This ensures consistent middleware ordering across both routed and unified server modes.
-func wrapWithMiddleware(handler http.Handler, logTag string, unifiedServer *UnifiedServer, apiKey, hmacSecret string) http.HandlerFunc {
-	logServerHelpers.Printf("Wrapping handler with middleware: logTag=%s, authEnabled=%v, hmacEnabled=%v", logTag, apiKey != "", hmacSecret != "")
+func wrapWithMiddleware(handler http.Handler, logTag string, unifiedServer *UnifiedServer, apiKeys []string, hmacSecret string) http.HandlerFunc {
+	logServerHelpers.Printf("Wrapping handler with middleware: logTag=%s, authEnabled=%v, hmacEnabled=%v", logTag, len(apiKeys) > 0, hmacSecret != "")
 
 	// Wrap SDK handler with detailed logging for JSON-RPC translation debugging
 	loggedHandler := WithSDKLogging(handler, logTag)
@@ -96,7 +96,7 @@ func wrapWithMiddleware(handler http.Handler, logTag string, unifiedServer *Unif
 	// Apply auth middleware if API key is configured (spec 7.1).
 	// Auth is the outermost application-level check so unauthenticated requests are
 	// rejected before HMAC validation (and its body-read overhead) runs.
-	authedHandler := applyAuthIfConfigured(apiKey, hmacHandler)
+	authedHandler := applyAuthIfConfigured(apiKeys, hmacHandler)
 
 	// Wrap with OTEL tracing span (outermost, so it covers auth + HMAC + shutdown + logging)
 	tracingHandler := WithOTELTracing(authedHandler, logTag)
@@ -126,5 +126,5 @@ func buildMCPHandler(serverFactory func(*http.Request) *sdk.Server, cfg mcpHandl
 		logServerHelpers.Printf("buildMCPHandler: requiring backend registration for backendID=%s", cfg.backendID)
 		handler = requireBackendRegistration(cfg.unifiedServer, cfg.backendID, handler)
 	}
-	return wrapWithMiddleware(handler, cfg.logTag, cfg.unifiedServer, cfg.apiKey, cfg.hmacSecret)
+	return wrapWithMiddleware(handler, cfg.logTag, cfg.unifiedServer, cfg.apiKeys, cfg.hmacSecret)
 }

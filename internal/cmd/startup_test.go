@@ -141,7 +141,7 @@ func TestBuildHTTPServer_RoutedMode(t *testing.T) {
 	ctx := context.Background()
 	listenAddr := availableLoopbackAddr(t)
 
-	httpServer := buildHTTPServer(ctx, "routed", listenAddr, us, "test-agent-id", "", func() {})
+	httpServer := buildHTTPServer(ctx, "routed", listenAddr, us, []string{"test-agent-id"}, "", func() {})
 
 	require.NotNil(t, httpServer)
 	assert.Equal(t, listenAddr, httpServer.Addr)
@@ -159,7 +159,7 @@ func TestBuildHTTPServer_UnifiedMode(t *testing.T) {
 	cancelCalled := false
 	cancel := func() { cancelCalled = true }
 
-	httpServer := buildHTTPServer(ctx, "unified", listenAddr, us, "", "", cancel)
+	httpServer := buildHTTPServer(ctx, "unified", listenAddr, us, nil, "", cancel)
 
 	require.NotNil(t, httpServer)
 	assert.Equal(t, listenAddr, httpServer.Addr)
@@ -183,7 +183,7 @@ func TestBuildHTTPServer_BaseContextPropagatesAcrossRequests(t *testing.T) {
 	ctx := context.WithValue(context.Background(), key, "test-value")
 	listenAddr := availableLoopbackAddr(t)
 
-	httpServer := buildHTTPServer(ctx, "unified", listenAddr, us, "", "", func() {})
+	httpServer := buildHTTPServer(ctx, "unified", listenAddr, us, nil, "", func() {})
 	require.NotNil(t, httpServer.BaseContext)
 
 	gotCtx := httpServer.BaseContext(nil)
@@ -197,7 +197,7 @@ func TestBuildHTTPServer_WithHMACSecret(t *testing.T) {
 	ctx := context.Background()
 	listenAddr := availableLoopbackAddr(t)
 
-	httpServer := buildHTTPServer(ctx, "routed", listenAddr, us, "agent-id", "hmac-secret", func() {})
+	httpServer := buildHTTPServer(ctx, "routed", listenAddr, us, []string{"agent-id"}, "hmac-secret", func() {})
 	require.NotNil(t, httpServer)
 	assert.Equal(t, listenAddr, httpServer.Addr)
 }
@@ -212,7 +212,7 @@ func TestBuildHTTPServer_ServesRequests(t *testing.T) {
 	ctx := context.Background()
 	listenAddr := availableLoopbackAddr(t)
 
-	httpServer := buildHTTPServer(ctx, "unified", listenAddr, us, "", "", func() {})
+	httpServer := buildHTTPServer(ctx, "unified", listenAddr, us, nil, "", func() {})
 	require.NotNil(t, httpServer)
 
 	ln, err := net.Listen("tcp", listenAddr)
