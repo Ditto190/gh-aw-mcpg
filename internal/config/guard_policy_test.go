@@ -510,6 +510,14 @@ func TestIsValidRepoScope(t *testing.T) {
 		{"wildcard in middle", "owner/re*po", false},
 		{"wildcard at start of repo", "owner/*prefix", false},
 		{"double wildcard count", "owner/a*b*", false},
+
+		// Trailing-dot-before-wildcard edge case (covers the isPrefixWildcard &&
+		// strings.HasSuffix(repoName, ".") branch): a prefix ending in "." right
+		// before the "*" is rejected even though the trimmed repo name itself is
+		// otherwise a valid repo name.
+		{"prefix wildcard with trailing dot before star", "owner/repo.*", false},
+		{"prefix wildcard with trailing dots before star", "owner/repo..*", false},
+		{"prefix wildcard without trailing dot is valid", "owner/repo-*", true},
 	}
 
 	for _, tt := range tests {
@@ -518,6 +526,17 @@ func TestIsValidRepoScope(t *testing.T) {
 			assert.Equal(t, tt.want, got, "isValidRepoScope(%q)", tt.scope)
 		})
 	}
+}
+
+// TestIsValidRepoScope_EmptyRepoNameAfterWildcardTrim covers the defensive
+// isPrefixWildcard branch in isValidRepoScope where trimming the trailing "*"
+// yields an empty repo name. In practice this is only reachable when repoPart
+// is exactly "*" (e.g. "owner/*"), which is intercepted by the earlier
+// `repoPart == "*"` short-circuit and always returns true before reaching this
+// check — this test documents that guarantee and pins the behavior so a
+// future refactor cannot silently make "owner/*" invalid.
+func TestIsValidRepoScope_EmptyRepoNameAfterWildcardTrim(t *testing.T) {
+	assert.True(t, isValidRepoScope("owner/*"), "owner/* should remain valid via the repoPart==\"*\" short-circuit")
 }
 
 // TestIsValidRepoOwner tests boundary conditions.
