@@ -215,3 +215,42 @@ func TestRun_InvalidGuardsMode(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid --guards-mode flag")
 }
+
+// TestRun_PluralAgentIDsFailsClosed verifies that run() refuses to start when
+// only gateway.agentIds (plural) is configured. Multi-identity authentication
+// is not yet implemented, so run() must fail closed instead of silently
+// ignoring the configured identities and falling back to a random singular
+// agent ID that would leave the configured agents unauthenticated.
+func TestRun_PluralAgentIDsFailsClosed(t *testing.T) {
+	resetRunFlagsForTest(t)
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	content := `[gateway]
+port = 3000
+agent_ids = ["primary-agent", "enclave-agent"]
+
+[servers.testserver]
+type = "http"
+url = "http://127.0.0.1:1"
+`
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
+
+	configFile = path
+	configStdin = false
+	envFile = ""
+	listenAddr = "127.0.0.1:0"
+	routedMode = true
+	unifiedMode = false
+	logDir = t.TempDir()
+	wasmCacheDir = t.TempDir()
+	shutdownTimeout = 2 * time.Second
+	difcMode = "strict"
+
+	rootCmd.SetContext(context.Background())
+	t.Cleanup(func() { rootCmd.SetContext(context.Background()) })
+
+	err := run(rootCmd, nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "gateway.agentIds is configured but multi-identity authentication is not yet supported")
+}

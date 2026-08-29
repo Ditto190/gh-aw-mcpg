@@ -285,6 +285,14 @@ func run(cmd *cobra.Command, args []string) error {
 
 	debugLog.Printf("Server mode: %s, guards mode: %s", mode, cfg.DIFCMode)
 
+	// gateway.agentIds (plural) is validated during config parsing but multi-identity
+	// authentication/routing is not implemented yet. Fail closed here instead of
+	// silently ignoring the configured identities and falling back to a random
+	// singular agent ID, which would leave the configured agents unauthenticated.
+	if len(cfg.Gateway.AgentIDs) > 0 {
+		return fmt.Errorf("gateway.agentIds is configured but multi-identity authentication is not yet supported; configure a single gateway.agentId instead")
+	}
+
 	// Per spec §7.3: generate a random agent identifier on startup if none is configured.
 	// The generated value is set in the config so it propagates to both the HTTP
 	// server authentication and the stdout configuration output (spec §5.4).
