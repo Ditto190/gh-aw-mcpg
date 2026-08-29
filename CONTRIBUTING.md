@@ -152,7 +152,7 @@ The MCP Gateway is a concurrent server; use this to validate thread safety when 
 
 ### Linting
 
-Run all linters (go vet, gofmt check, and golangci-lint if installed; v2.12.2 is the recommended version):
+Run all linters (go vet, gofmt check, and golangci-lint if installed; v2.13.2 is the recommended version):
 ```bash
 make lint
 ```
@@ -162,7 +162,7 @@ This runs:
 - `gofmt` check for code formatting
 - `golangci-lint` for additional static analysis (misspell, unconvert)
 
-**Note**: `make install` ensures `golangci-lint` v2.12.2 is available. If another version is already found on your PATH/GOPATH, it is upgraded to v2.12.2.
+**Note**: `make install` ensures `golangci-lint` v2.13.2 is available. If another version is already found on your PATH/GOPATH, it is upgraded to v2.13.2.
 
 To run golangci-lint directly with all configured linters:
 ```bash
