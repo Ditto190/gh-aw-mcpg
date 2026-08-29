@@ -213,7 +213,7 @@ assert.JSONEq(t, expectedJSON, actualJSON)
 - Configuration: `.golangci.yml` (version 2 format)
 - Enabled linters: `misspell`, `unconvert`
 - Disabled linters: `gosec`, `testifylint`, `errcheck`, `gocritic`, `revive`
-- Install: `make install` (installs golangci-lint v2.12.2)
+- Install: `make install` (installs golangci-lint v2.13.2)
 - Run manually: `golangci-lint run --timeout=5m`
 
 **testifylint**: Available but disabled due to requiring extensive test refactoring across the codebase.
