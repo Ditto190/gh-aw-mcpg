@@ -444,10 +444,10 @@ fn infer_scope_for_baseline<'a>(
         | "star_repository"
         | "unstar_repository" => Cow::Borrowed(scope_names::USER),
         "create_repository" | "fork_repository" => Cow::Borrowed(scope_names::GITHUB),
-        _ if !repo_id.is_empty() => Cow::Borrowed(repo_id),
         "create_codespace" | "update_codespace" | "delete_codespace" | "stop_codespace" => {
             Cow::Borrowed(scope_names::USER)
         }
+        _ if !repo_id.is_empty() => Cow::Borrowed(repo_id),
         "set_secret" | "delete_secret" | "set_variable" | "delete_variable" => {
             let org = tool_args
                 .get("org")
@@ -1363,6 +1363,12 @@ mod tests {
                 inferred,
                 scope_names::USER,
                 "{} should infer user baseline scope",
+                tool
+            );
+            assert_eq!(
+                infer_scope_for_baseline(tool, &tool_args, "github/gh-aw-mcpg"),
+                scope_names::USER,
+                "{} should keep user baseline scope even with repo context",
                 tool
             );
         }
