@@ -50,11 +50,9 @@ func writeGatewayConfig(cfg *config.Config, listenAddr, mode string, tlsEnabled 
 	// identities are configured via gateway.agentIds, the first is used for this
 	// downstream-facing config; every configured identity is independently valid
 	// for authenticating directly against the gateway.
-	agentID := cfg.GetAgentID()
-	if agentID == "" {
-		if ids := cfg.GetAgentIDs(); len(ids) > 0 {
-			agentID = ids[0]
-		}
+	var agentID string
+	if ids := cfg.GetAgentIDs(); len(ids) > 0 {
+		agentID = ids[0]
 	}
 	debugLog.Printf("Gateway config: auth_enabled=%v", agentID != "")
 
