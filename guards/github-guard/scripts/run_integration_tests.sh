@@ -201,7 +201,7 @@ echo ""
   "gateway": {
     "port": $GATEWAY_PORT,
     "domain": "localhost",
-    "apiKey": "$GATEWAY_API_KEY"
+    "agentId": "$GATEWAY_API_KEY"
   }
 }
 EOF

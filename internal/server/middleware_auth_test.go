@@ -20,7 +20,7 @@ func TestAuthMiddleware_ValidAPIKey(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	handler := authMiddleware(apiKey, next)
+	handler := authMiddleware([]string{apiKey}, next)
 
 	req := httptest.NewRequest(http.MethodGet, "/mcp", nil)
 	req.Header.Set("Authorization", apiKey)
@@ -41,7 +41,7 @@ func TestAuthMiddleware_MissingAuthorizationHeader(t *testing.T) {
 		called = true
 	})
 
-	handler := authMiddleware(apiKey, next)
+	handler := authMiddleware([]string{apiKey}, next)
 
 	req := httptest.NewRequest(http.MethodGet, "/mcp", nil)
 	rr := httptest.NewRecorder()
@@ -61,7 +61,7 @@ func TestAuthMiddleware_WrongAPIKey(t *testing.T) {
 		called = true
 	})
 
-	handler := authMiddleware(apiKey, next)
+	handler := authMiddleware([]string{apiKey}, next)
 
 	req := httptest.NewRequest(http.MethodGet, "/mcp", nil)
 	req.Header.Set("Authorization", "wrong-key")
@@ -82,7 +82,7 @@ func TestAuthMiddleware_MalformedAuthorizationHeader(t *testing.T) {
 		called = true
 	})
 
-	handler := authMiddleware(apiKey, next)
+	handler := authMiddleware([]string{apiKey}, next)
 
 	req := httptest.NewRequest(http.MethodGet, "/mcp", nil)
 	// Null byte makes the header malformed
@@ -107,7 +107,7 @@ func TestAuthMiddleware_EmptyAPIKeyRejectsRequest(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	handler := authMiddleware(apiKey, next)
+	handler := authMiddleware([]string{apiKey}, next)
 
 	req := httptest.NewRequest(http.MethodGet, "/mcp", nil)
 	req.Header.Set("Authorization", "")
@@ -246,7 +246,7 @@ func TestApplyAuthIfConfigured_WithKey(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	handler := applyAuthIfConfigured(apiKey, next)
+	handler := applyAuthIfConfigured([]string{apiKey}, next)
 
 	// Valid request
 	req := httptest.NewRequest(http.MethodGet, "/mcp", nil)
@@ -277,7 +277,7 @@ func TestApplyAuthIfConfigured_WithoutKey(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	handler := applyAuthIfConfigured("", next)
+	handler := applyAuthIfConfigured(nil, next)
 
 	// With no API key configured, handler should be passed through unchanged
 	req := httptest.NewRequest(http.MethodGet, "/mcp", nil)

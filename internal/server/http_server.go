@@ -43,12 +43,12 @@ func newHTTPServer(addr string, handler http.Handler) *http.Server {
 func buildMCPHTTPServer(
 	addr string,
 	unifiedServer *UnifiedServer,
-	apiKey, hmacSecret string,
+	apiKeys []string, hmacSecret string,
 	routeBuilder func(mux *http.ServeMux, sessionTimeout time.Duration),
 ) *http.Server {
-	logHTTPServer.Printf("Building MCP HTTP server: addr=%s, auth_enabled=%v, hmac_enabled=%v", addr, apiKey != "", hmacSecret != "")
+	logHTTPServer.Printf("Building MCP HTTP server: addr=%s, auth_enabled=%v, hmac_enabled=%v", addr, len(apiKeys) > 0, hmacSecret != "")
 	mux := http.NewServeMux()
-	registerCommonEndpoints(mux, unifiedServer, apiKey)
+	registerCommonEndpoints(mux, unifiedServer, apiKeys)
 	sessionTimeout := config.GetGatewaySessionTimeoutFromEnv()
 	logHTTPServer.Printf("Session timeout configured: %s", sessionTimeout)
 	routeBuilder(mux, sessionTimeout)
@@ -57,12 +57,13 @@ func buildMCPHTTPServer(
 }
 
 // CreateHTTPServerForMCP creates an HTTP server that handles MCP over streamable HTTP transport
-// If apiKey is provided, all requests except /health require authentication (spec 7.1)
+// If apiKeys is non-empty, all requests except /health require authentication (spec 7.1);
+// any of the configured identifiers is accepted, enabling concurrent primary/enclave sessions.
 // If hmacSecret is provided, each MCP request (/mcp, /mcp/) must carry a valid HMAC-SHA256
 // signature (ASI-07); common endpoints (e.g. /health, /close) are not HMAC-protected.
-func CreateHTTPServerForMCP(addr string, unifiedServer *UnifiedServer, apiKey, hmacSecret string) *http.Server {
-	logTransport.Printf("Creating HTTP server for MCP: addr=%s, auth_enabled=%v, hmac_enabled=%v", addr, apiKey != "", hmacSecret != "")
-	return buildMCPHTTPServer(addr, unifiedServer, apiKey, hmacSecret, func(mux *http.ServeMux, sessionTimeout time.Duration) {
+func CreateHTTPServerForMCP(addr string, unifiedServer *UnifiedServer, apiKeys []string, hmacSecret string) *http.Server {
+	logTransport.Printf("Creating HTTP server for MCP: addr=%s, auth_enabled=%v, hmac_enabled=%v", addr, len(apiKeys) > 0, hmacSecret != "")
+	return buildMCPHTTPServer(addr, unifiedServer, apiKeys, hmacSecret, func(mux *http.ServeMux, sessionTimeout time.Duration) {
 		logTransport.Print("Registering streamable HTTP handler for MCP protocol")
 		// Create the standard MCP handler stack (StreamableHTTP + session auto-init + middleware).
 		// This is what Codex uses with transport = "streamablehttp"
@@ -81,7 +82,7 @@ func CreateHTTPServerForMCP(addr string, unifiedServer *UnifiedServer, apiKey, h
 		}, buildDefaultHandlerConfig(unifiedServer, sessionTimeout, defaultHandlerConfigOptions{
 			handlerLog: logTransport,
 			logTag:     "unified",
-			apiKey:     apiKey,
+			apiKeys:    apiKeys,
 			hmacSecret: hmacSecret,
 		}))
 
@@ -94,16 +95,17 @@ func CreateHTTPServerForMCP(addr string, unifiedServer *UnifiedServer, apiKey, h
 // CreateHTTPServerForRoutedMode creates an HTTP server for routed mode.
 // In routed mode, each backend is accessible at /mcp/<server>.
 // Multiple routes from the same Authorization header share a session.
-// If apiKey is provided, all requests except /health require authentication (spec 7.1).
+// If apiKeys is non-empty, all requests except /health require authentication (spec 7.1);
+// any of the configured identifiers is accepted, enabling concurrent primary/enclave sessions.
 // If hmacSecret is provided, routed /mcp/<server> requests must carry a valid
 // HMAC-SHA256 signature (ASI-07); common endpoints (e.g. /health, /close) are not HMAC-protected.
-func CreateHTTPServerForRoutedMode(addr string, unifiedServer *UnifiedServer, apiKey, hmacSecret string) *http.Server {
+func CreateHTTPServerForRoutedMode(addr string, unifiedServer *UnifiedServer, apiKeys []string, hmacSecret string) *http.Server {
 	logRouted.Printf("Creating HTTP server for routed mode: addr=%s", addr)
 
 	allBackends := unifiedServer.GetServerIDs()
 	logRouted.Printf("Registering routes for %d backends: %v", len(allBackends), allBackends)
 
-	return buildMCPHTTPServer(addr, unifiedServer, apiKey, hmacSecret, func(mux *http.ServeMux, sessionTimeout time.Duration) {
+	return buildMCPHTTPServer(addr, unifiedServer, apiKeys, hmacSecret, func(mux *http.ServeMux, sessionTimeout time.Duration) {
 		logRouted.Printf("[CACHE] Creating filtered server cache: ttl=%s, maxSize=%d", sessionTimeout, filteredServerCacheMaxSize)
 		serverCache := syncutil.NewTTLCache[string, *sdk.Server](sessionTimeout, filteredServerCacheMaxSize)
 
@@ -114,7 +116,7 @@ func CreateHTTPServerForRoutedMode(addr string, unifiedServer *UnifiedServer, ap
 			handlerCfg := buildDefaultHandlerConfig(unifiedServer, sessionTimeout, defaultHandlerConfigOptions{
 				handlerLog: logRouted,
 				logTag:     "routed:" + backendID,
-				apiKey:     apiKey,
+				apiKeys:    apiKeys,
 				hmacSecret: hmacSecret,
 			})
 			if serverCfg := unifiedServer.cfg.Servers[backendID]; serverCfg != nil && serverCfg.Type == "http" {

@@ -621,6 +621,36 @@ func TestGetAgentID_LegacyAPIKeyFallback(t *testing.T) {
 	assert.Equal(t, "legacy-id", cfg.GetAgentID())
 }
 
+// TestGetAgentIDs_NilGateway verifies that GetAgentIDs returns nil when the
+// Config has a nil Gateway field.
+func TestGetAgentIDs_NilGateway(t *testing.T) {
+	cfg := &Config{Gateway: nil}
+	assert.Nil(t, cfg.GetAgentIDs())
+}
+
+// TestGetAgentIDs_NoneConfigured verifies that GetAgentIDs returns nil when
+// neither the singular nor the plural agent ID field is configured.
+func TestGetAgentIDs_NoneConfigured(t *testing.T) {
+	cfg := &Config{Gateway: &GatewayConfig{}}
+	assert.Nil(t, cfg.GetAgentIDs())
+}
+
+// TestGetAgentIDs_SingularFallsBackToSingleElementSlice verifies that
+// GetAgentIDs wraps the singular AgentID in a single-element slice when
+// gateway.agentIds (plural) is not configured.
+func TestGetAgentIDs_SingularFallsBackToSingleElementSlice(t *testing.T) {
+	cfg := &Config{Gateway: &GatewayConfig{AgentID: "agent-123"}}
+	assert.Equal(t, []string{"agent-123"}, cfg.GetAgentIDs())
+}
+
+// TestGetAgentIDs_PluralReturnsAllConfiguredIDs verifies that GetAgentIDs
+// returns every entry from gateway.agentIds (plural) when configured,
+// enabling every configured identity to authenticate independently.
+func TestGetAgentIDs_PluralReturnsAllConfiguredIDs(t *testing.T) {
+	cfg := &Config{Gateway: &GatewayConfig{AgentIDs: []string{"primary-agent", "enclave-agent"}}}
+	assert.Equal(t, []string{"primary-agent", "enclave-agent"}, cfg.GetAgentIDs())
+}
+
 // TestLoadFromFile_OIDCAuthMissingEnvVar verifies that LoadFromFile returns an error
 // when a server uses github-oidc auth but ACTIONS_ID_TOKEN_REQUEST_URL is not set.
 // This ensures parity with the JSON stdin config path (Spec §9 Fail-Fast Startup).

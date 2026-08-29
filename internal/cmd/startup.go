@@ -69,20 +69,20 @@ func buildHTTPServer(
 	ctx context.Context,
 	mode, listenAddr string,
 	unifiedServer *server.UnifiedServer,
-	agentID, hmacSecret string,
+	agentIDs []string, hmacSecret string,
 	cancel context.CancelFunc,
 ) *http.Server {
 	debugLog.Printf("Building HTTP server: mode=%s, listenAddr=%s, authEnabled=%v, hmacEnabled=%v",
-		mode, listenAddr, agentID != "", hmacSecret != "")
+		mode, listenAddr, len(agentIDs) > 0, hmacSecret != "")
 	var httpServer *http.Server
 	if mode == "routed" {
 		logger.StartupInfo("Starting MCPG in ROUTED mode on %s", listenAddr)
 		logger.StartupInfo("Routes: /mcp/<server> where <server> is one of: %v", unifiedServer.GetServerIDs())
-		httpServer = server.CreateHTTPServerForRoutedMode(listenAddr, unifiedServer, agentID, hmacSecret)
+		httpServer = server.CreateHTTPServerForRoutedMode(listenAddr, unifiedServer, agentIDs, hmacSecret)
 	} else {
 		logger.StartupInfo("Starting MCPG in UNIFIED mode on %s", listenAddr)
 		logger.StartupInfo("Endpoint: /mcp")
-		httpServer = server.CreateHTTPServerForMCP(listenAddr, unifiedServer, agentID, hmacSecret)
+		httpServer = server.CreateHTTPServerForMCP(listenAddr, unifiedServer, agentIDs, hmacSecret)
 	}
 
 	// Set BaseContext so every incoming request inherits the startup context,

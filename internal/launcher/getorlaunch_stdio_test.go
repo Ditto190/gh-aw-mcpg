@@ -537,7 +537,7 @@ func TestGetOrLaunch_ContainerFieldConversion(t *testing.T) {
 		"gateway": {
 			"port": 3001,
 			"domain": "localhost",
-			"apiKey": "test-api-key"
+			"agentId": "test-api-key"
 		}
 	}`
 

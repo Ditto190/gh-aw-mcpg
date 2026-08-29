@@ -165,7 +165,7 @@ func TestHTTPConnection(t *testing.T) {
 				"gateway": {
 					"port": 3001,
 					"domain": "localhost",
-					"apiKey": "test-key"
+					"agentId": "test-key"
 				}
 			}`, tt.serverID, mockServer.URL, tt.authHeader, tt.authValue)
 
@@ -210,7 +210,7 @@ func TestMixedHTTPAndStdioServers(t *testing.T) {
 		"gateway": {
 			"port": 3001,
 			"domain": "localhost",
-			"apiKey": "test-key"
+			"agentId": "test-key"
 		}
 	}`
 
@@ -327,7 +327,7 @@ func TestGetOrLaunch_InvalidServerID(t *testing.T) {
 		"gateway": {
 			"port": 3001,
 			"domain": "localhost",
-			"apiKey": "test-key"
+			"agentId": "test-key"
 		}
 	}`
 
@@ -357,7 +357,7 @@ func TestGetOrLaunch_Reuse(t *testing.T) {
 		"gateway": {
 			"port": 3001,
 			"domain": "localhost",
-			"apiKey": "test-key"
+			"agentId": "test-key"
 		}
 	}`, mockServer.URL)
 
@@ -399,7 +399,7 @@ func TestServerIDs(t *testing.T) {
 		"gateway": {
 			"port": 3001,
 			"domain": "localhost",
-			"apiKey": "test-key"
+			"agentId": "test-key"
 		}
 	}`
 
@@ -418,7 +418,7 @@ func TestServerIDs_Empty(t *testing.T) {
 		"gateway": {
 			"port": 3001,
 			"domain": "localhost",
-			"apiKey": "test-key"
+			"agentId": "test-key"
 		}
 	}`
 
@@ -444,7 +444,7 @@ func TestClose(t *testing.T) {
 		"gateway": {
 			"port": 3001,
 			"domain": "localhost",
-			"apiKey": "test-key"
+			"agentId": "test-key"
 		}
 	}`, mockServer.URL)
 
@@ -486,7 +486,7 @@ func TestGetOrLaunchForSession_HTTPBackend(t *testing.T) {
 "gateway": {
 "port": 3002,
 "domain": "localhost",
-"apiKey": "test-key"
+"agentId": "test-key"
 }
 }`, mockServer.URL)
 

@@ -15,6 +15,16 @@ func validateGatewayConfig(gateway *StdinGatewayConfig) error {
 
 	logValidation.Print("Validating gateway configuration")
 
+	if err := validateAgentIDs(gateway.AgentIDs, gateway.agentIDsSet || gateway.AgentIDs != nil, "agentIds"); err != nil {
+		return err
+	}
+	if (gateway.agentIDSet || gateway.AgentID != "") && (gateway.agentIDsSet || gateway.AgentIDs != nil) {
+		return fmt.Errorf("gateway.agentId cannot be combined with gateway.agentIds")
+	}
+	if (gateway.legacyAPIKeySet || gateway.APIKey != "") && (gateway.agentIDsSet || gateway.AgentIDs != nil) {
+		return fmt.Errorf("gateway.apiKey cannot be combined with gateway.agentIds")
+	}
+
 	// Validate port range using centralized rules
 	if err := validateOptionalInt(gateway.Port, "Validating gateway port",
 		func(v int) *ValidationError { return PortRange(v, "gateway.port") }); err != nil {
@@ -90,6 +100,21 @@ func validateGatewayConfig(gateway *StdinGatewayConfig) error {
 	}
 
 	logValidation.Print("Gateway config validation passed")
+	return nil
+}
+
+func validateAgentIDs(agentIDs []string, defined bool, fieldName string) error {
+	if !defined {
+		return nil
+	}
+	if len(agentIDs) == 0 {
+		return fmt.Errorf("%s must be a non-empty array when present", fieldName)
+	}
+	for i, agentID := range agentIDs {
+		if strings.TrimSpace(agentID) == "" {
+			return fmt.Errorf("%s[%d] must be a non-empty string", fieldName, i)
+		}
+	}
 	return nil
 }
 

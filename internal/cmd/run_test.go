@@ -215,3 +215,54 @@ func TestRun_InvalidGuardsMode(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid --guards-mode flag")
 }
+
+// TestRun_PluralAgentIDsStartsSuccessfully verifies that run() starts normally
+// when only gateway.agentIds (plural) is configured: every configured
+// identifier is accepted as a valid Authorization credential (see
+// config.Config.GetAgentIDs and authMiddleware's matchesAnyKey), enabling
+// concurrent primary/enclave sessions that each authenticate independently.
+func TestRun_PluralAgentIDsStartsSuccessfully(t *testing.T) {
+	resetRunFlagsForTest(t)
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	content := `[gateway]
+port = 3000
+agent_ids = ["primary-agent", "enclave-agent"]
+
+[servers.testserver]
+type = "http"
+url = "http://127.0.0.1:1"
+`
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
+
+	configFile = path
+	configStdin = false
+	envFile = ""
+	listenAddr = "127.0.0.1:0"
+	routedMode = true
+	unifiedMode = false
+	logDir = t.TempDir()
+	wasmCacheDir = t.TempDir()
+	shutdownTimeout = 2 * time.Second
+	difcMode = "strict"
+
+	ctx, cancel := context.WithCancel(context.Background())
+	rootCmd.SetContext(ctx)
+	t.Cleanup(func() { rootCmd.SetContext(context.Background()) })
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- run(rootCmd, nil)
+	}()
+
+	time.Sleep(200 * time.Millisecond)
+	cancel()
+
+	select {
+	case err := <-errCh:
+		assert.NoError(t, err, "run() should start successfully with only gateway.agentIds configured")
+	case <-time.After(5 * time.Second):
+		t.Fatal("run() did not return within the expected shutdown window")
+	}
+}

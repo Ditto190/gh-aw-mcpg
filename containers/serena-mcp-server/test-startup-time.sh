@@ -63,7 +63,7 @@ CONFIG_JSON=$(cat <<EOF
   "gateway": {
     "port": ${MCP_GATEWAY_PORT},
     "domain": "${MCP_GATEWAY_DOMAIN}",
-    "apiKey": "${MCP_GATEWAY_API_KEY}"
+    "agentId": "${MCP_GATEWAY_API_KEY}"
   }
 }
 EOF

@@ -407,7 +407,7 @@ if [ "$MODE" = "yolo" ] || [ "$MODE" = "lockdown" ]; then
   "gateway": {
     "port": $GATEWAY_PORT,
     "domain": "localhost",
-    "apiKey": "$GATEWAY_API_KEY"
+    "agentId": "$GATEWAY_API_KEY"
   }
 }
 EOF
@@ -436,7 +436,7 @@ else
   "gateway": {
     "port": $GATEWAY_PORT,
     "domain": "localhost",
-    "apiKey": "$GATEWAY_API_KEY"
+    "agentId": "$GATEWAY_API_KEY"
   }
 }
 EOF

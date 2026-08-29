@@ -153,7 +153,7 @@ func TestAuthMiddleware(t *testing.T) {
 			})
 
 			// Create the middleware-wrapped handler
-			handler := authMiddleware(tt.configuredAPIKey, nextHandler)
+			handler := authMiddleware(keysOrNil(tt.configuredAPIKey), nextHandler)
 
 			// Create a test request
 			req := httptest.NewRequest(http.MethodGet, "/test", nil)
@@ -193,7 +193,7 @@ func TestAuthMiddleware_RequestPropagation(t *testing.T) {
 	})
 
 	// Create the middleware-wrapped handler
-	handler := authMiddleware(apiKey, nextHandler)
+	handler := authMiddleware([]string{apiKey}, nextHandler)
 
 	// Create a test request with custom headers and path
 	req := httptest.NewRequest(http.MethodPost, "/api/test?param=value", nil)
@@ -228,7 +228,7 @@ func TestAuthMiddleware_ResponseWriter(t *testing.T) {
 	})
 
 	// Create the middleware-wrapped handler
-	handler := authMiddleware(apiKey, nextHandler)
+	handler := authMiddleware([]string{apiKey}, nextHandler)
 
 	// Create a test request
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
@@ -257,7 +257,7 @@ func TestAuthMiddleware_ConcurrentRequests(t *testing.T) {
 	})
 
 	// Create the middleware-wrapped handler
-	handler := authMiddleware(apiKey, nextHandler)
+	handler := authMiddleware([]string{apiKey}, nextHandler)
 
 	// Create a channel to synchronize goroutines
 	done := make(chan bool, numRequests)
@@ -317,6 +317,45 @@ func TestIsMalformedAuthHeader(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got := auth.IsMalformedHeader(tt.header)
 			assert.Equal(t, tt.malformed, got, "auth.IsMalformedHeader(%q) should return %v", tt.header, tt.malformed)
+		})
+	}
+}
+
+// TestAuthMiddleware_MultipleKeys verifies that authMiddleware accepts any of
+// several configured keys (gateway.agentIds), enabling concurrent
+// primary/enclave sessions to each authenticate with their own identifier.
+func TestAuthMiddleware_MultipleKeys(t *testing.T) {
+	keys := []string{"primary-agent", "enclave-agent"}
+
+	tests := []struct {
+		name             string
+		authHeader       string
+		expectStatusCode int
+		expectNextCalled bool
+	}{
+		{name: "FirstKeyMatches", authHeader: "primary-agent", expectStatusCode: http.StatusOK, expectNextCalled: true},
+		{name: "SecondKeyMatches", authHeader: "enclave-agent", expectStatusCode: http.StatusOK, expectNextCalled: true},
+		{name: "UnknownKeyRejected", authHeader: "unknown-agent", expectStatusCode: http.StatusUnauthorized, expectNextCalled: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			nextCalled := false
+			next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				nextCalled = true
+				w.WriteHeader(http.StatusOK)
+			})
+
+			handler := authMiddleware(keys, next)
+
+			req := httptest.NewRequest(http.MethodPost, "/mcp", nil)
+			req.Header.Set("Authorization", tt.authHeader)
+			rr := httptest.NewRecorder()
+
+			handler(rr, req)
+
+			assert.Equal(t, tt.expectStatusCode, rr.Code)
+			assert.Equal(t, tt.expectNextCalled, nextCalled)
 		})
 	}
 }

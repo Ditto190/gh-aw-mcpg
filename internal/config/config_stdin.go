@@ -36,6 +36,7 @@ type StdinConfig struct {
 type StdinGatewayConfig struct {
 	Port                        *int                      `json:"port,omitempty"`
 	AgentID                     string                    `json:"agentId,omitempty"`
+	AgentIDs                    []string                  `json:"agentIds,omitempty"`
 	APIKey                      string                    `json:"apiKey,omitempty"`
 	Domain                      string                    `json:"domain,omitempty"`
 	StartupTimeout              *int                      `json:"startupTimeout,omitempty"`
@@ -54,6 +55,7 @@ type StdinGatewayConfig struct {
 	OpenTelemetry               *StdinOpenTelemetryConfig `json:"opentelemetry,omitempty"`
 
 	agentIDSet      bool `json:"-"`
+	agentIDsSet     bool `json:"-"`
 	legacyAPIKeySet bool `json:"-"`
 }
 
@@ -75,6 +77,7 @@ func (g *StdinGatewayConfig) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	_, g.agentIDSet = rawFields["agentId"]
+	_, g.agentIDsSet = rawFields["agentIds"]
 	_, g.legacyAPIKeySet = rawFields["apiKey"]
 	return nil
 }
@@ -409,6 +412,7 @@ func convertStdinConfig(stdinCfg *StdinConfig) (*Config, error) {
 		cfg.Gateway = &GatewayConfig{
 			Port:                    intPtrOrDefault(stdinCfg.Gateway.Port, DefaultPort),
 			AgentID:                 stdinCfg.Gateway.AgentID,
+			AgentIDs:                append([]string{}, stdinCfg.Gateway.AgentIDs...),
 			APIKey:                  stdinCfg.Gateway.APIKey,
 			Domain:                  stdinCfg.Gateway.Domain,
 			StartupTimeout:          intPtrOrDefault(stdinCfg.Gateway.StartupTimeout, DefaultStartupTimeout),

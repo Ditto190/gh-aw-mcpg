@@ -46,8 +46,14 @@ func writeGatewayConfig(cfg *config.Config, listenAddr, mode string, tlsEnabled 
 
 	debugLog.Printf("Resolved gateway address: host=%s, port=%s", host, port)
 
-	// Extract agent ID from gateway config (per spec section 7.1)
-	agentID := cfg.GetAgentID()
+	// Extract agent ID from gateway config (per spec section 7.1). When multiple
+	// identities are configured via gateway.agentIds, the first is used for this
+	// downstream-facing config; every configured identity is independently valid
+	// for authenticating directly against the gateway.
+	var agentID string
+	if ids := cfg.GetAgentIDs(); len(ids) > 0 {
+		agentID = ids[0]
+	}
 	debugLog.Printf("Gateway config: auth_enabled=%v", agentID != "")
 
 	debugLog.Printf("Gateway auth: agentIDConfigured=%v", agentID != "")

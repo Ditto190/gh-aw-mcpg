@@ -592,7 +592,7 @@ The `customSchemas` top-level field allows you to define custom server types bey
 - **TOML format**:
   - Uses `command` and `args` fields directly (e.g., `command = "docker"`)
   - Variable expansion with `${VAR_NAME}` is only supported in `[gateway.opentelemetry]` fields (the legacy `[gateway.tracing]` section does **not** support variable expansion)
-  - Server `env` values, `url`, `args`, `gateway.agent_id`, and other non-tracing fields are not expanded
+  - Server `env` values, `url`, `args`, `gateway.agent_id` / `gateway.agent_ids`, and other non-tracing fields are not expanded
   - For host environment passthrough to container `env`, use an empty string `""` value
 - **Common rules** (both formats):
   - Empty/"local" type automatically normalized to "stdio"
@@ -609,7 +609,7 @@ The `customSchemas` top-level field allows you to define custom server types bey
 |-------|-------------|---------|
 | `port` | Validated and stored for metadata purposes only. The actual listen address is always set by the `--listen` CLI flag (default `127.0.0.1:3000`). **Note:** When using JSON stdin format, `gateway.port` is required by schema validation even though TOML configs have an internal default of `3000`. | `3000` (informational only; required in JSON stdin) |
 | `agentId` | Agent/session identifier used for routing and optional auth matching | (disabled) |
-| `apiKey` | Deprecated alias for `agentId` (accepted for backward compatibility) | (deprecated) |
+| `agentIds` (JSON stdin) / `agent_ids` (TOML) | Agent/session identifiers for concurrent session isolation. Configure exactly one of this field or `agentId` / `agent_id`; it must contain at least one non-blank string. Each configured identifier authenticates independently against the gateway (e.g. primary/enclave), enabling concurrent sessions that don't share a single credential. | (disabled) |
 | `domain` | Gateway domain (`"localhost"`, `"host.docker.internal"`, or `"${VAR}"`) | (unset) |
 | `startupTimeout` | Seconds to wait for backend startup | `30` |
 | `toolTimeout` | Maximum seconds for a single tool call, enforced as a context deadline on all backend requests (stdio and HTTP) | `60` |

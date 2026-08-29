@@ -14,7 +14,7 @@ func TestBuildDefaultHandlerConfig(t *testing.T) {
 	cfg := buildDefaultHandlerConfig(unifiedServer, sessionTimeout, defaultHandlerConfigOptions{
 		handlerLog: logSDK,
 		logTag:     "unified",
-		apiKey:     "test-api-key",
+		apiKeys:    []string{"test-api-key"},
 		hmacSecret: "test-hmac-secret",
 	})
 
@@ -22,6 +22,6 @@ func TestBuildDefaultHandlerConfig(t *testing.T) {
 	require.Equal(t, sessionTimeout, cfg.sessionTimeout)
 	require.Equal(t, "unified", cfg.logTag)
 	require.Same(t, unifiedServer, cfg.unifiedServer)
-	require.Equal(t, "test-api-key", cfg.apiKey)
+	require.Equal(t, []string{"test-api-key"}, cfg.apiKeys)
 	require.Equal(t, "test-hmac-secret", cfg.hmacSecret)
 }

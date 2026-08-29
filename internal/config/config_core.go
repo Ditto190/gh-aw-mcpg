@@ -105,6 +105,9 @@ type GatewayConfig struct {
 	// AgentID is the gateway agent/session identifier.
 	AgentID string `toml:"agent_id" json:"agent_id,omitempty"`
 
+	// AgentIDs are the gateway agent/session identifiers.
+	AgentIDs []string `toml:"agent_ids" json:"agent_ids,omitempty"`
+
 	// APIKey is a deprecated alias for AgentID.
 	APIKey string `toml:"api_key" json:"api_key,omitempty"`
 
@@ -217,6 +220,24 @@ func (c *Config) GetAgentID() string {
 		return ""
 	}
 	return c.Gateway.effectiveAgentID()
+}
+
+// GetAgentIDs returns every configured gateway identity that should authenticate
+// successfully. When gateway.agentIds (plural) is configured, each entry is a
+// valid credential, enabling concurrent primary/enclave sessions that each
+// authenticate with their own identifier. Otherwise, it falls back to the
+// singular effective agent ID (which may be empty when none is configured).
+func (c *Config) GetAgentIDs() []string {
+	if c.Gateway == nil {
+		return nil
+	}
+	if len(c.Gateway.AgentIDs) > 0 {
+		return append([]string{}, c.Gateway.AgentIDs...)
+	}
+	if id := c.Gateway.effectiveAgentID(); id != "" {
+		return []string{id}
+	}
+	return nil
 }
 
 func (g *GatewayConfig) effectiveAgentID() string {
@@ -544,6 +565,13 @@ func LoadFromFile(path string) (*Config, error) {
 		cfg.Gateway = &GatewayConfig{}
 	}
 	cfg.Gateway.normalizeAgentID(md.IsDefined("gateway", "agent_id"), md.IsDefined("gateway", "api_key"), "TOML")
+	agentIDsDefined := md.IsDefined("gateway", "agent_ids")
+	if err := validateAgentIDs(cfg.Gateway.AgentIDs, agentIDsDefined, "agent_ids"); err != nil {
+		return nil, err
+	}
+	if agentIDsDefined && (md.IsDefined("gateway", "agent_id") || md.IsDefined("gateway", "api_key")) {
+		return nil, fmt.Errorf("gateway.agent_ids cannot be combined with gateway.agent_id or gateway.api_key")
+	}
 	if err := validateContainerRuntimeValue(cfg.Gateway.ContainerRuntime, "gateway.container_runtime"); err != nil {
 		return nil, err
 	}
