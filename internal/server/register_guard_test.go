@@ -571,9 +571,12 @@ func TestCreateGuardFromConfig_WasmType_Success(t *testing.T) {
 		Path: tmpFile.Name(),
 	})
 
-	require.NoError(t, err)
-	require.NotNil(t, g)
-	assert.Equal(t, "wasm-guard", g.Name())
+require.NoError(t, err)
+require.NotNil(t, g)
+wasmGuard, ok := g.(*guard.WasmGuard)
+require.True(t, ok)
+t.Cleanup(func() { require.NoError(t, wasmGuard.Close(t.Context())) })
+assert.Equal(t, "wasm-guard", g.Name())
 }
 
 // TestCreateGuardFromConfig_WasmType_Success_ViaRegisterGuard verifies the same
