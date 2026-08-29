@@ -447,8 +447,10 @@ fn infer_scope_for_baseline<'a>(
         "create_codespace" | "update_codespace" | "delete_codespace" | "stop_codespace" => {
             Cow::Borrowed(scope_names::USER)
         }
-        _ if !repo_id.is_empty() => Cow::Borrowed(repo_id),
         "set_secret" | "delete_secret" | "set_variable" | "delete_variable" => {
+            if !repo_id.is_empty() {
+                return Cow::Borrowed(repo_id);
+            }
             let org = tool_args
                 .get("org")
                 .and_then(Value::as_str)
@@ -492,6 +494,9 @@ fn infer_scope_for_baseline<'a>(
         | "search_pull_requests"
         | "search_pull_requests_ff_fields_param"
         | "search_commits" => {
+            if !repo_id.is_empty() {
+                return Cow::Borrowed(repo_id);
+            }
             let query = tool_args
                 .get("query")
                 .and_then(|v| v.as_str())
@@ -499,6 +504,7 @@ fn infer_scope_for_baseline<'a>(
             let (_, _, repo_from_query) = extract_repo_info_from_search_query(query);
             Cow::Owned(repo_from_query)
         }
+        _ if !repo_id.is_empty() => Cow::Borrowed(repo_id),
         _ => Cow::Borrowed(""),
     }
 }
@@ -1516,6 +1522,11 @@ mod tests {
                 infer_scope_for_baseline(tool, &owner_only_args, ""),
                 "github",
                 "{tool} should infer org baseline scope from owner-only synthetic CLI args"
+            );
+            assert_eq!(
+                infer_scope_for_baseline(tool, &json!({}), "github/gh-aw-mcpg"),
+                "github/gh-aw-mcpg",
+                "{tool} should preserve repo baseline scope when repo context is present"
             );
         }
 
