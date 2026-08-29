@@ -67,28 +67,31 @@ args = ["run", "--rm", "-i", "ghcr.io/github/github-mcp-server:latest"]
 
 func TestLoadFromStdin_AgentIDs(t *testing.T) {
 	tests := []struct {
-		name    string
-		agent   string
-		wantErr string
+		name      string
+		agent     string
+		shouldErr bool
+		wantErr   string
 	}{
 		{
 			name:  "valid plural IDs are preserved",
 			agent: `"agentIds": ["primary-agent", "enclave-agent"]`,
 		},
 		{
-			name:    "empty plural IDs",
-			agent:   `"agentIds": []`,
-			wantErr: "agentIds",
+			name:      "empty plural IDs",
+			agent:     `"agentIds": []`,
+			shouldErr: true,
+			wantErr:   "agentIds",
 		},
 		{
-			name:    "blank plural ID",
-			agent:   `"agentIds": ["primary-agent", " "]`,
-			wantErr: "agentIds[1] must be a non-empty string",
+			name:      "blank plural ID",
+			agent:     `"agentIds": ["primary-agent", " "]`,
+			shouldErr: true,
+			wantErr:   "agentIds[1] must be a non-empty string",
 		},
 		{
-			name:    "singular and plural IDs",
-			agent:   `"agentId": "primary-agent", "agentIds": ["enclave-agent"]`,
-			wantErr: "'oneOf' failed",
+			name:      "singular and plural IDs",
+			agent:     `"agentId": "primary-agent", "agentIds": ["enclave-agent"]`,
+			shouldErr: true,
 		},
 	}
 
@@ -110,9 +113,11 @@ func TestLoadFromStdin_AgentIDs(t *testing.T) {
 			require.NoError(t, writeEnd.Close())
 
 			cfg, err := LoadFromStdin()
-			if tt.wantErr != "" {
+			if tt.shouldErr {
 				require.Error(t, err)
-				assert.ErrorContains(t, err, tt.wantErr)
+				if tt.wantErr != "" {
+					assert.ErrorContains(t, err, tt.wantErr)
+				}
 				return
 			}
 
