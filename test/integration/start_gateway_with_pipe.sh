@@ -98,7 +98,7 @@ if [ -n "${MOCK_BACKEND_URL:-}" ]; then
   "gateway": {
     "port": ${PORT},
     "domain": "localhost",
-    "apiKey": "test-key"
+    "agentId": "test-key"
   }
 }
 EOF
@@ -115,7 +115,7 @@ else
   "gateway": {
     "port": ${PORT},
     "domain": "localhost",
-    "apiKey": "test-key"
+    "agentId": "test-key"
   }
 }
 EOF

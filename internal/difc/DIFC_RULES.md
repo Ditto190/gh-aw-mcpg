@@ -198,7 +198,7 @@ The JSON config schema supports guard and policy fields:
   "gateway": {
     "port": 3000,
     "domain": "localhost",
-    "apiKey": "your-api-key"
+    "agentId": "your-agent-id"
   }
 }
 ```
