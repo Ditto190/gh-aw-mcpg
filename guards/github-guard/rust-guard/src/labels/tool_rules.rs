@@ -610,11 +610,11 @@ pub fn apply_tool_labels(
         | "mark_all_notifications_read"
         | "manage_notification_subscription"
         | "manage_repository_notification_subscription" => {
-            // These operations change notification/subscription state and return minimal metadata.
-            // S = public (empty); I = project:github
-            secrecy = vec![];
-            baseline_scope = Cow::Borrowed(scope_names::GITHUB);
-            integrity = project_github_label(ctx);
+            // These operations change notification/subscription state for the authenticated user.
+            // S = private:user; I = writer(user)
+            secrecy = private_user_label();
+            baseline_scope = Cow::Borrowed(scope_names::USER);
+            integrity = writer_integrity(scope_names::USER, ctx);
         }
 
         // === Private GitHub-controlled metadata (user-associated): PII/org-structure sensitive ===
@@ -881,13 +881,13 @@ pub fn apply_tool_labels(
             integrity = writer_integrity(scope_names::GITHUB, ctx);
         }
 
-        // === Star/unstar operations (public metadata) ===
+        // === Star/unstar operations (account-scoped writes) ===
         "star_repository" | "unstar_repository" => {
-            // Starring is a public action; response is minimal metadata.
-            // S = public (empty); I = project:github
-            secrecy = vec![];
-            baseline_scope = Cow::Borrowed(scope_names::GITHUB);
-            integrity = project_github_label(ctx);
+            // Starring changes authenticated-user affinity state.
+            // S = private:user; I = writer(user)
+            secrecy = private_user_label();
+            baseline_scope = Cow::Borrowed(scope_names::USER);
+            integrity = writer_integrity(scope_names::USER, ctx);
         }
 
         // === Gist deletion (pre-emptive) ===

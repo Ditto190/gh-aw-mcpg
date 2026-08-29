@@ -436,17 +436,15 @@ fn infer_scope_for_baseline<'a>(
     tool_args: &Value,
     repo_id: &'a str,
 ) -> Cow<'a, str> {
-    if !repo_id.is_empty() {
-        return Cow::Borrowed(repo_id);
-    }
-
     match tool_name {
         "dismiss_notification"
         | "mark_all_notifications_read"
         | "manage_notification_subscription"
         | "manage_repository_notification_subscription"
-        | "create_repository"
-        | "fork_repository" => Cow::Borrowed(scope_names::GITHUB),
+        | "star_repository"
+        | "unstar_repository" => Cow::Borrowed(scope_names::USER),
+        "create_repository" | "fork_repository" => Cow::Borrowed(scope_names::GITHUB),
+        _ if !repo_id.is_empty() => Cow::Borrowed(repo_id),
         "create_codespace" | "update_codespace" | "delete_codespace" | "stop_codespace" => {
             Cow::Borrowed(scope_names::USER)
         }
@@ -1352,7 +1350,7 @@ mod tests {
     }
 
     #[test]
-    fn infer_scope_for_baseline_uses_github_scope_for_notification_management_tools() {
+    fn infer_scope_for_baseline_uses_user_scope_for_notification_management_tools() {
         let tool_args = json!({ "threadId": "123" });
         for tool in &[
             "dismiss_notification",
@@ -1363,8 +1361,8 @@ mod tests {
             let inferred = infer_scope_for_baseline(tool, &tool_args, "");
             assert_eq!(
                 inferred,
-                scope_names::GITHUB,
-                "{} should infer github baseline scope",
+                scope_names::USER,
+                "{} should infer user baseline scope",
                 tool
             );
         }
@@ -1409,8 +1407,37 @@ mod tests {
 
             assert_eq!(
                 after_baseline,
-                labels::project_github_label(&ctx),
-                "{} integrity should remain github-scoped after baseline enforcement",
+                labels::writer_integrity(scope_names::USER, &ctx),
+                "{} integrity should remain user-scoped after baseline enforcement",
+                tool
+            );
+        }
+    }
+
+    #[test]
+    fn star_repository_integrity_remains_user_scoped_with_repo_args() {
+        let ctx = PolicyContext::default();
+        let tool_args = json!({ "owner": "github", "repo": "gh-aw-mcpg" });
+        let repo_id = "github/gh-aw-mcpg";
+
+        for tool in &["star_repository", "unstar_repository"] {
+            let (_, integrity, _) = labels::apply_tool_labels(
+                tool,
+                &tool_args,
+                repo_id,
+                vec![],
+                vec![],
+                String::new(),
+                &ctx,
+            );
+            let baseline_scope = infer_scope_for_baseline(tool, &tool_args, repo_id);
+            let after_baseline =
+                labels::ensure_integrity_baseline(&baseline_scope, integrity, &ctx);
+
+            assert_eq!(
+                after_baseline,
+                labels::writer_integrity(scope_names::USER, &ctx),
+                "{} integrity should remain user-scoped after baseline enforcement",
                 tool
             );
         }
