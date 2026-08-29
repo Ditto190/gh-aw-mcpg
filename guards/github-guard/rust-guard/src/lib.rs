@@ -372,6 +372,15 @@ fn apply_singleton_fallback_if_needed(
         } else {
             &baseline_scope
         };
+        let (secrecy, _, _) = labels::apply_tool_labels(
+            &input.tool_name,
+            &input.tool_args,
+            &repo_id,
+            vec![],
+            vec![],
+            String::new(),
+            ctx,
+        );
         // Use writer_integrity which goes through normalize_scope to match
         // the policy scope token (e.g., "github" for owner-scoped policies).
         let integrity = labels::writer_integrity(scope, ctx);
@@ -386,7 +395,7 @@ fn apply_singleton_fallback_if_needed(
             data: input.tool_result.clone(),
             labels: ResourceLabels {
                 description: desc,
-                secrecy: vec![].into(),
+                secrecy: secrecy.into(),
                 integrity: integrity.into(),
             },
         });
@@ -1160,6 +1169,49 @@ mod tests {
 
         assert!(matches!(action, FallbackAction::SkipLabeling));
         assert!(labeled_items.is_empty());
+    }
+
+    #[test]
+    fn plaintext_notification_mutations_keep_user_secrecy() {
+        let ctx = PolicyContext::default();
+        for (tool_name, tool_args) in [
+            ("dismiss_notification", json!({"thread_id": "123"})),
+            ("mark_all_notifications_read", json!({})),
+            (
+                "manage_notification_subscription",
+                json!({"thread_id": "123", "action": "delete"}),
+            ),
+            (
+                "manage_repository_notification_subscription",
+                json!({"owner": "github", "repo": "gh-aw-mcpg", "action": "delete"}),
+            ),
+        ] {
+            let input = LabelResponseInput {
+                tool_name: tool_name.to_string(),
+                tool_args,
+                tool_result: json!({
+                    "content": [{"type": "text", "text": "Notification updated"}]
+                }),
+            };
+            let mut labeled_items = Vec::new();
+
+            let action = apply_singleton_fallback_if_needed(&input, &ctx, &mut labeled_items);
+
+            assert!(matches!(action, FallbackAction::ContinueProcessing));
+            assert_eq!(labeled_items.len(), 1);
+            assert_eq!(
+                labeled_items[0].labels.secrecy,
+                labels::private_user_label(),
+                "{} plaintext response should retain user secrecy",
+                tool_name
+            );
+            assert_eq!(
+                labeled_items[0].labels.integrity,
+                labels::writer_integrity(scope_names::USER, &ctx),
+                "{} plaintext response should retain user integrity",
+                tool_name
+            );
+        }
     }
 
     #[test]
