@@ -105,6 +105,9 @@ type GatewayConfig struct {
 	// AgentID is the gateway agent/session identifier.
 	AgentID string `toml:"agent_id" json:"agent_id,omitempty"`
 
+	// AgentIDs are the gateway agent/session identifiers.
+	AgentIDs []string `toml:"agent_ids" json:"agent_ids,omitempty"`
+
 	// APIKey is a deprecated alias for AgentID.
 	APIKey string `toml:"api_key" json:"api_key,omitempty"`
 
@@ -544,6 +547,13 @@ func LoadFromFile(path string) (*Config, error) {
 		cfg.Gateway = &GatewayConfig{}
 	}
 	cfg.Gateway.normalizeAgentID(md.IsDefined("gateway", "agent_id"), md.IsDefined("gateway", "api_key"), "TOML")
+	agentIDsDefined := md.IsDefined("gateway", "agent_ids")
+	if err := validateAgentIDs(cfg.Gateway.AgentIDs, agentIDsDefined, "agent_ids"); err != nil {
+		return nil, err
+	}
+	if agentIDsDefined && (md.IsDefined("gateway", "agent_id") || md.IsDefined("gateway", "api_key")) {
+		return nil, fmt.Errorf("gateway.agent_ids cannot be combined with gateway.agent_id or gateway.api_key")
+	}
 	if err := validateContainerRuntimeValue(cfg.Gateway.ContainerRuntime, "gateway.container_runtime"); err != nil {
 		return nil, err
 	}

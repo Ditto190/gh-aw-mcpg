@@ -350,11 +350,14 @@
           "description": "Agent/session identifier for request routing and optional auth matching. When configured, clients include this value in Authorization and may also send X-Agent-ID for explicit session routing.",
           "minLength": 1
         },
-        "apiKey": {
-          "type": "string",
-          "description": "DEPRECATED alias for agentId. Use agentId instead.",
-          "minLength": 1,
-          "deprecated": true
+        "agentIds": {
+          "type": "array",
+          "description": "Agent/session identifiers for concurrent session isolation.",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
         },
         "domain": {
           "description": "Gateway domain for constructing URLs. Use 'localhost' for local development, 'host.docker.internal' when the gateway runs in a container and needs to access the host, a single RFC-1123 hostname label (e.g. 'awmg-mcpg') for network-isolation topology, or a variable expression like '${MCP_GATEWAY_DOMAIN}'.",
@@ -464,7 +467,7 @@
         "domain"
       ],
       "additionalProperties": false,
-      "anyOf": [
+      "oneOf": [
         {
           "required": [
             "agentId"
@@ -472,7 +475,7 @@
         },
         {
           "required": [
-            "apiKey"
+            "agentIds"
           ]
         }
       ]
@@ -579,6 +582,10 @@
       "gateway": {
         "port": 8080,
         "domain": "localhost",
+        "agentIds": [
+          "primary-agent",
+          "enclave-agent"
+        ],
         "startupTimeout": 60,
         "toolTimeout": 120
       }

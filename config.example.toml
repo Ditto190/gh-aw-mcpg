@@ -15,10 +15,10 @@
 # This field is stored for metadata purposes only. Valid range: 1-65535
 port = 3000
 
-# Agent ID for routing and optional authentication matching (optional)
-# When set, clients must provide this agent ID in the Authorization header
-# Format: Authorization: <agent_id>
-agent_id = ""
+# Agent IDs for concurrent session isolation and optional authentication matching (optional)
+# Configure either agent_id or agent_ids, but not both.
+# Clients must provide a configured agent ID in the Authorization header.
+agent_ids = ["primary-agent", "enclave-agent"]
 
 # Domain name for the gateway (optional)
 # Used for CORS and other domain-specific features
