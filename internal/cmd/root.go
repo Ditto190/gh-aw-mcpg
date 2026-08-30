@@ -7,7 +7,6 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/github/gh-aw-mcpg/internal/auth"
 	"github.com/github/gh-aw-mcpg/internal/config"
 	"github.com/github/gh-aw-mcpg/internal/difc"
 	"github.com/github/gh-aw-mcpg/internal/envutil"
@@ -284,21 +283,6 @@ func run(cmd *cobra.Command, args []string) error {
 	mode := resolveServerMode(routedMode, unifiedMode)
 
 	debugLog.Printf("Server mode: %s, guards mode: %s", mode, cfg.DIFCMode)
-
-	// Per spec §7.3: generate a random agent identifier on startup if none is configured.
-	// The generated value is set in the config so it propagates to both the HTTP
-	// server authentication and the stdout configuration output (spec §5.4).
-	// gateway.agentIds (plural) counts as configured here, so a random ID is only
-	// generated when neither the singular nor plural form is set.
-	if len(cfg.GetAgentIDs()) == 0 {
-		randomKey, err := auth.GenerateRandomAgentID()
-		if err != nil {
-			return fmt.Errorf("failed to generate random agent ID: %w", err)
-		}
-		cfg.Gateway.AgentID = randomKey
-		cfg.Gateway.APIKey = randomKey
-		logger.StartupInfo("No agent ID configured — generated temporary random agent ID (spec §7.3)")
-	}
 
 	// Apply tracing flags: CLI flags and env var overrides take precedence over config values.
 	applyTracingOverrides(cmd, cfg)

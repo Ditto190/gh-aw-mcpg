@@ -517,7 +517,14 @@ func TestValidateGatewayConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := validateGatewayConfig(tt.gateway)
+			gateway := tt.gateway
+			if gateway != nil && gateway.AgentID == "" && gateway.APIKey == "" && len(gateway.AgentIDs) == 0 {
+				clone := *gateway
+				clone.AgentID = "test-agent"
+				gateway = &clone
+			}
+
+			err := validateGatewayConfig(gateway)
 
 			if tt.shouldErr {
 				require.Error(t, err)

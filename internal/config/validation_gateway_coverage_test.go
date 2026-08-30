@@ -63,7 +63,7 @@ func TestValidateGatewayConfig_PayloadSizeThreshold(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gw := &StdinGatewayConfig{PayloadSizeThreshold: tt.threshold}
+			gw := &StdinGatewayConfig{AgentID: "test-agent", PayloadSizeThreshold: tt.threshold}
 			err := validateGatewayConfig(gw)
 			if tt.wantErr {
 				require.Error(t, err)
@@ -133,7 +133,7 @@ func TestValidateGatewayConfig_TrustedBots(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gw := &StdinGatewayConfig{TrustedBots: tt.bots}
+			gw := &StdinGatewayConfig{AgentID: "test-agent", TrustedBots: tt.bots}
 			err := validateGatewayConfig(gw)
 			if tt.wantErr {
 				require.Error(t, err)
@@ -237,7 +237,7 @@ func TestValidateGatewayConfig_OpenTelemetry(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gw := &StdinGatewayConfig{OpenTelemetry: tt.otel}
+			gw := &StdinGatewayConfig{AgentID: "test-agent", OpenTelemetry: tt.otel}
 			err := validateGatewayConfig(gw)
 			if tt.wantErr {
 				require.Error(t, err)

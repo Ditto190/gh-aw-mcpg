@@ -11,6 +11,9 @@ import (
 func TestServerConfig_RateLimitFields(t *testing.T) {
 	t.Parallel()
 	toml := `
+[gateway]
+agent_id = "test-agent"
+
 [servers.github]
 command = "docker"
 args = ["run", "--rm", "-i", "ghcr.io/github/github-mcp-server:latest"]

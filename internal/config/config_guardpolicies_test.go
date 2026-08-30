@@ -130,6 +130,9 @@ func TestGuardPolicies_AllMinIntegrityLevels(t *testing.T) {
 // TestGuardPolicies_TOML_ReposAllFormat tests TOML format with repos="all"
 func TestGuardPolicies_TOML_ReposAllFormat(t *testing.T) {
 	path := writeTempTOML(t, `
+[gateway]
+agent_id = "test-agent"
+
 [servers.github]
 command = "docker"
 args = ["run", "--rm", "-i", "ghcr.io/github/github-mcp-server:latest"]
@@ -154,6 +157,9 @@ min-integrity = "unapproved"
 // TestGuardPolicies_TOML_ReposWithWildcards tests TOML format with wildcard patterns
 func TestGuardPolicies_TOML_ReposWithWildcards(t *testing.T) {
 	path := writeTempTOML(t, `
+[gateway]
+agent_id = "test-agent"
+
 [servers.github]
 command = "docker"
 args = ["run", "--rm", "-i", "ghcr.io/github/github-mcp-server:latest"]
@@ -194,6 +200,9 @@ func TestGuardPolicies_TOML_AllMinIntegrityLevels(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			path := writeTempTOML(t, `
+[gateway]
+agent_id = "test-agent"
+
 [servers.github]
 command = "docker"
 args = ["run", "--rm", "-i", "ghcr.io/github/github-mcp-server:latest"]

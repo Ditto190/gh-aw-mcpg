@@ -379,8 +379,9 @@ func createTempConfigWithPayloadDir(t *testing.T, payloadDir string, servers map
 	require.NoError(t, err, "Failed to create temp config")
 	defer tmpFile.Close()
 
-	// Write gateway section with payload_dir
+	// Write gateway section with a valid configured agent ID and payload_dir
 	fmt.Fprintln(tmpFile, "[gateway]")
+	fmt.Fprintln(tmpFile, `agent_id = "test-agent"`)
 	fmt.Fprintf(tmpFile, "payload_dir = %q\n", payloadDir)
 
 	// Write servers section

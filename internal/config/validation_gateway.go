@@ -6,14 +6,36 @@ import (
 	"strings"
 )
 
-// validateGatewayConfig validates gateway configuration
 func validateGatewayConfig(gateway *StdinGatewayConfig) error {
+	return validateGatewayConfigWithAgentRequirement(gateway, true)
+}
+
+// validateGatewayConfigForPatterns validates rule-based string patterns without enforcing
+// the global exactly-one-agent-selection requirement. This is used by validateRuleBasedPatterns
+// to keep pattern validation focused on the field being checked.
+func validateGatewayConfigForPatterns(gateway *StdinGatewayConfig) error {
+	return validateGatewayConfigWithAgentRequirement(gateway, false)
+}
+
+// validateGatewayConfigWithAgentRequirement centralizes gateway validation and optionally
+// enforces the 1.17.0 requirement that exactly one agent ID selection be configured.
+func validateGatewayConfigWithAgentRequirement(gateway *StdinGatewayConfig, requireAgentSelection bool) error {
 	if gateway == nil {
 		logValidation.Print("No gateway config to validate")
 		return nil
 	}
 
 	logValidation.Print("Validating gateway configuration")
+
+	if gateway.agentIDSet && strings.TrimSpace(gateway.AgentID) == "" {
+		return fmt.Errorf("gateway.agentId must be a non-empty string when provided")
+	}
+	if gateway.legacyAPIKeySet && strings.TrimSpace(gateway.APIKey) == "" {
+		return fmt.Errorf("gateway.apiKey must be a non-empty string when provided")
+	}
+	if requireAgentSelection && !gateway.agentIDSet && !gateway.legacyAPIKeySet && !gateway.agentIDsSet && gateway.AgentID == "" && gateway.APIKey == "" && len(gateway.AgentIDs) == 0 {
+		return fmt.Errorf("gateway.agentId or gateway.agentIds must be configured; exactly one selection is required")
+	}
 
 	if err := validateAgentIDs(gateway.AgentIDs, gateway.agentIDsSet || gateway.AgentIDs != nil, "agentIds"); err != nil {
 		return err
@@ -201,7 +223,7 @@ func validateRuleBasedPatterns(stdinCfg *StdinConfig) error {
 	}
 
 	if stdinCfg.Gateway != nil {
-		if err := validateGatewayConfig(stdinCfg.Gateway); err != nil {
+		if err := validateGatewayConfigForPatterns(stdinCfg.Gateway); err != nil {
 			return err
 		}
 

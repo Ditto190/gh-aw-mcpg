@@ -934,6 +934,9 @@ func TestLoadFromStdin_InvalidMountFormat(t *testing.T) {
 
 func TestLoadFromFile_ValidTOML(t *testing.T) {
 	path := writeTempTOML(t, `
+[gateway]
+agent_id = "test-agent"
+
 [servers.test]
 command = "docker"
 args = ["run", "--rm", "-i", "test/container:latest"]
@@ -1129,7 +1132,7 @@ typ = "stdio"
 func TestLoadFromFile_StreamingLargeFile(t *testing.T) {
 	// Create a TOML config with many servers
 	var tomlContent strings.Builder
-	tomlContent.WriteString("[gateway]\nport = 3000\n\n")
+	tomlContent.WriteString("[gateway]\nport = 3000\nagent_id = \"test-agent\"\n\n")
 
 	for i := 1; i <= 100; i++ {
 		_, _ = fmt.Fprintf(&tomlContent, "[servers.server%d]\n", i)
