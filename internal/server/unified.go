@@ -208,10 +208,11 @@ func NewUnified(ctx context.Context, cfg *config.Config) (*UnifiedServer, error)
 	}
 
 	// Auto-enable DIFC if any non-noop guard was registered, a global policy override
-	// exists, or any server has per-server guard policies configured.
-	if !us.enableDIFC && (us.guardRegistry.HasNonNoopGuard() || cfg.GuardPolicy != nil || hasServerGuardPolicies(cfg)) {
+	// exists, any server has per-server guard policies configured, or any agent has a
+	// per-agent allow-only policy that requires DIFC-based enforcement.
+	if !us.enableDIFC && (us.guardRegistry.HasNonNoopGuard() || cfg.GuardPolicy != nil || hasServerGuardPolicies(cfg) || cfg.HasAgentAllowOnlyPolicies()) {
 		us.enableDIFC = true
-		logUnified.Printf("Auto-enabled DIFC: non-noop guard, global policy, or per-server guard policies detected")
+		logUnified.Printf("Auto-enabled DIFC: non-noop guard, global policy, per-server guard policies, or per-agent allow-only policies detected")
 	}
 
 	// Log guards status early (before backend launch which may take time)
@@ -420,10 +421,26 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 	// Get guard for this backend
 	g := us.guardRegistry.Get(serverID)
 	sessionID := us.getSessionID(ctx)
-	// Propagate the session ID to the tool call span so it is queryable on child spans
-	// independently of the parent gateway.request span.
+	// Propagate a redacted, stable session attribution to the tool call span so it
+	// is queryable on child spans without exposing the raw authenticated identity.
 	if toolSpan.IsRecording() {
-		toolSpan.SetAttributes(tracing.GenAIConversationID.String(util.FormatSessionIDForLog(sessionID)))
+		toolSpan.SetAttributes(tracing.GenAIConversationID.String(util.HashIdentifierForLog(sessionID)))
+	}
+
+	// **Per-agent policy enforcement**: reject calls to servers/tools the
+	// authenticated agent is not permitted to use. This is defense-in-depth
+	// alongside the per-agent tool-visibility filtering applied at session
+	// establishment (createAgentFilteredServer / createAgentFilteredUnifiedServer).
+	if us.agentPoliciesEnforced() {
+		agentIdentity := guard.GetAgentIDFromContext(ctx)
+		if !us.agentCanUseTool(agentIdentity, serverID, toolName) {
+			logger.LogWarn("client", "tools/call denied by per-agent policy: agent=%s tool=%q server=%s",
+				util.HashIdentifierForLog(agentIdentity), toolName, serverID)
+			httpStatusCode = 403
+			deniedErr := fmt.Errorf("tool %q on server %q is not permitted for this agent", toolName, serverID)
+			tracing.RecordSpanError(toolSpan, deniedErr, "agent policy denied")
+			return mcp.NewErrorCallToolResult(deniedErr)
+		}
 	}
 
 	// **Allowed-tools enforcement**: reject calls for tools not in the configured list.
@@ -476,7 +493,7 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 	if err != nil {
 		if denied, detailedErr := guard.HandlePrePhaseError(err); denied != nil {
 			logger.LogWarn("difc", "Access DENIED for agent %s to %s: %s",
-				agentID, denied.Resource.Description, denied.EvalResult.Reason)
+				util.HashIdentifierForLog(agentID), denied.Resource.Description, denied.EvalResult.Reason)
 			if toolSpan.IsRecording() {
 				toolSpan.AddEvent("difc.access_denied", oteltrace.WithAttributes(
 					attribute.String("reason", denied.EvalResult.Reason),

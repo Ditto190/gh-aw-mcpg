@@ -13,11 +13,10 @@ import (
 )
 
 // TestCallBackendTool_ToolCallSpanHasConversationID verifies that the mcp.tool_call span
-// started by callBackendTool carries gen_ai.conversation.id set to the formatted session ID
-// so that session-scoped queries work on child spans independently of the parent
-// gateway.request span.
+// started by callBackendTool carries gen_ai.conversation.id set to the redacted, stable
+// session attribution (HashIdentifierForLog) so that session-scoped queries work on child
+// spans independently of the parent gateway.request span without exposing the raw identity.
 func TestCallBackendTool_ToolCallSpanHasConversationID(t *testing.T) {
-	// Use an 8-char session ID so FormatSessionIDForLog returns it unchanged.
 	const sessionID = "sess-abc"
 
 	backend := newBackendWithToolResponse(t, "list_issues", defaultToolResponse)
@@ -51,8 +50,8 @@ func TestCallBackendTool_ToolCallSpanHasConversationID(t *testing.T) {
 	}
 	require.NotNil(t, toolSpan, "mcp.tool_call span must be recorded")
 
-	// The span must carry gen_ai.conversation.id set to the formatted session ID.
-	wantConversationID := util.FormatSessionIDForLog(sessionID)
+	// The span must carry gen_ai.conversation.id set to the redacted session attribution.
+	wantConversationID := util.HashIdentifierForLog(sessionID)
 	var gotConversationID string
 	for _, attr := range toolSpan.Attributes {
 		if attr.Key == tracing.GenAIConversationID {

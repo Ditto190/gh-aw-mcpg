@@ -194,7 +194,7 @@ func TestCreateFilteredServer_ToolFiltering(t *testing.T) {
 	us.toolsMu.Unlock()
 
 	// Create filtered server for github backend
-	filteredServer := createFilteredServer(us, "github")
+	filteredServer := createAgentFilteredServer(us, "github", "")
 
 	// We can't easily inspect the filtered server's tools without SDK internals,
 	// but we can verify GetToolsForBackend returns correct filtered list
@@ -249,7 +249,7 @@ func TestCreateFilteredServer_AnnotationsPropagated(t *testing.T) {
 	}
 	us.toolsMu.Unlock()
 
-	filteredServer := createFilteredServer(us, "github")
+	filteredServer := createAgentFilteredServer(us, "github", "")
 	require.NotNil(filteredServer)
 
 	// Connect a client via in-memory transport and call ListTools to verify annotations.
@@ -560,7 +560,7 @@ func TestCreateFilteredServer_EdgeCases(t *testing.T) {
 		defer us.Close()
 
 		// Create filtered server for non-existent backend
-		filteredServer := createFilteredServer(us, "nonexistent")
+		filteredServer := createAgentFilteredServer(us, "nonexistent", "")
 		assert.NotNil(t, filteredServer, "Should create server even for empty backend")
 
 		// Verify no tools for non-existent backend

@@ -32,9 +32,12 @@ func rejectIfShutdown(unifiedServer *UnifiedServer, next http.Handler, logNamesp
 // is evicted to make room.
 const filteredServerCacheMaxSize = 1000
 
-// createFilteredServer creates an MCP server that only exposes tools for a specific backend
-// This reuses the unified server's tool handlers, ensuring all calls go through the same session
-func createFilteredServer(unifiedServer *UnifiedServer, backendID string) *sdk.Server {
+// createAgentFilteredServer creates an MCP server that only exposes tools for a
+// specific backend that the given agent is permitted to use. This reuses the
+// unified server's tool handlers, ensuring all calls go through the same session.
+// When per-agent policies are not enforced, all of the backend's tools are exposed
+// (backward-compatible behavior).
+func createAgentFilteredServer(unifiedServer *UnifiedServer, backendID, agentID string) *sdk.Server {
 	logRouted.Printf("Creating filtered server: backend=%s", backendID)
 
 	// Create a new SDK server for this route with logger
@@ -50,6 +53,11 @@ func createFilteredServer(unifiedServer *UnifiedServer, backendID string) *sdk.S
 	for _, toolInfo := range tools {
 		// Capture for closure
 		toolNameCopy := toolInfo.Name
+
+		// Per-agent tool visibility: skip tools this agent's policy does not permit.
+		if !unifiedServer.agentCanUseTool(agentID, backendID, toolNameCopy) {
+			continue
+		}
 
 		// Get the unified server's handler for this tool
 		handler := unifiedServer.GetToolHandler(backendID, toolInfo.Name)

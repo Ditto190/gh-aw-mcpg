@@ -225,6 +225,25 @@ func (us *UnifiedServer) createGuardFromConfig(name string, cfg *config.GuardCon
 	}
 }
 
+// resolveGuardPolicyForAgent resolves the effective guard policy for a specific
+// authenticated agent and server. When the agent has a per-agent allow-only policy
+// configured, that policy takes precedence and is enforced via DIFC (source
+// "agent"). Otherwise it falls back to the server/global guard policy resolution.
+// This keeps per-agent allow-only policies isolated to the authenticated principal.
+func (us *UnifiedServer) resolveGuardPolicyForAgent(agentID, serverID string) (*config.GuardPolicy, string, error) {
+	if us.cfg != nil && us.cfg.AgentPoliciesEnabled() {
+		if agentPolicy := us.cfg.AgentPolicyFor(agentID); agentPolicy != nil && agentPolicy.AllowOnly != nil {
+			policy := &config.GuardPolicy{AllowOnly: agentPolicy.AllowOnly}
+			if err := config.ValidateGuardPolicy(policy); err != nil {
+				return nil, "", err
+			}
+			logGuardInit.Printf("Using per-agent allow-only policy: serverID=%s", serverID)
+			return policy, "agent", nil
+		}
+	}
+	return us.resolveGuardPolicy(serverID)
+}
+
 func (us *UnifiedServer) resolveGuardPolicy(serverID string) (*config.GuardPolicy, string, error) {
 	logGuardInit.Printf("Resolving guard policy: serverID=%s", serverID)
 	if us.cfg != nil && us.cfg.GuardPolicy != nil {
@@ -294,7 +313,9 @@ func (us *UnifiedServer) ensureGuardInitialized(
 ) (difc.EnforcementMode, error) {
 	defaultMode := us.Evaluator.GetMode()
 
-	policy, source, err := us.resolveGuardPolicy(serverID)
+	agentID := guard.GetAgentIDFromContext(ctx)
+
+	policy, source, err := us.resolveGuardPolicyForAgent(agentID, serverID)
 	if err != nil {
 		return defaultMode, fmt.Errorf("failed to resolve guard policy: %w", err)
 	}
@@ -336,8 +357,6 @@ func (us *UnifiedServer) ensureGuardInitialized(
 
 	logger.LogInfoToServer(serverID, "difc", "Initializing guard session state: session=%s, policy_source=%s", sessionID, source)
 	logger.LogInfoToServer(serverID, "difc", "Calling label_agent: session=%s, guard=%s, policy=%s", sessionID, g.Name(), string(policyJSON))
-
-	agentID := guard.GetAgentIDFromContext(ctx)
 
 	// Merge labels into existing agent (union semantics).
 	// Multiple guards may contribute labels for the same agent; each guard's
