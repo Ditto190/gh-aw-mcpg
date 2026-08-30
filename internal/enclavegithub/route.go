@@ -9,7 +9,7 @@ import (
 	"github.com/github/gh-aw-mcpg/internal/logger"
 )
 
-var logRoute = logger.New("enclavegithub:route")
+var logRoute = logger.ForFile()
 
 var (
 	issuesListPath = regexp.MustCompile(`^/repos/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)/issues$`)
