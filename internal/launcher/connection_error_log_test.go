@@ -10,6 +10,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/github/gh-aw-mcpg/internal/util"
 )
 
 // captureConnectionErrorLogOutput redirects log output to a buffer for the duration of fn.
@@ -59,7 +61,7 @@ func TestLogConnectionError_BasicOutput(t *testing.T) {
 			err: errors.New("exit status 1"),
 			wantInLog: []string{
 				"❌ FAILED to connect to server 'my-server'",
-				"for session 'sess-abc'",
+				"for session '" + util.HashIdentifierForLog("sess-abc") + "'",
 				"exit status 1",
 				"docker",
 				"test-image",

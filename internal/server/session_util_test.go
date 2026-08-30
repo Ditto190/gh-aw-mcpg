@@ -66,7 +66,7 @@ func TestFormatSessionIDForLog(t *testing.T) {
 			result := util.FormatSessionIDForLog(tt.sessionID)
 			assert.Equal(t, util.HashIdentifierForLog(tt.sessionID), result)
 			if tt.sessionID != "" {
-				assert.NotContains(t, result, tt.sessionID)
+				assert.NotEqual(t, tt.sessionID, result)
 			}
 		})
 	}

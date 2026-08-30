@@ -16,6 +16,7 @@ import (
 
 	"github.com/github/gh-aw-mcpg/internal/config"
 	"github.com/github/gh-aw-mcpg/internal/logger"
+	"github.com/github/gh-aw-mcpg/internal/util"
 )
 
 // captureLogOutput captures log output to a buffer for testing
@@ -40,7 +41,7 @@ func TestSessionSuffix(t *testing.T) {
 		{
 			name:      "with session ID",
 			sessionID: "test-session-123",
-			want:      " for session 'test-ses...'",
+			want:      " for session '" + util.HashIdentifierForLog("test-session-123") + "'",
 		},
 		{
 			name:      "empty session ID",
@@ -50,7 +51,7 @@ func TestSessionSuffix(t *testing.T) {
 		{
 			name:      "session ID with special characters",
 			sessionID: "session-with-dashes_and_underscores.123",
-			want:      " for session 'session-...'",
+			want:      " for session '" + util.HashIdentifierForLog("session-with-dashes_and_underscores.123") + "'",
 		},
 	}
 
@@ -314,7 +315,7 @@ func TestLauncher_LogLaunchError(t *testing.T) {
 			wantInLog: []string{
 				"FAILED",
 				"failed-server",
-				"session-...",
+				util.HashIdentifierForLog("session-123"),
 				"connection refused",
 				"docker",
 				"bad-image",
@@ -478,7 +479,7 @@ func TestLauncher_LogLaunchSuccess(t *testing.T) {
 			assert.Contains(t, string(content), tt.wantLog)
 			assert.Contains(t, string(content), tt.serverID)
 			if tt.sessionID != "" {
-				assert.Contains(t, string(content), "session-...")
+				assert.Contains(t, string(content), util.HashIdentifierForLog(tt.sessionID))
 			}
 		})
 	}

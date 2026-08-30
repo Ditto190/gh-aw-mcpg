@@ -262,6 +262,8 @@ type WasmGuard struct {
 	name    string
 	runtime wazero.Runtime
 	module  api.Module
+	wasm    []byte
+	options *WasmGuardOptions
 
 	// Backend caller provided to the guard via host functions
 	backend BackendCaller
@@ -326,6 +328,8 @@ func NewWasmGuardWithOptions(ctx context.Context, name string, wasmBytes []byte,
 		name:    name,
 		runtime: runtime,
 		backend: backend,
+		wasm:    append([]byte(nil), wasmBytes...),
+		options: cloneWasmGuardOptions(opts),
 	}
 
 	// Create host functions for the guard to call
@@ -420,6 +424,20 @@ func NewWasmGuardWithOptions(ctx context.Context, name string, wasmBytes []byte,
 
 	logWasm.Printf("WASM guard created successfully: name=%s", name)
 	return guard, nil
+}
+
+func cloneWasmGuardOptions(opts *WasmGuardOptions) *WasmGuardOptions {
+	if opts == nil {
+		return nil
+	}
+	copy := *opts
+	return &copy
+}
+
+// NewSessionGuard instantiates a WASM module with independent linear memory and
+// failure state while reusing the configured compilation cache.
+func (g *WasmGuard) NewSessionGuard(ctx context.Context) (Guard, error) {
+	return NewWasmGuardWithOptions(ctx, g.name, g.wasm, nil, g.options)
 }
 
 // instantiateHostFunctions creates the host functions that the WASM module can call

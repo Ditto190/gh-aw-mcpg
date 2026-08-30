@@ -18,6 +18,7 @@ import (
 	"github.com/github/gh-aw-mcpg/internal/sanitize"
 	"github.com/github/gh-aw-mcpg/internal/syncutil"
 	"github.com/github/gh-aw-mcpg/internal/sys"
+	"github.com/github/gh-aw-mcpg/internal/util"
 )
 
 var logLauncher = logger.ForFile()
@@ -202,7 +203,7 @@ func GetOrLaunch(l *Launcher, serverID string) (*mcp.Connection, error) {
 // GetOrLaunchForSession returns a session-aware connection or launches a new one
 // This is used for stateful stdio backends that require persistent connections
 func GetOrLaunchForSession(l *Launcher, serverID, sessionID string) (*mcp.Connection, error) {
-	logger.LogDebugToServer(serverID, "backend", "GetOrLaunchForSession called: server=%s, session=%s", serverID, sessionID)
+	logger.LogDebugToServer(serverID, "backend", "GetOrLaunchForSession called: server=%s, session=%s", serverID, util.FormatSessionIDForLog(sessionID))
 
 	// Get server config first to determine backend type
 	serverCfg, err := l.getServerConfig(serverID)
@@ -221,7 +222,7 @@ func GetOrLaunchForSession(l *Launcher, serverID, sessionID string) (*mcp.Connec
 	logLauncher.Printf("Checking session pool: serverID=%s, sessionID=%s", serverID, sessionID)
 	// For stdio backends, check the session pool first
 	if conn, exists := l.sessionPool.Get(serverID, sessionID); exists {
-		logger.LogDebugToServer(serverID, "backend", "Reusing session connection: server=%s, session=%s", serverID, sessionID)
+		logger.LogDebugToServer(serverID, "backend", "Reusing session connection: server=%s, session=%s", serverID, util.FormatSessionIDForLog(sessionID))
 		return conn, nil
 	}
 
@@ -239,7 +240,7 @@ func GetOrLaunchForSession(l *Launcher, serverID, sessionID string) (*mcp.Connec
 
 	// Double-check after acquiring lock
 	if conn, exists := l.sessionPool.Get(serverID, sessionID); exists {
-		logger.LogDebugToServer(serverID, "backend", "Session connection created by another goroutine: server=%s, session=%s", serverID, sessionID)
+		logger.LogDebugToServer(serverID, "backend", "Session connection created by another goroutine: server=%s, session=%s", serverID, util.FormatSessionIDForLog(sessionID))
 		return conn, nil
 	}
 

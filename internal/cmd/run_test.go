@@ -263,6 +263,12 @@ func TestRun_PluralAgentIDsStartsSuccessfully(t *testing.T) {
 port = 3000
 agent_ids = ["primary-agent", "enclave-agent"]
 
+[gateway.agent_policies.primary-agent]
+servers = ["testserver"]
+
+[gateway.agent_policies.enclave-agent]
+servers = ["testserver"]
+
 [servers.testserver]
 type = "http"
 url = "http://127.0.0.1:1"

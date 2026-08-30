@@ -13,6 +13,7 @@ import (
 	"github.com/github/gh-aw-mcpg/internal/mcp"
 	"github.com/github/gh-aw-mcpg/internal/middleware"
 	"github.com/github/gh-aw-mcpg/internal/sanitize"
+	"github.com/github/gh-aw-mcpg/internal/util"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -276,11 +277,11 @@ func (us *UnifiedServer) registerToolsFromBackendContext(ctx context.Context, se
 			sessionID := us.getSessionID(ctx)
 			argsJSON, _ := json.Marshal(toolArgs)
 			sanitizedArgs := sanitize.SanitizeString(string(argsJSON))
-			logger.LogInfo("client", "MCP tool call request, session=%s, tool=%s, args=%s", sessionID, toolNameCopy, sanitizedArgs)
+			logger.LogInfo("client", "MCP tool call request, session=%s, tool=%s, args=%s", util.FormatSessionIDForLog(sessionID), toolNameCopy, sanitizedArgs)
 
 			// Check session is initialized
 			if err := us.requireSession(ctx); err != nil {
-				logger.LogError("client", "MCP tool call failed: session not initialized, session=%s, tool=%s", sessionID, toolNameCopy)
+				logger.LogError("client", "MCP tool call failed: session not initialized, session=%s, tool=%s", util.FormatSessionIDForLog(sessionID), toolNameCopy)
 				return mcp.NewErrorCallToolResult(err)
 			}
 
@@ -288,9 +289,9 @@ func (us *UnifiedServer) registerToolsFromBackendContext(ctx context.Context, se
 
 			// Log the MCP tool call response
 			if err != nil {
-				logger.LogError("client", "MCP tool call error, session=%s, tool=%s, error=%v", sessionID, toolNameCopy, err)
+				logger.LogError("client", "MCP tool call error, session=%s, tool=%s, error=%v", util.FormatSessionIDForLog(sessionID), toolNameCopy, err)
 			} else {
-				logger.LogInfo("client", "MCP tool call response, session=%s, tool=%s, result=%s", sessionID, toolNameCopy, sanitize.MarshalAndSanitize(data))
+				logger.LogInfo("client", "MCP tool call response, session=%s, tool=%s, result=%s", util.FormatSessionIDForLog(sessionID), toolNameCopy, sanitize.MarshalAndSanitize(data))
 			}
 
 			return result, data, err

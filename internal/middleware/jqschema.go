@@ -483,7 +483,7 @@ func wrapToolHandler(
 		}
 
 		logger.LogDebug("payload", "Middleware processing tool call: tool=%s, queryID=%s, session=%s, baseDir=%s",
-			toolName, queryID, sessionID, baseDir)
+			toolName, queryID, util.FormatSessionIDForLog(sessionID), baseDir)
 
 		// Call the original handler
 		result, data, err := handler(ctx, req, args)

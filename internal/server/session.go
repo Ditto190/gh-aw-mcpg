@@ -54,10 +54,11 @@ func resolveRequestIdentity(r *http.Request, authEnabled bool) string {
 func NewSession(sessionID, token string) *Session {
 	logSession.Printf("Creating new session: sessionID=%s, has_token=%v", util.FormatSessionIDForLog(sessionID), token != "")
 	return &Session{
-		Token:     token,
-		SessionID: sessionID,
-		StartTime: time.Now(),
-		GuardInit: make(map[string]*GuardSessionState),
+		Token:          token,
+		SessionID:      sessionID,
+		StartTime:      time.Now(),
+		GuardInit:      make(map[string]*GuardSessionState),
+		guardInstances: make(map[string]guard.Guard),
 	}
 }
 

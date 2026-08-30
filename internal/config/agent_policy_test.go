@@ -186,6 +186,7 @@ servers = ["github"]
 
 [gateway.agent_policies.solo.allow-only]
 repos = "public"
+min-integrity = "none"
 `,
 		},
 		{
@@ -222,6 +223,10 @@ func TestLoadFromStdin_AgentPolicies(t *testing.T) {
 		{
 			name:    "valid single agent policy",
 			gateway: `"agentId": "solo", "agentPolicies": {"solo": {"servers": ["github"], "tools": {"github": ["search_code"]}}}`,
+		},
+		{
+			name:    "valid multiple agent policies",
+			gateway: `"agentIds": ["a", "b"], "agentPolicies": {"a": {"servers": ["github"], "tools": {"github": ["search_code"]}, "allow-only": {"repos": "public", "min-integrity": "none"}}, "b": {"servers": ["github"]}}`,
 		},
 		{
 			name:      "multi-agent missing policy fails closed",
@@ -279,4 +284,70 @@ func TestLoadFromStdin_AgentPolicies(t *testing.T) {
 			assert.True(t, cfg.AgentPoliciesEnabled())
 		})
 	}
+}
+
+func TestAgentPolicies_TOMLAndStdinJSONParity(t *testing.T) {
+	tomlPath := writeTempTOML(t, `[gateway]
+agent_ids = ["primary", "enclave"]
+
+[gateway.agent_policies.primary]
+servers = ["github"]
+
+[gateway.agent_policies.primary.tools]
+github = ["search_code"]
+
+[gateway.agent_policies.enclave]
+servers = ["github"]
+
+[gateway.agent_policies.enclave.allow-only]
+repos = ["github/gh-aw"]
+min-integrity = "approved"
+
+[servers.github]
+command = "docker"
+args = ["run", "--rm", "-i", "ghcr.io/github/github-mcp-server:latest"]
+`)
+	tomlConfig, err := LoadFromFile(tomlPath)
+	require.NoError(t, err)
+
+	input := `{
+		"mcpServers": {
+			"github": {
+				"type": "stdio",
+				"container": "ghcr.io/github/github-mcp-server:latest"
+			}
+		},
+		"gateway": {
+			"port": 3000,
+			"domain": "localhost",
+			"agentIds": ["primary", "enclave"],
+			"agentPolicies": {
+				"primary": {
+					"servers": ["github"],
+					"tools": {"github": ["search_code"]}
+				},
+				"enclave": {
+					"servers": ["github"],
+					"allow-only": {
+						"repos": ["github/gh-aw"],
+						"min-integrity": "approved"
+					}
+				}
+			}
+		}
+	}`
+	readEnd, writeEnd, err := os.Pipe()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = readEnd.Close() })
+	oldStdin := os.Stdin
+	os.Stdin = readEnd
+	t.Cleanup(func() { os.Stdin = oldStdin })
+	_, err = writeEnd.WriteString(input)
+	require.NoError(t, err)
+	require.NoError(t, writeEnd.Close())
+
+	jsonConfig, err := LoadFromStdin()
+	require.NoError(t, err)
+	assert.Equal(t, tomlConfig.Gateway.AgentIDs, jsonConfig.Gateway.AgentIDs)
+	assert.Equal(t, tomlConfig.Gateway.AgentPolicies, jsonConfig.Gateway.AgentPolicies)
 }

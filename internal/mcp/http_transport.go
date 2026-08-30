@@ -446,7 +446,7 @@ func tryPlainJSONTransport(ctx context.Context, cancel context.CancelFunc, serve
 	}
 
 	conn.httpSessionID = sessionID
-	logger.LogInfo("backend", "Plain JSON-RPC transport connected successfully with session=%s", sessionID)
+	logger.LogInfo("backend", "Plain JSON-RPC transport connected successfully with session=%s", util.FormatSessionIDForLog(sessionID))
 	logConn.Printf("Connected with plain JSON-RPC transport, session=%s", sessionID)
 	return conn, nil
 }

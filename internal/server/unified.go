@@ -45,6 +45,9 @@ type Session struct {
 	SessionID string
 	StartTime time.Time
 	GuardInit map[string]*GuardSessionState
+
+	guardMu        sync.Mutex
+	guardInstances map[string]guard.Guard
 }
 
 // GuardSessionState stores label_agent initialization state for a guard within a session.
@@ -418,8 +421,6 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 		toolSpan.End()
 	}()
 
-	// Get guard for this backend
-	g := us.guardRegistry.Get(serverID)
 	sessionID := us.getSessionID(ctx)
 	// Propagate a redacted, stable session attribution to the tool call span so it
 	// is queryable on child spans without exposing the raw authenticated identity.
@@ -441,6 +442,15 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 			tracing.RecordSpanError(toolSpan, deniedErr, "agent policy denied")
 			return mcp.NewErrorCallToolResult(deniedErr)
 		}
+
+	}
+
+	// Stateful guards keep label_agent policy context in their module memory.
+	// Multi-agent gateways therefore use an isolated instance per agent/server.
+	g, err := us.guardForSession(ctx, sessionID, serverID)
+	if err != nil {
+		httpStatusCode = 500
+		return mcp.NewErrorCallToolResult(fmt.Errorf("failed to create isolated guard session: %w", err))
 	}
 
 	// **Allowed-tools enforcement**: reject calls for tools not in the configured list.
@@ -602,8 +612,8 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 		if filterResult.Blocked {
 			logger.LogWarn("difc", "STRICT MODE: Blocking entire response - %d/%d items violate DIFC policy",
 				difcFiltered.GetFilteredCount(), difcFiltered.TotalCount)
-			blockErr := fmt.Errorf("DIFC policy violation: %d of %d items in response are not accessible to agent %s",
-				difcFiltered.GetFilteredCount(), difcFiltered.TotalCount, agentID)
+			blockErr := fmt.Errorf("DIFC policy violation: %d of %d items in response are not accessible to this agent",
+				difcFiltered.GetFilteredCount(), difcFiltered.TotalCount)
 			httpStatusCode = 403
 			return mcp.NewErrorCallToolResult(blockErr)
 		}
@@ -686,11 +696,11 @@ func (us *UnifiedServer) enforceToolCallLimit(sessionID, serverID, toolName stri
 
 	current := state.ToolCallCounts[toolName]
 	if current >= limit {
-		logUnified.Printf("enforceToolCallLimit: limit reached: sessionID=%s, serverID=%s, toolName=%s, count=%d, limit=%d", sessionID, serverID, toolName, current, limit)
+		logUnified.Printf("enforceToolCallLimit: limit reached: sessionID=%s, serverID=%s, toolName=%s, count=%d, limit=%d", util.HashIdentifierForLog(sessionID), serverID, toolName, current, limit)
 		return fmt.Errorf("tool call limit reached for %q (max: %d)", toolName, limit)
 	}
 	state.ToolCallCounts[toolName]++
-	logUnified.Printf("enforceToolCallLimit: count incremented: sessionID=%s, serverID=%s, toolName=%s, count=%d/%d", sessionID, serverID, toolName, state.ToolCallCounts[toolName], limit)
+	logUnified.Printf("enforceToolCallLimit: count incremented: sessionID=%s, serverID=%s, toolName=%s, count=%d/%d", util.HashIdentifierForLog(sessionID), serverID, toolName, state.ToolCallCounts[toolName], limit)
 	return nil
 }
 
@@ -808,6 +818,7 @@ func (us *UnifiedServer) InitiateShutdown() int {
 		us.launcher.Close()
 
 		// Release WASM runtime resources held by guards
+		us.closeSessionGuards(context.Background())
 		if us.guardRegistry != nil {
 			us.guardRegistry.Close(context.Background())
 		}

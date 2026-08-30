@@ -67,6 +67,13 @@ tool_timeout = 120
 # - Legacy [gateway.tracing] is still accepted for TOML migrations.
 # - If both sections are present, [gateway.opentelemetry] takes precedence.
 
+# Multi-agent gateways require an explicit policy for each configured identity.
+[gateway.agent_policies.primary-agent]
+servers = ["github"]
+
+[gateway.agent_policies.enclave-agent]
+servers = ["github"]
+
 # ============================================================================
 # MCP Server Configurations
 # ============================================================================

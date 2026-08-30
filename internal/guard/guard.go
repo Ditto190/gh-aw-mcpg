@@ -2,6 +2,7 @@ package guard
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/github/gh-aw-mcpg/internal/difc"
 )
@@ -44,6 +45,21 @@ type Guard interface {
 	// If the guard returns nil for labeledData, the reference monitor will use the
 	// resource labels from LabelResource for the entire response
 	LabelResponse(ctx context.Context, toolName string, result interface{}, backend BackendCaller, caps *difc.Capabilities) (difc.LabeledData, error)
+}
+
+// SessionGuardFactory creates an isolated guard instance for one authenticated
+// session. Stateful guards must not share policy or failure state across agents.
+type SessionGuardFactory interface {
+	NewSessionGuard(ctx context.Context) (Guard, error)
+}
+
+// NewSessionGuard creates an isolated instance from a registered guard template.
+func NewSessionGuard(ctx context.Context, template Guard) (Guard, error) {
+	factory, ok := template.(SessionGuardFactory)
+	if !ok {
+		return nil, fmt.Errorf("guard %q does not support isolated session instances", template.Name())
+	}
+	return factory.NewSessionGuard(ctx)
 }
 
 // LabelAgentResult describes the effective policy/session state returned by a guard.

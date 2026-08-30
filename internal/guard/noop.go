@@ -19,6 +19,11 @@ func NewNoopGuard() *NoopGuard {
 	return &NoopGuard{}
 }
 
+// NewSessionGuard returns an independent noop guard for one session.
+func (g *NoopGuard) NewSessionGuard(_ context.Context) (Guard, error) {
+	return NewNoopGuard(), nil
+}
+
 // Name returns the identifier for this guard
 func (g *NoopGuard) Name() string {
 	return "noop"

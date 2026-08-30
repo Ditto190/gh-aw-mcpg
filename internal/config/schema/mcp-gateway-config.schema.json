@@ -614,6 +614,14 @@
           "primary-agent",
           "enclave-agent"
         ],
+        "agentPolicies": {
+          "primary-agent": {
+            "servers": ["data-server"]
+          },
+          "enclave-agent": {
+            "servers": ["data-server"]
+          }
+        },
         "startupTimeout": 60,
         "toolTimeout": 120
       }
