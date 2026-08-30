@@ -5907,7 +5907,7 @@ mod tests {
     }
 
     #[test]
-    fn test_apply_tool_labels_notification_management_public_project_github() {
+    fn test_apply_tool_labels_notification_management_user_private_write() {
         let ctx = default_ctx();
         let tool_args = json!({ "threadId": "123" });
 
@@ -5920,22 +5920,23 @@ mod tests {
             let (secrecy, integrity, _desc) =
                 apply_tool_labels(tool, &tool_args, "", vec![], vec![], String::new(), &ctx);
 
-            assert!(
-                secrecy.is_empty(),
-                "{} should have empty (public) secrecy",
+            assert_eq!(
+                secrecy,
+                private_user_label(),
+                "{} should have private:user secrecy",
                 tool
             );
             assert_eq!(
                 integrity,
-                project_github_label(&ctx),
-                "{} should have project:github integrity",
+                writer_integrity(scope_names::USER, &ctx),
+                "{} should have writer:user integrity",
                 tool
             );
         }
     }
 
     #[test]
-    fn test_apply_tool_labels_star_repository_public() {
+    fn test_apply_tool_labels_star_repository_user_private_write() {
         let ctx = default_ctx();
         let tool_args = json!({
             "owner": "github",
@@ -5952,19 +5953,20 @@ mod tests {
             &ctx,
         );
 
-        assert!(
-            secrecy.is_empty(),
-            "star_repository should have empty (public) secrecy"
+        assert_eq!(
+            secrecy,
+            private_user_label(),
+            "star_repository should have private:user secrecy"
         );
         assert_eq!(
             integrity,
-            project_github_label(&ctx),
-            "star_repository should have project:github integrity"
+            writer_integrity(scope_names::USER, &ctx),
+            "star_repository should have writer:user integrity"
         );
     }
 
     #[test]
-    fn test_apply_tool_labels_unstar_repository_public_secrecy_github_integrity() {
+    fn test_apply_tool_labels_unstar_repository_user_private_write() {
         let ctx = default_ctx();
         let tool_args = json!({
             "owner": "github",
@@ -5981,14 +5983,15 @@ mod tests {
             &ctx,
         );
 
-        assert!(
-            secrecy.is_empty(),
-            "unstar_repository should have empty (public) secrecy — starring is a public action"
+        assert_eq!(
+            secrecy,
+            private_user_label(),
+            "unstar_repository should have private:user secrecy"
         );
         assert_eq!(
             integrity,
-            project_github_label(&ctx),
-            "unstar_repository should have project:github integrity"
+            writer_integrity(scope_names::USER, &ctx),
+            "unstar_repository should have writer:user integrity"
         );
     }
 

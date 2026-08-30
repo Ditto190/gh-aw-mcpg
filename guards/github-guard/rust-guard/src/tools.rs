@@ -57,8 +57,6 @@ pub const WRITE_OPERATIONS: &[&str] = &[
     "label_write",
     "lock_issue",        // gh issue lock
     "lock_pull_request", // gh pr lock
-    "manage_notification_subscription",
-    "manage_repository_notification_subscription",
     "mark_all_notifications_read",
     "mark_project_template", // gh project mark-template — GraphQL markProjectV2AsTemplate
     "projects_write",
@@ -140,6 +138,8 @@ pub const READ_WRITE_OPERATIONS: &[&str] = &[
     "issue_dependency_write", // GraphQL addBlockedBy/removeBlockedBy after resolving issue IDs
     "issue_write",
     "issue_write_ff_remote_mcp_issue_fields", // feature-flag variant of issue_write
+    "manage_notification_subscription",
+    "manage_repository_notification_subscription",
     "merge_pull_request",
     "pull_request_review_write",
     "remove_sub_issue",               // DELETE/POST — remove sub-issue link
@@ -726,6 +726,50 @@ mod tests {
             assert!(
                 !is_read_write_operation(op),
                 "{op} should not be in READ_WRITE_OPERATIONS"
+            );
+        }
+    }
+
+    #[test]
+    fn test_notification_and_star_tools_match_upstream_write_classification() {
+        for op in &[
+            "dismiss_notification",
+            "mark_all_notifications_read",
+            "star_repository",
+            "unstar_repository",
+        ] {
+            assert!(
+                WRITE_OPERATIONS.binary_search(op).is_ok(),
+                "{op} must be explicitly listed in WRITE_OPERATIONS"
+            );
+            assert!(
+                is_write_operation(op),
+                "{op} must be classified as a write operation"
+            );
+            assert!(
+                !is_read_write_operation(op),
+                "{op} should not be in READ_WRITE_OPERATIONS"
+            );
+        }
+    }
+
+    #[test]
+    fn test_notification_subscription_tools_match_upstream_read_write_classification() {
+        for op in &[
+            "manage_notification_subscription",
+            "manage_repository_notification_subscription",
+        ] {
+            assert!(
+                READ_WRITE_OPERATIONS.binary_search(op).is_ok(),
+                "{op} must be explicitly listed in READ_WRITE_OPERATIONS"
+            );
+            assert!(
+                is_read_write_operation(op),
+                "{op} must be classified as a read-write operation"
+            );
+            assert!(
+                !is_write_operation(op),
+                "{op} should not be in WRITE_OPERATIONS"
             );
         }
     }
