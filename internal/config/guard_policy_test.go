@@ -528,7 +528,6 @@ func TestIsValidRepoScope(t *testing.T) {
 	}
 }
 
-
 // TestIsValidRepoOwner tests boundary conditions.
 func TestIsValidRepoOwner(t *testing.T) {
 	tests := []struct {
