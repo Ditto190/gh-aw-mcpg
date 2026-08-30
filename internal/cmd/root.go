@@ -284,10 +284,6 @@ func run(cmd *cobra.Command, args []string) error {
 
 	debugLog.Printf("Server mode: %s, guards mode: %s", mode, cfg.DIFCMode)
 
-	if len(cfg.GetAgentIDs()) == 0 {
-		return fmt.Errorf("gateway.agentId or gateway.agentIds must be configured; exactly one selection is required")
-	}
-
 	// Apply tracing flags: CLI flags and env var overrides take precedence over config values.
 	applyTracingOverrides(cmd, cfg)
 
