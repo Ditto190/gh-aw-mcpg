@@ -32,6 +32,26 @@ func PortRange(port int, jsonPath string) *ValidationError {
 	return nil
 }
 
+// validateNonEmptyStringSlice validates that, when defined is true, values is a non-empty
+// slice containing only non-empty (non-whitespace) strings. When defined is false, the field
+// is treated as absent and validation passes trivially. fieldName is used for both the
+// top-level error and per-element errors; specSuffix (e.g. " (spec §4.1.3.4)") is appended
+// verbatim after "when present" in the top-level error, or may be empty.
+func validateNonEmptyStringSlice(values []string, defined bool, fieldName, specSuffix string) error {
+	if !defined {
+		return nil
+	}
+	if len(values) == 0 {
+		return fmt.Errorf("%s must be a non-empty array when present%s", fieldName, specSuffix)
+	}
+	for i, v := range values {
+		if strings.TrimSpace(v) == "" {
+			return fmt.Errorf("%s[%d] must be a non-empty string", fieldName, i)
+		}
+	}
+	return nil
+}
+
 func validatePositiveIntegerRule(value int, fieldName, jsonPath, logLabel, failureLabel, suggestion string) *ValidationError {
 	logValidation.Printf("Validating %s: field=%s, value=%d, jsonPath=%s", logLabel, fieldName, value, jsonPath)
 	if value < 1 {
