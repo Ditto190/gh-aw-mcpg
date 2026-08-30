@@ -526,3 +526,98 @@ func TestCreateGuardFromConfig_Default_RegisteredType(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, g)
 }
+
+// fullGuardWasm is a minimal valid WASM module exporting all three required
+// guard functions (label_resource, label_response, label_agent) plus memory;
+// every function returns i32.const 0 (empty result). This is the smallest
+// module that satisfies guard.NewWasmGuard's export/signature validation, so
+// it exercises the success path of the "wasm" branch in createGuardFromConfig
+// (previously 0% covered: NewWasmGuard succeeds, logger.LogInfo is called, and
+// the created guard + nil error are returned).
+//
+// Compiled from:
+//
+//	(module
+//	  (memory (export "memory") 1)
+//	  (func (export "label_resource") (param i32 i32 i32 i32) (result i32) i32.const 0)
+//	  (func (export "label_response") (param i32 i32 i32 i32) (result i32) i32.const 0)
+//	  (func (export "label_agent") (param i32 i32 i32 i32) (result i32) i32.const 0))
+var fullGuardWasm = []byte{
+	0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x01, 0x09, 0x01, 0x60, 0x04, 0x7f, 0x7f, 0x7f,
+	0x7f, 0x01, 0x7f, 0x03, 0x04, 0x03, 0x00, 0x00, 0x00, 0x05, 0x03, 0x01, 0x00, 0x01, 0x07, 0x3a,
+	0x04, 0x0e, 0x6c, 0x61, 0x62, 0x65, 0x6c, 0x5f, 0x72, 0x65, 0x73, 0x6f, 0x75, 0x72, 0x63, 0x65,
+	0x00, 0x00, 0x0e, 0x6c, 0x61, 0x62, 0x65, 0x6c, 0x5f, 0x72, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73,
+	0x65, 0x00, 0x01, 0x0b, 0x6c, 0x61, 0x62, 0x65, 0x6c, 0x5f, 0x61, 0x67, 0x65, 0x6e, 0x74, 0x00,
+	0x02, 0x06, 0x6d, 0x65, 0x6d, 0x6f, 0x72, 0x79, 0x02, 0x00, 0x0a, 0x10, 0x03, 0x04, 0x00, 0x41,
+	0x00, 0x0b, 0x04, 0x00, 0x41, 0x00, 0x0b, 0x04, 0x00, 0x41, 0x00, 0x0b,
+}
+
+// TestCreateGuardFromConfig_WasmType_Success verifies that the "wasm" branch in
+// createGuardFromConfig succeeds end-to-end when cfg.Path points to a valid WASM
+// guard module: NewWasmGuard must succeed, and createGuardFromConfig must return
+// the created guard with a nil error (the previously uncovered success path,
+// including the logger.LogInfo call at that line).
+func TestCreateGuardFromConfig_WasmType_Success(t *testing.T) {
+	tmpFile, err := os.CreateTemp(t.TempDir(), "full-guard-*.wasm")
+	require.NoError(t, err)
+	_, err = tmpFile.Write(fullGuardWasm)
+	require.NoError(t, err)
+	require.NoError(t, tmpFile.Close())
+
+	us := newMinimalUnifiedServerForGuardTest(&config.Config{})
+
+	g, err := us.createGuardFromConfig("wasm-guard", &config.GuardConfig{
+		Type: "wasm",
+		Path: tmpFile.Name(),
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, g)
+	wasmGuard, ok := g.(*guard.WasmGuard)
+	require.True(t, ok)
+	t.Cleanup(func() { require.NoError(t, wasmGuard.Close(t.Context())) })
+	assert.Equal(t, "wasm-guard", g.Name())
+}
+
+// TestCreateGuardFromConfig_WasmType_Success_ViaRegisterGuard verifies the same
+// success path but exercised through the higher-level registerGuard entry point,
+// confirming the guard created from a valid WASM module is registered correctly
+// and is not replaced by a noop guard.
+func TestCreateGuardFromConfig_WasmType_Success_ViaRegisterGuard(t *testing.T) {
+	t.Setenv(guard.WASMGuardsDirEnvVar, "")
+
+	tmpFile, err := os.CreateTemp(t.TempDir(), "full-guard-*.wasm")
+	require.NoError(t, err)
+	_, err = tmpFile.Write(fullGuardWasm)
+	require.NoError(t, err)
+	require.NoError(t, tmpFile.Close())
+
+	cfg := &config.Config{
+		Servers: map[string]*config.ServerConfig{
+			"github": {
+				Type:  "http",
+				Guard: "wasm-guard",
+				GuardPolicies: map[string]interface{}{
+					"allow-only": map[string]interface{}{
+						"repos":         "public",
+						"min-integrity": "none",
+					},
+				},
+			},
+		},
+		Guards: map[string]*config.GuardConfig{
+			"wasm-guard": {Type: "wasm", Path: tmpFile.Name()},
+		},
+	}
+	us := newMinimalUnifiedServerForGuardTest(cfg)
+
+	err = us.registerGuard("github")
+
+	require.NoError(t, err)
+	registeredGuard := us.guardRegistry.Get("github")
+	require.NotNil(t, registeredGuard)
+	wasmGuard, ok := registeredGuard.(*guard.WasmGuard)
+	require.True(t, ok)
+	t.Cleanup(func() { require.NoError(t, wasmGuard.Close(t.Context())) })
+	assert.Equal(t, "wasm-guard", registeredGuard.Name())
+}

@@ -239,3 +239,37 @@ func TestRequireGuardPolicyIfGuardEnabled_UnknownServerID(t *testing.T) {
 	require.NotNil(t, resultGuard, "should return a guard")
 	assert.Equal(t, "noop", resultGuard.Name(), "should fallback to noop for an unknown server ID")
 }
+
+// TestRequireGuardPolicyIfGuardEnabled_WithUnparseableGuardPolicies exercises the
+// previously uncovered branch (server.GuardPolicies is non-empty but does not
+// parse into a *config.GuardPolicy, so resolveGuardPolicy/ParseServerGuardPolicy
+// return (nil, nil)). In this case the non-noop guard must be kept — not
+// downgraded to noop — because DIFC guard-policy resolution will happen later
+// during guard initialization.
+func TestRequireGuardPolicyIfGuardEnabled_WithUnparseableGuardPolicies(t *testing.T) {
+	cfg := &config.Config{
+		Servers: map[string]*config.ServerConfig{
+			"github": {
+				Type: "stdio",
+				// No "allow-only"/"write-sink"/"repos" keys, so ParsePolicyMap
+				// (and therefore ParseServerGuardPolicy) returns (nil, nil), but
+				// len(GuardPolicies) > 0.
+				GuardPolicies: map[string]interface{}{
+					"some-unrecognized-key": "some-value",
+				},
+			},
+		},
+	}
+
+	us := &UnifiedServer{cfg: cfg}
+	mockG := &mockGuard{name: "mock-guard"}
+
+	resultGuard, err := us.requireGuardPolicyIfGuardEnabled("github", mockG)
+
+	require.NoError(t, err, "should not return an error")
+	require.NotNil(t, resultGuard, "should return a guard")
+	assert.Equal(t, "mock-guard", resultGuard.Name(),
+		"should keep the non-noop guard when guard-policies are configured but unparsed yet")
+	assert.NotEqual(t, "noop", resultGuard.Name(),
+		"should not fall back to noop when guard-policies are present, even if unparseable now")
+}
