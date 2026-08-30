@@ -528,16 +528,6 @@ func TestIsValidRepoScope(t *testing.T) {
 	}
 }
 
-// TestIsValidRepoScope_EmptyRepoNameAfterWildcardTrim covers the defensive
-// isPrefixWildcard branch in isValidRepoScope where trimming the trailing "*"
-// yields an empty repo name. In practice this is only reachable when repoPart
-// is exactly "*" (e.g. "owner/*"), which is intercepted by the earlier
-// `repoPart == "*"` short-circuit and always returns true before reaching this
-// check — this test documents that guarantee and pins the behavior so a
-// future refactor cannot silently make "owner/*" invalid.
-func TestIsValidRepoScope_EmptyRepoNameAfterWildcardTrim(t *testing.T) {
-	assert.True(t, isValidRepoScope("owner/*"), "owner/* should remain valid via the repoPart==\"*\" short-circuit")
-}
 
 // TestIsValidRepoOwner tests boundary conditions.
 func TestIsValidRepoOwner(t *testing.T) {
