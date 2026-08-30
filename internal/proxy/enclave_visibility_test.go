@@ -225,8 +225,9 @@ func TestForwardEnclaveVisibilityLookup(t *testing.T) {
 		require := require.New(t)
 		assert := assert.New(t)
 
-		var gotPath, gotAuth string
+		var gotMethod, gotPath, gotAuth string
 		upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			gotMethod = r.Method
 			gotPath = r.URL.Path
 			gotAuth = r.Header.Get("Authorization")
 			w.WriteHeader(http.StatusOK)
@@ -240,6 +241,7 @@ func TestForwardEnclaveVisibilityLookup(t *testing.T) {
 		require.NoError(err)
 		defer resp.Body.Close()
 
+		assert.Equal(http.MethodGet, gotMethod)
 		assert.Equal("/repos/octo/cat", gotPath)
 		assert.Equal("token abc123", gotAuth)
 		assert.Equal(http.StatusOK, resp.StatusCode)
