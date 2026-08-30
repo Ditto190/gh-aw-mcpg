@@ -5,7 +5,11 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+
+	"github.com/github/gh-aw-mcpg/internal/logger"
 )
+
+var logRoute = logger.ForFile()
 
 var (
 	issuesListPath = regexp.MustCompile(`^/repos/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)/issues$`)
@@ -39,6 +43,7 @@ func (r *Route) FullRepo() string {
 
 // MatchRoute matches only the versioned enclave issue-read REST surface.
 func MatchRoute(path string, query url.Values) (*Route, error) {
+	logRoute.Printf("Matching enclave route: path=%s", path)
 	var route Route
 	switch {
 	case issuesListPath.MatchString(path):
@@ -51,19 +56,23 @@ func MatchRoute(path string, query url.Values) (*Route, error) {
 		match := commentsPath.FindStringSubmatch(path)
 		route = Route{Operation: OperationIssueCommentsList, Owner: match[1], Repo: match[2], Number: match[3]}
 	default:
+		logRoute.Printf("No route pattern matched for path: %s", path)
 		return nil, fmt.Errorf("unsupported enclave route")
 	}
 	fullRepo := route.Owner + "/" + route.Repo
 	normalizedRepo, valid := NormalizeRepository(fullRepo)
 	if !valid || normalizedRepo != fullRepo {
+		logRoute.Printf("Repository normalization failed or mismatched: repo=%s, valid=%v", fullRepo, valid)
 		return nil, fmt.Errorf("unsupported enclave route")
 	}
 
 	allowed := allowedQueryKeys[route.Operation]
 	for key, values := range query {
 		if _, ok := allowed[key]; !ok || len(values) != 1 {
+			logRoute.Printf("Rejected unsupported query parameter: key=%s, operation=%s", key, route.Operation)
 			return nil, fmt.Errorf("unsupported enclave query")
 		}
 	}
+	logRoute.Printf("Route matched successfully: operation=%s, repo=%s", route.Operation, fullRepo)
 	return &route, nil
 }
