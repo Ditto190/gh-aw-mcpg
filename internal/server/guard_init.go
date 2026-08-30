@@ -134,6 +134,11 @@ func (us *UnifiedServer) registerGuard(serverID string) error {
 	if policyErr != nil {
 		return policyErr
 	}
+	if us.isMultiAgent() {
+		if _, ok := g.(guard.SessionGuardFactory); !ok {
+			return fmt.Errorf("guard %q for server %q does not support isolated multi-agent sessions", g.Name(), serverID)
+		}
+	}
 
 	us.guardRegistry.Register(serverID, g)
 	logger.LogInfoToServer(serverID, "difc", "Registered guard '%s'", g.Name())
@@ -158,6 +163,10 @@ func (us *UnifiedServer) requireGuardPolicyIfGuardEnabled(serverID string, g gua
 				logger.LogInfoToServer(serverID, "difc", "Guard '%s' loaded with guard-policies config (policy will be resolved during guard initialization)", g.Name())
 				return g, nil
 			}
+			if us.cfg != nil && us.cfg.HasAgentAllowOnlyPolicies() {
+				logger.LogInfoToServer(serverID, "difc", "Guard '%s' retained for per-agent allow-only policies", g.Name())
+				return g, nil
+			}
 		}
 
 		logger.LogWarnToServer(serverID, "difc", "Guard '%s' is available but no guard policy is set; falling back to noop guard", g.Name())
@@ -165,6 +174,61 @@ func (us *UnifiedServer) requireGuardPolicyIfGuardEnabled(serverID string, g gua
 	}
 
 	return g, nil
+}
+
+// guardForSession returns the registered server guard in singular mode and an
+// isolated per-agent instance in multi-agent mode.
+func (us *UnifiedServer) guardForSession(ctx context.Context, sessionID, serverID string) (guard.Guard, error) {
+	template := us.guardRegistry.Get(serverID)
+	if !us.isMultiAgent() {
+		return template, nil
+	}
+
+	us.sessionMu.Lock()
+	session := us.sessions[sessionID]
+	if session == nil {
+		session = NewSession(sessionID, "")
+		us.sessions[sessionID] = session
+	}
+	us.sessionMu.Unlock()
+
+	session.guardMu.Lock()
+	defer session.guardMu.Unlock()
+	if session.guardInstances == nil {
+		session.guardInstances = make(map[string]guard.Guard)
+	}
+	if instance := session.guardInstances[serverID]; instance != nil {
+		return instance, nil
+	}
+
+	instance, err := guard.NewSessionGuard(ctx, template)
+	if err != nil {
+		return nil, err
+	}
+	session.guardInstances[serverID] = instance
+	return instance, nil
+}
+
+func (us *UnifiedServer) closeSessionGuards(ctx context.Context) {
+	us.sessionMu.RLock()
+	sessions := make([]*Session, 0, len(us.sessions))
+	for _, session := range us.sessions {
+		sessions = append(sessions, session)
+	}
+	us.sessionMu.RUnlock()
+
+	for _, session := range sessions {
+		session.guardMu.Lock()
+		for serverID, instance := range session.guardInstances {
+			if closer, ok := instance.(interface{ Close(context.Context) error }); ok {
+				if err := closer.Close(ctx); err != nil {
+					logger.LogWarnToServer(serverID, "guard", "Failed to close isolated guard instance: %v", err)
+				}
+			}
+		}
+		session.guardInstances = make(map[string]guard.Guard)
+		session.guardMu.Unlock()
+	}
 }
 
 func (us *UnifiedServer) logServerGuardPolicies(serverID string) {
@@ -223,6 +287,25 @@ func (us *UnifiedServer) createGuardFromConfig(name string, cfg *config.GuardCon
 		// Try registered guard types
 		return guard.CreateGuard(cfg.Type)
 	}
+}
+
+// resolveGuardPolicyForAgent resolves the effective guard policy for a specific
+// authenticated agent and server. When the agent has a per-agent allow-only policy
+// configured, that policy takes precedence and is enforced via DIFC (source
+// "agent"). Otherwise it falls back to the server/global guard policy resolution.
+// This keeps per-agent allow-only policies isolated to the authenticated principal.
+func (us *UnifiedServer) resolveGuardPolicyForAgent(agentID, serverID string) (*config.GuardPolicy, string, error) {
+	if us.cfg != nil && us.cfg.AgentPoliciesEnabled() {
+		if agentPolicy := us.cfg.AgentPolicyFor(agentID); agentPolicy != nil && agentPolicy.AllowOnly != nil {
+			policy := &config.GuardPolicy{AllowOnly: agentPolicy.AllowOnly}
+			if err := config.ValidateGuardPolicy(policy); err != nil {
+				return nil, "", err
+			}
+			logGuardInit.Printf("Using per-agent allow-only policy: serverID=%s", serverID)
+			return policy, "agent", nil
+		}
+	}
+	return us.resolveGuardPolicy(serverID)
 }
 
 func (us *UnifiedServer) resolveGuardPolicy(serverID string) (*config.GuardPolicy, string, error) {
@@ -294,7 +377,9 @@ func (us *UnifiedServer) ensureGuardInitialized(
 ) (difc.EnforcementMode, error) {
 	defaultMode := us.Evaluator.GetMode()
 
-	policy, source, err := us.resolveGuardPolicy(serverID)
+	agentID := guard.GetAgentIDFromContext(ctx)
+
+	policy, source, err := us.resolveGuardPolicyForAgent(agentID, serverID)
 	if err != nil {
 		return defaultMode, fmt.Errorf("failed to resolve guard policy: %w", err)
 	}
@@ -328,16 +413,14 @@ func (us *UnifiedServer) ensureGuardInitialized(
 		if state, ok := session.GuardInit[serverID]; ok && state.Initialized && state.PolicyHash == policyHash {
 			mode := state.DIFCMode
 			us.sessionMu.RUnlock()
-			logGuardInit.Printf("Guard session cache hit: server=%s, session=%s, mode=%s", serverID, sessionID, mode)
+			logGuardInit.Printf("Guard session cache hit: server=%s, session=%s, mode=%s", serverID, util.HashIdentifierForLog(sessionID), mode)
 			return mode, nil
 		}
 	}
 	us.sessionMu.RUnlock()
 
-	logger.LogInfoToServer(serverID, "difc", "Initializing guard session state: session=%s, policy_source=%s", sessionID, source)
-	logger.LogInfoToServer(serverID, "difc", "Calling label_agent: session=%s, guard=%s, policy=%s", sessionID, g.Name(), string(policyJSON))
-
-	agentID := guard.GetAgentIDFromContext(ctx)
+	logger.LogInfoToServer(serverID, "difc", "Initializing guard session state: session=%s, policy_source=%s", util.HashIdentifierForLog(sessionID), source)
+	logger.LogInfoToServer(serverID, "difc", "Calling label_agent: session=%s, guard=%s, policy=%s", util.HashIdentifierForLog(sessionID), g.Name(), string(policyJSON))
 
 	// Merge labels into existing agent (union semantics).
 	// Multiple guards may contribute labels for the same agent; each guard's
@@ -354,7 +437,7 @@ func (us *UnifiedServer) ensureGuardInitialized(
 		defaultMode,
 	)
 	if err != nil {
-		logger.LogErrorToServer(serverID, "difc", "label_agent failed: session=%s, guard=%s, error=%v", sessionID, g.Name(), err)
+		logger.LogErrorToServer(serverID, "difc", "label_agent failed: session=%s, guard=%s, error=%v", util.HashIdentifierForLog(sessionID), g.Name(), err)
 		return defaultMode, err
 	}
 	logger.LogMarshaledForDebugf(
@@ -367,7 +450,7 @@ func (us *UnifiedServer) ensureGuardInitialized(
 			logger.LogWarnToServer(serverID, "difc", format, args...)
 		},
 		"label_agent response (failed to serialize for logging): session=%s, guard=%s, error=%v",
-		sessionID, g.Name(),
+		util.HashIdentifierForLog(sessionID), g.Name(),
 	)
 
 	us.sessionMu.Lock()
@@ -395,7 +478,7 @@ func (us *UnifiedServer) ensureGuardInitialized(
 	us.sessionMu.Unlock()
 
 	logger.LogInfoToServer(serverID, "difc", "Guard policy initialized: session=%s, guard_policy.source=%s, difc_mode=%s, guard_policy.normalized=%v",
-		sessionID, source, mode, normalizedPolicy)
+		util.HashIdentifierForLog(sessionID), source, mode, normalizedPolicy)
 
 	return mode, nil
 }

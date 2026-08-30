@@ -460,6 +460,34 @@
           "type": "array",
           "items": { "type": "string" },
           "description": "Server IDs exempt from the default sink-visibility=\"public\" enforcement. By default, all non-safe-outputs write-sink servers are assigned sink-visibility=\"public\" (security-by-default). Servers listed here retain their configured (or omitted) sink-visibility as-is. Use [\"*\"] to exempt all servers. Set by the compiler when private-to-public-flows is configured in workflow frontmatter."
+        },
+        "agentPolicies": {
+          "type": "object",
+          "description": "Per-agent access policies keyed by agent ID (each key MUST match a configured agentId/agentIds entry). Each policy restricts which MCP servers and tools the agent may use and may carry a per-agent allow-only guard policy. Fail-closed: with multiple agentIds, every configured agent ID MUST have a policy. Omit this field only for a singular agentId to retain backward-compatible full access.",
+          "additionalProperties": {
+            "type": "object",
+            "description": "Access policy for a single agent identity.",
+            "properties": {
+              "servers": {
+                "type": "array",
+                "description": "MCP server IDs this agent may access. Each entry MUST reference a configured server. An agent may only reach servers listed here.",
+                "items": { "type": "string", "minLength": 1 }
+              },
+              "tools": {
+                "type": "object",
+                "description": "Optional per-server tool allowlist. Maps a permitted server ID to the tool names the agent may call. Omit a server to permit all of its tools; use [\"*\"] to permit all tools explicitly. Server keys MUST also appear in 'servers'.",
+                "additionalProperties": {
+                  "type": "array",
+                  "items": { "type": "string", "minLength": 1 }
+                }
+              },
+              "allow-only": {
+                "type": "object",
+                "description": "Optional per-agent allow-only guard policy (same shape as a guard-policies allow-only policy). Applied to this agent's DIFC guard session; enforcement requires an active (non-noop) guard."
+              }
+            },
+            "additionalProperties": false
+          }
         }
       },
       "required": [
@@ -586,6 +614,14 @@
           "primary-agent",
           "enclave-agent"
         ],
+        "agentPolicies": {
+          "primary-agent": {
+            "servers": ["data-server"]
+          },
+          "enclave-agent": {
+            "servers": ["data-server"]
+          }
+        },
         "startupTimeout": 60,
         "toolTimeout": 120
       }

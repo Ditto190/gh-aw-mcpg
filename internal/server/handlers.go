@@ -64,6 +64,20 @@ func handleClose(unifiedServer *UnifiedServer) http.Handler {
 			return
 		}
 
+		// Multi-agent safety: when more than one agent identity is configured, the
+		// gateway is a shared resource. A single principal's /close request must NOT
+		// terminate the shared gateway and disrupt other agents. Acknowledge the
+		// request without shutting down. Singular (single-agent) behavior is preserved.
+		if unifiedServer.isMultiAgent() {
+			logger.LogWarn("shutdown", "Close endpoint ignored in multi-agent mode (shared gateway not terminated), remote=%s", r.RemoteAddr)
+			httputil.WriteJSONResponse(w, http.StatusOK, map[string]interface{}{
+				"status":            "ignored",
+				"message":           "Gateway is shared by multiple agents; shutdown not performed",
+				"serversTerminated": 0,
+			})
+			return
+		}
+
 		// Initiate shutdown and get server count
 		logHandlers.Print("Initiating gateway shutdown")
 		serversTerminated := unifiedServer.InitiateShutdown()

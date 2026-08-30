@@ -21,6 +21,10 @@ var logSession = logger.ForFile()
 
 // extractSessionIDFromRequest extracts the session ID from X-Agent-ID and
 // Authorization headers. Returns "" if neither header is present or valid.
+//
+// This retains the legacy X-Agent-ID-precedence behavior and is used only for
+// non-authoritative logging display. The authenticated session/DIFC identity is
+// resolved by resolveRequestIdentity, which ignores X-Agent-ID when auth is enabled.
 func extractSessionIDFromRequest(r *http.Request) string {
 	return auth.ExtractSessionIDFromHeaders(
 		r.Header.Get("X-Agent-ID"),
@@ -28,14 +32,33 @@ func extractSessionIDFromRequest(r *http.Request) string {
 	)
 }
 
+// resolveRequestIdentity derives the authenticated session/agent identity for a
+// request. When auth is enabled the identity is taken ONLY from the Authorization
+// header value (the authenticated principal); the X-Agent-ID header can never
+// override it. Malformed or blank Authorization values yield "" so the connection
+// is rejected. When auth is disabled there is no authentication identity to protect,
+// so the legacy X-Agent-ID/Authorization resolution is used for backward compatibility.
+func resolveRequestIdentity(r *http.Request, authEnabled bool) string {
+	if authEnabled {
+		authHeader := r.Header.Get("Authorization")
+		if auth.IsMalformedHeader(authHeader) {
+			logSession.Print("resolveRequestIdentity: Authorization header malformed, rejecting")
+			return ""
+		}
+		return auth.ExtractSessionID(authHeader)
+	}
+	return extractSessionIDFromRequest(r)
+}
+
 // NewSession creates a new Session with the given session ID and optional token
 func NewSession(sessionID, token string) *Session {
 	logSession.Printf("Creating new session: sessionID=%s, has_token=%v", util.FormatSessionIDForLog(sessionID), token != "")
 	return &Session{
-		Token:     token,
-		SessionID: sessionID,
-		StartTime: time.Now(),
-		GuardInit: make(map[string]*GuardSessionState),
+		Token:          token,
+		SessionID:      sessionID,
+		StartTime:      time.Now(),
+		GuardInit:      make(map[string]*GuardSessionState),
+		guardInstances: make(map[string]guard.Guard),
 	}
 }
 
@@ -125,16 +148,18 @@ func (us *UnifiedServer) getSessionKeys() []string {
 	return keys
 }
 
-// extractAndValidateSession extracts the session ID from request headers.
-// and logs connection details. Returns empty string if validation fails.
-func extractAndValidateSession(r *http.Request) string {
+// extractAndValidateSession extracts the authenticated session ID from request
+// headers and logs connection details. Returns empty string if validation fails.
+// When authEnabled is true, the identity is derived solely from the Authorization
+// header value (X-Agent-ID cannot override the authenticated principal).
+func extractAndValidateSession(r *http.Request, authEnabled bool) string {
 	logSession.Printf("Extracting session from request: remote=%s, path=%s", r.RemoteAddr, r.URL.Path)
 
-	sessionID := extractSessionIDFromRequest(r)
+	sessionID := resolveRequestIdentity(r, authEnabled)
 
 	if sessionID == "" {
-		logSession.Printf("Session extraction failed: missing or invalid X-Agent-ID/Authorization header, remote=%s", r.RemoteAddr)
-		logger.LogError("client", "Rejected MCP client connection: missing or invalid X-Agent-ID/Authorization header, remote=%s, path=%s", r.RemoteAddr, r.URL.Path)
+		logSession.Printf("Session extraction failed: missing or invalid Authorization/X-Agent-ID header, remote=%s", r.RemoteAddr)
+		logger.LogError("client", "Rejected MCP client connection: missing or invalid Authorization/X-Agent-ID header, remote=%s, path=%s", r.RemoteAddr, r.URL.Path)
 		return ""
 	}
 	if !isSinglePathSegmentSessionID(sessionID) {
@@ -143,7 +168,7 @@ func extractAndValidateSession(r *http.Request) string {
 		return ""
 	}
 
-	logSession.Printf("Session extracted successfully: sessionID=%s, remote=%s", util.FormatSessionIDForLog(sessionID), r.RemoteAddr)
+	logSession.Printf("Session extracted successfully: sessionID=%s, remote=%s", util.HashIdentifierForLog(sessionID), r.RemoteAddr)
 	return sessionID
 }
 
@@ -181,21 +206,23 @@ func injectSessionContext(r *http.Request, sessionID, backendID string) *http.Re
 	return r.WithContext(ctx)
 }
 
-// setupSessionCallback extracts the session ID, logs the new connection, injects
-// the session into the request context, and returns the session ID.
-// Used by both routed and unified StreamableHTTP session establishment callbacks.
-func setupSessionCallback(r *http.Request, backendID string) (string, bool) {
-	sessionID := extractAndValidateSession(r)
+// setupSessionCallback extracts the authenticated session ID, logs the new
+// connection, injects the session into the request context, and returns the
+// session ID. Used by both routed and unified StreamableHTTP session establishment
+// callbacks. When authEnabled is true, the identity is derived solely from the
+// Authorization header (X-Agent-ID cannot override the authenticated principal).
+func setupSessionCallback(r *http.Request, backendID string, authEnabled bool) (string, bool) {
+	sessionID := extractAndValidateSession(r, authEnabled)
 	if sessionID == "" {
 		return "", false
 	}
 
 	if backendID != "" {
 		logger.LogInfo("client", "New MCP client connection, remote=%s, method=%s, path=%s, backend=%s, session=%s",
-			r.RemoteAddr, r.Method, r.URL.Path, backendID, util.FormatSessionIDForLog(sessionID))
+			r.RemoteAddr, r.Method, r.URL.Path, backendID, util.HashIdentifierForLog(sessionID))
 	} else {
 		logger.LogInfo("client", "MCP connection established, remote=%s, method=%s, path=%s, session=%s",
-			r.RemoteAddr, r.Method, r.URL.Path, util.FormatSessionIDForLog(sessionID))
+			r.RemoteAddr, r.Method, r.URL.Path, util.HashIdentifierForLog(sessionID))
 	}
 
 	logHTTPRequestBody(r, sessionID, backendID)

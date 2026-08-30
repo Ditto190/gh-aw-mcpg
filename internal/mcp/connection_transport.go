@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/github/gh-aw-mcpg/internal/logger"
+	"github.com/github/gh-aw-mcpg/internal/util"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -35,7 +36,7 @@ func (c *Connection) reconnectPlainJSON() error {
 			return err
 		}
 		c.httpSessionID = sessionID
-		logConn.Printf("Reconnected plain JSON-RPC session for serverID=%s, new sessionID=%s", c.serverID, sessionID)
+		logConn.Printf("Reconnected plain JSON-RPC session for serverID=%s, new sessionID=%s", c.serverID, util.FormatSessionIDForLog(sessionID))
 		return nil
 	})
 }

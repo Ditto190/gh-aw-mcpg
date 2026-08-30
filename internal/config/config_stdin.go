@@ -52,6 +52,7 @@ type StdinGatewayConfig struct {
 	TrustedBots                 []string                  `json:"trustedBots,omitempty"`
 	ForcePublicRepos            *bool                     `json:"forcePublicRepos,omitempty"`
 	SinkVisibilityExemptServers []string                  `json:"sinkVisibilityExemptServers,omitempty"`
+	AgentPolicies               map[string]*AgentPolicy   `json:"agentPolicies,omitempty"`
 	OpenTelemetry               *StdinOpenTelemetryConfig `json:"opentelemetry,omitempty"`
 
 	agentIDSet      bool `json:"-"`
@@ -454,6 +455,9 @@ func convertStdinConfig(stdinCfg *StdinConfig) (*Config, error) {
 		if len(stdinCfg.Gateway.SinkVisibilityExemptServers) > 0 {
 			cfg.Gateway.SinkVisibilityExemptServers = stdinCfg.Gateway.SinkVisibilityExemptServers
 		}
+		if len(stdinCfg.Gateway.AgentPolicies) > 0 {
+			cfg.Gateway.AgentPolicies = stdinCfg.Gateway.AgentPolicies
+		}
 	} else {
 		logStdin.Print("No gateway config in stdin, applying defaults")
 		cfg.Gateway = &GatewayConfig{}
@@ -505,6 +509,10 @@ func convertStdinConfig(stdinCfg *StdinConfig) (*Config, error) {
 	applyStdinConverters(cfg, stdinCfg)
 
 	if err := validateGuardPolicies(cfg); err != nil {
+		return nil, err
+	}
+
+	if err := validateAgentPolicies(cfg); err != nil {
 		return nil, err
 	}
 

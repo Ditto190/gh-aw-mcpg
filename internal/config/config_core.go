@@ -186,6 +186,13 @@ type GatewayConfig struct {
 	// Set by the compiler when private-to-public-flows is configured in frontmatter.
 	SinkVisibilityExemptServers []string `toml:"sink_visibility_exempt_servers" json:"sinkVisibilityExemptServers,omitempty"`
 
+	// AgentPolicies holds optional per-agent access policies keyed by agent ID.
+	// Each key must match a configured agent ID (agent_id/agent_ids). When present,
+	// per-agent enforcement is fail-closed: an agent may only access the servers and
+	// tools granted by its policy, and (in multi-agent mode) every configured agent
+	// ID must have a policy. Omit entirely to grant all agents full access.
+	AgentPolicies map[string]*AgentPolicy `toml:"agent_policies" json:"agentPolicies,omitempty"`
+
 	// Tracing holds OpenTelemetry OTLP tracing configuration (legacy TOML key).
 	// New configurations should use the opentelemetry key (spec §4.1.3.6).
 	// When Endpoint is set, traces are exported to the specified OTLP endpoint.
@@ -638,6 +645,10 @@ func LoadFromFile(path string) (*Config, error) {
 	applyDefaults(&cfg)
 
 	if err := validateGuardPolicies(&cfg); err != nil {
+		return nil, err
+	}
+
+	if err := validateAgentPolicies(&cfg); err != nil {
 		return nil, err
 	}
 

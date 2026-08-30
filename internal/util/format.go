@@ -1,6 +1,8 @@
 package util
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -14,15 +16,26 @@ import (
 // FormatDuration) are natural candidates for an internal/timeutil package if
 // one is ever bootstrapped; no action is required until then.
 
-// FormatSessionIDForLog returns a log-safe session ID representation.
-// Empty session IDs are rendered as "(none)"; non-empty IDs are truncated to
-// the first 8 bytes with an ellipsis when needed.
+// FormatSessionIDForLog returns a stable, non-reversible log-safe session ID
+// representation. A session ID may be the authenticated agent ID and must not
+// disclose any recoverable prefix in logs, diagnostics, or traces.
 func FormatSessionIDForLog(sessionID string) string {
-	const sessionIDLogMaxLen = 8
-	if sessionID == "" {
+	return HashIdentifierForLog(sessionID)
+}
+
+// HashIdentifierForLog returns a stable, non-reversible attribution token for a
+// sensitive identifier (such as an authenticated agent ID or session token) that
+// is safe to write to logs, traces, and error messages. Empty identifiers render
+// as "(none)". Non-empty identifiers are rendered as "agent:" followed by the
+// first 12 hex characters of their SHA-256 digest. The mapping is deterministic,
+// so the same identity is attributable across log lines without exposing the raw
+// value or any recoverable prefix of it.
+func HashIdentifierForLog(id string) string {
+	if id == "" {
 		return "(none)"
 	}
-	return Truncate(sessionID, sessionIDLogMaxLen)
+	sum := sha256.Sum256([]byte(id))
+	return "agent:" + hex.EncodeToString(sum[:])[:12]
 }
 
 // FormatFutureTime returns a human-readable representation of a future time,

@@ -63,8 +63,12 @@ func buildMCPHTTPServer(
 // signature (ASI-07); common endpoints (e.g. /health, /close) are not HMAC-protected.
 func CreateHTTPServerForMCP(addr string, unifiedServer *UnifiedServer, apiKeys []string, hmacSecret string) *http.Server {
 	logTransport.Printf("Creating HTTP server for MCP: addr=%s, auth_enabled=%v, hmac_enabled=%v", addr, len(apiKeys) > 0, hmacSecret != "")
+	authEnabled := len(apiKeys) > 0
 	return buildMCPHTTPServer(addr, unifiedServer, apiKeys, hmacSecret, func(mux *http.ServeMux, sessionTimeout time.Duration) {
 		logTransport.Print("Registering streamable HTTP handler for MCP protocol")
+		// Per-agent unified servers expose only the tools an agent may see. Built
+		// lazily and cached per identity; only used when per-agent policies are set.
+		agentServerCache := syncutil.NewTTLCache[string, *sdk.Server](sessionTimeout, filteredServerCacheMaxSize)
 		// Create the standard MCP handler stack (StreamableHTTP + session auto-init + middleware).
 		// This is what Codex uses with transport = "streamablehttp"
 		finalHandler := buildMCPHandler(func(r *http.Request) *sdk.Server {
@@ -72,10 +76,19 @@ func CreateHTTPServerForMCP(addr string, unifiedServer *UnifiedServer, apiKeys [
 			// Subsequent JSON-RPC messages in the same session are handled by the SDK
 			// We use the Authorization header value as the session ID
 			// This groups all requests from the same agent (same auth value) into one session
-			if _, ok := setupSessionCallback(r, ""); !ok {
+			sessionID, ok := setupSessionCallback(r, "", authEnabled)
+			if !ok {
 				// Return nil to reject the connection
 				// The SDK will handle sending an appropriate error response
 				return nil
+			}
+
+			// When per-agent policies are configured, expose only the tools this
+			// authenticated agent may use (tool visibility enforcement).
+			if unifiedServer.agentPoliciesEnforced() {
+				return agentServerCache.GetOrCreate(sessionID, func() *sdk.Server {
+					return createAgentFilteredUnifiedServer(unifiedServer, sessionID)
+				})
 			}
 
 			return unifiedServer.server
@@ -104,6 +117,7 @@ func CreateHTTPServerForRoutedMode(addr string, unifiedServer *UnifiedServer, ap
 
 	allBackends := unifiedServer.GetServerIDs()
 	logRouted.Printf("Registering routes for %d backends: %v", len(allBackends), allBackends)
+	authEnabled := len(apiKeys) > 0
 
 	return buildMCPHTTPServer(addr, unifiedServer, apiKeys, hmacSecret, func(mux *http.ServeMux, sessionTimeout time.Duration) {
 		logRouted.Printf("[CACHE] Creating filtered server cache: ttl=%s, maxSize=%d", sessionTimeout, filteredServerCacheMaxSize)
@@ -124,15 +138,23 @@ func CreateHTTPServerForRoutedMode(addr string, unifiedServer *UnifiedServer, ap
 			}
 
 			finalHandler := buildMCPHandler(func(r *http.Request) *sdk.Server {
-				if _, ok := setupSessionCallback(r, backendID); !ok {
+				sessionID, ok := setupSessionCallback(r, backendID, authEnabled)
+				if !ok {
 					return nil
 				}
 
-				sessionID := SessionIDFromContext(r.Context())
+				// Per-agent server-access enforcement at session establishment:
+				// reject routed sessions for backends this agent's policy does not permit.
+				if !unifiedServer.agentCanAccessServer(sessionID, backendID) {
+					logger.LogWarn("client", "Routed access denied: agent=%s not permitted for server=%s",
+						util.HashIdentifierForLog(sessionID), backendID)
+					return nil
+				}
+
 				cacheKey := fmt.Sprintf("%s/%s", backendID, sessionID)
 				return serverCache.GetOrCreate(cacheKey, func() *sdk.Server {
-					logRouted.Printf("[CACHE] Creating new filtered server: backend=%s, session=%s", backendID, util.FormatSessionIDForLog(sessionID))
-					return createFilteredServer(unifiedServer, backendID)
+					logRouted.Printf("[CACHE] Creating new filtered server: backend=%s, session=%s", backendID, util.HashIdentifierForLog(sessionID))
+					return createAgentFilteredServer(unifiedServer, backendID, sessionID)
 				})
 			}, handlerCfg)
 

@@ -7,6 +7,7 @@ import (
 
 	"github.com/github/gh-aw-mcpg/internal/difc"
 	"github.com/github/gh-aw-mcpg/internal/logger"
+	"github.com/github/gh-aw-mcpg/internal/util"
 )
 
 var logPipeline = logger.ForFile()
@@ -95,7 +96,7 @@ func RunPipelinePrePhases(ctx context.Context, in PipelineInput) (context.Contex
 	// **Phase 0: Get or create agent labels**
 	agentLabels := in.AgentRegistry.GetOrCreate(in.AgentID)
 	logPipeline.Printf("[DIFC] Phase 0: agent=%s secrecy=%v integrity=%v",
-		in.AgentID, agentLabels.GetSecrecyTags(), agentLabels.GetIntegrityTags())
+		util.HashIdentifierForLog(in.AgentID), agentLabels.GetSecrecyTags(), agentLabels.GetIntegrityTags())
 
 	// Store tool args in context so LabelResponse (Phase 4) can pass them to the guard.
 	ctx = SetRequestStateInContext(ctx, map[string]interface{}{
@@ -117,12 +118,12 @@ func RunPipelinePrePhases(ctx context.Context, in PipelineInput) (context.Contex
 		in.Evaluator, agentLabels.Secrecy, agentLabels.Integrity, resource, operation)
 	switch coarseOutcome {
 	case difc.CoarseAllowed:
-		logPipeline.Printf("[DIFC] Phase 2: access allowed for agent %s to %s", in.AgentID, resource.Description)
+		logPipeline.Printf("[DIFC] Phase 2: access allowed for agent %s to %s", util.HashIdentifierForLog(in.AgentID), resource.Description)
 	case difc.CoarseBypassForRead:
 		logPipeline.Printf("[DIFC] Phase 2: coarse check failed for read, proceeding to Phase 3")
 	case difc.CoarseDenied:
 		logPipeline.Printf("[DIFC] Phase 2: access denied for agent %s to %s: %s",
-			in.AgentID, resource.Description, evalResult.Reason)
+			util.HashIdentifierForLog(in.AgentID), resource.Description, evalResult.Reason)
 		return ctx, nil, &PipelineAccessDenied{
 			EvalResult:  evalResult,
 			Resource:    resource,

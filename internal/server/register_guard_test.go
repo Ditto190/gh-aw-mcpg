@@ -621,3 +621,37 @@ func TestCreateGuardFromConfig_WasmType_Success_ViaRegisterGuard(t *testing.T) {
 	t.Cleanup(func() { require.NoError(t, wasmGuard.Close(t.Context())) })
 	assert.Equal(t, "wasm-guard", registeredGuard.Name())
 }
+
+func TestRegisterGuard_RetainsWasmForPerAgentAllowOnlyPolicies(t *testing.T) {
+	t.Setenv(guard.WASMGuardsDirEnvVar, "")
+
+	tmpFile, err := os.CreateTemp(t.TempDir(), "full-guard-*.wasm")
+	require.NoError(t, err)
+	_, err = tmpFile.Write(fullGuardWasm)
+	require.NoError(t, err)
+	require.NoError(t, tmpFile.Close())
+
+	allowOnly := &config.AllowOnlyPolicy{Repos: "public", MinIntegrity: "none"}
+	cfg := &config.Config{
+		Gateway: &config.GatewayConfig{
+			AgentIDs: []string{"primary", "enclave"},
+			AgentPolicies: map[string]*config.AgentPolicy{
+				"primary": {Servers: []string{"github"}, AllowOnly: allowOnly},
+				"enclave": {Servers: []string{"github"}, AllowOnly: allowOnly},
+			},
+		},
+		Servers: map[string]*config.ServerConfig{
+			"github": {Type: "http", Guard: "wasm-guard"},
+		},
+		Guards: map[string]*config.GuardConfig{
+			"wasm-guard": {Type: "wasm", Path: tmpFile.Name()},
+		},
+	}
+	us := newMinimalUnifiedServerForGuardTest(cfg)
+
+	require.NoError(t, us.registerGuard("github"))
+	registeredGuard := us.guardRegistry.Get("github")
+	wasmGuard, ok := registeredGuard.(*guard.WasmGuard)
+	require.True(t, ok, "per-agent allow-only policies require the configured guard")
+	t.Cleanup(func() { require.NoError(t, wasmGuard.Close(t.Context())) })
+}

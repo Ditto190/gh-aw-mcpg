@@ -328,6 +328,24 @@ func TestNewWasmGuardWithOptions_SuccessPath_WithCustomCache(t *testing.T) {
 	require.NoError(t, g.Close(ctx))
 }
 
+func TestWasmGuard_NewSessionGuardHasIndependentRuntime(t *testing.T) {
+	ctx := t.Context()
+	template, err := NewWasmGuardWithOptions(ctx, "session-template", fullGuardWasm, nil, nil)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, template.Close(ctx)) })
+
+	cloned, err := template.NewSessionGuard(ctx)
+	require.NoError(t, err)
+	sessionGuard, ok := cloned.(*WasmGuard)
+	require.True(t, ok)
+	t.Cleanup(func() { require.NoError(t, sessionGuard.Close(ctx)) })
+
+	assert.NotSame(t, template, sessionGuard)
+	assert.NotEqual(t, template.runtime, sessionGuard.runtime)
+	assert.NotEqual(t, template.module, sessionGuard.module)
+	assert.Equal(t, template.name, sessionGuard.name)
+}
+
 // TestLabelAgent_InvalidJSONResponse verifies that LabelAgent returns an error when
 // the WASM module writes bytes that cannot be parsed as a valid LabelAgentResult.
 // Uses labelAgentReturnsTwoWasm which returns 2 (claiming to write 2 bytes) but

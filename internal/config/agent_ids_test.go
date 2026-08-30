@@ -15,8 +15,14 @@ func TestLoadFromFile_AgentIDs(t *testing.T) {
 		wantErr string
 	}{
 		{
-			name:    "valid plural IDs",
-			gateway: `agent_ids = ["primary-agent", "enclave-agent"]`,
+			name: "valid plural IDs",
+			gateway: `agent_ids = ["primary-agent", "enclave-agent"]
+
+[gateway.agent_policies.primary-agent]
+servers = ["github"]
+
+[gateway.agent_policies.enclave-agent]
+servers = ["github"]`,
 		},
 		{
 			name:    "missing agent ID selection",
@@ -79,7 +85,7 @@ func TestLoadFromStdin_AgentIDs(t *testing.T) {
 	}{
 		{
 			name:  "valid plural IDs are preserved",
-			agent: `"agentIds": ["primary-agent", "enclave-agent"]`,
+			agent: `"agentIds": ["primary-agent", "enclave-agent"], "agentPolicies": {"primary-agent": {"servers": ["github"]}, "enclave-agent": {"servers": ["github"]}}`,
 		},
 		{
 			name:      "empty plural IDs",

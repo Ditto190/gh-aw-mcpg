@@ -94,7 +94,7 @@ func TestSetupSessionCallback(t *testing.T) {
 				req.Header.Set("Authorization", tt.authHeader)
 			}
 
-			sessionID, ok := setupSessionCallback(req, tt.backendID)
+			sessionID, ok := setupSessionCallback(req, tt.backendID, false)
 
 			assert.Equal(t, tt.expectOK, ok, "ok flag should match expected")
 			assert.Equal(t, tt.expectedSession, sessionID, "returned session ID should match")
@@ -134,7 +134,7 @@ func TestSetupSessionCallback_MutatesRequest(t *testing.T) {
 	// Verify context does not have session ID before call
 	assert.Nil(t, req.Context().Value(SessionIDContextKey), "context should be empty before call")
 
-	sessionID, ok := setupSessionCallback(req, "backend-a")
+	sessionID, ok := setupSessionCallback(req, "backend-a", false)
 
 	require.True(t, ok, "call should succeed")
 	assert.Equal(t, "my-session-id", sessionID, "returned session ID should match")
@@ -341,7 +341,7 @@ func TestExtractAndValidateSession(t *testing.T) {
 				req.Header.Set("X-Agent-ID", tt.xAgentID)
 			}
 
-			sessionID := extractAndValidateSession(req)
+			sessionID := extractAndValidateSession(req, false)
 
 			if tt.shouldBeEmpty {
 				assert.Empty(t, sessionID, "Expected empty session ID")

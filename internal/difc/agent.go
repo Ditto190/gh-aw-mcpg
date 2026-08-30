@@ -5,6 +5,7 @@ import (
 
 	"github.com/github/gh-aw-mcpg/internal/logger"
 	"github.com/github/gh-aw-mcpg/internal/syncutil"
+	"github.com/github/gh-aw-mcpg/internal/util"
 )
 
 var logAgent = logger.ForFile()
@@ -20,7 +21,7 @@ type AgentLabels struct {
 
 // NewAgentLabels creates a new agent with empty labels
 func NewAgentLabels(agentID string) *AgentLabels {
-	logAgent.Printf("Creating new agent labels: agentID=%s", agentID)
+	logAgent.Printf("Creating new agent labels: agentID=%s", util.HashIdentifierForLog(agentID))
 	return &AgentLabels{
 		AgentID:   agentID,
 		Secrecy:   NewSecrecyLabel(),
@@ -31,7 +32,7 @@ func NewAgentLabels(agentID string) *AgentLabels {
 // NewAgentLabelsWithTags creates a new agent with initial tags
 func NewAgentLabelsWithTags(agentID string, secrecyTags []Tag, integrityTags []Tag) *AgentLabels {
 	logAgent.Printf("Creating agent labels with tags: agentID=%s, secrecyTags=%v, integrityTags=%v",
-		agentID, secrecyTags, integrityTags)
+		util.HashIdentifierForLog(agentID), secrecyTags, integrityTags)
 	return &AgentLabels{
 		AgentID:   agentID,
 		Secrecy:   NewSecrecyLabel(secrecyTags...),
@@ -49,11 +50,11 @@ func NewAgentLabelsWithTags(agentID string, secrecyTags []Tag, integrityTags []T
 //   - tag: The tag being modified
 //   - fn: The function that performs the actual label modification
 func (a *AgentLabels) modifyTag(labelType, action, pastTense string, tag Tag, fn func()) {
-	logAgent.Printf("Agent %s %s %s tag: %s", a.AgentID, action, labelType, tag)
+	logAgent.Printf("Agent %s %s %s tag: %s", util.HashIdentifierForLog(a.AgentID), action, labelType, tag)
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	fn()
-	logAgent.Printf("Agent %s %s %s tag: %s", a.AgentID, pastTense, labelType, tag)
+	logAgent.Printf("Agent %s %s %s tag: %s", util.HashIdentifierForLog(a.AgentID), pastTense, labelType, tag)
 }
 
 // modifyTags is a helper for bulk label mutations, analogous to modifyTag.
@@ -66,12 +67,12 @@ func (a *AgentLabels) modifyTag(labelType, action, pastTense string, tag Tag, fn
 //   - tags: The tags being modified
 //   - fn: The function that performs the actual label modification
 func (a *AgentLabels) modifyTags(labelType, action, pastTense string, tags []Tag, fn func()) {
-	logAgent.Printf("Agent %s %s %d %s tags", a.AgentID, action, len(tags), labelType)
+	logAgent.Printf("Agent %s %s %d %s tags", util.HashIdentifierForLog(a.AgentID), action, len(tags), labelType)
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	fn()
 	if len(tags) > 0 {
-		logAgent.Printf("Agent %s %s %s tags: %v", a.AgentID, pastTense, labelType, tags)
+		logAgent.Printf("Agent %s %s %s tags: %v", util.HashIdentifierForLog(a.AgentID), pastTense, labelType, tags)
 	}
 }
 
@@ -130,13 +131,13 @@ func (a *AgentLabels) ApplyPropagation(result *EvaluationResult) bool {
 	if len(result.SecrecyToAdd) > 0 {
 		a.AddSecrecyTags(result.SecrecyToAdd)
 		changed = true
-		logAgent.Printf("Propagation: Agent %s tainted with secrecy tags %v", a.AgentID, result.SecrecyToAdd)
+		logAgent.Printf("Propagation: Agent %s tainted with secrecy tags %v", util.HashIdentifierForLog(a.AgentID), result.SecrecyToAdd)
 	}
 
 	if len(result.IntegrityToDrop) > 0 {
 		a.DropIntegrityTags(result.IntegrityToDrop)
 		changed = true
-		logAgent.Printf("Propagation: Agent %s lost integrity tags %v", a.AgentID, result.IntegrityToDrop)
+		logAgent.Printf("Propagation: Agent %s lost integrity tags %v", util.HashIdentifierForLog(a.AgentID), result.IntegrityToDrop)
 	}
 
 	return changed
@@ -154,7 +155,7 @@ func (a *AgentLabels) ApplyPropagation(result *EvaluationResult) bool {
 //     Agent integrity = Intersection(agent_integrity, resource_integrity)
 //     Reading from untrusted sources reduces agent's integrity to the lowest common denominator
 func (a *AgentLabels) AccumulateFromRead(resource *LabeledResource) {
-	logAgent.Printf("Agent %s accumulating labels from resource: %s", a.AgentID, resource.Description)
+	logAgent.Printf("Agent %s accumulating labels from resource: %s", util.HashIdentifierForLog(a.AgentID), resource.Description)
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
@@ -164,7 +165,7 @@ func (a *AgentLabels) AccumulateFromRead(resource *LabeledResource) {
 		prevTags := a.Secrecy.Label.GetTags()
 		a.Secrecy.Label.Union(resource.Secrecy.Label)
 		logAgent.Printf("Agent %s secrecy UNION: %v + %v = %v",
-			a.AgentID, prevTags, resource.Secrecy.Label.GetTags(), a.Secrecy.Label.GetTags())
+			util.HashIdentifierForLog(a.AgentID), prevTags, resource.Secrecy.Label.GetTags(), a.Secrecy.Label.GetTags())
 	}
 
 	// Integrity: INTERSECTION - agent's integrity is reduced to tags present in BOTH
@@ -173,13 +174,13 @@ func (a *AgentLabels) AccumulateFromRead(resource *LabeledResource) {
 		prevTags := a.Integrity.Label.GetTags()
 		a.Integrity.Label.Intersect(resource.Integrity.Label)
 		logAgent.Printf("Agent %s integrity INTERSECT: %v ∩ %v = %v",
-			a.AgentID, prevTags, resource.Integrity.Label.GetTags(), a.Integrity.Label.GetTags())
+			util.HashIdentifierForLog(a.AgentID), prevTags, resource.Integrity.Label.GetTags(), a.Integrity.Label.GetTags())
 	}
 }
 
 // Clone creates a copy of the agent labels
 func (a *AgentLabels) Clone() *AgentLabels {
-	logAgent.Printf("Cloning agent labels: agentID=%s", a.AgentID)
+	logAgent.Printf("Cloning agent labels: agentID=%s", util.HashIdentifierForLog(a.AgentID))
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 
@@ -242,12 +243,12 @@ func NewAgentRegistryWithDefaults(defaultSecrecy []Tag, defaultIntegrity []Tag) 
 
 // GetOrCreate gets an existing agent or creates a new one with default labels
 func (r *AgentRegistry) GetOrCreate(agentID string) *AgentLabels {
-	logAgent.Printf("GetOrCreate called for agentID=%s", agentID)
+	logAgent.Printf("GetOrCreate called for agentID=%s", util.HashIdentifierForLog(agentID))
 
 	labels, _ := syncutil.MapGetOrCreate(&r.mu, r.agents, agentID, func() (*AgentLabels, error) {
 		labels := NewAgentLabelsWithTags(agentID, r.defaultSecrecy, r.defaultIntegrity)
 		logAgent.Printf("Created new agent: %s with default labels (secrecy: %v, integrity: %v)",
-			agentID, r.defaultSecrecy, r.defaultIntegrity)
+			util.HashIdentifierForLog(agentID), r.defaultSecrecy, r.defaultIntegrity)
 		return labels, nil
 	})
 	return labels
@@ -258,13 +259,13 @@ func (r *AgentRegistry) Get(agentID string) (*AgentLabels, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	labels, ok := r.agents[agentID]
-	logAgent.Printf("Retrieving agent labels: agentID=%s, found=%v", agentID, ok)
+	logAgent.Printf("Retrieving agent labels: agentID=%s, found=%v", util.HashIdentifierForLog(agentID), ok)
 	return labels, ok
 }
 
 // Register creates a new agent with specific initial labels
 func (r *AgentRegistry) Register(agentID string, secrecyTags []Tag, integrityTags []Tag) *AgentLabels {
-	logAgent.Printf("Registering agent with explicit labels: agentID=%s, secrecyTags=%v, integrityTags=%v", agentID, secrecyTags, integrityTags)
+	logAgent.Printf("Registering agent with explicit labels: agentID=%s, secrecyTags=%v, integrityTags=%v", util.HashIdentifierForLog(agentID), secrecyTags, integrityTags)
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -272,18 +273,18 @@ func (r *AgentRegistry) Register(agentID string, secrecyTags []Tag, integrityTag
 	r.agents[agentID] = labels
 
 	logAgent.Printf("Registered agent: %s with labels (secrecy: %v, integrity: %v)",
-		agentID, secrecyTags, integrityTags)
+		util.HashIdentifierForLog(agentID), secrecyTags, integrityTags)
 
 	return labels
 }
 
 // Remove removes an agent from the registry
 func (r *AgentRegistry) Remove(agentID string) {
-	logAgent.Printf("Removing agent from registry: agentID=%s", agentID)
+	logAgent.Printf("Removing agent from registry: agentID=%s", util.HashIdentifierForLog(agentID))
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	delete(r.agents, agentID)
-	logAgent.Printf("Removed agent: %s", agentID)
+	logAgent.Printf("Removed agent: %s", util.HashIdentifierForLog(agentID))
 }
 
 // Count returns the number of registered agents

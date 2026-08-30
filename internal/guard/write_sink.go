@@ -2,6 +2,7 @@ package guard
 
 import (
 	"context"
+
 	"github.com/github/gh-aw-mcpg/internal/difc"
 	"github.com/github/gh-aw-mcpg/internal/logger"
 	"github.com/github/gh-aw-mcpg/internal/urlutil"
@@ -101,6 +102,15 @@ func NewWriteSinkGuardWithVisibility(accept []string, sinkVisibility string) *Wr
 	normalized := util.NormalizeStringCI(sinkVisibility)
 	logWriteSink.Printf("Creating write-sink guard with %d accept patterns, sink-visibility=%q", len(tags), normalized)
 	return &WriteSinkGuard{acceptTags: tags, sinkVisibility: normalized}
+}
+
+// NewSessionGuard returns an independent write-sink guard for one session.
+func (g *WriteSinkGuard) NewSessionGuard(_ context.Context) (Guard, error) {
+	accept := make([]string, len(g.acceptTags))
+	for i, tag := range g.acceptTags {
+		accept[i] = string(tag)
+	}
+	return NewWriteSinkGuardWithVisibility(accept, g.sinkVisibility), nil
 }
 
 // Name returns the identifier for this guard

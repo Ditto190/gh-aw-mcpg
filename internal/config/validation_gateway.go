@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+
+	"github.com/github/gh-aw-mcpg/internal/util"
 )
 
 func validateGatewayConfig(gateway *StdinGatewayConfig) error {
@@ -126,7 +128,19 @@ func validateGatewayConfigWithAgentRequirement(gateway *StdinGatewayConfig, requ
 }
 
 func validateAgentIDs(agentIDs []string, defined bool, fieldName string) error {
-	return validateNonEmptyStringSlice(agentIDs, defined, fieldName, "")
+	if err := validateNonEmptyStringSlice(agentIDs, defined, fieldName, ""); err != nil {
+		return err
+	}
+	// Reject duplicate agent IDs: each identity must be unique so per-agent policy,
+	// session, and DIFC state can be attributed deterministically.
+	seen := make(map[string]struct{}, len(agentIDs))
+	for _, id := range agentIDs {
+		if _, dup := seen[id]; dup {
+			return fmt.Errorf("gateway.%s must not contain duplicate agent ID %q", fieldName, util.HashIdentifierForLog(id))
+		}
+		seen[id] = struct{}{}
+	}
+	return nil
 }
 
 func validateGatewayPayloadSizeThreshold(value int, fieldName, jsonPath string) error {

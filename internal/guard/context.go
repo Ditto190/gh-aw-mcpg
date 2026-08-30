@@ -24,6 +24,7 @@ import (
 	"context"
 
 	"github.com/github/gh-aw-mcpg/internal/logger"
+	"github.com/github/gh-aw-mcpg/internal/util"
 )
 
 var logContext = logger.ForFile()
@@ -43,7 +44,7 @@ const (
 // Returns "default" if not found
 func GetAgentIDFromContext(ctx context.Context) string {
 	if agentID, ok := ctx.Value(AgentIDContextKey).(string); ok && agentID != "" {
-		logContext.Printf("Retrieved agent ID from context: %s", agentID)
+		logContext.Printf("Retrieved agent ID from context: %s", util.HashIdentifierForLog(agentID))
 		return agentID
 	}
 	logContext.Print("Agent ID not found in context, returning default")
@@ -52,7 +53,7 @@ func GetAgentIDFromContext(ctx context.Context) string {
 
 // SetAgentIDInContext sets the agent ID in the context
 func SetAgentIDInContext(ctx context.Context, agentID string) context.Context {
-	logContext.Printf("Setting agent ID in context: %s", agentID)
+	logContext.Printf("Setting agent ID in context: %s", util.HashIdentifierForLog(agentID))
 	return context.WithValue(ctx, AgentIDContextKey, agentID)
 }
 

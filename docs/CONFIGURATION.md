@@ -609,7 +609,8 @@ The `customSchemas` top-level field allows you to define custom server types bey
 |-------|-------------|---------|
 | `port` | Validated and stored for metadata purposes only. The actual listen address is always set by the `--listen` CLI flag (default `127.0.0.1:3000`). **Note:** When using JSON stdin format, `gateway.port` is required by schema validation even though TOML configs have an internal default of `3000`. | `3000` (informational only; required in JSON stdin) |
 | `agentId` | Agent/session identifier used for routing and optional auth matching | (disabled) |
-| `agentIds` (JSON stdin) / `agent_ids` (TOML) | Agent/session identifiers for concurrent session isolation. Configure exactly one of this field or `agentId` / `agent_id`; it must contain at least one non-blank string. Each configured identifier authenticates independently against the gateway (e.g. primary/enclave), enabling concurrent sessions that don't share a single credential. | (disabled) |
+| `agentIds` (JSON stdin) / `agent_ids` (TOML) | Agent/session identifiers for concurrent session isolation. Configure exactly one of this field or `agentId` / `agent_id`; it must contain at least one non-blank string. Each configured identifier authenticates independently against the gateway (e.g. primary/enclave), enabling concurrent sessions that don't share a single credential. Duplicate identifiers are rejected. | (disabled) |
+| `agentPolicies` (JSON stdin) / `agent_policies` (TOML) | Optional per-agent access policies keyed by agent ID. Restricts which MCP servers and tools each authenticated agent may use, and may carry a per-agent `allow-only` guard policy. **Fail-closed**: keys must match a configured `agentId`/`agentIds`; when multiple agent IDs are configured, every one must have a policy. See [Per-Agent Access Policies](#per-agent-access-policies). Omit only for a singular agent to retain backward-compatible full access. | (disabled) |
 | `domain` | Gateway domain (`"localhost"`, `"host.docker.internal"`, or `"${VAR}"`) | (unset) |
 | `startupTimeout` | Seconds to wait for backend startup | `30` |
 | `toolTimeout` | Maximum seconds for a single tool call, enforced as a context deadline on all backend requests (stdio and HTTP) | `60` |
@@ -620,6 +621,93 @@ The `customSchemas` top-level field allows you to define custom server types bey
 | `forcePublicRepos` (JSON) / `force_public_repos` (TOML) | When `true` (or omitted), the gateway checks `GITHUB_REPOSITORY` and the GitHub API at startup; if the workflow repository is public, it overrides the allow-only guard policy to `repos="public"` for all servers, preventing agents from reading private repository data. Set to `false` to opt out (equivalent to `private-to-public-flows: allow` in workflow front-matter). Has no effect if `GITHUB_REPOSITORY` is unset or the token is unavailable. Overrides env var `MCP_GATEWAY_FORCE_PUBLIC_REPOS`. | `true` (enabled) |
 | `sinkVisibilityExemptServers` (JSON) / `sink_visibility_exempt_servers` (TOML) | Server IDs exempt from default `sink-visibility="public"` enforcement. By default, only non-safe-outputs `write-sink` servers with omitted `sink-visibility` are defaulted to `"public"` (security-by-default). Listed servers keep their configured (or omitted) value as-is. Use `["*"]` to exempt all servers. | (none) |
 | `keepaliveInterval` (JSON) / `keepalive_interval` (TOML) | Interval (seconds) between keepalive pings sent to HTTP backends. Prevents remote servers from expiring idle sessions. Set to `-1` to disable keepalive pings entirely. | `1500` (25 min) |
+
+### Per-Agent Access Policies
+
+When multiple agents share a single gateway (via `agentIds` / `agent_ids`), you can
+scope each authenticated agent to a subset of servers and tools using per-agent
+policies. This model is **fail-closed** and **secure-by-default**:
+
+- **Identity is authenticated-only.** The agent identity used for policy, session,
+  and DIFC state is derived solely from the `Authorization` header value that the
+  auth middleware validated against a configured `agentId`/`agentIds`. A client
+  cannot spoof another agent's identity via the `X-Agent-ID` header; malformed or
+  blank credentials are rejected.
+- **Deterministic validation.** Policy keys must reference a configured agent ID
+  (unknown keys are rejected), duplicate agent IDs are rejected, and when more than
+  one agent ID is configured **every** agent ID must have a policy or startup fails.
+- **Least privilege.** An agent may only reach servers listed in its `servers`
+  array. When a server appears under `tools`, only the listed tool names (or `"*"`)
+  are callable; a server omitted from `tools` grants all of that server's tools.
+- **Two enforcement points.** Server access is enforced at session establishment
+  (routed mode) and tool visibility is filtered per agent in both unified and routed
+  modes; tool calls are re-checked at the gateway's call choke point (defense in
+  depth). Denied calls return an error result.
+- **Shared-gateway safety.** When multiple agent IDs are configured, a single
+  principal's request to `/close` does **not** terminate the shared gateway; it is
+  acknowledged with `status: "ignored"` so one agent cannot disrupt another. With a
+  single agent, `/close` behaves as before.
+- **Redacted attribution.** Agent identifiers are never written verbatim to logs,
+  traces, or error messages; a stable, non-reversible hash token (e.g.
+  `agent:1a2b3c4d5e6f`) is used so activity remains attributable without exposure.
+
+Each policy may also carry an optional `allow-only` block with the same shape as a
+[guard `allow-only` policy](#allow-only-github-mcp-server). It is applied to that
+agent's DIFC guard session and takes precedence over server/global guard policies
+for that agent; enforcement requires an active (non-noop) guard.
+
+Omitting `agent_policies` entirely leaves a singular agent with full access
+(backward compatible). With multiple `agent_ids`, every identity must have a
+policy; startup otherwise fails closed.
+
+**TOML example:**
+
+```toml
+[gateway]
+agent_ids = ["primary-agent", "enclave-agent"]
+
+# primary-agent: full github access, plus fetch (all tools)
+[gateway.agent_policies.primary-agent]
+servers = ["github", "fetch"]
+
+[gateway.agent_policies.primary-agent.tools]
+fetch = ["*"]
+
+# enclave-agent: read-only slice of github, with a per-agent allow-only policy
+[gateway.agent_policies.enclave-agent]
+servers = ["github"]
+
+[gateway.agent_policies.enclave-agent.tools]
+github = ["search_code", "get_file_contents"]
+
+[gateway.agent_policies.enclave-agent.allow-only]
+repos = "public"
+min-integrity = "none"
+```
+
+**JSON stdin example:**
+
+```json
+{
+  "gateway": {
+    "port": 3000,
+    "domain": "localhost",
+    "agentIds": ["primary-agent", "enclave-agent"],
+    "agentPolicies": {
+      "primary-agent": {
+        "servers": ["github", "fetch"],
+        "tools": { "fetch": ["*"] }
+      },
+      "enclave-agent": {
+        "servers": ["github"],
+        "tools": { "github": ["search_code", "get_file_contents"] },
+        "allow-only": { "repos": "public", "min-integrity": "none" }
+      }
+    }
+  }
+}
+```
+
 
 ### OpenTelemetry / Tracing
 
