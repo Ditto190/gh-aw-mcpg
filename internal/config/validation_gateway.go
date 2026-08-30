@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+
+	"github.com/github/gh-aw-mcpg/internal/util"
 )
 
 func validateGatewayConfig(gateway *StdinGatewayConfig) error {
@@ -134,7 +136,7 @@ func validateAgentIDs(agentIDs []string, defined bool, fieldName string) error {
 	seen := make(map[string]struct{}, len(agentIDs))
 	for _, id := range agentIDs {
 		if _, dup := seen[id]; dup {
-			return fmt.Errorf("gateway.%s must not contain duplicate agent ID %q", fieldName, id)
+			return fmt.Errorf("gateway.%s must not contain duplicate agent ID %q", fieldName, util.HashIdentifierForLog(id))
 		}
 		seen[id] = struct{}{}
 	}

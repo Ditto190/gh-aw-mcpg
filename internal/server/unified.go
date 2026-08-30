@@ -227,6 +227,7 @@ func NewUnified(ctx context.Context, cfg *config.Config) (*UnifiedServer, error)
 
 	// Register aggregated tools from all backends
 	if err := us.registerAllTools(); err != nil {
+		_ = us.Close()
 		return nil, fmt.Errorf("failed to register tools: %w", err)
 	}
 

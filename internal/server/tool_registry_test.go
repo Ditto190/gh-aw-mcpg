@@ -590,6 +590,40 @@ func TestRegisterAllToolsSequential_ContinuesOnFailure(t *testing.T) {
 	assert.Contains(us.tools, "good___tool_good", "good backend tools should still be registered")
 }
 
+func TestRegisterAllTools_AgentPolicyUnknownToolFailsStartup(t *testing.T) {
+	for _, sequential := range []bool{true, false} {
+		t.Run(fmt.Sprintf("sequential=%v", sequential), func(t *testing.T) {
+			backend := newMockBackend(t, "github", []string{"search_code"})
+			defer backend.Close()
+
+			const agentID = "secret-agent-id"
+			cfg := &config.Config{
+				SequentialLaunch: sequential,
+				Gateway: &config.GatewayConfig{
+					AgentID: agentID,
+					AgentPolicies: map[string]*config.AgentPolicy{
+						agentID: {
+							Servers: []string{"github"},
+							Tools:   map[string][]string{"github": {"search_code_typo"}},
+						},
+					},
+				},
+				Servers: map[string]*config.ServerConfig{
+					"github": {Type: "http", URL: backend.URL},
+				},
+			}
+
+			us, err := NewUnified(context.Background(), cfg)
+			if us != nil {
+				defer us.Close()
+			}
+			require.Error(t, err)
+			assert.ErrorContains(t, err, `references unknown tool "search_code_typo"`)
+			assert.NotContains(t, err.Error(), agentID)
+		})
+	}
+}
+
 // TestRegisterAllToolsParallel_MultipleBackends verifies parallel registration
 // across multiple backends concurrently.
 func TestRegisterAllToolsParallel_MultipleBackends(t *testing.T) {

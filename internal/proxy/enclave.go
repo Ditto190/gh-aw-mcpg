@@ -15,6 +15,7 @@ import (
 	"github.com/github/gh-aw-mcpg/internal/githubhttp"
 	"github.com/github/gh-aw-mcpg/internal/httputil"
 	"github.com/github/gh-aw-mcpg/internal/logger"
+	"github.com/github/gh-aw-mcpg/internal/util"
 )
 
 var logEnclave = logger.ForFile()
@@ -221,7 +222,7 @@ func (h *proxyHandler) handleEnclaveRequest(w http.ResponseWriter, r *http.Reque
 	}
 	route, err := enclavegithub.MatchRoute(path, query)
 	if err != nil || !claims.AllowsOperation(route.Operation) {
-		logEnclave.Printf("Enclave request denied: agentID=%s, path=%q not permitted by route/operation policy", claims.AgentID(), path)
+		logEnclave.Printf("Enclave request denied: agentID=%s, path=%q not permitted by route/operation policy", util.HashIdentifierForLog(claims.AgentID()), path)
 		writeEnclaveDenied(w)
 		return
 	}
@@ -229,7 +230,7 @@ func (h *proxyHandler) handleEnclaveRequest(w http.ResponseWriter, r *http.Reque
 
 	targetRepo := route.FullRepo()
 	if targetRepo != claims.Repo && !h.server.enclaveRepositoryIsPublic(r.Context(), targetRepo) {
-		logEnclave.Printf("Enclave request denied: agentID=%s attempted cross-repo access to non-public repo=%s (assigned=%s)", claims.AgentID(), targetRepo, claims.Repo)
+		logEnclave.Printf("Enclave request denied: agentID=%s attempted cross-repo access to non-public repo=%s (assigned=%s)", util.HashIdentifierForLog(claims.AgentID()), targetRepo, claims.Repo)
 		writeEnclaveDenied(w)
 		return
 	}
@@ -242,7 +243,7 @@ func (h *proxyHandler) handleEnclaveRequest(w http.ResponseWriter, r *http.Reque
 	if r.URL.RawQuery != "" {
 		fullPath += "?" + r.URL.RawQuery
 	}
-	logEnclave.Printf("Enclave request authorized: agentID=%s, tool=%s, repo=%s", claims.AgentID(), toolName, targetRepo)
+	logEnclave.Printf("Enclave request authorized: agentID=%s, tool=%s, repo=%s", util.HashIdentifierForLog(claims.AgentID()), toolName, targetRepo)
 	ctx := withEnclaveAuthorization(r.Context(), claims.AgentID(), claims.Repo)
 	h.handleWithDIFC(w, r.WithContext(ctx), fullPath, toolName, args, nil)
 }

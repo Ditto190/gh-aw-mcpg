@@ -14,6 +14,7 @@ import (
 
 	"github.com/github/gh-aw-mcpg/internal/hmacutil"
 	"github.com/github/gh-aw-mcpg/internal/logger"
+	"github.com/github/gh-aw-mcpg/internal/util"
 )
 
 var logCapability = logger.ForFile()
@@ -135,7 +136,7 @@ func (v *Verifier) verifyTokenAt(token string, now time.Time) (*Claims, error) {
 		logCapability.Printf("Rejected enclave capability: claims validation failed: %v", err)
 		return nil, fmt.Errorf("invalid enclave capability")
 	}
-	logCapability.Printf("Verified enclave capability: agent=%s, invocation=%s, ops=%d", claims.AgentID(), claims.Invocation, len(claims.Operations))
+	logCapability.Printf("Verified enclave capability: agent=%s, invocation=%s, ops=%d", util.HashIdentifierForLog(claims.AgentID()), claims.Invocation, len(claims.Operations))
 	return &claims, nil
 }
 

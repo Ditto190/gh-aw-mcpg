@@ -478,7 +478,7 @@ func (us *UnifiedServer) ensureGuardInitialized(
 	us.sessionMu.Unlock()
 
 	logger.LogInfoToServer(serverID, "difc", "Guard policy initialized: session=%s, guard_policy.source=%s, difc_mode=%s, guard_policy.normalized=%v",
-		sessionID, source, mode, normalizedPolicy)
+		util.HashIdentifierForLog(sessionID), source, mode, normalizedPolicy)
 
 	return mode, nil
 }

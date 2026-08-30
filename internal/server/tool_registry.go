@@ -3,7 +3,9 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -16,6 +18,21 @@ import (
 	"github.com/github/gh-aw-mcpg/internal/util"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
+
+type agentPolicyToolValidationError struct {
+	message string
+}
+
+type backendToolDefinition struct {
+	Name        string                 `json:"name"`
+	Description string                 `json:"description"`
+	InputSchema map[string]interface{} `json:"inputSchema"`
+	Annotations *sdk.ToolAnnotations   `json:"annotations,omitempty"`
+}
+
+func (e *agentPolicyToolValidationError) Error() string {
+	return e.message
+}
 
 // registerAllTools fetches and registers tools from all backend servers
 func (us *UnifiedServer) registerAllTools() error {
@@ -52,6 +69,10 @@ func (us *UnifiedServer) registerAllToolsSequential(serverIDs []string) error {
 		logUnified.Printf("Registering tools from backend: %s", serverID)
 		if err := us.ensureToolsRegistered(us.ctx, serverID); err != nil {
 			logger.LogError("backend", "Failed to register tools from %s: %v", serverID, err)
+			var validationErr *agentPolicyToolValidationError
+			if errors.As(err, &validationErr) {
+				return err
+			}
 			errs.record(serverID)
 		}
 	}
@@ -92,11 +113,16 @@ func (us *UnifiedServer) registerAllToolsParallel(serverIDs []string) error {
 
 	// Collect and log results
 	successCount := 0
+	var fatalErrs []error
 	errs := &registrationErrors{total: len(serverIDs)}
 	for result := range results {
 		if result.err != nil {
 			logger.LogErrorToServer(result.serverID, "backend", "Failed to register tools from %s (took %v): %v", result.serverID, result.duration, result.err)
 			errs.record(result.serverID)
+			var validationErr *agentPolicyToolValidationError
+			if errors.As(result.err, &validationErr) {
+				fatalErrs = append(fatalErrs, result.err)
+			}
 		} else {
 			logUnified.Printf("Successfully registered tools from %s (took %v)", result.serverID, result.duration)
 			logger.LogInfoToServer(result.serverID, "backend", "Successfully registered tools from %s (took %v)", result.serverID, result.duration)
@@ -105,6 +131,9 @@ func (us *UnifiedServer) registerAllToolsParallel(serverIDs []string) error {
 	}
 
 	errs.finish()
+	if len(fatalErrs) > 0 {
+		return errors.Join(fatalErrs...)
+	}
 
 	logger.LogInfo("backend", "Tool registration complete: %d succeeded, %d failed, total tools=%d", successCount, len(errs.failed), len(us.tools))
 	return nil
@@ -182,12 +211,7 @@ func (us *UnifiedServer) registerToolsFromBackendContext(ctx context.Context, se
 	}
 
 	var listResult struct {
-		Tools []struct {
-			Name        string                 `json:"name"`
-			Description string                 `json:"description"`
-			InputSchema map[string]interface{} `json:"inputSchema"`
-			Annotations *sdk.ToolAnnotations   `json:"annotations,omitempty"`
-		} `json:"tools"`
+		Tools []backendToolDefinition `json:"tools"`
 	}
 	if err := fetchBackendList(
 		ctx,
@@ -208,6 +232,10 @@ func (us *UnifiedServer) registerToolsFromBackendContext(ctx context.Context, se
 		return err
 	}
 
+	if err := us.validateAgentPolicyTools(serverID, listResult.Tools); err != nil {
+		return err
+	}
+
 	// Filter tools by the server's allowed-tools list (if configured).
 	// This prevents non-allowed tools from appearing in tools/list responses
 	// and is defense-in-depth alongside the callBackendTool enforcement.
@@ -218,6 +246,7 @@ func (us *UnifiedServer) registerToolsFromBackendContext(ctx context.Context, se
 				listResult.Tools[n] = tool
 				n++
 			}
+
 		}
 		if n < len(listResult.Tools) {
 			logger.LogInfo("backend", "[allowed-tools] Filtered %d tools from %s: keeping %d of %d",
@@ -330,6 +359,46 @@ func (us *UnifiedServer) registerToolsFromBackendContext(ctx context.Context, se
 		logger.LogWarn("backend", "Failed to register prompts from %s (non-fatal): %v", serverID, err)
 	}
 
+	return nil
+}
+
+func (us *UnifiedServer) validateAgentPolicyTools(serverID string, advertisedTools []backendToolDefinition) error {
+	if us.cfg == nil || us.cfg.Gateway == nil || len(us.cfg.Gateway.AgentPolicies) == 0 {
+		return nil
+	}
+
+	advertised := make(map[string]struct{}, len(advertisedTools))
+	for _, tool := range advertisedTools {
+		advertised[tool.Name] = struct{}{}
+	}
+
+	agentIDs := make([]string, 0, len(us.cfg.Gateway.AgentPolicies))
+	for agentID := range us.cfg.Gateway.AgentPolicies {
+		agentIDs = append(agentIDs, agentID)
+	}
+	sort.Strings(agentIDs)
+
+	for _, agentID := range agentIDs {
+		policy := us.cfg.Gateway.AgentPolicies[agentID]
+		if policy == nil {
+			continue
+		}
+		tools, configured := policy.Tools[serverID]
+		if !configured {
+			continue
+		}
+		for _, toolName := range tools {
+			if toolName == "*" {
+				continue
+			}
+			if _, ok := advertised[toolName]; !ok {
+				return &agentPolicyToolValidationError{message: fmt.Sprintf(
+					"agent policy %s references unknown tool %q on server %q",
+					util.HashIdentifierForLog(agentID), toolName, serverID,
+				)}
+			}
+		}
+	}
 	return nil
 }
 

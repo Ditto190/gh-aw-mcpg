@@ -584,16 +584,16 @@ func wrapToolHandler(
 
 		// Payload is larger than threshold - save to filesystem
 		logger.LogInfo("payload", "Payload size (%d bytes) exceeds threshold (%d bytes), saving to filesystem: tool=%s, queryID=%s, session=%s, baseDir=%s",
-			payloadSize, sizeThreshold, toolName, queryID, sessionID, baseDir)
+			payloadSize, sizeThreshold, toolName, queryID, util.FormatSessionIDForLog(sessionID), baseDir)
 
 		filePath, saveErr := savePayload(baseDir, pathPrefix, sessionID, queryID, payloadJSON)
 		if saveErr != nil {
 			logger.LogError("payload", "Failed to save payload to filesystem: tool=%s, queryID=%s, session=%s, error=%v",
-				toolName, queryID, sessionID, saveErr)
+				toolName, queryID, util.FormatSessionIDForLog(sessionID), saveErr)
 			// Continue even if save fails - don't break the tool call
 		} else {
-			logger.LogInfo("payload", "Payload storage completed successfully: tool=%s, queryID=%s, session=%s, path=%s, size=%d bytes",
-				toolName, queryID, sessionID, filePath, len(payloadJSON))
+			logger.LogInfo("payload", "Payload storage completed successfully: tool=%s, queryID=%s, session=%s, size=%d bytes",
+				toolName, queryID, util.FormatSessionIDForLog(sessionID), len(payloadJSON))
 		}
 
 		// Apply jq schema transformation
@@ -672,8 +672,8 @@ func wrapToolHandler(
 			QueryID:           queryID,
 		}
 
-		logger.LogInfo("payload", "Created metadata response for client: tool=%s, queryID=%s, session=%s, payloadPath=%s, originalSize=%d bytes, truncated=%v",
-			toolName, queryID, sessionID, filePath, payloadLen, truncated)
+		logger.LogInfo("payload", "Created metadata response for client: tool=%s, queryID=%s, session=%s, originalSize=%d bytes, truncated=%v",
+			toolName, queryID, util.FormatSessionIDForLog(sessionID), payloadLen, truncated)
 
 		// Marshal the rewritten response to JSON for the Content field
 		rewrittenJSON, marshalErr := json.Marshal(rewrittenResponse)
@@ -699,10 +699,8 @@ func wrapToolHandler(
 			Meta:    result.Meta,
 		}
 
-		logger.LogInfo("payload", "Returning transformed response to client: tool=%s, queryID=%s, session=%s, payloadPath=%s, clientReceivesMetadata=true",
-			toolName, queryID, sessionID, filePath)
-		logger.LogInfo("payload", "Client can access full payload at: %s (inside container: /workspace/mcp-payloads/%s/%s/payload.json)",
-			filePath, sessionID, queryID)
+		logger.LogInfo("payload", "Returning transformed response to client: tool=%s, queryID=%s, session=%s, clientReceivesMetadata=true",
+			toolName, queryID, util.FormatSessionIDForLog(sessionID))
 
 		return transformedResult, rewrittenResponse, nil
 	}
@@ -736,40 +734,44 @@ func savePayload(baseDir, pathPrefix, sessionID, queryID string, payload []byte)
 	// Create directory structure: {baseDir}/{sessionID}/{queryID}
 	dir := filepath.Join(baseDir, sessionID, queryID)
 
-	logger.LogDebug("payload", "Creating payload directory: baseDir=%s, session=%s, query=%s, fullPath=%s",
-		baseDir, sessionID, queryID, dir)
+	logger.LogDebug("payload", "Creating payload directory: baseDir=%s, session=%s, query=%s",
+		baseDir, util.FormatSessionIDForLog(sessionID), queryID)
 
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		logger.LogError("payload", "Failed to create payload directory: path=%s, error=%v", dir, err)
-		return "", fmt.Errorf("failed to create payload directory: %w", err)
+		sanitizedErr := strings.ReplaceAll(err.Error(), sessionID, util.FormatSessionIDForLog(sessionID))
+		logger.LogError("payload", "Failed to create payload directory: session=%s, error=%s", util.FormatSessionIDForLog(sessionID), sanitizedErr)
+		return "", fmt.Errorf("failed to create payload directory: %s", sanitizedErr)
 	}
 
-	logger.LogDebug("payload", "Successfully created payload directory: path=%s, permissions=0755", dir)
+	logger.LogDebug("payload", "Successfully created payload directory: session=%s, query=%s, permissions=0755",
+		util.FormatSessionIDForLog(sessionID), queryID)
 
 	// Save payload to file with restrictive permissions (owner read/write only)
 	filePath := filepath.Join(dir, "payload.json")
 	payloadSize := len(payload)
 
-	logger.LogInfo("payload", "Writing large payload to filesystem: path=%s, size=%d bytes (%.2f KB, %.2f MB)",
-		filePath, payloadSize, float64(payloadSize)/1024, float64(payloadSize)/(1024*1024))
+	logger.LogInfo("payload", "Writing large payload to filesystem: session=%s, query=%s, size=%d bytes (%.2f KB, %.2f MB)",
+		util.FormatSessionIDForLog(sessionID), queryID, payloadSize, float64(payloadSize)/1024, float64(payloadSize)/(1024*1024))
 
 	if err := os.WriteFile(filePath, payload, 0600); err != nil {
-		logger.LogError("payload", "Failed to write payload file: path=%s, size=%d bytes, error=%v",
-			filePath, payloadSize, err)
-		return "", fmt.Errorf("failed to write payload file: %w", err)
+		sanitizedErr := strings.ReplaceAll(err.Error(), sessionID, util.FormatSessionIDForLog(sessionID))
+		logger.LogError("payload", "Failed to write payload file: session=%s, query=%s, size=%d bytes, error=%s",
+			util.FormatSessionIDForLog(sessionID), queryID, payloadSize, sanitizedErr)
+		return "", fmt.Errorf("failed to write payload file: %s", sanitizedErr)
 	}
 
 	// Enforce permissions even if the file already existed (WriteFile only sets mode on create)
 	if err := os.Chmod(filePath, 0600); err != nil {
-		logger.LogError("payload", "Failed to enforce payload file permissions: path=%s, size=%d bytes, error=%v",
-			filePath, payloadSize, err)
-		return "", fmt.Errorf("failed to set payload file permissions: %w", err)
+		sanitizedErr := strings.ReplaceAll(err.Error(), sessionID, util.FormatSessionIDForLog(sessionID))
+		logger.LogError("payload", "Failed to enforce payload file permissions: session=%s, query=%s, size=%d bytes, error=%s",
+			util.FormatSessionIDForLog(sessionID), queryID, payloadSize, sanitizedErr)
+		return "", fmt.Errorf("failed to set payload file permissions: %s", sanitizedErr)
 	}
 
 	// Log with the requested chmod mode rather than re-stating as a guarantee (Chmod may be
 	// a no-op on some platforms/filesystems while still returning nil).
-	logger.LogInfo("payload", "Successfully saved large payload to filesystem: path=%s, size=%d bytes, chmod=0600",
-		filePath, payloadSize)
+	logger.LogInfo("payload", "Successfully saved large payload to filesystem: session=%s, query=%s, size=%d bytes, chmod=0600",
+		util.FormatSessionIDForLog(sessionID), queryID, payloadSize)
 
 	// If pathPrefix is provided, use it to remap the path for the client
 	// This allows the gateway to save files at one path (e.g., /tmp/jq-payloads)
@@ -779,8 +781,8 @@ func savePayload(baseDir, pathPrefix, sessionID, queryID string, payload []byte)
 		// Replace baseDir with pathPrefix in the file path
 		relPath := filepath.Join(sessionID, queryID, "payload.json")
 		returnPath = filepath.Join(pathPrefix, relPath)
-		logger.LogInfo("payload", "Remapped payload path for client: filesystem=%s, clientPath=%s, pathPrefix=%s",
-			filePath, returnPath, pathPrefix)
+		logger.LogInfo("payload", "Remapped payload path for client: session=%s, query=%s, pathPrefix=%s",
+			util.FormatSessionIDForLog(sessionID), queryID, pathPrefix)
 	}
 
 	return returnPath, nil

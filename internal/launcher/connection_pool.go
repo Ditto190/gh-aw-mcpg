@@ -8,6 +8,7 @@ import (
 
 	"github.com/github/gh-aw-mcpg/internal/logger"
 	"github.com/github/gh-aw-mcpg/internal/mcp"
+	"github.com/github/gh-aw-mcpg/internal/util"
 )
 
 var logPool = logger.New("launcher:pool")
@@ -156,13 +157,13 @@ func (p *SessionConnectionPool) cleanupIdleConnections() {
 
 		if shouldRemove {
 			logPool.Printf("Cleaning up connection: backend=%s, session=%s, reason=%s, idle=%v, errors=%d",
-				key.BackendID, key.SessionID, reason, now.Sub(metadata.LastUsedAt), metadata.ErrorCount)
+				key.BackendID, util.FormatSessionIDForLog(key.SessionID), reason, now.Sub(metadata.LastUsedAt), metadata.ErrorCount)
 
 			// Close the underlying connection to release resources (cancel context, close SDK session)
 			if metadata.Connection != nil && metadata.State != ConnectionStateClosed {
 				if err := metadata.Connection.Close(); err != nil {
 					logPool.Printf("Error closing connection during cleanup: backend=%s, session=%s, err=%v",
-						key.BackendID, key.SessionID, err)
+						key.BackendID, util.FormatSessionIDForLog(key.SessionID), err)
 				}
 				metadata.State = ConnectionStateClosed
 			}
@@ -204,7 +205,7 @@ func (p *SessionConnectionPool) Stop() {
 	defer p.mu.Unlock()
 
 	for key, metadata := range p.connections {
-		logPool.Printf("Closing connection: backend=%s, session=%s", key.BackendID, key.SessionID)
+		logPool.Printf("Closing connection: backend=%s, session=%s", key.BackendID, util.FormatSessionIDForLog(key.SessionID))
 		metadata.State = ConnectionStateClosed
 		delete(p.connections, key)
 	}
@@ -225,17 +226,17 @@ func (p *SessionConnectionPool) Get(backendID, sessionID string) (*mcp.Connectio
 	metadata, exists := p.connections[key]
 
 	if !exists {
-		logPool.Printf("Connection not found: backend=%s, session=%s", backendID, sessionID)
+		logPool.Printf("Connection not found: backend=%s, session=%s", backendID, util.FormatSessionIDForLog(sessionID))
 		return nil, false
 	}
 
 	if metadata.State == ConnectionStateClosed {
-		logPool.Printf("Connection is closed: backend=%s, session=%s", backendID, sessionID)
+		logPool.Printf("Connection is closed: backend=%s, session=%s", backendID, util.FormatSessionIDForLog(sessionID))
 		return nil, false
 	}
 
 	logPool.Printf("Reusing connection: backend=%s, session=%s, requests=%d",
-		backendID, sessionID, metadata.RequestCount)
+		backendID, util.FormatSessionIDForLog(sessionID), metadata.RequestCount)
 
 	metadata.LastUsedAt = time.Now()
 	metadata.RequestCount++
@@ -253,7 +254,7 @@ func (p *SessionConnectionPool) Set(backendID, sessionID string, conn *mcp.Conne
 
 	// Check if connection already exists
 	if existing, exists := p.connections[key]; exists {
-		logPool.Printf("Updating existing connection: backend=%s, session=%s", backendID, sessionID)
+		logPool.Printf("Updating existing connection: backend=%s, session=%s", backendID, util.FormatSessionIDForLog(sessionID))
 		existing.Connection = conn
 		existing.LastUsedAt = time.Now()
 		existing.State = ConnectionStateActive
@@ -271,7 +272,7 @@ func (p *SessionConnectionPool) Set(backendID, sessionID string, conn *mcp.Conne
 	}
 
 	p.connections[key] = metadata
-	logPool.Printf("Added new connection to pool: backend=%s, session=%s", backendID, sessionID)
+	logPool.Printf("Added new connection to pool: backend=%s, session=%s", backendID, util.FormatSessionIDForLog(sessionID))
 }
 
 // Delete removes a connection from the pool
@@ -284,7 +285,7 @@ func (p *SessionConnectionPool) Delete(backendID, sessionID string) {
 	if metadata, exists := p.connections[key]; exists {
 		metadata.State = ConnectionStateClosed
 		delete(p.connections, key)
-		logPool.Printf("Deleted connection from pool: backend=%s, session=%s", backendID, sessionID)
+		logPool.Printf("Deleted connection from pool: backend=%s, session=%s", backendID, util.FormatSessionIDForLog(sessionID))
 	}
 }
 
@@ -314,7 +315,7 @@ func (p *SessionConnectionPool) RecordError(backendID, sessionID string) {
 	if metadata, exists := p.connections[key]; exists {
 		metadata.ErrorCount++
 		logPool.Printf("Recorded error for connection: backend=%s, session=%s, errors=%d",
-			backendID, sessionID, metadata.ErrorCount)
+			backendID, util.FormatSessionIDForLog(sessionID), metadata.ErrorCount)
 	}
 }
 

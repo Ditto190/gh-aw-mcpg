@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/github/gh-aw-mcpg/internal/util"
 )
 
 // AgentPolicy defines the per-agent access policy for a single authenticated
@@ -52,7 +54,7 @@ func (p *AgentPolicy) AllowsTool(serverID, toolName string) bool {
 		return false
 	}
 	tools, ok := p.Tools[serverID]
-	if !ok || len(tools) == 0 {
+	if !ok {
 		return true
 	}
 	for _, t := range tools {
@@ -129,7 +131,7 @@ func validateAgentPolicies(cfg *Config) error {
 	// Reject policies keyed by an unknown (unconfigured) agent ID.
 	for policyID := range policies {
 		if _, ok := agentIDSet[policyID]; !ok {
-			return fmt.Errorf("gateway.agent_policies references unknown agent ID %q; it must match a configured agent_id/agent_ids entry", policyID)
+			return fmt.Errorf("gateway.agent_policies references unknown agent ID %q; it must match a configured agent_id/agent_ids entry", util.HashIdentifierForLog(policyID))
 		}
 	}
 
@@ -138,7 +140,7 @@ func validateAgentPolicies(cfg *Config) error {
 		var missing []string
 		for _, id := range agentIDs {
 			if _, ok := policies[id]; !ok {
-				missing = append(missing, id)
+				missing = append(missing, util.HashIdentifierForLog(id))
 			}
 		}
 		if len(missing) > 0 {
@@ -149,7 +151,7 @@ func validateAgentPolicies(cfg *Config) error {
 
 	for policyID, policy := range policies {
 		if policy == nil {
-			return fmt.Errorf("gateway.agent_policies[%q] must not be null", policyID)
+			return fmt.Errorf("gateway.agent_policies[%q] must not be null", util.HashIdentifierForLog(policyID))
 		}
 		if err := validateSingleAgentPolicy(policyID, policy, cfg.Servers); err != nil {
 			return err
@@ -162,33 +164,43 @@ func validateAgentPolicies(cfg *Config) error {
 // validateSingleAgentPolicy validates one agent's policy: server references, the
 // per-server tool allowlist, and any allow-only guard policy.
 func validateSingleAgentPolicy(policyID string, policy *AgentPolicy, servers map[string]*ServerConfig) error {
+	formattedPolicyID := util.HashIdentifierForLog(policyID)
 	seenServers := make(map[string]struct{}, len(policy.Servers))
 	for _, serverID := range policy.Servers {
 		trimmed := strings.TrimSpace(serverID)
 		if trimmed == "" {
-			return fmt.Errorf("gateway.agent_policies[%q].servers entries must be non-empty strings", policyID)
+			return fmt.Errorf("gateway.agent_policies[%q].servers entries must be non-empty strings", formattedPolicyID)
+		}
+		if trimmed != serverID {
+			return fmt.Errorf("gateway.agent_policies[%q].servers entries must not contain surrounding whitespace", formattedPolicyID)
 		}
 		if _, ok := servers[trimmed]; !ok {
-			return fmt.Errorf("gateway.agent_policies[%q].servers references unknown server %q", policyID, trimmed)
+			return fmt.Errorf("gateway.agent_policies[%q].servers references unknown server %q", formattedPolicyID, trimmed)
 		}
 		if _, dup := seenServers[trimmed]; dup {
-			return fmt.Errorf("gateway.agent_policies[%q].servers must not contain duplicate server %q", policyID, trimmed)
+			return fmt.Errorf("gateway.agent_policies[%q].servers must not contain duplicate server %q", formattedPolicyID, trimmed)
 		}
 		seenServers[trimmed] = struct{}{}
 	}
 
 	for serverID, tools := range policy.Tools {
+		if strings.TrimSpace(serverID) != serverID {
+			return fmt.Errorf("gateway.agent_policies[%q].tools server keys must not contain surrounding whitespace", formattedPolicyID)
+		}
 		if _, ok := seenServers[serverID]; !ok {
-			return fmt.Errorf("gateway.agent_policies[%q].tools references server %q that is not in the policy's servers list", policyID, serverID)
+			return fmt.Errorf("gateway.agent_policies[%q].tools references server %q that is not in the policy's servers list", formattedPolicyID, serverID)
 		}
 		seenTools := make(map[string]struct{}, len(tools))
 		for _, toolName := range tools {
 			trimmed := strings.TrimSpace(toolName)
 			if trimmed == "" {
-				return fmt.Errorf("gateway.agent_policies[%q].tools[%q] entries must be non-empty strings", policyID, serverID)
+				return fmt.Errorf("gateway.agent_policies[%q].tools[%q] entries must be non-empty strings", formattedPolicyID, serverID)
+			}
+			if trimmed != toolName {
+				return fmt.Errorf("gateway.agent_policies[%q].tools[%q] entries must not contain surrounding whitespace", formattedPolicyID, serverID)
 			}
 			if _, dup := seenTools[trimmed]; dup {
-				return fmt.Errorf("gateway.agent_policies[%q].tools[%q] must not contain duplicate tool %q", policyID, serverID, trimmed)
+				return fmt.Errorf("gateway.agent_policies[%q].tools[%q] must not contain duplicate tool %q", formattedPolicyID, serverID, trimmed)
 			}
 			seenTools[trimmed] = struct{}{}
 		}
@@ -196,7 +208,7 @@ func validateSingleAgentPolicy(policyID string, policy *AgentPolicy, servers map
 
 	if policy.AllowOnly != nil {
 		if err := ValidateGuardPolicy(&GuardPolicy{AllowOnly: policy.AllowOnly}); err != nil {
-			return fmt.Errorf("gateway.agent_policies[%q].allow-only is invalid: %w", policyID, err)
+			return fmt.Errorf("gateway.agent_policies[%q].allow-only is invalid: %w", formattedPolicyID, err)
 		}
 	}
 

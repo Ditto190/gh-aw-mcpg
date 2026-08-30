@@ -219,7 +219,7 @@ func GetOrLaunchForSession(l *Launcher, serverID, sessionID string) (*mcp.Connec
 		return getOrLaunchWithConfig(l, serverID, serverCfg)
 	}
 
-	logLauncher.Printf("Checking session pool: serverID=%s, sessionID=%s", serverID, sessionID)
+	logLauncher.Printf("Checking session pool: serverID=%s, sessionID=%s", serverID, util.FormatSessionIDForLog(sessionID))
 	// For stdio backends, check the session pool first
 	if conn, exists := l.sessionPool.Get(serverID, sessionID); exists {
 		logger.LogDebugToServer(serverID, "backend", "Reusing session connection: server=%s, session=%s", serverID, util.FormatSessionIDForLog(sessionID))
@@ -227,7 +227,7 @@ func GetOrLaunchForSession(l *Launcher, serverID, sessionID string) (*mcp.Connec
 	}
 
 	// Need to launch new connection for this session
-	logLauncher.Printf("Session connection not found, creating new: serverID=%s, sessionID=%s", serverID, sessionID)
+	logLauncher.Printf("Session connection not found, creating new: serverID=%s, sessionID=%s", serverID, util.FormatSessionIDForLog(sessionID))
 
 	// Allow tests to observe the pool miss and inject a connection before the lock.
 	if l.hookAfterFirstPoolMiss != nil {
@@ -293,7 +293,7 @@ func (l *Launcher) launchStdioConnection(serverID, sessionID string, serverCfg *
 	}
 
 	log.Printf("[LAUNCHER] Starting server with %v timeout", l.startupTimeout)
-	logLauncher.Printf("Starting server with timeout: serverID=%s, sessionID=%s, timeout=%v", serverID, sessionID, l.startupTimeout)
+	logLauncher.Printf("Starting server with timeout: serverID=%s, sessionID=%s, timeout=%v", serverID, util.FormatSessionIDForLog(sessionID), l.startupTimeout)
 
 	// Create a buffered channel to receive connection result
 	// Buffer size of 1 prevents goroutine leak if timeout occurs before connection completes

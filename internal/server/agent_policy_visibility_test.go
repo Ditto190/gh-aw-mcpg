@@ -108,15 +108,28 @@ func TestCreateAgentFilteredUnifiedServer_ConcurrentIsolation(t *testing.T) {
 	us := agentVisibilityServer(t)
 
 	agents := []string{"alice", "bob", "ghost"}
-	done := make(chan []string, len(agents)*4)
+	expected := map[string][]string{
+		"alice": {"github___issue_read"},
+		"bob":   {"fetch___get"},
+		"ghost": {},
+	}
+	type result struct {
+		agentID string
+		tools   []string
+	}
+	done := make(chan result, len(agents)*4)
 	for i := 0; i < 4; i++ {
 		for _, a := range agents {
 			go func(agentID string) {
-				done <- listToolsViaInMemory(t, createAgentFilteredUnifiedServer(us, agentID))
+				done <- result{
+					agentID: agentID,
+					tools:   listToolsViaInMemory(t, createAgentFilteredUnifiedServer(us, agentID)),
+				}
 			}(a)
 		}
 	}
 	for i := 0; i < len(agents)*4; i++ {
-		<-done
+		result := <-done
+		assert.ElementsMatch(t, expected[result.agentID], result.tools)
 	}
 }

@@ -44,6 +44,46 @@ func TestAgentPolicy_AllowsTool(t *testing.T) {
 	// Server permitted but no per-server tool list -> all tools allowed.
 	p2 := &AgentPolicy{Servers: []string{"github"}}
 	assert.True(t, p2.AllowsTool("github", "any_tool"))
+
+	// An explicitly configured empty allowlist denies every tool.
+	p3 := &AgentPolicy{Servers: []string{"github"}, Tools: map[string][]string{"github": {}}}
+	assert.False(t, p3.AllowsTool("github", "any_tool"))
+}
+
+func TestValidateSingleAgentPolicy_RejectsSurroundingWhitespace(t *testing.T) {
+	servers := map[string]*ServerConfig{"github": {}}
+	tests := []struct {
+		name   string
+		policy *AgentPolicy
+	}{
+		{
+			name:   "server entry",
+			policy: &AgentPolicy{Servers: []string{" github "}},
+		},
+		{
+			name: "tools server key",
+			policy: &AgentPolicy{
+				Servers: []string{"github"},
+				Tools:   map[string][]string{" github ": {"search_code"}},
+			},
+		},
+		{
+			name: "tool entry",
+			policy: &AgentPolicy{
+				Servers: []string{"github"},
+				Tools:   map[string][]string{"github": {" search_code "}},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateSingleAgentPolicy("secret-agent-id", tt.policy, servers)
+			require.Error(t, err)
+			assert.ErrorContains(t, err, "surrounding whitespace")
+			assert.NotContains(t, err.Error(), "secret-agent-id")
+		})
+	}
 }
 
 // --- Config accessor tests ---

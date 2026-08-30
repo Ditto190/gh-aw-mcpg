@@ -123,7 +123,7 @@ func (l *Launcher) logLaunchStart(serverID, sessionID string, serverCfg *config.
 	logger.LogInfoToServer(serverID, "backend", "Launching MCP backend server%s: server=%s%s, command=%s, args=%v",
 		suffix, serverID, suffix, serverCfg.Command, sanitize.SanitizeArgs(serverCfg.Args))
 	if sessionID != "" {
-		logLauncher.Printf("Launching new session server: serverID=%s, sessionID=%s, command=%s", serverID, sessionID, serverCfg.Command)
+		logLauncher.Printf("Launching new session server: serverID=%s, sessionID=%s, command=%s", serverID, util.FormatSessionIDForLog(sessionID), serverCfg.Command)
 	} else {
 		logLauncher.Printf("Launching new server: serverID=%s, command=%s, inContainer=%v, isDirectCommand=%v",
 			serverID, serverCfg.Command, l.runningInContainer, isDirectCommand)

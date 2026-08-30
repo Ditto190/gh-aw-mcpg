@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/github/gh-aw-mcpg/internal/logger"
+	"github.com/github/gh-aw-mcpg/internal/util"
 )
 
 var logReflect = logger.ForFile()
@@ -32,7 +33,7 @@ func BuildReflectResponse(components DIFCComponents) ReflectResponse {
 		for _, agentID := range agentIDs {
 			agent, ok := components.AgentRegistry.Get(agentID)
 			if !ok || agent == nil {
-				logReflect.Printf("Skipping agent %s: not found or nil in registry", agentID)
+				logReflect.Printf("Skipping agent %s: not found or nil in registry", util.HashIdentifierForLog(agentID))
 				continue
 			}
 			secrecy := TagsToStrings(agent.GetSecrecyTags())
