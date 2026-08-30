@@ -104,18 +104,7 @@ func validateGatewayConfig(gateway *StdinGatewayConfig) error {
 }
 
 func validateAgentIDs(agentIDs []string, defined bool, fieldName string) error {
-	if !defined {
-		return nil
-	}
-	if len(agentIDs) == 0 {
-		return fmt.Errorf("%s must be a non-empty array when present", fieldName)
-	}
-	for i, agentID := range agentIDs {
-		if strings.TrimSpace(agentID) == "" {
-			return fmt.Errorf("%s[%d] must be a non-empty string", fieldName, i)
-		}
-	}
-	return nil
+	return validateNonEmptyStringSlice(agentIDs, defined, fieldName, "")
 }
 
 func validateGatewayPayloadSizeThreshold(value int, fieldName, jsonPath string) error {
@@ -136,18 +125,7 @@ func validateContainerRuntimeCommandNotBlank(command, fieldName, jsonPath string
 // validateTrustedBots checks that the trusted_bots/trustedBots list conforms to spec §4.1.3.4:
 // when present, it must be a non-empty array of non-empty strings.
 func validateTrustedBots(bots []string) error {
-	if bots == nil {
-		return nil
-	}
-	if len(bots) == 0 {
-		return fmt.Errorf("trusted_bots must be a non-empty array when present (spec §4.1.3.4)")
-	}
-	for i, bot := range bots {
-		if strings.TrimSpace(bot) == "" {
-			return fmt.Errorf("trusted_bots[%d] must be a non-empty string", i)
-		}
-	}
-	return nil
+	return validateNonEmptyStringSlice(bots, bots != nil, "trusted_bots", " (spec §4.1.3.4)")
 }
 
 // validateTOMLStdioContainerization validates that TOML stdio servers use the selected container runtime command.
