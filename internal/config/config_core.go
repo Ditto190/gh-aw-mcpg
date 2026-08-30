@@ -566,6 +566,15 @@ func LoadFromFile(path string) (*Config, error) {
 	}
 	cfg.Gateway.normalizeAgentID(md.IsDefined("gateway", "agent_id"), md.IsDefined("gateway", "api_key"), "TOML")
 	agentIDsDefined := md.IsDefined("gateway", "agent_ids")
+	if md.IsDefined("gateway", "agent_id") && strings.TrimSpace(cfg.Gateway.AgentID) == "" {
+		return nil, fmt.Errorf("gateway.agent_id must be a non-empty string when provided")
+	}
+	if md.IsDefined("gateway", "api_key") && strings.TrimSpace(cfg.Gateway.APIKey) == "" {
+		return nil, fmt.Errorf("gateway.api_key must be a non-empty string when provided")
+	}
+	if !md.IsDefined("gateway", "agent_id") && !md.IsDefined("gateway", "api_key") && !agentIDsDefined && cfg.Gateway.AgentID == "" && cfg.Gateway.APIKey == "" && len(cfg.Gateway.AgentIDs) == 0 {
+		return nil, fmt.Errorf("gateway.agent_id or gateway.agent_ids must be configured; exactly one selection is required")
+	}
 	if err := validateAgentIDs(cfg.Gateway.AgentIDs, agentIDsDefined, "agent_ids"); err != nil {
 		return nil, err
 	}

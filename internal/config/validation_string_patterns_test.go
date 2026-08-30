@@ -414,7 +414,8 @@ func TestValidateStringPatternsComprehensive(t *testing.T) {
 						},
 					},
 					Gateway: &StdinGatewayConfig{
-						Port: tt.port,
+						Port:    tt.port,
+						AgentID: "test-agent",
 					},
 				}
 
@@ -531,7 +532,8 @@ func TestValidateStringPatternsComprehensive(t *testing.T) {
 						},
 					},
 					Gateway: &StdinGatewayConfig{
-						Domain: tt.domain,
+						Domain:  tt.domain,
+						AgentID: "test-agent",
 					},
 				}
 
@@ -627,6 +629,7 @@ func TestValidateStringPatternsComprehensive(t *testing.T) {
 					Gateway: &StdinGatewayConfig{
 						StartupTimeout: tt.startupTimeout,
 						ToolTimeout:    tt.toolTimeout,
+						AgentID:        "test-agent",
 					},
 				}
 
@@ -660,6 +663,7 @@ func TestValidateStringPatternsComprehensive(t *testing.T) {
 						Mounts:    []string{"/host:/container:ro"},
 					},
 				},
+				Gateway: &StdinGatewayConfig{AgentID: "test-agent"},
 			}
 
 			err := validateRuleBasedPatterns(config)
@@ -678,6 +682,7 @@ func TestValidateStringPatternsComprehensive(t *testing.T) {
 						Container: "-invalid/image:latest", // Invalid container
 					},
 				},
+				Gateway: &StdinGatewayConfig{AgentID: "test-agent"},
 			}
 
 			err := validateRuleBasedPatterns(config)
@@ -755,6 +760,7 @@ func TestValidateStringPatternsComprehensive(t *testing.T) {
 					Domain:         "localhost",
 					StartupTimeout: intPtr(30),
 					ToolTimeout:    intPtr(120),
+					AgentID:        "test-agent",
 				},
 			}
 
@@ -804,7 +810,8 @@ func TestValidateStringPatternsComprehensive(t *testing.T) {
 					},
 				},
 				Gateway: &StdinGatewayConfig{
-					Domain: "example.com",
+					Domain:  "example.com",
+					AgentID: "test-agent",
 				},
 			}
 

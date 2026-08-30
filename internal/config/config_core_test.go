@@ -23,6 +23,9 @@ func writeTempTOML(t *testing.T, content string) string {
 
 // validDockerServerTOML is a minimal valid TOML config with a single stdio (docker) server.
 const validDockerServerTOML = `
+[gateway]
+agent_id = "test-agent"
+
 [servers.github]
 command = "docker"
 args = ["run", "--rm", "-i", "ghcr.io/github/github-mcp-server:latest"]
@@ -30,6 +33,9 @@ args = ["run", "--rm", "-i", "ghcr.io/github/github-mcp-server:latest"]
 
 // validHTTPServerTOML is a minimal valid TOML config with a single HTTP server.
 const validHTTPServerTOML = `
+[gateway]
+agent_id = "test-agent"
+
 [servers.myservice]
 type = "http"
 url = "http://localhost:9090/mcp"
@@ -37,6 +43,9 @@ url = "http://localhost:9090/mcp"
 
 func TestLoadFromFileSeparatesContainerRuntimeArgs(t *testing.T) {
 	path := writeTempTOML(t, `
+[gateway]
+agent_id = "test-agent"
+
 [servers.github]
 command = "docker"
 args = ["run", "--rm", "-e", "NO_COLOR=1", "ghcr.io/github/github-mcp-server:latest", "--privileged"]
@@ -123,6 +132,9 @@ func TestFormatConfigError(t *testing.T) {
 
 func TestLoadFromFile_BothTracingAndOpenTelemetry_OpenTelemetryTakesPrecedence(t *testing.T) {
 	path := writeTempTOML(t, `
+[gateway]
+agent_id = "test-agent"
+
 [gateway.tracing]
 endpoint = "http://legacy-collector.example.com:4318"
 
@@ -193,6 +205,7 @@ args = ["server.js"]
 func TestLoadFromFile_WhitespaceGatewayContainerRuntimeRejected(t *testing.T) {
 	path := writeTempTOML(t, `
 [gateway]
+agent_id = "test-agent"
 container_runtime = "   "
 
 [servers.github]
@@ -223,6 +236,9 @@ func TestLoadFromFile_HTTPServerValid(t *testing.T) {
 // is parsed from TOML and returned correctly via HTTPConnectTimeout().
 func TestLoadFromFile_HTTPServerWithConnectTimeout(t *testing.T) {
 	path := writeTempTOML(t, `
+[gateway]
+agent_id = "test-agent"
+
 [servers.slowservice]
 type = "http"
 url = "http://localhost:9090/mcp"
@@ -279,6 +295,7 @@ args = ["run", "--rm", "-i", "ghcr.io/github/github-mcp-server:latest"]
 func TestLoadFromFile_InvalidGatewayPort(t *testing.T) {
 	path := writeTempTOML(t, `
 [gateway]
+agent_id = "test-agent"
 port = 99999
 
 [servers.github]
@@ -301,6 +318,9 @@ func TestLoadFromFile_ExampleConfig(t *testing.T) {
 // TestLoadFromFile_ServerFields verifies that all ServerConfig fields are parsed correctly.
 func TestLoadFromFile_ServerFields(t *testing.T) {
 	path := writeTempTOML(t, `
+[gateway]
+agent_id = "test-agent"
+
 [servers.github]
 command = "docker"
 args = ["run", "--rm", "-i", "-e", "GITHUB_TOKEN", "ghcr.io/github/github-mcp-server:latest"]
@@ -320,6 +340,9 @@ GITHUB_TOKEN = "mytoken"
 
 func TestLoadFromFile_ToolResponseFilters(t *testing.T) {
 	path := writeTempTOML(t, `
+[gateway]
+agent_id = "test-agent"
+
 [servers.github]
 command = "docker"
 args = ["run", "--rm", "-i", "ghcr.io/github/github-mcp-server:latest"]
@@ -443,6 +466,9 @@ args = ["run", "--rm", "-i", "ghcr.io/github/github-mcp-server:latest"]
 // unknown-field check.
 func TestLoadFromFile_GuardConfigAllowsDynamicKeys(t *testing.T) {
 	path := writeTempTOML(t, `
+[gateway]
+agent_id = "test-agent"
+
 [servers.github]
 command = "docker"
 args = ["run", "--rm", "-i", "ghcr.io/github/github-mcp-server:latest"]
@@ -473,6 +499,7 @@ allowed_repos = ["owner/repo"]
 func TestLoadFromFile_TrustedBotsEmptyArray(t *testing.T) {
 	path := writeTempTOML(t, `
 [gateway]
+agent_id = "test-agent"
 trusted_bots = []
 
 [servers.github]
@@ -490,6 +517,7 @@ args = ["run", "--rm", "-i", "ghcr.io/github/github-mcp-server:latest"]
 func TestLoadFromFile_TrustedBotsEmptyString(t *testing.T) {
 	path := writeTempTOML(t, `
 [gateway]
+agent_id = "test-agent"
 trusted_bots = ["   "]
 
 [servers.github]
@@ -507,6 +535,7 @@ args = ["run", "--rm", "-i", "ghcr.io/github/github-mcp-server:latest"]
 func TestLoadFromFile_TrustedBotsValid(t *testing.T) {
 	path := writeTempTOML(t, `
 [gateway]
+agent_id = "test-agent"
 trusted_bots = ["my-bot[bot]", "another-bot[bot]"]
 
 [servers.github]
@@ -523,6 +552,9 @@ args = ["run", "--rm", "-i", "ghcr.io/github/github-mcp-server:latest"]
 // are parsed correctly.
 func TestLoadFromFile_MixedStdioAndHTTPServers(t *testing.T) {
 	path := writeTempTOML(t, `
+[gateway]
+agent_id = "test-agent"
+
 [servers.github]
 command = "docker"
 args = ["run", "--rm", "-i", "ghcr.io/github/github-mcp-server:latest"]
@@ -543,6 +575,9 @@ url = "https://api.example.com/mcp"
 // type = "stdio" and command = "docker" is accepted.
 func TestLoadFromFile_StdioExplicitTypeDocker(t *testing.T) {
 	path := writeTempTOML(t, `
+[gateway]
+agent_id = "test-agent"
+
 [servers.myserver]
 type = "stdio"
 command = "docker"
@@ -678,6 +713,9 @@ func TestLoadFromFile_OIDCAuthWithEnvVarSet(t *testing.T) {
 	t.Setenv("ACTIONS_ID_TOKEN_REQUEST_URL", "https://token.actions.example.com")
 
 	path := writeTempTOML(t, `
+[gateway]
+agent_id = "test-agent"
+
 [servers.secure]
 type = "http"
 url = "https://example.com/mcp"
@@ -736,6 +774,7 @@ func TestLoadFromFile_InvalidPayloadSizeThresholdRejected(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			path := writeTempTOML(t, fmt.Sprintf(`
 [gateway]
+agent_id = "test-agent"
 payload_size_threshold = %d
 
 [servers.github]

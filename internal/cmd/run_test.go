@@ -158,6 +158,39 @@ func TestRun_InvalidConfigFile(t *testing.T) {
 	assert.Contains(t, err.Error(), "failed to load config")
 }
 
+func TestRun_RequiresConfiguredAgentID(t *testing.T) {
+	resetRunFlagsForTest(t)
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	content := `[gateway]
+port = 3000
+
+[servers.testserver]
+type = "http"
+url = "http://127.0.0.1:1"
+`
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
+
+	configFile = path
+	configStdin = false
+	envFile = ""
+	listenAddr = "127.0.0.1:0"
+	routedMode = true
+	unifiedMode = false
+	logDir = t.TempDir()
+	wasmCacheDir = t.TempDir()
+	shutdownTimeout = 2 * time.Second
+	difcMode = "strict"
+
+	rootCmd.SetContext(context.Background())
+	t.Cleanup(func() { rootCmd.SetContext(context.Background()) })
+
+	err := run(rootCmd, nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "gateway.agent_id or gateway.agent_ids must be configured; exactly one selection is required")
+}
+
 // TestRun_InvalidEnvFile verifies that run() returns a wrapped error when the
 // configured --env-file path does not exist, before any config loading or
 // server startup occurs.

@@ -19,6 +19,11 @@ func TestLoadFromFile_AgentIDs(t *testing.T) {
 			gateway: `agent_ids = ["primary-agent", "enclave-agent"]`,
 		},
 		{
+			name:    "missing agent ID selection",
+			gateway: `port = 3000`,
+			wantErr: "gateway.agent_id or gateway.agent_ids must be configured; exactly one selection is required",
+		},
+		{
 			name:    "empty plural IDs",
 			gateway: `agent_ids = []`,
 			wantErr: "agent_ids must be a non-empty array",
@@ -127,9 +132,33 @@ func TestLoadFromStdin_AgentIDs(t *testing.T) {
 	}
 }
 
+func TestLoadFromStdin_RequiresAgentIDOrAgentIDs(t *testing.T) {
+	input := `{
+		"mcpServers": {"github": {"type": "stdio", "container": "ghcr.io/github/github-mcp-server:latest"}},
+		"gateway": {"port": 3000, "domain": "localhost"}
+	}`
+
+	readEnd, writeEnd, err := os.Pipe()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = readEnd.Close() })
+
+	oldStdin := os.Stdin
+	os.Stdin = readEnd
+	t.Cleanup(func() { os.Stdin = oldStdin })
+	_, err = writeEnd.WriteString(input)
+	require.NoError(t, err)
+	require.NoError(t, writeEnd.Close())
+
+	_, err = LoadFromStdin()
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "agentId")
+	assert.ErrorContains(t, err, "agentIds")
+}
+
 func TestValidateGatewayConfig_RejectsLegacyAndPluralIDs(t *testing.T) {
 	err := validateGatewayConfig(&StdinGatewayConfig{
 		AgentIDs:        []string{"enclave-agent"},
+		APIKey:          "legacy-agent",
 		agentIDsSet:     true,
 		legacyAPIKeySet: true,
 	})

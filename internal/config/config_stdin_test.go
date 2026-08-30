@@ -133,7 +133,7 @@ func TestConvertStdinConfig_ContainerRuntimeSelection(t *testing.T) {
 			MCPServers: map[string]*StdinServerConfig{
 				"test": {Type: "stdio", Container: "ghcr.io/example/server:latest"},
 			},
-			Gateway: &StdinGatewayConfig{
+			Gateway: &StdinGatewayConfig{AgentID: "test-agent",
 				Dockerless: true,
 			},
 		}
@@ -151,7 +151,7 @@ func TestConvertStdinConfig_ContainerRuntimeSelection(t *testing.T) {
 			MCPServers: map[string]*StdinServerConfig{
 				"test": {Type: "stdio", Container: "ghcr.io/example/server:latest"},
 			},
-			Gateway: &StdinGatewayConfig{
+			Gateway: &StdinGatewayConfig{AgentID: "test-agent",
 				Dockerless: true,
 			},
 		}
@@ -166,7 +166,7 @@ func TestConvertStdinConfig_ContainerRuntimeSelection(t *testing.T) {
 			MCPServers: map[string]*StdinServerConfig{
 				"test": {Type: "stdio", Container: "ghcr.io/example/server:latest"},
 			},
-			Gateway: &StdinGatewayConfig{
+			Gateway: &StdinGatewayConfig{AgentID: "test-agent",
 				ContainerRuntime: "podman",
 			},
 		}
@@ -183,7 +183,7 @@ func TestConvertStdinConfig_ContainerRuntimeSelection(t *testing.T) {
 			MCPServers: map[string]*StdinServerConfig{
 				"test": {Type: "stdio", Container: "ghcr.io/example/server:latest"},
 			},
-			Gateway: &StdinGatewayConfig{
+			Gateway: &StdinGatewayConfig{AgentID: "test-agent",
 				ContainerRuntime:        "podman",
 				ContainerRuntimeCommand: "nerdctl",
 				ContainerRuntimeArgs:    []string{"--namespace", "k8s.io"},
@@ -207,7 +207,7 @@ func TestConvertStdinConfig_ContainerRuntimeSelection(t *testing.T) {
 			MCPServers: map[string]*StdinServerConfig{
 				"test": {Type: "stdio", Container: "ghcr.io/example/server:latest"},
 			},
-			Gateway: &StdinGatewayConfig{
+			Gateway: &StdinGatewayConfig{AgentID: "test-agent",
 				ContainerRuntime: "docker",
 			},
 		}
@@ -224,7 +224,7 @@ func TestConvertStdinConfig_ContainerRuntimeSelection(t *testing.T) {
 			MCPServers: map[string]*StdinServerConfig{
 				"test": {Type: "stdio", Container: "ghcr.io/example/server:latest"},
 			},
-			Gateway: &StdinGatewayConfig{
+			Gateway: &StdinGatewayConfig{AgentID: "test-agent",
 				ContainerRuntime: "podman",
 			},
 		}
@@ -238,11 +238,12 @@ func TestConvertStdinConfig_ContainerRuntimeSelection(t *testing.T) {
 
 func TestValidateGatewayConfig_Dockerless(t *testing.T) {
 	t.Run("accepts dockerless without explicit runtime", func(t *testing.T) {
-		assert.NoError(t, validateGatewayConfig(&StdinGatewayConfig{Dockerless: true}))
+		assert.NoError(t, validateGatewayConfig(&StdinGatewayConfig{AgentID: "test-agent", Dockerless: true}))
 	})
 
 	t.Run("accepts dockerless with podman runtime", func(t *testing.T) {
 		assert.NoError(t, validateGatewayConfig(&StdinGatewayConfig{
+			AgentID:          "test-agent",
 			Dockerless:       true,
 			ContainerRuntime: "podman",
 		}))
@@ -250,6 +251,7 @@ func TestValidateGatewayConfig_Dockerless(t *testing.T) {
 
 	t.Run("rejects dockerless with docker runtime", func(t *testing.T) {
 		err := validateGatewayConfig(&StdinGatewayConfig{
+			AgentID:          "test-agent",
 			Dockerless:       true,
 			ContainerRuntime: "docker",
 		})
@@ -258,6 +260,7 @@ func TestValidateGatewayConfig_Dockerless(t *testing.T) {
 
 	t.Run("accepts dockerless with explicit podman path", func(t *testing.T) {
 		assert.NoError(t, validateGatewayConfig(&StdinGatewayConfig{
+			AgentID:                 "test-agent",
 			Dockerless:              true,
 			ContainerRuntimeCommand: "/usr/local/bin/podman",
 		}))
@@ -265,6 +268,7 @@ func TestValidateGatewayConfig_Dockerless(t *testing.T) {
 
 	t.Run("rejects dockerless with non-podman command", func(t *testing.T) {
 		err := validateGatewayConfig(&StdinGatewayConfig{
+			AgentID:                 "test-agent",
 			Dockerless:              true,
 			ContainerRuntimeCommand: "nerdctl",
 		})
@@ -1197,7 +1201,7 @@ func TestConvertStdinConfig_TrustedBots(t *testing.T) {
 	t.Run("trustedBots parsed from JSON gateway config", func(t *testing.T) {
 		stdinCfg := &StdinConfig{
 			MCPServers: map[string]*StdinServerConfig{},
-			Gateway: &StdinGatewayConfig{
+			Gateway: &StdinGatewayConfig{AgentID: "test-agent",
 				TrustedBots: []string{"copilot-swe-agent[bot]", "my-org-bot"},
 			},
 		}
@@ -1211,7 +1215,7 @@ func TestConvertStdinConfig_TrustedBots(t *testing.T) {
 	t.Run("empty trustedBots rejected per spec §4.1.3.4", func(t *testing.T) {
 		stdinCfg := &StdinConfig{
 			MCPServers: map[string]*StdinServerConfig{},
-			Gateway: &StdinGatewayConfig{
+			Gateway: &StdinGatewayConfig{AgentID: "test-agent",
 				TrustedBots: []string{},
 			},
 		}
@@ -1224,7 +1228,7 @@ func TestConvertStdinConfig_TrustedBots(t *testing.T) {
 	t.Run("nil trustedBots not propagated", func(t *testing.T) {
 		stdinCfg := &StdinConfig{
 			MCPServers: map[string]*StdinServerConfig{},
-			Gateway:    &StdinGatewayConfig{},
+			Gateway:    &StdinGatewayConfig{AgentID: "test-agent"},
 		}
 
 		cfg, err := convertStdinConfig(stdinCfg)
@@ -1402,7 +1406,7 @@ func TestConvertStdinConfig_PayloadPathPrefix(t *testing.T) {
 	t.Run("payloadPathPrefix wired from stdin gateway config", func(t *testing.T) {
 		stdinCfg := &StdinConfig{
 			MCPServers: map[string]*StdinServerConfig{},
-			Gateway: &StdinGatewayConfig{
+			Gateway: &StdinGatewayConfig{AgentID: "test-agent",
 				PayloadPathPrefix: stringPtr("/workspace/payloads"),
 			},
 		}
@@ -1416,7 +1420,7 @@ func TestConvertStdinConfig_PayloadPathPrefix(t *testing.T) {
 	t.Run("payloadPathPrefix nil leaves internal config empty", func(t *testing.T) {
 		stdinCfg := &StdinConfig{
 			MCPServers: map[string]*StdinServerConfig{},
-			Gateway:    &StdinGatewayConfig{},
+			Gateway:    &StdinGatewayConfig{AgentID: "test-agent"},
 		}
 
 		cfg, err := convertStdinConfig(stdinCfg)
@@ -1434,7 +1438,7 @@ func TestConvertStdinConfig_PayloadSizeThreshold(t *testing.T) {
 	t.Run("payloadSizeThreshold wired from stdin gateway config", func(t *testing.T) {
 		stdinCfg := &StdinConfig{
 			MCPServers: map[string]*StdinServerConfig{},
-			Gateway: &StdinGatewayConfig{
+			Gateway: &StdinGatewayConfig{AgentID: "test-agent",
 				PayloadSizeThreshold: intPtr(1048576),
 			},
 		}
@@ -1448,7 +1452,7 @@ func TestConvertStdinConfig_PayloadSizeThreshold(t *testing.T) {
 	t.Run("payloadSizeThreshold nil leaves default applied", func(t *testing.T) {
 		stdinCfg := &StdinConfig{
 			MCPServers: map[string]*StdinServerConfig{},
-			Gateway:    &StdinGatewayConfig{},
+			Gateway:    &StdinGatewayConfig{AgentID: "test-agent"},
 		}
 
 		cfg, err := convertStdinConfig(stdinCfg)
@@ -1460,6 +1464,7 @@ func TestConvertStdinConfig_PayloadSizeThreshold(t *testing.T) {
 
 	t.Run("payloadSizeThreshold zero rejected per spec §4.1.3.3", func(t *testing.T) {
 		gateway := &StdinGatewayConfig{
+			AgentID:              "test-agent",
 			PayloadSizeThreshold: intPtr(0),
 		}
 
@@ -1470,6 +1475,7 @@ func TestConvertStdinConfig_PayloadSizeThreshold(t *testing.T) {
 
 	t.Run("payloadSizeThreshold negative rejected per spec §4.1.3.3", func(t *testing.T) {
 		gateway := &StdinGatewayConfig{
+			AgentID:              "test-agent",
 			PayloadSizeThreshold: intPtr(-1),
 		}
 
@@ -1480,6 +1486,7 @@ func TestConvertStdinConfig_PayloadSizeThreshold(t *testing.T) {
 
 	t.Run("payloadSizeThreshold one accepted", func(t *testing.T) {
 		gateway := &StdinGatewayConfig{
+			AgentID:              "test-agent",
 			PayloadSizeThreshold: intPtr(1),
 		}
 
@@ -1497,7 +1504,7 @@ func TestConvertStdinConfig_GatewayOptionalFields(t *testing.T) {
 
 	t.Run("payloadDir wired from stdin gateway config", func(t *testing.T) {
 		stdinCfg := &StdinConfig{
-			Gateway: &StdinGatewayConfig{
+			Gateway: &StdinGatewayConfig{AgentID: "test-agent",
 				PayloadDir: "/custom/payloads",
 			},
 		}
@@ -1509,7 +1516,7 @@ func TestConvertStdinConfig_GatewayOptionalFields(t *testing.T) {
 
 	t.Run("empty payloadDir leaves gateway default", func(t *testing.T) {
 		stdinCfg := &StdinConfig{
-			Gateway: &StdinGatewayConfig{},
+			Gateway: &StdinGatewayConfig{AgentID: "test-agent"},
 		}
 		cfg, err := convertStdinConfig(stdinCfg)
 		require.NoError(t, err)
@@ -1519,7 +1526,7 @@ func TestConvertStdinConfig_GatewayOptionalFields(t *testing.T) {
 
 	t.Run("forcePublicRepos true value preserved", func(t *testing.T) {
 		stdinCfg := &StdinConfig{
-			Gateway: &StdinGatewayConfig{
+			Gateway: &StdinGatewayConfig{AgentID: "test-agent",
 				ForcePublicRepos: &forceTrue,
 			},
 		}
@@ -1532,7 +1539,7 @@ func TestConvertStdinConfig_GatewayOptionalFields(t *testing.T) {
 
 	t.Run("forcePublicRepos false value preserved", func(t *testing.T) {
 		stdinCfg := &StdinConfig{
-			Gateway: &StdinGatewayConfig{
+			Gateway: &StdinGatewayConfig{AgentID: "test-agent",
 				ForcePublicRepos: &forceFalse,
 			},
 		}
@@ -1545,7 +1552,7 @@ func TestConvertStdinConfig_GatewayOptionalFields(t *testing.T) {
 
 	t.Run("nil forcePublicRepos leaves field nil", func(t *testing.T) {
 		stdinCfg := &StdinConfig{
-			Gateway: &StdinGatewayConfig{},
+			Gateway: &StdinGatewayConfig{AgentID: "test-agent"},
 		}
 		cfg, err := convertStdinConfig(stdinCfg)
 		require.NoError(t, err)
@@ -1555,7 +1562,7 @@ func TestConvertStdinConfig_GatewayOptionalFields(t *testing.T) {
 
 	t.Run("sinkVisibilityExemptServers wired from stdin gateway config", func(t *testing.T) {
 		stdinCfg := &StdinConfig{
-			Gateway: &StdinGatewayConfig{
+			Gateway: &StdinGatewayConfig{AgentID: "test-agent",
 				SinkVisibilityExemptServers: []string{"github", "slack"},
 			},
 		}
@@ -1567,7 +1574,7 @@ func TestConvertStdinConfig_GatewayOptionalFields(t *testing.T) {
 
 	t.Run("empty sinkVisibilityExemptServers leaves field nil", func(t *testing.T) {
 		stdinCfg := &StdinConfig{
-			Gateway: &StdinGatewayConfig{
+			Gateway: &StdinGatewayConfig{AgentID: "test-agent",
 				SinkVisibilityExemptServers: []string{},
 			},
 		}
@@ -1580,21 +1587,21 @@ func TestConvertStdinConfig_GatewayOptionalFields(t *testing.T) {
 
 func TestValidateGatewayConfig_ContainerRuntime(t *testing.T) {
 	t.Run("accepts docker and podman", func(t *testing.T) {
-		err := validateGatewayConfig(&StdinGatewayConfig{ContainerRuntime: "docker"})
+		err := validateGatewayConfig(&StdinGatewayConfig{AgentID: "test-agent", ContainerRuntime: "docker"})
 		assert.NoError(t, err)
 
-		err = validateGatewayConfig(&StdinGatewayConfig{ContainerRuntime: "podman"})
+		err = validateGatewayConfig(&StdinGatewayConfig{AgentID: "test-agent", ContainerRuntime: "podman"})
 		assert.NoError(t, err)
 	})
 
 	t.Run("rejects unsupported runtime", func(t *testing.T) {
-		err := validateGatewayConfig(&StdinGatewayConfig{ContainerRuntime: "containerd"})
+		err := validateGatewayConfig(&StdinGatewayConfig{AgentID: "test-agent", ContainerRuntime: "containerd"})
 		require.Error(t, err)
 		assert.ErrorContains(t, err, "gateway.containerRuntime must be one of: docker, podman")
 	})
 
 	t.Run("rejects whitespace-only runtime value", func(t *testing.T) {
-		err := validateGatewayConfig(&StdinGatewayConfig{ContainerRuntime: "   "})
+		err := validateGatewayConfig(&StdinGatewayConfig{AgentID: "test-agent", ContainerRuntime: "   "})
 		require.Error(t, err)
 		assert.ErrorContains(t, err, "gateway.containerRuntime must not be empty or whitespace-only when set")
 	})

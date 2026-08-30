@@ -389,6 +389,11 @@ func LoadFromStdin() (*Config, error) {
 	if err := validateCustomSchemas(stdinCfg.CustomSchemas); err != nil {
 		return nil, err
 	}
+	if stdinCfg.Gateway != nil {
+		if err := validateGatewayConfig(stdinCfg.Gateway); err != nil {
+			return nil, err
+		}
+	}
 
 	// Convert stdin config to internal format
 	cfg, err := convertStdinConfig(&stdinCfg)
