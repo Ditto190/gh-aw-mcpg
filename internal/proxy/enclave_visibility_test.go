@@ -85,7 +85,7 @@ func TestEnclaveRepositoryIsPublic(t *testing.T) {
 		server := newTestServer(t, "http://127.0.0.1:0")
 		server.githubToken = "test-token"
 		server.enclave = newEnclaveState(nil, nil)
-		server.githubAPIURL = "http://\x7f" // invalid URL to force request construction/transport failure
+		// Port 0 lets request construction succeed but forces httpClient.Do to fail.
 
 		result := server.enclaveRepositoryIsPublic(context.Background(), "org/repo")
 
