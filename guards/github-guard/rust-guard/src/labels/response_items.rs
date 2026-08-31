@@ -138,7 +138,7 @@ pub fn label_response_items(
         }
 
         // === Pull Requests - label by merged state ===
-        "list_pull_requests"
+        tool_names::LIST_PULL_REQUESTS
         | "list_pull_requests_ff_fields_param"
         | "search_pull_requests"
         | "search_pull_requests_ff_fields_param"
@@ -159,7 +159,8 @@ pub fn label_response_items(
                 let items = extract_items_slice(&actual_response, "pull_requests");
 
                 if !items.is_empty() {
-                    let items_to_process = limit_items_with_log(items, "list_pull_requests");
+                    let items_to_process =
+                        limit_items_with_log(items, tool_names::LIST_PULL_REQUESTS);
                     let (arg_owner, arg_repo, arg_repo_full) =
                         extract_repo_scope_with_query_fallback(tool_args);
                     let default_repo_private = repo_private_fallback(&arg_owner, &arg_repo);
@@ -307,10 +308,11 @@ pub fn label_response_items(
         }
 
         // === File Contents - repo-scoped secrecy ===
-        "get_file_contents" | "get_file_contents_ff_fields_param" => {
+        tool_names::GET_FILE_CONTENTS | "get_file_contents_ff_fields_param" => {
             let all_items = collect_items_simple(&actual_response);
 
-            let items_limited = limit_items_with_log(all_items.as_slice(), "get_file_contents");
+            let items_limited =
+                limit_items_with_log(all_items.as_slice(), tool_names::GET_FILE_CONTENTS);
             let (arg_owner, arg_repo, repo_full_name) = extract_repo_info(tool_args);
             let secrecy = repo_visibility_secrecy(&arg_owner, &arg_repo, &repo_full_name, ctx);
             let branch_ref = tool_args.get("ref").and_then(|v| v.as_str()).unwrap_or("");
@@ -335,11 +337,12 @@ pub fn label_response_items(
         }
 
         // === Commits - label by branch (default branch = merged) ===
-        "list_commits" | "list_commits_ff_fields_param" | "get_commit" => {
+        tool_names::LIST_COMMITS | "list_commits_ff_fields_param" | "get_commit" => {
             let all_items = collect_items_simple(&actual_response);
 
             // Limit items to prevent WASM memory exhaustion
-            let items_limited = limit_items_with_log(all_items.as_slice(), "list_commits");
+            let items_limited =
+                limit_items_with_log(all_items.as_slice(), tool_names::LIST_COMMITS);
 
             // Get owner/repo from tool_args
             let (arg_owner, arg_repo, repo_full_name) = extract_repo_info(tool_args);
@@ -431,14 +434,15 @@ pub fn label_response_items(
         }
 
         // === Releases - merged-level integrity (endorsed) ===
-        "list_releases"
+        tool_names::LIST_RELEASES
         | "list_releases_ff_fields_param"
         | "get_latest_release"
         | "get_release_by_tag" => {
             let all_items = collect_items_simple(&actual_response);
 
             // Limit items to prevent WASM memory exhaustion
-            let items_limited = limit_items_with_log(all_items.as_slice(), "list_releases");
+            let items_limited =
+                limit_items_with_log(all_items.as_slice(), tool_names::LIST_RELEASES);
 
             let (arg_owner, arg_repo, repo_full_name) = extract_repo_info(tool_args);
             let secrecy = repo_visibility_secrecy(&arg_owner, &arg_repo, &repo_full_name, ctx);

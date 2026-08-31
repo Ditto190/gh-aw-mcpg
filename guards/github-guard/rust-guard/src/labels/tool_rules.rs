@@ -300,7 +300,7 @@ pub fn apply_tool_labels(
         // === Pull Requests ===
         tool_names::GET_PULL_REQUEST
         | tool_names::PULL_REQUEST_READ
-        | "list_pull_requests"
+        | tool_names::LIST_PULL_REQUESTS
         | "list_pull_requests_ff_fields_param" => {
             // I(PR) = merged if merged; otherwise approved/unapproved/contributor floor by evidence
             // S(PR) = S(repo)
@@ -381,7 +381,7 @@ pub fn apply_tool_labels(
         }
 
         // === Commits ===
-        "get_commit" | "list_commits" | "list_commits_ff_fields_param" => {
+        "get_commit" | tool_names::LIST_COMMITS | "list_commits_ff_fields_param" => {
             // I(commit) = merged on default branch, approved in private repos, else contributor floor
             // S(commit) = S(repo)
             if !owner.is_empty() && !repo.is_empty() {
@@ -489,7 +489,7 @@ pub fn apply_tool_labels(
         | "list_discussion_categories"
         | "list_discussions"
         | "list_label"
-        | "list_releases"
+        | tool_names::LIST_RELEASES
         | "list_releases_ff_fields_param"
         | "get_latest_release"
         | "get_release_by_tag"
@@ -509,7 +509,7 @@ pub fn apply_tool_labels(
         }
 
         // === Content Access ===
-        "get_file_contents" | "get_file_blame" | "get_file_contents_ff_fields_param" => {
+        tool_names::GET_FILE_CONTENTS | "get_file_blame" | "get_file_contents_ff_fields_param" => {
             secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
             // File secrecy based on path patterns
             if let Some(path) = tool_args.get("path").and_then(|v| v.as_str()) {

@@ -1471,15 +1471,22 @@ pub fn search_result_total_count(response: &Value) -> Option<u64> {
         .or_else(|| response.get("totalCount").and_then(|v| v.as_u64()))
 }
 
+/// Returns the first element of an MCP content-wrapper array, e.g. the
+/// `{"type":"text","text":"..."}` object inside `{"content":[...]}`. Centralizes
+/// the traversal shared by `is_mcp_text_wrapper` and `backend::mcp_wrapped_text`.
+pub(crate) fn mcp_first_content_item(response: &Value) -> Option<&Value> {
+    response
+        .get("content")
+        .and_then(|v| v.as_array())
+        .and_then(|arr| arr.first())
+}
+
 /// Returns true if the response is an MCP content wrapper where the text was not
 /// parseable as JSON. These are `{"content":[{"type":"text","text":"..."}]}` objects
 /// that `extract_mcp_response` left unwrapped because the text field was not valid
 /// JSON (e.g. plain-text error messages or human-readable summaries).
 pub(crate) fn is_mcp_text_wrapper(response: &Value) -> bool {
-    response
-        .get("content")
-        .and_then(|v| v.as_array())
-        .and_then(|arr| arr.first())
+    mcp_first_content_item(response)
         .and_then(|item| item.get("type"))
         .and_then(|t| t.as_str())
         .map(|t| t == "text")
