@@ -165,7 +165,7 @@ func validateAgentPolicies(cfg *Config) error {
 // per-server tool allowlist, and any allow-only guard policy.
 func validateSingleAgentPolicy(policyID string, policy *AgentPolicy, servers map[string]*ServerConfig) error {
 	formattedPolicyID := util.HashIdentifierForLog(policyID)
-	seenServers := make(map[string]struct{}, len(policy.Servers))
+	serverSet := make(map[string]struct{}, len(policy.Servers))
 	for _, serverID := range policy.Servers {
 		trimmed := strings.TrimSpace(serverID)
 		if trimmed == "" {
@@ -177,20 +177,19 @@ func validateSingleAgentPolicy(policyID string, policy *AgentPolicy, servers map
 		if _, ok := servers[trimmed]; !ok {
 			return fmt.Errorf("gateway.agent_policies[%q].servers references unknown server %q", formattedPolicyID, trimmed)
 		}
-		if _, dup := seenServers[trimmed]; dup {
-			return fmt.Errorf("gateway.agent_policies[%q].servers must not contain duplicate server %q", formattedPolicyID, trimmed)
-		}
-		seenServers[trimmed] = struct{}{}
+		serverSet[trimmed] = struct{}{}
+	}
+	if duplicate, found := util.FindDuplicate(policy.Servers); found {
+		return fmt.Errorf("gateway.agent_policies[%q].servers must not contain duplicate server %q", formattedPolicyID, duplicate)
 	}
 
 	for serverID, tools := range policy.Tools {
 		if strings.TrimSpace(serverID) != serverID {
 			return fmt.Errorf("gateway.agent_policies[%q].tools server keys must not contain surrounding whitespace", formattedPolicyID)
 		}
-		if _, ok := seenServers[serverID]; !ok {
+		if _, ok := serverSet[serverID]; !ok {
 			return fmt.Errorf("gateway.agent_policies[%q].tools references server %q that is not in the policy's servers list", formattedPolicyID, serverID)
 		}
-		seenTools := make(map[string]struct{}, len(tools))
 		for _, toolName := range tools {
 			trimmed := strings.TrimSpace(toolName)
 			if trimmed == "" {
@@ -199,10 +198,9 @@ func validateSingleAgentPolicy(policyID string, policy *AgentPolicy, servers map
 			if trimmed != toolName {
 				return fmt.Errorf("gateway.agent_policies[%q].tools[%q] entries must not contain surrounding whitespace", formattedPolicyID, serverID)
 			}
-			if _, dup := seenTools[trimmed]; dup {
-				return fmt.Errorf("gateway.agent_policies[%q].tools[%q] must not contain duplicate tool %q", formattedPolicyID, serverID, trimmed)
-			}
-			seenTools[trimmed] = struct{}{}
+		}
+		if duplicate, found := util.FindDuplicate(tools); found {
+			return fmt.Errorf("gateway.agent_policies[%q].tools[%q] must not contain duplicate tool %q", formattedPolicyID, serverID, duplicate)
 		}
 	}
 

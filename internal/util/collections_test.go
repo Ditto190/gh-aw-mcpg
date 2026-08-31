@@ -204,6 +204,31 @@ func TestDeduplicateStrings(t *testing.T) {
 	}
 }
 
+func TestFindDuplicate(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		items     []int
+		duplicate int
+		found     bool
+	}{
+		{name: "nil items"},
+		{name: "unique items", items: []int{1, 2, 3}},
+		{name: "finds first duplicate", items: []int{1, 2, 1, 2}, duplicate: 1, found: true},
+		{name: "finds zero duplicate", items: []int{1, 0, 2, 0}, duplicate: 0, found: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			duplicate, found := FindDuplicate(tt.items)
+			assert.Equal(t, tt.found, found)
+			assert.Equal(t, tt.duplicate, duplicate)
+		})
+	}
+}
+
 func TestStringsToAny(t *testing.T) {
 	t.Parallel()
 
