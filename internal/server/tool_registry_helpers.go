@@ -56,6 +56,38 @@ func registerToolWithoutValidation(server *sdk.Server, tool *sdk.Tool, handler f
 	})
 }
 
+// registerFilteredTools registers tools allowed for an agent and returns their count.
+func registerFilteredTools(
+	server *sdk.Server,
+	tools []ToolInfo,
+	agentID string,
+	toolIdentity func(ToolInfo) (backendID, toolName string),
+	canUseTool func(agentID, backendID, toolName string) bool,
+	handlerFor func(ToolInfo) func(context.Context, *sdk.CallToolRequest, interface{}) (*sdk.CallToolResult, interface{}, error),
+) int {
+	registered := 0
+	for _, toolInfo := range tools {
+		backendID, toolName := toolIdentity(toolInfo)
+		if !canUseTool(agentID, backendID, toolName) {
+			continue
+		}
+
+		handler := handlerFor(toolInfo)
+		if handler == nil {
+			continue
+		}
+
+		registerToolWithoutValidation(server, &sdk.Tool{
+			Name:        toolInfo.Name,
+			Description: toolInfo.Description,
+			InputSchema: toolInfo.InputSchema,
+			Annotations: toolInfo.Annotations,
+		}, handler)
+		registered++
+	}
+	return registered
+}
+
 func getToolResponseFilter(cfg *config.Config, serverID, toolName string) string {
 	if cfg == nil {
 		return ""

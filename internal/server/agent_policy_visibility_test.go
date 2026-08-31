@@ -37,6 +37,35 @@ func listToolsViaInMemory(t *testing.T, server *sdk.Server) []string {
 	return names
 }
 
+func TestRegisterFilteredTools(t *testing.T) {
+	server := newSDKServer("filtered-tools-test", logTransport)
+	handler := func(context.Context, *sdk.CallToolRequest, interface{}) (*sdk.CallToolResult, interface{}, error) {
+		return &sdk.CallToolResult{}, nil, nil
+	}
+	tools := []ToolInfo{
+		{Name: "allowed", BackendID: "github", InputSchema: map[string]interface{}{"type": "object"}},
+		{Name: "denied", BackendID: "github", InputSchema: map[string]interface{}{"type": "object"}},
+		{Name: "no-handler", BackendID: "github", InputSchema: map[string]interface{}{"type": "object"}},
+	}
+
+	registered := registerFilteredTools(
+		server,
+		tools,
+		"alice",
+		func(tool ToolInfo) (string, string) { return tool.BackendID, tool.Name },
+		func(_ string, _ string, toolName string) bool { return toolName != "denied" },
+		func(tool ToolInfo) func(context.Context, *sdk.CallToolRequest, interface{}) (*sdk.CallToolResult, interface{}, error) {
+			if tool.Name == "no-handler" {
+				return nil
+			}
+			return handler
+		},
+	)
+
+	assert.Equal(t, 1, registered)
+	assert.ElementsMatch(t, []string{"allowed"}, listToolsViaInMemory(t, server))
+}
+
 func agentVisibilityServer(t *testing.T) *UnifiedServer {
 	t.Helper()
 	cfg := &config.Config{

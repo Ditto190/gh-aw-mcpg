@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"strings"
 
 	"github.com/github/gh-aw-mcpg/internal/logger"
@@ -64,30 +65,24 @@ func createAgentFilteredUnifiedServer(us *UnifiedServer, agentID string) *sdk.Se
 	server := newSDKServer("awmg-unified", logTransport)
 
 	us.toolsMu.RLock()
-	tools := make([]*ToolInfo, 0, len(us.tools))
+	tools := make([]ToolInfo, 0, len(us.tools))
 	for _, t := range us.tools {
-		tools = append(tools, t)
+		tools = append(tools, *t)
 	}
 	us.toolsMu.RUnlock()
 
-	registered := 0
-	for _, toolInfo := range tools {
-		backendID := toolInfo.BackendID
-		unprefixed := strings.TrimPrefix(toolInfo.Name, backendID+"___")
-		if !us.agentCanUseTool(agentID, backendID, unprefixed) {
-			continue
-		}
-		if toolInfo.Handler == nil {
-			continue
-		}
-		registerToolWithoutValidation(server, &sdk.Tool{
-			Name:        toolInfo.Name,
-			Description: toolInfo.Description,
-			InputSchema: toolInfo.InputSchema,
-			Annotations: toolInfo.Annotations,
-		}, toolInfo.Handler)
-		registered++
-	}
+	registered := registerFilteredTools(
+		server,
+		tools,
+		agentID,
+		func(toolInfo ToolInfo) (string, string) {
+			return toolInfo.BackendID, strings.TrimPrefix(toolInfo.Name, toolInfo.BackendID+"___")
+		},
+		us.agentCanUseTool,
+		func(toolInfo ToolInfo) func(context.Context, *sdk.CallToolRequest, interface{}) (*sdk.CallToolResult, interface{}, error) {
+			return toolInfo.Handler
+		},
+	)
 
 	logger.LogInfo("client", "Built per-agent unified tool view: agent=%s, tools=%d",
 		util.HashIdentifierForLog(agentID), registered)

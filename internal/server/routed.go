@@ -49,35 +49,28 @@ func createAgentFilteredServer(unifiedServer *UnifiedServer, backendID, agentID 
 	logRouted.Printf("Creating filtered server for %s with %d tools", backendID, len(tools))
 	logRouted.Printf("Backend %s has %d tools available", backendID, len(tools))
 
-	// Register each tool (without prefix) using the unified server's handlers
-	for _, toolInfo := range tools {
-		// Capture for closure
-		toolNameCopy := toolInfo.Name
+	// Register each tool (without prefix) using the unified server's handlers.
+	registerFilteredTools(
+		server,
+		tools,
+		agentID,
+		func(toolInfo ToolInfo) (string, string) {
+			return backendID, toolInfo.Name
+		},
+		unifiedServer.agentCanUseTool,
+		func(toolInfo ToolInfo) func(context.Context, *sdk.CallToolRequest, interface{}) (*sdk.CallToolResult, interface{}, error) {
+			handler := unifiedServer.GetToolHandler(backendID, toolInfo.Name)
+			if handler == nil {
+				logRouted.Printf("WARNING: No handler found for %s___%s", backendID, toolInfo.Name)
+				return nil
+			}
 
-		// Per-agent tool visibility: skip tools this agent's policy does not permit.
-		if !unifiedServer.agentCanUseTool(agentID, backendID, toolNameCopy) {
-			continue
-		}
-
-		// Get the unified server's handler for this tool
-		handler := unifiedServer.GetToolHandler(backendID, toolInfo.Name)
-		if handler == nil {
-			logRouted.Printf("WARNING: No handler found for %s___%s", backendID, toolInfo.Name)
-			continue
-		}
-
-		// Use registerToolWithoutValidation to bypass JSON Schema validation, allowing
-		// InputSchema from backends using different JSON Schema versions (e.g., draft-07).
-		registerToolWithoutValidation(server, &sdk.Tool{
-			Name:        toolInfo.Name, // Without prefix for the client
-			Description: toolInfo.Description,
-			InputSchema: toolInfo.InputSchema, // Include schema for clients
-			Annotations: toolInfo.Annotations, // Preserve readOnly/destructive hints
-		}, func(ctx context.Context, req *sdk.CallToolRequest, _ interface{}) (*sdk.CallToolResult, interface{}, error) {
-			logRouted.Printf("[ROUTED] Calling unified handler for: %s", toolNameCopy)
-			return handler(ctx, req, nil)
-		})
-	}
+			return func(ctx context.Context, req *sdk.CallToolRequest, _ interface{}) (*sdk.CallToolResult, interface{}, error) {
+				logRouted.Printf("[ROUTED] Calling unified handler for: %s", toolInfo.Name)
+				return handler(ctx, req, nil)
+			}
+		},
+	)
 
 	return server
 }
