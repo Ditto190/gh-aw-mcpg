@@ -86,6 +86,90 @@ func TestValidateSingleAgentPolicy_RejectsSurroundingWhitespace(t *testing.T) {
 	}
 }
 
+// TestValidateSingleAgentPolicy_ErrorPaths covers the remaining validation
+// failure branches in validateSingleAgentPolicy that were previously
+// uncovered: empty server/tool entries and duplicate server/tool references.
+func TestValidateSingleAgentPolicy_ErrorPaths(t *testing.T) {
+	servers := map[string]*ServerConfig{"github": {}, "fetch": {}}
+
+	tests := []struct {
+		name        string
+		policy      *AgentPolicy
+		errContains string
+	}{
+		{
+			name:        "empty server entry",
+			policy:      &AgentPolicy{Servers: []string{""}},
+			errContains: "must be non-empty strings",
+		},
+		{
+			name:        "unknown server reference",
+			policy:      &AgentPolicy{Servers: []string{"unknown-server"}},
+			errContains: "references unknown server",
+		},
+		{
+			name:        "duplicate server entry",
+			policy:      &AgentPolicy{Servers: []string{"github", "github"}},
+			errContains: "must not contain duplicate server",
+		},
+		{
+			name: "tools reference server not in policy's servers list",
+			policy: &AgentPolicy{
+				Servers: []string{"github"},
+				Tools:   map[string][]string{"fetch": {"fetch_url"}},
+			},
+			errContains: "not in the policy's servers list",
+		},
+		{
+			name: "empty tool entry",
+			policy: &AgentPolicy{
+				Servers: []string{"github"},
+				Tools:   map[string][]string{"github": {""}},
+			},
+			errContains: "must be non-empty strings",
+		},
+		{
+			name: "duplicate tool entry",
+			policy: &AgentPolicy{
+				Servers: []string{"github"},
+				Tools:   map[string][]string{"github": {"search_code", "search_code"}},
+			},
+			errContains: "must not contain duplicate tool",
+		},
+		{
+			name: "invalid allow-only policy",
+			policy: &AgentPolicy{
+				Servers:   []string{"github"},
+				AllowOnly: &AllowOnlyPolicy{MinIntegrity: "not-a-real-level"},
+			},
+			errContains: "allow-only is invalid",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateSingleAgentPolicy("secret-agent-id", tt.policy, servers)
+			require.Error(t, err)
+			assert.ErrorContains(t, err, tt.errContains)
+			assert.NotContains(t, err.Error(), "secret-agent-id")
+		})
+	}
+}
+
+func TestValidateSingleAgentPolicy_ValidPolicySucceeds(t *testing.T) {
+	servers := map[string]*ServerConfig{"github": {}, "fetch": {}}
+	policy := &AgentPolicy{
+		Servers: []string{"github", "fetch"},
+		Tools: map[string][]string{
+			"github": {"search_code", "get_file_contents"},
+			"fetch":  {"*"},
+		},
+	}
+
+	err := validateSingleAgentPolicy("agent-1", policy, servers)
+	assert.NoError(t, err)
+}
+
 // --- Config accessor tests ---
 
 func TestConfig_AgentPolicyAccessors(t *testing.T) {
