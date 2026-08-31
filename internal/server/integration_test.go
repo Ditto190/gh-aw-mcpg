@@ -229,7 +229,7 @@ func sendMCPRequestWithClient(t *testing.T, url string, bearerToken string, clie
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		t.Fatalf("Expected status 200, got %d. Body: %s", resp.StatusCode, string(body))
+		require.Equal(t, http.StatusOK, resp.StatusCode, "unexpected status. Body: %s", string(body))
 	}
 
 	// Check if response uses SSE-formatted streaming (part of streamable HTTP transport)
@@ -241,9 +241,8 @@ func sendMCPRequestWithClient(t *testing.T, url string, bearerToken string, clie
 
 	// Regular JSON response
 	var result map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		t.Fatalf("Failed to decode response: %v", err)
-	}
+	err = json.NewDecoder(resp.Body).Decode(&result)
+	require.NoError(t, err, "Failed to decode response")
 
 	return result
 }
@@ -261,16 +260,13 @@ func parseSSEResponse(t *testing.T, body io.Reader) map[string]interface{} {
 		}
 	}
 
-	if len(dataLines) == 0 {
-		t.Fatal("No data lines found in SSE-formatted response")
-	}
+	require.NotEmpty(t, dataLines, "No data lines found in SSE-formatted response")
 
 	// Join all data lines and parse as JSON
 	jsonData := strings.Join(dataLines, "")
 	var result map[string]interface{}
-	if err := json.Unmarshal([]byte(jsonData), &result); err != nil {
-		t.Fatalf("Failed to decode SSE-formatted data: %v, data: %s", err, jsonData)
-	}
+	err := json.Unmarshal([]byte(jsonData), &result)
+	require.NoError(t, err, "Failed to decode SSE-formatted data: %s", jsonData)
 
 	return result
 }
@@ -463,13 +459,34 @@ func TestProxyDoesNotModifyRequests(t *testing.T) {
 
 	_ = sendMCPRequest(t, ts.URL+"/mcp/testserver", "test-token-echo", initReq)
 
-	// Now send the actual test request
-	// Note: Due to session state issues, this test verifies the tool handler receives correct data
-	// The handler will be called if the tool is invoked, demonstrating transparent proxying
-
 	// Verify the handler is set up correctly
 	handler := us.GetToolHandler("testserver", "echo_tool")
 	require.NotNil(t, handler, "Echo tool handler not found")
+
+	// Invoke the handler directly with arguments to verify the proxy layer
+	// preserves the request payload without modification (transparent proxying).
+	argsJSON := []byte(`{"key1":"value1","key2":42}`)
+	callReq := &sdk.CallToolRequest{
+		Params: &sdk.CallToolParamsRaw{Arguments: argsJSON},
+	}
+	result, _, err := handler(ctx, callReq, nil)
+	require.NoError(t, err, "Echo tool handler returned an error")
+	require.NotNil(t, result)
+	require.False(t, result.IsError, "Echo tool handler reported an error result")
+	require.Len(t, result.Content, 1, "Expected exactly one content item in echo response")
+
+	textContent, ok := result.Content[0].(*sdk.TextContent)
+	require.True(t, ok, "Expected content to be TextContent")
+
+	// The echoed text should be the marshaled arguments unmodified. Since JSON
+	// marshaling order isn't guaranteed, compare decoded values rather than raw strings.
+	var echoed map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(textContent.Text), &echoed), "Failed to decode echoed arguments")
+
+	var original map[string]interface{}
+	require.NoError(t, json.Unmarshal(argsJSON, &original), "Failed to decode original arguments")
+
+	assert.Equal(t, original, echoed, "Echoed arguments should exactly match the original request payload")
 
 	t.Log("✓ Tool handler registered and accessible")
 	t.Log("✓ Request data structure is preserved through the proxy layer")
