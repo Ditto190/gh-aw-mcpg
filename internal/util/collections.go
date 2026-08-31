@@ -64,6 +64,19 @@ func DeduplicateStrings(input []string, sorted bool) []string {
 	return out
 }
 
+// FindDuplicate returns the first item that occurs more than once, if any.
+func FindDuplicate[T comparable](items []T) (T, bool) {
+	seen := make(map[T]struct{}, len(items))
+	for _, item := range items {
+		if _, exists := seen[item]; exists {
+			return item, true
+		}
+		seen[item] = struct{}{}
+	}
+	var zero T
+	return zero, false
+}
+
 // StringsToAny converts a []string to []any.
 func StringsToAny(input []string) []any {
 	out := make([]any, len(input))

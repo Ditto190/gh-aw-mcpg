@@ -133,12 +133,8 @@ func validateAgentIDs(agentIDs []string, defined bool, fieldName string) error {
 	}
 	// Reject duplicate agent IDs: each identity must be unique so per-agent policy,
 	// session, and DIFC state can be attributed deterministically.
-	seen := make(map[string]struct{}, len(agentIDs))
-	for _, id := range agentIDs {
-		if _, dup := seen[id]; dup {
-			return fmt.Errorf("gateway.%s must not contain duplicate agent ID %q", fieldName, util.HashIdentifierForLog(id))
-		}
-		seen[id] = struct{}{}
+	if duplicate, found := util.FindDuplicate(agentIDs); found {
+		return fmt.Errorf("gateway.%s must not contain duplicate agent ID %q", fieldName, util.HashIdentifierForLog(duplicate))
 	}
 	return nil
 }
