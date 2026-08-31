@@ -166,6 +166,7 @@ func validateAgentPolicies(cfg *Config) error {
 func validateSingleAgentPolicy(policyID string, policy *AgentPolicy, servers map[string]*ServerConfig) error {
 	formattedPolicyID := util.HashIdentifierForLog(policyID)
 	serverSet := make(map[string]struct{}, len(policy.Servers))
+	serverIDs := make([]string, 0, len(policy.Servers))
 	for _, serverID := range policy.Servers {
 		trimmed := strings.TrimSpace(serverID)
 		if trimmed == "" {
@@ -178,8 +179,9 @@ func validateSingleAgentPolicy(policyID string, policy *AgentPolicy, servers map
 			return fmt.Errorf("gateway.agent_policies[%q].servers references unknown server %q", formattedPolicyID, trimmed)
 		}
 		serverSet[trimmed] = struct{}{}
+		serverIDs = append(serverIDs, trimmed)
 	}
-	if duplicate, found := util.FindDuplicate(policy.Servers); found {
+	if duplicate, found := util.FindDuplicate(serverIDs); found {
 		return fmt.Errorf("gateway.agent_policies[%q].servers must not contain duplicate server %q", formattedPolicyID, duplicate)
 	}
 
@@ -190,6 +192,7 @@ func validateSingleAgentPolicy(policyID string, policy *AgentPolicy, servers map
 		if _, ok := serverSet[serverID]; !ok {
 			return fmt.Errorf("gateway.agent_policies[%q].tools references server %q that is not in the policy's servers list", formattedPolicyID, serverID)
 		}
+		toolNames := make([]string, 0, len(tools))
 		for _, toolName := range tools {
 			trimmed := strings.TrimSpace(toolName)
 			if trimmed == "" {
@@ -198,8 +201,9 @@ func validateSingleAgentPolicy(policyID string, policy *AgentPolicy, servers map
 			if trimmed != toolName {
 				return fmt.Errorf("gateway.agent_policies[%q].tools[%q] entries must not contain surrounding whitespace", formattedPolicyID, serverID)
 			}
+			toolNames = append(toolNames, trimmed)
 		}
-		if duplicate, found := util.FindDuplicate(tools); found {
+		if duplicate, found := util.FindDuplicate(toolNames); found {
 			return fmt.Errorf("gateway.agent_policies[%q].tools[%q] must not contain duplicate tool %q", formattedPolicyID, serverID, duplicate)
 		}
 	}
