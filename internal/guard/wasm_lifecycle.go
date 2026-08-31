@@ -200,8 +200,16 @@ const guardMemoryLimitPages = 512
 // binaries are untrusted third-party artifacts and the gateway never
 // symbolicates guest stack traces, so skipping DWARF parsing saves compile
 // time and memory without any functional loss.
+//
+// wazero.NewRuntimeConfig() is used (rather than NewRuntimeConfigCompiler())
+// so the runtime auto-selects the Compiler (AOT) engine on supported
+// architectures (amd64/arm64) and transparently falls back to the
+// Interpreter engine elsewhere (e.g. riscv64), matching wazero's own
+// recommended usage and keeping WASM guard support portable across all
+// Go-supported architectures instead of failing to instantiate on
+// unsupported ones.
 func newGuardRuntimeConfig(opts *WasmGuardOptions) wazero.RuntimeConfig {
-	runtimeConfig := wazero.NewRuntimeConfigCompiler().
+	runtimeConfig := wazero.NewRuntimeConfig().
 		WithCloseOnContextDone(true).
 		WithMemoryLimitPages(guardMemoryLimitPages).
 		WithDebugInfoEnabled(logWasm.Enabled())
