@@ -383,6 +383,8 @@ After creating the issue (or calling noop), update cache-memory:
 
 Keep `known_gaps` bounded to the last 200 entries — remove the oldest if it exceeds this limit.
 
+Before saving, remove stale CLI command spellings from both `known_gaps` and `last_all_gaps` when their canonical synthetic guard identifier is already covered. In particular, remove `gh project create`, `gh secret delete`, `gh variable delete`, `gh workflow disable`, `gh workflow enable`, `gh secret set`, `gh variable set`, `gh repo sync`, `gh issue transfer`, and `gh cache delete`; retain only their canonical identifiers (`create_project`, `delete_secret`, `delete_variable`, `disable_workflow`, `enable_workflow`, `set_secret`, `set_variable`, `sync_fork`, `transfer_issue`, and `delete_actions_cache`) when they are actual gaps.
+
 ## Guidelines
 
 - **Be precise**: only flag tools that are genuinely missing from the guard. Read-only tools (get, list, search) that fall through to default handling are not gaps unless they handle sensitive cross-repo data.
