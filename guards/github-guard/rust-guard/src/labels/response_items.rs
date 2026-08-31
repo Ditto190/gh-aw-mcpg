@@ -138,7 +138,7 @@ pub fn label_response_items(
         }
 
         // === Pull Requests - label by merged state ===
-        "list_pull_requests"
+        tool_names::LIST_PULL_REQUESTS
         | "list_pull_requests_ff_fields_param"
         | "search_pull_requests"
         | "search_pull_requests_ff_fields_param"
@@ -308,7 +308,7 @@ pub fn label_response_items(
         }
 
         // === File Contents - repo-scoped secrecy ===
-        "get_file_contents" | "get_file_contents_ff_fields_param" => {
+        tool_names::GET_FILE_CONTENTS | "get_file_contents_ff_fields_param" => {
             let all_items = collect_items_simple(&actual_response);
 
             let items_limited =
@@ -337,7 +337,7 @@ pub fn label_response_items(
         }
 
         // === Commits - label by branch (default branch = merged) ===
-        "list_commits" | "list_commits_ff_fields_param" | "get_commit" => {
+        tool_names::LIST_COMMITS | "list_commits_ff_fields_param" | "get_commit" => {
             let all_items = collect_items_simple(&actual_response);
 
             // Limit items to prevent WASM memory exhaustion
@@ -434,7 +434,7 @@ pub fn label_response_items(
         }
 
         // === Releases - merged-level integrity (endorsed) ===
-        "list_releases"
+        tool_names::LIST_RELEASES
         | "list_releases_ff_fields_param"
         | "get_latest_release"
         | "get_release_by_tag" => {

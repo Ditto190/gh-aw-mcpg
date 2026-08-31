@@ -168,7 +168,7 @@ pub fn label_response_paths(
         }
 
         // === Pull Requests - label by merged state ===
-        "list_pull_requests"
+        tool_names::LIST_PULL_REQUESTS
         | "list_pull_requests_ff_fields_param"
         | "search_pull_requests"
         | "search_pull_requests_ff_fields_param"
@@ -188,7 +188,7 @@ pub fn label_response_paths(
                 tool_args,
                 &actual_response,
                 "search_pull_requests",
-                "list_pull_requests",
+                tool_names::LIST_PULL_REQUESTS,
                 ctx,
             ) {
                 let mut labeled_paths = Vec::with_capacity(repo_item_ctx.limited_items.len());
@@ -330,7 +330,7 @@ pub fn label_response_paths(
         }
 
         // === Commits - label by branch ===
-        "list_commits" | "list_commits_ff_fields_param" => {
+        tool_names::LIST_COMMITS | "list_commits_ff_fields_param" => {
             let items = actual_response.as_array();
 
             if let Some(items) = items {
@@ -408,7 +408,7 @@ pub fn label_response_paths(
         }
 
         // === File Contents - repo-scoped secrecy ===
-        "get_file_contents" | "get_file_contents_ff_fields_param" => {
+        tool_names::GET_FILE_CONTENTS | "get_file_contents_ff_fields_param" => {
             let (arg_owner, arg_repo, arg_repo_full) = extract_repo_info(tool_args);
             let secrecy = repo_visibility_secrecy(&arg_owner, &arg_repo, &arg_repo_full, ctx);
             let branch_ref = tool_args.get("ref").and_then(|v| v.as_str()).unwrap_or("");
@@ -449,7 +449,7 @@ pub fn label_response_paths(
         }
 
         // === Releases - merged-level integrity ===
-        "list_releases" | "list_releases_ff_fields_param" => {
+        tool_names::LIST_RELEASES | "list_releases_ff_fields_param" => {
             let items = actual_response.as_array();
 
             if let Some(items) = items {
