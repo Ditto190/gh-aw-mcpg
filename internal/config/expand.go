@@ -17,7 +17,11 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+
+	"github.com/github/gh-aw-mcpg/internal/logger"
 )
+
+var logExpand = logger.ForFile()
 
 // Variable expression pattern: ${VARIABLE_NAME}
 var varExprPattern = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}`)
@@ -28,7 +32,7 @@ var varExprPattern = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}`)
 // It returns the expanded bytes, a slice of undefined variable names, and an error
 // (currently always nil).
 func expandVariablesCore(data []byte, contextDesc string) ([]byte, []string, error) {
-	logValidation.Printf("Expanding variables: context=%s", contextDesc)
+	logExpand.Printf("Expanding variables: context=%s", contextDesc)
 	var undefinedVars []string
 
 	result := varExprPattern.ReplaceAllFunc(data, func(match []byte) []byte {
@@ -36,17 +40,17 @@ func expandVariablesCore(data []byte, contextDesc string) ([]byte, []string, err
 		varName := string(match[2 : len(match)-1])
 
 		if envValue, exists := os.LookupEnv(varName); exists {
-			logValidation.Printf("Expanded variable: %s (found in environment)", varName)
+			logExpand.Printf("Expanded variable: %s (found in environment)", varName)
 			return []byte(envValue)
 		}
 
 		// Track undefined variable
 		undefinedVars = append(undefinedVars, varName)
-		logValidation.Printf("Undefined variable: %s", varName)
+		logExpand.Printf("Undefined variable: %s", varName)
 		return match // Keep original if undefined
 	})
 
-	logValidation.Printf("Variable expansion completed: context=%s, undefined_count=%d", contextDesc, len(undefinedVars))
+	logExpand.Printf("Variable expansion completed: context=%s, undefined_count=%d", contextDesc, len(undefinedVars))
 	return result, undefinedVars, nil
 }
 
@@ -57,7 +61,7 @@ func expandVariables(value, jsonPath string) (string, error) {
 	result, undefinedVars, _ := expandVariablesCore([]byte(value), fmt.Sprintf("jsonPath=%s", jsonPath))
 
 	if len(undefinedVars) > 0 {
-		logValidation.Printf("Variable expansion failed: undefined variables=%v", undefinedVars)
+		logExpand.Printf("Variable expansion failed: undefined variables=%v", undefinedVars)
 		return "", UndefinedVariable(undefinedVars[0], jsonPath)
 	}
 
@@ -71,7 +75,7 @@ func ExpandRawJSONVariables(data []byte) ([]byte, error) {
 	result, undefinedVars, _ := expandVariablesCore(data, "raw JSON data")
 
 	if len(undefinedVars) > 0 {
-		logValidation.Printf("Variable expansion failed: undefined variables=%v", undefinedVars)
+		logExpand.Printf("Variable expansion failed: undefined variables=%v", undefinedVars)
 		return nil, UndefinedVariable(undefinedVars[0], "configuration")
 	}
 
@@ -82,7 +86,7 @@ func ExpandRawJSONVariables(data []byte) ([]byte, error) {
 // env is the map to expand and serverName is used for config-path error context.
 // It returns a new map with expanded values or an error if any variable is undefined.
 func expandEnvVariables(env map[string]string, serverName string) (map[string]string, error) {
-	logValidation.Printf("Expanding env variables for server: %s, count=%d", serverName, len(env))
+	logExpand.Printf("Expanding env variables for server: %s, count=%d", serverName, len(env))
 	result := make(map[string]string, len(env))
 
 	for key, value := range env {
@@ -96,7 +100,7 @@ func expandEnvVariables(env map[string]string, serverName string) (map[string]st
 		result[key] = expanded
 	}
 
-	logValidation.Printf("Env variable expansion completed for server: %s", serverName)
+	logExpand.Printf("Env variable expansion completed for server: %s", serverName)
 	return result, nil
 }
 
@@ -122,7 +126,7 @@ func expandTracingVariables(cfg *TracingConfig) error {
 		return nil
 	}
 
-	logValidation.Printf("Expanding tracing config variables: hasEndpoint=%v, hasTraceID=%v, hasSpanID=%v, hasHeaders=%v",
+	logExpand.Printf("Expanding tracing config variables: hasEndpoint=%v, hasTraceID=%v, hasSpanID=%v, hasHeaders=%v",
 		cfg.Endpoint != "", cfg.TraceID != "", cfg.SpanID != "", cfg.Headers != "")
 
 	fields := []struct {
@@ -146,10 +150,10 @@ func expandTracingVariables(cfg *TracingConfig) error {
 			return err
 		}
 
-		logValidation.Printf("Expanded tracing %s variable", field.name)
+		logExpand.Printf("Expanded tracing %s variable", field.name)
 		*field.value = expanded
 	}
 
-	logValidation.Print("Tracing config variable expansion completed")
+	logExpand.Print("Tracing config variable expansion completed")
 	return nil
 }

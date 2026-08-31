@@ -5,8 +5,11 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/github/gh-aw-mcpg/internal/logger"
 	"github.com/github/gh-aw-mcpg/internal/util"
 )
+
+var logValidationGateway = logger.ForFile()
 
 func validateGatewayConfig(gateway *StdinGatewayConfig) error {
 	return validateGatewayConfigWithAgentRequirement(gateway, true)
@@ -23,11 +26,11 @@ func validateGatewayConfigForPatterns(gateway *StdinGatewayConfig) error {
 // enforces the 1.17.0 requirement that exactly one agent ID selection be configured.
 func validateGatewayConfigWithAgentRequirement(gateway *StdinGatewayConfig, requireAgentSelection bool) error {
 	if gateway == nil {
-		logValidation.Print("No gateway config to validate")
+		logValidationGateway.Print("No gateway config to validate")
 		return nil
 	}
 
-	logValidation.Print("Validating gateway configuration")
+	logValidationGateway.Print("Validating gateway configuration")
 
 	if gateway.agentIDSet && strings.TrimSpace(gateway.AgentID) == "" {
 		return fmt.Errorf("gateway.agentId must be a non-empty string when provided")
@@ -91,7 +94,7 @@ func validateGatewayConfigWithAgentRequirement(gateway *StdinGatewayConfig, requ
 
 	// Validate payloadDir if provided (per schema: must be absolute path)
 	if gateway.PayloadDir != "" {
-		logValidation.Printf("Validating payload directory: %s", gateway.PayloadDir)
+		logValidationGateway.Printf("Validating payload directory: %s", gateway.PayloadDir)
 		if err := AbsolutePath(gateway.PayloadDir, "payloadDir", "gateway.payloadDir"); err != nil {
 			return err
 		}
@@ -123,7 +126,7 @@ func validateGatewayConfigWithAgentRequirement(gateway *StdinGatewayConfig, requ
 		}
 	}
 
-	logValidation.Print("Gateway config validation passed")
+	logValidationGateway.Print("Gateway config validation passed")
 	return nil
 }
 
@@ -163,16 +166,16 @@ func validateTrustedBots(bots []string) error {
 // validateTOMLStdioContainerization validates that TOML stdio servers use the selected container runtime command.
 // This enforces MCP Gateway Specification Section 3.2.1: "Stdio-based MCP servers MUST be containerized."
 func validateTOMLStdioContainerization(servers map[string]*ServerConfig, gateway *GatewayConfig) error {
-	logValidation.Print("Validating TOML stdio server containerization requirement")
+	logValidationGateway.Print("Validating TOML stdio server containerization requirement")
 	expectedCommand := configuredContainerRuntimeCommand(gateway)
 
 	for name, cfg := range servers {
 		// Only validate stdio servers (or empty type which defaults to stdio)
 		if IsStdioServerType(cfg.Type) {
-			logValidation.Printf("Checking stdio server: name=%s, command=%s", name, cfg.Command)
+			logValidationGateway.Printf("Checking stdio server: name=%s, command=%s", name, cfg.Command)
 
 			if cfg.Command != expectedCommand {
-				logValidation.Printf("Validation failed: %s, name=%s, type=%s", fmt.Sprintf("stdio server using unexpected runtime command, command=%s, expected=%s", cfg.Command, expectedCommand), name, "stdio")
+				logValidationGateway.Printf("Validation failed: %s, name=%s, type=%s", fmt.Sprintf("stdio server using unexpected runtime command, command=%s, expected=%s", cfg.Command, expectedCommand), name, "stdio")
 				return fmt.Errorf(
 					"server '%s': stdio servers must use containerized execution (command must be '%s', got '%s'). "+
 						"This is required by MCP Gateway Specification Section 3.2.1 (Containerization Requirement). "+
@@ -182,14 +185,14 @@ func validateTOMLStdioContainerization(servers map[string]*ServerConfig, gateway
 		}
 	}
 
-	logValidation.Print("TOML stdio containerization validation passed")
+	logValidationGateway.Print("TOML stdio containerization validation passed")
 	return nil
 }
 
 // validateGuardPolicies validates all per-server guard policies in the config.
 // It iterates over cfg.Guards and calls ValidateGuardPolicy for each non-nil policy.
 func validateGuardPolicies(cfg *Config) error {
-	logValidation.Printf("Validating guard policies: count=%d", len(cfg.Guards))
+	logValidationGateway.Printf("Validating guard policies: count=%d", len(cfg.Guards))
 	for name, guardCfg := range cfg.Guards {
 		if guardCfg != nil && guardCfg.Policy != nil {
 			if err := ValidateGuardPolicy(guardCfg.Policy); err != nil {
@@ -203,11 +206,11 @@ func validateGuardPolicies(cfg *Config) error {
 // validateRuleBasedPatterns validates additional rule-based string constraints that
 // are not handled by schema validation alone.
 func validateRuleBasedPatterns(stdinCfg *StdinConfig) error {
-	logValidation.Printf("Validating string patterns: server_count=%d", len(stdinCfg.MCPServers))
+	logValidationGateway.Printf("Validating string patterns: server_count=%d", len(stdinCfg.MCPServers))
 
 	for name, server := range stdinCfg.MCPServers {
 		jsonPath := fmt.Sprintf("mcpServers.%s", name)
-		logValidation.Printf("Validating server: name=%s, type=%s", name, server.Type)
+		logValidationGateway.Printf("Validating server: name=%s, type=%s", name, server.Type)
 
 		if IsStdioServerType(server.Type) {
 			if server.Container != "" && !containerPattern.MatchString(server.Container) {

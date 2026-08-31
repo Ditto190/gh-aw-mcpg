@@ -5,8 +5,11 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/github/gh-aw-mcpg/internal/logger"
 	"github.com/github/gh-aw-mcpg/internal/util"
 )
+
+var logAgentPolicy = logger.ForFile()
 
 // AgentPolicy defines the per-agent access policy for a single authenticated
 // agent identity. It restricts which MCP servers and tools the agent may use and
@@ -117,7 +120,7 @@ func validateAgentPolicies(cfg *Config) error {
 		if len(cfg.GetAgentIDs()) > 1 {
 			return fmt.Errorf("gateway.agent_policies must define a policy for every configured agent ID when multiple agent IDs are set (fail-closed)")
 		}
-		logValidation.Print("No per-agent policies configured; skipping validation")
+		logAgentPolicy.Print("No per-agent policies configured; skipping validation")
 		return nil
 	}
 
@@ -126,7 +129,7 @@ func validateAgentPolicies(cfg *Config) error {
 	for _, id := range agentIDs {
 		agentIDSet[id] = struct{}{}
 	}
-	logValidation.Printf("Validating %d per-agent policies against %d configured agent IDs", len(policies), len(agentIDs))
+	logAgentPolicy.Printf("Validating %d per-agent policies against %d configured agent IDs", len(policies), len(agentIDs))
 
 	// Reject policies keyed by an unknown (unconfigured) agent ID.
 	for policyID := range policies {

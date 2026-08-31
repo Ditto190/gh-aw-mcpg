@@ -3,7 +3,11 @@ package config
 import (
 	"fmt"
 	"strings"
+
+	"github.com/github/gh-aw-mcpg/internal/logger"
 )
+
+var logValidationErrors = logger.ForFile()
 
 // Documentation URL constants
 const (
@@ -38,7 +42,7 @@ func (e *ValidationError) Error() string {
 // newValidationError logs logMsg and returns a ValidationError with the given fields.
 // It centralises the repeated log+return pattern used by error constructor functions.
 func newValidationError(logMsg, field, message, jsonPath, suggestion string) *ValidationError {
-	logValidation.Print(logMsg)
+	logValidationErrors.Print(logMsg)
 	return &ValidationError{Field: field, Message: message, JSONPath: jsonPath, Suggestion: suggestion}
 }
 

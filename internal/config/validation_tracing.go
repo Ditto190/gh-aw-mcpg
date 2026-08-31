@@ -4,7 +4,11 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	"github.com/github/gh-aw-mcpg/internal/logger"
 )
+
+var logValidationTracing = logger.ForFile()
 
 // W3C trace context patterns (spec §4.1.3.6)
 var (
@@ -25,7 +29,7 @@ func validateOpenTelemetryConfig(cfg *TracingConfig, enforceHTTPS bool) error {
 		return nil
 	}
 
-	logValidation.Print("Validating OpenTelemetry configuration (spec §4.1.3.7)")
+	logValidationTracing.Print("Validating OpenTelemetry configuration (spec §4.1.3.7)")
 
 	// endpoint is required when opentelemetry section is present
 	if enforceHTTPS && cfg.Endpoint == "" {
@@ -36,7 +40,7 @@ func validateOpenTelemetryConfig(cfg *TracingConfig, enforceHTTPS bool) error {
 	// endpoint MUST be HTTP or HTTPS (spec §4.1.3.7)
 	if enforceHTTPS && cfg.Endpoint != "" {
 		if !strings.HasPrefix(cfg.Endpoint, "https://") && !strings.HasPrefix(cfg.Endpoint, "http://") {
-			logValidation.Printf("Non-HTTP(S) endpoint in opentelemetry config: %s", cfg.Endpoint)
+			logValidationTracing.Printf("Non-HTTP(S) endpoint in opentelemetry config: %s", cfg.Endpoint)
 			return InvalidValue("endpoint",
 				fmt.Sprintf("opentelemetry endpoint must use HTTP or HTTPS, got '%s'", cfg.Endpoint),
 				"gateway.opentelemetry.endpoint",
@@ -58,10 +62,10 @@ func validateOpenTelemetryConfig(cfg *TracingConfig, enforceHTTPS bool) error {
 
 	// spanId without traceId is meaningless — log a warning but do not fail
 	if cfg.SpanID != "" && cfg.TraceID == "" {
-		logValidation.Print("Warning: opentelemetry spanId is set without traceId; spanId will be ignored")
+		logValidationTracing.Print("Warning: opentelemetry spanId is set without traceId; spanId will be ignored")
 	}
 
-	logValidation.Print("OpenTelemetry config validation passed")
+	logValidationTracing.Print("OpenTelemetry config validation passed")
 	return nil
 }
 
@@ -82,14 +86,14 @@ func validateW3CHexID(
 	w3cHyphenName := strings.Replace(fieldName, "Id", "-id", 1)
 
 	if !formatPattern.MatchString(value) {
-		logValidation.Printf("Invalid %s format: %s", fieldName, value)
+		logValidationTracing.Printf("Invalid %s format: %s", fieldName, value)
 		return InvalidValue(fieldName,
 			fmt.Sprintf("%s must be a %d-character lowercase hexadecimal string, got '%s'", fieldName, hexLen, value),
 			jsonPath,
 			fmt.Sprintf("Provide a valid W3C %s (%d lowercase hex chars, e.g., %q)", w3cName, hexLen, example))
 	}
 	if allZeroPattern.MatchString(value) {
-		logValidation.Printf("All-zero %s rejected per W3C Trace Context: %s", fieldName, value)
+		logValidationTracing.Printf("All-zero %s rejected per W3C Trace Context: %s", fieldName, value)
 		return InvalidValue(fieldName,
 			fmt.Sprintf("%s must not be all zeros (W3C Trace Context forbids an all-zero %s)", fieldName, w3cHyphenName),
 			jsonPath,

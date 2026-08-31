@@ -9,17 +9,20 @@ import (
 	"sync"
 
 	"github.com/github/gh-aw-mcpg/internal/jqutil"
+	"github.com/github/gh-aw-mcpg/internal/logger"
 	"github.com/github/gh-aw-mcpg/internal/oidc"
 	"github.com/itchyny/gojq"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 )
+
+var logValidationServer = logger.ForFile()
 
 // customSchemaCache stores compiled custom schemas by schema URL to avoid
 // repeated fetch + compile work across validations.
 var customSchemaCache sync.Map
 
 func logValidationFail(name, serverType, reason string, err error) error {
-	logValidation.Printf("Validation failed: %s, name=%s, type=%s", reason, name, serverType)
+	logValidationServer.Printf("Validation failed: %s, name=%s, type=%s", reason, name, serverType)
 	return err
 }
 
@@ -44,12 +47,12 @@ func validateMounts(mounts []string, jsonPath string) error {
 
 // validateServerConfigWithCustomSchemas validates a server configuration with custom schema support
 func validateServerConfigWithCustomSchemas(name string, server *StdinServerConfig, customSchemas map[string]interface{}) error {
-	logValidation.Printf("Validating server config: name=%s, type=%s", name, server.Type)
+	logValidationServer.Printf("Validating server config: name=%s, type=%s", name, server.Type)
 	jsonPath := fmt.Sprintf("mcpServers.%s", name)
 
 	// Normalize empty/"local" to "stdio"
 	if normalized := NormalizeServerType(server.Type); normalized != server.Type {
-		logValidation.Printf("Server type normalized from %q to %q: name=%s", server.Type, normalized, name)
+		logValidationServer.Printf("Server type normalized from %q to %q: name=%s", server.Type, normalized, name)
 		server.Type = normalized
 	}
 
@@ -76,7 +79,7 @@ func validateStandardServerConfig(name string, server *StdinServerConfig, jsonPa
 
 		// Validate mounts if provided
 		if len(server.Mounts) > 0 {
-			logValidation.Printf("Validating mounts for server: name=%s, mount_count=%d", name, len(server.Mounts))
+			logValidationServer.Printf("Validating mounts for server: name=%s, mount_count=%d", name, len(server.Mounts))
 			if err := validateMounts(server.Mounts, jsonPath); err != nil {
 				return err
 			}
@@ -119,7 +122,7 @@ func validateStandardServerConfig(name string, server *StdinServerConfig, jsonPa
 		return err
 	}
 
-	logValidation.Printf("Server config validation passed: name=%s, type=%s", name, server.Type)
+	logValidationServer.Printf("Server config validation passed: name=%s, type=%s", name, server.Type)
 	return nil
 }
 
@@ -198,7 +201,7 @@ func validateServerAuth(auth *AuthConfig, serverType, name, jsonPath string) err
 // validateAuthConfig validates the auth configuration for an HTTP server.
 func validateAuthConfig(auth *AuthConfig, serverName, jsonPath string) error {
 	authPath := jsonPath + ".auth"
-	logValidation.Printf("Validating auth config: server=%s, type=%s", serverName, auth.Type)
+	logValidationServer.Printf("Validating auth config: server=%s, type=%s", serverName, auth.Type)
 	validator := serverValidator{name: serverName, serverType: "http"}
 
 	if auth.Type == "" {
@@ -224,7 +227,7 @@ func validateAuthConfig(auth *AuthConfig, serverName, jsonPath string) error {
 				oidc.ErrMissingOIDCEnvVar(serverName).Error()))
 	}
 
-	logValidation.Printf("Auth config validated: server=%s, type=%s", serverName, auth.Type)
+	logValidationServer.Printf("Auth config validated: server=%s, type=%s", serverName, auth.Type)
 	return nil
 }
 
@@ -239,22 +242,22 @@ func validateCustomServerConfig(name string, server *StdinServerConfig, customSc
 		if customSchemas == nil {
 			noCustomSchemasSuffix = " (no customSchemas)"
 		}
-		logValidation.Printf("Custom type not registered: name=%s, type=%s%s", name, serverType, noCustomSchemasSuffix)
+		logValidationServer.Printf("Custom type not registered: name=%s, type=%s%s", name, serverType, noCustomSchemasSuffix)
 		return UnsupportedType("type", serverType, jsonPath, "Custom server type '"+serverType+"' is not registered in customSchemas. Add the custom type to the customSchemas field or use a standard type ('stdio' or 'http')")
 	}
 
 	// Convert schema value to string if possible
 	schemaURL, ok := schemaValue.(string)
 	if !ok {
-		logValidation.Printf("Custom schema value is not a string: name=%s, type=%s", name, serverType)
+		logValidationServer.Printf("Custom schema value is not a string: name=%s, type=%s", name, serverType)
 		schemaURL = ""
 	}
 
-	logValidation.Printf("Custom type found in customSchemas: name=%s, type=%s, schemaURL=%s", name, serverType, schemaURL)
+	logValidationServer.Printf("Custom type found in customSchemas: name=%s, type=%s, schemaURL=%s", name, serverType, schemaURL)
 
 	// If schema URL is empty, skip validation
 	if schemaURL == "" {
-		logValidation.Printf("Custom schema URL is empty, skipping validation: name=%s, type=%s", name, serverType)
+		logValidationServer.Printf("Custom schema URL is empty, skipping validation: name=%s, type=%s", name, serverType)
 		return nil
 	}
 
@@ -274,24 +277,24 @@ func validateAgainstCustomSchema(name string, server *StdinServerConfig, schemaU
 
 	if cachedSchema, ok := customSchemaCache.Load(schemaURL); ok {
 		if schema, ok := cachedSchema.(*jsonschema.Schema); ok {
-			logValidation.Printf("Using cached custom schema: name=%s, url=%s", name, schemaURL)
+			logValidationServer.Printf("Using cached custom schema: name=%s, url=%s", name, schemaURL)
 			return validateServerAgainstSchema(name, server, schema, schemaURL, jsonPath)
 		}
-		logValidation.Printf("Ignoring cached custom schema with unexpected type: name=%s, url=%s", name, schemaURL)
+		logValidationServer.Printf("Ignoring cached custom schema with unexpected type: name=%s, url=%s", name, schemaURL)
 	}
 
-	logValidation.Printf("Fetching custom schema for validation: name=%s, url=%s", name, schemaURL)
+	logValidationServer.Printf("Fetching custom schema for validation: name=%s, url=%s", name, schemaURL)
 
 	// Fetch the custom schema using the existing helper
 	schemaJSON, err := fetchSchema(schemaURL)
 	if err != nil {
-		logValidation.Printf("Failed to fetch custom schema: name=%s, url=%s, error=%v", name, schemaURL, err)
+		logValidationServer.Printf("Failed to fetch custom schema: name=%s, url=%s, error=%v", name, schemaURL, err)
 		return schemaErr(
 			fmt.Sprintf("failed to fetch custom schema: %v", err),
 			fmt.Sprintf("Ensure the schema URL '%s' is accessible and returns a valid JSON Schema", schemaURL))
 	}
 
-	logValidation.Printf("Custom schema fetched successfully: name=%s, size=%d bytes", name, len(schemaJSON))
+	logValidationServer.Printf("Custom schema fetched successfully: name=%s, size=%d bytes", name, len(schemaJSON))
 
 	// Parse the schema JSON into a document
 	schemaDoc, parseErr := jsonschema.UnmarshalJSON(bytes.NewReader(schemaJSON))
@@ -333,7 +336,7 @@ func validateAgainstCustomSchema(name string, server *StdinServerConfig, schemaU
 			fmt.Sprintf("The schema at '%s' must be a valid JSON Schema document (Draft 2020-12 or earlier)", schemaURL))
 	}
 
-	logValidation.Printf("Custom schema compiled successfully: name=%s", name)
+	logValidationServer.Printf("Custom schema compiled successfully: name=%s", name)
 	customSchemaCache.Store(schemaURL, schema)
 
 	return validateServerAgainstSchema(name, server, schema, schemaURL, jsonPath)
@@ -366,7 +369,7 @@ func validateServerAgainstSchema(name string, server *StdinServerConfig, schema 
 	if obj, ok := serverObj.(map[string]interface{}); ok {
 		serverMap = obj
 	} else {
-		logValidation.Printf("unexpected: server config parsed to non-object type, using empty map for validation: name=%s", name)
+		logValidationServer.Printf("unexpected: server config parsed to non-object type, using empty map for validation: name=%s", name)
 	}
 
 	// Merge additional properties (custom fields) into the map
@@ -376,13 +379,13 @@ func validateServerAgainstSchema(name string, server *StdinServerConfig, schema 
 
 	// Validate the merged map against the custom schema
 	if err := schema.Validate(serverMap); err != nil {
-		logValidation.Printf("Custom schema validation failed: name=%s, error=%v", name, err)
+		logValidationServer.Printf("Custom schema validation failed: name=%s, error=%v", name, err)
 		return schemaErr(
 			fmt.Sprintf("server configuration does not match custom schema: %v", err),
 			fmt.Sprintf("Update the server configuration to match the schema requirements at '%s'", schemaURL))
 	}
 
-	logValidation.Printf("Custom schema validation passed: name=%s, type=%s", name, server.Type)
+	logValidationServer.Printf("Custom schema validation passed: name=%s, type=%s", name, server.Type)
 	return nil
 }
 
@@ -392,18 +395,18 @@ func validateCustomSchemas(customSchemas map[string]interface{}) error {
 		return nil
 	}
 
-	logValidation.Printf("Validating customSchemas: count=%d", len(customSchemas))
+	logValidationServer.Printf("Validating customSchemas: count=%d", len(customSchemas))
 
 	for typeName, schemaValue := range customSchemas {
 		// Check for reserved type names
 		if typeName == "stdio" || typeName == "http" {
-			logValidation.Printf("Reserved type name in customSchemas: %s", typeName)
+			logValidationServer.Printf("Reserved type name in customSchemas: %s", typeName)
 			return UnsupportedType("customSchemas", typeName, fmt.Sprintf("customSchemas.%s", typeName), "Custom type name '"+typeName+"' conflicts with reserved type. Use a different name for your custom type (reserved types: stdio, http)")
 		}
 		// Enforce HTTPS-only for non-empty schema URLs (spec section 4.1.4)
 		if schemaURL, ok := schemaValue.(string); ok && schemaURL != "" {
 			if !strings.HasPrefix(schemaURL, "https://") {
-				logValidation.Printf("Non-HTTPS schema URL in customSchemas: typeName=%s, url=%s", typeName, schemaURL)
+				logValidationServer.Printf("Non-HTTPS schema URL in customSchemas: typeName=%s, url=%s", typeName, schemaURL)
 				return InvalidValue("customSchemas."+typeName,
 					fmt.Sprintf("custom schema URL must use HTTPS, got '%s'", schemaURL),
 					"customSchemas."+typeName,
@@ -412,6 +415,6 @@ func validateCustomSchemas(customSchemas map[string]interface{}) error {
 		}
 	}
 
-	logValidation.Printf("customSchemas validation passed")
+	logValidationServer.Printf("customSchemas validation passed")
 	return nil
 }
