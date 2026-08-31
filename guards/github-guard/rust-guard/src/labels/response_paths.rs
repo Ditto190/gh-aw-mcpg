@@ -350,7 +350,7 @@ pub fn label_response_paths(
 
                 // Commits on default branch (main/master) get merged-level integrity
                 let is_default_branch = is_default_branch_ref(sha);
-                let limited_items = limit_items_with_log(items, "list_commits");
+                let limited_items = limit_items_with_log(items, tool_names::LIST_COMMITS);
                 let mut labeled_paths = Vec::with_capacity(limited_items.len());
 
                 for (i, item) in limited_items.iter().enumerate() {
@@ -422,7 +422,7 @@ pub fn label_response_paths(
             let file_integrity_shared: crate::SharedLabels = file_integrity.into();
 
             if let Some(items) = actual_response.as_array() {
-                let limited_items = limit_items_with_log(items, "get_file_contents");
+                let limited_items = limit_items_with_log(items, tool_names::GET_FILE_CONTENTS);
                 let mut labeled_paths = Vec::with_capacity(limited_items.len());
 
                 for (i, _item) in limited_items.iter().enumerate() {
@@ -463,7 +463,7 @@ pub fn label_response_paths(
                 let default_merged_shared: crate::SharedLabels =
                     merged_integrity(&default_repo, ctx).into();
 
-                let limited_items = limit_items_with_log(items, "list_releases");
+                let limited_items = limit_items_with_log(items, tool_names::LIST_RELEASES);
                 let mut labeled_paths = Vec::with_capacity(limited_items.len());
 
                 for (i, item) in limited_items.iter().enumerate() {

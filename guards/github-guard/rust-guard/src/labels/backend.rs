@@ -668,10 +668,7 @@ pub(crate) fn get_collaborator_permission(
 /// e.g. `{"content":[{"type":"text","text":"..."}]}`. Returns None if the
 /// response isn't in that shape.
 fn mcp_wrapped_text(response: &Value) -> Option<&str> {
-    response
-        .get("content")
-        .and_then(|v| v.as_array())
-        .and_then(|arr| arr.first())
+    super::helpers::mcp_first_content_item(response)
         .and_then(|item| item.get("text"))
         .and_then(|v| v.as_str())
 }

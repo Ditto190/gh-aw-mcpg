@@ -164,4 +164,8 @@ pub mod tool_names {
     pub const GET_PULL_REQUEST: &str = "get_pull_request";
     pub const ISSUE_READ: &str = "issue_read";
     pub const GET_ISSUE: &str = "get_issue";
+    pub const LIST_PULL_REQUESTS: &str = "list_pull_requests";
+    pub const GET_FILE_CONTENTS: &str = "get_file_contents";
+    pub const LIST_COMMITS: &str = "list_commits";
+    pub const LIST_RELEASES: &str = "list_releases";
 }
