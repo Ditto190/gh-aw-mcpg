@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -213,6 +214,12 @@ func sendMCPRequest(t *testing.T, url string, bearerToken string, payload map[st
 
 // Helper function to send MCP requests with a custom client (for connection reuse)
 func sendMCPRequestWithClient(t *testing.T, url string, bearerToken string, client *http.Client, payload map[string]interface{}) map[string]interface{} {
+	result, _ := sendMCPRequestWithClientAndSession(t, url, bearerToken, "", client, payload)
+	return result
+}
+
+// sendMCPRequestWithClientAndSession sends an MCP request and preserves its session ID.
+func sendMCPRequestWithClientAndSession(t *testing.T, url string, bearerToken, sessionID string, client *http.Client, payload map[string]interface{}) (map[string]interface{}, string) {
 	jsonData, err := json.Marshal(payload)
 	require.NoError(t, err, "Failed to marshal request")
 
@@ -222,30 +229,33 @@ func sendMCPRequestWithClient(t *testing.T, url string, bearerToken string, clie
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json, text/event-stream")
 	req.Header.Set("Authorization", "Bearer "+bearerToken)
+	if sessionID != "" {
+		req.Header.Set("Mcp-Session-Id", sessionID)
+	}
 
 	resp, err := client.Do(req)
 	require.NoError(t, err, "Request failed")
 	defer resp.Body.Close()
+	responseSessionID := resp.Header.Get("Mcp-Session-Id")
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		t.Fatalf("Expected status 200, got %d. Body: %s", resp.StatusCode, string(body))
+		require.Equal(t, http.StatusOK, resp.StatusCode, "unexpected status. Body: %s", string(body))
 	}
 
 	// Check if response uses SSE-formatted streaming (part of streamable HTTP transport)
 	contentType := resp.Header.Get("Content-Type")
 	if strings.Contains(contentType, "text/event-stream") {
 		// Parse SSE-formatted response
-		return parseSSEResponse(t, resp.Body)
+		return parseSSEResponse(t, resp.Body), responseSessionID
 	}
 
 	// Regular JSON response
 	var result map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		t.Fatalf("Failed to decode response: %v", err)
-	}
+	err = json.NewDecoder(resp.Body).Decode(&result)
+	require.NoError(t, err, "Failed to decode response")
 
-	return result
+	return result, responseSessionID
 }
 
 // parseSSEResponse parses Server-Sent Events formatted responses
@@ -261,16 +271,13 @@ func parseSSEResponse(t *testing.T, body io.Reader) map[string]interface{} {
 		}
 	}
 
-	if len(dataLines) == 0 {
-		t.Fatal("No data lines found in SSE-formatted response")
-	}
+	require.NotEmpty(t, dataLines, "No data lines found in SSE-formatted response")
 
 	// Join all data lines and parse as JSON
 	jsonData := strings.Join(dataLines, "")
 	var result map[string]interface{}
-	if err := json.Unmarshal([]byte(jsonData), &result); err != nil {
-		t.Fatalf("Failed to decode SSE-formatted data: %v, data: %s", err, jsonData)
-	}
+	err := json.Unmarshal([]byte(jsonData), &result)
+	require.NoError(t, err, "Failed to decode SSE-formatted data: %s", jsonData)
 
 	return result
 }
@@ -395,52 +402,74 @@ func TestProxyDoesNotModifyRequests(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
+	var receivedArguments map[string]interface{}
+	var receivedArgumentsMu sync.Mutex
+	mockBackend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var request map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			http.Error(w, "invalid JSON-RPC request", http.StatusBadRequest)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		switch request["method"] {
+		case "initialize":
+			w.Header().Set("Mcp-Session-Id", "backend-session")
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"jsonrpc": "2.0",
+				"id":      request["id"],
+				"result": map[string]interface{}{
+					"protocolVersion": "2024-11-05",
+					"capabilities":    map[string]interface{}{},
+					"serverInfo":      map[string]interface{}{"name": "test-backend", "version": "1.0.0"},
+				},
+			})
+		case "tools/list":
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"jsonrpc": "2.0",
+				"id":      request["id"],
+				"result": map[string]interface{}{"tools": []map[string]interface{}{{
+					"name":        "echo_tool",
+					"description": "Echo tool",
+					"inputSchema": map[string]interface{}{
+						"type": "object",
+						"properties": map[string]interface{}{
+							"key1": map[string]interface{}{"type": "string"},
+							"key2": map[string]interface{}{"type": "number"},
+						},
+					},
+				}}},
+			})
+		case "tools/call":
+			params, _ := request["params"].(map[string]interface{})
+			arguments, _ := params["arguments"].(map[string]interface{})
+			receivedArgumentsMu.Lock()
+			receivedArguments = arguments
+			receivedArgumentsMu.Unlock()
+
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"jsonrpc": "2.0",
+				"id":      request["id"],
+				"result": map[string]interface{}{"content": []map[string]interface{}{{
+					"type": "text",
+					"text": "Success",
+				}}},
+			})
+		default:
+			http.Error(w, "unsupported method", http.StatusBadRequest)
+		}
+	}))
+	defer mockBackend.Close()
+
 	cfg := &config.Config{
 		Servers: map[string]*config.ServerConfig{
-			"testserver": {Command: "echo", Args: []string{}},
+			"testserver": {Type: "http", URL: mockBackend.URL},
 		},
 	}
 
 	us, err := NewUnified(ctx, cfg)
 	require.NoError(t, err, "Failed to create unified server")
 	defer us.Close()
-
-	// Add tool that captures the request
-	us.toolsMu.Lock()
-	us.tools["testserver___echo_tool"] = &ToolInfo{
-		Name:        "testserver___echo_tool",
-		Description: "Echo tool",
-		BackendID:   "testserver",
-		InputSchema: map[string]interface{}{
-			"type": "object",
-			"properties": map[string]interface{}{
-				"key1": map[string]interface{}{"type": "string"},
-				"key2": map[string]interface{}{"type": "number"},
-			},
-		},
-		Handler: func(ctx context.Context, req *sdk.CallToolRequest, state interface{}) (*sdk.CallToolResult, interface{}, error) {
-			// Echo back the arguments
-			argsJSON, err := json.Marshal(req.Params.Arguments)
-			if err != nil {
-				return &sdk.CallToolResult{
-					Content: []sdk.Content{
-						&sdk.TextContent{
-							Text: fmt.Sprintf("Failed to marshal arguments: %v", err),
-						},
-					},
-					IsError: true,
-				}, state, nil
-			}
-			return &sdk.CallToolResult{
-				Content: []sdk.Content{
-					&sdk.TextContent{
-						Text: string(argsJSON),
-					},
-				},
-			}, state, nil
-		},
-	}
-	us.toolsMu.Unlock()
 
 	httpServer := CreateHTTPServerForRoutedMode("127.0.0.1:0", us, nil, "")
 	ts := httptest.NewServer(httpServer.Handler)
@@ -461,17 +490,27 @@ func TestProxyDoesNotModifyRequests(t *testing.T) {
 		},
 	}
 
-	_ = sendMCPRequest(t, ts.URL+"/mcp/testserver", "test-token-echo", initReq)
+	client := &http.Client{Timeout: 5 * time.Second}
+	_, sessionID := sendMCPRequestWithClientAndSession(t, ts.URL+"/mcp/testserver", "test-token-echo", "", client, initReq)
+	require.NotEmpty(t, sessionID, "Expected initialize response to provide a session ID")
 
-	// Now send the actual test request
-	// Note: Due to session state issues, this test verifies the tool handler receives correct data
-	// The handler will be called if the tool is invoked, demonstrating transparent proxying
+	original := map[string]interface{}{"key1": "value1", "key2": float64(42)}
+	callResp, _ := sendMCPRequestWithClientAndSession(t, ts.URL+"/mcp/testserver", "test-token-echo", sessionID, client, map[string]interface{}{
+		"jsonrpc": "2.0",
+		"id":      1,
+		"method":  "tools/call",
+		"params": map[string]interface{}{
+			"name":      "echo_tool",
+			"arguments": original,
+		},
+	})
 
-	// Verify the handler is set up correctly
-	handler := us.GetToolHandler("testserver", "echo_tool")
-	require.NotNil(t, handler, "Echo tool handler not found")
+	require.Nilf(t, callResp["error"], "Tool call failed: %v", callResp["error"])
+	require.NotNil(t, callResp["result"], "Expected a tool call result")
+	receivedArgumentsMu.Lock()
+	defer receivedArgumentsMu.Unlock()
+	assert.Equal(t, original, receivedArguments, "Backend should receive the original request payload")
 
-	t.Log("✓ Tool handler registered and accessible")
 	t.Log("✓ Request data structure is preserved through the proxy layer")
 }
 
