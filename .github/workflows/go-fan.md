@@ -38,6 +38,7 @@ tools:
   - cat go.mod
   - cat go.sum
   - go list -m all
+  - go list -m -u github.com/modelcontextprotocol/go-sdk
   - grep -r "import" --include="*.go"
   - find pkg -name "*.go"
   cache-memory: true
@@ -140,6 +141,15 @@ Check for:
 - Breaking changes
 - Deprecations
 - Security advisories
+
+When reviewing `github.com/modelcontextprotocol/go-sdk`, run:
+
+```bash
+go list -m -u github.com/modelcontextprotocol/go-sdk
+```
+
+Report an available tagged update as a recommendation and confirm that the SDK upgrade canary
+tests are run before upgrading.
 
 ## Step 4: Analyze Project Usage with Serena
 
