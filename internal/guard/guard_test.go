@@ -1348,6 +1348,100 @@ func TestApplyLabelAgentResult(t *testing.T) {
 	})
 }
 
+// sessionFactoryMockGuard is a mockGuard variant that also implements
+// SessionGuardFactory, allowing tests to exercise the success path of the
+// package-level NewSessionGuard helper.
+type sessionFactoryMockGuard struct {
+	mockGuard
+	sessionInstance Guard
+	sessionErr      error
+	calls           int
+}
+
+func (m *sessionFactoryMockGuard) NewSessionGuard(_ context.Context) (Guard, error) {
+	m.calls++
+	if m.sessionErr != nil {
+		return nil, m.sessionErr
+	}
+	if m.sessionInstance != nil {
+		return m.sessionInstance, nil
+	}
+	return &mockGuard{id: m.id + "-session"}, nil
+}
+
+func TestNewSessionGuard(t *testing.T) {
+	t.Parallel()
+
+	t.Run("template implements SessionGuardFactory returns isolated instance", func(t *testing.T) {
+		t.Parallel()
+		ctx := context.Background()
+		expected := &mockGuard{id: "isolated"}
+		template := &sessionFactoryMockGuard{mockGuard: mockGuard{id: "primary"}, sessionInstance: expected}
+
+		got, err := NewSessionGuard(ctx, template)
+
+		require.NoError(t, err)
+		require.NotNil(t, got)
+		assert.Same(t, expected, got)
+		assert.Equal(t, 1, template.calls)
+	})
+
+	t.Run("template implements SessionGuardFactory but returns error", func(t *testing.T) {
+		t.Parallel()
+		ctx := context.Background()
+		sentinelErr := errors.New("session guard construction failed")
+		template := &sessionFactoryMockGuard{mockGuard: mockGuard{id: "erroring"}, sessionErr: sentinelErr}
+
+		got, err := NewSessionGuard(ctx, template)
+
+		require.Error(t, err)
+		assert.Nil(t, got)
+		assert.Equal(t, sentinelErr, err)
+		assert.Equal(t, 1, template.calls)
+	})
+
+	t.Run("template does not implement SessionGuardFactory returns error", func(t *testing.T) {
+		t.Parallel()
+		ctx := context.Background()
+		template := &mockGuard{id: "stateless"}
+
+		got, err := NewSessionGuard(ctx, template)
+
+		require.Error(t, err)
+		assert.Nil(t, got)
+		assert.Contains(t, err.Error(), "mock-stateless")
+		assert.Contains(t, err.Error(), "does not support isolated session instances")
+	})
+
+	t.Run("nil-returning factory without error still succeeds", func(t *testing.T) {
+		t.Parallel()
+		ctx := context.Background()
+		template := &sessionFactoryMockGuard{mockGuard: mockGuard{id: "default"}}
+
+		got, err := NewSessionGuard(ctx, template)
+
+		require.NoError(t, err)
+		require.NotNil(t, got)
+		assert.Equal(t, "mock-default-session", got.Name())
+	})
+
+	t.Run("real guard implementations satisfy SessionGuardFactory", func(t *testing.T) {
+		t.Parallel()
+		ctx := context.Background()
+
+		noop := NewNoopGuard()
+		gotNoop, err := NewSessionGuard(ctx, noop)
+		require.NoError(t, err)
+		assert.Equal(t, "noop", gotNoop.Name())
+
+		sink := NewWriteSinkGuard([]string{"*"})
+		gotSink, err := NewSessionGuard(ctx, sink)
+		require.NoError(t, err)
+		assert.Equal(t, "write-sink", gotSink.Name())
+		assert.NotSame(t, sink, gotSink)
+	})
+}
+
 func TestIsSafeOutputsServer(t *testing.T) {
 	t.Parallel()
 
