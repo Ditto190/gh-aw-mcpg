@@ -36,7 +36,9 @@ pub mod policy_integrity {
 
 #[cfg(test)]
 mod tests {
-    use super::{desc_prefix, field_names, policy_integrity};
+    use super::{
+        desc_prefix, field_names, policy_integrity, SENSITIVE_PATH_PREFIXES, URL_FALLBACK_FIELDS,
+    };
 
     /// Ensures ORDER_LOW_TO_HIGH_PIPED stays in sync with ORDER_HIGH_TO_LOW.
     /// If a new integrity level is added or reordered, this test will catch the drift.
@@ -67,6 +69,16 @@ mod tests {
         assert_eq!(field_names::METHOD, "method");
         assert_eq!(field_names::IS_ERROR, "isError");
         assert_eq!(field_names::PUBLIC, "public");
+    }
+
+    #[test]
+    fn sensitive_path_prefixes_include_workflows() {
+        assert_eq!(SENSITIVE_PATH_PREFIXES, &[".github/workflows/"]);
+    }
+
+    #[test]
+    fn url_fallback_fields_are_ordered_by_specificity() {
+        assert_eq!(URL_FALLBACK_FIELDS, &["repository_url", "html_url", "url"]);
     }
 }
 
@@ -146,6 +158,14 @@ pub const SENSITIVE_FILE_PATTERNS: &[&str] = &[
 
 /// Sensitive keywords in filenames
 pub const SENSITIVE_FILE_KEYWORDS: &[&str] = &["secret", "credential", "password", "token"];
+
+/// Path prefixes always treated as sensitive because workflow definitions may
+/// embed or reference secrets.
+pub const SENSITIVE_PATH_PREFIXES: &[&str] = &[".github/workflows/"];
+
+/// URL-bearing response fields used as fallbacks, ordered from most to least
+/// specific.
+pub const URL_FALLBACK_FIELDS: &[&str] = &["repository_url", "html_url", "url"];
 
 /// Buffer size constants for backend calls
 pub const SMALL_BUFFER_SIZE: usize = 256 * 1024; // 256KB

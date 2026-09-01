@@ -7,7 +7,7 @@ use serde_json::Value;
 
 use super::constants::{
     desc_prefix, field_names, scope_names, tool_names, SENSITIVE_FILE_KEYWORDS,
-    SENSITIVE_FILE_PATTERNS,
+    SENSITIVE_FILE_PATTERNS, SENSITIVE_PATH_PREFIXES,
 };
 use super::helpers::{
     author_association_floor_from_str, elevate_via_collaborator_permission,
@@ -958,7 +958,9 @@ fn check_file_secrecy(
             .split('/')
             .any(|seg| SENSITIVE_FILE_PATTERNS.iter().any(|p| seg.starts_with(*p)))
         || SENSITIVE_FILE_KEYWORDS.iter().any(|k| filename.contains(k))
-        || path_lower.starts_with(".github/workflows/");
+        || SENSITIVE_PATH_PREFIXES
+            .iter()
+            .any(|prefix| path_lower.starts_with(prefix));
 
     if is_sensitive {
         policy_private_scope_label(owner, repo, repo_id, ctx)
