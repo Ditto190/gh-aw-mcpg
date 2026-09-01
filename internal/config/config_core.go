@@ -239,11 +239,14 @@ func (c *Config) GetAgentIDs() []string {
 		return nil
 	}
 	if len(c.Gateway.AgentIDs) > 0 {
+		logConfig.Printf("GetAgentIDs: using gateway.agentIds (plural), count=%d", len(c.Gateway.AgentIDs))
 		return append([]string{}, c.Gateway.AgentIDs...)
 	}
 	if id := c.Gateway.effectiveAgentID(); id != "" {
+		logConfig.Print("GetAgentIDs: gateway.agentIds not set, falling back to singular effective agent ID")
 		return []string{id}
 	}
+	logConfig.Print("GetAgentIDs: no agent IDs configured, authentication disabled")
 	return nil
 }
 
@@ -669,6 +672,7 @@ func containerRuntimeArgs(args []string) ([]string, bool) {
 		}
 	}
 	if runIndex == -1 {
+		logConfig.Printf("containerRuntimeArgs: no %q token found in %d args, cannot derive image boundary", "run", len(args))
 		return nil, false
 	}
 
@@ -691,6 +695,7 @@ func containerRuntimeArgs(args []string) ([]string, bool) {
 		}
 		return append([]string(nil), args[:i]...), true
 	}
+	logConfig.Printf("containerRuntimeArgs: reached end of args after %q at index %d without finding the image token", "run", runIndex)
 	return nil, false
 }
 
