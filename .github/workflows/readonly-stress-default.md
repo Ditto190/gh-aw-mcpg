@@ -14,7 +14,7 @@ permissions:
   actions: read
   copilot-requests: write
 name: "Read-Only Stress: default runtime"
-model: claude-sonnet-4.6
+model: claude-sonnet-5
 engine:
   id: copilot
 strict: false
