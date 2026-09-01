@@ -9,7 +9,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use serde_json::Value;
 
 use super::backend::GithubMcpCallback;
-use super::constants::{field_names, label_constants, scope_names};
+use super::constants::{field_names, label_constants, scope_names, URL_FALLBACK_FIELDS};
 
 /// Ensures the endorsement gateway-mode warning is emitted at most once per process lifetime.
 static ENDORSEMENT_GATEWAY_WARNING_EMITTED: AtomicBool = AtomicBool::new(false);
@@ -75,7 +75,7 @@ fn item_number(item: &Value) -> u64 {
 /// Extract a resource number from URL fields (html_url, url).
 /// Parses trailing number from paths like `.../issues/123` or `.../pull/456`.
 fn extract_number_from_url(item: &Value) -> Option<String> {
-    for field in &["html_url", "url"] {
+    for field in &URL_FALLBACK_FIELDS[1..] {
         if let Some(url) = item.get(field).and_then(|v| v.as_str()) {
             if let Some(last) = url.rsplit('/').next() {
                 if let Ok(n) = last.parse::<u64>() {
@@ -1326,7 +1326,7 @@ pub(crate) fn extract_repo_from_item(item: &Value) -> String {
         return name.to_string();
     }
     // URL field fallback (repository_url for search results, html_url / url as generic fallbacks)
-    for field in &["repository_url", "html_url", "url"] {
+    for field in URL_FALLBACK_FIELDS {
         if let Some(url) = item.get(field).and_then(|v| v.as_str()) {
             if let Some(repo_id) = extract_repo_from_github_url(url) {
                 return repo_id;
