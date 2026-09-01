@@ -75,6 +75,7 @@ fn item_number(item: &Value) -> u64 {
 /// Extract a resource number from URL fields (html_url, url).
 /// Parses trailing number from paths like `.../issues/123` or `.../pull/456`.
 fn extract_number_from_url(item: &Value) -> Option<String> {
+    // Skip repository_url: it identifies a repository but not a numbered resource.
     for field in &URL_FALLBACK_FIELDS[1..] {
         if let Some(url) = item.get(field).and_then(|v| v.as_str()) {
             if let Some(last) = url.rsplit('/').next() {
