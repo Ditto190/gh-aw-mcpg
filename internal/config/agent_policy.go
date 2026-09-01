@@ -54,6 +54,7 @@ func (p *AgentPolicy) AllowsServer(serverID string) bool {
 // allowlist is configured for a permitted server, all of its tools are allowed.
 func (p *AgentPolicy) AllowsTool(serverID, toolName string) bool {
 	if !p.AllowsServer(serverID) {
+		logValidation.Printf("AllowsTool: denying tool=%s on server=%s (server not permitted)", toolName, serverID)
 		return false
 	}
 	tools, ok := p.Tools[serverID]
@@ -65,6 +66,7 @@ func (p *AgentPolicy) AllowsTool(serverID, toolName string) bool {
 			return true
 		}
 	}
+	logValidation.Printf("AllowsTool: denying tool=%s on server=%s (not in per-server allowlist)", toolName, serverID)
 	return false
 }
 
@@ -81,7 +83,11 @@ func (c *Config) AgentPolicyFor(agentID string) *AgentPolicy {
 	if c == nil || c.Gateway == nil {
 		return nil
 	}
-	return c.Gateway.AgentPolicies[agentID]
+	policy, ok := c.Gateway.AgentPolicies[agentID]
+	if !ok {
+		logValidation.Printf("AgentPolicyFor: no policy configured for agentID=%s", util.HashIdentifierForLog(agentID))
+	}
+	return policy
 }
 
 // HasAgentAllowOnlyPolicies reports whether any configured per-agent policy carries
@@ -168,6 +174,8 @@ func validateAgentPolicies(cfg *Config) error {
 // per-server tool allowlist, and any allow-only guard policy.
 func validateSingleAgentPolicy(policyID string, policy *AgentPolicy, servers map[string]*ServerConfig) error {
 	formattedPolicyID := util.HashIdentifierForLog(policyID)
+	logValidation.Printf("Validating agent policy for %s: %d servers, %d per-server tool allowlists, allowOnly=%v",
+		formattedPolicyID, len(policy.Servers), len(policy.Tools), policy.AllowOnly != nil)
 	serverSet := make(map[string]struct{}, len(policy.Servers))
 	serverIDs := make([]string, 0, len(policy.Servers))
 	for _, serverID := range policy.Servers {
