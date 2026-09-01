@@ -505,7 +505,7 @@ func TestProxyDoesNotModifyRequests(t *testing.T) {
 		},
 	})
 
-	require.NotContains(t, callResp, "error", "Tool call failed: %v", callResp["error"])
+	require.Nil(t, callResp["error"], "Tool call failed: %v", callResp["error"])
 	require.NotNil(t, callResp["result"], "Expected a tool call result")
 	receivedArgumentsMu.Lock()
 	defer receivedArgumentsMu.Unlock()
