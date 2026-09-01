@@ -5,7 +5,10 @@ import (
 	"fmt"
 
 	"github.com/github/gh-aw-mcpg/internal/difc"
+	"github.com/github/gh-aw-mcpg/internal/logger"
 )
+
+var logGuard = logger.ForFile()
 
 // BackendCaller provides a way for guards to make read-only calls to the backend
 // to gather information needed for labeling (e.g., fetching issue author)
@@ -55,11 +58,22 @@ type SessionGuardFactory interface {
 
 // NewSessionGuard creates an isolated instance from a registered guard template.
 func NewSessionGuard(ctx context.Context, template Guard) (Guard, error) {
+	logGuard.Printf("NewSessionGuard: template=%s", template.Name())
+
 	factory, ok := template.(SessionGuardFactory)
 	if !ok {
+		logGuard.Printf("NewSessionGuard: guard %q does not implement SessionGuardFactory, no per-session isolation available", template.Name())
 		return nil, fmt.Errorf("guard %q does not support isolated session instances", template.Name())
 	}
-	return factory.NewSessionGuard(ctx)
+
+	sessionGuard, err := factory.NewSessionGuard(ctx)
+	if err != nil {
+		logGuard.Printf("NewSessionGuard: template=%s failed: %v", template.Name(), err)
+		return nil, err
+	}
+
+	logGuard.Printf("NewSessionGuard: template=%s created isolated session guard", template.Name())
+	return sessionGuard, nil
 }
 
 // LabelAgentResult describes the effective policy/session state returned by a guard.
@@ -84,5 +98,7 @@ type RequestState interface{}
 // sink-visibility policy (see internal/server/guard_init.go).
 // Matches the canonical "safe-outputs" ID and the legacy "safeoutputs" alias.
 func IsSafeOutputsServer(serverID string) bool {
-	return serverID == "safe-outputs" || serverID == "safeoutputs"
+	result := serverID == "safe-outputs" || serverID == "safeoutputs"
+	logGuard.Printf("IsSafeOutputsServer: serverID=%q, result=%v", serverID, result)
+	return result
 }
