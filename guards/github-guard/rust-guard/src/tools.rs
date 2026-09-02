@@ -58,7 +58,6 @@ pub const WRITE_OPERATIONS: &[&str] = &[
     "lock_issue",        // gh issue lock
     "lock_pull_request", // gh pr lock
     "mark_all_notifications_read",
-    "mark_answer", // marks a discussion comment as the accepted answer
     "mark_project_template", // gh project mark-template — GraphQL markProjectV2AsTemplate
     "projects_write",
     "push_files",
@@ -71,7 +70,6 @@ pub const WRITE_OPERATIONS: &[&str] = &[
     "unarchive_project_item", // gh project item-archive --undo — unarchives a Projects v2 item
     "unlock_issue",   // gh issue unlock
     "unlock_pull_request", // gh pr unlock
-    "unmark_answer", // removes the accepted-answer state from a discussion comment
     "unmark_project_template", // gh project mark-template --undo — GraphQL unmarkProjectV2AsTemplate
     "unstar_repository",
     "update_codespace", // gh codespace edit — PATCH /user/codespaces/{codespace_name}
@@ -148,7 +146,6 @@ pub const READ_WRITE_OPERATIONS: &[&str] = &[
     "reprioritize_sub_issue",         // PATCH — reorder sub-issues
     "request_pull_request_reviewers", // POST /repos/.../pulls/{number}/requested_reviewers
     "resolve_review_thread",          // PUT  /graphql — resolveReviewThread
-    "resolve_thread",                 // PUT  /graphql — resolves a pull request review thread
     "set_issue_fields", // GraphQL — sets custom field values on a specific repository issue
     "sub_issue_write",
     "submit_pending_pull_request_review", // POST /repos/.../pulls/{number}/reviews/{id}/events
@@ -734,18 +731,6 @@ mod tests {
     }
 
     #[test]
-    fn test_discussion_answer_tools_are_write_operations() {
-        for op in &["mark_answer", "unmark_answer"] {
-            assert!(
-                WRITE_OPERATIONS.binary_search(op).is_ok(),
-                "{op} must be explicitly listed in WRITE_OPERATIONS"
-            );
-            assert!(is_write_operation(op));
-            assert!(!is_read_write_operation(op));
-        }
-    }
-
-    #[test]
     fn test_notification_and_star_tools_match_upstream_write_classification() {
         for op in &[
             "dismiss_notification",
@@ -787,15 +772,6 @@ mod tests {
                 "{op} should not be in WRITE_OPERATIONS"
             );
         }
-    }
-
-    #[test]
-    fn test_resolve_thread_is_a_read_write_operation() {
-        assert!(READ_WRITE_OPERATIONS
-            .binary_search(&"resolve_thread")
-            .is_ok());
-        assert!(is_read_write_operation("resolve_thread"));
-        assert!(!is_write_operation("resolve_thread"));
     }
 
     #[test]
