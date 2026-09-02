@@ -2541,7 +2541,7 @@ mod tests {
         });
 
         let (secrecy, integrity, _desc) = apply_tool_labels(
-            "actions_get",
+            tool_names::ACTIONS_GET,
             &tool_args,
             "github/copilot",
             vec![],

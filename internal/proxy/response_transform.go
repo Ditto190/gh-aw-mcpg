@@ -30,10 +30,7 @@ func rewrapSearchResponse(originalData interface{}, filteredItems interface{}) i
 	}
 	logTransform.Printf("rewrapSearchResponse: rebuilding search wrapper with %d filtered items", len(items))
 	// Rebuild the search wrapper with filtered items
-	result := make(map[string]interface{})
-	for k, v := range original {
-		result[k] = v
-	}
+	result := util.ShallowCloneMap(original)
 	// Replace items key — search can use "items", "repositories", etc.
 	for _, key := range []string{"items", "repositories"} {
 		if _, ok := original[key]; ok {

@@ -152,6 +152,22 @@ func TestPolicyValidate_FieldErrors(t *testing.T) {
 	}
 }
 
+func TestPolicyValidate_NormalizesPublicMinIntegrity(t *testing.T) {
+	policy := &Policy{
+		Version:                 1,
+		Profile:                 ProfileIssuesReadV1,
+		Audience:                DefaultAudience,
+		WorkflowRunID:           "run-123",
+		Repositories:            []RepositoryPolicy{{Repo: "github/gh-aw", Sensitivity: "confidential"}},
+		PublicMinIntegrity:      " APPROVED ",
+		AllowedOperations:       []string{OperationIssuesGet},
+		MaxCapabilityTTLSeconds: 600,
+	}
+
+	require.NoError(t, policy.Validate())
+	assert.Equal(t, "approved", policy.PublicMinIntegrity)
+}
+
 func TestPolicyRepositorySensitivity(t *testing.T) {
 	policy, err := ParsePolicy(validPolicyJSON())
 	require.NoError(t, err)

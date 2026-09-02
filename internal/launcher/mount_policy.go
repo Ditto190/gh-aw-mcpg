@@ -9,6 +9,7 @@ import (
 
 	"github.com/github/gh-aw-mcpg/internal/envutil"
 	"github.com/github/gh-aw-mcpg/internal/logger"
+	"github.com/github/gh-aw-mcpg/internal/mountspec"
 )
 
 var logMountPolicy = logger.ForFile()
@@ -182,44 +183,11 @@ type mountDeclaration struct {
 
 // parseMountDeclaration parses a structured bind-mount specification.
 func parseMountDeclaration(spec string) (mountDeclaration, error) {
-	parts := strings.Split(spec, ":")
-	if len(parts) < 2 || len(parts) > 3 {
-		return mountDeclaration{}, fmt.Errorf("expected 'source:dest:mode'")
+	mount, err := mountspec.Parse(spec)
+	if err != nil {
+		return mountDeclaration{}, err
 	}
-	source, dest := parts[0], parts[1]
-	if source == "" || dest == "" {
-		return mountDeclaration{}, fmt.Errorf("source and destination must not be empty")
-	}
-	if !filepath.IsAbs(source) {
-		return mountDeclaration{}, fmt.Errorf("host source must be an absolute path")
-	}
-	if !filepath.IsAbs(dest) {
-		return mountDeclaration{}, fmt.Errorf("container destination must be an absolute path")
-	}
-
-	decl := mountDeclaration{source: source, dest: dest}
-	if len(parts) == 3 {
-		modeSet := false
-		for _, opt := range strings.Split(parts[2], ",") {
-			opt = strings.TrimSpace(opt)
-			switch opt {
-			case "ro", "rw":
-				if modeSet {
-					return mountDeclaration{}, fmt.Errorf("conflicting mount options")
-				}
-				modeSet = true
-				decl.writable = opt == "rw"
-			case "":
-				return mountDeclaration{}, fmt.Errorf("empty mount option")
-			default:
-				return mountDeclaration{}, fmt.Errorf("unsupported mount option")
-			}
-		}
-	} else {
-		// Docker defaults to read-write when no mode is given.
-		decl.writable = true
-	}
-	return decl, nil
+	return mountDeclaration{source: mount.Source, dest: mount.Destination, writable: mount.Writable}, nil
 }
 
 // ValidateMount checks a single "source:dest:mode" declaration against the policy.

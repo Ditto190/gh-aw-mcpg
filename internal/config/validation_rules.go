@@ -1,11 +1,13 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
 
 	"github.com/github/gh-aw-mcpg/internal/logger"
+	"github.com/github/gh-aw-mcpg/internal/mountspec"
 )
 
 var logValidationRules = logger.ForFile()
@@ -148,60 +150,51 @@ func mountValidationError(jsonPath string, index int, message, suggestion string
 // - Mode MUST be either "ro" (read-only) or "rw" (read-write)
 func MountFormat(mount, jsonPath string, index int) *ValidationError {
 	logValidationRules.Printf("Validating mount format: mount=%s, jsonPath=%s, index=%d", mount, jsonPath, index)
-	parts := strings.Split(mount, ":")
-	if len(parts) != 3 {
-		logValidationRules.Printf("Mount format validation failed: invalid part count=%d", len(parts))
+	_, err := mountspec.ParseRequiredMode(mount)
+	if err == nil {
+		return nil
+	}
+
+	var parseErr *mountspec.ParseError
+	if !errors.As(err, &parseErr) {
 		return mountValidationError(jsonPath, index,
 			fmt.Sprintf("invalid mount format '%s' (expected 'source:dest:mode')", mount),
 			"Use format 'source:dest:mode' where mode is 'ro' (read-only) or 'rw' (read-write), e.g. '/host/path:/container/path:ro'",
 		)
 	}
 
-	source := parts[0]
-	dest := parts[1]
-	mode := parts[2]
-
-	// Validate source is not empty
-	if source == "" {
+	switch parseErr.Kind {
+	case mountspec.EmptySource:
 		return mountValidationError(jsonPath, index,
 			fmt.Sprintf("mount source cannot be empty in '%s'", mount),
 			"Provide a valid absolute source path (e.g., '/host/path')",
 		)
-	}
-
-	// Validate source is an absolute path (MCP spec requirement)
-	if !strings.HasPrefix(source, "/") {
+	case mountspec.RelativeSource:
 		return mountValidationError(jsonPath, index,
-			fmt.Sprintf("mount source must be an absolute path, got '%s'", source),
+			fmt.Sprintf("mount source must be an absolute path, got '%s'", strings.Split(mount, ":")[0]),
 			"Use an absolute path starting with '/' (e.g., '/var/data' instead of 'data')",
 		)
-	}
-
-	// Validate dest is not empty
-	if dest == "" {
+	case mountspec.EmptyDestination:
 		return mountValidationError(jsonPath, index,
 			fmt.Sprintf("mount destination cannot be empty in '%s'", mount),
 			"Provide a valid absolute destination path (e.g., '/app/data')",
 		)
-	}
-
-	// Validate dest is an absolute path (MCP spec requirement)
-	if !strings.HasPrefix(dest, "/") {
+	case mountspec.RelativeDestination:
 		return mountValidationError(jsonPath, index,
-			fmt.Sprintf("mount destination must be an absolute path, got '%s'", dest),
+			fmt.Sprintf("mount destination must be an absolute path, got '%s'", strings.Split(mount, ":")[1]),
 			"Use an absolute path starting with '/' (e.g., '/app/data' instead of 'app/data')",
 		)
-	}
-
-	// Validate mode
-	if mode != "ro" && mode != "rw" {
+	case mountspec.InvalidOptions:
 		return mountValidationError(jsonPath, index,
-			fmt.Sprintf("invalid mount mode '%s' (must be 'ro' or 'rw')", mode),
+			fmt.Sprintf("invalid mount mode in '%s' (must be 'ro' or 'rw')", mount),
 			"Use 'ro' for read-only or 'rw' for read-write",
 		)
+	default:
+		return mountValidationError(jsonPath, index,
+			fmt.Sprintf("invalid mount format '%s' (expected 'source:dest:mode')", mount),
+			"Use format 'source:dest:mode' where mode is 'ro' (read-only) or 'rw' (read-write), e.g. '/host/path:/container/path:ro'",
+		)
 	}
-
-	return nil
 }
 
 // RequiredStringField validates that a required string field is not empty.

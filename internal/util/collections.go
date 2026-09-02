@@ -5,6 +5,16 @@ import (
 	"strings"
 )
 
+// ShallowCloneMap returns a shallow copy of m so callers can safely overwrite
+// specific keys without mutating the original map.
+func ShallowCloneMap[K comparable, V any](m map[K]V) map[K]V {
+	clone := make(map[K]V, len(m))
+	for key, value := range m {
+		clone[key] = value
+	}
+	return clone
+}
+
 // SortedSetKeys returns the keys of a string set (map[string]struct{}) as a sorted slice.
 // Returns an empty (non-nil) slice when the set is empty.
 func SortedSetKeys(set map[string]struct{}) []string {
