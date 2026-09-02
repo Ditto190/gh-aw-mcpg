@@ -102,7 +102,7 @@ This finds all files that contain `AddTool(` calls, which is the standard Go MCP
 
 ### 2.3 Build the canonical tool list
 
-Produce a complete, deduplicated list of tool names from the upstream GitHub MCP server. This is your **MCP reference set**. Record the total count for cache comparison.
+Produce a complete, deduplicated list of registered tool names from the upstream GitHub MCP server. This is your **MCP reference set**. Record the total count for cache comparison. Some registered tools dispatch multiple operations through a `method` argument. Record those as `{tool_name, method}` pairs for semantic coverage checks, but do not add their method values to the tool-name reference set or report them as standalone tool gaps.
 
 ## Step 3: Fetch Write Operations from the GitHub CLI
 
@@ -207,6 +207,8 @@ A tool has a **classification gap** if it is in the upstream MCP tool list AND:
 - AND it appears to perform write or mutating operations based on its name or description (e.g., tools with verbs like "add", "set", "enable", "disable", "submit", "publish", "request", "approve", "reject", "resolve", "reopen", "close", "lock", "unlock", "pin", "unpin", "convert")
 
 For read-only tools (get, list, search, read), missing classification is expected and not a gap.
+
+For a mutating `{tool_name, method}` pair, check the registered parent `tool_name` classification and its label rule using representative arguments that include `method`. A method value is not an MCP tool name and must not be added to a tool classification bucket or treated as a standalone gap.
 
 ### 5.2 MCP tool labeling gaps (tool_rules.rs)
 

@@ -1253,6 +1253,45 @@ mod tests {
     }
 
     #[test]
+    fn apply_tool_labels_discussion_and_review_write_methods_are_repo_scoped_writes() {
+        let ctx = default_ctx();
+        let repo_id = "octocat/hello-world";
+        let expected_writer_integrity = writer_integrity(repo_id, &ctx);
+        for (tool_name, method) in &[
+            ("discussion_comment_write", "mark_answer"),
+            ("discussion_comment_write", "unmark_answer"),
+            ("pull_request_review_write", "resolve_thread"),
+        ] {
+            let args = serde_json::json!({
+                "owner": "octocat",
+                "repo": "hello-world",
+                "method": method,
+            });
+            let (secrecy, integrity, _) = super::apply_tool_labels(
+                tool_name,
+                &args,
+                repo_id,
+                vec![],
+                vec![],
+                String::new(),
+                &ctx,
+            );
+            let _ = secrecy; // secrecy inherits from repo visibility (backend unavailable in tests)
+            assert!(
+                !integrity.is_empty(),
+                "{tool_name} ({method}) must produce writer-level integrity"
+            );
+            assert!(
+                integrity
+                    .iter()
+                    .any(|l| expected_writer_integrity.contains(l)),
+                "{tool_name} ({method}) integrity must contain a writer-level approved label, got: {:?}",
+                integrity
+            );
+        }
+    }
+
+    #[test]
     fn apply_tool_labels_issue_comment_edit_delete_is_repo_scoped_write() {
         let ctx = default_ctx();
         let tool_args =
