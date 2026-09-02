@@ -676,6 +676,8 @@ pub fn apply_tool_labels(
         | "discussion_comment_write"
         | "create_discussion" // gh discussion create — creates a discussion in a repository
         | "edit_discussion" // gh discussion edit   — edits title/body/labels of a discussion
+        | "mark_answer" // marks a discussion comment as the accepted answer
+        | "unmark_answer" // removes the accepted-answer state from a discussion comment
         // Granular issue mutation
         | "close_issue"
         | "reopen_issue"
@@ -714,6 +716,7 @@ pub fn apply_tool_labels(
         | "delete_pending_pull_request_review"
         | "request_pull_request_reviewers"
         | "resolve_review_thread"
+        | "resolve_thread"
         | "submit_pending_pull_request_review"
         | "unresolve_review_thread"
         // Repo content/structure
@@ -1234,7 +1237,12 @@ mod tests {
         let args = serde_json::json!({"owner": "octocat", "repo": "hello-world"});
         let repo_id = "octocat/hello-world";
         let expected_writer_integrity = writer_integrity(repo_id, &ctx);
-        for op in &["create_discussion", "edit_discussion"] {
+        for op in &[
+            "create_discussion",
+            "edit_discussion",
+            "mark_answer",
+            "unmark_answer",
+        ] {
             let (secrecy, integrity, _) =
                 super::apply_tool_labels(op, &args, repo_id, vec![], vec![], String::new(), &ctx);
             let _ = secrecy; // secrecy inherits from repo visibility (backend unavailable in tests)
@@ -2528,6 +2536,7 @@ mod tests {
             "delete_pending_pull_request_review",
             "request_pull_request_reviewers",
             "resolve_review_thread",
+            "resolve_thread",
             "submit_pending_pull_request_review",
             "unresolve_review_thread",
         ] {
