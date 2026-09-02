@@ -92,8 +92,12 @@ func Parse(spec string) (Spec, error) {
 // ParseRequiredMode parses a bind-mount declaration that must explicitly
 // include its mode.
 func ParseRequiredMode(spec string) (Spec, error) {
-	if len(strings.Split(spec, ":")) == 2 {
+	parts := strings.Split(spec, ":")
+	if len(parts) != 3 {
 		return Spec{}, &ParseError{Kind: InvalidFormat}
+	}
+	if parts[2] != "ro" && parts[2] != "rw" {
+		return Spec{}, &ParseError{Kind: InvalidOptions}
 	}
 	return Parse(spec)
 }
