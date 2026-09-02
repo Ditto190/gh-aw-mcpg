@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 
 	"github.com/github/gh-aw-mcpg/internal/logger"
+	"github.com/github/gh-aw-mcpg/internal/util"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -42,10 +43,7 @@ func rewriteEnvelopeTextPayload(data any, filteredText string) (any, bool) {
 			logMiddleware.Print("rewriteEnvelopeTextPayload: no content key in map, skipping envelope rewrite")
 			return nil, false
 		}
-		rewrittenMap := make(map[string]any, len(v))
-		for key, value := range v {
-			rewrittenMap[key] = value
-		}
+		rewrittenMap := util.ShallowCloneMap(v)
 
 		rewrittenContent, ok := rewriteFirstContentItem(contentValue, filteredText)
 		if !ok {
@@ -90,10 +88,7 @@ func rewriteFirstContentItem(contentValue any, filteredText string) (any, bool) 
 }
 
 func rewriteContentItemText(contentItem map[string]any, filteredText string) map[string]any {
-	rewrittenItem := make(map[string]any, len(contentItem))
-	for key, value := range contentItem {
-		rewrittenItem[key] = value
-	}
+	rewrittenItem := util.ShallowCloneMap(contentItem)
 	rewrittenItem["text"] = filteredText
 	return rewrittenItem
 }
