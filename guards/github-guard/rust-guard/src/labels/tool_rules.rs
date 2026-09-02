@@ -7,7 +7,7 @@ use serde_json::Value;
 
 use super::constants::{
     desc_prefix, field_names, scope_names, tool_names, SENSITIVE_FILE_KEYWORDS,
-    SENSITIVE_FILE_PATTERNS, SENSITIVE_PATH_PREFIXES,
+    SENSITIVE_FILE_PATTERNS, SENSITIVE_PATH_PREFIXES, UI_GET_REPO_SCOPED_METHODS,
 };
 use super::helpers::{
     author_association_floor_from_str, elevate_via_collaborator_permission,
@@ -442,7 +442,7 @@ pub fn apply_tool_labels(
         }
 
         // === Actions: Workflow/Artifact Metadata and Artifact Downloads ===
-        "actions_get" => {
+        tool_names::ACTIONS_GET => {
             secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
             integrity = writer_integrity(repo_id, ctx);
         }
@@ -450,7 +450,7 @@ pub fn apply_tool_labels(
         // === UI metadata dispatch (repo/org-scoped, method-dependent) ===
         // Mirrors existing rules for list_label, list_branches, list_issue_types,
         // list_issue_fields, and list_repository_collaborators.
-        "ui_get" => {
+        tool_names::UI_GET => {
             let method = tool_args
                 .get(field_names::METHOD)
                 .and_then(|v| v.as_str())
@@ -458,7 +458,7 @@ pub fn apply_tool_labels(
             match method {
                 // Repo-scoped metadata: labels, milestones, branches
                 // S = S(repo); I = writer
-                "labels" | "milestones" | "branches" => {
+                method if UI_GET_REPO_SCOPED_METHODS.contains(&method) => {
                     secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
                     integrity = writer_integrity(repo_id, ctx);
                 }
@@ -1737,7 +1737,7 @@ mod tests {
         let _guard = crate::labels::backend::cache_repo_visibility_for_tests(repo_id, false);
 
         let (secrecy, integrity, _) = super::apply_tool_labels(
-            "actions_get",
+            tool_names::ACTIONS_GET,
             &args,
             repo_id,
             vec![],
@@ -1769,7 +1769,7 @@ mod tests {
         let _guard = crate::labels::backend::cache_repo_visibility_for_tests(repo_id, true);
 
         let (secrecy, integrity, _) = super::apply_tool_labels(
-            "actions_get",
+            tool_names::ACTIONS_GET,
             &args,
             repo_id,
             vec![],
@@ -1801,7 +1801,7 @@ mod tests {
         let _guard = crate::labels::backend::cache_repo_visibility_for_tests(repo_id, false);
 
         let (secrecy, integrity, _) = super::apply_tool_labels(
-            "actions_get",
+            tool_names::ACTIONS_GET,
             &args,
             repo_id,
             vec![],
@@ -2043,14 +2043,14 @@ mod tests {
                 owner,
                 repo,
             );
-            for method in &["labels", "milestones", "branches"] {
+            for method in UI_GET_REPO_SCOPED_METHODS {
                 let args = serde_json::json!({
                     "owner": owner,
                     "repo": repo,
                     "method": method,
                 });
                 let (secrecy, integrity, _) = super::apply_tool_labels(
-                    "ui_get",
+                    tool_names::UI_GET,
                     &args,
                     repo_id,
                     vec![],
@@ -2095,14 +2095,14 @@ mod tests {
                 owner,
                 repo,
             );
-            for method in &["labels", "milestones", "branches"] {
+            for method in UI_GET_REPO_SCOPED_METHODS {
                 let args = serde_json::json!({
                     "owner": owner,
                     "repo": repo,
                     "method": method,
                 });
                 let (secrecy, integrity, _) = super::apply_tool_labels(
-                    "ui_get",
+                    tool_names::UI_GET,
                     &args,
                     repo_id,
                     vec![],
@@ -2140,7 +2140,7 @@ mod tests {
                 "method": method,
             });
             let (secrecy, integrity, _) = super::apply_tool_labels(
-                "ui_get",
+                tool_names::UI_GET,
                 &args,
                 repo_id,
                 vec![],
@@ -2175,7 +2175,7 @@ mod tests {
                 "method": method,
             });
             let (secrecy, integrity, _) = super::apply_tool_labels(
-                "ui_get",
+                tool_names::UI_GET,
                 &args,
                 repo_id,
                 vec![],
@@ -2206,7 +2206,7 @@ mod tests {
         });
 
         let (secrecy, integrity, _) = super::apply_tool_labels(
-            "ui_get",
+            tool_names::UI_GET,
             &args,
             repo_id,
             initial_secrecy.clone(),
