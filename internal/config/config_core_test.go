@@ -65,6 +65,95 @@ func TestContainerRuntimeArgsRecognizesValueOptions(t *testing.T) {
 	assert.Equal(t, args[:7], runtimeArgs)
 }
 
+// TestContainerRuntimeArgs covers containerRuntimeArgs branches not exercised
+// by TestContainerRuntimeArgsRecognizesValueOptions: missing "run" token,
+// running out of args before an image is found, the "--" separator boundary,
+// short-flag value consumption, boolean long/short flags without values, and
+// case-insensitive matching of "run".
+func TestContainerRuntimeArgs(t *testing.T) {
+	tests := []struct {
+		name     string
+		args     []string
+		wantArgs []string
+		wantOK   bool
+	}{
+		{
+			name:     "no run token found",
+			args:     []string{"--rm", "-i", "image:latest"},
+			wantArgs: nil,
+			wantOK:   false,
+		},
+		{
+			name:     "empty args",
+			args:     []string{},
+			wantArgs: nil,
+			wantOK:   false,
+		},
+		{
+			name:     "run token but no image found before args end",
+			args:     []string{"run", "--rm", "-i"},
+			wantArgs: nil,
+			wantOK:   false,
+		},
+		{
+			name:     "run token is only element, nothing after",
+			args:     []string{"run"},
+			wantArgs: nil,
+			wantOK:   false,
+		},
+		{
+			name:     "double-dash separator with args after it",
+			args:     []string{"run", "--rm", "--", "image:latest", "cmd"},
+			wantArgs: []string{"run", "--rm", "--"},
+			wantOK:   true,
+		},
+		{
+			name:     "double-dash separator with nothing after it",
+			args:     []string{"run", "--rm", "--"},
+			wantArgs: []string{"run", "--rm", "--"},
+			wantOK:   false,
+		},
+		{
+			name:     "short flag consumes following value",
+			args:     []string{"run", "-e", "FOO=bar", "image:latest"},
+			wantArgs: []string{"run", "-e", "FOO=bar"},
+			wantOK:   true,
+		},
+		{
+			name:     "short boolean flag does not consume value",
+			args:     []string{"run", "-d", "image:latest"},
+			wantArgs: []string{"run", "-d"},
+			wantOK:   true,
+		},
+		{
+			name:     "long flag with = sign does not consume next arg",
+			args:     []string{"run", "--env=FOO=bar", "image:latest"},
+			wantArgs: []string{"run", "--env=FOO=bar"},
+			wantOK:   true,
+		},
+		{
+			name:     "case-insensitive run token",
+			args:     []string{"RuN", "--rm", "image:latest"},
+			wantArgs: []string{"RuN", "--rm"},
+			wantOK:   true,
+		},
+		{
+			name:     "image token is first arg after run",
+			args:     []string{"run", "image:latest", "--privileged"},
+			wantArgs: []string{"run"},
+			wantOK:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotArgs, gotOK := containerRuntimeArgs(tt.args)
+			assert.Equal(t, tt.wantOK, gotOK)
+			assert.Equal(t, tt.wantArgs, gotArgs)
+		})
+	}
+}
+
 // TestLoadFromFile_FileNotFound verifies that LoadFromFile returns an error
 // when the specified file path does not exist.
 func TestLoadFromFile_FileNotFound(t *testing.T) {
