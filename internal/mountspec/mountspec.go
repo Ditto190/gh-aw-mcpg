@@ -5,7 +5,11 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+
+	"github.com/github/gh-aw-mcpg/internal/logger"
 )
+
+var log = logger.New("mountspec:mountspec")
 
 // Spec is a parsed bind-mount declaration.
 type Spec struct {
@@ -50,7 +54,9 @@ func (e *ParseError) Error() string {
 // defaults to read-write; mode may contain one "ro" or "rw" option.
 func Parse(spec string) (Spec, error) {
 	parts := strings.Split(spec, ":")
+	log.Printf("Parsing mount spec: parts=%d", len(parts))
 	if len(parts) < 2 || len(parts) > 3 {
+		log.Printf("Rejecting mount spec: invalid format (expected 2-3 colon-separated parts, got %d)", len(parts))
 		return Spec{}, &ParseError{Kind: InvalidFormat}
 	}
 	if parts[0] == "" {
@@ -60,14 +66,17 @@ func Parse(spec string) (Spec, error) {
 		return Spec{}, &ParseError{Kind: EmptyDestination}
 	}
 	if !filepath.IsAbs(parts[0]) {
+		log.Print("Rejecting mount spec: source path is not absolute")
 		return Spec{}, &ParseError{Kind: RelativeSource}
 	}
 	if !filepath.IsAbs(parts[1]) {
+		log.Print("Rejecting mount spec: destination path is not absolute")
 		return Spec{}, &ParseError{Kind: RelativeDestination}
 	}
 
 	mount := Spec{Source: parts[0], Destination: parts[1], Writable: true}
 	if len(parts) == 2 {
+		log.Print("Mount spec has no explicit mode, defaulting to read-write")
 		return mount, nil
 	}
 
@@ -94,6 +103,7 @@ func Parse(spec string) (Spec, error) {
 func ParseRequiredMode(spec string) (Spec, error) {
 	parts := strings.Split(spec, ":")
 	if len(parts) != 3 {
+		log.Printf("Rejecting mount spec: mode is required but %d parts were given", len(parts))
 		return Spec{}, &ParseError{Kind: InvalidFormat}
 	}
 	if parts[2] != "ro" && parts[2] != "rw" {
