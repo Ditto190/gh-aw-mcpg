@@ -33,6 +33,24 @@ func TestSortedSetKeys(t *testing.T) {
 	})
 }
 
+func TestShallowCloneMap(t *testing.T) {
+	t.Parallel()
+
+	input := map[string]any{
+		"scalar": "original",
+		"nested": map[string]any{"key": "value"},
+	}
+	clone := ShallowCloneMap(input)
+
+	require.Equal(t, input, clone)
+
+	clone["scalar"] = "modified"
+	assert.Equal(t, "original", input["scalar"])
+
+	clone["nested"].(map[string]any)["key"] = "modified"
+	assert.Equal(t, "modified", input["nested"].(map[string]any)["key"])
+}
+
 func TestGetStringFromMap(t *testing.T) {
 	t.Parallel()
 
