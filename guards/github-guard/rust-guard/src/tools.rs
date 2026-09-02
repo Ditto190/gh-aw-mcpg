@@ -58,7 +58,6 @@ pub const WRITE_OPERATIONS: &[&str] = &[
     "lock_issue",        // gh issue lock
     "lock_pull_request", // gh pr lock
     "mark_all_notifications_read",
-    "mark_answer",           // POST /graphql — marks a discussion comment as the accepted answer
     "mark_project_template", // gh project mark-template — GraphQL markProjectV2AsTemplate
     "projects_write",
     "push_files",
@@ -71,7 +70,6 @@ pub const WRITE_OPERATIONS: &[&str] = &[
     "unarchive_project_item", // gh project item-archive --undo — unarchives a Projects v2 item
     "unlock_issue",   // gh issue unlock
     "unlock_pull_request", // gh pr unlock
-    "unmark_answer",           // POST /graphql — removes the accepted-answer state from a discussion comment
     "unmark_project_template", // gh project mark-template --undo — GraphQL unmarkProjectV2AsTemplate
     "unstar_repository",
     "update_codespace", // gh codespace edit — PATCH /user/codespaces/{codespace_name}
@@ -148,7 +146,6 @@ pub const READ_WRITE_OPERATIONS: &[&str] = &[
     "reprioritize_sub_issue",         // PATCH — reorder sub-issues
     "request_pull_request_reviewers", // POST /repos/.../pulls/{number}/requested_reviewers
     "resolve_review_thread",          // PUT  /graphql — resolveReviewThread
-    "resolve_thread", // PUT /graphql — resolveReviewThread (alias tool name for resolving a PR review thread)
     "set_issue_fields", // GraphQL — sets custom field values on a specific repository issue
     "sub_issue_write",
     "submit_pending_pull_request_review", // POST /repos/.../pulls/{number}/reviews/{id}/events
