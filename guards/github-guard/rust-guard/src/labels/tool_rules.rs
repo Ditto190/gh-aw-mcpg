@@ -1369,6 +1369,9 @@ mod tests {
             integrity,
             writer_integrity(&format!("node/{}", node_id), &ctx)
         );
+    }
+
+    #[test]
     fn apply_tool_labels_discussion_and_review_write_methods_are_repo_scoped_writes() {
         let ctx = default_ctx();
         let repo_id = "octocat/hello-world";
