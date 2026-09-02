@@ -154,6 +154,91 @@ func TestNoopGuard(t *testing.T) {
 	})
 }
 
+// sessionGuardFactoryMock is a Guard that also implements SessionGuardFactory,
+// used to exercise the success path of the package-level NewSessionGuard function.
+type sessionGuardFactoryMock struct {
+	mockGuard
+	sessionGuard Guard
+	sessionErr   error
+	called       int
+}
+
+func (m *sessionGuardFactoryMock) NewSessionGuard(_ context.Context) (Guard, error) {
+	m.called++
+	if m.sessionErr != nil {
+		return nil, m.sessionErr
+	}
+	return m.sessionGuard, nil
+}
+
+// TestNewSessionGuard covers the package-level NewSessionGuard helper, which
+// type-asserts a guard template to SessionGuardFactory and delegates to it.
+func TestNewSessionGuard(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("template does not implement SessionGuardFactory", func(t *testing.T) {
+		template := &mockGuard{id: "plain"}
+
+		guard, err := NewSessionGuard(ctx, template)
+
+		require.Error(t, err)
+		assert.Nil(t, guard)
+		assert.Contains(t, err.Error(), "mock-plain")
+		assert.Contains(t, err.Error(), "does not support isolated session instances")
+	})
+
+	t.Run("template implements SessionGuardFactory successfully", func(t *testing.T) {
+		want := &mockGuard{id: "session-instance"}
+		template := &sessionGuardFactoryMock{
+			mockGuard:    mockGuard{id: "template"},
+			sessionGuard: want,
+		}
+
+		guard, err := NewSessionGuard(ctx, template)
+
+		require.NoError(t, err)
+		assert.Same(t, want, guard)
+		assert.Equal(t, 1, template.called)
+	})
+
+	t.Run("factory returns an error", func(t *testing.T) {
+		wantErr := errors.New("session init failed")
+		template := &sessionGuardFactoryMock{
+			mockGuard:  mockGuard{id: "template"},
+			sessionErr: wantErr,
+		}
+
+		guard, err := NewSessionGuard(ctx, template)
+
+		require.Error(t, err)
+		assert.Nil(t, guard)
+		assert.ErrorIs(t, err, wantErr)
+	})
+
+	t.Run("real NoopGuard implements SessionGuardFactory", func(t *testing.T) {
+		template := NewNoopGuard()
+
+		guard, err := NewSessionGuard(ctx, template)
+
+		require.NoError(t, err)
+		require.NotNil(t, guard)
+		assert.Equal(t, "noop", guard.Name())
+		// NoopGuard is a zero-size struct, so Go may reuse the same address for
+		// distinct instances; identity comparison isn't meaningful here.
+	})
+
+	t.Run("real WriteSinkGuard implements SessionGuardFactory", func(t *testing.T) {
+		template := NewWriteSinkGuardWithVisibility([]string{"public"}, "public")
+
+		guard, err := NewSessionGuard(ctx, template)
+
+		require.NoError(t, err)
+		require.NotNil(t, guard)
+		assert.Equal(t, "write-sink", guard.Name())
+		assert.NotSame(t, template, guard, "each session should get an independent instance")
+	})
+}
+
 func TestGuardRegistry(t *testing.T) {
 	t.Run("Register and Get guard", func(t *testing.T) {
 		registry := NewRegistry()
