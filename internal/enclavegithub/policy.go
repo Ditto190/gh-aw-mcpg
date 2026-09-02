@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/github/gh-aw-mcpg/internal/config"
 	"github.com/github/gh-aw-mcpg/internal/logger"
 )
 
@@ -44,12 +45,6 @@ var (
 		"internal":     {},
 		"confidential": {},
 		"sealed":       {},
-	}
-	validIntegrityLevels = map[string]struct{}{
-		"none":       {},
-		"unapproved": {},
-		"approved":   {},
-		"merged":     {},
 	}
 )
 
@@ -147,8 +142,10 @@ func (p *Policy) Validate() error {
 		}
 	}
 
-	if _, ok := validIntegrityLevels[p.PublicMinIntegrity]; !ok {
-		return fmt.Errorf("public_min_integrity must be one of none, unapproved, approved, merged")
+	var err error
+	p.PublicMinIntegrity, err = config.NormalizeIntegrityLevel(p.PublicMinIntegrity, false)
+	if err != nil {
+		return fmt.Errorf("public_min_integrity %w", err)
 	}
 	if len(p.AllowedOperations) == 0 {
 		return fmt.Errorf("allowed_operations must contain at least one operation")

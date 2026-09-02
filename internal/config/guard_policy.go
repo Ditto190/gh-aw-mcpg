@@ -17,6 +17,8 @@ const (
 	IntegrityUnapproved = "unapproved"
 	IntegrityApproved   = "approved"
 	IntegrityMerged     = "merged"
+
+	integrityLevelSuggestion = "Specify the minimum integrity level (one of: none, unapproved, approved, merged)"
 )
 
 var allIntegrityLevels = []string{IntegrityNone, IntegrityUnapproved, IntegrityApproved, IntegrityMerged}
@@ -270,7 +272,7 @@ func (p *AllowOnlyPolicy) UnmarshalJSON(data []byte) error {
 		return fmt.Errorf("allow-only must include repos")
 	}
 	if err := RequiredStringField(strings.TrimSpace(p.MinIntegrity), "min-integrity", "allow-only.min-integrity",
-		"Specify the minimum integrity level (one of: none, unapproved, approved, merged)"); err != nil {
+		integrityLevelSuggestion); err != nil {
 		return err
 	}
 
