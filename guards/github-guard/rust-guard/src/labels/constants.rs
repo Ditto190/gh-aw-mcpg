@@ -37,7 +37,8 @@ pub mod policy_integrity {
 #[cfg(test)]
 mod tests {
     use super::{
-        desc_prefix, field_names, policy_integrity, SENSITIVE_PATH_PREFIXES, URL_FALLBACK_FIELDS,
+        desc_prefix, field_names, policy_integrity, tool_names, UI_GET_REPO_SCOPED_METHODS,
+        SENSITIVE_PATH_PREFIXES, URL_FALLBACK_FIELDS,
     };
 
     /// Ensures ORDER_LOW_TO_HIGH_PIPED stays in sync with ORDER_HIGH_TO_LOW.
@@ -79,6 +80,16 @@ mod tests {
     #[test]
     fn url_fallback_fields_are_ordered_by_specificity() {
         assert_eq!(URL_FALLBACK_FIELDS, &["repository_url", "html_url", "url"]);
+    }
+
+    #[test]
+    fn ui_get_constants_match_dispatch_names() {
+        assert_eq!(tool_names::ACTIONS_GET, "actions_get");
+        assert_eq!(tool_names::UI_GET, "ui_get");
+        assert_eq!(
+            UI_GET_REPO_SCOPED_METHODS,
+            &["labels", "milestones", "branches"]
+        );
     }
 }
 
@@ -188,4 +199,9 @@ pub mod tool_names {
     pub const GET_FILE_CONTENTS: &str = "get_file_contents";
     pub const LIST_COMMITS: &str = "list_commits";
     pub const LIST_RELEASES: &str = "list_releases";
+    pub const ACTIONS_GET: &str = "actions_get";
+    pub const UI_GET: &str = "ui_get";
 }
+
+/// UI metadata methods that are scoped to a specific repository.
+pub const UI_GET_REPO_SCOPED_METHODS: &[&str] = &["labels", "milestones", "branches"];
