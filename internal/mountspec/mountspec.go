@@ -103,7 +103,7 @@ func Parse(spec string) (Spec, error) {
 func ParseRequiredMode(spec string) (Spec, error) {
 	parts := strings.Split(spec, ":")
 	if len(parts) != 3 {
-		log.Printf("Rejecting mount spec: mode is required but %d parts were given", len(parts))
+		log.Printf("Rejecting mount spec: expected exactly 3 colon-separated parts, got %d", len(parts))
 		return Spec{}, &ParseError{Kind: InvalidFormat}
 	}
 	if parts[2] != "ro" && parts[2] != "rw" {
