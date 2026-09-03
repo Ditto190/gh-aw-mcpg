@@ -7,7 +7,8 @@ use serde_json::Value;
 
 use super::constants::{
     desc_prefix, field_names, scope_names, tool_names, SENSITIVE_FILE_KEYWORDS,
-    SENSITIVE_FILE_PATTERNS, SENSITIVE_PATH_PREFIXES, UI_GET_REPO_SCOPED_METHODS,
+    SENSITIVE_FILE_PATTERNS, SENSITIVE_PATH_PREFIXES, UI_GET_ACCESS_SENSITIVE_METHODS,
+    UI_GET_GITHUB_APPROVED_METHODS, UI_GET_REPO_SCOPED_METHODS,
 };
 use super::helpers::{
     author_association_floor_from_str, elevate_via_collaborator_permission,
@@ -492,13 +493,13 @@ pub fn apply_tool_labels(
                     secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
                     integrity = writer_integrity(repo_id, ctx);
                 }
-                "issue_types" | "issue_fields" => {
+                method if UI_GET_GITHUB_APPROVED_METHODS.contains(&method) => {
                     baseline_scope = Cow::Borrowed(scope_names::GITHUB);
                     integrity = project_github_label(ctx);
                 }
                 // Access-sensitive membership/reviewer data
                 // S = private policy scope; I = reader
-                "assignees" | "reviewers" => {
+                method if UI_GET_ACCESS_SENSITIVE_METHODS.contains(&method) => {
                     secrecy = policy_private_scope_label(&owner, &repo, repo_id, ctx);
                     integrity = reader_integrity(repo_id, ctx);
                 }
@@ -2249,10 +2250,16 @@ mod tests {
         let repo_id = "octocat/hello-world";
         let expected_secrecy: Vec<String> = vec![];
 
-        for (method, standalone) in &[
-            ("issue_types", "list_issue_types"),
-            ("issue_fields", "list_issue_fields"),
-        ] {
+        let standalone_methods = ["list_issue_types", "list_issue_fields"];
+        assert_eq!(
+            UI_GET_GITHUB_APPROVED_METHODS.len(),
+            standalone_methods.len(),
+            "every GitHub-approved ui_get method must have a standalone counterpart",
+        );
+        for (&method, standalone) in UI_GET_GITHUB_APPROVED_METHODS
+            .iter()
+            .zip(standalone_methods)
+        {
             let args = serde_json::json!({
                 "owner": "octocat",
                 "repo": "hello-world",
@@ -2287,7 +2294,7 @@ mod tests {
         let expected_secrecy = private_label("octocat", "hello-world", repo_id, &ctx);
         let expected_integrity = reader_integrity(repo_id, &ctx);
 
-        for method in &["assignees", "reviewers"] {
+        for method in UI_GET_ACCESS_SENSITIVE_METHODS {
             let args = serde_json::json!({
                 "owner": "octocat",
                 "repo": "hello-world",

@@ -48,10 +48,61 @@ func TestParse(t *testing.T) {
 }
 
 func TestParseRequiredMode(t *testing.T) {
-	_, err := ParseRequiredMode("/srv/data:/data")
-	require.Error(t, err)
+	tests := []struct {
+		name         string
+		spec         string
+		wantErr      bool
+		errorKind    ErrorKind
+		wantWritable bool
+	}{
+		{name: "explicit ro accepted", spec: "/srv/data:/data:ro", wantWritable: false},
+		{name: "explicit rw accepted", spec: "/srv/data:/data:rw", wantWritable: true},
+		{name: "missing mode rejected", spec: "/srv/data:/data", wantErr: true, errorKind: InvalidFormat},
+		{name: "too few segments rejected", spec: "/srv/data", wantErr: true, errorKind: InvalidFormat},
+		{name: "too many segments rejected", spec: "/srv/data:/data:ro:extra", wantErr: true, errorKind: InvalidFormat},
+		{name: "non ro/rw mode token rejected", spec: "/srv/data:/data:rslave", wantErr: true, errorKind: InvalidOptions},
+		{name: "empty mode token rejected", spec: "/srv/data:/data:", wantErr: true, errorKind: InvalidOptions},
+		{name: "delegates to Parse for other validation errors", spec: "data:/data:ro", wantErr: true, errorKind: RelativeSource},
+	}
 
-	var parseErr *ParseError
-	require.ErrorAs(t, err, &parseErr)
-	assert.Equal(t, InvalidFormat, parseErr.Kind)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mount, err := ParseRequiredMode(tt.spec)
+			if !tt.wantErr {
+				require.NoError(t, err)
+				assert.Equal(t, "/srv/data", mount.Source)
+				assert.Equal(t, "/data", mount.Destination)
+				assert.Equal(t, tt.wantWritable, mount.Writable)
+				return
+			}
+
+			require.Error(t, err)
+			var parseErr *ParseError
+			require.ErrorAs(t, err, &parseErr)
+			assert.Equal(t, tt.errorKind, parseErr.Kind)
+		})
+	}
+}
+
+func TestParseErrorMessages(t *testing.T) {
+	tests := []struct {
+		name    string
+		kind    ErrorKind
+		wantMsg string
+	}{
+		{name: "invalid format", kind: InvalidFormat, wantMsg: "expected 'source:dest:mode'"},
+		{name: "empty source", kind: EmptySource, wantMsg: "source and destination must not be empty"},
+		{name: "empty destination", kind: EmptyDestination, wantMsg: "source and destination must not be empty"},
+		{name: "relative source", kind: RelativeSource, wantMsg: "host source must be an absolute path"},
+		{name: "relative destination", kind: RelativeDestination, wantMsg: "container destination must be an absolute path"},
+		{name: "invalid options", kind: InvalidOptions, wantMsg: "invalid mount options"},
+		{name: "unknown kind falls back to default", kind: ErrorKind(999), wantMsg: "invalid mount options"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := &ParseError{Kind: tt.kind}
+			assert.Equal(t, tt.wantMsg, err.Error())
+		})
+	}
 }
