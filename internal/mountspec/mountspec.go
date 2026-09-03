@@ -9,7 +9,7 @@ import (
 	"github.com/github/gh-aw-mcpg/internal/logger"
 )
 
-var log = logger.New("mountspec:mountspec")
+var log = logger.ForFile()
 
 // Spec is a parsed bind-mount declaration.
 type Spec struct {
