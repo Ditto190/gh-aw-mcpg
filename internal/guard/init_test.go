@@ -72,8 +72,8 @@ func TestRunLabelAgent_GuardError(t *testing.T) {
 	mode, result, err := RunLabelAgent(context.Background(), g, nil, &noopRunBackendCaller{}, caps, agentLabels, defaultMode)
 
 	require.Error(t, err)
-	assert.ErrorContains(t, err, "LabelAgent failed")
-	assert.ErrorContains(t, err, "wasm runtime error")
+	require.ErrorContains(t, err, "LabelAgent failed")
+	require.ErrorContains(t, err, "wasm runtime error")
 	assert.Nil(t, result)
 	assert.Equal(t, defaultMode, mode, "defaultMode should be returned on error")
 }
@@ -90,7 +90,7 @@ func TestRunLabelAgent_NilResult(t *testing.T) {
 	mode, result, err := RunLabelAgent(context.Background(), g, nil, &noopRunBackendCaller{}, caps, agentLabels, defaultMode)
 
 	require.Error(t, err)
-	assert.ErrorContains(t, err, "LabelAgent returned nil result")
+	require.ErrorContains(t, err, "LabelAgent returned nil result")
 	assert.Nil(t, result)
 	assert.Equal(t, defaultMode, mode)
 }
@@ -110,7 +110,7 @@ func TestRunLabelAgent_InvalidDIFCMode(t *testing.T) {
 	mode, result, err := RunLabelAgent(context.Background(), g, nil, &noopRunBackendCaller{}, caps, agentLabels, defaultMode)
 
 	require.Error(t, err)
-	assert.ErrorContains(t, err, "LabelAgent result invalid")
+	require.ErrorContains(t, err, "LabelAgent result invalid")
 	assert.Nil(t, result)
 	assert.Equal(t, defaultMode, mode)
 }
@@ -171,7 +171,7 @@ func TestRunLabelAgentForAgent_PropagatesError(t *testing.T) {
 	mode, result, err := RunLabelAgentForAgent(context.Background(), g, nil, &noopRunBackendCaller{}, caps, registry, "agent-2", defaultMode)
 
 	require.Error(t, err)
-	assert.ErrorContains(t, err, "LabelAgent failed")
+	require.ErrorContains(t, err, "LabelAgent failed")
 	assert.Nil(t, result)
 	assert.Equal(t, defaultMode, mode)
 }

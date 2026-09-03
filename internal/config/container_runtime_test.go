@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestEffectiveContainerRuntimeCommand_Dockerless(t *testing.T) {
@@ -147,9 +148,9 @@ func TestValidateContainerRuntimeCommandNotBlank(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := validateContainerRuntimeCommandNotBlank(tt.command, "containerRuntimeCommand", "gateway.containerRuntimeCommand")
 			if tt.wantErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 				if tt.errMsg != "" {
-					assert.ErrorContains(t, err, tt.errMsg)
+					require.ErrorContains(t, err, tt.errMsg)
 				}
 			} else {
 				assert.NoError(t, err)

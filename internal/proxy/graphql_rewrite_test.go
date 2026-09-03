@@ -597,7 +597,7 @@ func TestFindParentField_NoEnclosingBrace(t *testing.T) {
 	idx := strings.Index(query, "nodes")
 	require.NotEqual(t, -1, idx)
 	got := findParentField(query, idx)
-	assert.Equal(t, "", got)
+	assert.Empty(t, got)
 }
 
 // TestInjectFieldsIntoQuery tests the injectFieldsIntoQuery function directly,

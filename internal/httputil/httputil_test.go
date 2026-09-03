@@ -105,7 +105,7 @@ func TestWriteJSONResponse(t *testing.T) {
 		err := json.NewDecoder(rec.Body).Decode(&got)
 		require.NoError(t, err)
 		assert.Equal(t, "not found", got["error"])
-		assert.Equal(t, float64(404), got["code"])
+		assert.InDelta(t, 404.0, got["code"], 1e-9)
 		assert.Len(t, got["details"], 2)
 	})
 

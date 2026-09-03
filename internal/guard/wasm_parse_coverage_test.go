@@ -314,6 +314,6 @@ func TestDecodeWasmCallResult_FunctionCallError(t *testing.T) {
 
 	_, requiredSize, err := decodeWasmCallResult(ctx, fn, mem, 0, 0, 256, 4096)
 	require.Error(t, err, "calling a function on a closed module should return an error")
-	assert.ErrorContains(t, err, "WASM function call failed")
+	require.ErrorContains(t, err, "WASM function call failed")
 	assert.Equal(t, uint32(0), requiredSize)
 }

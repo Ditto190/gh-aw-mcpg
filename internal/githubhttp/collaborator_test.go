@@ -34,8 +34,8 @@ func TestParseCollaboratorPermissionArgs(t *testing.T) {
 		}
 		owner, repo, username, err := ParseCollaboratorPermissionArgs(argsMap)
 		require.Error(t, err)
-		assert.ErrorContains(t, err, "missing owner/repo/username")
-		assert.Equal(t, "", owner)
+		require.ErrorContains(t, err, "missing owner/repo/username")
+		assert.Empty(t, owner)
 		assert.Equal(t, "myrepo", repo)
 		assert.Equal(t, "alice", username)
 	})
@@ -47,9 +47,9 @@ func TestParseCollaboratorPermissionArgs(t *testing.T) {
 		}
 		owner, repo, username, err := ParseCollaboratorPermissionArgs(argsMap)
 		require.Error(t, err)
-		assert.ErrorContains(t, err, "missing owner/repo/username")
+		require.ErrorContains(t, err, "missing owner/repo/username")
 		assert.Equal(t, "myorg", owner)
-		assert.Equal(t, "", repo)
+		assert.Empty(t, repo)
 		assert.Equal(t, "alice", username)
 	})
 
@@ -60,10 +60,10 @@ func TestParseCollaboratorPermissionArgs(t *testing.T) {
 		}
 		owner, repo, username, err := ParseCollaboratorPermissionArgs(argsMap)
 		require.Error(t, err)
-		assert.ErrorContains(t, err, "missing owner/repo/username")
+		require.ErrorContains(t, err, "missing owner/repo/username")
 		assert.Equal(t, "myorg", owner)
 		assert.Equal(t, "myrepo", repo)
-		assert.Equal(t, "", username)
+		assert.Empty(t, username)
 	})
 
 	t.Run("returns partial values on error for logging", func(t *testing.T) {
@@ -75,7 +75,7 @@ func TestParseCollaboratorPermissionArgs(t *testing.T) {
 		require.Error(t, err)
 		assert.Equal(t, "myorg", owner)
 		assert.Equal(t, "myrepo", repo)
-		assert.Equal(t, "", username)
+		assert.Empty(t, username)
 	})
 }
 

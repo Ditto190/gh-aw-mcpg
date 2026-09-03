@@ -136,8 +136,8 @@ func TestExtractJWTExpiry_WrongPartCount(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := extractJWTExpiry(tt.token)
 			require.Error(t, err)
-			assert.ErrorContains(t, err, "malformed JWT")
-			assert.ErrorContains(t, err, fmt.Sprintf("got %d", tt.wantParts))
+			require.ErrorContains(t, err, "malformed JWT")
+			require.ErrorContains(t, err, fmt.Sprintf("got %d", tt.wantParts))
 		})
 	}
 }

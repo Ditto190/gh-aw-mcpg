@@ -189,7 +189,7 @@ func TestValidateAgentPolicyTools(t *testing.T) {
 			if tt.wantErr {
 				require.Error(t, err)
 				var validationErr *agentPolicyToolValidationError
-				assert.ErrorAs(t, err, &validationErr)
+				require.ErrorAs(t, err, &validationErr)
 				if tt.wantErrMsg != "" {
 					assert.Regexp(t, tt.wantErrMsg, err.Error())
 				}

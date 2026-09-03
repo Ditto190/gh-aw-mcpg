@@ -80,7 +80,7 @@ func TestWriteSinkGuard_LabelResource_EmptyAccept(t *testing.T) {
 func TestWriteSinkGuard_LabelResponse(t *testing.T) {
 	g := NewWriteSinkGuard([]string{"private:github/gh-aw*"})
 	data, err := g.LabelResponse(context.Background(), "create_issue", nil, nil, nil)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Nil(t, data, "write-sink should not label responses")
 }
 

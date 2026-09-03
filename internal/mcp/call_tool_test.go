@@ -114,7 +114,7 @@ func TestCallTool_ArgumentsForwarded(t *testing.T) {
 	args, ok := val.(map[string]any)
 	require.True(t, ok)
 	assert.Equal(t, "hello", args["query"])
-	assert.Equal(t, float64(3), args["count"])
+	assert.InEpsilon(t, 3.0, args["count"], 1e-9)
 }
 
 // TestCallTool_BackendHandlerError verifies that when the backend tool

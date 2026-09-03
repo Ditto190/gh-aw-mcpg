@@ -153,7 +153,7 @@ func TestParseSSEResponse(t *testing.T) {
 			got, err := parseSSEResponse([]byte(tt.body))
 			if tt.wantErr {
 				require.Error(t, err)
-				assert.ErrorContains(t, err, "no data field found in SSE response")
+				require.ErrorContains(t, err, "no data field found in SSE response")
 				assert.Nil(t, got)
 			} else {
 				require.NoError(t, err)
@@ -416,7 +416,8 @@ func TestCreateJSONRPCRequest_IsSerializable(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, "2.0", parsed["jsonrpc"])
-	assert.Equal(t, float64(7), parsed["id"]) // JSON numbers are float64
+	assert.IsType(t, float64(0), parsed["id"])
+	assert.InEpsilon(t, 7.0, parsed["id"], 1e-9) // JSON numbers are float64
 	assert.Equal(t, "tools/call", parsed["method"])
 }
 
@@ -1626,7 +1627,7 @@ func TestParseHTTPResult(t *testing.T) {
 			ResponseBody: []byte(`not valid json at all`),
 		}
 		resp, err := parseHTTPResult(result)
-		assert.Error(t, err, "should return error for unparseable 200 response")
+		require.Error(t, err, "should return error for unparseable 200 response")
 		assert.Nil(t, resp)
 	})
 
@@ -1636,7 +1637,7 @@ func TestParseHTTPResult(t *testing.T) {
 			ResponseBody: []byte{},
 		}
 		resp, err := parseHTTPResult(result)
-		assert.Error(t, err, "should return error for empty 200 response body")
+		require.Error(t, err, "should return error for empty 200 response body")
 		assert.Nil(t, resp)
 	})
 

@@ -111,7 +111,7 @@ func TestValidateContainerID_SecurityCritical(t *testing.T) {
 			if tt.wantErr {
 				require.Error(t, err)
 				if tt.errMsg != "" {
-					assert.ErrorContains(t, err, tt.errMsg)
+					require.ErrorContains(t, err, tt.errMsg)
 				}
 			} else {
 				require.NoError(t, err)
@@ -163,10 +163,10 @@ func TestRunDockerInspect(t *testing.T) {
 			output, err := runDockerInspect(tt.containerID, tt.formatTemplate)
 
 			if tt.shouldError {
-				assert.Error(t, err, "Expected error but got none")
+				require.Error(t, err, "Expected error but got none")
 				assert.Empty(t, output, "Expected empty output on error")
 			} else {
-				assert.NoError(t, err, "Unexpected error")
+				require.NoError(t, err, "Unexpected error")
 			}
 		})
 	}
@@ -282,10 +282,10 @@ func TestCheckPortMapping(t *testing.T) {
 			mapped, err := CheckPortMapping(tt.containerID, tt.port)
 
 			if tt.shouldError {
-				assert.Error(t, err, "Expected error for %s", tt.name)
+				require.Error(t, err, "Expected error for %s", tt.name)
 				assert.False(t, mapped, "Port should not be mapped on error")
 			} else {
-				assert.NoError(t, err, "Unexpected error")
+				require.NoError(t, err, "Unexpected error")
 			}
 		})
 	}

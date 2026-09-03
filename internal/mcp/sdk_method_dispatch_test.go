@@ -100,8 +100,8 @@ func TestCallSDKMethod_UnsupportedMethod(t *testing.T) {
 			result, err := conn.callSDKMethod(context.Background(), tt.method, nil)
 			require.Error(t, err)
 			assert.Nil(t, result)
-			assert.ErrorContains(t, err, "unsupported method")
-			assert.ErrorContains(t, err, tt.method)
+			require.ErrorContains(t, err, "unsupported method")
+			require.ErrorContains(t, err, tt.method)
 		})
 	}
 }
@@ -183,7 +183,7 @@ func newPlainJSONTestServer(t *testing.T, handler func(w http.ResponseWriter, r 
 		}
 
 		body, err := io.ReadAll(r.Body)
-		require.NoError(t, err)
+		assert.NoError(t, err)
 
 		// Reject empty bodies (e.g. from SDK probe requests)
 		if len(body) == 0 {
@@ -192,7 +192,7 @@ func newPlainJSONTestServer(t *testing.T, handler func(w http.ResponseWriter, r 
 		}
 
 		var req map[string]interface{}
-		require.NoError(t, json.Unmarshal(body, &req))
+		assert.NoError(t, json.Unmarshal(body, &req))
 
 		method, _ := req["method"].(string)
 

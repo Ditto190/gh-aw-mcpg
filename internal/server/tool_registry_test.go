@@ -618,7 +618,7 @@ func TestRegisterAllTools_AgentPolicyUnknownToolFailsStartup(t *testing.T) {
 				defer us.Close()
 			}
 			require.Error(t, err)
-			assert.ErrorContains(t, err, `references unknown tool "search_code_typo"`)
+			require.ErrorContains(t, err, `references unknown tool "search_code_typo"`)
 			assert.NotContains(t, err.Error(), agentID)
 		})
 	}

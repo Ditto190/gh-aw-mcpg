@@ -71,10 +71,10 @@ func TestServerFileLoggerCreatesLogFiles(t *testing.T) {
 	slackLog := filepath.Join(logDir, "slack.log")
 
 	_, err = os.Stat(githubLog)
-	assert.NoError(t, err, "github.log was not created")
+	require.NoError(t, err, "github.log was not created")
 
 	_, err = os.Stat(slackLog)
-	assert.NoError(t, err, "slack.log was not created")
+	require.NoError(t, err, "slack.log was not created")
 
 	// Read and verify log contents
 	githubContent, err := os.ReadFile(githubLog)
@@ -298,7 +298,7 @@ func TestServerFileLoggerClose_EmptyFiles(t *testing.T) {
 
 	err := sfl.Close()
 
-	assert.NoError(t, err, "Close() with no open files should return nil")
+	require.NoError(t, err, "Close() with no open files should return nil")
 	assert.Empty(t, sfl.loggers, "loggers map should be cleared after Close()")
 	assert.Empty(t, sfl.files, "files map should be cleared after Close()")
 }
@@ -329,7 +329,7 @@ func TestServerFileLoggerClose_SyncError(t *testing.T) {
 	closeErr := sfl.Close()
 
 	// Sync() on a closed file descriptor should fail, so Close() must return an error.
-	assert.Error(closeErr, "Close() should return an error when Sync() fails on an invalidated file")
+	require.Error(closeErr, "Close() should return an error when Sync() fails on an invalidated file")
 
 	// Maps must be cleared even when errors occur.
 	assert.Empty(sfl.loggers, "loggers map should be cleared after Close() even on error")
@@ -367,7 +367,7 @@ func TestServerFileLoggerClose_FirstErrorTracking(t *testing.T) {
 	closeErr := sfl.Close()
 
 	// At least one error should be returned; the first one wins.
-	assert.Error(closeErr, "Close() should return an error when files have already been closed")
+	require.Error(closeErr, "Close() should return an error when files have already been closed")
 
 	// Maps must be cleared regardless.
 	assert.Empty(sfl.loggers, "loggers map should be cleared after Close()")
@@ -401,7 +401,7 @@ func TestServerFileLoggerClose_ValidFiles(t *testing.T) {
 
 	closeErr := sfl.Close()
 
-	assert.NoError(closeErr, "Close() should return nil when all files close successfully")
+	require.NoError(closeErr, "Close() should return nil when all files close successfully")
 	assert.Empty(sfl.loggers, "loggers map should be cleared after Close()")
 	assert.Empty(sfl.files, "files map should be cleared after Close()")
 }

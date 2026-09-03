@@ -424,7 +424,7 @@ func TestFilterAndConvertLabeledData(t *testing.T) {
 		// Verify that errors from the non-collection ToResult path are surfaced.
 		result, err := FilterAndConvertLabeledData(evaluator, agentSecrecy, agentIntegrity, OperationWrite, &errorLabeledData{}, EnforcementStrict)
 		require.Error(t, err)
-		assert.EqualError(t, err, "to result failed")
+		require.EqualError(t, err, "to result failed")
 		assert.Nil(t, result)
 	})
 

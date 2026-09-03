@@ -25,7 +25,8 @@ func TestDeepCloneJSON(t *testing.T) {
 	t.Run("float64 returns same value", func(t *testing.T) {
 		t.Parallel()
 		result := DeepCloneJSON(float64(3.14))
-		assert.Equal(t, float64(3.14), result)
+		assert.IsType(t, float64(0), result)
+		assert.InEpsilon(t, 3.14, result, 1e-9)
 	})
 
 	t.Run("bool true returns same value", func(t *testing.T) {

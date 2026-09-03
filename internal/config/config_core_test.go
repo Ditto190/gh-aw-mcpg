@@ -173,12 +173,12 @@ command = "docker"
 	cfg, err := LoadFromFile(path)
 	require.Error(t, err)
 	assert.Nil(t, cfg)
-	assert.ErrorContains(t, err, "failed to parse TOML")
+	require.ErrorContains(t, err, "failed to parse TOML")
 
 	var perr toml.ParseError
 	require.ErrorAs(t, err, &perr, "expected wrapped toml.ParseError")
-	assert.Greater(t, perr.Position.Line, 0, "parse error should include line number")
-	assert.Greater(t, perr.Position.Col, 0, "parse error should include column number")
+	assert.Positive(t, perr.Position.Line, "parse error should include line number")
+	assert.Positive(t, perr.Position.Col, "parse error should include column number")
 }
 
 // TestFormatConfigError verifies that FormatConfigError returns source-context-rich
@@ -192,8 +192,8 @@ func TestFormatConfigError(t *testing.T) {
 
 		var perr toml.ParseError
 		require.ErrorAs(t, err, &perr, "expected wrapped toml.ParseError")
-		assert.Greater(t, perr.Position.Line, 0, "parse error should include line number")
-		assert.Greater(t, perr.Position.Col, 0, "parse error should include column number")
+		assert.Positive(t, perr.Position.Line, "parse error should include line number")
+		assert.Positive(t, perr.Position.Col, "parse error should include column number")
 
 		msg := FormatConfigError(err)
 
@@ -215,7 +215,7 @@ func TestFormatConfigError(t *testing.T) {
 	})
 
 	t.Run("nil error returns empty string", func(t *testing.T) {
-		assert.Equal(t, "", FormatConfigError(nil))
+		assert.Empty(t, FormatConfigError(nil))
 	})
 }
 
@@ -272,8 +272,8 @@ args = ["server.py"]
 	cfg, err := LoadFromFile(path)
 	require.Error(t, err)
 	assert.Nil(t, cfg)
-	assert.ErrorContains(t, err, "badserver")
-	assert.ErrorContains(t, err, "docker")
+	require.ErrorContains(t, err, "badserver")
+	require.ErrorContains(t, err, "docker")
 }
 
 // TestLoadFromFile_StdioLocalTypeNonDockerCommand verifies that stdio servers
@@ -723,14 +723,14 @@ func TestApplyGatewayDefaults_PartialZero(t *testing.T) {
 // when the Config has a nil Gateway field.
 func TestGetAgentID_NilGateway(t *testing.T) {
 	cfg := &Config{Gateway: nil}
-	assert.Equal(t, "", cfg.GetAgentID())
+	assert.Empty(t, cfg.GetAgentID())
 }
 
 // TestGetAgentID_EmptyID verifies that GetAgentID returns an empty string
 // when the Gateway has an empty AgentID.
 func TestGetAgentID_EmptyID(t *testing.T) {
 	cfg := &Config{Gateway: &GatewayConfig{AgentID: ""}}
-	assert.Equal(t, "", cfg.GetAgentID())
+	assert.Empty(t, cfg.GetAgentID())
 }
 
 // TestGetAgentID_ReturnsID verifies that GetAgentID returns the configured agent ID.
@@ -838,8 +838,8 @@ audience = "https://example.com"
 	cfg, err := LoadFromFile(path)
 	require.Error(t, err)
 	assert.Nil(t, cfg)
-	assert.ErrorContains(t, err, "auth")
-	assert.ErrorContains(t, err, "Remove the auth configuration or change the server type to \"http\"")
+	require.ErrorContains(t, err, "auth")
+	require.ErrorContains(t, err, "Remove the auth configuration or change the server type to \"http\"")
 }
 
 // TestLoadFromFile_InvalidPayloadSizeThresholdRejected verifies that TOML configs with

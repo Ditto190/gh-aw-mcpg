@@ -135,7 +135,7 @@ func TestStrictLoggerOnInitError_PropagatesError(t *testing.T) {
 
 	require.Error(t, err)
 	assert.Same(t, sentinel, err, "must return the original error unchanged")
-	assert.Equal(t, "", got, "must return the zero value for the type parameter")
+	assert.Empty(t, got, "must return the zero value for the type parameter")
 }
 
 // TestStrictLoggerOnInitError_NilErrorStillReturnsZero verifies that passing a
@@ -144,7 +144,7 @@ func TestStrictLoggerOnInitError_PropagatesError(t *testing.T) {
 func TestStrictLoggerOnInitError_NilErrorStillReturnsZero(t *testing.T) {
 	got, err := strictLoggerOnInitError[int](nil)
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, 0, got)
 }
 

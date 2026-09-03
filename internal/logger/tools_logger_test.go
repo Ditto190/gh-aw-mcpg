@@ -256,7 +256,7 @@ func TestWriteJSON_WriteFileFails(t *testing.T) {
 	}
 
 	err := tl.writeJSON(tl.data, 0644)
-	assert.Error(err, "writeJSON should fail when logDir does not exist")
+	require.Error(t, err, "writeJSON should fail when logDir does not exist")
 	assert.ErrorContains(err, "failed to write temp file")
 }
 
@@ -278,8 +278,8 @@ func TestWriteJSON_RenameFails(t *testing.T) {
 	}
 
 	err := tl.writeJSON(tl.data, 0644)
-	assert.Error(err, "writeJSON should fail when rename target is a directory")
-	assert.ErrorContains(err, "failed to rename temp file")
+	require.Error(err, "writeJSON should fail when rename target is a directory")
+	require.ErrorContains(err, "failed to rename temp file")
 
 	// Verify that the cleanup removed the temp file.
 	_, statErr := os.Stat(filepath.Join(tmpDir, "tools.json.tmp"))

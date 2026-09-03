@@ -145,7 +145,7 @@ func TestServeHTTP_MetadataPassthroughAllowlist(t *testing.T) {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusOK)
 				_, err := w.Write([]byte(tt.response))
-				require.NoError(t, err)
+				assert.NoError(t, err)
 			}))
 			defer upstream.Close()
 
@@ -220,7 +220,7 @@ func TestServeHTTP_UnknownRESTEndpointPassthroughWithEmptyLabels(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, err := w.Write([]byte(`{"status":"ok"}`))
-		require.NoError(t, err)
+		assert.NoError(t, err)
 	}))
 	defer upstream.Close()
 
@@ -399,7 +399,7 @@ func TestServeHTTP_GraphQLPreservesQueryString(t *testing.T) {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusOK)
 				_, err := w.Write([]byte(`{"data":{"repository":{"issues":{"nodes":[]}}}}`))
-				require.NoError(t, err)
+				assert.NoError(t, err)
 			}))
 			defer upstream.Close()
 
@@ -847,7 +847,7 @@ func TestHandleWithDIFC_ArtifactZipBinaryPassthrough(t *testing.T) {
 		w.Header().Set("Content-Disposition", `attachment; filename="artifact.zip"`)
 		w.WriteHeader(http.StatusOK)
 		_, err := w.Write(wantBody)
-		require.NoError(t, err)
+		assert.NoError(t, err)
 	}))
 	defer upstream.Close()
 

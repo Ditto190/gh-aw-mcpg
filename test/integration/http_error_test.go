@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/github/gh-aw-mcpg/internal/config"
@@ -169,7 +170,9 @@ func TestHTTPError_DroppedConnection(t *testing.T) {
 			t.Fatal("Server doesn't support hijacking")
 		}
 		conn, _, err := hj.Hijack()
-		require.NoError(t, err, "Failed to hijack connection")
+		if !assert.NoError(t, err, "Failed to hijack connection") {
+			return
+		}
 		conn.Close() // Drop the connection
 	}))
 	defer mockServer.Close()

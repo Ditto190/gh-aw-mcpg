@@ -15,7 +15,7 @@ func TestCircuitBreaker_InitialStateClosed(t *testing.T) {
 	t.Parallel()
 	cb := newCircuitBreaker("test", 3, 60*time.Second)
 	assert.Equal(t, circuitClosed, cb.State())
-	assert.NoError(t, cb.Allow())
+	require.NoError(t, cb.Allow())
 }
 
 // TestCircuitBreaker_OpensAfterThreshold verifies the circuit opens after N consecutive errors.
@@ -25,11 +25,11 @@ func TestCircuitBreaker_OpensAfterThreshold(t *testing.T) {
 
 	cb.RecordRateLimit(time.Time{})
 	assert.Equal(t, circuitClosed, cb.State(), "should remain CLOSED after 1 error")
-	assert.NoError(t, cb.Allow())
+	require.NoError(t, cb.Allow())
 
 	cb.RecordRateLimit(time.Time{})
 	assert.Equal(t, circuitClosed, cb.State(), "should remain CLOSED after 2 errors")
-	assert.NoError(t, cb.Allow())
+	require.NoError(t, cb.Allow())
 
 	cb.RecordRateLimit(time.Time{})
 	assert.Equal(t, circuitOpen, cb.State(), "should be OPEN after 3 errors (threshold)")
@@ -76,7 +76,7 @@ func TestCircuitBreaker_HalfOpenAfterCooldown(t *testing.T) {
 	// After cooldown: transitions to HALF-OPEN.
 	fakeNow = fakeNow.Add(31 * time.Second)
 	err := cb.Allow()
-	assert.NoError(t, err, "should allow probe after cooldown")
+	require.NoError(t, err, "should allow probe after cooldown")
 	assert.Equal(t, circuitHalfOpen, cb.State(), "should be HALF-OPEN after cooldown")
 }
 
@@ -138,7 +138,7 @@ func TestCircuitBreaker_ResetAtFromHeader(t *testing.T) {
 	// After the reset time: transitions to HALF-OPEN (before cooldown would elapse).
 	fakeNow = fakeNow.Add(20 * time.Second)
 	err := cb.Allow()
-	assert.NoError(t, err, "should allow probe after reset time")
+	require.NoError(t, err, "should allow probe after reset time")
 	assert.Equal(t, circuitHalfOpen, cb.State())
 }
 
@@ -186,16 +186,16 @@ func TestCircuitBreaker_ErrOpenMessage(t *testing.T) {
 	t.Run("no reset time", func(t *testing.T) {
 		t.Parallel()
 		err := &ErrCircuitOpen{ServerID: "github"}
-		assert.ErrorContains(t, err, "github")
-		assert.ErrorContains(t, err, "OPEN")
+		require.ErrorContains(t, err, "github")
+		require.ErrorContains(t, err, "OPEN")
 	})
 
 	t.Run("with reset time", func(t *testing.T) {
 		t.Parallel()
 		reset := time.Now().Add(30 * time.Second)
 		err := &ErrCircuitOpen{ServerID: "github", ResetAt: reset}
-		assert.ErrorContains(t, err, "github")
-		assert.ErrorContains(t, err, "retry after")
+		require.ErrorContains(t, err, "github")
+		require.ErrorContains(t, err, "retry after")
 	})
 }
 
@@ -548,8 +548,8 @@ func TestCircuitBreaker_HalfOpenAllowsWhenNoProbeInFlight(t *testing.T) {
 	cb.mu.Unlock()
 
 	err := cb.Allow()
-	assert.NoError(t, err, "HALF-OPEN with no probe in flight should allow through defensively")
-	assert.Error(t, cb.Allow(), "a second request should be rejected while the defensive probe is in flight")
+	require.NoError(t, err, "HALF-OPEN with no probe in flight should allow through defensively")
+	require.Error(t, cb.Allow(), "a second request should be rejected while the defensive probe is in flight")
 }
 
 // TestCircuitBreaker_RecordRateLimitWhenAlreadyOpen verifies that calling RecordRateLimit
@@ -616,7 +616,7 @@ func TestCircuitBreaker_StrandedHalfOpenProbeRecovers(t *testing.T) {
 	// rather than staying wedged forever.
 	now = base.Add(6 * time.Hour)
 	err = cb.Allow()
-	assert.NoError(t, err, "a stranded HALF-OPEN probe should eventually release a fresh probe")
+	require.NoError(t, err, "a stranded HALF-OPEN probe should eventually release a fresh probe")
 	assert.Equal(t, circuitHalfOpen, cb.State(), "should remain HALF-OPEN awaiting the new probe's outcome")
 
 	// The new probe succeeds, closing the circuit.
@@ -711,6 +711,6 @@ func TestCircuitBreaker_RecordProbeReleased_AllowsFreshProbe(t *testing.T) {
 	cb.RecordProbeReleased()
 
 	now = base.Add(2*time.Minute + 6*time.Second)
-	assert.NoError(t, cb.Allow(), "a released probe should allow a fresh request immediately")
+	require.NoError(t, cb.Allow(), "a released probe should allow a fresh request immediately")
 	assert.Equal(t, circuitHalfOpen, cb.State())
 }

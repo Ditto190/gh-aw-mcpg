@@ -102,7 +102,7 @@ func TestConvertToCallToolResult_VariousFormats(t *testing.T) {
 			result, err := mcp.ConvertToCallToolResult(tt.input)
 
 			if tt.expectError {
-				assert.Error(t, err)
+				require.Error(t, err)
 				assert.Nil(t, result, "Result should be nil on error")
 				return
 			}
@@ -149,7 +149,7 @@ func TestConvertToCallToolResult_NilCheck(t *testing.T) {
 	// Additional validations
 	assert.False(t, result.IsError, "Should not be an error")
 	assert.NotNil(t, result.Content, "Content should not be nil")
-	assert.Greater(t, len(result.Content), 0, "Should have content items")
+	assert.NotEmpty(t, result.Content)
 
 	t.Log("✓ CallToolResult is properly non-nil and structured")
 }
@@ -184,7 +184,7 @@ func TestNewErrorCallToolResult(t *testing.T) {
 
 			// Verify the error is returned
 			if tt.err == nil {
-				assert.Error(t, err, "nil error input should return a fallback error")
+				require.Error(t, err, "nil error input should return a fallback error")
 			} else {
 				assert.Equal(t, tt.err, err, "Error should be returned as-is")
 			}

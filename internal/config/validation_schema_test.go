@@ -384,7 +384,7 @@ func TestValidateJSONSchema(t *testing.T) {
 			if tt.shouldErr {
 				require.Error(t, err)
 				if tt.errorMsg != "" {
-					assert.ErrorContains(t, err, tt.errorMsg)
+					require.ErrorContains(t, err, tt.errorMsg)
 				}
 			} else {
 				assert.NoError(t, err, "Unexpected error")
@@ -622,7 +622,7 @@ func TestValidateStringPatterns(t *testing.T) {
 			if tt.shouldErr {
 				require.Error(t, err)
 				if tt.errorMsg != "" {
-					assert.ErrorContains(t, err, tt.errorMsg)
+					require.ErrorContains(t, err, tt.errorMsg)
 				}
 			} else {
 				assert.NoError(t, err, "Unexpected error")
@@ -724,11 +724,11 @@ func TestSchemaCaching(t *testing.T) {
 	// that multiple calls to getOrCompileSchema return the same schema instance
 
 	schema1, err1 := getOrCompileSchema()
-	assert.NoError(t, err1, "First schema compilation should succeed")
+	require.NoError(t, err1, "First schema compilation should succeed")
 	assert.NotNil(t, schema1, "First schema should not be nil")
 
 	schema2, err2 := getOrCompileSchema()
-	assert.NoError(t, err2, "Second schema retrieval should succeed")
+	require.NoError(t, err2, "Second schema retrieval should succeed")
 	assert.NotNil(t, schema2, "Second schema should not be nil")
 
 	// Verify that both calls return the exact same schema instance (pointer equality)
@@ -760,7 +760,7 @@ func TestSchemaConfiguration(t *testing.T) {
 
 	// Verify that the schema compiles and validates correctly
 	schema, err := getOrCompileSchema()
-	assert.NoError(t, err, "Schema compilation should succeed")
+	require.NoError(t, err, "Schema compilation should succeed")
 	assert.NotNil(t, schema, "Schema should not be nil")
 
 	// Verify that the schema works for validation
@@ -778,7 +778,7 @@ func TestSchemaConfiguration(t *testing.T) {
 }`
 
 	err = validateJSONSchema([]byte(validConfig))
-	assert.NoError(t, err, "Validation should succeed with embedded schema")
+	require.NoError(t, err, "Validation should succeed with embedded schema")
 
 	t.Logf("Embedded schema size: %d bytes", len(embeddedSchemaBytes))
 }
@@ -893,7 +893,7 @@ func TestSchema_OpenTelemetryConfig(t *testing.T) {
 			if tt.shouldErr {
 				require.Error(t, err, "expected schema validation to fail")
 				if tt.errMsg != "" {
-					assert.ErrorContains(t, err, tt.errMsg)
+					require.ErrorContains(t, err, tt.errMsg)
 				}
 			} else {
 				assert.NoError(t, err, "expected schema validation to pass")

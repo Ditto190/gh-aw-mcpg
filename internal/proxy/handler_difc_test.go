@@ -305,7 +305,7 @@ func TestHandleWithDIFC_Collection_FilterMode_ItemsFiltered(t *testing.T) {
 	require.NoError(t, json.NewDecoder(w.Body).Decode(&got))
 	// Only the public item remains
 	assert.Len(t, got, 1)
-	assert.Equal(t, float64(1), got[0].(map[string]interface{})["id"])
+	assert.InEpsilon(t, 1.0, got[0].(map[string]interface{})["id"], 1e-9)
 }
 
 // ─── Phase 5: GraphQL collection, no items filtered → original body ───────────
@@ -354,7 +354,7 @@ func TestHandleWithDIFC_GraphQL_Collection_NoItemsFiltered(t *testing.T) {
 	data := got["data"].(map[string]interface{})
 	repo := data["repository"].(map[string]interface{})
 	issues := repo["issues"].(map[string]interface{})
-	assert.Equal(t, float64(1), issues["totalCount"])
+	assert.InEpsilon(t, 1.0, issues["totalCount"], 1e-9)
 }
 
 // ─── Phase 5: GraphQL collection, some items filtered → rebuilt response ──────
@@ -405,7 +405,7 @@ func TestHandleWithDIFC_GraphQL_Collection_ItemsFiltered(t *testing.T) {
 	repo := data["repository"].(map[string]interface{})
 	issues := repo["issues"].(map[string]interface{})
 	// totalCount updated to reflect only accessible nodes
-	assert.Equal(t, float64(1), issues["totalCount"])
+	assert.InEpsilon(t, 1.0, issues["totalCount"], 1e-9)
 	nodes := issues["nodes"].([]interface{})
 	assert.Len(t, nodes, 1)
 	assert.Equal(t, "I_1", nodes[0].(map[string]interface{})["id"])
@@ -722,7 +722,7 @@ func TestHandleWithDIFC_ArtifactDownloadDeniedBeforeForward(t *testing.T) {
 		upstreamCalls++
 		w.WriteHeader(http.StatusOK)
 		_, err := w.Write([]byte("should-not-be-returned"))
-		require.NoError(t, err)
+		assert.NoError(t, err)
 	}))
 	defer upstream.Close()
 

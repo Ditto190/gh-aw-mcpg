@@ -202,7 +202,7 @@ func TestVerifySinkVisibility(t *testing.T) {
 
 func TestVerifySinkVisibility_EmptyNWO(t *testing.T) {
 	_, _, err := VerifySinkVisibility(context.Background(), "http://unused", "", "token xyz", "private")
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no repository configured")
 }
 
@@ -215,7 +215,7 @@ func TestVerifySinkVisibility_APIError(t *testing.T) {
 	effective, overridden, err := VerifySinkVisibility(
 		context.Background(), server.URL, "octo/broken", "token xyz", "private",
 	)
-	assert.Error(t, err)
+	require.Error(t, err)
 	// On error, returns configured value unchanged
 	assert.Equal(t, "private", effective)
 	assert.False(t, overridden)

@@ -86,7 +86,7 @@ func TestCallTool_ArgumentsPassed(t *testing.T) {
 			testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				// Read the request body
 				bodyBytes, err := io.ReadAll(r.Body)
-				require.NoError(t, err, "Failed to read request body")
+				assert.NoError(t, err, "Failed to read request body")
 
 				// Ignore requests with empty or non-JSON bodies (e.g. GET/DELETE from
 				// the Streamable HTTP transport during session lifecycle management).
@@ -125,7 +125,10 @@ func TestCallTool_ArgumentsPassed(t *testing.T) {
 				if method == "tools/call" {
 					// Extract the arguments from the params
 					params, ok := request["params"].(map[string]interface{})
-					require.True(t, ok, "params should be a map")
+					if !assert.True(t, ok, "params should be a map") {
+						http.Error(w, "params should be a map", http.StatusBadRequest)
+						return
+					}
 
 					// Store the arguments we received
 					if args, ok := params["arguments"].(map[string]interface{}); ok {

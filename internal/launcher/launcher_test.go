@@ -337,9 +337,9 @@ func TestGetOrLaunch_InvalidServerID(t *testing.T) {
 
 	// Try to get a non-existent server
 	conn, err := GetOrLaunch(l, "non-existent-server")
-	assert.Error(t, err, "Expected error for non-existent server")
+	require.Error(t, err, "Expected error for non-existent server")
 	assert.Nil(t, conn, "Expected nil connection")
-	assert.ErrorIs(t, err, ErrServerNotFound)
+	require.ErrorIs(t, err, ErrServerNotFound)
 	assert.ErrorContains(t, err, "not found in config")
 }
 
@@ -467,7 +467,7 @@ func TestClose(t *testing.T) {
 
 	// Verify connections map is cleared
 	l.mu.RLock()
-	assert.Len(t, l.connections, 0, "Connections should be cleared after Close")
+	assert.Empty(t, l.connections, "Connections should be cleared after Close")
 	l.mu.RUnlock()
 }
 
@@ -537,10 +537,10 @@ func TestGetOrLaunchForSession_InvalidServer(t *testing.T) {
 
 	// Try to get connection for non-existent server
 	conn, err := GetOrLaunchForSession(l, "nonexistent", "session1")
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, conn)
-	assert.ErrorIs(t, err, ErrServerNotFound)
-	assert.ErrorContains(t, err, "not found in config")
+	require.ErrorIs(t, err, ErrServerNotFound)
+	require.ErrorContains(t, err, "not found in config")
 }
 
 func TestLauncher_StartupTimeout(t *testing.T) {
@@ -687,8 +687,8 @@ func TestGetOrLaunch_OIDCMissingProvider(t *testing.T) {
 
 	_, err := GetOrLaunch(l, "oidc-server")
 	require.Error(t, err)
-	assert.ErrorContains(t, err, "OIDC authentication")
-	assert.ErrorContains(t, err, "ACTIONS_ID_TOKEN_REQUEST_URL")
+	require.ErrorContains(t, err, "OIDC authentication")
+	require.ErrorContains(t, err, "ACTIONS_ID_TOKEN_REQUEST_URL")
 }
 
 func TestGetOrLaunch_OIDCAudienceDefaultsToURL(t *testing.T) {

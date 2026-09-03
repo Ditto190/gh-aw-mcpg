@@ -334,9 +334,9 @@ func TestNewWasmGuardFromBytes(t *testing.T) {
 		backend := &mockBackendCaller{}
 
 		guard, err := NewWasmGuardFromBytes(ctx, "test-guard", []byte{}, backend)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Nil(t, guard)
-		assert.ErrorContains(t, err, "instantiate WASM module")
+		require.ErrorContains(t, err, "instantiate WASM module")
 	})
 
 	t.Run("invalid WASM bytes returns error", func(t *testing.T) {
@@ -345,7 +345,7 @@ func TestNewWasmGuardFromBytes(t *testing.T) {
 
 		invalidWasm := []byte{0x00, 0x01, 0x02, 0x03} // Not valid WASM
 		guard, err := NewWasmGuardFromBytes(ctx, "test-guard", invalidWasm, backend)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Nil(t, guard)
 	})
 
@@ -454,8 +454,8 @@ func TestBuildStrictLabelAgentPayloadExtended(t *testing.T) {
 
 		_, err := buildStrictLabelAgentPayload(policy)
 		require.Error(t, err)
-		assert.ErrorContains(t, err, "outdated")
-		assert.ErrorContains(t, err, "remove legacy envelope")
+		require.ErrorContains(t, err, "outdated")
+		require.ErrorContains(t, err, "remove legacy envelope")
 	})
 
 	t.Run("policy without allow-only returns error", func(t *testing.T) {
@@ -824,8 +824,8 @@ func TestBuildStrictLabelAgentPayloadExtended(t *testing.T) {
 
 		_, err := buildStrictLabelAgentPayload(policy)
 		require.Error(t, err)
-		assert.ErrorContains(t, err, "trusted-users")
-		assert.ErrorContains(t, err, "non-empty string")
+		require.ErrorContains(t, err, "trusted-users")
+		require.ErrorContains(t, err, "non-empty string")
 	})
 
 	t.Run("trusted-users with empty string entry returns error", func(t *testing.T) {
@@ -853,8 +853,8 @@ func TestBuildStrictLabelAgentPayloadExtended(t *testing.T) {
 
 		_, err := buildStrictLabelAgentPayload(policy)
 		require.Error(t, err)
-		assert.ErrorContains(t, err, "blocked-users")
-		assert.ErrorContains(t, err, "non-empty string")
+		require.ErrorContains(t, err, "blocked-users")
+		require.ErrorContains(t, err, "non-empty string")
 	})
 
 	t.Run("blocked-users with empty string entry returns error", func(t *testing.T) {
@@ -882,8 +882,8 @@ func TestBuildStrictLabelAgentPayloadExtended(t *testing.T) {
 
 		_, err := buildStrictLabelAgentPayload(policy)
 		require.Error(t, err)
-		assert.ErrorContains(t, err, "approval-labels")
-		assert.ErrorContains(t, err, "non-empty string")
+		require.ErrorContains(t, err, "approval-labels")
+		require.ErrorContains(t, err, "non-empty string")
 	})
 
 	t.Run("refusal-labels with non-string entry returns error", func(t *testing.T) {
@@ -897,8 +897,8 @@ func TestBuildStrictLabelAgentPayloadExtended(t *testing.T) {
 
 		_, err := buildStrictLabelAgentPayload(policy)
 		require.Error(t, err)
-		assert.ErrorContains(t, err, "refusal-labels")
-		assert.ErrorContains(t, err, "non-empty string")
+		require.ErrorContains(t, err, "refusal-labels")
+		require.ErrorContains(t, err, "non-empty string")
 	})
 
 	t.Run("unknown allow-only key returns error", func(t *testing.T) {
@@ -1213,7 +1213,7 @@ func TestWasmGuardName(t *testing.T) {
 
 	t.Run("returns empty name if not set", func(t *testing.T) {
 		guard := &WasmGuard{}
-		assert.Equal(t, "", guard.Name())
+		assert.Empty(t, guard.Name())
 	})
 }
 
@@ -1236,9 +1236,9 @@ func TestParsePathLabeledResponse(t *testing.T) {
 	t.Run("invalid JSON returns error", func(t *testing.T) {
 		invalidJSON := []byte("not json")
 		result, err := parsePathLabeledResponse(invalidJSON, nil)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Nil(t, result)
-		assert.ErrorContains(t, err, "parse path labels")
+		require.ErrorContains(t, err, "parse path labels")
 	})
 
 	t.Run("valid path labels with nil original data returns collection labeled data", func(t *testing.T) {
@@ -1261,7 +1261,7 @@ func TestMockBackendCaller(t *testing.T) {
 
 		assert.True(t, mock.called)
 		assert.Equal(t, "test_tool", mock.toolName)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, map[string]interface{}{"status": "ok"}, result)
 	})
 
@@ -1274,7 +1274,7 @@ func TestMockBackendCaller(t *testing.T) {
 		result, err := mock.CallTool(ctx, "test_tool", nil)
 
 		assert.True(t, mock.called)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Nil(t, result)
 	})
 }
@@ -1420,7 +1420,7 @@ func TestBufferRetryLogic(t *testing.T) {
 		g.mu.Unlock()
 
 		require.Error(t, callErr)
-		assert.ErrorIs(t, callErr, sentinel)
+		require.ErrorIs(t, callErr, sentinel)
 		assert.Contains(t, callErr.Error(), "unavailable after a previous trap")
 	})
 }
@@ -1607,7 +1607,7 @@ func TestIsWasmTrap(t *testing.T) {
 
 		_, err = mod.ExportedFunction("trap").Call(ctx)
 		require.Error(t, err)
-		assert.ErrorContains(t, err, "wasm error:")
+		require.ErrorContains(t, err, "wasm error:")
 		assert.True(t, isWasmTrap(err))
 	})
 
@@ -1669,8 +1669,8 @@ func TestWasmGuardFailedState(t *testing.T) {
 		ctx := context.Background()
 		_, err := g.callWasmFunction(ctx, "label_response", []byte(`{}`))
 		require.Error(t, err)
-		assert.ErrorContains(t, err, "unavailable after a previous trap")
-		assert.ErrorContains(t, err, "test-guard")
+		require.ErrorContains(t, err, "unavailable after a previous trap")
+		require.ErrorContains(t, err, "test-guard")
 	})
 
 	t.Run("failed guard wraps original trap error", func(t *testing.T) {
@@ -1783,7 +1783,7 @@ func TestWasmGuardCompilationCache(t *testing.T) {
 
 		err := ConfigureGlobalCompilationCache(ctx, "")
 		require.Error(t, err)
-		assert.ErrorContains(t, err, "failed to close previous compilation cache")
+		require.ErrorContains(t, err, "failed to close previous compilation cache")
 		assert.Same(t, failingCache, globalCompilationCache)
 		assert.True(t, failingCache.closed, "expected failing cache to be closed")
 	})
@@ -1807,10 +1807,10 @@ func TestWasmGuardCompilationCache(t *testing.T) {
 
 		err := ConfigureGlobalCompilationCache(ctx, "")
 		require.Error(t, err)
-		assert.ErrorContains(t, err, "failed to close previous compilation cache")
-		assert.ErrorContains(t, err, "failed to close replacement compilation cache")
-		assert.ErrorIs(t, err, previousCloseErr)
-		assert.ErrorIs(t, err, replacementCloseErr)
+		require.ErrorContains(t, err, "failed to close previous compilation cache")
+		require.ErrorContains(t, err, "failed to close replacement compilation cache")
+		require.ErrorIs(t, err, previousCloseErr)
+		require.ErrorIs(t, err, replacementCloseErr)
 		assert.True(t, failingCache.closed, "expected previous cache to be closed")
 		assert.True(t, replacementFailingCache.closed, "expected replacement cache to be closed")
 		assert.Same(t, failingCache, globalCompilationCache, "global cache must remain the old cache when both closes fail")
@@ -1881,7 +1881,7 @@ func TestWasmGuardCompilationCache(t *testing.T) {
 
 		err := CloseGlobalCompilationCache(ctx)
 		require.Error(t, err)
-		assert.ErrorContains(t, err, "close failed")
+		require.ErrorContains(t, err, "close failed")
 		assert.Nil(t, globalCompilationCache)
 		assert.Equal(t, 1, cache.closeCnt)
 	})

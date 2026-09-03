@@ -1,7 +1,6 @@
 package config
 
 import (
-	"errors"
 	"os"
 	"testing"
 
@@ -368,9 +367,9 @@ func TestConvertStdinServerConfig_EnvExpansionError(t *testing.T) {
 	}
 
 	result, err := convertStdinServerConfig("test", server, nil)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, result)
-	assert.ErrorContains(t, err, "UNDEFINED_VAR")
+	require.ErrorContains(t, err, "UNDEFINED_VAR")
 }
 
 // TestConvertStdinServerConfig_HeadersExpansion tests HTTP headers expansion.
@@ -425,9 +424,9 @@ func TestConvertStdinServerConfig_HeadersExpansionError(t *testing.T) {
 	}
 
 	result, err := convertStdinServerConfig("test", server, nil)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, result)
-	assert.ErrorContains(t, err, "MISSING_TOKEN")
+	require.ErrorContains(t, err, "MISSING_TOKEN")
 }
 
 // TestConvertStdinServerConfig_ValidationError tests validation error handling.
@@ -469,9 +468,9 @@ func TestConvertStdinServerConfig_ValidationError(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			result, err := convertStdinServerConfig("test", tc.server, nil)
-			assert.Error(t, err)
+			require.Error(t, err)
 			assert.Nil(t, result)
-			assert.ErrorContains(t, err, tc.errorContains)
+			require.ErrorContains(t, err, tc.errorContains)
 		})
 	}
 }
@@ -493,7 +492,7 @@ func TestConvertStdinServerConfig_StdioWithAuth(t *testing.T) {
 	assert.Nil(t, result)
 
 	var valErr *ValidationError
-	require.True(t, errors.As(err, &valErr), "expected a *ValidationError, got %T: %v", err, err)
+	require.ErrorAs(t, err, &valErr, "expected a *ValidationError, got %T: %v", err, err)
 	assert.Equal(t, "auth", valErr.Field)
 	assert.Contains(t, valErr.Message, "server type \"stdio\"")
 	assert.Contains(t, valErr.JSONPath, "mcpServers.my-server")
@@ -609,25 +608,25 @@ func TestConvertStdinServerConfig_ArgsOrdering(t *testing.T) {
 	containerIdx := indexOf(result.Args, "test/container:latest")
 	entryArgIdx := indexOf(result.Args, "entry-arg1")
 
-	assert.True(t, runIdx >= 0, "run should be present")
-	assert.True(t, containerIdx >= 0, "container should be present")
+	assert.GreaterOrEqual(t, runIdx, 0, "run should be present")
+	assert.GreaterOrEqual(t, containerIdx, 0, "container should be present")
 
 	// Standard Docker args (run, --rm, -i) should come first
-	assert.True(t, runIdx < entrypointIdx, "run should come before entrypoint")
+	assert.Less(t, runIdx, entrypointIdx, "run should come before entrypoint")
 
 	// Entrypoint should come before container
 	if entrypointIdx >= 0 {
-		assert.True(t, entrypointIdx < containerIdx, "entrypoint should come before container")
+		assert.Less(t, entrypointIdx, containerIdx, "entrypoint should come before container")
 	}
 
 	// Mounts should come before container
 	if mountIdx >= 0 {
-		assert.True(t, mountIdx < containerIdx, "mounts should come before container")
+		assert.Less(t, mountIdx, containerIdx, "mounts should come before container")
 	}
 
 	// Entrypoint args should come after container
 	if entryArgIdx >= 0 && containerIdx >= 0 {
-		assert.True(t, entryArgIdx > containerIdx, "entrypoint args should come after container")
+		assert.Greater(t, entryArgIdx, containerIdx, "entrypoint args should come after container")
 	}
 }
 
@@ -753,7 +752,7 @@ func TestBuildStdioServerConfig_WithEntrypoint(t *testing.T) {
 
 	// --entrypoint value must appear immediately after --entrypoint flag
 	entrypointFlagIdx := indexOf(args, "--entrypoint")
-	require.True(t, entrypointFlagIdx >= 0, "--entrypoint flag must be present")
+	require.GreaterOrEqual(t, entrypointFlagIdx, 0, "--entrypoint flag must be present")
 	assert.Equal(t, "/usr/bin/node", args[entrypointFlagIdx+1])
 }
 
@@ -784,7 +783,7 @@ func TestBuildStdioServerConfig_WithSingleMount(t *testing.T) {
 
 	// -v value must immediately follow the -v flag
 	vIdx := indexOf(args, "-v")
-	require.True(t, vIdx >= 0, "-v flag must be present")
+	require.GreaterOrEqual(t, vIdx, 0, "-v flag must be present")
 	assert.Equal(t, "/host/data:/container/data:ro", args[vIdx+1])
 }
 
@@ -897,8 +896,8 @@ func TestBuildStdioServerConfig_WithAdditionalArgs(t *testing.T) {
 	// Additional args must come before the container name
 	containerIdx := indexOf(args, "my/image:latest")
 	networkIdx := indexOf(args, "--network")
-	require.True(t, containerIdx > 0)
-	require.True(t, networkIdx > 0)
+	require.Positive(t, containerIdx)
+	require.Positive(t, networkIdx)
 	assert.Less(t, networkIdx, containerIdx, "--network must appear before container name")
 }
 
@@ -914,11 +913,11 @@ func TestBuildStdioServerConfig_WithEntrypointArgs(t *testing.T) {
 
 	args := result.Args
 	containerIdx := indexOf(args, "my/image:latest")
-	require.True(t, containerIdx >= 0, "container must be in args")
+	require.GreaterOrEqual(t, containerIdx, 0, "container must be in args")
 
 	// Entrypoint args must come after container
 	serveIdx := indexOf(args, "--serve")
-	require.True(t, serveIdx >= 0, "--serve must be in args")
+	require.GreaterOrEqual(t, serveIdx, 0, "--serve must be in args")
 	assert.Greater(t, serveIdx, containerIdx, "--serve must appear after container name")
 	assert.Equal(t, args[:containerIdx], result.ContainerRuntimeArgs)
 
@@ -1004,11 +1003,11 @@ func TestBuildStdioServerConfig_ArgumentOrdering(t *testing.T) {
 	containerIdx := indexOf(args, "my/image:latest")
 	epArgIdx := indexOf(args, "--ep-arg")
 
-	require.True(t, entrypointFlagIdx >= 0)
-	require.True(t, mountFlagIdx >= 0)
-	require.True(t, extraFlagIdx >= 0)
-	require.True(t, containerIdx >= 0)
-	require.True(t, epArgIdx >= 0)
+	require.GreaterOrEqual(t, entrypointFlagIdx, 0)
+	require.GreaterOrEqual(t, mountFlagIdx, 0)
+	require.GreaterOrEqual(t, extraFlagIdx, 0)
+	require.GreaterOrEqual(t, containerIdx, 0)
+	require.GreaterOrEqual(t, epArgIdx, 0)
 
 	// Entrypoint override comes before mounts
 	assert.Less(t, entrypointFlagIdx, mountFlagIdx, "--entrypoint must come before -v")
@@ -1491,7 +1490,7 @@ func TestConvertStdinConfig_PayloadSizeThreshold(t *testing.T) {
 		}
 
 		err := validateGatewayConfig(gateway)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	})
 }
 
@@ -1588,7 +1587,7 @@ func TestConvertStdinConfig_GatewayOptionalFields(t *testing.T) {
 func TestValidateGatewayConfig_ContainerRuntime(t *testing.T) {
 	t.Run("accepts docker and podman", func(t *testing.T) {
 		err := validateGatewayConfig(&StdinGatewayConfig{AgentID: "test-agent", ContainerRuntime: "docker"})
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		err = validateGatewayConfig(&StdinGatewayConfig{AgentID: "test-agent", ContainerRuntime: "podman"})
 		assert.NoError(t, err)

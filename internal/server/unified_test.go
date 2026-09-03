@@ -175,7 +175,7 @@ func TestRequireSession_DifcDisabled(t *testing.T) {
 	sessionID := "new-session"
 	ctxWithNewSession := context.WithValue(ctx, SessionIDContextKey, sessionID)
 	err = us.requireSession(ctxWithNewSession)
-	assert.NoError(t, err, "requireSession() should auto-create session when DIFC is disabled")
+	require.NoError(t, err, "requireSession() should auto-create session when DIFC is disabled")
 
 	// Verify session was created
 	us.sessionMu.RLock()

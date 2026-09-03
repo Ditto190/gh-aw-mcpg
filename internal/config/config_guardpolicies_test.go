@@ -629,7 +629,7 @@ func TestValidateWriteSinkPolicy_WildcardAccept(t *testing.T) {
 func TestValidateWriteSinkPolicy_WildcardWithOtherEntries(t *testing.T) {
 	policy := &WriteSinkPolicy{Accept: []string{"*", "private:org/repo"}}
 	err := ValidateWriteSinkPolicy(policy)
-	assert.Error(t, err, `accept=["*", "private:org/repo"] should be invalid`)
+	require.Error(t, err, `accept=["*", "private:org/repo"] should be invalid`)
 	assert.ErrorContains(t, err, "wildcard")
 }
 
@@ -638,8 +638,8 @@ func TestValidateWriteSinkPolicy_WildcardWithOtherEntries(t *testing.T) {
 func TestValidateWriteSinkPolicy_WildcardNotFirst(t *testing.T) {
 	policy := &WriteSinkPolicy{Accept: []string{"private:org/repo", "*"}}
 	err := ValidateWriteSinkPolicy(policy)
-	assert.Error(t, err, `accept=["private:org/repo", "*"] should be invalid`)
-	assert.ErrorContains(t, err, "wildcard")
+	require.Error(t, err, `accept=["private:org/repo", "*"] should be invalid`)
+	require.ErrorContains(t, err, "wildcard")
 }
 
 // TestValidateWriteSinkPolicy_SinkVisibility_Valid tests that valid sink-visibility
@@ -677,8 +677,8 @@ func TestValidateWriteSinkPolicy_SinkVisibility_Invalid(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			policy := &WriteSinkPolicy{Accept: []string{"*"}, SinkVisibility: tc.visibility}
 			err := ValidateWriteSinkPolicy(policy)
-			assert.Error(t, err, "sink-visibility=%q should be invalid", tc.visibility)
-			assert.ErrorContains(t, err, "sink-visibility")
+			require.Error(t, err, "sink-visibility=%q should be invalid", tc.visibility)
+			require.ErrorContains(t, err, "sink-visibility")
 		})
 	}
 }

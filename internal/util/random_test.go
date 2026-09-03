@@ -178,7 +178,7 @@ func TestRandomHexWithFallback_NegativeFallsBack(t *testing.T) {
 	// The fallback produces a valid 32-character hex string (pid + nanoseconds encoded).
 	assert.NotEmpty(t, result, "fallback should produce a non-empty string")
 	_, err := hex.DecodeString(result)
-	assert.NoError(t, err, "fallback should produce valid hex")
+	require.NoError(t, err, "fallback should produce valid hex")
 	assert.Len(t, result, 32, "fallback should produce 32 hex chars (16 bytes)")
 }
 
@@ -197,7 +197,7 @@ func TestRandomHexFromReader(t *testing.T) {
 		result, err := randomHexFromReader(16, errReader{err: readErr})
 		require.Error(t, err)
 		assert.Empty(t, result)
-		assert.ErrorIs(t, err, readErr, "original error should be wrapped")
+		require.ErrorIs(t, err, readErr, "original error should be wrapped")
 		assert.ErrorContains(t, err, "16")
 	})
 
@@ -244,7 +244,7 @@ func TestRandomBytesFromReader(t *testing.T) {
 		result, err := randomBytesFromReader(16, errReader{err: readErr})
 		require.Error(t, err)
 		assert.Nil(t, result)
-		assert.ErrorIs(t, err, readErr, "original error should be wrapped")
+		require.ErrorIs(t, err, readErr, "original error should be wrapped")
 		assert.ErrorContains(t, err, "16")
 	})
 
@@ -373,7 +373,7 @@ func TestRandomBigIntFromRandFunc(t *testing.T) {
 			return nil, randErr
 		})
 		require.Error(t, err)
-		assert.ErrorIs(t, err, randErr)
+		require.ErrorIs(t, err, randErr)
 		assert.Contains(t, err.Error(), "128 bits")
 	})
 

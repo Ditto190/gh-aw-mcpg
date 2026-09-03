@@ -232,6 +232,6 @@ func TestGatewayWithResources(t *testing.T) {
 	require.NoError(t, err, "Failed to read resource")
 
 	require.Len(t, result.Contents, 1, "Expected 1 content item")
-	assert.Equal(t, `{"setting": "value"}`, result.Contents[0].Text)
+	assert.JSONEq(t, `{"setting": "value"}`, result.Contents[0].Text)
 	t.Logf("✓ Resource content validated: %s", result.Contents[0].Text)
 }

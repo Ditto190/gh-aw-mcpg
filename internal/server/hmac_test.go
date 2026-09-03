@@ -92,8 +92,8 @@ func TestHMACMiddleware_ValidSignature_GETWithBody(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		body, err := io.ReadAll(r.Body)
-		require.NoError(t, err)
-		assert.Equal(t, `{"method":"test"}`, string(body))
+		assert.NoError(t, err)
+		assert.Equal(t, `{"method":"test"}`, string(body)) //nolint:testifylint // signed body must be restored byte-for-byte
 		w.WriteHeader(http.StatusOK)
 	})
 	wrapped := hmacMiddleware(testHMACSecret, handler)

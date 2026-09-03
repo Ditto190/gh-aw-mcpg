@@ -84,7 +84,7 @@ func TestMarshalToResponse(t *testing.T) {
 		assert.Equal(t, "2.0", response.JSONRPC)
 		assert.Equal(t, 1, response.ID)
 		// nil marshals to "null" in JSON
-		assert.Equal(t, json.RawMessage("null"), response.Result)
+		assert.JSONEq(t, "null", string(response.Result))
 	})
 
 	t.Run("successful marshal with empty struct", func(t *testing.T) {
@@ -109,9 +109,9 @@ func TestMarshalToResponse(t *testing.T) {
 
 		response, err := marshalToResponse(unmarshalableResult)
 
-		assert.Error(t, err, "Should fail to marshal channel type")
+		require.Error(t, err, "Should fail to marshal channel type")
 		assert.Nil(t, response, "Response should be nil on error")
-		assert.ErrorContains(t, err, "failed to marshal result", "Error should mention marshal failure")
+		require.ErrorContains(t, err, "failed to marshal result", "Error should mention marshal failure")
 	})
 }
 
@@ -127,9 +127,9 @@ func TestMarshalToResponse_UnmarshalableStruct(t *testing.T) {
 
 	response, err := marshalToResponse(result)
 
-	assert.Error(t, err, "Should fail to marshal struct with channel")
+	require.Error(t, err, "Should fail to marshal struct with channel")
 	assert.Nil(t, response, "Response should be nil on error")
-	assert.ErrorContains(t, err, "failed to marshal result", "Error should mention marshal failure")
+	require.ErrorContains(t, err, "failed to marshal result", "Error should mention marshal failure")
 }
 
 // TestMarshalToResponse_ResponseStructure validates the Response structure

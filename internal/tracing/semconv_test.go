@@ -185,8 +185,7 @@ func TestSchemaURL_MatchesPinnedSemconvVersion(t *testing.T) {
 
 	sdkResource, err := resource.New(context.Background(), resource.WithTelemetrySDK())
 	require.NoError(t, err)
-	assert.Equal(t, sdkResource.SchemaURL(), SchemaURL,
-		"otel/sdk semconv version changed; update the semconv import in semconv.go to match")
+	assert.Equal(t, SchemaURL, sdkResource.SchemaURL(), "otel/sdk semconv version changed; update the semconv import in semconv.go to match")
 	assert.Equal(t, expectedSchemaURL, SchemaURL,
 		"semconv version changed; update semconv.go imports and expectedSchemaURL together")
 

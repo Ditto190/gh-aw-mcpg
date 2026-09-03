@@ -149,7 +149,7 @@ func TestDoGitHubGET(t *testing.T) {
 
 	t.Run("returns error on invalid URL", func(t *testing.T) {
 		resp, err := DoGitHubGET(context.Background(), "://bad-url", "/path", "token x")
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Nil(t, resp)
 	})
 
@@ -172,7 +172,7 @@ func TestDoGitHubGET(t *testing.T) {
 		defer upstream.Close()
 
 		resp, err := DoGitHubGET(context.Background(), upstream.URL, "/path", "token x")
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Nil(t, resp)
 	})
 
@@ -186,7 +186,7 @@ func TestDoGitHubGET(t *testing.T) {
 		defer upstream.Close()
 
 		resp, err := DoGitHubGET(ctx, upstream.URL, "/path", "token x")
-		assert.ErrorIs(t, err, context.Canceled)
+		require.ErrorIs(t, err, context.Canceled)
 		assert.Nil(t, resp)
 	})
 }

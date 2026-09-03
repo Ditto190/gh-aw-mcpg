@@ -233,7 +233,7 @@ func TestVerifySinkVisibilityAtRuntime_EmptyConfiguredVisibility(t *testing.T) {
 	})
 
 	result := us.verifySinkVisibilityAtRuntime("github", "")
-	assert.Equal(t, "", result,
+	assert.Empty(t, result,
 		"should return empty string unchanged when configuredVisibility is empty")
 }
 

@@ -55,7 +55,7 @@ func TestReplaceNodesArray(t *testing.T) {
 		result := replaceNodesArray(obj, items2)
 		assert.True(t, result)
 		assert.Equal(t, items2, obj["nodes"])
-		assert.Equal(t, float64(2), obj["totalCount"])
+		assert.InEpsilon(t, 2.0, obj["totalCount"], 1e-9)
 	})
 
 	t.Run("nodes replaced but no totalCount key — field not created", func(t *testing.T) {
@@ -86,7 +86,7 @@ func TestReplaceNodesArray(t *testing.T) {
 		result := replaceNodesArray(obj, items2)
 		assert.True(t, result)
 		assert.Equal(t, items2, obj["edges"])
-		assert.Equal(t, float64(2), obj["totalCount"])
+		assert.InEpsilon(t, 2.0, obj["totalCount"], 1e-9)
 	})
 
 	t.Run("edges replaced but no totalCount key — field not created", func(t *testing.T) {
@@ -132,7 +132,7 @@ func TestReplaceNodesArray(t *testing.T) {
 		result := replaceNodesArray(outer, items2)
 		assert.True(t, result)
 		assert.Equal(t, items2, inner["nodes"])
-		assert.Equal(t, float64(2), inner["totalCount"])
+		assert.InEpsilon(t, 2.0, inner["totalCount"], 1e-9)
 	})
 
 	t.Run("recursion: nodes found two levels deep", func(t *testing.T) {
@@ -185,7 +185,7 @@ func TestReplaceNodesArray(t *testing.T) {
 		result := replaceNodesArray(obj, empty)
 		assert.True(t, result)
 		assert.Equal(t, empty, obj["nodes"])
-		assert.Equal(t, float64(0), obj["totalCount"])
+		assert.InDelta(t, float64(0), obj["totalCount"], 0)
 	})
 
 	t.Run("replacement with nil items sets nodes to nil", func(t *testing.T) {

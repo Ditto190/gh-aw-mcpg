@@ -282,8 +282,7 @@ func TestOverrideToPublicScope_NoExistingPolicy_InjectsDefault(t *testing.T) {
 	us.overrideToPublicScope("github")
 
 	// The server should now have an allow-only policy injected
-	assert.Greater(t, len(cfg.Servers["github"].GuardPolicies), 0,
-		"overrideToPublicScope should inject a default policy when none exists")
+	assert.NotEmpty(t, cfg.Servers["github"].GuardPolicies, "overrideToPublicScope should inject a default policy when none exists")
 
 	policy, err := config.ParseServerGuardPolicy("github", cfg.Servers["github"].GuardPolicies)
 	require.NoError(t, err)

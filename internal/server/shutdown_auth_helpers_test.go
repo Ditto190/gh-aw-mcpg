@@ -281,7 +281,7 @@ func TestApplyAuthIfConfigured_WithKeyEnforcesAuth(t *testing.T) {
 
 func TestGetToolResponseFilter_NilConfig(t *testing.T) {
 	result := getToolResponseFilter(nil, "any-server", "any-tool")
-	assert.Equal(t, "", result)
+	assert.Empty(t, result)
 }
 
 func TestGetToolResponseFilter_UnknownServer(t *testing.T) {
@@ -291,7 +291,7 @@ func TestGetToolResponseFilter_UnknownServer(t *testing.T) {
 		},
 	}
 	result := getToolResponseFilter(cfg, "unknown", "search")
-	assert.Equal(t, "", result)
+	assert.Empty(t, result)
 }
 
 func TestGetToolResponseFilter_UnknownTool(t *testing.T) {
@@ -301,7 +301,7 @@ func TestGetToolResponseFilter_UnknownTool(t *testing.T) {
 		},
 	}
 	result := getToolResponseFilter(cfg, "github", "other-tool")
-	assert.Equal(t, "", result)
+	assert.Empty(t, result)
 }
 
 func TestGetToolResponseFilter_KnownToolReturnsFilter(t *testing.T) {
@@ -331,7 +331,7 @@ func TestGetToolResponseFilter_NilServerCfg(t *testing.T) {
 		},
 	}
 	result := getToolResponseFilter(cfg, "broken", "any")
-	assert.Equal(t, "", result)
+	assert.Empty(t, result)
 }
 
 func TestGetToolResponseFilter_EmptyFiltersMap(t *testing.T) {
@@ -341,7 +341,7 @@ func TestGetToolResponseFilter_EmptyFiltersMap(t *testing.T) {
 		},
 	}
 	result := getToolResponseFilter(cfg, "github", "search")
-	assert.Equal(t, "", result)
+	assert.Empty(t, result)
 }
 
 func TestGetToolResponseFilter_MultipleServersIsolated(t *testing.T) {
@@ -353,5 +353,5 @@ func TestGetToolResponseFilter_MultipleServersIsolated(t *testing.T) {
 	}
 	assert.Equal(t, ".alpha", getToolResponseFilter(cfg, "alpha", "tool"))
 	assert.Equal(t, ".beta", getToolResponseFilter(cfg, "beta", "tool"))
-	assert.Equal(t, "", getToolResponseFilter(cfg, "alpha", "other"))
+	assert.Empty(t, getToolResponseFilter(cfg, "alpha", "other"))
 }

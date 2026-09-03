@@ -179,7 +179,7 @@ func TestValidateStringArrayField(t *testing.T) {
 			if tt.wantErr {
 				require.Error(t, err)
 				if tt.errContains != "" {
-					assert.ErrorContains(t, err, tt.errContains)
+					require.ErrorContains(t, err, tt.errContains)
 				}
 			} else {
 				require.NoError(t, err)

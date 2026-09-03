@@ -211,22 +211,22 @@ assert.JSONEq(t, expectedJSON, actualJSON)
 
 **golangci-lint** is integrated and runs as part of `make lint`:
 - Configuration: `.golangci.yml` (version 2 format)
-- Enabled linters: `misspell`, `unconvert`
-- Disabled linters: `gosec`, `testifylint`, `errcheck`, `gocritic`, `revive`
+- Enabled linters: `misspell`, `testifylint`, `unconvert`
+- Disabled linters: `gosec`, `errcheck`, `gocritic`, `revive`
 - Install: `make install` (installs golangci-lint v2.13.2)
 - Run manually: `golangci-lint run --timeout=5m`
 
-**testifylint**: Available but disabled due to requiring extensive test refactoring across the codebase.
+**testifylint**: Enabled by default and configured with `enable-all: true`.
 - Automatically catches common testify mistakes:
   - Suggests `assert.Empty(t, x)` instead of `assert.True(t, len(x) == 0)`
   - Suggests `assert.True(t, x)` instead of `assert.Equal(t, true, x)`
   - Suggests `assert.NoError(t, err)` instead of `assert.Nil(t, err)`
 - To run on specific files: `golangci-lint run --enable=testifylint --timeout=5m <files>`
-- To run on entire codebase: `golangci-lint run --enable=testifylint --timeout=5m`
+- To run on the entire codebase: `golangci-lint run --enable=testifylint --timeout=5m`
 
-**Note**: Some linters (gosec, testifylint, errcheck) are disabled to minimize noise. Enable them for stricter checks:
+**Note**: Some linters (`gosec`, `errcheck`) are disabled to minimize noise. Enable them for stricter checks:
 ```bash
-golangci-lint run --enable=gosec,testifylint,errcheck --timeout=5m
+golangci-lint run --enable=gosec,errcheck --timeout=5m
 ```
 
 ## Test Structure

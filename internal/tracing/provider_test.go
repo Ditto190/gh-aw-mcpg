@@ -178,7 +178,7 @@ func TestInitProvider_NoEndpoint_ReturnsNoopProvider(t *testing.T) {
 	require.NotNil(t, provider)
 
 	// Noop provider must shut down cleanly
-	assert.NoError(t, provider.Shutdown(ctx))
+	require.NoError(t, provider.Shutdown(ctx))
 
 	// The global provider should be a noop provider
 	tp := otel.GetTracerProvider()
@@ -700,12 +700,10 @@ func TestInitProvider_WithHeaders(t *testing.T) {
 			select {
 			case headers := <-received:
 				for key, expectedValue := range tt.expectedValues {
-					assert.Equal(t, expectedValue, headers.Get(key),
-						fmt.Sprintf("%s header must be forwarded to the OTLP collector", key))
+					assert.Equalf(t, expectedValue, headers.Get(key), "%s header must be forwarded to the OTLP collector", key)
 				}
 				for _, key := range tt.notExpectedSet {
-					assert.Empty(t, headers.Get(key),
-						fmt.Sprintf("%s header must not be sent when pair is malformed", key))
+					assert.Emptyf(t, headers.Get(key), "%s header must not be sent when pair is malformed", key)
 				}
 			case <-time.After(3 * time.Second):
 				t.Fatal("timed out waiting for OTLP export request — headers test is non-deterministic")

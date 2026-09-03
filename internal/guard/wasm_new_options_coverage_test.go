@@ -153,8 +153,8 @@ func TestNewWasmGuardWithOptions_StartFunctionOnly(t *testing.T) {
 
 	_, err := NewWasmGuardWithOptions(ctx, "start-only", startOnlyGuardWasm, &mockBackendCaller{}, opts)
 	require.Error(t, err)
-	assert.ErrorContains(t, err, "standard Go")
-	assert.ErrorContains(t, err, "TinyGo")
+	require.ErrorContains(t, err, "standard Go")
+	require.ErrorContains(t, err, "TinyGo")
 }
 
 // TestNewWasmGuardWithOptions_MissingLabelAgent verifies the error when a WASM module
@@ -187,8 +187,8 @@ func TestNewWasmGuardWithOptions_InvalidExportedFunctionSignature(t *testing.T) 
 
 	_, err := NewWasmGuardWithOptions(ctx, "bad-signature", invalidSignatureWasm, &mockBackendCaller{}, opts)
 	require.Error(t, err)
-	assert.ErrorContains(t, err, "must have signature (i32,i32,i32,i32)->i32")
-	assert.ErrorContains(t, err, "label_resource")
+	require.ErrorContains(t, err, "must have signature (i32,i32,i32,i32)->i32")
+	require.ErrorContains(t, err, "label_resource")
 }
 
 // labelResponseBadSignatureWasm exports label_resource (valid signature), label_agent
@@ -275,7 +275,6 @@ func TestNewWasmGuardWithOptions_InvalidSignature_TableDriven(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert := assert.New(t)
 			require := require.New(t)
 
 			ctx := context.Background()
@@ -283,8 +282,8 @@ func TestNewWasmGuardWithOptions_InvalidSignature_TableDriven(t *testing.T) {
 
 			_, err := NewWasmGuardWithOptions(ctx, "bad-signature-"+tt.wantFnName, tt.wasm, &mockBackendCaller{}, opts)
 			require.Error(err)
-			assert.ErrorContains(err, "must have signature (i32,i32,i32,i32)->i32")
-			assert.ErrorContains(err, tt.wantFnName)
+			require.ErrorContains(err, "must have signature (i32,i32,i32,i32)->i32")
+			require.ErrorContains(err, tt.wantFnName)
 		})
 	}
 }

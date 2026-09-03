@@ -219,7 +219,7 @@ func TestNewProxyCmd_DefaultFlagValues(t *testing.T) {
 				t.Helper()
 				val, err := cmd.Flags().GetString("github-token")
 				require.NoError(t, err)
-				assert.Equal(t, "", val, "--github-token default should be empty")
+				assert.Empty(t, val, "--github-token default should be empty")
 			},
 		},
 		{
@@ -228,7 +228,7 @@ func TestNewProxyCmd_DefaultFlagValues(t *testing.T) {
 				t.Helper()
 				val, err := cmd.Flags().GetString("github-api-url")
 				require.NoError(t, err)
-				assert.Equal(t, "", val, "--github-api-url default should be empty")
+				assert.Empty(t, val, "--github-api-url default should be empty")
 			},
 		},
 		{
@@ -246,7 +246,7 @@ func TestNewProxyCmd_DefaultFlagValues(t *testing.T) {
 				t.Helper()
 				val, err := cmd.Flags().GetString("tls-dir")
 				require.NoError(t, err)
-				assert.Equal(t, "", val, "--tls-dir default should be empty")
+				assert.Empty(t, val, "--tls-dir default should be empty")
 			},
 		},
 		{
@@ -274,8 +274,7 @@ func TestNewProxyCmd_DefaultFlagValues(t *testing.T) {
 				t.Helper()
 				val, err := cmd.Flags().GetFloat64("otlp-sample-rate")
 				require.NoError(t, err)
-				assert.Equal(t, config.DefaultTracingSampleRate, val,
-					"--otlp-sample-rate default should be DefaultTracingSampleRate")
+				assert.InEpsilon(t, config.DefaultTracingSampleRate, val, 1e-9, "--otlp-sample-rate default should be DefaultTracingSampleRate")
 			},
 		},
 		{
@@ -284,7 +283,7 @@ func TestNewProxyCmd_DefaultFlagValues(t *testing.T) {
 				t.Helper()
 				val, err := cmd.Flags().GetString("policy")
 				require.NoError(t, err)
-				assert.Equal(t, "", val, "--policy default should be empty when env var is unset")
+				assert.Empty(t, val, "--policy default should be empty when env var is unset")
 			},
 		},
 	}

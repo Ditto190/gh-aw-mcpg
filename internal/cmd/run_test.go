@@ -128,7 +128,7 @@ func TestRun_GracefulShutdownViaContextCancellation(t *testing.T) {
 
 	select {
 	case err := <-errCh:
-		assert.NoError(t, err, "run() should shut down gracefully without error when context is cancelled")
+		require.NoError(t, err, "run() should shut down gracefully without error when context is cancelled")
 	case <-time.After(5 * time.Second):
 		t.Fatal("run() did not return within the expected shutdown window")
 	}
@@ -300,7 +300,7 @@ url = "http://127.0.0.1:1"
 
 	select {
 	case err := <-errCh:
-		assert.NoError(t, err, "run() should start successfully with only gateway.agentIds configured")
+		require.NoError(t, err, "run() should start successfully with only gateway.agentIds configured")
 	case <-time.After(5 * time.Second):
 		t.Fatal("run() did not return within the expected shutdown window")
 	}

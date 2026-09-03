@@ -524,7 +524,7 @@ func TestShutdownErrorJSON(t *testing.T) {
 	// Verify it's valid JSON
 	var parsed map[string]interface{}
 	err := json.Unmarshal([]byte(shutdownErrorJSON), &parsed)
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	// Verify structure
 	assert.Equal("Gateway is shutting down", parsed["error"])

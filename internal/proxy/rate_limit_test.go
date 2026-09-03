@@ -33,7 +33,7 @@ func TestInjectRetryAfterIfRateLimited(t *testing.T) {
 		assert.NotEmpty(t, retryAfter, "Retry-After should be set on 429")
 		secs, err := strconv.Atoi(retryAfter)
 		require.NoError(t, err)
-		assert.Greater(t, secs, 0, "Retry-After should be positive")
+		assert.Positive(t, secs, "Retry-After should be positive")
 	})
 
 	t.Run("X-Ratelimit-Remaining 0 injects Retry-After", func(t *testing.T) {

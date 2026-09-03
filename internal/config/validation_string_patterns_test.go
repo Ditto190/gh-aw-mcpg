@@ -782,8 +782,8 @@ func TestValidateStringPatternsComprehensive(t *testing.T) {
 
 			err := validateRuleBasedPatterns(config)
 			require.Error(t, err)
-			assert.ErrorContains(t, err, "mcpServers.my-server.container", "Error should include JSON path")
-			assert.ErrorContains(t, err, "Suggestion", "Error should include suggestion")
+			require.ErrorContains(t, err, "mcpServers.my-server.container", "Error should include JSON path")
+			require.ErrorContains(t, err, "Suggestion", "Error should include suggestion")
 		})
 
 		t.Run("mount format validation is handled separately", func(t *testing.T) {
@@ -817,8 +817,8 @@ func TestValidateStringPatternsComprehensive(t *testing.T) {
 
 			err := validateRuleBasedPatterns(config)
 			require.Error(t, err)
-			assert.ErrorContains(t, err, "Suggestion", "Error should include suggestion")
-			assert.ErrorContains(t, err, "localhost", "Suggestion should mention localhost")
+			require.ErrorContains(t, err, "Suggestion", "Error should include suggestion")
+			require.ErrorContains(t, err, "localhost", "Suggestion should mention localhost")
 		})
 	})
 }

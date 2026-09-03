@@ -172,7 +172,7 @@ func TestStreamArtifactResponse_Success(t *testing.T) {
 		w.Header().Set("X-GitHub-Request-Id", "abc123")
 		w.WriteHeader(http.StatusOK)
 		_, err := w.Write(wantBody)
-		require.NoError(t, err)
+		assert.NoError(t, err)
 	}))
 	defer upstream.Close()
 

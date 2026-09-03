@@ -610,7 +610,7 @@ func TestFormatValidationErrorRecursive(t *testing.T) {
 func TestFormatSchemaError(t *testing.T) {
 	t.Run("nil error returns nil", func(t *testing.T) {
 		result := formatSchemaError(nil)
-		assert.Nil(t, result, "formatSchemaError(nil) should return nil")
+		assert.NoError(t, result, "formatSchemaError(nil) should return nil")
 	})
 
 	t.Run("jsonschema.ValidationError includes version and location info", func(t *testing.T) {

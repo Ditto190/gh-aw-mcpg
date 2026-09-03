@@ -33,7 +33,7 @@ func TestGenerateRandomAgentID_RandomFailure(t *testing.T) {
 
 	assert.Empty(t, key, "key should be empty when random generation fails")
 	require.Error(t, err, "should return an error when the random source fails")
-	assert.ErrorIs(t, err, syntheticErr, "error should wrap the underlying source error")
+	require.ErrorIs(t, err, syntheticErr, "error should wrap the underlying source error")
 	assert.Contains(t, err.Error(), "failed to generate random agent ID",
 		"error message should describe the failure context")
 }

@@ -126,7 +126,7 @@ func TestNewSession(t *testing.T) {
 func TestNewSession_EmptyToken(t *testing.T) {
 	s := NewSession("session-no-token", "")
 	require.NotNil(t, s)
-	assert.Equal(t, "", s.Token)
+	assert.Empty(t, s.Token)
 	assert.Equal(t, "session-no-token", s.SessionID)
 }
 
@@ -243,8 +243,8 @@ func TestEnsureSessionDirectory(t *testing.T) {
 		us2.payloadDir = fileInsteadOfDir
 
 		err := us2.ensureSessionDirectory("my-session")
-		assert.Error(t, err, "should fail when payloadDir is a regular file")
-		assert.ErrorContains(t, err, "failed to check session directory")
+		require.Error(t, err, "should fail when payloadDir is a regular file")
+		require.ErrorContains(t, err, "failed to check session directory")
 	})
 
 	t.Run("returns error when directory cannot be created (MkdirAll failure)", func(t *testing.T) {
@@ -266,8 +266,8 @@ func TestEnsureSessionDirectory(t *testing.T) {
 		us2.payloadDir = readOnly
 
 		err := us2.ensureSessionDirectory("blocked-session")
-		assert.Error(t, err, "should fail when payloadDir is not writable")
-		assert.ErrorContains(t, err, "failed to create session directory")
+		require.Error(t, err, "should fail when payloadDir is not writable")
+		require.ErrorContains(t, err, "failed to create session directory")
 	})
 
 	t.Run("returns error on Stat failure that is not IsNotExist", func(t *testing.T) {
@@ -277,8 +277,8 @@ func TestEnsureSessionDirectory(t *testing.T) {
 		us2.payloadDir = t.TempDir()
 
 		err := us2.ensureSessionDirectory("session\x00bad")
-		assert.Error(t, err, "should fail for a session ID that makes the path invalid")
-		assert.ErrorContains(t, err, "failed to check session directory")
+		require.Error(t, err, "should fail for a session ID that makes the path invalid")
+		require.ErrorContains(t, err, "failed to check session directory")
 	})
 }
 

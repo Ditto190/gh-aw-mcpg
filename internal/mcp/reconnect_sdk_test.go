@@ -102,9 +102,9 @@ func TestReconnectSDKTransport_UnsupportedTransportType(t *testing.T) {
 	err := conn.reconnectSDKTransport()
 
 	require.Error(t, err)
-	assert.ErrorContains(t, err, "cannot reconnect")
-	assert.ErrorContains(t, err, "unsupported transport type")
-	assert.ErrorContains(t, err, "unsupported-type")
+	require.ErrorContains(t, err, "cannot reconnect")
+	require.ErrorContains(t, err, "unsupported transport type")
+	require.ErrorContains(t, err, "unsupported-type")
 }
 
 // TestReconnectSDKTransport_EmptyTransportType verifies the default branch with an
@@ -192,7 +192,7 @@ func TestCallSDKMethodWithReconnect_NoReconnectOnNonSessionError(t *testing.T) {
 
 	require.Error(t, err)
 	assert.Nil(t, result)
-	assert.ErrorContains(t, err, "internal server error")
+	require.ErrorContains(t, err, "internal server error")
 	// Verify the error is NOT a session-not-found error (reconnect should not have been attempted).
 	assert.False(t, isSessionNotFoundError(err))
 	assert.Equal(t, int32(1), initCount.Load(), "reconnect should not have been attempted")

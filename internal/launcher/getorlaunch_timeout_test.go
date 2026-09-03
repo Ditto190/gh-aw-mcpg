@@ -41,9 +41,9 @@ func TestGetOrLaunch_Timeout(t *testing.T) {
 	elapsed := time.Since(start)
 
 	// Verify timeout error
-	assert.Error(t, err, "Expected timeout error")
+	require.Error(t, err, "Expected timeout error")
 	assert.Nil(t, conn, "Connection should be nil on timeout")
-	assert.ErrorContains(t, err, "timeout", "Error should mention timeout")
+	require.ErrorContains(t, err, "timeout", "Error should mention timeout")
 
 	// Verify timeout duration is approximately correct (within reasonable margin)
 	expectedTimeout := 1 * time.Second
@@ -106,14 +106,14 @@ func TestGetOrLaunch_TimeoutMultipleServers(t *testing.T) {
 
 	// Both servers should timeout independently
 	conn1, err1 := GetOrLaunch(l, "timeout-server-1")
-	assert.Error(t, err1)
+	require.Error(t, err1)
 	assert.Nil(t, conn1)
-	assert.ErrorContains(t, err1, "timeout")
+	require.ErrorContains(t, err1, "timeout")
 
 	conn2, err2 := GetOrLaunch(l, "timeout-server-2")
-	assert.Error(t, err2)
+	require.Error(t, err2)
 	assert.Nil(t, conn2)
-	assert.ErrorContains(t, err2, "timeout")
+	require.ErrorContains(t, err2, "timeout")
 
 	// Verify no connections were stored
 	l.mu.RLock()
@@ -199,9 +199,9 @@ func TestGetOrLaunch_TimeoutDoesNotBlockOtherServers(t *testing.T) {
 
 	// First server should timeout
 	conn1, err1 := GetOrLaunch(l, "timeout-server")
-	assert.Error(t, err1)
+	require.Error(t, err1)
 	assert.Nil(t, conn1)
-	assert.ErrorContains(t, err1, "timeout")
+	require.ErrorContains(t, err1, "timeout")
 
 	// Second server should work independently (HTTP connection)
 	conn2, err2 := GetOrLaunch(l, "working-server")
@@ -235,7 +235,7 @@ func TestGetOrLaunch_ShortTimeout(t *testing.T) {
 	defer l.Close()
 
 	conn, err := GetOrLaunch(l, "instant-timeout-server")
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, conn)
 	assert.ErrorContains(t, err, "timeout")
 }
@@ -265,9 +265,9 @@ func TestGetOrLaunch_LongTimeout(t *testing.T) {
 	elapsed := time.Since(start)
 
 	// Should timeout after approximately 2 seconds
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, conn)
-	assert.ErrorContains(t, err, "timeout")
+	require.ErrorContains(t, err, "timeout")
 
 	// Verify we waited approximately 2 seconds, not 10
 	assert.Greater(t, elapsed, 2*time.Second)
@@ -299,7 +299,7 @@ func TestGetOrLaunch_TimeoutWithInvalidCommand(t *testing.T) {
 	elapsed := time.Since(start)
 
 	// Should fail quickly with command error, not timeout
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, conn)
 	// Should fail immediately (command not found), not wait for timeout
 	assert.Less(t, elapsed, 2*time.Second, "Invalid command should fail fast, not timeout")
@@ -372,7 +372,7 @@ func TestGetOrLaunch_ContextCancellationDuringTimeout(t *testing.T) {
 	elapsed := time.Since(start)
 
 	// Should fail (either timeout or context cancellation)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, conn)
 
 	// Should complete within reasonable time (not wait full 10 second timeout)

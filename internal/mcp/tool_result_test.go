@@ -330,7 +330,7 @@ func TestParseToolArguments(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, args)
 		assert.Equal(t, "search term", args["query"])
-		assert.Equal(t, float64(10), args["limit"])
+		assert.InEpsilon(t, 10.0, args["limit"], 1e-9)
 		active, ok := args["active"].(bool)
 		require.True(t, ok, "expected active to be a bool")
 		assert.True(t, active)
@@ -363,7 +363,7 @@ func TestParseToolArguments(t *testing.T) {
 
 		args, err := ParseToolArguments(req)
 
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Nil(t, args)
 		assert.ErrorContains(t, err, "failed to parse arguments")
 	})
@@ -409,7 +409,7 @@ func TestNewErrorCallToolResult(t *testing.T) {
 		require.NotNil(t, result)
 		assert.True(t, result.IsError)
 		assert.Nil(t, second)
-		assert.ErrorIs(t, returnedErr, inputErr)
+		require.ErrorIs(t, returnedErr, inputErr)
 
 		require.Len(t, result.Content, 1)
 		text, ok := result.Content[0].(*sdk.TextContent)
@@ -439,7 +439,7 @@ func TestNewErrorCallToolResult(t *testing.T) {
 
 		require.NotNil(t, result)
 		assert.True(t, result.IsError)
-		assert.ErrorIs(t, returnedErr, inputErr)
+		require.ErrorIs(t, returnedErr, inputErr)
 
 		require.Len(t, result.Content, 1)
 		text, ok := result.Content[0].(*sdk.TextContent)
@@ -454,9 +454,9 @@ func TestConvertToCallToolResult_MarshalError(t *testing.T) {
 	// Channels cannot be marshaled to JSON; json.Marshal returns an error.
 	result, err := ConvertToCallToolResult(make(chan int))
 
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, result)
-	assert.ErrorContains(t, err, "failed to marshal backend result")
+	require.ErrorContains(t, err, "failed to marshal backend result")
 }
 
 // TestDecodeContentData exercises all three branches of decodeContentData directly
@@ -489,7 +489,7 @@ func TestDecodeContentData(t *testing.T) {
 			// no "data" key
 		}
 		result, err := convertContentItem(ci)
-		assert.Error(t, err, "missing image data should produce an error")
+		require.Error(t, err, "missing image data should produce an error")
 		assert.Nil(t, result)
 	})
 
@@ -500,9 +500,9 @@ func TestDecodeContentData(t *testing.T) {
 			"data":     "!!!not-valid-base64!!!",
 		}
 		result, err := convertContentItem(ci)
-		assert.Error(t, err, "invalid base64 should produce an error")
+		require.Error(t, err, "invalid base64 should produce an error")
 		assert.Nil(t, result)
-		assert.ErrorContains(t, err, "failed to decode image data")
+		require.ErrorContains(t, err, "failed to decode image data")
 	})
 
 	t.Run("invalid base64 string in audio data returns error", func(t *testing.T) {
@@ -512,9 +512,9 @@ func TestDecodeContentData(t *testing.T) {
 			"data":     "!!!not-valid-base64!!!",
 		}
 		result, err := convertContentItem(ci)
-		assert.Error(t, err, "invalid base64 should produce an error")
+		require.Error(t, err, "invalid base64 should produce an error")
 		assert.Nil(t, result)
-		assert.ErrorContains(t, err, "failed to decode audio data")
+		require.ErrorContains(t, err, "failed to decode audio data")
 	})
 
 	t.Run("missing audio data field returns error", func(t *testing.T) {
@@ -524,9 +524,9 @@ func TestDecodeContentData(t *testing.T) {
 			// no "data" key
 		}
 		result, err := convertContentItem(ci)
-		assert.Error(t, err, "missing audio data should produce an error")
+		require.Error(t, err, "missing audio data should produce an error")
 		assert.Nil(t, result)
-		assert.ErrorContains(t, err, "failed to decode audio data")
+		require.ErrorContains(t, err, "failed to decode audio data")
 	})
 
 	t.Run("unsupported data type for image returns error", func(t *testing.T) {
@@ -537,9 +537,9 @@ func TestDecodeContentData(t *testing.T) {
 			"data":     42, // integer — not a valid data carrier
 		}
 		result, err := convertContentItem(ci)
-		assert.Error(t, err, "unsupported data type should produce an error")
+		require.Error(t, err, "unsupported data type should produce an error")
 		assert.Nil(t, result)
-		assert.ErrorContains(t, err, "failed to decode image data")
+		require.ErrorContains(t, err, "failed to decode image data")
 	})
 
 	t.Run("nil data value in image content returns error", func(t *testing.T) {
@@ -550,9 +550,9 @@ func TestDecodeContentData(t *testing.T) {
 			"data":     nil,
 		}
 		result, err := convertContentItem(ci)
-		assert.Error(t, err, "nil data value should produce an error")
+		require.Error(t, err, "nil data value should produce an error")
 		assert.Nil(t, result)
-		assert.ErrorContains(t, err, "failed to decode image data")
+		require.ErrorContains(t, err, "failed to decode image data")
 	})
 }
 
@@ -566,7 +566,7 @@ func TestConvertContentItem_ResourceMarshalError(t *testing.T) {
 		"resource": make(chan int),
 	}
 	result, err := convertContentItem(ci)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, result)
 	assert.ErrorContains(t, err, "failed to marshal resource")
 }
@@ -584,9 +584,9 @@ func TestConvertContentItem_ResourceUnmarshalError(t *testing.T) {
 		},
 	}
 	result, err := convertContentItem(ci)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, result)
-	assert.ErrorContains(t, err, "failed to parse resource")
+	require.ErrorContains(t, err, "failed to parse resource")
 }
 
 // TestConvertMapToCallToolResult_ContentItemCastFailure verifies that

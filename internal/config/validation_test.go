@@ -367,7 +367,7 @@ func TestValidateStdioServer(t *testing.T) {
 			if tt.shouldErr {
 				require.Error(t, err)
 				if tt.errorMsg != "" {
-					assert.ErrorContains(t, err, tt.errorMsg)
+					require.ErrorContains(t, err, tt.errorMsg)
 				}
 			} else {
 				assert.NoError(t, err)
@@ -529,7 +529,7 @@ func TestValidateGatewayConfig(t *testing.T) {
 			if tt.shouldErr {
 				require.Error(t, err)
 				if tt.errorMsg != "" {
-					assert.ErrorContains(t, err, tt.errorMsg)
+					require.ErrorContains(t, err, tt.errorMsg)
 				}
 			} else {
 				assert.NoError(t, err)
@@ -616,8 +616,8 @@ func TestLoadFromStdin_UndefinedVariable(t *testing.T) {
 
 	_, err := LoadFromStdin()
 	require.Error(t, err)
-	assert.ErrorContains(t, err, "UNDEFINED_GITHUB_TOKEN", "Error should mention the undefined variable")
-	assert.ErrorContains(t, err, "undefined environment variable", "Error should describe the issue")
+	require.ErrorContains(t, err, "UNDEFINED_GITHUB_TOKEN", "Error should mention the undefined variable")
+	require.ErrorContains(t, err, "undefined environment variable", "Error should describe the issue")
 }
 
 func TestLoadFromStdin_VariableExpansionInContainer(t *testing.T) {
@@ -811,7 +811,7 @@ func TestLoadFromStdin_ValidationErrors(t *testing.T) {
 			if tt.shouldErr {
 				require.Error(t, err)
 				if tt.errorMsg != "" {
-					assert.ErrorContains(t, err, tt.errorMsg)
+					require.ErrorContains(t, err, tt.errorMsg)
 				}
 			} else {
 				assert.NoError(t, err)
@@ -1004,7 +1004,7 @@ func TestValidateTOMLStdioContainerization(t *testing.T) {
 			if tt.shouldErr {
 				require.Error(t, err)
 				if tt.errorMsg != "" {
-					assert.ErrorContains(t, err, tt.errorMsg)
+					require.ErrorContains(t, err, tt.errorMsg)
 				}
 			} else {
 				assert.NoError(t, err)
@@ -1109,7 +1109,7 @@ func TestValidateAuthConfig(t *testing.T) {
 			if tt.shouldErr {
 				require.Error(t, err)
 				if tt.errMsg != "" {
-					assert.ErrorContains(t, err, tt.errMsg)
+					require.ErrorContains(t, err, tt.errMsg)
 				}
 			} else {
 				assert.NoError(t, err)
@@ -1207,7 +1207,7 @@ func TestValidatePerServerToolTimeout(t *testing.T) {
 			if tt.shouldErr {
 				require.Error(t, err)
 				if tt.errMsg != "" {
-					assert.ErrorContains(t, err, tt.errMsg)
+					require.ErrorContains(t, err, tt.errMsg)
 				}
 			} else {
 				assert.NoError(t, err)

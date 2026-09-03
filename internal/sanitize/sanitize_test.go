@@ -194,7 +194,7 @@ func TestSanitizeJSON(t *testing.T) {
 			// Result should always be valid JSON
 			var tmp interface{}
 			err := json.Unmarshal(result, &tmp)
-			assert.NoError(t, err, "Result should be valid JSON")
+			require.NoError(t, err, "Result should be valid JSON")
 		})
 	}
 }
@@ -238,7 +238,7 @@ func TestSanitizeJSONWithNestedStructures(t *testing.T) {
 	// Result should be valid JSON
 	var tmp interface{}
 	err := json.Unmarshal(result, &tmp)
-	assert.NoError(t, err, "Result should be valid JSON")
+	require.NoError(t, err, "Result should be valid JSON")
 }
 
 func TestSanitizeJSONCompactsMultiline(t *testing.T) {
@@ -261,7 +261,7 @@ func TestSanitizeJSONCompactsMultiline(t *testing.T) {
 	// Should still be valid JSON
 	var tmp interface{}
 	err := json.Unmarshal(result, &tmp)
-	assert.NoError(t, err, "Result should be valid JSON")
+	require.NoError(t, err, "Result should be valid JSON")
 
 	// Should contain expected values
 	assert.Contains(t, resultStr, "jsonrpc", "Result missing expected content 'jsonrpc'")

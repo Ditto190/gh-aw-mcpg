@@ -291,7 +291,7 @@ func TestSysInitHandler_NoToken(t *testing.T) {
 	sess, ok := us.sessions["no-token-session"]
 	us.sessionMu.RUnlock()
 	require.True(ok)
-	assert.Equal(t, "", sess.Token)
+	assert.Empty(t, sess.Token)
 }
 
 func TestSysInitHandler_EnsureSessionDirectoryFailure(t *testing.T) {
