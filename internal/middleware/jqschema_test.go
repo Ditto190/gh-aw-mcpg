@@ -1792,7 +1792,7 @@ func TestWrapToolHandler_FastPath_SkipsMarshal(t *testing.T) {
 	require.Len(t, result.Content, 1)
 	tc, ok := result.Content[0].(*sdk.TextContent)
 	require.True(t, ok, "fast path must preserve TextContent")
-	assert.Equal(t, innerText, tc.Text, "fast path must not rewrite text content")
+	assert.Equal(t, innerText, tc.Text, "fast path must not rewrite text content") //nolint:testifylint // fast path must preserve exact text
 
 	// data must be the original envelope map, not a PayloadMetadata.
 	_, isMetadata := data.(PayloadMetadata)
@@ -1834,7 +1834,7 @@ func TestWrapToolHandler_FastPath_SkipsMarshalForTypedContentSlice(t *testing.T)
 
 	tc, ok := result.Content[0].(*sdk.TextContent)
 	require.True(t, ok, "fast path must preserve TextContent for typed content slices")
-	assert.Equal(t, innerText, tc.Text)
+	assert.Equal(t, innerText, tc.Text) //nolint:testifylint // fast path must preserve exact text
 
 	_, isMetadata := data.(PayloadMetadata)
 	assert.False(t, isMetadata, "fast path must not produce PayloadMetadata for typed content slices")

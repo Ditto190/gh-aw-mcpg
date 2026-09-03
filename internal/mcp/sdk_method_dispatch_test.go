@@ -283,7 +283,7 @@ func TestSendRequestWithServerID_AgentTags_PlainJSONSuccess(t *testing.T) {
 	})
 
 	resp, err := conn.SendRequestWithServerID(ctx, "tools/list", nil, "sink-server")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	require.NotNil(t, resp)
 }
 

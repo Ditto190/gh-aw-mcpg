@@ -98,7 +98,7 @@ func TestLogRPCMessageJSONL(t *testing.T) {
 		assert.NotEmpty(entry.ServerID, "Line %d: missing server_id", lineCount)
 		assert.NotNil(entry.Payload, "Line %d: missing payload", lineCount)
 		_, tsErr := time.Parse(jsonTimestampLayout, entry.Timestamp)
-		assert.NoError(tsErr, "Line %d: timestamp must be ISO 8601 with milliseconds", lineCount)
+		require.NoError(tsErr, "Line %d: timestamp must be ISO 8601 with milliseconds", lineCount)
 		assert.Equal("rpc-message/v2", entry.Schema, "Line %d: expected schema rpc-message/v2", lineCount)
 
 		// Verify line-specific fields
@@ -652,7 +652,7 @@ func TestLogDifcFilteredItem_MultipleEntriesAuditTrail(t *testing.T) {
 		assert.Equal("difc-filtered/v2", line.Schema, "entry[%d] must have _schema=difc-filtered/v2", i)
 		assert.NotEmpty(line.Timestamp, "entry[%d] must have Timestamp", i)
 		_, tsErr := time.Parse(jsonTimestampLayout, line.Timestamp)
-		assert.NoError(tsErr, "entry[%d] timestamp must be ISO 8601 with milliseconds", i)
+		require.NoError(tsErr, "entry[%d] timestamp must be ISO 8601 with milliseconds", i)
 		assert.NotEmpty(line.Reason, "entry[%d] must have Reason", i)
 	}
 }
@@ -1020,7 +1020,7 @@ func TestLogDifcFilteredItem_SetsTimestampEventAndSchema(t *testing.T) {
 	assert.Equal(t, "difc-filtered/v2", got.Schema, "Schema must always be difc-filtered/v2")
 	assert.NotEmpty(t, got.Timestamp, "Timestamp must be set by LogDifcFilteredItem")
 	_, tsErr := time.Parse(jsonTimestampLayout, got.Timestamp)
-	assert.NoError(t, tsErr, "Timestamp must be ISO 8601 with milliseconds")
+	require.NoError(t, tsErr, "Timestamp must be ISO 8601 with milliseconds")
 	assert.Equal(t, "github", got.ServerID)
 	assert.Equal(t, "create_issue", got.ToolName)
 	assert.Equal(t, []string{"private:org/repo"}, got.SecrecyTags)
@@ -1087,7 +1087,7 @@ func TestLogUnrecognizedEndpointPassthrough_WritesCorrectFields(t *testing.T) {
 	assert.NotEmpty(t, got.Note)
 	assert.NotEmpty(t, got.Timestamp)
 	_, tsErr := time.Parse(jsonTimestampLayout, got.Timestamp)
-	assert.NoError(t, tsErr, "Timestamp must be ISO 8601 with milliseconds")
+	require.NoError(t, tsErr, "Timestamp must be ISO 8601 with milliseconds")
 
 	// Verify markdown output.
 	mdPath := filepath.Join(logDir, "gateway.md")

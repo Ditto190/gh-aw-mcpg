@@ -81,7 +81,7 @@ func TestPaginateAllExported(t *testing.T) {
 		}
 		items, err := PaginateAll(10, fetch)
 		require.Error(t, err)
-		assert.ErrorContains(t, err, "page 2 failed")
+		require.ErrorContains(t, err, "page 2 failed")
 		assert.Nil(t, items)
 	})
 
@@ -140,7 +140,7 @@ func TestPaginateAllExported(t *testing.T) {
 		}
 		items, err := PaginateAll(100, fetch)
 		require.Error(t, err)
-		assert.ErrorContains(t, err, "loop-cursor")
+		require.ErrorContains(t, err, "loop-cursor")
 		assert.Nil(t, items)
 	})
 
@@ -156,8 +156,8 @@ func TestPaginateAllExported(t *testing.T) {
 		}
 		_, err := PaginateAll(100, fetch)
 		require.Error(t, err)
-		assert.ErrorContains(t, err, cycleCursor)
-		assert.ErrorContains(t, err, "cyclical cursor")
+		require.ErrorContains(t, err, cycleCursor)
+		require.ErrorContains(t, err, "cyclical cursor")
 	})
 
 	t.Run("maxPages=1 succeeds when single page has no next cursor", func(t *testing.T) {
@@ -378,8 +378,8 @@ func TestPaginateAllHelper(t *testing.T) {
 		items, err := paginateAll("server1", "Tools", fetch)
 
 		require.Error(t, err)
-		assert.ErrorContains(t, err, "exceeded")
-		assert.ErrorContains(t, err, "page limit")
+		require.ErrorContains(t, err, "exceeded")
+		require.ErrorContains(t, err, "page limit")
 		assert.Nil(t, items)
 	})
 

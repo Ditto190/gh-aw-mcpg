@@ -102,7 +102,7 @@ func TestConvertToCallToolResult_VariousFormats(t *testing.T) {
 			result, err := mcp.ConvertToCallToolResult(tt.input)
 
 			if tt.expectError {
-				assert.Error(t, err)
+				require.Error(t, err)
 				assert.Nil(t, result, "Result should be nil on error")
 				return
 			}

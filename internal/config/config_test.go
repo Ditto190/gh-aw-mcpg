@@ -208,7 +208,7 @@ func TestLoadFromStdin_DirectCommand(t *testing.T) {
 	// Command field is no longer supported in stdin JSON format - schema validation rejects it
 	require.Error(t, err)
 
-	assert.ErrorContains(t, err, "validation error", "Expected validation error")
+	require.ErrorContains(t, err, "validation error", "Expected validation error")
 
 	// Config should be nil on validation error
 	assert.Nil(t, cfg, "Config should be nil when validation fails")

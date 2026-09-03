@@ -169,7 +169,7 @@ func TestExpandRawJSONVariables(t *testing.T) {
 			if tt.shouldErr {
 				require.Error(t, err)
 				if tt.errMsg != "" {
-					assert.ErrorContains(t, err, tt.errMsg, "Error message should mention the undefined variable")
+					require.ErrorContains(t, err, tt.errMsg, "Error message should mention the undefined variable")
 				}
 				assert.Nil(t, result, "Result should be nil on error")
 			} else {

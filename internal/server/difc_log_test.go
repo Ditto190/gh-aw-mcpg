@@ -607,10 +607,10 @@ func TestBuildDIFCSingleItemFilteredError_IntegrityViolation(t *testing.T) {
 	err := buildDIFCSingleItemFilteredError(detail)
 
 	require.Error(t, err)
-	assert.ErrorContains(t, err, "[Filtered]")
-	assert.ErrorContains(t, err, "issue:org/repo#42")
-	assert.ErrorContains(t, err, "integrity policy")
-	assert.ErrorContains(t, err, "integrity too low for agent context")
+	require.ErrorContains(t, err, "[Filtered]")
+	require.ErrorContains(t, err, "issue:org/repo#42")
+	require.ErrorContains(t, err, "integrity policy")
+	require.ErrorContains(t, err, "integrity too low for agent context")
 }
 
 // TestBuildDIFCSingleItemFilteredError_SecrecyViolation verifies that a secrecy
@@ -621,10 +621,10 @@ func TestBuildDIFCSingleItemFilteredError_SecrecyViolation(t *testing.T) {
 	err := buildDIFCSingleItemFilteredError(detail)
 
 	require.Error(t, err)
-	assert.ErrorContains(t, err, "[Filtered]")
-	assert.ErrorContains(t, err, "resource:actions_get")
-	assert.ErrorContains(t, err, "secrecy policy")
-	assert.ErrorContains(t, err, "secrecy requirements not met")
+	require.ErrorContains(t, err, "[Filtered]")
+	require.ErrorContains(t, err, "resource:actions_get")
+	require.ErrorContains(t, err, "secrecy policy")
+	require.ErrorContains(t, err, "secrecy requirements not met")
 }
 
 // TestBuildDIFCSingleItemFilteredError_NoDescription verifies that a missing description
@@ -639,9 +639,9 @@ func TestBuildDIFCSingleItemFilteredError_NoDescription(t *testing.T) {
 	err := buildDIFCSingleItemFilteredError(detail)
 
 	require.Error(t, err)
-	assert.ErrorContains(t, err, "[Filtered]")
-	assert.ErrorContains(t, err, "resource exists but is not accessible")
-	assert.ErrorContains(t, err, "integrity policy")
+	require.ErrorContains(t, err, "[Filtered]")
+	require.ErrorContains(t, err, "resource exists but is not accessible")
+	require.ErrorContains(t, err, "integrity policy")
 }
 
 // TestBuildDIFCSingleItemFilteredError_NoReason verifies that a missing reason still

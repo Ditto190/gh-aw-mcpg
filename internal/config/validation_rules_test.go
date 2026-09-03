@@ -1020,8 +1020,8 @@ func TestRequiredStringField(t *testing.T) {
 
 			if tt.shouldErr {
 				require.NotNil(t, err, "Expected validation error but got none")
-				assert.ErrorContains(t, err, tt.errMsg)
-				assert.ErrorContains(t, err, tt.jsonPath)
+				require.ErrorContains(t, err, tt.errMsg)
+				require.ErrorContains(t, err, tt.jsonPath)
 				assert.Equal(t, tt.fieldName, err.Field)
 				assert.Equal(t, tt.suggestion, err.Suggestion)
 			} else {
@@ -1085,7 +1085,7 @@ func TestNonEmptyString(t *testing.T) {
 
 			if tt.shouldErr {
 				require.NotNil(t, err, "Expected validation error but got none")
-				assert.ErrorContains(t, err, tt.errMsg)
+				require.ErrorContains(t, err, tt.errMsg)
 				assert.ErrorContains(t, err, tt.jsonPath)
 			} else {
 				require.NoError(t, validationErrAsError(err), "Unexpected validation error")
@@ -1225,7 +1225,7 @@ func TestAbsolutePath(t *testing.T) {
 
 			if tt.shouldErr {
 				require.NotNil(t, err, "Expected validation error but got none")
-				assert.ErrorContains(t, err, tt.errMsg)
+				require.ErrorContains(t, err, tt.errMsg)
 				assert.ErrorContains(t, err, tt.jsonPath)
 			} else {
 				require.NoError(t, validationErrAsError(err), "Unexpected validation error")

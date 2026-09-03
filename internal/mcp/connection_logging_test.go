@@ -34,7 +34,7 @@ func TestLogInboundRPCResponseFromResult_LogsMarshaledResponseAndReturnsResultAn
 	result, err := logInboundRPCResponseFromResult("test-server", expectedResult, expectedErr, nil)
 
 	assert.Same(expectedResult, result)
-	assert.ErrorIs(err, expectedErr)
+	require.ErrorIs(err, expectedErr)
 
 	logFile, err := os.Open(filepath.Join(logDir, "rpc-messages.jsonl"))
 	require.NoError(err)

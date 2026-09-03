@@ -1004,7 +1004,7 @@ func TestValidateTOMLStdioContainerization(t *testing.T) {
 			if tt.shouldErr {
 				require.Error(t, err)
 				if tt.errorMsg != "" {
-					assert.ErrorContains(t, err, tt.errorMsg)
+					require.ErrorContains(t, err, tt.errorMsg)
 				}
 			} else {
 				assert.NoError(t, err)

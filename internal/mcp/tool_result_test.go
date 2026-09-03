@@ -363,7 +363,7 @@ func TestParseToolArguments(t *testing.T) {
 
 		args, err := ParseToolArguments(req)
 
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Nil(t, args)
 		assert.ErrorContains(t, err, "failed to parse arguments")
 	})
@@ -566,7 +566,7 @@ func TestConvertContentItem_ResourceMarshalError(t *testing.T) {
 		"resource": make(chan int),
 	}
 	result, err := convertContentItem(ci)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, result)
 	assert.ErrorContains(t, err, "failed to marshal resource")
 }
@@ -584,9 +584,9 @@ func TestConvertContentItem_ResourceUnmarshalError(t *testing.T) {
 		},
 	}
 	result, err := convertContentItem(ci)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, result)
-	assert.ErrorContains(t, err, "failed to parse resource")
+	require.ErrorContains(t, err, "failed to parse resource")
 }
 
 // TestConvertMapToCallToolResult_ContentItemCastFailure verifies that

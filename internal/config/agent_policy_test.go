@@ -80,7 +80,7 @@ func TestValidateSingleAgentPolicy_RejectsSurroundingWhitespace(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := validateSingleAgentPolicy("secret-agent-id", tt.policy, servers)
 			require.Error(t, err)
-			assert.ErrorContains(t, err, "surrounding whitespace")
+			require.ErrorContains(t, err, "surrounding whitespace")
 			assert.NotContains(t, err.Error(), "secret-agent-id")
 		})
 	}
@@ -150,7 +150,7 @@ func TestValidateSingleAgentPolicy_ErrorPaths(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := validateSingleAgentPolicy("secret-agent-id", tt.policy, servers)
 			require.Error(t, err)
-			assert.ErrorContains(t, err, tt.errContains)
+			require.ErrorContains(t, err, tt.errContains)
 			assert.NotContains(t, err.Error(), "secret-agent-id")
 		})
 	}

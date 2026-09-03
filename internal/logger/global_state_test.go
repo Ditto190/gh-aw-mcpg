@@ -37,7 +37,7 @@ func TestCloseLogFile_ValidFile(t *testing.T) {
 	// Close using the helper
 	var mu sync.Mutex
 	err = closeLogFile(file, &mu, "test")
-	assert.NoError(err, "closeLogFile failed")
+	require.NoError(err, "closeLogFile failed")
 
 	// Verify file was actually closed and flushed
 	content, err := os.ReadFile(logPath)
@@ -167,23 +167,24 @@ func TestCloseLogFile_EmptyFile(t *testing.T) {
 
 func TestInitLogFile_Success(t *testing.T) {
 	assert := assert.New(t)
+	require := require.New(t)
 	tmpDir := t.TempDir()
 	logDir := filepath.Join(tmpDir, "logs")
 	fileName := "test.log"
 
 	// Initialize log file with O_APPEND flag
 	file, err := initLogFile(logDir, fileName, os.O_APPEND)
-	assert.NoError(err, "initLogFile should succeed")
+	require.NoError(err, "initLogFile should succeed")
 	defer file.Close()
 
 	// Verify directory was created
 	_, err = os.Stat(logDir)
-	assert.NoError(err, "Log directory should exist")
+	require.NoError(err, "Log directory should exist")
 
 	// Verify file was created
 	logPath := filepath.Join(logDir, fileName)
 	_, err = os.Stat(logPath)
-	assert.NoError(err, "Log file should exist")
+	require.NoError(err, "Log file should exist")
 
 	// Write some content to verify file is writable
 	_, err = file.WriteString("test content\n")
@@ -504,7 +505,7 @@ func TestInitLogger_JSONLLogger(t *testing.T) {
 	// Verify the log file was created
 	logPath := filepath.Join(logDir, fileName)
 	_, err = os.Stat(logPath)
-	assert.NoError(err, "Log file should exist")
+	require.NoError(err, "Log file should exist")
 
 	// Clean up
 	logger.Close()
@@ -512,6 +513,7 @@ func TestInitLogger_JSONLLogger(t *testing.T) {
 
 func TestInitLogger_JSONLLoggerError(t *testing.T) {
 	assert := assert.New(t)
+	require := require.New(t)
 
 	// Use a non-writable directory to trigger error
 	logDir := "/root/nonexistent/directory"
@@ -539,7 +541,7 @@ func TestInitLogger_JSONLLoggerError(t *testing.T) {
 	assert.False(setupHandlerCalled, "Setup handler should not be called on error")
 
 	assert.True(errorHandlerCalled, "Error handler should be called")
-	assert.Error(err, "initLogger should return error")
+	require.Error(err, "initLogger should return error")
 	assert.Nil(logger, "logger should be nil on error")
 }
 
@@ -583,7 +585,7 @@ func TestInitLogger_MarkdownLogger(t *testing.T) {
 	// Verify the log file was created
 	logPath := filepath.Join(logDir, fileName)
 	_, err = os.Stat(logPath)
-	assert.NoError(err, "Log file should exist")
+	require.NoError(err, "Log file should exist")
 
 	// Clean up
 	logger.Close()
@@ -632,6 +634,7 @@ func TestInitLogger_MarkdownLoggerFallback(t *testing.T) {
 
 func TestInitLogger_SetupError(t *testing.T) {
 	a := assert.New(t)
+	r := require.New(t)
 	tmpDir := t.TempDir()
 	logDir := filepath.Join(tmpDir, "logs")
 	fileName := "test.log"
@@ -653,7 +656,7 @@ func TestInitLogger_SetupError(t *testing.T) {
 
 	a.False(errorHandlerCalled, "Error handler should not be called for setup errors")
 
-	a.Error(err, "initLogger should return error on setup failure")
+	r.Error(err, "initLogger should return error on setup failure")
 	a.Equal(assert.AnError, err, "Error should match setup error")
 	a.Nil(logger, "logger should be nil on setup error")
 

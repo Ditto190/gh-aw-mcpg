@@ -424,9 +424,9 @@ func TestConvertStdinServerConfig_HeadersExpansionError(t *testing.T) {
 	}
 
 	result, err := convertStdinServerConfig("test", server, nil)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, result)
-	assert.ErrorContains(t, err, "MISSING_TOKEN")
+	require.ErrorContains(t, err, "MISSING_TOKEN")
 }
 
 // TestConvertStdinServerConfig_ValidationError tests validation error handling.
@@ -1490,7 +1490,7 @@ func TestConvertStdinConfig_PayloadSizeThreshold(t *testing.T) {
 		}
 
 		err := validateGatewayConfig(gateway)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	})
 }
 
@@ -1587,7 +1587,7 @@ func TestConvertStdinConfig_GatewayOptionalFields(t *testing.T) {
 func TestValidateGatewayConfig_ContainerRuntime(t *testing.T) {
 	t.Run("accepts docker and podman", func(t *testing.T) {
 		err := validateGatewayConfig(&StdinGatewayConfig{AgentID: "test-agent", ContainerRuntime: "docker"})
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		err = validateGatewayConfig(&StdinGatewayConfig{AgentID: "test-agent", ContainerRuntime: "podman"})
 		assert.NoError(t, err)

@@ -383,7 +383,7 @@ func TestHTTPRequest_ErrorResponses(t *testing.T) {
 			if err != nil {
 				require.True(t, tt.expectError, "Unexpected error creating connection: %v", err)
 				if tt.errorSubstring != "" {
-					assert.ErrorContains(t, err, tt.errorSubstring, "Error should contain expected substring")
+					require.ErrorContains(t, err, tt.errorSubstring, "Error should contain expected substring")
 				}
 				return
 			}
@@ -394,7 +394,7 @@ func TestHTTPRequest_ErrorResponses(t *testing.T) {
 			if tt.expectError {
 				require.Error(t, err, "Expected an error but got none")
 				if tt.errorSubstring != "" {
-					assert.ErrorContains(t, err, tt.errorSubstring, "Error should contain expected substring")
+					require.ErrorContains(t, err, tt.errorSubstring, "Error should contain expected substring")
 				}
 			} else {
 				assert.NoError(t, err)
@@ -473,7 +473,7 @@ func TestHTTPConnection_InvalidURL(t *testing.T) {
 			if tt.expectError {
 				require.Error(t, err, "Expected an error but got none")
 				if tt.errorSubstring != "" {
-					assert.ErrorContains(t, err, tt.errorSubstring, "Error should contain expected substring")
+					require.ErrorContains(t, err, tt.errorSubstring, "Error should contain expected substring")
 				}
 			} else {
 				assert.NoError(t, err)
@@ -665,8 +665,8 @@ func TestConnection_RequireSession(t *testing.T) {
 			err := conn.requireSDKSession()
 
 			if tt.expectError {
-				assert.Error(t, err, "requireSDKSession should return error when session is nil")
-				assert.ErrorContains(t, err, "SDK session not available for plain JSON-RPC transport",
+				require.Error(t, err, "requireSDKSession should return error when session is nil")
+				require.ErrorContains(t, err, "SDK session not available for plain JSON-RPC transport",
 					"Error message should contain expected text")
 			} else {
 				// This test case can't be fully tested without a real SDK session
@@ -1014,8 +1014,8 @@ func TestPaginateAll(t *testing.T) {
 		})
 
 		require.Error(t, err)
-		assert.ErrorContains(t, err, "cyclical cursor")
-		assert.ErrorContains(t, err, "page2")
+		require.ErrorContains(t, err, "cyclical cursor")
+		require.ErrorContains(t, err, "page2")
 		// Initial page + 2 unique cursor fetches, then cycle detected before another fetch.
 		assert.Equal(t, 3, callCount)
 	})
@@ -1149,7 +1149,7 @@ func TestListMCPItems_NilSession(t *testing.T) {
 		func(items []string) []string { return items },
 	)
 	require.Error(t, err)
-	assert.ErrorContains(t, err, "SDK session not available")
+	require.ErrorContains(t, err, "SDK session not available")
 	assert.False(t, fetchCalled, "fetch should not be called when session is unavailable")
 }
 

@@ -235,7 +235,7 @@ func TestGetOrLaunch_ShortTimeout(t *testing.T) {
 	defer l.Close()
 
 	conn, err := GetOrLaunch(l, "instant-timeout-server")
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, conn)
 	assert.ErrorContains(t, err, "timeout")
 }
@@ -299,7 +299,7 @@ func TestGetOrLaunch_TimeoutWithInvalidCommand(t *testing.T) {
 	elapsed := time.Since(start)
 
 	// Should fail quickly with command error, not timeout
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, conn)
 	// Should fail immediately (command not found), not wait for timeout
 	assert.Less(t, elapsed, 2*time.Second, "Invalid command should fail fast, not timeout")
@@ -372,7 +372,7 @@ func TestGetOrLaunch_ContextCancellationDuringTimeout(t *testing.T) {
 	elapsed := time.Since(start)
 
 	// Should fail (either timeout or context cancellation)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, conn)
 
 	// Should complete within reasonable time (not wait full 10 second timeout)

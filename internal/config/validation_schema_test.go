@@ -760,7 +760,7 @@ func TestSchemaConfiguration(t *testing.T) {
 
 	// Verify that the schema compiles and validates correctly
 	schema, err := getOrCompileSchema()
-	assert.NoError(t, err, "Schema compilation should succeed")
+	require.NoError(t, err, "Schema compilation should succeed")
 	assert.NotNil(t, schema, "Schema should not be nil")
 
 	// Verify that the schema works for validation
@@ -778,7 +778,7 @@ func TestSchemaConfiguration(t *testing.T) {
 }`
 
 	err = validateJSONSchema([]byte(validConfig))
-	assert.NoError(t, err, "Validation should succeed with embedded schema")
+	require.NoError(t, err, "Validation should succeed with embedded schema")
 
 	t.Logf("Embedded schema size: %d bytes", len(embeddedSchemaBytes))
 }

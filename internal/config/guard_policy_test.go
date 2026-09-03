@@ -718,7 +718,7 @@ func TestGuardPolicyUnmarshalJSON(t *testing.T) {
 
 			if tt.wantErr != "" {
 				require.Error(t, err)
-				assert.ErrorContains(t, err, tt.wantErr)
+				require.ErrorContains(t, err, tt.wantErr)
 				return
 			}
 
@@ -885,7 +885,7 @@ func TestAllowOnlyPolicyUnmarshalJSON(t *testing.T) {
 
 			if tt.wantErr != "" {
 				require.Error(t, err)
-				assert.ErrorContains(t, err, tt.wantErr)
+				require.ErrorContains(t, err, tt.wantErr)
 				return
 			}
 
@@ -1092,7 +1092,7 @@ func TestParseGuardPolicyJSONComprehensive(t *testing.T) {
 
 			if tt.wantErr != "" {
 				require.Error(t, err)
-				assert.ErrorContains(t, err, tt.wantErr)
+				require.ErrorContains(t, err, tt.wantErr)
 				assert.Nil(t, got)
 				return
 			}

@@ -97,8 +97,8 @@ func TestTCFG011_RejectCustomTypeWithoutRegistration(t *testing.T) {
 
 	// Validate should fail for unregistered custom type
 	err = validateServerConfigWithCustomSchemas("unregistered-server", server, stdinCfg.CustomSchemas)
-	assert.Error(t, err, "Unregistered custom server type should be rejected")
-	assert.ErrorContains(t, err, "unregistered")
+	require.Error(t, err, "Unregistered custom server type should be rejected")
+	require.ErrorContains(t, err, "unregistered")
 	assert.ErrorContains(t, err, "not registered in customSchemas")
 }
 
@@ -203,8 +203,8 @@ func TestTCFG012_ValidateAgainstCustomSchema(t *testing.T) {
 
 		server := stdinCfg.MCPServers["invalid-custom"]
 		err = validateServerConfigWithCustomSchemas("invalid-custom", server, stdinCfg.CustomSchemas)
-		assert.Error(t, err, "Configuration missing required fields should fail validation")
-		assert.ErrorContains(t, err, "does not match custom schema")
+		require.Error(t, err, "Configuration missing required fields should fail validation")
+		require.ErrorContains(t, err, "does not match custom schema")
 	})
 
 	t.Run("empty_string_skips_validation", func(t *testing.T) {
@@ -294,8 +294,8 @@ func TestTCFG013b_RejectNonHTTPSSchemaURLs(t *testing.T) {
 			}
 
 			err := validateCustomSchemas(customSchemas)
-			assert.Error(t, err, "Non-HTTPS schema URL %q should be rejected", tt.schemaURL)
-			assert.ErrorContains(t, err, "must use HTTPS")
+			require.Error(t, err, "Non-HTTPS schema URL %q should be rejected", tt.schemaURL)
+			require.ErrorContains(t, err, "must use HTTPS")
 		})
 	}
 }

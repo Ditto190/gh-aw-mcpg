@@ -242,7 +242,7 @@ func TestValidateGatewayConfig_OpenTelemetry(t *testing.T) {
 			if tt.wantErr {
 				require.Error(t, err)
 				if tt.errMsg != "" {
-					assert.ErrorContains(t, err, tt.errMsg)
+					require.ErrorContains(t, err, tt.errMsg)
 				}
 			} else {
 				assert.NoError(t, err)

@@ -115,8 +115,8 @@ func TestUnmarshalParams(t *testing.T) {
 		}
 		err := unmarshalParams(params, &target)
 
-		assert.Error(t, err, "Should fail on type mismatch")
-		assert.ErrorContains(t, err, "invalid params", "Error should mention invalid params")
+		require.Error(t, err, "Should fail on type mismatch")
+		require.ErrorContains(t, err, "invalid params", "Error should mention invalid params")
 	})
 
 	t.Run("fail with non-pointer target", func(t *testing.T) {
@@ -209,7 +209,7 @@ func TestUnmarshalParams_ErrorMessages(t *testing.T) {
 		err := unmarshalParams(params, &target)
 
 		require.Error(t, err)
-		assert.ErrorContains(t, err, "failed to marshal params")
+		require.ErrorContains(t, err, "failed to marshal params")
 		// Error should wrap the original JSON error
 		assert.ErrorContains(t, err, "json")
 	})

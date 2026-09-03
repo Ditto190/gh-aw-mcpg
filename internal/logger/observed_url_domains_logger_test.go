@@ -108,7 +108,7 @@ func TestCloseAllLoggers_ObservedURLDomains_ClearsGlobal(t *testing.T) {
 	require.NoError(t, InitObservedURLDomainsLogger(tmpDir, observedURLDomainsFileName))
 
 	err := CloseAllLoggers()
-	assert.NoError(t, err, "CloseAllLoggers should succeed")
+	require.NoError(t, err, "CloseAllLoggers should succeed")
 
 	globalObservedURLDomainsMu.RLock()
 	assert.Nil(t, globalObservedURLDomainsLogger, "global logger should be nil after close")
@@ -149,7 +149,7 @@ func TestLogDomains_NilDomains(t *testing.T) {
 	l, _ := newTestObservedURLDomainsLogger(t)
 
 	err := l.LogDomains("github", nil)
-	assert.NoError(t, err, "nil domains should return nil")
+	require.NoError(t, err, "nil domains should return nil")
 	assert.Empty(t, l.data, "data should remain empty after nil domains call")
 }
 

@@ -36,6 +36,6 @@ func TestTryPlainJSONTransportHonorsConnectTimeout(t *testing.T) {
 
 	require.Error(t, err)
 	assert.Nil(t, conn)
-	assert.ErrorIs(t, err, context.DeadlineExceeded)
+	require.ErrorIs(t, err, context.DeadlineExceeded)
 	assert.Less(t, time.Since(start), time.Second)
 }

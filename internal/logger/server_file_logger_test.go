@@ -71,10 +71,10 @@ func TestServerFileLoggerCreatesLogFiles(t *testing.T) {
 	slackLog := filepath.Join(logDir, "slack.log")
 
 	_, err = os.Stat(githubLog)
-	assert.NoError(t, err, "github.log was not created")
+	require.NoError(t, err, "github.log was not created")
 
 	_, err = os.Stat(slackLog)
-	assert.NoError(t, err, "slack.log was not created")
+	require.NoError(t, err, "slack.log was not created")
 
 	// Read and verify log contents
 	githubContent, err := os.ReadFile(githubLog)
@@ -401,7 +401,7 @@ func TestServerFileLoggerClose_ValidFiles(t *testing.T) {
 
 	closeErr := sfl.Close()
 
-	assert.NoError(closeErr, "Close() should return nil when all files close successfully")
+	require.NoError(closeErr, "Close() should return nil when all files close successfully")
 	assert.Empty(sfl.loggers, "loggers map should be cleared after Close()")
 	assert.Empty(sfl.files, "files map should be cleared after Close()")
 }

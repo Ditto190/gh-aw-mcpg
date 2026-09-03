@@ -31,7 +31,7 @@ func TestGetOrLaunch_StdioServer_InvalidCommand(t *testing.T) {
 
 	// Try to launch stdio server with invalid command
 	conn, err := GetOrLaunch(l, "stdio-server")
-	assert.Error(t, err, "Expected error for invalid command")
+	require.Error(t, err, "Expected error for invalid command")
 	assert.Nil(t, conn, "Expected nil connection")
 	assert.ErrorContains(t, err, "failed to create connection")
 }
@@ -52,7 +52,7 @@ func TestGetOrLaunch_StdioServer_DockerCommand(t *testing.T) {
 
 	// This should fail since Docker image doesn't exist, but we're testing the path logic
 	conn, err := GetOrLaunch(l, "docker-server")
-	assert.Error(t, err, "Expected error for missing Docker image")
+	require.Error(t, err, "Expected error for missing Docker image")
 	assert.Nil(t, conn)
 }
 
@@ -98,7 +98,7 @@ func TestGetOrLaunch_StdioServer_EnvPassthroughMissing(t *testing.T) {
 
 	// Launch should log warning about missing env var
 	conn, err := GetOrLaunch(l, "missing-env-server")
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, conn)
 }
 
@@ -186,7 +186,7 @@ func TestGetOrLaunch_StdioServer_EnvFlagAtEnd(t *testing.T) {
 
 	// Should not crash when -e is at the end with no value
 	conn, err := GetOrLaunch(l, "env-at-end-server")
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, conn)
 }
 
@@ -231,7 +231,7 @@ func TestGetOrLaunch_StdioServer_EmptyEnvMap(t *testing.T) {
 
 	// Should not log empty env map
 	conn, err := GetOrLaunch(l, "empty-env-server")
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, conn)
 }
 
@@ -471,9 +471,9 @@ func TestGetOrLaunch_StdioConnectionError(t *testing.T) {
 
 	// Should fail with connection creation error
 	conn, err := GetOrLaunch(l, "bad-stdio-server")
-	assert.Error(t, err, "Expected error for nonexistent binary")
+	require.Error(t, err, "Expected error for nonexistent binary")
 	assert.Nil(t, conn)
-	assert.ErrorContains(t, err, "failed to create connection")
+	require.ErrorContains(t, err, "failed to create connection")
 
 	// Verify no connection was stored
 	l.mu.RLock()
@@ -498,7 +498,7 @@ func TestGetOrLaunch_ErrorLogging_DirectCommand(t *testing.T) {
 
 	// Should fail and log enhanced error information
 	conn, err := GetOrLaunch(l, "error-logging-server")
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, conn)
 }
 

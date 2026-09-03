@@ -483,7 +483,7 @@ func TestCallBackendTool_Phase5_FilterMode_PartialCollection(t *testing.T) {
 	result, data, err := us.callBackendTool(callCtx("session-p5f"), "test-server", "list_issues", nil)
 
 	require.NotNil(result)
-	assert.NoError(err, "filter mode should not return an error when items are filtered")
+	require.NoError(err, "filter mode should not return an error when items are filtered")
 	assert.False(result.IsError, "result should not be marked as error in filter mode")
 	require.NotNil(data, "partial data should still be returned")
 
@@ -570,7 +570,7 @@ func TestCallBackendTool_Phase5_FilterMode_AllItemsFiltered_NoticePresent(t *tes
 	result, _, err := us.callBackendTool(callCtx("session-p5af"), "test-server", "list_issues", nil)
 
 	require.NotNil(result)
-	assert.NoError(err, "filter mode with all items filtered must not return a Go error")
+	require.NoError(err, "filter mode with all items filtered must not return a Go error")
 	assert.False(result.IsError, "result must not be marked IsError when multiple items are all filtered")
 
 	// The filter notice must be present so the agent knows items exist but were withheld.
@@ -675,7 +675,7 @@ func TestCallBackendTool_Phase5_FilterMode_GenuinelyEmptyCollection_NoNotice(t *
 	result, _, err := us.callBackendTool(callCtx("session-p5e"), "test-server", "list_issues", nil)
 
 	require.NotNil(result)
-	assert.NoError(err, "genuinely empty collection must not produce a Go error")
+	require.NoError(err, "genuinely empty collection must not produce a Go error")
 	assert.False(result.IsError, "genuinely empty collection must not be an MCP error")
 
 	// No filter notice should be present because no items were withheld.
@@ -733,7 +733,7 @@ func TestCallBackendTool_Phase5_FilterMode_ListToolSingleItemFiltered_NoticeNotE
 	require.NotNil(result)
 	// list_issues is a collection tool — even with exactly 1 filtered item it must NOT
 	// return an MCP error.  The agent should see an empty list + filter notice.
-	assert.NoError(err, "list tool with 1 filtered item must not return a Go error")
+	require.NoError(err, "list tool with 1 filtered item must not return a Go error")
 	assert.False(result.IsError, "list tool with 1 filtered item must not be IsError")
 
 	var foundNotice bool

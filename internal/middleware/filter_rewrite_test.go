@@ -261,7 +261,7 @@ func TestRewriteFilteredTextPayload(t *testing.T) {
 		// Content must still have the filteredText even when data fallback is original
 		tc, ok := got.Content[0].(*sdk.TextContent)
 		require.True(t, ok)
-		assert.Equal(t, notJSON, tc.Text)
+		assert.Equal(t, notJSON, tc.Text) //nolint:testifylint // filtered text must be preserved exactly
 		// data should be the original slice (not parsed)
 		assert.Equal(t, data, gotData)
 	})

@@ -65,7 +65,7 @@ args = ["run", "--rm", "-i", "ghcr.io/github/github-mcp-server:latest"]
 			cfg, err := LoadFromFile(path)
 			if tt.wantErr != "" {
 				require.Error(t, err)
-				assert.ErrorContains(t, err, tt.wantErr)
+				require.ErrorContains(t, err, tt.wantErr)
 				return
 			}
 
@@ -127,7 +127,7 @@ func TestLoadFromStdin_AgentIDs(t *testing.T) {
 			if tt.shouldErr {
 				require.Error(t, err)
 				if tt.wantErr != "" {
-					assert.ErrorContains(t, err, tt.wantErr)
+					require.ErrorContains(t, err, tt.wantErr)
 				}
 				return
 			}

@@ -108,9 +108,9 @@ func TestFetchSchema_HTTPError(t *testing.T) {
 
 			result, err := fetchSchema(server.URL)
 
-			assert.Error(t, err)
+			require.Error(t, err)
 			assert.Nil(t, result)
-			assert.ErrorContains(t, err, tt.wantErr)
+			require.ErrorContains(t, err, tt.wantErr)
 			assert.Equal(t, int32(tt.wantRequests), requestCount.Load(),
 				"expected %d HTTP request(s) for status %d", tt.wantRequests, tt.statusCode)
 		})
@@ -127,9 +127,9 @@ func TestFetchSchema_NetworkError(t *testing.T) {
 
 	result, err := fetchSchema(closedURL)
 
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, result)
-	assert.ErrorContains(t, err, "failed to fetch schema from")
+	require.ErrorContains(t, err, "failed to fetch schema from")
 }
 
 // TestFetchSchema_Timeout tests handling of request timeouts
@@ -145,10 +145,10 @@ func TestFetchSchema_Timeout(t *testing.T) {
 
 	result, err := fetchSchema(server.URL)
 
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, result)
 	// The error should indicate a timeout or context deadline exceeded
-	assert.ErrorContains(t, err, "failed to fetch schema from")
+	require.ErrorContains(t, err, "failed to fetch schema from")
 }
 
 // TestFetchSchema_InvalidJSON tests that invalid JSON response bytes are returned as-is.
@@ -317,7 +317,7 @@ func TestFetchSchema_MarshalError(t *testing.T) {
 
 	result, err := fetchSchema(server.URL)
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, result)
 }
 
@@ -352,7 +352,7 @@ func TestFetchSchema_UserAgentAndHeaders(t *testing.T) {
 
 	_, err := fetchSchema(server.URL)
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, headers, "Should have captured request headers")
 	// Verify Go's default User-Agent is present
 	userAgent := headers.Get("User-Agent")

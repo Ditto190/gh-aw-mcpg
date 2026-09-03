@@ -134,7 +134,7 @@ func TestValidateToolResponseFilters_DirectCall(t *testing.T) {
 			if tt.wantErr {
 				require.Error(t, err)
 				if tt.errSubstr != "" {
-					assert.ErrorContains(t, err, tt.errSubstr)
+					require.ErrorContains(t, err, tt.errSubstr)
 				}
 			} else {
 				assert.NoError(t, err)
@@ -150,9 +150,9 @@ func TestValidateToolResponseFilters_ParseErrorIncludesOffsetAndToken(t *testing
 
 	err := validateToolResponseFilters(filters, "mcpServers.myserver.tool_response_filters")
 	require.Error(t, err)
-	assert.ErrorContains(t, err, "contains an invalid jq expression")
-	assert.ErrorContains(t, err, "offset")
-	assert.ErrorContains(t, err, "token")
+	require.ErrorContains(t, err, "contains an invalid jq expression")
+	require.ErrorContains(t, err, "offset")
+	require.ErrorContains(t, err, "token")
 	assert.ErrorContains(t, err, "<EOF>")
 }
 
@@ -250,7 +250,7 @@ func TestValidateServerAuth_DirectCall(t *testing.T) {
 			if tt.wantErr {
 				require.Error(t, err)
 				if tt.errSubstr != "" {
-					assert.ErrorContains(t, err, tt.errSubstr)
+					require.ErrorContains(t, err, tt.errSubstr)
 				}
 			} else {
 				assert.NoError(t, err)

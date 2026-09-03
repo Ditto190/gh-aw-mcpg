@@ -15,7 +15,7 @@ func TestCircuitBreaker_InitialStateClosed(t *testing.T) {
 	t.Parallel()
 	cb := newCircuitBreaker("test", 3, 60*time.Second)
 	assert.Equal(t, circuitClosed, cb.State())
-	assert.NoError(t, cb.Allow())
+	require.NoError(t, cb.Allow())
 }
 
 // TestCircuitBreaker_OpensAfterThreshold verifies the circuit opens after N consecutive errors.
@@ -25,11 +25,11 @@ func TestCircuitBreaker_OpensAfterThreshold(t *testing.T) {
 
 	cb.RecordRateLimit(time.Time{})
 	assert.Equal(t, circuitClosed, cb.State(), "should remain CLOSED after 1 error")
-	assert.NoError(t, cb.Allow())
+	require.NoError(t, cb.Allow())
 
 	cb.RecordRateLimit(time.Time{})
 	assert.Equal(t, circuitClosed, cb.State(), "should remain CLOSED after 2 errors")
-	assert.NoError(t, cb.Allow())
+	require.NoError(t, cb.Allow())
 
 	cb.RecordRateLimit(time.Time{})
 	assert.Equal(t, circuitOpen, cb.State(), "should be OPEN after 3 errors (threshold)")

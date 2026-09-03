@@ -109,9 +109,9 @@ func TestMarshalToResponse(t *testing.T) {
 
 		response, err := marshalToResponse(unmarshalableResult)
 
-		assert.Error(t, err, "Should fail to marshal channel type")
+		require.Error(t, err, "Should fail to marshal channel type")
 		assert.Nil(t, response, "Response should be nil on error")
-		assert.ErrorContains(t, err, "failed to marshal result", "Error should mention marshal failure")
+		require.ErrorContains(t, err, "failed to marshal result", "Error should mention marshal failure")
 	})
 }
 
