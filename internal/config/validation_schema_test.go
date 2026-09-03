@@ -384,7 +384,7 @@ func TestValidateJSONSchema(t *testing.T) {
 			if tt.shouldErr {
 				require.Error(t, err)
 				if tt.errorMsg != "" {
-					assert.ErrorContains(t, err, tt.errorMsg)
+					require.ErrorContains(t, err, tt.errorMsg)
 				}
 			} else {
 				assert.NoError(t, err, "Unexpected error")
@@ -893,7 +893,7 @@ func TestSchema_OpenTelemetryConfig(t *testing.T) {
 			if tt.shouldErr {
 				require.Error(t, err, "expected schema validation to fail")
 				if tt.errMsg != "" {
-					assert.ErrorContains(t, err, tt.errMsg)
+					require.ErrorContains(t, err, tt.errMsg)
 				}
 			} else {
 				assert.NoError(t, err, "expected schema validation to pass")
