@@ -519,7 +519,7 @@ func TestCallBackendTool_Phase5_NilLabeledData_PassesBackendResult(t *testing.T)
 	result, data, err := us.callBackendTool(callCtx("session-p5n"), "test-server", "get_item", nil)
 
 	require.NotNil(result)
-	assert.NoError(err)
+	require.NoError(err)
 	assert.False(result.IsError)
 	assert.NotNil(data, "backend result should be passed through when LabelResponse returns nil")
 }
@@ -785,7 +785,7 @@ func TestCallBackendTool_Phase6_PropagateModeAccumulatesLabels(t *testing.T) {
 
 	result, _, err := us.callBackendTool(ctx, "test-server", "list_files", nil)
 	require.NotNil(result)
-	assert.NoError(err)
+	require.NoError(err)
 	assert.False(result.IsError)
 
 	// Agent labels should now contain the resource's secrecy tag (propagate mode).

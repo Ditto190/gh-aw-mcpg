@@ -111,7 +111,7 @@ func TestExpandMapInPlace(t *testing.T) {
 		}
 		err := expandMapInPlace(&m, "srv", "environment variable(s)")
 		require.NoError(t, err)
-		assert.Equal(t, "", m["KEY"])
+		assert.Empty(t, m["KEY"])
 	})
 
 	t.Run("error wraps underlying undefined-variable error", func(t *testing.T) {

@@ -33,8 +33,8 @@ func TestValidateAgainstCustomSchema_FetchFailure(t *testing.T) {
 	err := validateAgainstCustomSchema("test-server", server, mockServer.URL, "mcpServers.test-server")
 
 	require.Error(t, err)
-	assert.ErrorContains(t, err, "failed to fetch custom schema")
-	assert.ErrorContains(t, err, "mytype")
+	require.ErrorContains(t, err, "failed to fetch custom schema")
+	require.ErrorContains(t, err, "mytype")
 }
 
 // TestValidateAgainstCustomSchema_UnreachableURL covers the fetchAndFixSchema connection
@@ -324,8 +324,8 @@ func TestValidateCustomServerConfig_UnregisteredType(t *testing.T) {
 	err := validateCustomServerConfig("test-server", server, customSchemas, "mcpServers.test-server")
 
 	require.Error(t, err)
-	assert.ErrorContains(t, err, "not registered in customSchemas")
-	assert.ErrorContains(t, err, "mytype")
+	require.ErrorContains(t, err, "not registered in customSchemas")
+	require.ErrorContains(t, err, "mytype")
 }
 
 // TestValidateAgainstCustomSchema_CacheHitWrongType covers the branch where the

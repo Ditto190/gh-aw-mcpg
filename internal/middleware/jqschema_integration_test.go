@@ -102,7 +102,7 @@ func TestMiddlewareIntegration(t *testing.T) {
 	require.NoError(t, err, "Payload should be valid JSON")
 
 	// Verify original data structure is preserved in file
-	assert.Equal(t, float64(1000), originalData["total_count"])
+	assert.InEpsilon(t, 1000.0, originalData["total_count"], 1e-9)
 	assert.NotNil(t, originalData["items"])
 
 	// Verify schema structure
@@ -152,7 +152,7 @@ func TestMiddlewareIntegration(t *testing.T) {
 	assert.Equal(t, "number", ownerSchema["id"])
 
 	// Verify originalSize
-	assert.Greater(t, pm.OriginalSize, 0, "Original size should be positive")
+	assert.Positive(t, pm.OriginalSize, "Original size should be positive")
 }
 
 // TestMiddlewareWithLargePayload tests truncation behavior

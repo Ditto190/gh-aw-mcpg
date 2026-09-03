@@ -467,7 +467,7 @@ func TestClose(t *testing.T) {
 
 	// Verify connections map is cleared
 	l.mu.RLock()
-	assert.Len(t, l.connections, 0, "Connections should be cleared after Close")
+	assert.Empty(t, l.connections, "Connections should be cleared after Close")
 	l.mu.RUnlock()
 }
 
@@ -687,8 +687,8 @@ func TestGetOrLaunch_OIDCMissingProvider(t *testing.T) {
 
 	_, err := GetOrLaunch(l, "oidc-server")
 	require.Error(t, err)
-	assert.ErrorContains(t, err, "OIDC authentication")
-	assert.ErrorContains(t, err, "ACTIONS_ID_TOKEN_REQUEST_URL")
+	require.ErrorContains(t, err, "OIDC authentication")
+	require.ErrorContains(t, err, "ACTIONS_ID_TOKEN_REQUEST_URL")
 }
 
 func TestGetOrLaunch_OIDCAudienceDefaultsToURL(t *testing.T) {

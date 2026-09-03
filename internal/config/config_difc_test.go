@@ -166,7 +166,7 @@ func TestStdinConfigGuardWithConfig(t *testing.T) {
 
 	maxFileSize, ok := guard.Config["maxFileSize"].(float64) // JSON numbers are float64
 	require.True(t, ok, "maxFileSize should be a number")
-	assert.Equal(t, float64(1048576), maxFileSize)
+	assert.InEpsilon(t, 1048576.0, maxFileSize, 1e-9)
 
 	securityLevel, ok := guard.Config["securityLevel"].(string)
 	require.True(t, ok, "securityLevel should be a string")

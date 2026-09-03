@@ -195,8 +195,8 @@ func TestEnsureGuardInitialized_LabelAgentError(t *testing.T) {
 	_, err := us.ensureGuardInitialized(context.Background(), "session-err", "server1", g, &noopBackendCaller{})
 
 	require.Error(t, err)
-	assert.ErrorContains(t, err, "LabelAgent failed")
-	assert.ErrorContains(t, err, "backend unreachable")
+	require.ErrorContains(t, err, "LabelAgent failed")
+	require.ErrorContains(t, err, "backend unreachable")
 }
 
 // TestEnsureGuardInitialized_LabelAgentNilResult checks the nil-result guard branch.

@@ -92,7 +92,7 @@ func TestResolveEndpoint_AppendsV1Traces(t *testing.T) {
 
 func TestResolveEndpoint_NilConfig(t *testing.T) {
 	got := resolveEndpoint(nil)
-	assert.Equal(t, "", got)
+	assert.Empty(t, got)
 }
 
 func TestResolveEndpoint_ParseErrorFallback(t *testing.T) {

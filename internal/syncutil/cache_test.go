@@ -55,7 +55,7 @@ func TestMapGetOrCreate_DoesNotStoreOnError(t *testing.T) {
 		return 0, boom
 	})
 
-	assert.ErrorIs(t, err, boom)
+	require.ErrorIs(t, err, boom)
 	assert.Equal(t, 0, v)
 	_, exists := cache["key"]
 	assert.False(t, exists, "failed value should not be stored in cache")

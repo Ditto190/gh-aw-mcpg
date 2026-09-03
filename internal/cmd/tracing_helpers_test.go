@@ -44,7 +44,7 @@ func TestRegisterTracingFlags_DefaultsFromEnv(t *testing.T) {
 
 	actualSampleRate, err := cmd.Flags().GetFloat64("otlp-sample-rate")
 	require.NoError(t, err)
-	assert.Equal(t, config.DefaultTracingSampleRate, actualSampleRate)
+	assert.InEpsilon(t, config.DefaultTracingSampleRate, actualSampleRate, 1e-9)
 
 	err = cmd.ParseFlags([]string{
 		"--otlp-endpoint=http://override:4318",
@@ -54,7 +54,7 @@ func TestRegisterTracingFlags_DefaultsFromEnv(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "http://override:4318", endpoint)
 	assert.Equal(t, "override-service", service)
-	assert.Equal(t, 0.25, sampleRate)
+	assert.InEpsilon(t, 0.25, sampleRate, 1e-9)
 }
 
 // TestInitTracingProviderWithFallback verifies that the helper returns a working

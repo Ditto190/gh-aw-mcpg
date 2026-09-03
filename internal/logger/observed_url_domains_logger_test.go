@@ -85,7 +85,7 @@ func TestInitObservedURLDomainsLogger_FallbackOnBadDir(t *testing.T) {
 
 	err := InitObservedURLDomainsLogger(filepath.Join(tmpFile, "subdir"), observedURLDomainsFileName)
 	// No error is returned — the fallback handler absorbs it.
-	assert.NoError(t, err, "InitObservedURLDomainsLogger uses silent fallback, should not return error")
+	require.NoError(t, err, "InitObservedURLDomainsLogger uses silent fallback, should not return error")
 
 	// The global logger should be a fallback instance (not nil).
 	globalObservedURLDomainsMu.RLock()
@@ -133,7 +133,7 @@ func TestLogDomains_EmptyServerID(t *testing.T) {
 
 	// Empty serverID should be a no-op and return nil.
 	err := l.LogDomains("", []string{"example.com"})
-	assert.NoError(t, err, "empty serverID should return nil")
+	require.NoError(t, err, "empty serverID should return nil")
 	assert.Empty(t, l.data, "data should remain empty after empty serverID call")
 }
 
@@ -141,7 +141,7 @@ func TestLogDomains_EmptyDomains(t *testing.T) {
 	l, _ := newTestObservedURLDomainsLogger(t)
 
 	err := l.LogDomains("github", []string{})
-	assert.NoError(t, err, "empty domains slice should return nil")
+	require.NoError(t, err, "empty domains slice should return nil")
 	assert.Empty(t, l.data, "data should remain empty after empty domains call")
 }
 
@@ -161,7 +161,7 @@ func TestLogDomains_FallbackMode_ReturnsNil(t *testing.T) {
 
 	// In fallback mode LogDomains should silently succeed without writing.
 	err := l.LogDomains("github", []string{"example.com"})
-	assert.NoError(t, err, "fallback mode should return nil")
+	require.NoError(t, err, "fallback mode should return nil")
 	assert.Empty(t, l.data, "data should not be updated in fallback mode")
 }
 

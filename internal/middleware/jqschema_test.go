@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -453,7 +454,7 @@ func TestWrapToolHandler_ErrorHandling(t *testing.T) {
 		wrapped := WrapToolHandler(mockHandler, "test_tool", baseDir, "", 1024, testGetSessionID)
 		result, data, err := wrapped(context.Background(), &sdk.CallToolRequest{}, map[string]interface{}{})
 
-		assert.Error(t, err, "Should return error from handler")
+		require.Error(t, err, "Should return error from handler")
 		assert.Nil(t, data, "Data should be nil on error")
 		assert.True(t, result.IsError, "Result should indicate error")
 	})
@@ -466,7 +467,7 @@ func TestWrapToolHandler_ErrorHandling(t *testing.T) {
 		wrapped := WrapToolHandler(mockHandler, "test_tool", baseDir, "", 1024, testGetSessionID)
 		result, data, err := wrapped(context.Background(), &sdk.CallToolRequest{}, map[string]interface{}{})
 
-		assert.NoError(t, err, "Should not return error")
+		require.NoError(t, err, "Should not return error")
 		assert.Nil(t, data, "Data should remain nil")
 		assert.False(t, result.IsError, "Result should not indicate error")
 	})
@@ -613,13 +614,13 @@ func TestPayloadStorage_LargePayloadPreserved(t *testing.T) {
 	require.NoError(t, err, "Stored payload should be valid JSON")
 
 	// Verify complete payload structure is preserved
-	assert.Equal(t, float64(1000), storedPayload["total_count"], "total_count should be preserved")
+	assert.InEpsilon(t, 1000.0, storedPayload["total_count"], 1e-9, "total_count should be preserved")
 
 	items := storedPayload["items"].([]interface{})
 	require.Len(t, items, 1, "Should have 1 item")
 
 	item := items[0].(map[string]interface{})
-	assert.Equal(t, float64(12345), item["id"], "Item ID should be preserved")
+	assert.InEpsilon(t, 12345.0, item["id"], 1e-9, "Item ID should be preserved")
 	assert.Equal(t, "test-item", item["name"], "Item name should be preserved")
 	assert.Equal(t, largeContent, item["description"], "Complete large description should be preserved")
 
@@ -1081,7 +1082,7 @@ func TestPayloadSizeThreshold_LargePayload(t *testing.T) {
 	require.True(t, ok, "Data should be PayloadMetadata")
 	assert.NotEmpty(t, pm.QueryID, "Should have queryID")
 	assert.NotEmpty(t, pm.PayloadPath, "Should have payloadPath")
-	assert.True(t, pm.OriginalSize > 1024, "Original size should exceed threshold")
+	assert.Greater(t, pm.OriginalSize, 1024, "Original size should exceed threshold")
 
 	// Verify file was created
 	assert.FileExists(t, pm.PayloadPath, "Payload file should exist")
@@ -1335,7 +1336,7 @@ func TestThresholdBehavior_LargePayloadsUsePayloadDir(t *testing.T) {
 			assert.NotEmpty(t, pm.PayloadPath, "Should have payloadPath")
 			assert.NotEmpty(t, pm.PayloadPreview, "Should have payloadPreview")
 			assert.NotNil(t, pm.PayloadSchema, "Should have payloadSchema")
-			assert.True(t, pm.OriginalSize > tt.threshold, "Original size should exceed threshold: %s", tt.comment)
+			assert.Greater(t, pm.OriginalSize, tt.threshold, "Original size should exceed threshold: %s", tt.comment)
 
 			// Verify file was created at the specified path
 			assert.FileExists(t, pm.PayloadPath, "Payload file should exist at path: %s", tt.comment)
@@ -1792,7 +1793,7 @@ func TestWrapToolHandler_FastPath_SkipsMarshal(t *testing.T) {
 	require.Len(t, result.Content, 1)
 	tc, ok := result.Content[0].(*sdk.TextContent)
 	require.True(t, ok, "fast path must preserve TextContent")
-	assert.Equal(t, innerText, tc.Text, "fast path must not rewrite text content")
+	assert.JSONEq(t, strconv.Quote(innerText), tc.Text, "fast path must not rewrite text content")
 
 	// data must be the original envelope map, not a PayloadMetadata.
 	_, isMetadata := data.(PayloadMetadata)
@@ -1834,7 +1835,7 @@ func TestWrapToolHandler_FastPath_SkipsMarshalForTypedContentSlice(t *testing.T)
 
 	tc, ok := result.Content[0].(*sdk.TextContent)
 	require.True(t, ok, "fast path must preserve TextContent for typed content slices")
-	assert.Equal(t, innerText, tc.Text)
+	assert.JSONEq(t, strconv.Quote(innerText), tc.Text)
 
 	_, isMetadata := data.(PayloadMetadata)
 	assert.False(t, isMetadata, "fast path must not produce PayloadMetadata for typed content slices")

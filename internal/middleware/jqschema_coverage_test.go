@@ -246,9 +246,9 @@ func TestCompileToolResponseFilter_ParseError(t *testing.T) {
 			code, err := CompileToolResponseFilter(tt.filter)
 			require.Error(t, err)
 			assert.Nil(t, code)
-			assert.ErrorContains(t, err, "failed to parse tool response filter")
-			assert.ErrorContains(t, err, "offset")
-			assert.ErrorContains(t, err, "token")
+			require.ErrorContains(t, err, "failed to parse tool response filter")
+			require.ErrorContains(t, err, "offset")
+			require.ErrorContains(t, err, "token")
 		})
 	}
 }
@@ -283,9 +283,9 @@ func TestCompileToolResponseFilter_EnvDisabled(t *testing.T) {
 func TestApplyToolResponseFilter_ParseError(t *testing.T) {
 	_, err := ApplyToolResponseFilter(context.Background(), "(.invalid", map[string]interface{}{"a": 1})
 	require.Error(t, err)
-	assert.ErrorContains(t, err, "failed to parse tool response filter")
-	assert.ErrorContains(t, err, "offset")
-	assert.ErrorContains(t, err, "token")
+	require.ErrorContains(t, err, "failed to parse tool response filter")
+	require.ErrorContains(t, err, "offset")
+	require.ErrorContains(t, err, "token")
 }
 
 // ---------------------------------------------------------------------------
@@ -371,11 +371,11 @@ func TestWrapToolHandler_SavePayloadFailure(t *testing.T) {
 	assert.Contains(t, meta, "payloadSchema", "expected metadata response to include payloadSchema when payload saving fails")
 	assert.Contains(t, meta, "payloadPreview", "expected metadata response to include payloadPreview when payload saving fails")
 	// payloadPath should be empty (no file was saved).
-	assert.Equal(t, "", meta["payloadPath"], "payloadPath should be empty when savePayload fails")
+	assert.Empty(t, meta["payloadPath"], "payloadPath should be empty when savePayload fails")
 
 	entries, readErr := os.ReadDir(baseDir)
 	require.NoError(t, readErr)
-	assert.Len(t, entries, 0, "savePayload failure path should not leave any saved payload files or directories behind")
+	assert.Empty(t, entries, "savePayload failure path should not leave any saved payload files or directories behind")
 }
 
 // ---------------------------------------------------------------------------
@@ -418,9 +418,9 @@ func TestApplyToolResponseFilter_TypeError(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := ApplyToolResponseFilter(context.Background(), tt.filter, tt.input)
 			require.Error(t, err)
-			assert.ErrorContains(t, err, tt.wantMsg)
+			require.ErrorContains(t, err, tt.wantMsg)
 			// The gojq error message should be preserved in the wrapping.
-			assert.ErrorContains(t, err, "type error")
+			require.ErrorContains(t, err, "type error")
 		})
 	}
 }
@@ -433,7 +433,7 @@ func TestApplyToolResponseFilter_ValueError(t *testing.T) {
 	// The wrapper should NOT add the null-safety hint.
 	_, err := ApplyToolResponseFilter(context.Background(), `error("deliberate")`, map[string]any{"a": 1})
 	require.Error(t, err)
-	assert.ErrorContains(t, err, "tool response filter error")
+	require.ErrorContains(t, err, "tool response filter error")
 	assert.NotContains(t, err.Error(), "check filter handles null/missing fields")
 }
 
@@ -484,9 +484,9 @@ func TestCompileToolResponseFilterWithVars_ParseError(t *testing.T) {
 	code, err := CompileToolResponseFilterWithVars("(.invalid", []string{"$x"})
 	require.Error(t, err)
 	assert.Nil(t, code)
-	assert.ErrorContains(t, err, "failed to parse tool response filter")
-	assert.ErrorContains(t, err, "offset")
-	assert.ErrorContains(t, err, "token")
+	require.ErrorContains(t, err, "failed to parse tool response filter")
+	require.ErrorContains(t, err, "offset")
+	require.ErrorContains(t, err, "token")
 }
 
 // TestCompileToolResponseFilterWithVars_UndeclaredVar verifies that a filter

@@ -539,7 +539,7 @@ func TestHostCallBackend_SuccessWithNoArgs(t *testing.T) {
 
 	// Success: stack[0] should be the result JSON byte length (positive).
 	resultLen := int32(stack[0])
-	assert.Greater(t, resultLen, int32(0), "successful call should return positive result length")
+	assert.Positive(t, resultLen, "successful call should return positive result length")
 }
 
 func TestHostCallBackend_SuccessWithValidArgs(t *testing.T) {
@@ -567,5 +567,5 @@ func TestHostCallBackend_SuccessWithValidArgs(t *testing.T) {
 	g.hostCallBackend(context.Background(), g.module, stack)
 
 	resultLen := int32(stack[0])
-	assert.Greater(t, resultLen, int32(0), "successful call with args should return positive result length")
+	assert.Positive(t, resultLen, "successful call with args should return positive result length")
 }

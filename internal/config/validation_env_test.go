@@ -429,7 +429,7 @@ func TestValidateContainerizedEnvironment(t *testing.T) {
 		result := ValidateContainerizedEnvironment("")
 
 		assert.True(t, result.IsContainerized, "Should be marked as containerized")
-		assert.Equal(t, "", result.ContainerID, "Container ID should be empty")
+		assert.Empty(t, result.ContainerID, "Container ID should be empty")
 		assert.False(t, result.IsValid(), "Should be invalid with empty container ID")
 		assert.ErrorContains(t, result, "Container ID could not be determined")
 	})

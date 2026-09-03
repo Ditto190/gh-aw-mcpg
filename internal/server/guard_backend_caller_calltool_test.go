@@ -54,7 +54,9 @@ func newGuardCallToolBackend(t *testing.T, serverName string, handleMethod func(
 			// The SDK stores the negotiated session from initialize responses and
 			// reuses it on later requests, so tests need to provide one here.
 			w.Header().Set("Mcp-Session-Id", "guard-calltool-test-session")
-			require.NoError(t, json.NewEncoder(w).Encode(resp))
+			if err := json.NewEncoder(w).Encode(resp); err != nil {
+				http.Error(w, "failed to encode initialize response", http.StatusInternalServerError)
+			}
 			return
 		}
 		if method == "notifications/initialized" {
@@ -66,14 +68,16 @@ func newGuardCallToolBackend(t *testing.T, serverName string, handleMethod func(
 			// JSON-RPC "method not found" error so the client falls back to the
 			// legacy initialize flow.
 			w.Header().Set("Content-Type", "application/json")
-			require.NoError(t, json.NewEncoder(w).Encode(map[string]interface{}{
+			if err := json.NewEncoder(w).Encode(map[string]interface{}{
 				"jsonrpc": "2.0",
 				"id":      req["id"],
 				"error": map[string]interface{}{
 					"code":    -32601,
 					"message": `method not found: "server/discover"`,
 				},
-			}))
+			}); err != nil {
+				http.Error(w, "failed to encode discover response", http.StatusInternalServerError)
+			}
 			return
 		}
 		handleMethod(w, method, req["id"], req["params"])

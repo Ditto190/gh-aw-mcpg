@@ -121,7 +121,7 @@ func TestUnmarshalStringListOrExpression(t *testing.T) {
 			got, err := unmarshalStringListOrExpression(raw)
 			if tt.wantErr != "" {
 				require.Error(t, err)
-				assert.ErrorContains(t, err, tt.wantErr)
+				require.ErrorContains(t, err, tt.wantErr)
 				assert.Nil(t, got)
 			} else {
 				require.NoError(t, err)

@@ -37,7 +37,6 @@ func TestInitJSONLLogger(t *testing.T) {
 
 func TestJSONLLoggerClose(t *testing.T) {
 	require := require.New(t)
-	assert := assert.New(t)
 	tmpDir := t.TempDir()
 	logDir := filepath.Join(tmpDir, "logs")
 
@@ -46,11 +45,11 @@ func TestJSONLLoggerClose(t *testing.T) {
 
 	// Test closing
 	err = CloseAllLoggers()
-	assert.NoError(err, "CloseAllLoggers should not error")
+	require.NoError(err, "CloseAllLoggers should not error")
 
 	// Test closing again (should not error)
 	err = CloseAllLoggers()
-	assert.NoError(err, "CloseAllLoggers should not error on second call")
+	require.NoError(err, "CloseAllLoggers should not error on second call")
 }
 
 func TestLogRPCMessageJSONL(t *testing.T) {
@@ -595,7 +594,7 @@ func TestLogDifcFilteredItem_WritesAuditEntryToJSONL(t *testing.T) {
 	assert.Equal("difc-filtered/v2", logged.Schema, "Schema must be difc-filtered/v2")
 	assert.NotEmpty(logged.Timestamp, "Timestamp must be set for audit trail")
 	_, tsErr := time.Parse(jsonTimestampLayout, logged.Timestamp)
-	assert.NoError(tsErr, "Timestamp must be ISO 8601 with milliseconds")
+	require.NoError(tsErr, "Timestamp must be ISO 8601 with milliseconds")
 	assert.Equal("github", logged.ServerID)
 	assert.Equal("list_issues", logged.ToolName)
 	assert.Equal("issue:org/repo#42", logged.Description)
@@ -949,7 +948,7 @@ func TestLogEntry_ConcurrentAccess(t *testing.T) {
 	}
 
 	for i := 0; i < numGoroutines; i++ {
-		assert.NoError(t, <-done, "concurrent logEntry call should not error")
+		require.NoError(t, <-done, "concurrent logEntry call should not error")
 	}
 
 	// Count lines written: each successful logEntry writes exactly one JSONL line.

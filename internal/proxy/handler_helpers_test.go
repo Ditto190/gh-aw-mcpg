@@ -108,6 +108,5 @@ func TestIsMetadataPassthroughPath_CompleteAllowlist(t *testing.T) {
 	}
 
 	// The allowlist map should contain exactly these five paths.
-	assert.Equal(t, len(expectedAllowlist), len(metadataPassthrough),
-		"metadataPassthrough allowlist size changed: review DIFC security implications")
+	assert.Len(t, metadataPassthrough, len(expectedAllowlist), "metadataPassthrough allowlist size changed: review DIFC security implications")
 }

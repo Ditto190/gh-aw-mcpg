@@ -171,10 +171,10 @@ func TestPathLabeledData_NestedItems(t *testing.T) {
 	require.Len(t, items, 2)
 
 	// Check labels were correctly applied
-	assert.Equal(t, float64(42), items[0].Data.(map[string]interface{})["number"])
+	assert.InDelta(t, 42.0, items[0].Data.(map[string]interface{})["number"], 1e-9)
 	assert.True(t, items[0].Labels.Secrecy.Label.Contains(Tag("public")))
 
-	assert.Equal(t, float64(43), items[1].Data.(map[string]interface{})["number"])
+	assert.InDelta(t, 43.0, items[1].Data.(map[string]interface{})["number"], 1e-9)
 	assert.True(t, items[1].Labels.Secrecy.Label.Contains(Tag("repo_private")))
 }
 

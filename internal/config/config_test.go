@@ -1531,12 +1531,12 @@ func TestApplyGatewayDefaults_OtherFieldsUnaffected(t *testing.T) {
 func TestGetAgentID(t *testing.T) {
 	t.Run("nil Gateway returns empty string", func(t *testing.T) {
 		cfg := &Config{}
-		assert.Equal(t, "", cfg.GetAgentID())
+		assert.Empty(t, cfg.GetAgentID())
 	})
 
 	t.Run("Gateway with no ID returns empty string", func(t *testing.T) {
 		cfg := &Config{Gateway: &GatewayConfig{}}
-		assert.Equal(t, "", cfg.GetAgentID())
+		assert.Empty(t, cfg.GetAgentID())
 	})
 
 	t.Run("Gateway with ID returns ID", func(t *testing.T) {

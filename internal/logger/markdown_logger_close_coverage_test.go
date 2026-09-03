@@ -99,7 +99,7 @@ func TestMarkdownLogger_InitializeFile_WriteError(t *testing.T) {
 	require.NoError(t, f.Close())
 
 	err = ml.initializeFile()
-	assert.Error(t, err, "initializeFile() should return error when write fails")
+	require.Error(t, err, "initializeFile() should return error when write fails")
 	assert.False(t, ml.initialized, "ml.initialized should remain false after failed header write")
 }
 

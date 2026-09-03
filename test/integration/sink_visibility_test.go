@@ -226,7 +226,7 @@ func TestSinkVisibility_InvalidValue(t *testing.T) {
 			select {
 			case err := <-done:
 				// Gateway exited — expected due to schema validation failure
-				assert.Error(t, err, "Gateway should exit with error on invalid sink-visibility")
+				require.Error(t, err, "Gateway should exit with error on invalid sink-visibility")
 				output := stderr.String()
 				assert.Contains(t, output, "sink-visibility",
 					"Stderr should mention the invalid sink-visibility field")

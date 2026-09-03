@@ -126,7 +126,7 @@ func TestNewSession(t *testing.T) {
 func TestNewSession_EmptyToken(t *testing.T) {
 	s := NewSession("session-no-token", "")
 	require.NotNil(t, s)
-	assert.Equal(t, "", s.Token)
+	assert.Empty(t, s.Token)
 	assert.Equal(t, "session-no-token", s.SessionID)
 }
 
@@ -277,8 +277,8 @@ func TestEnsureSessionDirectory(t *testing.T) {
 		us2.payloadDir = t.TempDir()
 
 		err := us2.ensureSessionDirectory("session\x00bad")
-		assert.Error(t, err, "should fail for a session ID that makes the path invalid")
-		assert.ErrorContains(t, err, "failed to check session directory")
+		require.Error(t, err, "should fail for a session ID that makes the path invalid")
+		require.ErrorContains(t, err, "failed to check session directory")
 	})
 }
 

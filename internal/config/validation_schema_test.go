@@ -622,7 +622,7 @@ func TestValidateStringPatterns(t *testing.T) {
 			if tt.shouldErr {
 				require.Error(t, err)
 				if tt.errorMsg != "" {
-					assert.ErrorContains(t, err, tt.errorMsg)
+					require.ErrorContains(t, err, tt.errorMsg)
 				}
 			} else {
 				assert.NoError(t, err, "Unexpected error")
@@ -724,11 +724,11 @@ func TestSchemaCaching(t *testing.T) {
 	// that multiple calls to getOrCompileSchema return the same schema instance
 
 	schema1, err1 := getOrCompileSchema()
-	assert.NoError(t, err1, "First schema compilation should succeed")
+	require.NoError(t, err1, "First schema compilation should succeed")
 	assert.NotNil(t, schema1, "First schema should not be nil")
 
 	schema2, err2 := getOrCompileSchema()
-	assert.NoError(t, err2, "Second schema retrieval should succeed")
+	require.NoError(t, err2, "Second schema retrieval should succeed")
 	assert.NotNil(t, schema2, "Second schema should not be nil")
 
 	// Verify that both calls return the exact same schema instance (pointer equality)

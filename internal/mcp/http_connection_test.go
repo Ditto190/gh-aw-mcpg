@@ -240,7 +240,7 @@ func TestNewHTTPConnection_InvalidURL(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			conn, err := NewHTTPConnection(context.Background(), "test-server", tt.url, tt.headers, nil, "", 0, 0)
-			assert.Error(t, err, "Expected error for invalid URL")
+			require.Error(t, err, "Expected error for invalid URL")
 			assert.Nil(t, conn, "Connection should be nil on error")
 		})
 	}

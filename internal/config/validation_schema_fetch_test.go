@@ -48,14 +48,13 @@ func TestFetchSchema_SuccessfulFetch(t *testing.T) {
 
 	// Test fetching from the server
 	result, err := fetchSchema(server.URL)
-
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, result)
 
 	// Verify the result is valid JSON
 	var parsed map[string]interface{}
 	err = json.Unmarshal(result, &parsed)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 // TestFetchSchema_HTTPError tests handling of HTTP error responses
@@ -166,7 +165,7 @@ func TestFetchSchema_InvalidJSON(t *testing.T) {
 	result, err := fetchSchema(server.URL)
 
 	// fetchSchema returns raw bytes; JSON validation is the caller's responsibility
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, []byte("not valid json {{{"), result)
 }
 
@@ -181,7 +180,7 @@ func TestFetchSchema_EmptyResponse(t *testing.T) {
 	result, err := fetchSchema(server.URL)
 
 	// fetchSchema returns raw bytes; an empty response is returned without error
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, []byte{}, result)
 }
 
@@ -335,8 +334,7 @@ func TestFetchSchema_HTTPMethodUsed(t *testing.T) {
 	defer server.Close()
 
 	_, err := fetchSchema(server.URL)
-
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "GET", requestMethod, "Should use GET method")
 }
 

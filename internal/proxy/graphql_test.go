@@ -180,8 +180,8 @@ func TestMatchGraphQL_NoOwnerNoRepo(t *testing.T) {
 	result := MatchGraphQL(body)
 	require.NotNil(t, result)
 	assert.Equal(t, "get_me", result.ToolName)
-	assert.Equal(t, "", result.Owner)
-	assert.Equal(t, "", result.Repo)
+	assert.Empty(t, result.Owner)
+	assert.Empty(t, result.Repo)
 	// Args map should not contain owner or repo keys
 	_, hasOwner := result.Args["owner"]
 	_, hasRepo := result.Args["repo"]
@@ -245,8 +245,8 @@ func TestExtractOwnerRepo_InlineJSONFallback(t *testing.T) {
 // TestExtractOwnerRepo_NilVariablesNoQuery returns empty strings.
 func TestExtractOwnerRepo_NilVariablesNoQuery(t *testing.T) {
 	owner, repo := extractOwnerRepo(nil, "{ viewer { login } }")
-	assert.Equal(t, "", owner)
-	assert.Equal(t, "", repo)
+	assert.Empty(t, owner)
+	assert.Empty(t, repo)
 }
 
 // --- extractSearchQuery ---
@@ -276,7 +276,7 @@ func TestExtractSearchQuery_Inline(t *testing.T) {
 // TestExtractSearchQuery_NoneFound returns empty string when no query available.
 func TestExtractSearchQuery_NoneFound(t *testing.T) {
 	result := extractSearchQuery(`{ viewer { login } }`, nil)
-	assert.Equal(t, "", result)
+	assert.Empty(t, result)
 }
 
 // TestExtractSearchQuery_NilVariables verifies nil variables fall through to inline parsing.

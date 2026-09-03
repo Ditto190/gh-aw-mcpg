@@ -16,7 +16,7 @@ import (
 func TestPaginateAllExported(t *testing.T) {
 	t.Run("single page with no next cursor", func(t *testing.T) {
 		fetch := func(cursor string) ([]string, string, error) {
-			assert.Equal(t, "", cursor, "first call should use empty cursor")
+			assert.Empty(t, cursor, "first call should use empty cursor")
 			return []string{"a", "b", "c"}, "", nil
 		}
 		items, err := PaginateAll(10, fetch)
@@ -66,7 +66,7 @@ func TestPaginateAllExported(t *testing.T) {
 		}
 		items, err := PaginateAll(10, fetch)
 		require.Error(t, err)
-		assert.ErrorIs(t, err, fetchErr)
+		require.ErrorIs(t, err, fetchErr)
 		assert.Nil(t, items)
 	})
 
@@ -123,8 +123,8 @@ func TestPaginateAllExported(t *testing.T) {
 		}
 		items, err := PaginateAll(maxPages, fetch)
 		require.Error(t, err)
-		assert.ErrorContains(t, err, "pagination exceeded")
-		assert.ErrorContains(t, err, fmt.Sprintf("%d", maxPages))
+		require.ErrorContains(t, err, "pagination exceeded")
+		require.ErrorContains(t, err, fmt.Sprintf("%d", maxPages))
 		assert.Nil(t, items)
 	})
 
@@ -177,7 +177,7 @@ func TestPaginateAllExported(t *testing.T) {
 		}
 		items, err := PaginateAll(1, fetch)
 		require.Error(t, err)
-		assert.ErrorContains(t, err, "pagination exceeded")
+		require.ErrorContains(t, err, "pagination exceeded")
 		// Only the first page should be fetched before hitting the cap on the next loop
 		assert.Equal(t, 1, callCount)
 		assert.Nil(t, items)
@@ -225,7 +225,7 @@ func TestPaginateAllExported(t *testing.T) {
 func TestPaginateAllHelper(t *testing.T) {
 	t.Run("single page with no next cursor", func(t *testing.T) {
 		fetch := func(cursor string) (paginatedPage[string], error) {
-			assert.Equal(t, "", cursor, "first call should use empty cursor")
+			assert.Empty(t, cursor, "first call should use empty cursor")
 			return paginatedPage[string]{
 				Items:      []string{"a", "b", "c"},
 				NextCursor: "",
@@ -297,7 +297,7 @@ func TestPaginateAllHelper(t *testing.T) {
 		items, err := paginateAll("server1", "Tools", fetch)
 
 		require.Error(t, err)
-		assert.ErrorIs(t, err, expectedErr)
+		require.ErrorIs(t, err, expectedErr)
 		assert.Nil(t, items)
 	})
 
@@ -314,7 +314,7 @@ func TestPaginateAllHelper(t *testing.T) {
 		items, err := paginateAll("server1", "Tools", fetch)
 
 		require.Error(t, err)
-		assert.ErrorContains(t, err, "page 2 failed")
+		require.ErrorContains(t, err, "page 2 failed")
 		assert.Nil(t, items)
 	})
 
@@ -332,8 +332,8 @@ func TestPaginateAllHelper(t *testing.T) {
 		items, err := paginateAll("server1", "Tools", fetch)
 
 		require.Error(t, err)
-		assert.ErrorContains(t, err, "cyclical cursor")
-		assert.ErrorContains(t, err, "cursor1")
+		require.ErrorContains(t, err, "cyclical cursor")
+		require.ErrorContains(t, err, "cursor1")
 		assert.Nil(t, items)
 	})
 
@@ -351,7 +351,7 @@ func TestPaginateAllHelper(t *testing.T) {
 		_, err := paginateAll(serverID, "Tools", fetch)
 
 		require.Error(t, err)
-		assert.ErrorContains(t, err, serverID)
+		require.ErrorContains(t, err, serverID)
 	})
 
 	t.Run("max pages limit returns error", func(t *testing.T) {
@@ -398,8 +398,8 @@ func TestPaginateAllHelper(t *testing.T) {
 		_, err := paginateAll(serverID, itemKind, fetch)
 
 		require.Error(t, err)
-		assert.ErrorContains(t, err, serverID)
-		assert.ErrorContains(t, err, itemKind)
+		require.ErrorContains(t, err, serverID)
+		require.ErrorContains(t, err, itemKind)
 	})
 
 	t.Run("exactly paginateAllMaxPages-1 pages succeeds", func(t *testing.T) {
@@ -488,9 +488,9 @@ func TestPaginateAllHelper(t *testing.T) {
 		_, err := paginateAll(serverID, itemKind, fetch)
 
 		require.Error(t, err)
-		assert.ErrorContains(t, err, serverID)
-		assert.ErrorContains(t, err, itemKind)
-		assert.ErrorContains(t, err, fmt.Sprintf("%d", paginateAllMaxPages))
+		require.ErrorContains(t, err, serverID)
+		require.ErrorContains(t, err, itemKind)
+		require.ErrorContains(t, err, fmt.Sprintf("%d", paginateAllMaxPages))
 	})
 }
 
@@ -520,7 +520,7 @@ func TestListMCPItems_PaginateError(t *testing.T) {
 		func(items []string) []string { return items },
 	)
 	require.Error(t, err)
-	assert.ErrorIs(t, err, fetchErr)
+	require.ErrorIs(t, err, fetchErr)
 	assert.Nil(t, resp)
 }
 
@@ -552,7 +552,7 @@ func TestListSDKItems_NilSession(t *testing.T) {
 	)
 
 	require.Error(t, err)
-	assert.ErrorContains(t, err, "SDK session not available")
+	require.ErrorContains(t, err, "SDK session not available")
 	assert.False(t, listCalled, "list should not be called when session is unavailable")
 }
 
@@ -564,7 +564,7 @@ func TestCallParamMethod_FnError(t *testing.T) {
 		return nil, fnErr
 	})
 	require.Error(t, err)
-	assert.ErrorIs(t, err, fnErr)
+	require.ErrorIs(t, err, fnErr)
 	assert.Nil(t, resp)
 }
 

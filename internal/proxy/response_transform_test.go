@@ -25,7 +25,7 @@ func TestRewrapSearchResponse_Repositories(t *testing.T) {
 
 	m, ok := result.(map[string]interface{})
 	assert.True(t, ok, "result should be a map")
-	assert.Equal(t, float64(2), m["total_count"], "total_count should reflect filtered count")
+	assert.InEpsilon(t, 2.0, m["total_count"], 1e-9, "total_count should reflect filtered count")
 	incompleteResults, ok := m["incomplete_results"].(bool)
 	assert.True(t, ok, "incomplete_results should be a bool")
 	assert.False(t, incompleteResults)
@@ -71,7 +71,7 @@ func TestRewrapSearchResponse_NeitherItemsNorRepositories(t *testing.T) {
 
 	m, ok := result.(map[string]interface{})
 	assert.True(t, ok, "result should be a map")
-	assert.Equal(t, float64(2), m["total_count"], "total_count updated to filtered length")
+	assert.InEpsilon(t, 2.0, m["total_count"], 1e-9, "total_count updated to filtered length")
 	incompleteResults, ok := m["incomplete_results"].(bool)
 	assert.True(t, ok, "incomplete_results should be a bool")
 	assert.False(t, incompleteResults)
@@ -121,7 +121,7 @@ func TestDeepCloneJSON_Slice(t *testing.T) {
 	original[0].(map[string]interface{})["id"] = float64(99)
 
 	// Clone should be unaffected.
-	assert.Equal(t, float64(1), clonedSlice[0].(map[string]interface{})["id"],
+	assert.InEpsilon(t, 1.0, clonedSlice[0].(map[string]interface{})["id"], 1e-9,
 		"clone should not be affected by mutation of original")
 }
 
@@ -129,7 +129,7 @@ func TestDeepCloneJSON_Slice(t *testing.T) {
 // (string, number, bool, nil) unchanged — they are immutable so no copy is needed.
 func TestDeepCloneJSON_Primitive(t *testing.T) {
 	assert.Equal(t, "hello", util.DeepCloneJSON("hello"))
-	assert.Equal(t, float64(3.14), util.DeepCloneJSON(float64(3.14)))
+	assert.InEpsilon(t, 3.14, util.DeepCloneJSON(float64(3.14)), 1e-9)
 	clonedBool, ok := util.DeepCloneJSON(true).(bool)
 	assert.True(t, ok, "cloned bool should remain a bool")
 	assert.True(t, clonedBool)

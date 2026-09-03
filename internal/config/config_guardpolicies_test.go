@@ -677,8 +677,8 @@ func TestValidateWriteSinkPolicy_SinkVisibility_Invalid(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			policy := &WriteSinkPolicy{Accept: []string{"*"}, SinkVisibility: tc.visibility}
 			err := ValidateWriteSinkPolicy(policy)
-			assert.Error(t, err, "sink-visibility=%q should be invalid", tc.visibility)
-			assert.ErrorContains(t, err, "sink-visibility")
+			require.Error(t, err, "sink-visibility=%q should be invalid", tc.visibility)
+			require.ErrorContains(t, err, "sink-visibility")
 		})
 	}
 }

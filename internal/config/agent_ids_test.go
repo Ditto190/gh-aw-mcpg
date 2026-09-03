@@ -157,8 +157,8 @@ func TestLoadFromStdin_RequiresAgentIDOrAgentIDs(t *testing.T) {
 
 	_, err = LoadFromStdin()
 	require.Error(t, err)
-	assert.ErrorContains(t, err, "agentId")
-	assert.ErrorContains(t, err, "agentIds")
+	require.ErrorContains(t, err, "agentId")
+	require.ErrorContains(t, err, "agentIds")
 }
 
 func TestValidateGatewayConfig_RejectsLegacyAndPluralIDs(t *testing.T) {

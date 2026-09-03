@@ -241,8 +241,8 @@ func TestDefaultMountPolicyAllowsWorkspaceAndTemp(t *testing.T) {
 
 	assert.NoError(t, policy.ValidateMount(workspace+":/workspace:ro"))
 	assert.NoError(t, policy.ValidateMount(filepath.Join(os.TempDir(), "jq-payloads")+":/payloads:rw"))
-	assert.Error(t, policy.ValidateMount("/etc:/host-etc:ro"))
-	assert.Error(t, policy.ValidateMount(workspace+":/workspace:rw"))
+	require.Error(t, policy.ValidateMount("/etc:/host-etc:ro"))
+	require.Error(t, policy.ValidateMount(workspace+":/workspace:rw"))
 }
 
 func TestDefaultMountPolicyEnvOverride(t *testing.T) {
@@ -260,8 +260,8 @@ func TestDefaultMountPolicyEnvOverride(t *testing.T) {
 
 	assert.NoError(t, policy.ValidateMount(allowed+":/data:rw"))
 	assert.NoError(t, policy.ValidateMount(readonly+":/data:ro"))
-	assert.Error(t, policy.ValidateMount(readonly+":/data:rw"), "read-only sub-root overrides writable parent")
-	assert.Error(t, policy.ValidateMount(os.TempDir()+":/data:rw"), "default roots do not apply when overridden")
+	require.Error(t, policy.ValidateMount(readonly+":/data:rw"), "read-only sub-root overrides writable parent")
+	require.Error(t, policy.ValidateMount(os.TempDir()+":/data:rw"), "default roots do not apply when overridden")
 }
 
 func TestCanonicalizePathHandlesMissingLeafDirectories(t *testing.T) {

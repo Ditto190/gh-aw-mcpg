@@ -269,9 +269,9 @@ func TestTCFG013_RejectReservedTypeNames(t *testing.T) {
 
 			// Validation should reject reserved type names in customSchemas
 			err = validateCustomSchemas(stdinCfg.CustomSchemas)
-			assert.Error(t, err, "Reserved type name %q should be rejected in customSchemas", tt.reservedType)
-			assert.ErrorContains(t, err, tt.reservedType)
-			assert.ErrorContains(t, err, "reserved")
+			require.Error(t, err, "Reserved type name %q should be rejected in customSchemas", tt.reservedType)
+			require.ErrorContains(t, err, tt.reservedType)
+			require.ErrorContains(t, err, "reserved")
 		})
 	}
 }
@@ -371,9 +371,9 @@ func TestTCFG014_SchemaURLFetchAndCache(t *testing.T) {
 
 		// Multiple validations should work (caching is implementation detail)
 		err1 := validateServerConfigWithCustomSchemas("test1", server, customSchemas)
-		assert.NoError(t, err1)
+		require.NoError(t, err1)
 
 		err2 := validateServerConfigWithCustomSchemas("test2", server, customSchemas)
-		assert.NoError(t, err2)
+		require.NoError(t, err2)
 	})
 }

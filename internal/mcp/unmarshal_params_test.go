@@ -90,7 +90,7 @@ func TestUnmarshalParams(t *testing.T) {
 		err := unmarshalParams(params, &target)
 
 		require.NoError(t, err, "Should handle empty params")
-		assert.Equal(t, "", target.URI, "URI should be empty string when not provided")
+		assert.Empty(t, target.URI, "URI should be empty string when not provided")
 	})
 
 	t.Run("fail on unmarshalable input type", func(t *testing.T) {
@@ -100,8 +100,8 @@ func TestUnmarshalParams(t *testing.T) {
 		var target CallToolParams
 		err := unmarshalParams(params, &target)
 
-		assert.Error(t, err, "Should fail to marshal channel type")
-		assert.ErrorContains(t, err, "failed to marshal params", "Error should mention marshal failure")
+		require.Error(t, err, "Should fail to marshal channel type")
+		require.ErrorContains(t, err, "failed to marshal params", "Error should mention marshal failure")
 	})
 
 	t.Run("fail on invalid JSON structure", func(t *testing.T) {
@@ -130,8 +130,8 @@ func TestUnmarshalParams(t *testing.T) {
 		}
 		err := unmarshalParams(params, target) // Note: not &target
 
-		assert.Error(t, err, "Should fail when target is not a pointer")
-		assert.ErrorContains(t, err, "invalid params", "Error should mention invalid params")
+		require.Error(t, err, "Should fail when target is not a pointer")
+		require.ErrorContains(t, err, "invalid params", "Error should mention invalid params")
 	})
 
 	t.Run("successful unmarshal preserves JSON types", func(t *testing.T) {
@@ -151,8 +151,8 @@ func TestUnmarshalParams(t *testing.T) {
 		require.NoError(t, err, "Should successfully preserve JSON types")
 		assert.Equal(t, "test", target["string_val"])
 		// JSON unmarshal converts numbers to float64 by default
-		assert.Equal(t, float64(42), target["int_val"])
-		assert.Equal(t, 3.14, target["float_val"])
+		assert.InEpsilon(t, 42.0, target["int_val"], 1e-9)
+		assert.InEpsilon(t, 3.14, target["float_val"], 1e-9)
 		boolVal, ok := target["bool_val"].(bool)
 		require.True(t, ok, "bool_val should be a bool")
 		assert.True(t, boolVal)

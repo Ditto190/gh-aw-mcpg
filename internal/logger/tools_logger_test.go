@@ -256,7 +256,7 @@ func TestWriteJSON_WriteFileFails(t *testing.T) {
 	}
 
 	err := tl.writeJSON(tl.data, 0644)
-	assert.Error(err, "writeJSON should fail when logDir does not exist")
+	require.Error(t, err, "writeJSON should fail when logDir does not exist")
 	assert.ErrorContains(err, "failed to write temp file")
 }
 

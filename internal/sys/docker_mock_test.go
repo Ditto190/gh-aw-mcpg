@@ -100,9 +100,9 @@ func TestCheckPortMapping_SuccessPath(t *testing.T) {
 			mapped, err := CheckPortMapping(tt.containerID, tt.port)
 
 			if tt.wantErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, tt.wantMapped, mapped)
 			}
 		})
@@ -218,6 +218,6 @@ func TestRunDockerInspect_SuccessPath(t *testing.T) {
 
 		output, err := runDockerInspect("abc123def4567890", "{{.Config}}")
 		require.NoError(t, err)
-		assert.Equal(t, "", output)
+		assert.Empty(t, output)
 	})
 }

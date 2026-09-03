@@ -672,9 +672,9 @@ func TestCreateGuard(t *testing.T) {
 			guard, err := CreateGuard(tt.guardType)
 
 			if tt.wantErr {
-				assert.Error(t, err, tt.description)
+				require.Error(t, err, tt.description)
 				assert.Nil(t, guard)
-				assert.ErrorContains(t, err, "unknown guard type")
+				require.ErrorContains(t, err, "unknown guard type")
 			} else {
 				require.NoError(t, err, tt.description)
 				require.NotNil(t, guard)
@@ -1393,7 +1393,7 @@ func TestApplyLabelAgentResult(t *testing.T) {
 		mode, err := ApplyLabelAgentResult(result, agentLabels, difc.EnforcementStrict)
 
 		require.Error(t, err)
-		assert.ErrorContains(t, err, "invalid difc_mode from label_agent")
+		require.ErrorContains(t, err, "invalid difc_mode from label_agent")
 		assert.Equal(t, difc.EnforcementStrict, mode)
 		assert.Empty(t, agentLabels.GetSecrecyTags())
 		assert.Empty(t, agentLabels.GetIntegrityTags())

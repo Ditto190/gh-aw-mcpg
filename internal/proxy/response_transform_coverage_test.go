@@ -67,7 +67,7 @@ func TestRewrapSearchResponse_ItemsKey(t *testing.T) {
 
 	m, ok := result.(map[string]interface{})
 	require.True(t, ok)
-	assert.Equal(t, float64(1), m["total_count"])
+	assert.InEpsilon(t, 1.0, m["total_count"], 1e-9)
 	assert.False(t, m["incomplete_results"].(bool))
 	assert.Equal(t, filtered, m["items"])
 }
@@ -310,7 +310,7 @@ func TestRebuildGraphQLResponse_SuccessfulRebuild(t *testing.T) {
 	nodes, ok := issues["nodes"].([]interface{})
 	require.True(t, ok, "nodes should be a slice")
 	assert.Len(t, nodes, 1, "only accessible items should be in nodes")
-	assert.Equal(t, float64(1), issues["totalCount"], "totalCount should reflect filtered count")
+	assert.InEpsilon(t, 1.0, issues["totalCount"], 1e-9, "totalCount should reflect filtered count")
 
 	// The original must be unchanged (deep-clone was used).
 	origNodes := original["data"].(map[string]interface{})["repository"].(map[string]interface{})["issues"].(map[string]interface{})["nodes"].([]interface{})
@@ -345,7 +345,7 @@ func TestRebuildGraphQLResponse_EdgesReplaced(t *testing.T) {
 	edges, ok := search["edges"].([]interface{})
 	require.True(t, ok)
 	assert.Len(t, edges, 1)
-	assert.Equal(t, float64(1), search["totalCount"])
+	assert.InEpsilon(t, 1.0, search["totalCount"], 1e-9)
 }
 
 // ---------------------------------------------------------------------------
@@ -396,5 +396,5 @@ func TestDeepCloneJSON_NestedMapAndSlice(t *testing.T) {
 	original["level1"].(map[string]interface{})["level2"].([]interface{})[0].(map[string]interface{})["x"] = float64(99)
 
 	clonedVal := cloned.(map[string]interface{})["level1"].(map[string]interface{})["level2"].([]interface{})[0].(map[string]interface{})["x"]
-	assert.Equal(t, float64(1), clonedVal, "deep clone should be independent of original mutations")
+	assert.InEpsilon(t, 1.0, clonedVal, 1e-9, "deep clone should be independent of original mutations")
 }

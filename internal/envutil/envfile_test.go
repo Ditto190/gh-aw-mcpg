@@ -61,7 +61,7 @@ TEST_VAR3=value with spaces
 		assert.Equal(t, "value1", os.Getenv("TEST_VAR1"))
 		assert.Equal(t, "value2", os.Getenv("TEST_VAR2"))
 		assert.Equal(t, "value with spaces", os.Getenv("TEST_VAR3"))
-		assert.Equal(t, "", os.Getenv("EMPTY_LINE"))
+		assert.Empty(t, os.Getenv("EMPTY_LINE"))
 	})
 
 	t.Run("nonexistent file", func(t *testing.T) {

@@ -51,7 +51,7 @@ func TestCloseAllLoggers_NoLoggersInitialized(t *testing.T) {
 	t.Cleanup(func() { resetAllGlobalLoggers(t) })
 
 	err := CloseAllLoggers()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 // TestCloseAllLoggers_AllSucceed verifies that CloseAllLoggers returns nil and
@@ -68,7 +68,7 @@ func TestCloseAllLoggers_AllSucceed(t *testing.T) {
 	require.NoError(t, InitServerFileLogger(tmpDir))
 
 	err := CloseAllLoggers()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	globalLoggerMu.RLock()
 	assert.Nil(t, globalFileLogger, "FileLogger should be nil after CloseAllLoggers")
@@ -112,7 +112,7 @@ func TestCloseAllLoggers_AllCalledEvenIfEarlyFails(t *testing.T) {
 	globalLoggerMu.Unlock()
 
 	err := CloseAllLoggers()
-	assert.Error(t, err, "CloseAllLoggers should return an error when a closer fails")
+	require.Error(t, err, "CloseAllLoggers should return an error when a closer fails")
 
 	// All loggers must be nil: every closer was attempted, not just the first one.
 	globalLoggerMu.RLock()

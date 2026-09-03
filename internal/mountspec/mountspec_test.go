@@ -1,7 +1,6 @@
 package mountspec
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -42,7 +41,7 @@ func TestParse(t *testing.T) {
 
 			require.Error(t, err)
 			var parseErr *ParseError
-			require.True(t, errors.As(err, &parseErr))
+			require.ErrorAs(t, err, &parseErr)
 			assert.Equal(t, tt.errorKind, parseErr.Kind)
 		})
 	}
@@ -53,6 +52,6 @@ func TestParseRequiredMode(t *testing.T) {
 	require.Error(t, err)
 
 	var parseErr *ParseError
-	require.True(t, errors.As(err, &parseErr))
+	require.ErrorAs(t, err, &parseErr)
 	assert.Equal(t, InvalidFormat, parseErr.Kind)
 }

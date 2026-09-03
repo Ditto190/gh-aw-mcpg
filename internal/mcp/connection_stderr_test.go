@@ -79,6 +79,6 @@ func TestConnection_Close_CancelsContext(t *testing.T) {
 	require.NoError(t, ctx.Err(), "context should be valid before Close")
 
 	err := conn.Close()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.ErrorIs(t, ctx.Err(), context.Canceled, "context should be cancelled after Close")
 }

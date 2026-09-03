@@ -75,7 +75,7 @@ func TestCompileOptsWithVariables_DoesNotMutateSharedSlice(t *testing.T) {
 	_ = CompileOptsWithVariables([]string{"$a"})
 	_ = CompileOptsWithVariables([]string{"$b", "$c"})
 
-	assert.Equal(t, origLen, len(SecureCompileOpts), "SecureCompileOpts length should not change")
+	assert.Len(t, SecureCompileOpts, origLen, "SecureCompileOpts length should not change")
 	assert.Equal(t, origCap, cap(SecureCompileOpts), "SecureCompileOpts capacity should not change")
 }
 

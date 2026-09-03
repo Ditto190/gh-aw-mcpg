@@ -140,7 +140,7 @@ func TestGet(t *testing.T) {
 		t.Cleanup(func() { gatewayVersion = original })
 
 		gatewayVersion = "v3.1.4"
-		assert.Equal(t, Get(), Get(), "consecutive Get() calls should return the same value")
+		assert.Equal(t, "v3.1.4", Get(), "consecutive Get() calls should return the same value")
 	})
 }
 

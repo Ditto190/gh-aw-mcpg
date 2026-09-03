@@ -140,7 +140,7 @@ func TestForwardToGitHub_ForwardsRequestBody(t *testing.T) {
 	require.NotNil(t, resp)
 	defer resp.Body.Close()
 
-	assert.Equal(t, requestBody, capturedBody)
+	assert.JSONEq(t, requestBody, capturedBody)
 }
 
 // TestForwardToGitHub_GraphQLPathRouting verifies that forwardToGitHub correctly

@@ -63,7 +63,7 @@ func TestFanoutExporter_forEachExporter_CallsAllAndJoinsErrors(t *testing.T) {
 
 	require.Error(t, err)
 	assert.Equal(t, int32(len(exporters)), calls.Load())
-	assert.ErrorIs(t, err, wantErr)
+	require.ErrorIs(t, err, wantErr)
 	assert.Contains(t, err.Error(), wantErr.Error())
 }
 
@@ -110,7 +110,7 @@ func TestFanoutExporter_ExportSpans_ContinuesOnError(t *testing.T) {
 	spans := sr.Ended()
 	err := exp.ExportSpans(ctx, spans)
 
-	assert.Error(t, err, "error from failing exporter should be returned")
+	require.Error(t, err, "error from failing exporter should be returned")
 	assert.Contains(t, err.Error(), "backend unavailable")
 	assert.Len(t, ok.exported, 1, "healthy exporter should still receive spans")
 }
@@ -149,7 +149,7 @@ func TestFanoutExporter_Shutdown_ContinuesOnError(t *testing.T) {
 	exp := &fanoutExporter{exporters: []sdktrace.SpanExporter{failing, ok}}
 
 	err := exp.Shutdown(ctx)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "shutdown error")
 	assert.Equal(t, 1, ok.shutdowns, "healthy exporter should still be shut down")
 }

@@ -14,8 +14,7 @@ import (
 
 // listToolsViaInMemory connects an SDK client to the given server over an
 // in-memory transport and returns the tool names it advertises.
-func listToolsViaInMemory(t *testing.T, server *sdk.Server) []string {
-	t.Helper()
+func listToolsViaInMemory(server *sdk.Server) ([]string, error) {
 	serverTransport, clientTransport := sdk.NewInMemoryTransports()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -24,17 +23,21 @@ func listToolsViaInMemory(t *testing.T, server *sdk.Server) []string {
 
 	client := sdk.NewClient(&sdk.Implementation{Name: "test-client", Version: "1.0"}, &sdk.ClientOptions{})
 	clientSession, err := client.Connect(ctx, clientTransport, nil)
-	require.NoError(t, err)
+	if err != nil {
+		return nil, err
+	}
 	defer clientSession.Close()
 
 	listResult, err := clientSession.ListTools(ctx, &sdk.ListToolsParams{})
-	require.NoError(t, err)
+	if err != nil {
+		return nil, err
+	}
 
 	names := make([]string, 0, len(listResult.Tools))
 	for _, tool := range listResult.Tools {
 		names = append(names, tool.Name)
 	}
-	return names
+	return names, nil
 }
 
 func TestRegisterFilteredTools(t *testing.T) {
@@ -63,7 +66,9 @@ func TestRegisterFilteredTools(t *testing.T) {
 	)
 
 	assert.Equal(t, 1, registered)
-	assert.ElementsMatch(t, []string{"allowed"}, listToolsViaInMemory(t, server))
+	toolsListed, err := listToolsViaInMemory(server)
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []string{"allowed"}, toolsListed)
 }
 
 func agentVisibilityServer(t *testing.T) *UnifiedServer {
@@ -103,15 +108,18 @@ func TestCreateAgentFilteredServer_RoutedPolicyIsolation(t *testing.T) {
 	us := agentVisibilityServer(t)
 
 	// alice on github: only issue_read is visible (repo_delete filtered out).
-	aliceGithub := listToolsViaInMemory(t, createAgentFilteredServer(us, "github", "alice"))
+	aliceGithub, err := listToolsViaInMemory(createAgentFilteredServer(us, "github", "alice"))
+	require.NoError(t, err)
 	assert.ElementsMatch(t, []string{"issue_read"}, aliceGithub)
 
 	// bob has no github access: the github route exposes zero tools to bob.
-	bobGithub := listToolsViaInMemory(t, createAgentFilteredServer(us, "github", "bob"))
+	bobGithub, err := listToolsViaInMemory(createAgentFilteredServer(us, "github", "bob"))
+	require.NoError(t, err)
 	assert.Empty(t, bobGithub, "bob must not see any github tools")
 
 	// bob on fetch: sees the fetch tool.
-	bobFetch := listToolsViaInMemory(t, createAgentFilteredServer(us, "fetch", "bob"))
+	bobFetch, err := listToolsViaInMemory(createAgentFilteredServer(us, "fetch", "bob"))
+	require.NoError(t, err)
 	assert.ElementsMatch(t, []string{"get"}, bobFetch)
 }
 
@@ -120,14 +128,17 @@ func TestCreateAgentFilteredServer_RoutedPolicyIsolation(t *testing.T) {
 func TestCreateAgentFilteredUnifiedServer_PolicyIsolation(t *testing.T) {
 	us := agentVisibilityServer(t)
 
-	aliceTools := listToolsViaInMemory(t, createAgentFilteredUnifiedServer(us, "alice"))
+	aliceTools, err := listToolsViaInMemory(createAgentFilteredUnifiedServer(us, "alice"))
+	require.NoError(t, err)
 	assert.ElementsMatch(t, []string{"github___issue_read"}, aliceTools, "alice sees only her permitted github tool")
 
-	bobTools := listToolsViaInMemory(t, createAgentFilteredUnifiedServer(us, "bob"))
+	bobTools, err := listToolsViaInMemory(createAgentFilteredUnifiedServer(us, "bob"))
+	require.NoError(t, err)
 	assert.ElementsMatch(t, []string{"fetch___get"}, bobTools, "bob sees only fetch")
 
 	// An agent with no policy sees nothing (fail-closed).
-	ghostTools := listToolsViaInMemory(t, createAgentFilteredUnifiedServer(us, "ghost"))
+	ghostTools, err := listToolsViaInMemory(createAgentFilteredUnifiedServer(us, "ghost"))
+	require.NoError(t, err)
 	assert.Empty(t, ghostTools, "an agent without a policy sees no tools")
 }
 
@@ -145,20 +156,20 @@ func TestCreateAgentFilteredUnifiedServer_ConcurrentIsolation(t *testing.T) {
 	type result struct {
 		agentID string
 		tools   []string
+		err     error
 	}
 	done := make(chan result, len(agents)*4)
 	for i := 0; i < 4; i++ {
 		for _, a := range agents {
 			go func(agentID string) {
-				done <- result{
-					agentID: agentID,
-					tools:   listToolsViaInMemory(t, createAgentFilteredUnifiedServer(us, agentID)),
-				}
+				tools, err := listToolsViaInMemory(createAgentFilteredUnifiedServer(us, agentID))
+				done <- result{agentID: agentID, tools: tools, err: err}
 			}(a)
 		}
 	}
 	for i := 0; i < len(agents)*4; i++ {
 		result := <-done
+		require.NoError(t, result.err)
 		assert.ElementsMatch(t, expected[result.agentID], result.tools)
 	}
 }

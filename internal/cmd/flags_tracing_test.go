@@ -100,8 +100,7 @@ func TestRegisterTracingFlags_DefaultsWithNoEnv(t *testing.T) {
 
 	actualSampleRate, err := cmd.Flags().GetFloat64("otlp-sample-rate")
 	require.NoError(t, err)
-	assert.Equal(t, config.DefaultTracingSampleRate, actualSampleRate,
-		"otlp-sample-rate should default to DefaultTracingSampleRate")
+	assert.InEpsilon(t, config.DefaultTracingSampleRate, actualSampleRate, 1e-9, "otlp-sample-rate should default to DefaultTracingSampleRate")
 }
 
 // TestApplyTracingFlags_ServiceNameEnvVar verifies that when OTEL_SERVICE_NAME is set

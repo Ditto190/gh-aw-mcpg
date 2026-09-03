@@ -694,7 +694,7 @@ func TestRewrapSearchResponse(t *testing.T) {
 		filtered := []interface{}{"a", "b"}
 		result := rewrapSearchResponse(original, filtered)
 		m := result.(map[string]interface{})
-		assert.Equal(t, float64(2), m["total_count"])
+		assert.InEpsilon(t, 2.0, m["total_count"], 1e-9)
 		incompleteResults, ok := m["incomplete_results"]
 		require.True(t, ok)
 		incompleteResultsBool, ok := incompleteResults.(bool)
@@ -743,7 +743,7 @@ func TestRebuildGraphQLResponse(t *testing.T) {
 		data := m["data"].(map[string]interface{})
 		repo := data["repository"].(map[string]interface{})
 		issues := repo["issues"].(map[string]interface{})
-		assert.Equal(t, float64(2), issues["totalCount"])
+		assert.InEpsilon(t, 2.0, issues["totalCount"], 1e-9)
 		assert.Len(t, issues["nodes"].([]interface{}), 2)
 	})
 
@@ -797,7 +797,7 @@ func TestDeepCloneJSON(t *testing.T) {
 	original["a"].([]interface{})[0] = float64(99)
 	original["b"].(map[string]interface{})["c"] = "mutated"
 	// Clone should be unaffected
-	assert.Equal(t, float64(1), cloned.(map[string]interface{})["a"].([]interface{})[0])
+	assert.InEpsilon(t, 1.0, cloned.(map[string]interface{})["a"].([]interface{})[0], 1e-9)
 	assert.Equal(t, "d", cloned.(map[string]interface{})["b"].(map[string]interface{})["c"])
 }
 

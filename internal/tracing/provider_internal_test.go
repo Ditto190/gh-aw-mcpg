@@ -91,7 +91,7 @@ func TestGenerateRandomSpanID_Error(t *testing.T) {
 
 	assert.Equal(t, trace.SpanID{}, id, "span ID should be zero on error")
 	require.Error(t, err, "should return an error when the random source fails")
-	assert.ErrorIs(t, err, syntheticErr, "error should wrap the underlying source error")
+	require.ErrorIs(t, err, syntheticErr, "error should wrap the underlying source error")
 	assert.Contains(t, err.Error(), "failed to generate random span ID")
 }
 
@@ -112,6 +112,5 @@ func TestParentContext_RandomSpanIDFailure(t *testing.T) {
 
 	parentCtx := ParentContext(ctx, cfg)
 
-	assert.True(t, ctx == parentCtx,
-		"ParentContext must return the original context when random span ID generation fails")
+	assert.Same(t, ctx, parentCtx, "ParentContext must return the original context when random span ID generation fails")
 }

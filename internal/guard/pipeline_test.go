@@ -97,7 +97,7 @@ func TestRunPipelinePrePhases_Phase1_ReturnsErrorOnLabelResourceFailure(t *testi
 	_, pre, err := RunPipelinePrePhases(context.Background(), in)
 	require.Error(t, err)
 	assert.Nil(t, pre)
-	assert.ErrorIs(t, err, labelErr, "error should wrap the underlying labeling error")
+	require.ErrorIs(t, err, labelErr, "error should wrap the underlying labeling error")
 	assert.Contains(t, err.Error(), "resource labeling failed")
 	// Confirm it's not a PipelineAccessDenied error
 	_, isDenied := err.(*PipelineAccessDenied)
@@ -318,7 +318,7 @@ func TestHandlePrePhaseError_ReturnsDetailedViolationForDeniedError(t *testing.T
 
 	denied, detailedErr := HandlePrePhaseError(fmt.Errorf("wrapped: %w", deniedErr))
 	assert.Same(t, deniedErr, denied)
-	assert.Error(t, detailedErr)
+	require.Error(t, detailedErr)
 	assert.Contains(t, detailedErr.Error(), "DIFC Violation:")
 	assert.Contains(t, detailedErr.Error(), "secrecy violation")
 }
@@ -326,5 +326,5 @@ func TestHandlePrePhaseError_ReturnsDetailedViolationForDeniedError(t *testing.T
 func TestHandlePrePhaseError_IgnoresNonDeniedError(t *testing.T) {
 	denied, detailedErr := HandlePrePhaseError(errors.New("resource labeling failed"))
 	assert.Nil(t, denied)
-	assert.Nil(t, detailedErr)
+	assert.NoError(t, detailedErr)
 }

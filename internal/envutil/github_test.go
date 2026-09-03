@@ -50,7 +50,7 @@ func TestLookupGitHubToken(t *testing.T) {
 
 	t.Run("returns empty when no token set", func(t *testing.T) {
 		clearAll(t)
-		assert.Equal(t, "", LookupGitHubToken())
+		assert.Empty(t, LookupGitHubToken())
 	})
 
 	t.Run("trims whitespace", func(t *testing.T) {

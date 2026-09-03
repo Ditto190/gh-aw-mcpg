@@ -399,7 +399,7 @@ func TestLoadFromStdin_AgentPolicies(t *testing.T) {
 			if tt.shouldErr {
 				require.Error(t, err)
 				if tt.wantErr != "" {
-					assert.ErrorContains(t, err, tt.wantErr)
+					require.ErrorContains(t, err, tt.wantErr)
 				}
 				return
 			}

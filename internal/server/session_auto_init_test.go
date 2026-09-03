@@ -329,7 +329,7 @@ func TestPerformSessionAutoInit_MissingSessionID(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/mcp", nil)
 	req.Header.Set("Authorization", "test-api-key")
 	_, err := performSessionAutoInit(req, handler)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "missing Mcp-Session-Id")
 }
 

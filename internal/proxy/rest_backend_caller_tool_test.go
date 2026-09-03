@@ -264,7 +264,7 @@ func TestRestBackendCaller_PullRequestRead(t *testing.T) {
 			if tt.wantErr {
 				require.Error(t, err)
 				if tt.errContains != "" {
-					assert.ErrorContains(t, err, tt.errContains)
+					require.ErrorContains(t, err, tt.errContains)
 				}
 				return
 			}
@@ -388,7 +388,7 @@ func TestRestBackendCaller_IssueRead(t *testing.T) {
 			if tt.wantErr {
 				require.Error(t, err)
 				if tt.errContains != "" {
-					assert.ErrorContains(t, err, tt.errContains)
+					require.ErrorContains(t, err, tt.errContains)
 				}
 				return
 			}
@@ -502,7 +502,7 @@ func TestRestBackendCaller_SearchRepositories(t *testing.T) {
 			if tt.wantErr {
 				require.Error(t, err)
 				if tt.errContains != "" {
-					assert.ErrorContains(t, err, tt.errContains)
+					require.ErrorContains(t, err, tt.errContains)
 				}
 				return
 			}

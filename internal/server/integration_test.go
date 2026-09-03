@@ -562,7 +562,7 @@ func TestCloseEndpoint_Integration(t *testing.T) {
 		assert.Equal("Gateway shutdown initiated", result["message"], "Message should match expected text")
 
 		// Should report 2 servers terminated
-		assert.Equal(float64(2), result["serversTerminated"], "Should terminate 2 servers")
+		assert.InEpsilon(float64(2), result["serversTerminated"], 1e-9, "Should terminate 2 servers")
 
 		t.Log("✓ Close endpoint returns correct success response")
 

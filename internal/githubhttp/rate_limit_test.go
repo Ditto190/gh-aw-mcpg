@@ -216,9 +216,9 @@ func TestParseRateLimitResetFromText(t *testing.T) {
 
 			assert.False(t, got.IsZero(), "expected non-zero time")
 			// The returned time should be in the range [before+minOffset, after+maxOffset].
-			assert.True(t, !got.Before(before.Add(tt.minOffset)),
+			assert.False(t, got.Before(before.Add(tt.minOffset)),
 				"reset time %v is too early (expected at least %v after %v)", got, tt.minOffset, before)
-			assert.True(t, !got.After(after.Add(tt.maxOffset)),
+			assert.False(t, got.After(after.Add(tt.maxOffset)),
 				"reset time %v is too late (expected at most %v after %v)", got, tt.maxOffset, after)
 		})
 	}
@@ -244,7 +244,7 @@ func TestRateLimitSignal(t *testing.T) {
 		limited, reset, remaining := RateLimitSignal(resp)
 		assert.True(t, limited)
 		assert.Equal(t, "12345", reset)
-		assert.Equal(t, "", remaining)
+		assert.Empty(t, remaining)
 	})
 
 	t.Run("remaining zero is rate limited", func(t *testing.T) {

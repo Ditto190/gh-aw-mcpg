@@ -565,7 +565,7 @@ func TestValidateMounts(t *testing.T) {
 			if tt.shouldErr {
 				require.Error(t, err, "Expected an error but got none")
 				if tt.errMsg != "" {
-					assert.ErrorContains(t, err, tt.errMsg,
+					require.ErrorContains(t, err, tt.errMsg,
 						"Error message %q should contain %q", err.Error(), tt.errMsg)
 				}
 			} else {

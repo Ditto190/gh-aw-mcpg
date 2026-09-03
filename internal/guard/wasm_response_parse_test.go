@@ -76,7 +76,7 @@ func TestFillLabeledResourceFromMap(t *testing.T) {
 			"description": 42,
 		}, resource)
 
-		assert.Equal(t, "", resource.Description)
+		assert.Empty(t, resource.Description)
 		assert.Empty(t, resource.Secrecy.Label.GetTags())
 		assert.Empty(t, resource.Integrity.Label.GetTags())
 	})
@@ -318,7 +318,7 @@ func TestParseResourceResponse(t *testing.T) {
 				require.Error(t, err)
 				assert.Nil(t, resource)
 				if tt.errContains != "" {
-					assert.ErrorContains(t, err, tt.errContains)
+					require.ErrorContains(t, err, tt.errContains)
 				}
 				return
 			}
@@ -475,7 +475,7 @@ func TestParseCollectionLabeledData(t *testing.T) {
 				require.NotNil(t, item.Labels)
 				assert.Empty(t, item.Labels.Secrecy.Label.GetTags())
 				assert.Empty(t, item.Labels.Integrity.Label.GetTags())
-				assert.Equal(t, "", item.Labels.Description)
+				assert.Empty(t, item.Labels.Description)
 			},
 		},
 		{
@@ -652,7 +652,7 @@ func TestParseCollectionLabeledData(t *testing.T) {
 			},
 			wantItemCount: 1,
 			checkItems: func(t *testing.T, c *difc.CollectionLabeledData) {
-				assert.Equal(t, "", c.Items[0].Labels.Description)
+				assert.Empty(t, c.Items[0].Labels.Description)
 			},
 		},
 

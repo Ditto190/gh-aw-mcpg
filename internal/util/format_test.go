@@ -225,14 +225,14 @@ func TestInterfaceToIntString(t *testing.T) {
 		t.Parallel()
 		s, ok := InterfaceToIntString(float64(1.5))
 		assert.False(t, ok)
-		assert.Equal(t, "", s)
+		assert.Empty(t, s)
 	})
 
 	t.Run("float64 truncatable decimal returns false", func(t *testing.T) {
 		t.Parallel()
 		s, ok := InterfaceToIntString(float64(123.9))
 		assert.False(t, ok)
-		assert.Equal(t, "", s)
+		assert.Empty(t, s)
 	})
 
 	t.Run("float64 out of int64 range returns false", func(t *testing.T) {
@@ -240,7 +240,7 @@ func TestInterfaceToIntString(t *testing.T) {
 		// 1e20 exceeds int64 max; explicit out-of-range guard rejects it
 		s, ok := InterfaceToIntString(float64(1e20))
 		assert.False(t, ok)
-		assert.Equal(t, "", s)
+		assert.Empty(t, s)
 	})
 
 	t.Run("json.Number integer", func(t *testing.T) {
@@ -268,35 +268,35 @@ func TestInterfaceToIntString(t *testing.T) {
 		t.Parallel()
 		s, ok := InterfaceToIntString(json.Number("123.45"))
 		assert.False(t, ok)
-		assert.Equal(t, "", s)
+		assert.Empty(t, s)
 	})
 
 	t.Run("json.Number out of int64 range returns false", func(t *testing.T) {
 		t.Parallel()
 		s, ok := InterfaceToIntString(json.Number("99999999999999999999"))
 		assert.False(t, ok)
-		assert.Equal(t, "", s)
+		assert.Empty(t, s)
 	})
 
 	t.Run("string returns false", func(t *testing.T) {
 		t.Parallel()
 		s, ok := InterfaceToIntString("42")
 		assert.False(t, ok)
-		assert.Equal(t, "", s)
+		assert.Empty(t, s)
 	})
 
 	t.Run("int returns false", func(t *testing.T) {
 		t.Parallel()
 		s, ok := InterfaceToIntString(42)
 		assert.False(t, ok)
-		assert.Equal(t, "", s)
+		assert.Empty(t, s)
 	})
 
 	t.Run("nil returns false", func(t *testing.T) {
 		t.Parallel()
 		s, ok := InterfaceToIntString(nil)
 		assert.False(t, ok)
-		assert.Equal(t, "", s)
+		assert.Empty(t, s)
 	})
 }
 

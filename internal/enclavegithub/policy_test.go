@@ -248,7 +248,7 @@ func TestVerifierAcceptsExactAWFPositiveVector(t *testing.T) {
 
 	decodedPayload, err := base64.RawURLEncoding.DecodeString(payloadB64)
 	require.NoError(t, err)
-	assert.Equal(t, payload, string(decodedPayload))
+	assert.JSONEq(t, payload, string(decodedPayload))
 
 	token := CapabilityPrefix + "." + payloadB64 + "." + mac
 	claims, err := verifier.verifyAuthorizationAt(

@@ -221,7 +221,7 @@ func TestNormalizeGuardPolicy(t *testing.T) {
 
 			if tt.wantErr != "" {
 				require.Error(t, err)
-				assert.ErrorContains(t, err, tt.wantErr)
+				require.ErrorContains(t, err, tt.wantErr)
 				assert.Nil(t, got)
 				return
 			}
@@ -658,7 +658,7 @@ func TestNormalizeAndValidateScopeArray(t *testing.T) {
 
 			if tt.wantErr != "" {
 				require.Error(t, err)
-				assert.ErrorContains(t, err, tt.wantErr)
+				require.ErrorContains(t, err, tt.wantErr)
 				assert.Nil(t, got)
 				return
 			}

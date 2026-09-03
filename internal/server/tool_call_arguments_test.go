@@ -167,7 +167,7 @@ func TestUnifiedServer_ToolCallArguments(t *testing.T) {
 
 	// Verify specific argument values
 	assert.Equal(t, "test_value", arguments["param1"], "param1 should match")
-	assert.Equal(t, float64(42), arguments["param2"], "param2 should match")
+	assert.InEpsilon(t, 42.0, arguments["param2"], 1e-9, "param2 should match")
 
 	nestedMap, ok := arguments["param3"].(map[string]interface{})
 	require.True(t, ok, "param3 should be a nested map")

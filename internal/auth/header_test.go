@@ -487,19 +487,19 @@ func TestExtractSessionIDFromHeaders(t *testing.T) {
 	t.Run("malformed X-Agent-ID returns empty", func(t *testing.T) {
 		t.Parallel()
 		got := ExtractSessionIDFromHeaders("bad\x00id", "auth-token")
-		assert.Equal(t, "", got)
+		assert.Empty(t, got)
 	})
 
 	t.Run("malformed Authorization returns empty when X-Agent-ID missing", func(t *testing.T) {
 		t.Parallel()
 		got := ExtractSessionIDFromHeaders("", "bad\x00token")
-		assert.Equal(t, "", got)
+		assert.Empty(t, got)
 	})
 
 	t.Run("both headers empty returns empty string", func(t *testing.T) {
 		t.Parallel()
 		got := ExtractSessionIDFromHeaders("", "")
-		assert.Equal(t, "", got)
+		assert.Empty(t, got)
 	})
 
 	t.Run("valid X-Agent-ID takes precedence over malformed Authorization", func(t *testing.T) {

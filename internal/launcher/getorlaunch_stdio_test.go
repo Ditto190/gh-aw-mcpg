@@ -77,7 +77,7 @@ func TestGetOrLaunch_StdioServer_EnvPassthrough(t *testing.T) {
 	// Launch should process env passthrough logic
 	// This will fail (echo is not an MCP server), but we're testing the env var path
 	conn, err := GetOrLaunch(l, "env-test-server")
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, conn)
 }
 
@@ -118,7 +118,7 @@ func TestGetOrLaunch_StdioServer_EnvExplicitValue(t *testing.T) {
 
 	// Should not treat VAR=explicit_value as passthrough
 	conn, err := GetOrLaunch(l, "explicit-env-server")
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, conn)
 }
 
@@ -142,7 +142,7 @@ func TestGetOrLaunch_StdioServer_EnvLongValue(t *testing.T) {
 
 	// Should truncate long value in logs
 	conn, err := GetOrLaunch(l, "long-env-server")
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, conn)
 }
 
@@ -166,7 +166,7 @@ func TestGetOrLaunch_StdioServer_MultipleEnvFlags(t *testing.T) {
 
 	// Should process all -e flags
 	conn, err := GetOrLaunch(l, "multi-env-server")
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, conn)
 }
 
@@ -210,7 +210,7 @@ func TestGetOrLaunch_StdioServer_WithEnvMap(t *testing.T) {
 
 	// Should log env map (with truncation)
 	conn, err := GetOrLaunch(l, "env-map-server")
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, conn)
 }
 
@@ -256,7 +256,7 @@ func TestGetOrLaunch_DirectCommandInContainer(t *testing.T) {
 
 	// Should log warning about direct command in container
 	conn, err := GetOrLaunch(l, "direct-command-server")
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, conn)
 }
 
@@ -279,7 +279,7 @@ func TestGetOrLaunch_DockerCommandInContainer(t *testing.T) {
 
 	// Should NOT log warning (Docker command is OK in container)
 	conn, err := GetOrLaunch(l, "docker-in-container")
-	assert.Error(t, err) // Still fails (no Docker), but no warning about direct command
+	require.Error(t, err) // Still fails (no Docker), but no warning about direct command
 	assert.Nil(t, conn)
 }
 
@@ -318,9 +318,9 @@ func TestGetOrLaunch_ConcurrentLaunch(t *testing.T) {
 	firstErr := errors[0]
 	for i := 1; i < numGoroutines; i++ {
 		if firstErr == nil {
-			assert.NoError(t, errors[i], "All goroutines should succeed if first succeeded")
+			require.NoError(t, errors[i], "All goroutines should succeed if first succeeded")
 		} else {
-			assert.Error(t, errors[i], "All goroutines should fail if first failed")
+			require.Error(t, errors[i], "All goroutines should fail if first failed")
 		}
 	}
 
@@ -445,9 +445,9 @@ func TestGetOrLaunch_HTTPConnectionError(t *testing.T) {
 
 	// Should fail with HTTP connection creation error
 	conn, err := GetOrLaunch(l, "bad-http-server")
-	assert.Error(t, err, "Expected error for invalid HTTP URL")
+	require.Error(t, err, "Expected error for invalid HTTP URL")
 	assert.Nil(t, conn)
-	assert.ErrorContains(t, err, "failed to create HTTP connection")
+	require.ErrorContains(t, err, "failed to create HTTP connection")
 
 	// Verify no connection was stored
 	l.mu.RLock()
@@ -521,7 +521,7 @@ func TestGetOrLaunch_ErrorLogging_DirectCommandInContainer(t *testing.T) {
 
 	// Should fail and log container-specific troubleshooting
 	conn, err := GetOrLaunch(l, "error-container-server")
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, conn)
 }
 
@@ -555,6 +555,6 @@ func TestGetOrLaunch_ContainerFieldConversion(t *testing.T) {
 
 	// Try to launch (will fail due to missing image, but tests the path)
 	conn, err := GetOrLaunch(l, "container-server")
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, conn)
 }

@@ -155,7 +155,7 @@ func TestCloseLogFile_EmptyFile(t *testing.T) {
 	// Don't write anything, just close
 	var mu sync.Mutex
 	err = closeLogFile(file, &mu, "test")
-	assert.NoError(err, "closeLogFile failed for empty file")
+	require.NoError(err, "closeLogFile failed for empty file")
 
 	// Verify file exists and is empty
 	info, err := os.Stat(logPath)
@@ -201,7 +201,7 @@ func TestInitLogFile_CreatesDirectory(t *testing.T) {
 	assert.True(os.IsNotExist(err), "Directory should not exist yet")
 
 	file, err := initLogFile(logDir, fileName, os.O_APPEND)
-	assert.NoError(err, "initLogFile should succeed")
+	require.NoError(t, err, "initLogFile should succeed")
 	defer file.Close()
 
 	// Verify nested directory was created
@@ -366,7 +366,7 @@ func TestInitLogFile_ConcurrentCreation(t *testing.T) {
 	close(errors)
 
 	for err := range errors {
-		assert.NoError(err, "Concurrent file creation should not error")
+		require.NoError(t, err, "Concurrent file creation should not error")
 	}
 
 	// Verify all files were created
@@ -419,7 +419,7 @@ func TestInitLogger_FileLogger(t *testing.T) {
 	// Verify the log file was created
 	logPath := filepath.Join(logDir, fileName)
 	_, err = os.Stat(logPath)
-	assert.NoError(err, "Log file should exist")
+	require.NoError(err, "Log file should exist")
 
 	// Clean up
 	logger.Close()
@@ -678,8 +678,8 @@ func TestInitLogger_NilSetup(t *testing.T) {
 		},
 	)
 
-	a.Error(err, "initLogger should return error when factory.setup is nil")
-	a.ErrorContains(err, "non-nil")
+	require.Error(t, err, "initLogger should return error when factory.setup is nil")
+	require.ErrorContains(t, err, "non-nil")
 	a.Nil(logger, "logger should be nil when factory.setup is nil")
 }
 
@@ -698,8 +698,8 @@ func TestInitLogger_NilOnError(t *testing.T) {
 		},
 	)
 
-	a.Error(err, "initLogger should return error when factory.onError is nil")
-	a.ErrorContains(err, "non-nil")
+	require.Error(t, err, "initLogger should return error when factory.onError is nil")
+	require.ErrorContains(t, err, "non-nil")
 	a.Nil(logger, "logger should be nil when factory.onError is nil")
 }
 
@@ -721,8 +721,8 @@ func TestInitLogger_SetupReturnsNilLogger(t *testing.T) {
 		},
 	)
 
-	a.Error(err, "initLogger should return error when setup returns nil logger")
-	a.ErrorContains(err, "nil logger")
+	require.Error(t, err, "initLogger should return error when setup returns nil logger")
+	require.ErrorContains(t, err, "nil logger")
 	a.Nil(logger, "logger should be nil")
 
 	// The file should have been created (initLogFile succeeded) but then closed.

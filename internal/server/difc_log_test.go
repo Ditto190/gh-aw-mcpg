@@ -652,8 +652,8 @@ func TestBuildDIFCSingleItemFilteredError_NoReason(t *testing.T) {
 	err := buildDIFCSingleItemFilteredError(detail)
 
 	require.Error(t, err)
-	assert.ErrorContains(t, err, "[Filtered]")
-	assert.ErrorContains(t, err, "issue:org/repo#7")
+	require.ErrorContains(t, err, "[Filtered]")
+	require.ErrorContains(t, err, "issue:org/repo#7")
 	// No trailing "()" should appear when reason is empty.
 	assert.NotContains(t, err.Error(), "()")
 }
