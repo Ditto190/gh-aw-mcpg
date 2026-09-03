@@ -217,6 +217,9 @@ func NewUnified(ctx context.Context, cfg *config.Config) (*UnifiedServer, error)
 		us.enableDIFC = true
 		logUnified.Printf("Auto-enabled DIFC: non-noop guard, global policy, per-server guard policies, or per-agent allow-only policies detected")
 	}
+	if err := us.validateSafeOutputsGuards(); err != nil {
+		return nil, err
+	}
 
 	// Log guards status early (before backend launch which may take time)
 	if us.enableDIFC {
@@ -505,6 +508,7 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 		if denied, detailedErr := guard.HandlePrePhaseError(err); denied != nil {
 			logger.LogWarn("difc", "Access DENIED for agent %s to %s: %s",
 				util.HashIdentifierForLog(agentID), denied.Resource.Description, denied.EvalResult.Reason)
+			logCoarseDIFCDenial(serverID, toolName, denied)
 			if toolSpan.IsRecording() {
 				toolSpan.AddEvent("difc.access_denied", oteltrace.WithAttributes(
 					attribute.String("reason", denied.EvalResult.Reason),

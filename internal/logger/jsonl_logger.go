@@ -148,17 +148,19 @@ func logRPCMessageJSONLWithTagsAndSanitized(direction RPCMessageDirection, messa
 // It is used for both text log output ([DIFC-FILTERED] JSON lines) and as
 // the embedded payload in JSONLFilteredItem for JSONL log output.
 type FilteredItemLogEntry struct {
-	ServerID          string   `json:"server_id"`
-	ToolName          string   `json:"tool_name"`
-	Description       string   `json:"description"`
-	Reason            string   `json:"reason"`
-	SecrecyTags       []string `json:"secrecy_tags"`
-	IntegrityTags     []string `json:"integrity_tags"`
-	AuthorAssociation string   `json:"author_association,omitempty"`
-	AuthorLogin       string   `json:"author_login,omitempty"`
-	HTMLURL           string   `json:"html_url,omitempty"`
-	Number            string   `json:"number,omitempty"`
-	SHA               string   `json:"sha,omitempty"`
+	ServerID           string   `json:"server_id"`
+	ToolName           string   `json:"tool_name"`
+	Description        string   `json:"description"`
+	Reason             string   `json:"reason"`
+	SecrecyTags        []string `json:"secrecy_tags"`
+	IntegrityTags      []string `json:"integrity_tags"`
+	AgentSecrecyTags   []string `json:"agent_secrecy_tags,omitempty"`
+	AgentIntegrityTags []string `json:"agent_integrity_tags,omitempty"`
+	AuthorAssociation  string   `json:"author_association,omitempty"`
+	AuthorLogin        string   `json:"author_login,omitempty"`
+	HTMLURL            string   `json:"html_url,omitempty"`
+	Number             string   `json:"number,omitempty"`
+	SHA                string   `json:"sha,omitempty"`
 }
 
 // JSONLFilteredItem represents a DIFC-filtered item logged to the JSONL stream.

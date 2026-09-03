@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/github/gh-aw-mcpg/internal/difc"
+	"github.com/github/gh-aw-mcpg/internal/guard"
 	"github.com/github/gh-aw-mcpg/internal/logger"
 	"github.com/github/gh-aw-mcpg/internal/util"
 )
@@ -74,6 +75,26 @@ func buildFilteredItemLogEntry(serverID, toolName string, detail difc.FilteredIt
 	}
 
 	return entry
+}
+
+func logCoarseDIFCDenial(serverID, toolName string, denied *guard.PipelineAccessDenied) {
+	entry := logger.FilteredItemLogEntry{
+		ServerID:           serverID,
+		ToolName:           toolName,
+		Description:        denied.Resource.Description,
+		Reason:             denied.EvalResult.Reason,
+		SecrecyTags:        difc.TagsToStrings(denied.Resource.Secrecy.Label.GetTags()),
+		IntegrityTags:      difc.TagsToStrings(denied.Resource.Integrity.Label.GetTags()),
+		AgentSecrecyTags:   difc.TagsToStrings(denied.AgentLabels.Secrecy.Label.GetTags()),
+		AgentIntegrityTags: difc.TagsToStrings(denied.AgentLabels.Integrity.Label.GetTags()),
+	}
+	b, err := json.Marshal(entry)
+	if err != nil {
+		logger.LogWarnToServer(serverID, "difc", "Failed to marshal coarse DIFC denial: %v", err)
+		return
+	}
+	logger.LogWarnToServer(serverID, "difc", "[DIFC-DENIED] %s", string(b))
+	logger.LogDifcFilteredItem(&logger.JSONLFilteredItem{FilteredItemLogEntry: entry})
 }
 
 // maxFilteredItemsInNotice is the maximum number of individual item descriptions

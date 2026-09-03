@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/github/gh-aw-mcpg/internal/difc"
+	"github.com/github/gh-aw-mcpg/internal/guard"
 	"github.com/github/gh-aw-mcpg/internal/logger"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -78,6 +79,35 @@ func readLogLines(t *testing.T, path, needle string) []string {
 		}
 	}
 	return matched
+}
+
+func TestLogCoarseDIFCDenial_EmitsAuditEntry(t *testing.T) {
+	tmpDir := t.TempDir()
+	require.NoError(t, logger.InitJSONLLogger(tmpDir, "rpc-messages.jsonl"))
+	defer logger.CloseAllLoggers()
+
+	resource := difc.NewLabeledResource("safeoutputs:create_issue")
+	resource.Secrecy.Label.Add("private:github/gh-aw")
+	resource.Integrity.Label.Add("none:public")
+	agent := difc.NewAgentLabels("agent")
+	agent.Secrecy.Label.Add("private:github/gh-aw")
+	agent.Integrity.Label.Add("none:public")
+	logCoarseDIFCDenial("safeoutputs", "create_issue", &guard.PipelineAccessDenied{
+		Resource: resource, AgentLabels: agent,
+		EvalResult: &difc.EvaluationResult{Reason: "integrity too low"},
+	})
+
+	logger.CloseAllLoggers()
+	content, err := os.ReadFile(filepath.Join(tmpDir, "rpc-messages.jsonl"))
+	require.NoError(t, err)
+	var entry logger.JSONLFilteredItem
+	require.NoError(t, json.Unmarshal(content, &entry))
+	assert.Equal(t, "difc_filtered", entry.Event)
+	assert.Equal(t, "safeoutputs", entry.ServerID)
+	assert.Equal(t, "create_issue", entry.ToolName)
+	assert.Equal(t, "integrity too low", entry.Reason)
+	assert.Equal(t, []string{"none:public"}, entry.AgentIntegrityTags)
+	assert.Equal(t, []string{"none:public"}, entry.IntegrityTags)
 }
 
 // extractJSONFromDIFCLine extracts the JSON payload from a [DIFC-FILTERED] log line.
