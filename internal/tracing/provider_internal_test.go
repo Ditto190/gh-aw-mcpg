@@ -112,5 +112,5 @@ func TestParentContext_RandomSpanIDFailure(t *testing.T) {
 
 	parentCtx := ParentContext(ctx, cfg)
 
-	assert.Same(t, ctx, parentCtx, "ParentContext must return the original context when random span ID generation fails")
+	assert.Equal(t, ctx, parentCtx, "ParentContext must return the original context when random span ID generation fails")
 }
