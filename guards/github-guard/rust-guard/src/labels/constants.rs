@@ -37,8 +37,9 @@ pub mod policy_integrity {
 #[cfg(test)]
 mod tests {
     use super::{
-        desc_prefix, field_names, policy_integrity, tool_names, UI_GET_REPO_SCOPED_METHODS,
-        SENSITIVE_PATH_PREFIXES, URL_FALLBACK_FIELDS,
+        desc_prefix, field_names, policy_integrity, tool_names, SENSITIVE_PATH_PREFIXES,
+        UI_GET_ACCESS_SENSITIVE_METHODS, UI_GET_GITHUB_APPROVED_METHODS,
+        UI_GET_REPO_SCOPED_METHODS, URL_FALLBACK_FIELDS,
     };
 
     /// Ensures ORDER_LOW_TO_HIGH_PIPED stays in sync with ORDER_HIGH_TO_LOW.
@@ -90,6 +91,11 @@ mod tests {
             UI_GET_REPO_SCOPED_METHODS,
             &["labels", "milestones", "branches"]
         );
+        assert_eq!(
+            UI_GET_GITHUB_APPROVED_METHODS,
+            &["issue_types", "issue_fields"]
+        );
+        assert_eq!(UI_GET_ACCESS_SENSITIVE_METHODS, &["assignees", "reviewers"]);
     }
 }
 
@@ -205,3 +211,9 @@ pub mod tool_names {
 
 /// UI metadata methods that are scoped to a specific repository.
 pub const UI_GET_REPO_SCOPED_METHODS: &[&str] = &["labels", "milestones", "branches"];
+
+/// UI metadata methods treated as GitHub-controlled/project-level (not repo-scoped).
+pub const UI_GET_GITHUB_APPROVED_METHODS: &[&str] = &["issue_types", "issue_fields"];
+
+/// UI metadata methods that expose access-sensitive membership/reviewer data.
+pub const UI_GET_ACCESS_SENSITIVE_METHODS: &[&str] = &["assignees", "reviewers"];
