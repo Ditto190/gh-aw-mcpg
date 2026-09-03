@@ -2250,9 +2250,15 @@ mod tests {
         let repo_id = "octocat/hello-world";
         let expected_secrecy: Vec<String> = vec![];
 
+        let standalone_methods = ["list_issue_types", "list_issue_fields"];
+        assert_eq!(
+            UI_GET_GITHUB_APPROVED_METHODS.len(),
+            standalone_methods.len(),
+            "every GitHub-approved ui_get method must have a standalone counterpart",
+        );
         for (&method, standalone) in UI_GET_GITHUB_APPROVED_METHODS
             .iter()
-            .zip(["list_issue_types", "list_issue_fields"])
+            .zip(standalone_methods)
         {
             let args = serde_json::json!({
                 "owner": "octocat",
