@@ -140,7 +140,8 @@ func TestForwardToGitHub_ForwardsRequestBody(t *testing.T) {
 	require.NotNil(t, resp)
 	defer resp.Body.Close()
 
-	assert.JSONEq(t, requestBody, capturedBody)
+	// The proxy must preserve the request body byte-for-byte.
+	assert.Equal(t, requestBody, capturedBody) //nolint:testifylint // transport transparency requires exact bytes
 }
 
 // TestForwardToGitHub_GraphQLPathRouting verifies that forwardToGitHub correctly

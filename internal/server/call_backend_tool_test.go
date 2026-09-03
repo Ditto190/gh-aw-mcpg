@@ -134,7 +134,7 @@ func TestCallBackendTool_ReturnsNonNilCallToolResult(t *testing.T) {
 	// Verify the result has proper structure
 	assert.False(result.IsError, "Result should not be marked as error")
 	require.NotNil(result.Content, "Result Content should not be nil")
-	assert.NotEmpty(t, result.Content)
+	assert.NotEmpty(result.Content)
 
 	// Verify content is properly converted
 	if len(result.Content) > 0 {

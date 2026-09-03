@@ -170,7 +170,9 @@ func TestHTTPError_DroppedConnection(t *testing.T) {
 			t.Fatal("Server doesn't support hijacking")
 		}
 		conn, _, err := hj.Hijack()
-		assert.NoError(t, err, "Failed to hijack connection")
+		if !assert.NoError(t, err, "Failed to hijack connection") {
+			return
+		}
 		conn.Close() // Drop the connection
 	}))
 	defer mockServer.Close()

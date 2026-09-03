@@ -82,7 +82,7 @@ func TestWithOTELTracing_PreservesResponseBody(t *testing.T) {
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 
-	assert.JSONEq(t, body, w.Body.String(), "response body should be forwarded unchanged")
+	assert.Equal(t, body, w.Body.String(), "response body should be forwarded unchanged") //nolint:testifylint // forwarding requires exact bytes
 	assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
 }
 

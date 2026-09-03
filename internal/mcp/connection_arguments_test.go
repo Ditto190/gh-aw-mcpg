@@ -125,7 +125,10 @@ func TestCallTool_ArgumentsPassed(t *testing.T) {
 				if method == "tools/call" {
 					// Extract the arguments from the params
 					params, ok := request["params"].(map[string]interface{})
-					assert.True(t, ok, "params should be a map")
+					if !assert.True(t, ok, "params should be a map") {
+						http.Error(w, "params should be a map", http.StatusBadRequest)
+						return
+					}
 
 					// Store the arguments we received
 					if args, ok := params["arguments"].(map[string]interface{}); ok {

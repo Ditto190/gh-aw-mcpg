@@ -416,6 +416,7 @@ func TestCreateJSONRPCRequest_IsSerializable(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, "2.0", parsed["jsonrpc"])
+	assert.IsType(t, float64(0), parsed["id"])
 	assert.InEpsilon(t, 7.0, parsed["id"], 1e-9) // JSON numbers are float64
 	assert.Equal(t, "tools/call", parsed["method"])
 }

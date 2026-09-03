@@ -151,7 +151,9 @@ func TestUnmarshalParams(t *testing.T) {
 		require.NoError(t, err, "Should successfully preserve JSON types")
 		assert.Equal(t, "test", target["string_val"])
 		// JSON unmarshal converts numbers to float64 by default
+		assert.IsType(t, float64(0), target["int_val"])
 		assert.InEpsilon(t, 42.0, target["int_val"], 1e-9)
+		assert.IsType(t, float64(0), target["float_val"])
 		assert.InEpsilon(t, 3.14, target["float_val"], 1e-9)
 		boolVal, ok := target["bool_val"].(bool)
 		require.True(t, ok, "bool_val should be a bool")

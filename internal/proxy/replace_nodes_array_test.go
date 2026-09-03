@@ -185,7 +185,7 @@ func TestReplaceNodesArray(t *testing.T) {
 		result := replaceNodesArray(obj, empty)
 		assert.True(t, result)
 		assert.Equal(t, empty, obj["nodes"])
-		assert.InEpsilon(t, 0.0, obj["totalCount"], 1e-9)
+		assert.Equal(t, float64(0), obj["totalCount"])
 	})
 
 	t.Run("replacement with nil items sets nodes to nil", func(t *testing.T) {
