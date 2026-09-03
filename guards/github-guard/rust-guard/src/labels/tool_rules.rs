@@ -109,6 +109,36 @@ fn get_first_non_empty_field(tool_args: &Value, field_names: &[&str]) -> String 
         .unwrap_or_default()
 }
 
+fn apply_dispatch_repo_labels(
+    owner: &str,
+    repo: &str,
+    repo_id: &str,
+    node_id: &str,
+    secrecy: &mut Vec<String>,
+    integrity: &mut Vec<String>,
+    ctx: &PolicyContext,
+) {
+    let (effective_owner, effective_repo) = if !owner.is_empty() && !repo.is_empty() {
+        (owner, repo)
+    } else if let Some((scope_owner, scope_repo)) = repo_id.split_once('/') {
+        (scope_owner, scope_repo)
+    } else {
+        ("", "")
+    };
+    let node_scope = format!("node/{}", node_id);
+    let scope = if repo_id.is_empty() {
+        node_scope.as_str()
+    } else {
+        repo_id
+    };
+    *secrecy = if effective_owner.is_empty() || effective_repo.is_empty() {
+        policy_private_scope_label("", "", scope, ctx)
+    } else {
+        apply_repo_visibility_secrecy(effective_owner, effective_repo, scope, secrecy.clone(), ctx)
+    };
+    *integrity = writer_integrity(scope, ctx);
+}
+
 /// Compute integrity for a user-authored resource (issue or PR), applying:
 ///   1. `author_association` floor
 ///   2. Trusted bot/user elevation to writer level
@@ -669,11 +699,9 @@ pub fn apply_tool_labels(
         | "create_pull_request_with_copilot"
         | "update_pull_request"
         | "merge_pull_request"
-        | "pull_request_review_write"
         | "add_comment_to_pending_review"
         | "add_reply_to_pull_request_comment"
         // Discussion
-        | "discussion_comment_write"
         | "create_discussion" // gh discussion create — creates a discussion in a repository
         | "edit_discussion" // gh discussion edit   — edits title/body/labels of a discussion
         // Granular issue mutation
@@ -754,6 +782,63 @@ pub fn apply_tool_labels(
         | "upload_release_asset" => {
             secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
             integrity = writer_integrity(repo_id, ctx);
+        }
+
+        "discussion_comment_write" => {
+            let method = tool_args
+                .get(field_names::METHOD)
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            if matches!(method, "mark_answer" | "unmark_answer") {
+                if repo_id.is_empty() {
+                    baseline_scope = Cow::Owned(format!(
+                        "node/{}",
+                        tool_args
+                            .get("commentNodeID")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                    ));
+                }
+                apply_dispatch_repo_labels(
+                    &owner,
+                    &repo,
+                    repo_id,
+                    tool_args
+                        .get("commentNodeID")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or(""),
+                    &mut secrecy,
+                    &mut integrity,
+                    ctx,
+                );
+            } else {
+                secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
+                integrity = writer_integrity(repo_id, ctx);
+            }
+        }
+
+        "pull_request_review_write" => {
+            if repo_id.is_empty() {
+                baseline_scope = Cow::Owned(format!(
+                    "node/{}",
+                    tool_args
+                        .get("commentNodeID")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                ));
+            }
+            apply_dispatch_repo_labels(
+                &owner,
+                &repo,
+                repo_id,
+                tool_args
+                    .get("commentNodeID")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or(""),
+                &mut secrecy,
+                &mut integrity,
+                ctx,
+            );
         }
 
         // === Repo-scoped workflow/fork writes ===
@@ -1229,14 +1314,24 @@ mod tests {
     }
 
     #[test]
-    fn apply_tool_labels_create_and_edit_discussion_are_repo_scoped_writes() {
+    fn apply_tool_labels_discussion_dispatch_methods_are_repo_scoped_writes() {
         let ctx = default_ctx();
-        let args = serde_json::json!({"owner": "octocat", "repo": "hello-world"});
         let repo_id = "octocat/hello-world";
         let expected_writer_integrity = writer_integrity(repo_id, &ctx);
-        for op in &["create_discussion", "edit_discussion"] {
-            let (secrecy, integrity, _) =
-                super::apply_tool_labels(op, &args, repo_id, vec![], vec![], String::new(), &ctx);
+        for op in &["mark_answer", "unmark_answer"] {
+            let args = serde_json::json!({
+                "method": op,
+                "commentNodeID": "DIC_kwDOABC123"
+            });
+            let (secrecy, integrity, _) = super::apply_tool_labels(
+                "discussion_comment_write",
+                &args,
+                repo_id,
+                vec![],
+                vec![],
+                String::new(),
+                &ctx,
+            );
             let _ = secrecy; // secrecy inherits from repo visibility (backend unavailable in tests)
             assert!(
                 !integrity.is_empty(),
@@ -1250,6 +1345,30 @@ mod tests {
                 integrity
             );
         }
+    }
+
+    #[test]
+    fn apply_tool_labels_node_only_dispatch_is_conservatively_scoped() {
+        let ctx = default_ctx();
+        let node_id = "DIC_kwDOABC123";
+        let args = serde_json::json!({
+            "method": "mark_answer",
+            "commentNodeID": node_id
+        });
+        let (secrecy, integrity, _) = super::apply_tool_labels(
+            "discussion_comment_write",
+            &args,
+            "",
+            vec![],
+            vec![],
+            String::new(),
+            &ctx,
+        );
+        assert_eq!(secrecy, private_scope_label(&format!("node/{}", node_id)));
+        assert_eq!(
+            integrity,
+            writer_integrity(&format!("node/{}", node_id), &ctx)
+        );
     }
 
     #[test]
@@ -2554,14 +2673,9 @@ mod tests {
     #[test]
     fn apply_tool_labels_pr_review_write_tools_are_repo_scoped_writes() {
         let ctx = default_ctx();
-        let args = serde_json::json!({
-            "owner": "github",
-            "repo": "copilot",
-            "pull_number": 7,
-        });
         let repo_id = "github/copilot";
 
-        for op in &[
+        for (tool, args) in [
             "add_pull_request_review_comment",
             "create_pull_request_review",
             "delete_pending_pull_request_review",
@@ -2569,17 +2683,35 @@ mod tests {
             "resolve_review_thread",
             "submit_pending_pull_request_review",
             "unresolve_review_thread",
-        ] {
+        ]
+        .iter()
+        .map(|op| {
+            (
+                *op,
+                serde_json::json!({
+                    "owner": "github",
+                    "repo": "copilot",
+                    "pull_number": 7,
+                }),
+            )
+        })
+        .chain(std::iter::once((
+            "pull_request_review_write",
+            serde_json::json!({
+                "method": "resolve_thread",
+                "commentNodeID": "PRRT_kwDOABC123",
+            }),
+        ))) {
             let (secrecy, integrity, _desc) =
-                super::apply_tool_labels(op, &args, repo_id, vec![], vec![], String::new(), &ctx);
+                super::apply_tool_labels(tool, &args, repo_id, vec![], vec![], String::new(), &ctx);
             assert_eq!(
                 integrity,
                 writer_integrity(repo_id, &ctx),
-                "{op}: must require repo-scoped writer integrity"
+                "{tool}: must require repo-scoped writer integrity"
             );
             assert!(
                 secrecy.is_empty(),
-                "{op}: public repo must have empty secrecy"
+                "{tool}: public repo must have empty secrecy"
             );
         }
     }
