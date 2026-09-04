@@ -87,6 +87,7 @@ func (us *UnifiedServer) GetToolHandler(backendID string, toolName string) func(
 
 // Close cleans up resources
 func (us *UnifiedServer) Close() error {
+	logUnified.Print("Close: cleaning up unified server resources via InitiateShutdown")
 	us.InitiateShutdown()
 	return nil
 }
@@ -102,7 +103,9 @@ func (us *UnifiedServer) IsShutdown() bool {
 // This method is idempotent - subsequent calls will return 0 servers terminated
 func (us *UnifiedServer) InitiateShutdown() int {
 	serversTerminated := 0
+	alreadyShutdown := true
 	us.shutdownOnce.Do(func() {
+		alreadyShutdown = false
 		// Mark as shutdown
 		us.shutdownMu.Lock()
 		us.isShutdown = true
@@ -135,6 +138,9 @@ func (us *UnifiedServer) InitiateShutdown() int {
 
 		logger.LogInfo("shutdown", "Backend servers terminated successfully")
 	})
+	if alreadyShutdown {
+		logUnified.Print("InitiateShutdown: shutdown already performed, this call is a no-op")
+	}
 	return serversTerminated
 }
 
@@ -162,6 +168,7 @@ func (us *UnifiedServer) ShouldExit() bool {
 // during /close endpoint handling (spec 5.1.3). Should be called after the HTTP server
 // is created so that the close handler can perform graceful shutdown.
 func (us *UnifiedServer) SetHTTPShutdown(fn func(context.Context) error) {
+	logUnified.Printf("SetHTTPShutdown: registering HTTP shutdown function (set=%v)", fn != nil)
 	us.httpShutdownFn = fn
 }
 
