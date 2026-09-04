@@ -438,9 +438,10 @@ CMD ["node", "mock-mcp-server.js"]
 			},
 		},
 		"gateway": map[string]interface{}{
-			"port":    13109,
-			"domain":  "localhost",
-			"agentId": "test-mock-key",
+			"port":           13109,
+			"domain":         "localhost",
+			"agentId":        "test-mock-key",
+			"startupTimeout": 60,
 		},
 	}
 
