@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -16,6 +17,21 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// failingReadCloser is an io.ReadCloser whose Read always returns an error,
+// used to exercise the readAndRestoreRequestBody/logHTTPRequestBody error paths.
+type failingReadCloser struct {
+	closed bool
+}
+
+func (f *failingReadCloser) Read(_ []byte) (int, error) {
+	return 0, errors.New("simulated read failure")
+}
+
+func (f *failingReadCloser) Close() error {
+	f.closed = true
+	return nil
+}
 
 // TestSetupSessionCallback tests the setupSessionCallback helper function which
 // combines session extraction, logging, and context injection into one call.
@@ -425,6 +441,21 @@ func TestLogHTTPRequestBody(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestLogHTTPRequestBody_ReadFailure exercises the error branch in
+// logHTTPRequestBody where readAndRestoreRequestBody fails to read the body.
+// The function must log the failure and return without panicking, leaving
+// the (now-drained/failing) body untouched.
+func TestLogHTTPRequestBody_ReadFailure(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/mcp", nil)
+	frc := &failingReadCloser{}
+	req.Body = frc
+
+	assert.NotPanics(t, func() {
+		logHTTPRequestBody(req, "session-fail", "backend-fail")
+	})
+	assert.True(t, frc.closed, "the original failing body should have been closed")
 }
 
 func TestInjectSessionContext(t *testing.T) {
