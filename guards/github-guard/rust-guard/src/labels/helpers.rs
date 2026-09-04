@@ -258,7 +258,7 @@ fn normalize_scope<'a>(scope: &'a str, ctx: &'a PolicyContext) -> Cow<'a, str> {
     }
 }
 
-fn split_repo_id(repo_id: &str) -> Option<(&str, &str)> {
+pub(crate) fn split_repo_id(repo_id: &str) -> Option<(&str, &str)> {
     let (owner, repo) = repo_id.split_once('/')?;
     if owner.is_empty() || repo.is_empty() || repo.contains('/') {
         return None;
