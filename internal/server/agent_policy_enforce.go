@@ -46,7 +46,7 @@ func (us *UnifiedServer) agentCanAccessServer(agentID, serverID string) bool {
 	}
 	allowed := policy.AllowsServer(serverID)
 	if !allowed {
-		logUnified.Printf("agentCanAccessServer: policy denies serverID=%s", serverID)
+logUnified.Printf("agentCanAccessServer: policy denies agent=%s serverID=%s", util.HashIdentifierForLog(agentID), serverID)
 	}
 	return allowed
 }
