@@ -125,7 +125,7 @@ func TestWriteSinkGuardRegistration_FromConfig(t *testing.T) {
 	})
 
 	cfg := &config.Config{
-		DIFCMode: "filter",
+		DIFCMode: "strict",
 		Servers: map[string]*config.ServerConfig{
 			"github": {
 				Type:  "http",
@@ -397,6 +397,35 @@ func TestNoopGuard_BlocksWriteAfterGitHubRead(t *testing.T) {
 	// Non-read writes that fail DIFC should always return an error (even in filter mode).
 	require.Error(err)
 	require.ErrorContains(err, "integrity", "noop should fail on integrity check")
+}
+
+func TestStrictDIFCRejectsNoopSafeOutputsAtStartup(t *testing.T) {
+	require := require.New(t)
+
+	githubBackend := newMCPBackend(t, nil)
+	defer githubBackend.Close()
+	safeoutputsBackend := newMCPBackend(t, nil)
+	defer safeoutputsBackend.Close()
+
+	guard.RegisterGuardType("strict-noop-sink-test-type", func() (guard.Guard, error) {
+		return &writeSinkTestGuard{}, nil
+	})
+	_, err := NewUnified(context.Background(), &config.Config{
+		DIFCMode: "strict",
+		Servers: map[string]*config.ServerConfig{
+			"github": {
+				Type: "http", URL: githubBackend.URL, Guard: "github-guard",
+				GuardPolicies: map[string]interface{}{"allow-only": map[string]interface{}{"repos": "public", "min-integrity": "none"}},
+			},
+			"safeoutputs": {Type: "http", URL: safeoutputsBackend.URL},
+		},
+		Guards: map[string]*config.GuardConfig{
+			"github-guard": {Type: "strict-noop-sink-test-type"},
+		},
+	})
+
+	require.Error(err)
+	require.ErrorContains(err, "safe-outputs server \"safeoutputs\" requires a write-sink guard policy")
 }
 
 // TestWriteSinkPolicy_ResolvedForWriteSinkServer verifies that

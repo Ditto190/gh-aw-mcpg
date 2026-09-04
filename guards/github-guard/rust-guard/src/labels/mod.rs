@@ -97,8 +97,7 @@ pub fn label_response_paths(
 // ============================================================================
 
 /// Extract the actual response from MCP wrapper format
-/// MCP responses are wrapped in {"content":[{"type":"text","text":"..."}]}
-/// where the text field contains stringified JSON
+/// MCP responses may contain text or resource content with stringified JSON.
 pub(crate) fn extract_mcp_response(response: &Value) -> Cow<'_, Value> {
     // Log the top-level keys to understand the structure
     if let Some(obj) = response.as_object() {
@@ -119,27 +118,37 @@ pub(crate) fn extract_mcp_response(response: &Value) -> Cow<'_, Value> {
         ));
     }
 
-    // Try to extract content[0].text and parse it as JSON
+    // Prefer a resource item: leading text is frequently only status metadata.
     if let Some(content) = response.get("content").and_then(|v| v.as_array()) {
         crate::log_debug(&format!(
             "extract_mcp_response: found content array with {} items",
             content.len()
         ));
-        if let Some(first) = content.first() {
-            if let Some(text) = first.get("text").and_then(|v| v.as_str()) {
+        for item in content {
+            if let Some(text) = item
+                .get("resource")
+                .and_then(|resource| resource.get("text"))
+                .and_then(|value| value.as_str())
+            {
+                if let Ok(parsed) = serde_json::from_str::<Value>(text) {
+                    crate::log_debug("extract_mcp_response: parsed resource text as JSON");
+                    return Cow::Owned(parsed);
+                }
+            }
+        }
+        for item in content {
+            if let Some(text) = item.get("text").and_then(|v| v.as_str()) {
                 crate::log_debug(&format!(
                     "extract_mcp_response: found text field, len={}",
                     text.len()
                 ));
                 // Try to parse the text as JSON
                 if let Ok(parsed) = serde_json::from_str::<Value>(text) {
-                    crate::log_debug("extract_mcp_response: parsed content[0].text as JSON");
+                    crate::log_debug("extract_mcp_response: parsed text content as JSON");
                     return Cow::Owned(parsed);
                 } else {
                     crate::log_debug("extract_mcp_response: failed to parse text as JSON");
                 }
-            } else {
-                crate::log_debug("extract_mcp_response: no text field in content[0]");
             }
         }
     } else {
@@ -167,6 +176,24 @@ mod tests {
 
     fn default_ctx() -> PolicyContext {
         PolicyContext::default()
+    }
+
+    #[test]
+    fn test_extract_mcp_response_prefers_resource_over_status_text() {
+        let response = json!({
+            "content": [
+                {"type": "text", "text": "Retrieved file contents"},
+                {"type": "resource", "resource": {
+                    "uri": "https://api.github.com/repos/github/gh-aw-mcpg/contents/README.md",
+                    "text": r#"{"name":"README.md","path":"README.md","repository":{"full_name":"github/gh-aw-mcpg"}}"#
+                }}
+            ]
+        });
+
+        let extracted = extract_mcp_response(&response);
+
+        assert_eq!(extracted["name"], "README.md");
+        assert_eq!(extracted["repository"]["full_name"], "github/gh-aw-mcpg");
     }
 
     #[test]

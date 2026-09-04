@@ -176,6 +176,20 @@ func (us *UnifiedServer) requireGuardPolicyIfGuardEnabled(serverID string, g gua
 	return g, nil
 }
 
+// validateSafeOutputsGuards rejects strict DIFC configurations that would
+// otherwise let guarded source labels reach an unconfigured safe-outputs sink.
+func (us *UnifiedServer) validateSafeOutputsGuards() error {
+	if !us.enableDIFC || us.Evaluator.GetMode() != difc.EnforcementStrict || !us.guardRegistry.HasNonNoopSourceGuard() {
+		return nil
+	}
+	for _, serverID := range us.launcher.ServerIDs() {
+		if guard.IsSafeOutputsServer(serverID) && us.guardRegistry.Get(serverID).Name() == "noop" {
+			return fmt.Errorf("safe-outputs server %q requires a write-sink guard policy when guarded DIFC sources are configured", serverID)
+		}
+	}
+	return nil
+}
+
 // guardForSession returns the registered server guard in singular mode and an
 // isolated per-agent instance in multi-agent mode.
 func (us *UnifiedServer) guardForSession(ctx context.Context, sessionID, serverID string) (guard.Guard, error) {

@@ -148,17 +148,20 @@ func logRPCMessageJSONLWithTagsAndSanitized(direction RPCMessageDirection, messa
 // It is used for both text log output ([DIFC-FILTERED] JSON lines) and as
 // the embedded payload in JSONLFilteredItem for JSONL log output.
 type FilteredItemLogEntry struct {
-	ServerID          string   `json:"server_id"`
-	ToolName          string   `json:"tool_name"`
-	Description       string   `json:"description"`
-	Reason            string   `json:"reason"`
-	SecrecyTags       []string `json:"secrecy_tags"`
-	IntegrityTags     []string `json:"integrity_tags"`
-	AuthorAssociation string   `json:"author_association,omitempty"`
-	AuthorLogin       string   `json:"author_login,omitempty"`
-	HTMLURL           string   `json:"html_url,omitempty"`
-	Number            string   `json:"number,omitempty"`
-	SHA               string   `json:"sha,omitempty"`
+	ServerID            string   `json:"server_id"`
+	ToolName            string   `json:"tool_name"`
+	Description         string   `json:"description"`
+	Reason              string   `json:"reason"`
+	SecrecyTags         []string `json:"secrecy_tags"`
+	IntegrityTags       []string `json:"integrity_tags"`
+	AgentSecrecyTags    []string `json:"agent_secrecy_tags,omitempty"`
+	AgentIntegrityTags  []string `json:"agent_integrity_tags,omitempty"`
+	AgentLabelsComplete bool     `json:"-"`
+	AuthorAssociation   string   `json:"author_association,omitempty"`
+	AuthorLogin         string   `json:"author_login,omitempty"`
+	HTMLURL             string   `json:"html_url,omitempty"`
+	Number              string   `json:"number,omitempty"`
+	SHA                 string   `json:"sha,omitempty"`
 }
 
 // JSONLFilteredItem represents a DIFC-filtered item logged to the JSONL stream.
@@ -171,6 +174,32 @@ type JSONLFilteredItem struct {
 	Event     string `json:"event"`   // Always "difc_filtered"
 	Schema    string `json:"_schema"` // "difc-filtered/v2"
 	FilteredItemLogEntry
+}
+
+// MarshalJSON preserves omitted agent snapshots for ordinary filtered items,
+// while allowing denial entries to encode an explicitly empty snapshot.
+func (entry JSONLFilteredItem) MarshalJSON() ([]byte, error) {
+	type alias JSONLFilteredItem
+	data, err := json.Marshal(alias(entry))
+	if err != nil || !entry.AgentLabelsComplete {
+		return data, err
+	}
+
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return nil, err
+	}
+	secrecy, err := json.Marshal(entry.AgentSecrecyTags)
+	if err != nil {
+		return nil, err
+	}
+	integrity, err := json.Marshal(entry.AgentIntegrityTags)
+	if err != nil {
+		return nil, err
+	}
+	fields["agent_secrecy_tags"] = secrecy
+	fields["agent_integrity_tags"] = integrity
+	return json.Marshal(fields)
 }
 
 // JSONLUnrecognizedEndpointPassthrough records when the proxy forwards an
