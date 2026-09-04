@@ -16,7 +16,8 @@ use super::helpers::{
     format_repo_id, get_string_field, is_any_trusted_actor, is_default_branch_commit_context,
     is_default_branch_ref, max_integrity, merged_integrity, policy_private_scope_label,
     private_scope_label, private_user_label, project_github_label, reader_integrity,
-    repo_private_or_secure_default, short_sha, writer_integrity, PolicyContext, ScopeKind,
+    repo_private_or_secure_default, short_sha, split_repo_id, writer_integrity, PolicyContext,
+    ScopeKind,
 };
 use std::borrow::Cow;
 
@@ -121,7 +122,7 @@ fn apply_dispatch_repo_labels(
 ) {
     let (effective_owner, effective_repo) = if !owner.is_empty() && !repo.is_empty() {
         (owner, repo)
-    } else if let Some((scope_owner, scope_repo)) = repo_id.split_once('/') {
+    } else if let Some((scope_owner, scope_repo)) = split_repo_id(repo_id) {
         (scope_owner, scope_repo)
     } else {
         ("", "")
@@ -1370,6 +1371,32 @@ mod tests {
             integrity,
             writer_integrity(&format!("node/{}", node_id), &ctx)
         );
+    }
+
+    #[test]
+    fn apply_tool_labels_dispatch_malformed_repo_id_is_conservatively_scoped() {
+        let ctx = default_ctx();
+        for repo_id in &["octocat/", "/hello-world", "octocat/sub/hello-world"] {
+            let args = serde_json::json!({
+                "method": "mark_answer",
+                "commentNodeID": "DIC_kwDOABC123"
+            });
+            let (secrecy, integrity, _) = super::apply_tool_labels(
+                "discussion_comment_write",
+                &args,
+                repo_id,
+                vec![],
+                vec![],
+                String::new(),
+                &ctx,
+            );
+            assert_eq!(
+                secrecy,
+                policy_private_scope_label("", "", repo_id, &ctx),
+                "{repo_id}: malformed repo_id must fall back to the conservative scope label"
+            );
+            assert_eq!(integrity, writer_integrity(repo_id, &ctx));
+        }
     }
 
     #[test]
