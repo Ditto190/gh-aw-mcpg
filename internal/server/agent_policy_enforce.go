@@ -64,7 +64,7 @@ func (us *UnifiedServer) agentCanUseTool(agentID, serverID, toolName string) boo
 	}
 	allowed := policy.AllowsTool(serverID, toolName)
 	if !allowed {
-		logUnified.Printf("agentCanUseTool: policy denies serverID=%s tool=%s", serverID, toolName)
+logUnified.Printf("agentCanUseTool: policy denies agent=%s serverID=%s tool=%s", util.HashIdentifierForLog(agentID), serverID, toolName)
 	}
 	return allowed
 }
