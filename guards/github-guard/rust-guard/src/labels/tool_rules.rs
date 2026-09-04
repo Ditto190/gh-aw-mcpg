@@ -1374,6 +1374,33 @@ mod tests {
     }
 
     #[test]
+    fn apply_tool_labels_dispatch_rejects_malformed_repo_ids() {
+        let ctx = default_ctx();
+        let args = serde_json::json!({
+            "method": "mark_answer",
+            "commentNodeID": "DIC_kwDOABC123"
+        });
+
+        for repo_id in ["owner/", "/repo", "owner/repo/extra"] {
+            let (secrecy, _, _) = super::apply_tool_labels(
+                "discussion_comment_write",
+                &args,
+                repo_id,
+                vec![],
+                vec![],
+                String::new(),
+                &ctx,
+            );
+
+            assert_eq!(
+                secrecy,
+                vec!["private"],
+                "malformed repo_id {repo_id:?} should use bare-private secrecy"
+            );
+        }
+    }
+
+    #[test]
     fn apply_tool_labels_discussion_and_review_write_methods_are_repo_scoped_writes() {
         let ctx = default_ctx();
         let repo_id = "octocat/hello-world";
