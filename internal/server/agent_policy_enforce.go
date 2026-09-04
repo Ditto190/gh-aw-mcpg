@@ -24,9 +24,10 @@ func (us *UnifiedServer) isMultiAgent() bool {
 	if us == nil || us.cfg == nil {
 		return false
 	}
-	multi := len(us.cfg.GetAgentIDs()) > 1
+agentIDs := us.cfg.GetAgentIDs()
+	multi := len(agentIDs) > 1
 	if multi {
-		logUnified.Printf("isMultiAgent: multiple agent identities configured; agentCount=%d", len(us.cfg.GetAgentIDs()))
+		logUnified.Printf("isMultiAgent: multiple agent identities configured; agentCount=%d", len(agentIDs))
 	}
 	return multi
 }
