@@ -79,14 +79,15 @@ func buildFilteredItemLogEntry(serverID, toolName string, detail difc.FilteredIt
 
 func logCoarseDIFCDenial(serverID, toolName string, denied *guard.PipelineAccessDenied) {
 	entry := logger.FilteredItemLogEntry{
-		ServerID:           serverID,
-		ToolName:           toolName,
-		Description:        denied.Resource.Description,
-		Reason:             denied.EvalResult.Reason,
-		SecrecyTags:        difc.TagsToStrings(denied.Resource.Secrecy.Label.GetTags()),
-		IntegrityTags:      difc.TagsToStrings(denied.Resource.Integrity.Label.GetTags()),
-		AgentSecrecyTags:   difc.TagsToStrings(denied.AgentLabels.Secrecy.Label.GetTags()),
-		AgentIntegrityTags: difc.TagsToStrings(denied.AgentLabels.Integrity.Label.GetTags()),
+		ServerID:            serverID,
+		ToolName:            toolName,
+		Description:         denied.Resource.Description,
+		Reason:              denied.EvalResult.Reason,
+		SecrecyTags:         difc.TagsToStrings(denied.Resource.Secrecy.Label.GetTags()),
+		IntegrityTags:       difc.TagsToStrings(denied.Resource.Integrity.Label.GetTags()),
+		AgentSecrecyTags:    difc.TagsToStrings(denied.AgentLabels.Secrecy.Label.GetTags()),
+		AgentIntegrityTags:  difc.TagsToStrings(denied.AgentLabels.Integrity.Label.GetTags()),
+		AgentLabelsComplete: true,
 	}
 	b, err := json.Marshal(entry)
 	if err != nil {

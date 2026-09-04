@@ -218,6 +218,7 @@ func NewUnified(ctx context.Context, cfg *config.Config) (*UnifiedServer, error)
 		logUnified.Printf("Auto-enabled DIFC: non-noop guard, global policy, per-server guard policies, or per-agent allow-only policies detected")
 	}
 	if err := us.validateSafeOutputsGuards(); err != nil {
+		_ = us.Close()
 		return nil, err
 	}
 

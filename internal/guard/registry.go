@@ -72,6 +72,22 @@ func (r *Registry) HasNonNoopGuard() bool {
 	return false
 }
 
+// HasNonNoopSourceGuard returns true if any registered source-labeling guard
+// is not a noop guard. Write-sink guards do not contribute agent labels.
+func (r *Registry) HasNonNoopSourceGuard() bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for _, g := range r.guards {
+		if g.Name() != "noop" {
+			if _, ok := g.(*WriteSinkGuard); ok {
+				continue
+			}
+			return true
+		}
+	}
+	return false
+}
+
 // Remove removes a guard registration
 func (r *Registry) Remove(serverID string) {
 	logRegistry.Printf("Removing guard for serverID=%s", serverID)

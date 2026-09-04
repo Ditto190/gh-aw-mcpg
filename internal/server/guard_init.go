@@ -179,7 +179,7 @@ func (us *UnifiedServer) requireGuardPolicyIfGuardEnabled(serverID string, g gua
 // validateSafeOutputsGuards rejects strict DIFC configurations that would
 // otherwise let guarded source labels reach an unconfigured safe-outputs sink.
 func (us *UnifiedServer) validateSafeOutputsGuards() error {
-	if !us.enableDIFC || us.Evaluator.GetMode() != difc.EnforcementStrict || !us.guardRegistry.HasNonNoopGuard() {
+	if !us.enableDIFC || us.Evaluator.GetMode() != difc.EnforcementStrict || !us.guardRegistry.HasNonNoopSourceGuard() {
 		return nil
 	}
 	for _, serverID := range us.launcher.ServerIDs() {
