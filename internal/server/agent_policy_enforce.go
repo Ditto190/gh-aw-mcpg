@@ -24,7 +24,7 @@ func (us *UnifiedServer) isMultiAgent() bool {
 	if us == nil || us.cfg == nil {
 		return false
 	}
-agentIDs := us.cfg.GetAgentIDs()
+	agentIDs := us.cfg.GetAgentIDs()
 	multi := len(agentIDs) > 1
 	if multi {
 		logUnified.Printf("isMultiAgent: multiple agent identities configured; agentCount=%d", len(agentIDs))
@@ -47,7 +47,7 @@ func (us *UnifiedServer) agentCanAccessServer(agentID, serverID string) bool {
 	}
 	allowed := policy.AllowsServer(serverID)
 	if !allowed {
-logUnified.Printf("agentCanAccessServer: policy denies agent=%s serverID=%s", util.HashIdentifierForLog(agentID), serverID)
+		logUnified.Printf("agentCanAccessServer: policy denies agent=%s serverID=%s", util.HashIdentifierForLog(agentID), serverID)
 	}
 	return allowed
 }
@@ -65,7 +65,7 @@ func (us *UnifiedServer) agentCanUseTool(agentID, serverID, toolName string) boo
 	}
 	allowed := policy.AllowsTool(serverID, toolName)
 	if !allowed {
-logUnified.Printf("agentCanUseTool: policy denies agent=%s serverID=%s tool=%s", util.HashIdentifierForLog(agentID), serverID, toolName)
+		logUnified.Printf("agentCanUseTool: policy denies agent=%s serverID=%s tool=%s", util.HashIdentifierForLog(agentID), serverID, toolName)
 	}
 	return allowed
 }
