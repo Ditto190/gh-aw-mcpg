@@ -551,6 +551,15 @@ func TestGuardRegistry_HasNonNoopGuard(t *testing.T) {
 	})
 }
 
+func TestGuardRegistry_HasNonNoopSourceGuard(t *testing.T) {
+	registry := NewRegistry()
+	registry.Register("sink", NewWriteSinkGuard(nil))
+	assert.False(t, registry.HasNonNoopSourceGuard())
+
+	registry.Register("source", &mockGuard{id: "wasm"})
+	assert.True(t, registry.HasNonNoopSourceGuard())
+}
+
 func TestGuardRegistry_Close(t *testing.T) {
 	t.Run("close calls Close on guards that implement it", func(t *testing.T) {
 		registry := NewRegistry()

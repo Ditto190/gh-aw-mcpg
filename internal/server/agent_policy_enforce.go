@@ -24,7 +24,12 @@ func (us *UnifiedServer) isMultiAgent() bool {
 	if us == nil || us.cfg == nil {
 		return false
 	}
-	return len(us.cfg.GetAgentIDs()) > 1
+	agentIDs := us.cfg.GetAgentIDs()
+	multi := len(agentIDs) > 1
+	if multi {
+		logUnified.Printf("isMultiAgent: multiple agent identities configured; agentCount=%d", len(agentIDs))
+	}
+	return multi
 }
 
 // agentCanAccessServer reports whether the given agent may access the named MCP
@@ -40,7 +45,11 @@ func (us *UnifiedServer) agentCanAccessServer(agentID, serverID string) bool {
 		logUnified.Printf("agentCanAccessServer: no policy for agent; denying serverID=%s", serverID)
 		return false
 	}
-	return policy.AllowsServer(serverID)
+	allowed := policy.AllowsServer(serverID)
+	if !allowed {
+		logUnified.Printf("agentCanAccessServer: policy denies agent=%s serverID=%s", util.HashIdentifierForLog(agentID), serverID)
+	}
+	return allowed
 }
 
 // agentCanUseTool reports whether the given agent may call toolName on serverID.
@@ -54,7 +63,11 @@ func (us *UnifiedServer) agentCanUseTool(agentID, serverID, toolName string) boo
 		logUnified.Printf("agentCanUseTool: no policy for agent; denying serverID=%s tool=%s", serverID, toolName)
 		return false
 	}
-	return policy.AllowsTool(serverID, toolName)
+	allowed := policy.AllowsTool(serverID, toolName)
+	if !allowed {
+		logUnified.Printf("agentCanUseTool: policy denies agent=%s serverID=%s tool=%s", util.HashIdentifierForLog(agentID), serverID, toolName)
+	}
+	return allowed
 }
 
 // createAgentFilteredUnifiedServer builds an SDK server that exposes only the
@@ -62,6 +75,7 @@ func (us *UnifiedServer) agentCanUseTool(agentID, serverID, toolName string) boo
 // handlers. It is used in unified mode when per-agent policies are in effect so
 // that tools/list and tools/call reflect the agent's policy.
 func createAgentFilteredUnifiedServer(us *UnifiedServer, agentID string) *sdk.Server {
+	logUnified.Printf("createAgentFilteredUnifiedServer: building filtered tool view for agent=%s", util.HashIdentifierForLog(agentID))
 	server := newSDKServer("awmg-unified", logTransport)
 
 	us.toolsMu.RLock()

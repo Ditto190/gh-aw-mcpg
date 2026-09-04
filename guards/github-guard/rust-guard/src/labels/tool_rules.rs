@@ -1374,15 +1374,14 @@ mod tests {
     }
 
     #[test]
-    fn apply_tool_labels_dispatch_rejects_malformed_repo_ids() {
+    fn apply_tool_labels_dispatch_malformed_repo_id_is_conservatively_scoped() {
         let ctx = default_ctx();
-        let args = serde_json::json!({
-            "method": "mark_answer",
-            "commentNodeID": "DIC_kwDOABC123"
-        });
-
-        for repo_id in ["owner/", "/repo", "owner/repo/extra"] {
-            let (secrecy, _, _) = super::apply_tool_labels(
+        for repo_id in &["octocat/", "/hello-world", "octocat/sub/hello-world"] {
+            let args = serde_json::json!({
+                "method": "mark_answer",
+                "commentNodeID": "DIC_kwDOABC123"
+            });
+            let (secrecy, integrity, _) = super::apply_tool_labels(
                 "discussion_comment_write",
                 &args,
                 repo_id,
@@ -1391,12 +1390,12 @@ mod tests {
                 String::new(),
                 &ctx,
             );
-
             assert_eq!(
                 secrecy,
-                vec!["private"],
-                "malformed repo_id {repo_id:?} should use bare-private secrecy"
+                policy_private_scope_label("", "", repo_id, &ctx),
+                "{repo_id}: malformed repo_id must fall back to the conservative scope label"
             );
+            assert_eq!(integrity, writer_integrity(repo_id, &ctx));
         }
     }
 
