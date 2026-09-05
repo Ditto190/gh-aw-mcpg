@@ -450,6 +450,74 @@ func TestOverrideToPublicScope_PerServerPolicy_InvalidPolicy_Skipped(t *testing.
 		"overrideToPublicScope should leave the policy unchanged when it cannot be parsed")
 }
 
+// TestOverrideToPublicScope_PerServerPolicy_InvalidWriteSink_ParseErrorSkipped
+// verifies that a per-server policy containing a "write-sink" key whose value
+// is not a valid object causes config.ParseServerGuardPolicy to return an
+// error (via ParsePolicyMap -> ParseGuardPolicyJSON's json.Unmarshal), and
+// that overrideToPublicScope's parse-error branch (guard_visibility.go:266-269)
+// leaves the original policy map completely unchanged.
+func TestOverrideToPublicScope_PerServerPolicy_InvalidWriteSink_ParseErrorSkipped(t *testing.T) {
+	t.Setenv("GITHUB_REPOSITORY", "test-owner/test-repo")
+
+	cfg := &config.Config{
+		Servers: map[string]*config.ServerConfig{
+			"github": {
+				Type: "http",
+				GuardPolicies: map[string]interface{}{
+					"write-sink": "not-a-valid-write-sink-object",
+				},
+			},
+		},
+	}
+	us := newMinimalUnifiedServerForGuardTest(cfg)
+
+	assert.NotPanics(t, func() {
+		us.overrideToPublicScope("github")
+	})
+
+	// The policy is unparseable (write-sink must be an object), so
+	// ParseServerGuardPolicy returns an error and the override is skipped,
+	// leaving the original map untouched.
+	assert.Equal(t, map[string]interface{}{
+		"write-sink": "not-a-valid-write-sink-object",
+	}, cfg.Servers["github"].GuardPolicies)
+}
+
+// TestOverrideToPublicScope_PerServerPolicy_ExistingAllowOnly_UpdatesReposToPublic
+// verifies that overrideToPublicScope updates an existing per-server AllowOnly
+// policy's Repos field to "public" (the policy.AllowOnly != nil branch inside
+// the final else clause), and that the updated policy round-trips through
+// config.GuardPolicyToMap successfully. This exercises
+// guard_visibility.go:288-303, including the GuardPolicyToMap success path.
+func TestOverrideToPublicScope_PerServerPolicy_ExistingAllowOnly_UpdatesReposToPublic(t *testing.T) {
+	t.Setenv("GITHUB_REPOSITORY", "test-owner/test-repo")
+
+	cfg := &config.Config{
+		Servers: map[string]*config.ServerConfig{
+			"github": {
+				Type: "http",
+				GuardPolicies: map[string]interface{}{
+					"allow-only": map[string]interface{}{
+						"repos":         "all",
+						"min-integrity": "approved",
+					},
+				},
+			},
+		},
+	}
+	us := newMinimalUnifiedServerForGuardTest(cfg)
+
+	us.overrideToPublicScope("github")
+
+	allowOnlyRaw, ok := cfg.Servers["github"].GuardPolicies["allow-only"]
+	require.True(t, ok, "allow-only key should still be present after override")
+	allowOnly, ok := allowOnlyRaw.(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "public", allowOnly["repos"], "repos should be overridden to public")
+	// min-integrity should be preserved from the original policy, not reset.
+	assert.Equal(t, "approved", allowOnly["min-integrity"])
+}
+
 // TestResolveWorkflowRepoVisibility_EmptyRepo verifies that resolveWorkflowRepoVisibility
 // returns (empty, false) when GITHUB_REPOSITORY is not set.
 // This exercises the defensive early-return inside the Once.Do callback that
