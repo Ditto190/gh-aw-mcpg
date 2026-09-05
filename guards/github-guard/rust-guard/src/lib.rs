@@ -496,6 +496,22 @@ fn infer_scope_for_baseline<'a>(
                 }
             }
         }
+        "repository_ruleset_read"
+        | "custom_properties_read"
+        | "custom_properties_write"
+        | "create_repository_ruleset" => {
+            let scope_field = match tool_args.get("level").and_then(Value::as_str) {
+                Some("organization") => "org",
+                Some("enterprise") => "enterprise",
+                _ => return Cow::Borrowed(repo_id),
+            };
+            tool_args
+                .get(scope_field)
+                .and_then(Value::as_str)
+                .filter(|value| !value.is_empty())
+                .map(|value| Cow::Owned(value.to_string()))
+                .unwrap_or_else(|| Cow::Borrowed(repo_id))
+        }
         "search_code"
         | "search_code_ff_fields_param"
         | "search_issues"
@@ -1595,6 +1611,35 @@ mod tests {
                 infer_scope_for_baseline(tool, &user_args, ""),
                 "",
                 "{tool} should not infer user baseline scope without repo or org context"
+            );
+        }
+    }
+
+    #[test]
+    fn infer_scope_for_baseline_uses_governance_target_level() {
+        for tool in &[
+            "repository_ruleset_read",
+            "custom_properties_read",
+            "custom_properties_write",
+            "create_repository_ruleset",
+        ] {
+            assert_eq!(
+                infer_scope_for_baseline(
+                    tool,
+                    &json!({"level": "organization", "org": "github"}),
+                    ""
+                ),
+                "github",
+                "{tool} should infer organization scope"
+            );
+            assert_eq!(
+                infer_scope_for_baseline(
+                    tool,
+                    &json!({"level": "enterprise", "enterprise": "github-enterprise"}),
+                    ""
+                ),
+                "github-enterprise",
+                "{tool} should infer enterprise scope"
             );
         }
     }
