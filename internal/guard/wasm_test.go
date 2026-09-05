@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"testing"
 	"time"
@@ -1203,6 +1204,32 @@ func TestWasmGuardClose(t *testing.T) {
 		err = guard.Close(cancelledCtx)
 		assert.NoError(t, err)
 	})
+
+	t.Run("nil context is replaced with context.Background", func(t *testing.T) {
+		// Close must tolerate a nil context.Context by substituting
+		// context.Background() internally rather than panicking.
+		guard := &WasmGuard{}
+		//nolint:staticcheck // intentionally passing nil to exercise the nil-context fallback branch
+		err := guard.Close(nil)
+		assert.NoError(t, err)
+	})
+}
+
+// TestCallWasmGuardFunction_MarshalError covers the input-marshal error branch of
+// callWasmGuardFunction: when inputData cannot be marshaled to JSON (e.g. it contains
+// a non-finite float), the function must return a wrapped error without attempting to
+// invoke the WASM export.
+func TestCallWasmGuardFunction_MarshalError(t *testing.T) {
+	guard := &WasmGuard{}
+
+	// math.Inf(1) is a float64 that json.Marshal always rejects with
+	// "unsupported value: +Inf", regardless of runtime/module state.
+	badInput := map[string]any{"value": math.Inf(1)}
+
+	result, err := guard.callWasmGuardFunction(context.Background(), "label_agent", &mockBackendCaller{}, badInput)
+	require.Error(t, err)
+	assert.Nil(t, result)
+	assert.ErrorContains(t, err, "failed to marshal label_agent input")
 }
 
 func TestWasmGuardName(t *testing.T) {

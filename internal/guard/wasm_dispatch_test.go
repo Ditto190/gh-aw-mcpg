@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"math"
 	"os"
 	"path/filepath"
 	"testing"
@@ -514,6 +515,32 @@ func TestHostCallBackend_ResultTooLarge_BufferLessThan4(t *testing.T) {
 	bufferAfter, ok := g.module.Memory().Read(400, 2)
 	require.True(t, ok)
 	assert.Equal(t, []byte{0xAA, 0xBB}, bufferAfter, "result buffer should remain unchanged when resultSize < 4")
+}
+
+func TestHostCallBackend_ResultMarshalFailure(t *testing.T) {
+	// The backend result contains math.Inf, which json.Marshal always rejects.
+	// This exercises the "Failed to marshal backend result" error branch, which
+	// is otherwise unreachable via any well-formed backend response.
+	g, cleanup := setupWasmGuard(t, allocGuardWasm, "hcb-result-marshal-fail")
+	defer cleanup()
+
+	g.backend = &mockBackendCaller{result: map[string]any{"value": math.Inf(1)}}
+
+	toolName := []byte("my_tool")
+	ok := g.module.Memory().Write(256, toolName)
+	require.True(t, ok)
+
+	stack := make([]uint64, 6)
+	stack[0] = 256                   // toolNamePtr
+	stack[1] = uint64(len(toolName)) // toolNameLen
+	stack[2] = 300                   // argsPtr
+	stack[3] = 0                     // argsLen = 0 (no args)
+	stack[4] = 400
+	stack[5] = 1024
+
+	g.hostCallBackend(context.Background(), g.module, stack)
+	const errorSentinel = uint64(0xFFFFFFFF)
+	assert.Equal(t, errorSentinel, stack[0], "result marshal failure should return -1 error sentinel")
 }
 
 func TestHostCallBackend_SuccessWithNoArgs(t *testing.T) {
