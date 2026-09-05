@@ -689,6 +689,20 @@ pub fn apply_tool_labels(
             integrity = writer_integrity(repo_id, ctx);
         }
 
+        // === Repository governance and issue discovery ===
+        "find_duplicate" => {
+            // Duplicate matching searches repository issues and pull requests.
+            // S = S(repo); I = private writer (public results carry no write authority).
+            secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
+            integrity = private_writer_integrity(repo_id, repo_private, ctx);
+        }
+        "repository_ruleset_read" | "custom_properties_read" => {
+            // Governance metadata is repository/org-scoped and requires writer-level trust.
+            // S = S(repo); I = writer.
+            secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
+            integrity = writer_integrity(repo_id, ctx);
+        }
+
         // === Repo-scoped write operations ===
         // All listed tools follow: S = S(repo), I = writer.
         // Issue/PR writes
@@ -780,6 +794,8 @@ pub fn apply_tool_labels(
         | "create_release"
         | "edit_release"
         | "delete_release"
+        | "custom_properties_write"
+        | "create_repository_ruleset"
         | "delete_release_asset"
         | "upload_release_asset" => {
             secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
@@ -1765,6 +1781,46 @@ mod tests {
             integrity, expected_integrity,
             "list_repository_collaborators must produce reader-level integrity"
         );
+    }
+
+    #[test]
+    fn apply_tool_labels_governance_tools_are_repo_scoped() {
+        let ctx = default_ctx();
+        let args = serde_json::json!({"owner": "octocat", "repo": "hello-world"});
+        let repo_id = "octocat/hello-world";
+        let _guard = crate::labels::backend::cache_repo_visibility_for_tests(repo_id, true);
+        let expected_secrecy = private_label("octocat", "hello-world", repo_id, &ctx);
+
+        let (secrecy, integrity, _) = super::apply_tool_labels(
+            "find_duplicate",
+            &args,
+            repo_id,
+            vec![],
+            vec![],
+            String::new(),
+            &ctx,
+        );
+        assert_eq!(secrecy, expected_secrecy);
+        assert_eq!(integrity, writer_integrity(repo_id, &ctx));
+
+        for tool in &[
+            "repository_ruleset_read",
+            "custom_properties_read",
+            "custom_properties_write",
+            "create_repository_ruleset",
+        ] {
+            let (secrecy, integrity, _) = super::apply_tool_labels(
+                tool,
+                &args,
+                repo_id,
+                vec![],
+                vec![],
+                String::new(),
+                &ctx,
+            );
+            assert_eq!(secrecy, expected_secrecy, "{tool} secrecy");
+            assert_eq!(integrity, writer_integrity(repo_id, &ctx), "{tool} integrity");
+        }
     }
 
     #[test]
