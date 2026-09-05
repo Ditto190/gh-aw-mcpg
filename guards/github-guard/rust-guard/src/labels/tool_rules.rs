@@ -111,17 +111,33 @@ fn get_first_non_empty_field(tool_args: &Value, field_names: &[&str]) -> String 
         .unwrap_or_default()
 }
 
-fn governance_scope(tool_args: &Value) -> Option<String> {
-    match get_string_field(tool_args, "level").as_str() {
-        "organization" => {
-            let org = get_string_field(tool_args, "org");
-            (!org.is_empty()).then_some(org)
-        }
-        "enterprise" => {
-            let enterprise = get_string_field(tool_args, "enterprise");
-            (!enterprise.is_empty()).then_some(enterprise)
-        }
-        _ => None,
+#[allow(clippy::too_many_arguments)]
+fn apply_governance_labels(
+    tool_args: &Value,
+    owner: &str,
+    repo: &str,
+    repo_id: &str,
+    secrecy: &mut Vec<String>,
+    integrity: &mut Vec<String>,
+    baseline_scope: &mut Cow<'_, str>,
+    ctx: &PolicyContext,
+) {
+    let scope = match get_string_field(tool_args, "level").as_str() {
+        "organization" => get_first_non_empty_field(
+            tool_args,
+            &["org", "org_name", "organization", "organization_name"],
+        ),
+        "enterprise" => get_first_non_empty_field(tool_args, &["enterprise", "enterprise_name"]),
+        _ => String::new(),
+    };
+
+    if scope.is_empty() {
+        *secrecy = apply_repo_visibility_secrecy(owner, repo, repo_id, secrecy.clone(), ctx);
+        *integrity = writer_integrity(repo_id, ctx);
+    } else {
+        *secrecy = private_scope_label(&scope);
+        *integrity = writer_integrity(&scope, ctx);
+        *baseline_scope = Cow::Owned(scope);
     }
 }
 
@@ -310,39 +326,6 @@ pub fn apply_tool_labels(
             }
             secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
             integrity = writer_integrity(repo_id, ctx);
-        }
-
-        // === Duplicate issue/PR search (repo-scoped, contributor-writable) ===
-        // S = S(repo); I = private_writer (contributor if repo is private, else untrusted)
-        "find_duplicate" => {
-            secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
-            integrity = private_writer_integrity(repo_id, repo_private, ctx);
-        }
-
-        // === Repository governance reads (rulesets, custom properties) ===
-        // S = S(repo/org/enterprise); I = writer (only writers can view governance metadata)
-        "repository_ruleset_read" | "custom_properties_read" => {
-            if let Some(scope) = governance_scope(tool_args) {
-                secrecy = private_scope_label(&scope);
-                integrity = writer_integrity(&scope, ctx);
-                baseline_scope = Cow::Owned(scope);
-            } else {
-                secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
-                integrity = writer_integrity(repo_id, ctx);
-            }
-        }
-
-        // === Repository governance writes (rulesets, custom properties) ===
-        // S = S(repo/org/enterprise); I = writer
-        "custom_properties_write" | "create_repository_ruleset" => {
-            if let Some(scope) = governance_scope(tool_args) {
-                secrecy = private_scope_label(&scope);
-                integrity = writer_integrity(&scope, ctx);
-                baseline_scope = Cow::Owned(scope);
-            } else {
-                secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
-                integrity = writer_integrity(repo_id, ctx);
-            }
         }
 
         // === Blocked repository operations ===
@@ -736,6 +719,28 @@ pub fn apply_tool_labels(
             integrity = writer_integrity(repo_id, ctx);
         }
 
+        // === Repository governance and issue discovery ===
+        "find_duplicate" => {
+            // Duplicate matching searches repository issues and pull requests.
+            // S = S(repo); I = private writer (public results carry no write authority).
+            secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
+            integrity = private_writer_integrity(repo_id, repo_private, ctx);
+        }
+        "repository_ruleset_read" | "custom_properties_read" => {
+            // Governance metadata is repository, organization, or enterprise scoped.
+            // S = S(target); I = writer(target).
+            apply_governance_labels(
+                tool_args,
+                &owner,
+                &repo,
+                repo_id,
+                &mut secrecy,
+                &mut integrity,
+                &mut baseline_scope,
+                ctx,
+            );
+        }
+
         // === Repo-scoped write operations ===
         // All listed tools follow: S = S(repo), I = writer.
         // Issue/PR writes
@@ -831,6 +836,20 @@ pub fn apply_tool_labels(
         | "upload_release_asset" => {
             secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
             integrity = writer_integrity(repo_id, ctx);
+        }
+
+        // === Governance writes (repository/org/enterprise-scoped) ===
+        "custom_properties_write" | "create_repository_ruleset" => {
+            apply_governance_labels(
+                tool_args,
+                &owner,
+                &repo,
+                repo_id,
+                &mut secrecy,
+                &mut integrity,
+                &mut baseline_scope,
+                ctx,
+            );
         }
 
         "discussion_comment_write" => {
@@ -1906,6 +1925,74 @@ mod tests {
             integrity, expected_integrity,
             "list_repository_collaborators must produce reader-level integrity"
         );
+    }
+
+    #[test]
+    fn apply_tool_labels_governance_tools_are_repo_scoped() {
+        let ctx = default_ctx();
+        let args = serde_json::json!({"owner": "octocat", "repo": "hello-world"});
+        let repo_id = "octocat/hello-world";
+        let _guard = crate::labels::backend::cache_repo_visibility_for_tests(repo_id, true);
+        let expected_secrecy = private_label("octocat", "hello-world", repo_id, &ctx);
+
+        let (secrecy, integrity, _) = super::apply_tool_labels(
+            "find_duplicate",
+            &args,
+            repo_id,
+            vec![],
+            vec![],
+            String::new(),
+            &ctx,
+        );
+        assert_eq!(secrecy, expected_secrecy);
+        assert_eq!(integrity, writer_integrity(repo_id, &ctx));
+
+        for tool in &[
+            "repository_ruleset_read",
+            "custom_properties_read",
+            "custom_properties_write",
+            "create_repository_ruleset",
+        ] {
+            let (secrecy, integrity, _) =
+                super::apply_tool_labels(tool, &args, repo_id, vec![], vec![], String::new(), &ctx);
+            assert_eq!(secrecy, expected_secrecy, "{tool} secrecy");
+            assert_eq!(
+                integrity,
+                writer_integrity(repo_id, &ctx),
+                "{tool} integrity"
+            );
+        }
+    }
+
+    #[test]
+    fn apply_tool_labels_governance_tools_are_org_and_enterprise_scoped() {
+        let ctx = default_ctx();
+
+        for (level, field, scope) in [
+            ("organization", "org", "github"),
+            ("enterprise", "enterprise", "github-enterprise"),
+        ] {
+            let args = serde_json::json!({"level": level, field: scope});
+            for tool in &[
+                "repository_ruleset_read",
+                "custom_properties_read",
+                "custom_properties_write",
+                "create_repository_ruleset",
+            ] {
+                let (secrecy, integrity, _) =
+                    super::apply_tool_labels(tool, &args, "", vec![], vec![], String::new(), &ctx);
+                assert_eq!(
+                    secrecy,
+                    private_scope_label(scope),
+                    "{tool}: {level} secrecy"
+                );
+                assert_eq!(
+                    integrity,
+                    writer_integrity(scope, &ctx),
+                    "{tool}: {level} integrity"
+                );
+            }
+        }
     }
 
     #[test]
