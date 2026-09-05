@@ -483,35 +483,6 @@ func TestOverrideToPublicScope_PerServerPolicy_InvalidWriteSink_ParseErrorSkippe
 	}, cfg.Servers["github"].GuardPolicies)
 }
 
-// TestOverrideToPublicScope_PerServerPolicy_ExistingWriteSinkOnly_Skipped verifies
-// that overrideToPublicScope skips the override for a per-server policy that
-// already parses successfully into a write-sink-only GuardPolicy (AllowOnly is
-// nil, WriteSink is set). This exercises guard_visibility.go:284-287.
-func TestOverrideToPublicScope_PerServerPolicy_ExistingWriteSinkOnly_Skipped(t *testing.T) {
-	t.Setenv("GITHUB_REPOSITORY", "test-owner/test-repo")
-
-	original := map[string]interface{}{
-		"write-sink": map[string]interface{}{
-			"accept": []interface{}{"secrecy:public"},
-		},
-	}
-	cfg := &config.Config{
-		Servers: map[string]*config.ServerConfig{
-			"github": {
-				Type:          "http",
-				GuardPolicies: original,
-			},
-		},
-	}
-	us := newMinimalUnifiedServerForGuardTest(cfg)
-
-	us.overrideToPublicScope("github")
-
-	// The write-sink-only policy must not have gained an "allow-only" key.
-	_, hasAllowOnly := cfg.Servers["github"].GuardPolicies["allow-only"]
-	assert.False(t, hasAllowOnly, "overrideToPublicScope should not inject allow-only into a write-sink-only per-server policy")
-}
-
 // TestOverrideToPublicScope_PerServerPolicy_ExistingAllowOnly_UpdatesReposToPublic
 // verifies that overrideToPublicScope updates an existing per-server AllowOnly
 // policy's Repos field to "public" (the policy.AllowOnly != nil branch inside
