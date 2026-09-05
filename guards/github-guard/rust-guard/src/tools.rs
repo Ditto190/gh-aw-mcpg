@@ -35,6 +35,7 @@ pub const WRITE_OPERATIONS: &[&str] = &[
     "create_release", // POST /repos/.../releases
     "create_repository",
     "create_repository_autolink", // gh repo autolink create — POST /repos/.../autolinks
+    "create_repository_ruleset",  // creates a repository ruleset
     "delete_codespace", // gh codespace delete — DELETE /user/codespaces/{name} or /orgs/{org}/members/{user}/codespaces/{name}
     "delete_deploy_key",
     "delete_file",
@@ -134,6 +135,7 @@ pub const READ_WRITE_OPERATIONS: &[&str] = &[
     "add_pull_request_review_comment", // POST /repos/.../pulls/{number}/comments
     "add_sub_issue",                   // POST  /repos/.../issues/{number}/sub_issues
     "create_pull_request_review",      // POST /repos/.../pulls/{number}/reviews
+    "custom_properties_write",         // updates repository/org custom properties
     "delete_pending_pull_request_review", // DELETE /repos/.../pulls/{number}/reviews/{id}
     "issue_dependency_write", // GraphQL addBlockedBy/removeBlockedBy after resolving issue IDs
     "issue_write",
@@ -772,6 +774,15 @@ mod tests {
                 "{op} should not be in WRITE_OPERATIONS"
             );
         }
+    }
+
+    #[test]
+    fn test_custom_properties_write_matches_upstream_read_write_classification() {
+        assert!(READ_WRITE_OPERATIONS
+            .binary_search(&"custom_properties_write")
+            .is_ok());
+        assert!(is_read_write_operation("custom_properties_write"));
+        assert!(!is_write_operation("custom_properties_write"));
     }
 
     #[test]
