@@ -298,6 +298,27 @@ pub fn apply_tool_labels(
             integrity = writer_integrity(repo_id, ctx);
         }
 
+        // === Duplicate issue/PR search (repo-scoped, contributor-writable) ===
+        // S = S(repo); I = private_writer (contributor if repo is private, else untrusted)
+        "find_duplicate" => {
+            secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
+            integrity = private_writer_integrity(repo_id, repo_private, ctx);
+        }
+
+        // === Repository governance reads (rulesets, custom properties) ===
+        // S = S(repo); I = writer (only writers can view governance metadata)
+        "repository_ruleset_read" | "custom_properties_read" => {
+            secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
+            integrity = writer_integrity(repo_id, ctx);
+        }
+
+        // === Repository governance writes (rulesets, custom properties) ===
+        // S = S(repo); I = writer
+        "custom_properties_write" | "create_repository_ruleset" => {
+            secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
+            integrity = writer_integrity(repo_id, ctx);
+        }
+
         // === Blocked repository operations ===
         // Applies repo-visibility secrecy before label_resource enforces the unconditional
         // block via is_blocked_tool(). Covers: irreversible ownership changes
@@ -1625,6 +1646,37 @@ mod tests {
             "search_pull_requests_ff_fields_param",
             &search_pr_args,
         );
+    }
+
+    #[test]
+    fn apply_tool_labels_repo_governance_tools_use_writer_integrity() {
+        let ctx = default_ctx();
+        let tool_args = serde_json::json!({ "owner": "github", "repo": "copilot" });
+        let repo_id = "github/copilot";
+
+        for tool in [
+            "find_duplicate",
+            "repository_ruleset_read",
+            "custom_properties_read",
+            "custom_properties_write",
+            "create_repository_ruleset",
+        ] {
+            let (secrecy, _integrity, _desc) = super::apply_tool_labels(
+                tool,
+                &tool_args,
+                repo_id,
+                vec![],
+                vec![],
+                String::new(),
+                &ctx,
+            );
+            // Public repo in tests -> no private-scope secrecy label should be added.
+            assert!(
+                secrecy.is_empty(),
+                "{} should not add secrecy labels for a public repo",
+                tool
+            );
+        }
     }
 
     #[test]

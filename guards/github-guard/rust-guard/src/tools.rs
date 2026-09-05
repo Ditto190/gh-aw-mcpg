@@ -35,6 +35,7 @@ pub const WRITE_OPERATIONS: &[&str] = &[
     "create_release", // POST /repos/.../releases
     "create_repository",
     "create_repository_autolink", // gh repo autolink create — POST /repos/.../autolinks
+    "create_repository_ruleset",  // POST /repos/.../rulesets — creates a repository ruleset
     "delete_codespace", // gh codespace delete — DELETE /user/codespaces/{name} or /orgs/{org}/members/{user}/codespaces/{name}
     "delete_deploy_key",
     "delete_file",
@@ -134,6 +135,7 @@ pub const READ_WRITE_OPERATIONS: &[&str] = &[
     "add_pull_request_review_comment", // POST /repos/.../pulls/{number}/comments
     "add_sub_issue",                   // POST  /repos/.../issues/{number}/sub_issues
     "create_pull_request_review",      // POST /repos/.../pulls/{number}/reviews
+    "custom_properties_write", // PATCH /repos/.../properties/values — updates repo/org custom properties
     "delete_pending_pull_request_review", // DELETE /repos/.../pulls/{number}/reviews/{id}
     "issue_dependency_write", // GraphQL addBlockedBy/removeBlockedBy after resolving issue IDs
     "issue_write",
@@ -624,6 +626,36 @@ mod tests {
         assert!(
             !is_write_operation(op),
             "{} should not be in WRITE_OPERATIONS (it is in READ_WRITE_OPERATIONS)",
+            op
+        );
+    }
+
+    #[test]
+    fn test_custom_properties_write_is_read_write_operation() {
+        let op = "custom_properties_write";
+        assert!(
+            is_read_write_operation(op),
+            "{} must be classified as a read-write operation",
+            op
+        );
+        assert!(
+            !is_write_operation(op),
+            "{} should not be in WRITE_OPERATIONS (it is in READ_WRITE_OPERATIONS)",
+            op
+        );
+    }
+
+    #[test]
+    fn test_create_repository_ruleset_is_write_operation() {
+        let op = "create_repository_ruleset";
+        assert!(
+            is_write_operation(op),
+            "{} must be classified as a write operation",
+            op
+        );
+        assert!(
+            !is_read_write_operation(op),
+            "{} should not be in READ_WRITE_OPERATIONS (it is in WRITE_OPERATIONS)",
             op
         );
     }
