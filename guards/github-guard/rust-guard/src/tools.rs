@@ -631,6 +631,36 @@ mod tests {
     }
 
     #[test]
+    fn test_custom_properties_write_is_read_write_operation() {
+        let op = "custom_properties_write";
+        assert!(
+            is_read_write_operation(op),
+            "{} must be classified as a read-write operation",
+            op
+        );
+        assert!(
+            !is_write_operation(op),
+            "{} should not be in WRITE_OPERATIONS (it is in READ_WRITE_OPERATIONS)",
+            op
+        );
+    }
+
+    #[test]
+    fn test_create_repository_ruleset_is_write_operation() {
+        let op = "create_repository_ruleset";
+        assert!(
+            is_write_operation(op),
+            "{} must be classified as a write operation",
+            op
+        );
+        assert!(
+            !is_read_write_operation(op),
+            "{} should not be in READ_WRITE_OPERATIONS (it is in WRITE_OPERATIONS)",
+            op
+        );
+    }
+
+    #[test]
     fn test_sub_issue_tools_are_read_write_operations() {
         for op in &[
             "sub_issue_write",
