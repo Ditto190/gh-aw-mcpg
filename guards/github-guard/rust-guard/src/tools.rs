@@ -778,7 +778,9 @@ mod tests {
 
     #[test]
     fn test_custom_properties_write_matches_upstream_read_write_classification() {
-        assert!(READ_WRITE_OPERATIONS.binary_search(&"custom_properties_write").is_ok());
+        assert!(READ_WRITE_OPERATIONS
+            .binary_search(&"custom_properties_write")
+            .is_ok());
         assert!(is_read_write_operation("custom_properties_write"));
         assert!(!is_write_operation("custom_properties_write"));
     }

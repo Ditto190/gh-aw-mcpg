@@ -1809,17 +1809,14 @@ mod tests {
             "custom_properties_write",
             "create_repository_ruleset",
         ] {
-            let (secrecy, integrity, _) = super::apply_tool_labels(
-                tool,
-                &args,
-                repo_id,
-                vec![],
-                vec![],
-                String::new(),
-                &ctx,
-            );
+            let (secrecy, integrity, _) =
+                super::apply_tool_labels(tool, &args, repo_id, vec![], vec![], String::new(), &ctx);
             assert_eq!(secrecy, expected_secrecy, "{tool} secrecy");
-            assert_eq!(integrity, writer_integrity(repo_id, &ctx), "{tool} integrity");
+            assert_eq!(
+                integrity,
+                writer_integrity(repo_id, &ctx),
+                "{tool} integrity"
+            );
         }
     }
 
