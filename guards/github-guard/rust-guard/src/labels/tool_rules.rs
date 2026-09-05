@@ -111,6 +111,20 @@ fn get_first_non_empty_field(tool_args: &Value, field_names: &[&str]) -> String 
         .unwrap_or_default()
 }
 
+fn governance_scope(tool_args: &Value) -> Option<String> {
+    match get_string_field(tool_args, "level").as_str() {
+        "organization" => {
+            let org = get_string_field(tool_args, "org");
+            (!org.is_empty()).then_some(org)
+        }
+        "enterprise" => {
+            let enterprise = get_string_field(tool_args, "enterprise");
+            (!enterprise.is_empty()).then_some(enterprise)
+        }
+        _ => None,
+    }
+}
+
 fn apply_dispatch_repo_labels(
     owner: &str,
     repo: &str,
@@ -306,17 +320,29 @@ pub fn apply_tool_labels(
         }
 
         // === Repository governance reads (rulesets, custom properties) ===
-        // S = S(repo); I = writer (only writers can view governance metadata)
+        // S = S(repo/org/enterprise); I = writer (only writers can view governance metadata)
         "repository_ruleset_read" | "custom_properties_read" => {
-            secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
-            integrity = writer_integrity(repo_id, ctx);
+            if let Some(scope) = governance_scope(tool_args) {
+                secrecy = private_scope_label(&scope);
+                integrity = writer_integrity(&scope, ctx);
+                baseline_scope = Cow::Owned(scope);
+            } else {
+                secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
+                integrity = writer_integrity(repo_id, ctx);
+            }
         }
 
         // === Repository governance writes (rulesets, custom properties) ===
-        // S = S(repo); I = writer
+        // S = S(repo/org/enterprise); I = writer
         "custom_properties_write" | "create_repository_ruleset" => {
-            secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
-            integrity = writer_integrity(repo_id, ctx);
+            if let Some(scope) = governance_scope(tool_args) {
+                secrecy = private_scope_label(&scope);
+                integrity = writer_integrity(&scope, ctx);
+                baseline_scope = Cow::Owned(scope);
+            } else {
+                secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
+                integrity = writer_integrity(repo_id, ctx);
+            }
         }
 
         // === Blocked repository operations ===
@@ -1079,7 +1105,7 @@ fn check_file_secrecy(
 
 #[cfg(test)]
 mod tests {
-    use super::super::helpers::PolicyContext;
+    use super::super::helpers::{none_integrity, PolicyContext};
     use super::*;
 
     fn default_ctx() -> PolicyContext {
@@ -1649,33 +1675,96 @@ mod tests {
     }
 
     #[test]
-    fn apply_tool_labels_repo_governance_tools_use_writer_integrity() {
+    fn apply_tool_labels_repo_governance_tools_are_scoped() {
         let ctx = default_ctx();
-        let tool_args = serde_json::json!({ "owner": "github", "repo": "copilot" });
+        let public_repo_args = serde_json::json!({ "owner": "github", "repo": "copilot" });
+        let private_repo_args = serde_json::json!({ "owner": "octocat", "repo": "private-repo" });
         let repo_id = "github/copilot";
 
-        for tool in [
+        let (secrecy, integrity, _) = super::apply_tool_labels(
             "find_duplicate",
+            &public_repo_args,
+            repo_id,
+            vec![],
+            vec![],
+            String::new(),
+            &ctx,
+        );
+        assert!(
+            secrecy.is_empty(),
+            "public find_duplicate should not add secrecy"
+        );
+        assert_eq!(integrity, none_integrity(repo_id, &ctx));
+
+        let governance_tools = [
             "repository_ruleset_read",
             "custom_properties_read",
             "custom_properties_write",
             "create_repository_ruleset",
-        ] {
-            let (secrecy, _integrity, _desc) = super::apply_tool_labels(
+        ];
+        for tool in governance_tools {
+            let (secrecy, integrity, _) = super::apply_tool_labels(
                 tool,
-                &tool_args,
+                &public_repo_args,
                 repo_id,
                 vec![],
                 vec![],
                 String::new(),
                 &ctx,
             );
-            // Public repo in tests -> no private-scope secrecy label should be added.
             assert!(
                 secrecy.is_empty(),
-                "{} should not add secrecy labels for a public repo",
-                tool
+                "{tool}: public repo should not add secrecy"
             );
+            assert_eq!(integrity, writer_integrity(repo_id, &ctx), "{tool}");
+        }
+
+        let private_repo_id = "octocat/private-repo";
+        let _guard = crate::labels::backend::cache_repo_visibility_for_tests(private_repo_id, true);
+        let (secrecy, integrity, _) = super::apply_tool_labels(
+            "find_duplicate",
+            &private_repo_args,
+            private_repo_id,
+            vec![],
+            vec![],
+            String::new(),
+            &ctx,
+        );
+        assert_eq!(
+            secrecy,
+            private_label("octocat", "private-repo", private_repo_id, &ctx)
+        );
+        assert_eq!(integrity, writer_integrity(private_repo_id, &ctx));
+
+        for tool in governance_tools {
+            let (secrecy, integrity, _) = super::apply_tool_labels(
+                tool,
+                &private_repo_args,
+                private_repo_id,
+                vec![],
+                vec![],
+                String::new(),
+                &ctx,
+            );
+            assert_eq!(
+                secrecy,
+                private_label("octocat", "private-repo", private_repo_id, &ctx),
+                "{tool}"
+            );
+            assert_eq!(integrity, writer_integrity(private_repo_id, &ctx), "{tool}");
+        }
+
+        for (level, field, scope) in [
+            ("organization", "org", "github"),
+            ("enterprise", "enterprise", "github-enterprise"),
+        ] {
+            let args = serde_json::json!({ "level": level, field: scope });
+            for tool in governance_tools {
+                let (secrecy, integrity, _) =
+                    super::apply_tool_labels(tool, &args, "", vec![], vec![], String::new(), &ctx);
+                assert_eq!(secrecy, private_scope_label(scope), "{tool} ({level})");
+                assert_eq!(integrity, writer_integrity(scope, &ctx), "{tool} ({level})");
+            }
         }
     }
 
