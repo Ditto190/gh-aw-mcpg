@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -119,29 +118,8 @@ func (s *Store) saveStateLocked(path string, forceReconciled bool) error {
 	}
 	checksum := sha256.Sum256(body)
 	out := append(body, []byte("\n"+hex.EncodeToString(checksum[:])+"\n")...)
-	temp, err := os.CreateTemp(filepath.Dir(path), ".delegation-state-*")
-	if err != nil {
-		return fmt.Errorf("failed to create delegation state file: %w", err)
-	}
-	tempPath := temp.Name()
-	defer os.Remove(tempPath)
-	if err := temp.Chmod(0o600); err != nil {
-		temp.Close()
-		return fmt.Errorf("failed to secure delegation state file: %w", err)
-	}
-	if _, err := temp.Write(out); err != nil {
-		temp.Close()
-		return fmt.Errorf("failed to write delegation state: %w", err)
-	}
-	if err := temp.Sync(); err != nil {
-		temp.Close()
-		return fmt.Errorf("failed to sync delegation state: %w", err)
-	}
-	if err := temp.Close(); err != nil {
-		return fmt.Errorf("failed to close delegation state: %w", err)
-	}
-	if err := os.Rename(tempPath, path); err != nil {
-		return fmt.Errorf("failed to publish delegation state: %w", err)
+	if err := util.AtomicWriteFile(path, out, 0o600); err != nil {
+		return fmt.Errorf("failed to persist delegation state: %w", err)
 	}
 	logDelegationRecovery.Printf("Persisted delegation state: identities=%d generation=%d", len(identities), generation)
 	return nil
