@@ -420,17 +420,10 @@ func TestSnapshot_ReturnsLiveIdentityAndExcludesExpiredAndRevoked(t *testing.T) 
 	expiring.InvocationID = "inv-expiring"
 	expiring.IdempotencyKey = "idem-expiring"
 	expiring.RequestedTTL = time.Minute
-	_, err = store.createOrConfirmAt(expiring, base)
+	// Create an identity whose TTL has already elapsed, then verify Snapshot
+	// performs the lazy cleanup itself.
+	_, err = store.createOrConfirmAt(expiring, base.Add(-2*time.Minute))
 	require.NoError(t, err)
-
-	// Sanity check: still live immediately after creation.
-	require.Len(t, store.Snapshot(), 1)
-
-	// Advance time past expiry: Snapshot must lazily clean up and exclude it.
-	future := base.Add(2 * time.Minute)
-	store.mu.Lock()
-	store.cleanupExpiredLocked(future)
-	store.mu.Unlock()
 	assert.Empty(t, store.Snapshot(), "expired identities must be excluded from the snapshot")
 }
 
