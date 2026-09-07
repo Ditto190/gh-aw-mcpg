@@ -46,6 +46,25 @@ func TestAtomicWriteFile(t *testing.T) {
 	})
 }
 
+func TestRemoveTempFile(t *testing.T) {
+	t.Run("ignores missing temp file", func(t *testing.T) {
+		err := removeTempFile(filepath.Join(t.TempDir(), ".missing-temp"))
+
+		require.NoError(t, err)
+	})
+
+	t.Run("reports cleanup failure", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), ".state.json-temp")
+		require.NoError(t, os.Mkdir(path, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(path, "child"), []byte("data"), 0o600))
+
+		err := removeTempFile(path)
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to remove temp file")
+	})
+}
+
 func tempFiles(t *testing.T, dir string) []string {
 	t.Helper()
 	entries, err := os.ReadDir(dir)
