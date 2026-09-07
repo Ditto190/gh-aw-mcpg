@@ -56,10 +56,12 @@ func TruncateRunes(s string, maxRunes int) string {
 	if len(s) <= maxRunes {
 		return s
 	}
+
 	// Count runes without allocating; return early if no truncation is needed.
 	if utf8.RuneCountInString(s) <= maxRunes {
 		return s
 	}
+
 	// Walk byte-by-byte to find the byte offset of the maxRunes-th rune boundary.
 	n := 0
 	for i := range s {
@@ -77,4 +79,18 @@ func TruncateRunes(s string, maxRunes int) string {
 		n++
 	}
 	return s
+}
+
+// TruncateRunesWithSuffix truncates s to maxRunes Unicode code points and
+// appends suffix when truncation occurs. If maxRunes is zero or negative, or
+// no truncation is needed, it returns s unchanged.
+func TruncateRunesWithSuffix(s string, maxRunes int, suffix string) string {
+	if maxRunes <= 0 {
+		return s
+	}
+	truncated := TruncateRunes(s, maxRunes)
+	if truncated == s {
+		return s
+	}
+	return truncated + suffix
 }

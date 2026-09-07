@@ -4,7 +4,12 @@
 // truncate or strip it so only a safe hint remains.
 package sanitize
 
-import "net/url"
+import (
+	"net/url"
+	"unicode/utf8"
+
+	"github.com/github/gh-aw-mcpg/internal/util"
+)
 
 // RedactSecret returns a sanitized version of the input string for safe logging.
 // It shows only the first 4 characters followed by "..." to prevent exposing sensitive data.
@@ -15,10 +20,10 @@ func RedactSecret(input string) string {
 		return ""
 	}
 	const prefixLen = 4
-	if len(input) <= prefixLen {
+	if utf8.RuneCountInString(input) <= prefixLen {
 		return "..."
 	}
-	return input[:prefixLen] + "..."
+	return util.TruncateRunesWithSuffix(input, prefixLen, "...")
 }
 
 // RedactSecretMap returns a sanitized version of environment variables

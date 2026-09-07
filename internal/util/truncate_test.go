@@ -253,6 +253,26 @@ func TestTruncateRunes(t *testing.T) {
 	}
 }
 
+func TestTruncateRunesWithSuffix(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		maxRunes int
+		suffix   string
+		expected string
+	}{
+		{"multibyte runes truncated", "日本語テスト", 4, "...", "日本語テ..."},
+		{"no truncation needed", "日本語", 4, "...", "日本語"},
+		{"zero maxRunes returns original", "hello", 0, "...", "hello"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, TruncateRunesWithSuffix(tt.input, tt.maxRunes, tt.suffix))
+		})
+	}
+}
+
 // TestTruncateRunes_TruncatedResultIsAlwaysValidUTF8 verifies that whenever
 // TruncateRunes actually truncates a string (i.e. returns fewer bytes than the
 // input), the result never contains invalid UTF-8 byte sequences - even if the
