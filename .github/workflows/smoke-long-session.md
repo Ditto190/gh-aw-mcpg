@@ -70,10 +70,10 @@ At the end, create an issue with the full results only if at least one test fail
 
 ### Step 1: Build the Gateway Binary
 
-Use `safeinputs-make` to build the project:
+Use `mcpscripts-make` to build the project:
 
 ```
-safeinputs-make tool with args: "build"
+mcpscripts-make tool with args: "build"
 ```
 
 Verify the binary exists at `./awmg`.
