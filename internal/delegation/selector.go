@@ -10,7 +10,11 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+
+	"github.com/github/gh-aw-mcpg/internal/logger"
 )
+
+var logSelector = logger.ForFile()
 
 // ToolPolicyGitHubRepositoryReadV1 is the only delegated tool policy this
 // package understands: a closed allowlist of repository-scoped read-only
@@ -62,17 +66,18 @@ var canonicalSelectorPattern = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,38})/
 // false rather than attempt to normalize it.
 func IsCanonicalRepositorySelector(selector string) bool {
 	if !isASCII(selector) {
+		logSelector.Print("rejected repository selector: non-ASCII bytes present")
 		return false
 	}
 	if !canonicalSelectorPattern.MatchString(selector) {
+		logSelector.Print("rejected repository selector: does not match canonical owner/repo pattern")
 		return false
 	}
-	slash := strings.IndexByte(selector, '/')
-	if slash < 0 {
-		return false
-	}
-	name := selector[slash+1:]
+	// canonicalSelectorPattern requires a '/' separator, so it is always
+	// present once the pattern above has matched.
+	name := selector[strings.IndexByte(selector, '/')+1:]
 	if name == "." || name == ".." || strings.Contains(name, "..") {
+		logSelector.Print("rejected repository selector: repo segment is '.', '..', or contains '..'")
 		return false
 	}
 	return true
@@ -89,7 +94,11 @@ var canonicalOwnerPattern = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,38})$`)
 // normalization, or URL decoding: callers must reject any selector for which
 // this returns false rather than attempt to normalize it.
 func IsCanonicalOwner(selector string) bool {
-	return isASCII(selector) && canonicalOwnerPattern.MatchString(selector)
+	ok := isASCII(selector) && canonicalOwnerPattern.MatchString(selector)
+	if !ok {
+		logSelector.Print("rejected owner selector: not a canonical ASCII owner segment")
+	}
+	return ok
 }
 
 func isASCII(s string) bool {
