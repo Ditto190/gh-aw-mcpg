@@ -1337,21 +1337,21 @@ pub(crate) fn extract_repo_from_item(item: &Value) -> String {
     String::new()
 }
 
+/// Extracts the `repo.full_name` from the `base` or `head` side (e.g. `"base"`
+/// or `"head"`) of a PR-shaped JSON value.
+pub(crate) fn pr_side_full_name<'a>(pr: &'a Value, side: &str) -> Option<&'a str> {
+    pr.get(side)
+        .and_then(|s| s.get("repo"))
+        .and_then(|r| r.get(field_names::FULL_NAME))
+        .and_then(|v| v.as_str())
+}
+
 /// Extracts `base.repo.full_name` and `head.repo.full_name` from a PR-shaped
 /// JSON value and reports whether the PR is from a fork (base repo != head repo).
 /// Returns `None` when either full_name is missing or empty.
 pub(crate) fn is_forked_pr(pr: &Value) -> Option<bool> {
-    let base_full_name = pr
-        .get("base")
-        .and_then(|b| b.get("repo"))
-        .and_then(|r| r.get(field_names::FULL_NAME))
-        .and_then(|v| v.as_str());
-
-    let head_full_name = pr
-        .get("head")
-        .and_then(|h| h.get("repo"))
-        .and_then(|r| r.get(field_names::FULL_NAME))
-        .and_then(|v| v.as_str());
+    let base_full_name = pr_side_full_name(pr, "base");
+    let head_full_name = pr_side_full_name(pr, "head");
 
     match (base_full_name, head_full_name) {
         (Some(base), Some(head)) if !base.is_empty() && !head.is_empty() => {

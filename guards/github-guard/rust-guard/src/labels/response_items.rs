@@ -195,19 +195,14 @@ pub fn label_response_items(
                         let repo_private = repo_visibility_private_for_repo_id(repo_full_name)
                             .unwrap_or(default_repo_private);
 
+                        // `is_forked_pr` treats an empty (but present) full_name as
+                        // "unknown" (None). For list items we still want to compare
+                        // empty full_name values directly (e.g. both empty → same repo,
+                        // one empty → mismatched), so fall back to a permissive
+                        // comparison instead of leaving fork status undetermined.
                         let is_forked = is_forked_pr(item).or_else(|| {
-                            let base_full_name = item
-                                .get("base")
-                                .and_then(|b| b.get("repo"))
-                                .and_then(|r| r.get(field_names::FULL_NAME))
-                                .and_then(|v| v.as_str());
-                            let head_full_name = item
-                                .get("head")
-                                .and_then(|h| h.get("repo"))
-                                .and_then(|r| r.get(field_names::FULL_NAME))
-                                .and_then(|v| v.as_str());
-                            base_full_name
-                                .zip(head_full_name)
+                            pr_side_full_name(item, "base")
+                                .zip(pr_side_full_name(item, "head"))
                                 .map(|(base, head)| !base.eq_ignore_ascii_case(head))
                         });
 
