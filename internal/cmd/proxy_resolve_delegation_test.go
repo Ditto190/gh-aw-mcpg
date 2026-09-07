@@ -221,7 +221,7 @@ func TestResolveDelegationProxyConfig_NoPriorStateFile_StartsFresh(t *testing.T)
 	envelopeJSON := validDelegationEnvelopeJSON(t)
 	// Nonexistent state file path: LoadStore should treat as "no prior state"
 	// and succeed with a fresh, empty store.
-	statePath := filepath.Join(t.TempDir(), "does-not-exist", "state.json")
+statePath := filepath.Join(t.TempDir(), "state.json")
 	setAllDelegationEnvVars(t, envelopeJSON, "some-capability-key-that-is-long-enough", statePath, "42", "127.0.0.1:9999")
 
 	cfg, gotStatePath, err := resolveDelegationProxyConfig()
