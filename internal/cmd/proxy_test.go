@@ -5,7 +5,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/github/gh-aw-mcpg/internal/delegation"
 	"github.com/github/gh-aw-mcpg/internal/difc"
 	"github.com/github/gh-aw-mcpg/internal/guard"
 	"github.com/spf13/cobra"
@@ -15,6 +17,45 @@ import (
 	"github.com/github/gh-aw-mcpg/internal/config"
 	"github.com/github/gh-aw-mcpg/internal/util"
 )
+
+func TestResolveDelegationProxyConfig_MaxIdentityTTLIsSeconds(t *testing.T) {
+	t.Setenv("MCP_GATEWAY_DELEGATION_ENVELOPE", `{
+		"run_id":"run-1",
+		"enclave_backend":"backend-1",
+		"allowed_repositories":["github/gh-aw"],
+		"tool_policy":"github-repository-read-v1",
+		"allowed_schema_hashes":["sha256:test"],
+		"max_identity_ttl":120,
+		"expires_at":"2030-01-01T00:00:00Z"
+	}`)
+	t.Setenv(delegation.EnvControlCapabilityKey, strings.Repeat("a", 32))
+	t.Setenv("MCP_GATEWAY_DELEGATION_STATE_PATH", filepath.Join(t.TempDir(), "state.json"))
+	t.Setenv("MCP_GATEWAY_DELEGATION_GENERATION", "1")
+	t.Setenv(delegation.EnvControlListenAddr, "127.0.0.1:0")
+
+	config, _, err := resolveDelegationProxyConfig()
+	require.NoError(t, err)
+
+	request := delegation.CreateOrConfirmRequest{
+		RunID:          "run-1",
+		EnclaveBackend: "backend-1",
+		EnclaveEntryID: "entry-1",
+		InvocationID:   "invocation-1",
+		Repository:     "github/gh-aw",
+		ToolPolicy:     delegation.ToolPolicyGitHubRepositoryReadV1,
+		SchemaHash:     "sha256:test",
+		RequestedTTL:   120 * time.Second,
+		IdempotencyKey: "key-1",
+	}
+	_, err = config.Store.CreateOrConfirm(request)
+	require.NoError(t, err)
+
+	request.InvocationID = "invocation-2"
+	request.IdempotencyKey = "key-2"
+	request.RequestedTTL = 121 * time.Second
+	_, err = config.Store.CreateOrConfirm(request)
+	assert.Error(t, err, "a requested TTL above the 120-second wire ceiling must be rejected")
+}
 
 // TestDetectGuardWasm_FileNotFound tests that detectGuardWasm returns empty string
 // when the baked-in guard at guard.ContainerGuardWasmPath does not exist and

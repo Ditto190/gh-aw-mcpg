@@ -24,7 +24,7 @@ func newTestDelegationHandler(t *testing.T) (*proxyHandler, string, []byte) {
 		AllowedRepositories: []string{"github/gh-aw"},
 		ToolPolicy:          delegation.ToolPolicyGitHubRepositoryReadV1,
 		AllowedSchemaHashes: []string{"sha256:test"},
-		MaxIdentityTTL:      time.Minute,
+		MaxIdentityTTL:      120 * time.Second,
 		ExpiresAt:           time.Now().Add(time.Hour),
 	}
 	store, err := delegation.NewStore(envelope, 1)
@@ -48,7 +48,7 @@ func newTestDelegationHandler(t *testing.T) (*proxyHandler, string, []byte) {
 		"repository": "github/gh-aw",
 		"tool_policy": "` + string(delegation.ToolPolicyGitHubRepositoryReadV1) + `",
 		"schema_hash": "sha256:test",
-		"requested_ttl": 60000000000,
+		"requested_ttl": 120,
 		"idempotency_key": "key-1"
 	}`)
 
@@ -97,6 +97,15 @@ func TestHandleDelegationControl_CreateOrConfirm(t *testing.T) {
 		assert.Contains(t, rec.Body.String(), "handle")
 	})
 
+	t.Run("rejects requested ttl above envelope ceiling", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		overCeiling := bytes.Replace(body, []byte(`"requested_ttl": 120`), []byte(`"requested_ttl": 121`), 1)
+		req := authedRequest(http.MethodPost, delegationControlPath+"create-or-confirm", overCeiling, capabilityKey)
+		handler.handleDelegationControl(rec, req)
+		assert.Equal(t, http.StatusForbidden, rec.Code)
+		assert.Contains(t, rec.Body.String(), "delegation_request_denied")
+	})
+
 	t.Run("rejects malformed JSON body", func(t *testing.T) {
 		rec := httptest.NewRecorder()
 		req := authedRequest(http.MethodPost, delegationControlPath+"create-or-confirm", []byte(`{not json`), capabilityKey)
@@ -121,7 +130,7 @@ func TestHandleDelegationControl_CreateOrConfirm(t *testing.T) {
 			"repository": "github/gh-aw",
 			"tool_policy": "` + string(delegation.ToolPolicyGitHubRepositoryReadV1) + `",
 			"schema_hash": "sha256:test",
-			"requested_ttl": 60000000000,
+			"requested_ttl": 120,
 			"idempotency_key": "key-2"
 		}`)
 		req := authedRequest(http.MethodPost, delegationControlPath+"create-or-confirm", badBody, capabilityKey)
@@ -146,7 +155,7 @@ func TestHandleDelegationControl_CreateOrConfirm(t *testing.T) {
 			"repository": "github/gh-aw",
 			"tool_policy": "` + string(delegation.ToolPolicyGitHubRepositoryReadV1) + `",
 			"schema_hash": "sha256:test",
-			"requested_ttl": 60000000000,
+			"requested_ttl": 120,
 			"idempotency_key": "key-persist-fail"
 		}`)
 		req := authedRequest(http.MethodPost, delegationControlPath+"create-or-confirm", freshBody, capabilityKey)

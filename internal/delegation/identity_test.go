@@ -1,12 +1,22 @@
 package delegation
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestCreateOrConfirmRequestWire_RequestedTTLIsSeconds(t *testing.T) {
+	var wire CreateOrConfirmRequestWire
+	require.NoError(t, json.Unmarshal([]byte(`{"requested_ttl":120}`), &wire))
+
+	request, err := wire.ToRequest()
+	require.NoError(t, err)
+	assert.Equal(t, 120*time.Second, request.RequestedTTL)
+}
 
 func TestIdentityBindingRoundTrip(t *testing.T) {
 	req := validRequest()

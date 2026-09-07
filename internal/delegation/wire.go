@@ -1,0 +1,89 @@
+package delegation
+
+import (
+	"fmt"
+	"math"
+	"time"
+)
+
+// EnvelopeWire is the JSON representation installed by the workflow compiler.
+// Duration fields are whole seconds on the wire.
+type EnvelopeWire struct {
+	RunID                  string    `json:"run_id"`
+	EnclaveBackend         string    `json:"enclave_backend"`
+	AllowedRepositories    []string  `json:"allowed_repositories"`
+	AllowedOwners          []string  `json:"allowed_owners,omitempty"`
+	ToolPolicy             string    `json:"tool_policy"`
+	AllowedSchemaHashes    []string  `json:"allowed_schema_hashes"`
+	MaxDynamicSchemaHashes int       `json:"max_dynamic_schema_hashes,omitempty"`
+	MaxIdentityTTLSeconds  int64     `json:"max_identity_ttl"`
+	ExpiresAt              time.Time `json:"expires_at"`
+}
+
+// ToEnvelope validates wire-specific fields and converts them to the internal
+// duration-based representation.
+func (w EnvelopeWire) ToEnvelope() (*Envelope, error) {
+	maxIdentityTTL, err := durationFromWireSeconds("max_identity_ttl", w.MaxIdentityTTLSeconds)
+	if err != nil {
+		return nil, err
+	}
+	return &Envelope{
+		RunID:                  w.RunID,
+		EnclaveBackend:         w.EnclaveBackend,
+		AllowedRepositories:    w.AllowedRepositories,
+		AllowedOwners:          w.AllowedOwners,
+		ToolPolicy:             w.ToolPolicy,
+		AllowedSchemaHashes:    w.AllowedSchemaHashes,
+		MaxDynamicSchemaHashes: w.MaxDynamicSchemaHashes,
+		MaxIdentityTTL:         maxIdentityTTL,
+		ExpiresAt:              w.ExpiresAt,
+	}, nil
+}
+
+// CreateOrConfirmRequestWire is the JSON representation accepted by the
+// private delegation control endpoint. Duration fields are whole seconds.
+type CreateOrConfirmRequestWire struct {
+	RunID                    string    `json:"run_id"`
+	EnclaveBackend           string    `json:"enclave_backend"`
+	EnclaveEntryID           string    `json:"enclave_entry_id"`
+	InvocationID             string    `json:"invocation_id"`
+	Repository               string    `json:"repository"`
+	ToolPolicy               string    `json:"tool_policy"`
+	SchemaHash               string    `json:"schema_hash"`
+	AdmittedDefaultBranchSHA string    `json:"admitted_default_branch_sha,omitempty"`
+	RequestedTTLSeconds      int64     `json:"requested_ttl"`
+	InvocationExpiresAt      time.Time `json:"invocation_expires_at,omitempty"`
+	IdempotencyKey           string    `json:"idempotency_key"`
+}
+
+// ToRequest validates wire-specific fields and converts them to the internal
+// duration-based representation.
+func (w CreateOrConfirmRequestWire) ToRequest() (CreateOrConfirmRequest, error) {
+	requestedTTL, err := durationFromWireSeconds("requested_ttl", w.RequestedTTLSeconds)
+	if err != nil {
+		return CreateOrConfirmRequest{}, err
+	}
+	return CreateOrConfirmRequest{
+		RunID:                    w.RunID,
+		EnclaveBackend:           w.EnclaveBackend,
+		EnclaveEntryID:           w.EnclaveEntryID,
+		InvocationID:             w.InvocationID,
+		Repository:               w.Repository,
+		ToolPolicy:               w.ToolPolicy,
+		SchemaHash:               w.SchemaHash,
+		AdmittedDefaultBranchSHA: w.AdmittedDefaultBranchSHA,
+		RequestedTTL:             requestedTTL,
+		InvocationExpiresAt:      w.InvocationExpiresAt,
+		IdempotencyKey:           w.IdempotencyKey,
+	}, nil
+}
+
+func durationFromWireSeconds(field string, seconds int64) (time.Duration, error) {
+	if seconds <= 0 {
+		return 0, fmt.Errorf("%s must be a positive number of seconds", field)
+	}
+	if seconds > math.MaxInt64/int64(time.Second) {
+		return 0, fmt.Errorf("%s exceeds the maximum supported duration", field)
+	}
+	return time.Duration(seconds) * time.Second, nil
+}

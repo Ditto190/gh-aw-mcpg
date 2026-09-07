@@ -16,14 +16,14 @@ import (
 type Envelope struct {
 	// RunID is the workflow run this envelope, and every identity minted
 	// from it, is bound to.
-	RunID string `json:"run_id"`
+	RunID string
 	// EnclaveBackend is the single AWF enclave backend identities may be
 	// bound to.
-	EnclaveBackend string `json:"enclave_backend"`
+	EnclaveBackend string
 	// AllowedRepositories is the closed set of canonical owner/repo
 	// selectors the compiler admitted for this run. Selectors are compared
 	// as exact ASCII byte sequences; no normalization is performed.
-	AllowedRepositories []string `json:"allowed_repositories"`
+	AllowedRepositories []string
 	// AllowedOwners is the closed set of canonical repository owners the
 	// compiler admitted for this run's dynamic enclaves. When set, AWF may
 	// select any exact repository under an allowed owner at invocation
@@ -32,28 +32,28 @@ type Envelope struct {
 	// its owner segment is a member of AllowedOwners; one identity remains
 	// bound to exactly one repository either way. Owners are compared as
 	// exact ASCII byte sequences; no normalization is performed.
-	AllowedOwners []string `json:"allowed_owners,omitempty"`
+	AllowedOwners []string
 	// ToolPolicy is the single delegated tool policy this envelope allows.
 	// Only ToolPolicyGitHubRepositoryReadV1 is currently supported.
-	ToolPolicy string `json:"tool_policy"`
+	ToolPolicy string
 	// AllowedSchemaHashes is the closed set of finite response schema
 	// hashes the compiler approved for this run. It may be left empty to
 	// use MaxDynamicSchemaHashes' bounded runtime admission instead.
-	AllowedSchemaHashes []string `json:"allowed_schema_hashes"`
+	AllowedSchemaHashes []string
 	// MaxDynamicSchemaHashes bounds how many distinct invocation-supplied
 	// schema hashes may be admitted at runtime when AllowedSchemaHashes is
 	// empty, so a dynamic enclave can be authorized against a bounded
 	// finite-schema policy without every hash being enumerated at compile
 	// time. It has no effect when AllowedSchemaHashes is non-empty: in
 	// that case only the exact compiled hashes are ever admitted.
-	MaxDynamicSchemaHashes int `json:"max_dynamic_schema_hashes,omitempty"`
+	MaxDynamicSchemaHashes int
 	// MaxIdentityTTL bounds how long any single delegated identity may
 	// live, and therefore how long an executor bearer remains valid.
-	MaxIdentityTTL time.Duration `json:"max_identity_ttl"`
+	MaxIdentityTTL time.Duration
 	// ExpiresAt is the envelope's own absolute expiry, no later than the
 	// workflow job lifetime. No identity may be created once the envelope
 	// itself has expired.
-	ExpiresAt time.Time `json:"expires_at"`
+	ExpiresAt time.Time
 }
 
 // Validate checks the envelope's own invariants. It does not check any

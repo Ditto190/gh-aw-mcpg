@@ -278,16 +278,16 @@ func TestDelegationControlLoggingRedactsPrivateSelectors(t *testing.T) {
 	}
 
 	logs := captureProxyLogs(t, func() {
-		require.Equal(t, http.StatusOK, post("create-or-confirm", delegation.CreateOrConfirmRequest{
-			RunID:          redactionRunID,
-			EnclaveBackend: "awf-enclave",
-			EnclaveEntryID: redactionEntryID,
-			InvocationID:   redactionInvID,
-			Repository:     redactionSelector,
-			ToolPolicy:     delegation.ToolPolicyGitHubRepositoryReadV1,
-			SchemaHash:     "sha256:test",
-			RequestedTTL:   time.Minute,
-			IdempotencyKey: "idem-1",
+		require.Equal(t, http.StatusOK, post("create-or-confirm", delegation.CreateOrConfirmRequestWire{
+			RunID:               redactionRunID,
+			EnclaveBackend:      "awf-enclave",
+			EnclaveEntryID:      redactionEntryID,
+			InvocationID:        redactionInvID,
+			Repository:          redactionSelector,
+			ToolPolicy:          delegation.ToolPolicyGitHubRepositoryReadV1,
+			SchemaHash:          "sha256:test",
+			RequestedTTLSeconds: 60,
+			IdempotencyKey:      "idem-1",
 		}).Code)
 
 		require.Equal(t, http.StatusOK, post("status", map[string]string{

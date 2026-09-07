@@ -2,41 +2,41 @@ package delegation
 
 import "time"
 
-// CreateOrConfirmRequest is an AWF-authenticated request to create or
-// confirm exactly one delegated identity. Every field must be a strict
-// subset of the compiler-installed Envelope; the Store rejects anything
-// wider than the envelope allows.
+// CreateOrConfirmRequest is the internal duration-based form of an
+// AWF-authenticated request to create or confirm exactly one delegated
+// identity. Every field must be a strict subset of the compiler-installed
+// Envelope; the Store rejects anything wider than the envelope allows.
 type CreateOrConfirmRequest struct {
 	// RunID must equal the envelope's bound workflow run.
-	RunID string `json:"run_id"`
+	RunID string
 	// EnclaveBackend must equal the envelope's single AWF enclave backend.
-	EnclaveBackend string `json:"enclave_backend"`
+	EnclaveBackend string
 	// EnclaveEntryID identifies the enclave entry (frontmatter block) this
 	// invocation belongs to.
-	EnclaveEntryID string `json:"enclave_entry_id"`
+	EnclaveEntryID string
 	// InvocationID identifies one bounded enclave invocation.
-	InvocationID string `json:"invocation_id"`
+	InvocationID string
 	// Repository is the canonical, exact-byte owner/repo selector chosen
 	// for this invocation. It must already be canonical: the Store performs
 	// no trimming, case folding, Unicode normalization, or URL decoding.
-	Repository string `json:"repository"`
+	Repository string
 	// ToolPolicy must equal ToolPolicyGitHubRepositoryReadV1.
-	ToolPolicy string `json:"tool_policy"`
+	ToolPolicy string
 	// SchemaHash is the finite response schema hash approved for this
 	// invocation; it must be a member of the envelope's allowed set.
-	SchemaHash string `json:"schema_hash"`
+	SchemaHash string
 	// AdmittedDefaultBranchSHA is the default-branch SHA AWF resolved
 	// during live-read admission, when known at request time.
-	AdmittedDefaultBranchSHA string `json:"admitted_default_branch_sha,omitempty"`
+	AdmittedDefaultBranchSHA string
 	// RequestedTTL bounds how long the identity should live; it is capped
 	// by (and must not exceed) the envelope's MaxIdentityTTL.
-	RequestedTTL time.Duration `json:"requested_ttl"`
+	RequestedTTL time.Duration
 	// InvocationExpiresAt is the absolute deadline of the invocation, when
 	// one is supplied by AWF. An identity can never outlive this deadline.
-	InvocationExpiresAt time.Time `json:"invocation_expires_at,omitempty"`
+	InvocationExpiresAt time.Time
 	// IdempotencyKey deduplicates retried create/confirm calls for the same
 	// (RunID, EnclaveEntryID, InvocationID, Repository) tuple.
-	IdempotencyKey string `json:"idempotency_key"`
+	IdempotencyKey string
 }
 
 // delegationBinding is the request/identity tuple that must remain identical

@@ -33,10 +33,10 @@ func TestDelegationControlCreateRequiresCapability(t *testing.T) {
 	require.NoError(t, err)
 	handler := &proxyHandler{server: &Server{delegation: &delegationState{store: store, capability: capability, statePath: t.TempDir() + "/state.json"}}}
 
-	body, err := json.Marshal(delegation.CreateOrConfirmRequest{
+	body, err := json.Marshal(delegation.CreateOrConfirmRequestWire{
 		RunID: "run", EnclaveBackend: "backend", EnclaveEntryID: "entry", InvocationID: "inv",
 		Repository: "github/gh-aw", ToolPolicy: delegation.ToolPolicyGitHubRepositoryReadV1,
-		SchemaHash: "sha256:test", RequestedTTL: time.Minute, IdempotencyKey: "key",
+		SchemaHash: "sha256:test", RequestedTTLSeconds: 60, IdempotencyKey: "key",
 	})
 	require.NoError(t, err)
 
@@ -68,10 +68,10 @@ func TestDelegationControlStatusAndReconcile(t *testing.T) {
 	require.NoError(t, err)
 	handler := &proxyHandler{server: &Server{delegation: &delegationState{store: store, capability: capability, statePath: t.TempDir() + "/state.json"}}}
 
-	createBody, err := json.Marshal(delegation.CreateOrConfirmRequest{
+	createBody, err := json.Marshal(delegation.CreateOrConfirmRequestWire{
 		RunID: "run", EnclaveBackend: "backend", EnclaveEntryID: "entry", InvocationID: "inv",
 		Repository: "github/gh-aw", ToolPolicy: delegation.ToolPolicyGitHubRepositoryReadV1,
-		SchemaHash: "sha256:test", RequestedTTL: time.Minute, IdempotencyKey: "key",
+		SchemaHash: "sha256:test", RequestedTTLSeconds: 60, IdempotencyKey: "key",
 	})
 	require.NoError(t, err)
 	createReq := httptest.NewRequest(http.MethodPost, delegationControlPath+"create-or-confirm", bytes.NewReader(createBody))

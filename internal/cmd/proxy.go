@@ -70,14 +70,18 @@ func resolveDelegationProxyConfig() (*proxy.DelegationConfig, string, error) {
 	if envelopeJSON == "" || capabilityKey == "" || statePath == "" || generationRaw == "" || controlListenAddr == "" {
 		return nil, "", fmt.Errorf("MCP_GATEWAY_DELEGATION_ENVELOPE, %s, MCP_GATEWAY_DELEGATION_STATE_PATH, %s, and MCP_GATEWAY_DELEGATION_GENERATION must be configured together", delegation.EnvControlCapabilityKey, delegation.EnvControlListenAddr)
 	}
-	var envelope delegation.Envelope
+	var envelopeWire delegation.EnvelopeWire
 	decoder := json.NewDecoder(bytes.NewReader([]byte(envelopeJSON)))
 	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&envelope); err != nil {
+	if err := decoder.Decode(&envelopeWire); err != nil {
 		return nil, "", fmt.Errorf("invalid delegation envelope: %w", err)
 	}
 	if err := decoder.Decode(&struct{}{}); err != io.EOF {
 		return nil, "", fmt.Errorf("invalid delegation envelope: trailing JSON")
+	}
+	envelope, err := envelopeWire.ToEnvelope()
+	if err != nil {
+		return nil, "", fmt.Errorf("invalid delegation envelope: %w", err)
 	}
 	generation, err := strconv.ParseUint(generationRaw, 10, 64)
 	if err != nil {
@@ -87,7 +91,7 @@ func resolveDelegationProxyConfig() (*proxy.DelegationConfig, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	store, err := delegation.LoadStore(statePath, &envelope, generation)
+	store, err := delegation.LoadStore(statePath, envelope, generation)
 	if err != nil {
 		return nil, "", err
 	}
