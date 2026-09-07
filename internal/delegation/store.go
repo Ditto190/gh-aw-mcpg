@@ -1,14 +1,14 @@
 package delegation
 
 import (
-	"crypto/rand"
 	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"slices"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/github/gh-aw-mcpg/internal/util"
 )
 
 const (
@@ -99,11 +99,11 @@ func (s *Store) markReconciled() {
 }
 
 func generateOpaqueToken(prefix string, n int) (string, error) {
-	buf := make([]byte, n)
-	if _, err := rand.Read(buf); err != nil {
+	hexStr, err := util.RandomHex(n)
+	if err != nil {
 		return "", fmt.Errorf("failed to generate delegation token: %w", err)
 	}
-	return prefix + hex.EncodeToString(buf), nil
+	return prefix + hexStr, nil
 }
 
 // validateAgainstEnvelope enforces that req is a strict subset of the
