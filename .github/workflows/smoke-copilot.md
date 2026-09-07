@@ -81,7 +81,7 @@ timeout-minutes: 15
 ## Test Requirements
 
 1. **GitHub MCP Testing**: Review the last 2 merged pull requests in ${{ github.repository }}
-2. **Make Build Testing**: Use the `safeinputs-make` tool to build the project (use args: "build") and verify it succeeds
+2. **Make Build Testing**: Use the `mcpscripts-make` tool to build the project (use args: "build") and verify it succeeds
 3. **Playwright Testing**: Use the playwright tools to navigate to https://github.com and verify the page title contains "GitHub" (do NOT try to install playwright - use the provided MCP tools)
 4. **File Writing Testing**: Create a test file `/tmp/gh-aw/agent/smoke-test-copilot-${{ github.run_id }}.txt` with content "Smoke test passed for Copilot at $(date)" (create the directory if it doesn't exist)
 5. **Bash Tool Testing**: Execute bash commands to verify file creation was successful (use `cat` to read the file back)

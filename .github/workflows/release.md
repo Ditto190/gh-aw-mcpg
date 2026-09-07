@@ -259,7 +259,7 @@ jobs:
 
       # Enables emulation so the amd64 runner can build arm64 too
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4.2.0
+        uses: docker/setup-qemu-action@v4.3.0
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4.3.0
