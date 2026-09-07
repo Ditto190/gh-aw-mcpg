@@ -65,7 +65,7 @@ type CreateOrConfirmRequestWire struct {
 // ToRequest validates wire-specific fields and converts them to the internal
 // duration-based representation.
 func (w CreateOrConfirmRequestWire) ToRequest() (CreateOrConfirmRequest, error) {
-	logWire.Printf("Converting CreateOrConfirmRequestWire: run_id=%s, enclave_entry_id=%s, invocation_id=%s", w.RunID, w.EnclaveEntryID, w.InvocationID)
+	logWire.Printf("Converting CreateOrConfirmRequestWire: run_id_hash=%s, enclave_entry_id=%s, invocation_id=%s", hashForAudit(w.RunID), w.EnclaveEntryID, w.InvocationID)
 	requestedTTL, err := durationFromWireSeconds("requested_ttl", w.RequestedTTLSeconds)
 	if err != nil {
 		logWire.Printf("CreateOrConfirmRequestWire.ToRequest: invalid requested_ttl: %v", err)

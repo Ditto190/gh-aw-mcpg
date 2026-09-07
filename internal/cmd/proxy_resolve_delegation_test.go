@@ -15,13 +15,13 @@ import (
 // serialized as JSON for use in resolveDelegationProxyConfig tests.
 func validDelegationEnvelopeJSON(t *testing.T) string {
 	t.Helper()
-	envelope := delegation.Envelope{
+	envelope := delegation.EnvelopeWire{
 		RunID:                  "run-1",
 		EnclaveBackend:         "backend-1",
 		AllowedRepositories:    []string{"owner/repo"},
 		ToolPolicy:             delegation.ToolPolicyGitHubRepositoryReadV1,
 		MaxDynamicSchemaHashes: 1,
-		MaxIdentityTTL:         5 * time.Minute,
+		MaxIdentityTTLSeconds:  300,
 		ExpiresAt:              time.Now().Add(time.Hour),
 	}
 	raw, err := json.Marshal(envelope)
