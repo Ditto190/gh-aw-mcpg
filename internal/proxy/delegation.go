@@ -55,8 +55,13 @@ func (h *proxyHandler) handleDelegationControl(w http.ResponseWriter, r *http.Re
 
 	switch r.URL.Path {
 	case delegationControlPath + "create-or-confirm":
-		var request delegation.CreateOrConfirmRequest
-		if !decodeDelegationJSON(w, r, &request) {
+		var requestWire delegation.CreateOrConfirmRequestWire
+		if !decodeDelegationJSON(w, r, &requestWire) {
+			return
+		}
+		request, err := requestWire.ToRequest()
+		if err != nil {
+			httputil.WriteErrorResponse(w, http.StatusBadRequest, "invalid_delegation_request", "invalid delegation request")
 			return
 		}
 		result, err := h.server.delegation.store.CreateOrConfirm(request)

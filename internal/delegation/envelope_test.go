@@ -1,12 +1,47 @@
 package delegation
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestEnvelopeWire_MaxIdentityTTLIsSeconds(t *testing.T) {
+	var wire EnvelopeWire
+	require.NoError(t, json.Unmarshal([]byte(`{
+		"run_id":"run-123",
+		"enclave_backend":"awf-enclave",
+		"allowed_repositories":["github/gh-aw"],
+		"tool_policy":"github-repository-read-v1",
+		"allowed_schema_hashes":["sha256:abc"],
+		"max_identity_ttl":120,
+		"expires_at":"2030-01-01T00:00:00Z"
+	}`), &wire))
+
+	envelope, err := wire.ToEnvelope()
+	require.NoError(t, err)
+	assert.Equal(t, 120*time.Second, envelope.MaxIdentityTTL)
+}
+
+func TestEnvelopeWire_RejectsInvalidSeconds(t *testing.T) {
+	tests := []struct {
+		name    string
+		seconds int64
+	}{
+		{name: "zero", seconds: 0},
+		{name: "negative", seconds: -1},
+		{name: "overflow", seconds: int64(^uint64(0)>>1)/int64(time.Second) + 1},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := (EnvelopeWire{MaxIdentityTTLSeconds: test.seconds}).ToEnvelope()
+			assert.Error(t, err)
+		})
+	}
+}
 
 func validEnvelope() *Envelope {
 	return &Envelope{
