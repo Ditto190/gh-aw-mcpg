@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+
+	"github.com/github/gh-aw-mcpg/internal/util"
 )
 
 // closeLogFile syncs buffered data before closing and handles errors appropriately.
@@ -92,24 +94,10 @@ func initLogFile(logDir, fileName string, flags int) (*os.File, error) {
 	return file, nil
 }
 
-// atomicWriteFile writes data to filePath atomically using a temp-file + rename strategy.
-// On rename failure the temp file is removed; a removal error that is not os.IsNotExist
-// is logged as a warning but does not mask the primary rename error.
-//
-// TODO: export as internal/util.AtomicWriteFile (or internal/fileutil) when a
-// second consumer outside the logger package emerges.
+// atomicWriteFile writes data to filePath atomically using a synced temp-file
+// and rename strategy.
 func atomicWriteFile(filePath string, data []byte, perm os.FileMode) error {
-	tempPath := filePath + ".tmp"
-	if err := os.WriteFile(tempPath, data, perm); err != nil {
-		return fmt.Errorf("failed to write temp file: %w", err)
-	}
-	if err := os.Rename(tempPath, filePath); err != nil {
-		if removeErr := os.Remove(tempPath); removeErr != nil && !os.IsNotExist(removeErr) {
-			log.Printf("WARNING: Failed to cleanup temp file %s: %v", tempPath, removeErr)
-		}
-		return fmt.Errorf("failed to rename temp file: %w", err)
-	}
-	return nil
+	return util.AtomicWriteFile(filePath, data, perm)
 }
 
 // writeJSONToFile marshals data as indented JSON and atomically writes it to
