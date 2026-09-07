@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/github/gh-aw-mcpg/internal/logger"
+	"github.com/github/gh-aw-mcpg/internal/restroute"
 	"github.com/github/gh-aw-mcpg/internal/util"
 )
 
@@ -574,10 +575,7 @@ func routeMatchKey(path string) string {
 // across all 49 routes to O(k) where k is the number of routes in the bucket
 // (typically 1–14 instead of up to 49).
 func MatchRoute(path string) *RouteMatch {
-	// Strip query string
-	if idx := strings.IndexByte(path, '?'); idx >= 0 {
-		path = path[:idx]
-	}
+	path = restroute.StripQuery(path)
 
 	key := routeMatchKey(path)
 	bucketIndices := routeDispatch[key]
@@ -586,7 +584,7 @@ func MatchRoute(path string) *RouteMatch {
 
 	tryMatch := func(idx int) *RouteMatch {
 		r := routes[idx]
-		matches := r.pattern.FindStringSubmatch(path)
+		matches := restroute.Match(path, r.pattern)
 		if matches == nil {
 			return nil
 		}

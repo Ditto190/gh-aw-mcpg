@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/github/gh-aw-mcpg/internal/logger"
+	"github.com/github/gh-aw-mcpg/internal/restroute"
 )
 
 var logRoute = logger.ForFile()
@@ -15,6 +16,14 @@ var (
 	issuesListPath = regexp.MustCompile(`^/repos/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)/issues$`)
 	issueGetPath   = regexp.MustCompile(`^/repos/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)/issues/([1-9][0-9]*)$`)
 	commentsPath   = regexp.MustCompile(`^/repos/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)/issues/([1-9][0-9]*)/comments$`)
+	enclaveRoutes  = []struct {
+		pattern   *regexp.Regexp
+		operation string
+	}{
+		{issuesListPath, OperationIssuesList},
+		{issueGetPath, OperationIssuesGet},
+		{commentsPath, OperationIssueCommentsList},
+	}
 )
 
 var allowedQueryKeys = map[string]map[string]struct{}{
@@ -45,17 +54,18 @@ func (r *Route) FullRepo() string {
 func MatchRoute(path string, query url.Values) (*Route, error) {
 	logRoute.Printf("Matching enclave route: path=%s", path)
 	var route Route
-	switch {
-	case issuesListPath.MatchString(path):
-		match := issuesListPath.FindStringSubmatch(path)
-		route = Route{Operation: OperationIssuesList, Owner: match[1], Repo: match[2]}
-	case issueGetPath.MatchString(path):
-		match := issueGetPath.FindStringSubmatch(path)
-		route = Route{Operation: OperationIssuesGet, Owner: match[1], Repo: match[2], Number: match[3]}
-	case commentsPath.MatchString(path):
-		match := commentsPath.FindStringSubmatch(path)
-		route = Route{Operation: OperationIssueCommentsList, Owner: match[1], Repo: match[2], Number: match[3]}
-	default:
+	for _, candidate := range enclaveRoutes {
+		match := restroute.Match(path, candidate.pattern)
+		if match == nil {
+			continue
+		}
+		route = Route{Operation: candidate.operation, Owner: match[1], Repo: match[2]}
+		if len(match) > 3 {
+			route.Number = match[3]
+		}
+		break
+	}
+	if route.Operation == "" {
 		logRoute.Printf("No route pattern matched for path: %s", path)
 		return nil, fmt.Errorf("unsupported enclave route")
 	}

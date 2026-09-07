@@ -350,6 +350,11 @@ func TestRedactSecret(t *testing.T) {
 			want:  "abcd...",
 		},
 		{
+			name:  "Existing suffix",
+			input: "abcd...",
+			want:  "abcd...",
+		},
+		{
 			name:  "Long string",
 			input: "my-secret-api-key-12345",
 			want:  "my-s...",
@@ -363,6 +368,11 @@ func TestRedactSecret(t *testing.T) {
 			name:  "Unicode characters",
 			input: "key-with-émojis-🔑",
 			want:  "key-...",
+		},
+		{
+			name:  "Multibyte prefix remains valid UTF-8",
+			input: "日本語テスト",
+			want:  "日本語テ...",
 		},
 		{
 			name:  "Very long API key",
