@@ -4,7 +4,11 @@ import (
 	"fmt"
 	"math"
 	"time"
+
+	"github.com/github/gh-aw-mcpg/internal/logger"
 )
+
+var logWire = logger.ForFile()
 
 // EnvelopeWire is the JSON representation installed by the workflow compiler.
 // Duration fields are whole seconds on the wire.
@@ -23,8 +27,10 @@ type EnvelopeWire struct {
 // ToEnvelope validates wire-specific fields and converts them to the internal
 // duration-based representation.
 func (w EnvelopeWire) ToEnvelope() (*Envelope, error) {
+	logWire.Printf("Converting EnvelopeWire: run_id=%s, enclave_backend=%s, tool_policy=%s", w.RunID, w.EnclaveBackend, w.ToolPolicy)
 	maxIdentityTTL, err := durationFromWireSeconds("max_identity_ttl", w.MaxIdentityTTLSeconds)
 	if err != nil {
+		logWire.Printf("EnvelopeWire.ToEnvelope: invalid max_identity_ttl: %v", err)
 		return nil, err
 	}
 	return &Envelope{
@@ -59,8 +65,10 @@ type CreateOrConfirmRequestWire struct {
 // ToRequest validates wire-specific fields and converts them to the internal
 // duration-based representation.
 func (w CreateOrConfirmRequestWire) ToRequest() (CreateOrConfirmRequest, error) {
+	logWire.Printf("Converting CreateOrConfirmRequestWire: run_id=%s, enclave_entry_id=%s, invocation_id=%s", w.RunID, w.EnclaveEntryID, w.InvocationID)
 	requestedTTL, err := durationFromWireSeconds("requested_ttl", w.RequestedTTLSeconds)
 	if err != nil {
+		logWire.Printf("CreateOrConfirmRequestWire.ToRequest: invalid requested_ttl: %v", err)
 		return CreateOrConfirmRequest{}, err
 	}
 	return CreateOrConfirmRequest{
@@ -83,6 +91,7 @@ func durationFromWireSeconds(field string, seconds int64) (time.Duration, error)
 		return 0, fmt.Errorf("%s must be a positive number of seconds", field)
 	}
 	if seconds > math.MaxInt64/int64(time.Second) {
+		logWire.Printf("durationFromWireSeconds: %s=%d exceeds maximum supported duration", field, seconds)
 		return 0, fmt.Errorf("%s exceeds the maximum supported duration", field)
 	}
 	return time.Duration(seconds) * time.Second, nil
