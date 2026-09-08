@@ -8,17 +8,34 @@ import (
 )
 
 // validIdentityForEnvelope returns an Identity that satisfies
-// validateRestoredIdentity against validEnvelope() at the given generation,
+// validateRestoredIdentity against the provided envelope at the given generation,
 // unless individually mutated by each test case.
 func validIdentityForEnvelope(envelope *Envelope, generation uint64) *Identity {
 	req := validRequest()
+	if envelope != nil {
+		req.RunID = envelope.RunID
+		req.EnclaveBackend = envelope.EnclaveBackend
+		req.ToolPolicy = envelope.ToolPolicy
+		if len(envelope.AllowedRepositories) > 0 {
+			req.Repository = envelope.AllowedRepositories[0]
+		}
+		if len(envelope.AllowedSchemaHashes) > 0 {
+			req.SchemaHash = envelope.AllowedSchemaHashes[0]
+		}
+	}
+
 	now := time.Now()
+	expiresAt := now.Add(time.Minute)
+	if envelope != nil && expiresAt.After(envelope.ExpiresAt) {
+		expiresAt = envelope.ExpiresAt
+	}
+
 	return &Identity{
 		Handle:            "handle-1",
 		ExecutorBearer:    "bearer-1",
 		delegationBinding: bindingFromRequest(req),
 		RequestedTTL:      req.RequestedTTL,
-		ExpiresAt:         now.Add(time.Minute),
+		ExpiresAt:         expiresAt,
 		PolicyGeneration:  generation,
 		IdempotencyKey:    req.IdempotencyKey,
 		CreatedAt:         now,
