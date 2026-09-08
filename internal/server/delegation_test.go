@@ -76,6 +76,35 @@ func TestDelegatedAuthAdmitsOnlyLiveExecutorBearer(t *testing.T) {
 	assert.False(t, called)
 }
 
+func TestDelegatedAuthWithoutGatewayKeyRequiresLiveBearer(t *testing.T) {
+	delegationConfig, createReq := newUnifiedDelegationConfig(t)
+	created, err := delegationConfig.Store.CreateOrConfirm(createReq)
+	require.NoError(t, err)
+
+	us := &UnifiedServer{delegation: delegationConfig}
+	called := false
+	handler := applyAuthIfConfiguredWithDelegation(nil, us.isDelegatedExecutorAuth, func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	req, err := http.NewRequest(http.MethodPost, "/mcp", nil)
+	require.NoError(t, err)
+	req.Header.Set("Authorization", created.ExecutorBearer)
+	req.Header.Set("X-Agent-ID", "attacker-agent")
+	rec := httptest.NewRecorder()
+	handler(rec, req)
+	assert.Equal(t, http.StatusNoContent, rec.Code)
+	assert.True(t, called)
+
+	require.NoError(t, delegationConfig.Store.Revoke(created.Handle))
+	called = false
+	rec = httptest.NewRecorder()
+	handler(rec, req)
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+	assert.False(t, called)
+}
+
 func TestUnifiedDelegationAuthorizesExactGitHubRepositoryTool(t *testing.T) {
 	previousRedaction := sanitize.PrivateSelectorRedactionEnabled()
 	t.Cleanup(func() { sanitize.SetPrivateSelectorRedaction(previousRedaction) })
@@ -91,6 +120,12 @@ func TestUnifiedDelegationAuthorizesExactGitHubRepositoryTool(t *testing.T) {
 	guard.RegisterGuardType(guardName, func() (guard.Guard, error) { return &difcTestGuard{}, nil })
 	cfg := &config.Config{
 		DIFCMode: "filter",
+		Gateway: &config.GatewayConfig{
+			AgentID: "enclave-agent",
+			AgentPolicies: map[string]*config.AgentPolicy{
+				"enclave-agent": {Servers: []string{"github"}, Tools: map[string][]string{"github": {"list_issues"}}},
+			},
+		},
 		Servers: map[string]*config.ServerConfig{
 			"github": {
 				Type:  "http",

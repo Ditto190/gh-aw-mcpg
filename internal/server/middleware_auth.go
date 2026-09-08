@@ -106,7 +106,7 @@ func applyAuthIfConfigured(apiKeys []string, handler http.HandlerFunc) http.Hand
 }
 
 func applyAuthIfConfiguredWithDelegation(apiKeys []string, delegatedAuthenticator func(string) bool, handler http.HandlerFunc) http.HandlerFunc {
-	if len(apiKeys) > 0 {
+	if len(apiKeys) > 0 || delegatedAuthenticator != nil {
 		logAuth.Print("Auth key configured, applying middleware")
 		return authMiddlewareWithDelegation(apiKeys, delegatedAuthenticator, handler)
 	}

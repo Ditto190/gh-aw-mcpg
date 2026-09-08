@@ -17,6 +17,13 @@ import (
 
 var logServerDelegation = logger.ForFile()
 
+type delegatedToolAuthorizationKey struct{}
+
+type delegatedToolAuthorization struct {
+	serverID string
+	toolName string
+}
+
 func (us *UnifiedServer) delegationEnabled() bool {
 	return us != nil && us.delegation != nil
 }
@@ -26,6 +33,13 @@ func (us *UnifiedServer) isDelegatedExecutorAuth(authorizationHeader string) boo
 		return false
 	}
 	return us.delegation.Store.HasLiveExecutorBearer(authorizationHeader)
+}
+
+func (us *UnifiedServer) isDelegatedExecutorSession(sessionID string) bool {
+	if !us.delegationEnabled() {
+		return false
+	}
+	return us.delegation.Store.HasLiveExecutorBearer(sessionID)
 }
 
 func (us *UnifiedServer) authorizeDelegatedToolCall(ctx context.Context, serverID, toolName string, args interface{}) (context.Context, error) {
@@ -48,7 +62,12 @@ func (us *UnifiedServer) authorizeDelegatedToolCall(ctx context.Context, serverI
 		logServerDelegation.Printf("Delegated tool call denied: tool=%s repo_hash=%s", toolName, util.HashForLog(repository, 16, ""))
 		return ctx, err
 	}
-	return guard.SetAgentIDInContext(ctx, "delegation:"+handle), nil
+	ctx = guard.SetAgentIDInContext(ctx, "delegation:"+handle)
+	ctx = context.WithValue(ctx, delegatedToolAuthorizationKey{}, delegatedToolAuthorization{
+		serverID: serverID,
+		toolName: toolName,
+	})
+	return ctx, nil
 }
 
 func delegatedToolRepository(toolName string, args interface{}) (string, bool) {
@@ -66,6 +85,39 @@ func delegatedToolRepository(toolName string, args interface{}) (string, bool) {
 	}
 	repository := owner + "/" + repo
 	return repository, delegation.IsCanonicalRepositorySelector(repository)
+}
+
+func delegatedToolAuthorized(ctx context.Context, serverID, toolName string) bool {
+	authorization, ok := ctx.Value(delegatedToolAuthorizationKey{}).(delegatedToolAuthorization)
+	return ok && authorization.serverID == serverID && authorization.toolName == toolName
+}
+
+func (us *UnifiedServer) rejectDelegatedNonToolMethods(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !us.isDelegatedExecutorAuth(r.Header.Get("Authorization")) || r.Method != http.MethodPost {
+			next.ServeHTTP(w, r)
+			return
+		}
+		body, err := readAndRestoreRequestBody(r)
+		if err != nil || len(body) == 0 {
+			next.ServeHTTP(w, r)
+			return
+		}
+		var request struct {
+			Method string `json:"method"`
+		}
+		if err := json.Unmarshal(body, &request); err != nil || request.Method == "" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		switch request.Method {
+		case "initialize", "notifications/initialized", "ping", "tools/list", "tools/call":
+			next.ServeHTTP(w, r)
+		default:
+			logServerDelegation.Printf("Delegated MCP method denied: method=%s", request.Method)
+			httputil.WriteErrorResponse(w, http.StatusForbidden, "delegation_method_denied", "delegated identity is not authorized for this MCP method")
+		}
+	})
 }
 
 // ControlHandler returns the private delegation control-plane handler. It is
