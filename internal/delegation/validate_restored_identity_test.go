@@ -107,7 +107,7 @@ func TestValidateRestoredIdentity(t *testing.T) {
 	t.Run("binding outside envelope is rejected via validateAgainstEnvelope", func(t *testing.T) {
 		envelope := validEnvelope()
 		identity := validIdentityForEnvelope(envelope, 1)
-		identity.delegationBinding.Repository = "github/not-allowed"
+		identity.Repository = "github/not-allowed"
 		err := validateRestoredIdentity(identity, envelope, 1)
 		assert.ErrorContains(t, err, "repository outside envelope")
 	})
