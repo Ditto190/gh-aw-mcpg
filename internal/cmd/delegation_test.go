@@ -50,7 +50,7 @@ func TestStartUnifiedDelegationControlServesStatus(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	var payload map[string]any
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&payload))
-	assert.Equal(t, float64(1), payload["generation"])
+	assert.InEpsilon(t, 1.0, payload["generation"], 0)
 	assert.NoError(t, selectDelegationControlError(nil, controlErrCh))
 }
 

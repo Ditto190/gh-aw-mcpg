@@ -126,7 +126,7 @@ func TestUnifiedDelegationAuthorizesExactGitHubRepositoryTool(t *testing.T) {
 		"owner": "github",
 		"repo":  "gh-aw-firewall",
 	})
-	assert.Error(t, err)
+	require.Error(t, err)
 	require.NotNil(t, result)
 	assert.True(t, result.IsError)
 
@@ -134,7 +134,7 @@ func TestUnifiedDelegationAuthorizesExactGitHubRepositoryTool(t *testing.T) {
 		"owner": "github",
 		"repo":  "gh-aw",
 	})
-	assert.Error(t, err)
+	require.Error(t, err)
 	require.NotNil(t, result)
 	assert.True(t, result.IsError)
 }
