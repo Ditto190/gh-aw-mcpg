@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -284,6 +285,12 @@ func run(cmd *cobra.Command, args []string) error {
 
 	debugLog.Printf("Server mode: %s, guards mode: %s", mode, cfg.DIFCMode)
 
+	delegationConfig, delegationStatePath, err := resolveDelegationProxyConfig()
+	if err != nil {
+		return err
+	}
+	cfg.Delegation = delegationConfig
+
 	// Apply tracing flags: CLI flags and env var overrides take precedence over config values.
 	applyTracingOverrides(cmd, cfg)
 
@@ -340,6 +347,16 @@ func run(cmd *cobra.Command, args []string) error {
 	debugLog.Printf("Unified MCP server created successfully")
 	defer unifiedServer.Close()
 
+	delegationControlServer, delegationControlErrCh, err := startUnifiedDelegationControl(ctx, cancel, unifiedServer, delegationConfig)
+	if err != nil {
+		return err
+	}
+	if delegationControlServer != nil {
+		defer func() {
+			_ = delegationControlServer.Shutdown(context.Background())
+		}()
+	}
+
 	// Handle graceful shutdown via context cancellation
 	go func() {
 		<-ctx.Done()
@@ -370,7 +387,7 @@ func run(cmd *cobra.Command, args []string) error {
 		log.Printf("Warning: failed to write gateway configuration to stdout: %v", err)
 	}
 
-	if err := serveAndWait(
+	err = serveAndWait(
 		ctx,
 		cancel,
 		httpServer,
@@ -381,8 +398,13 @@ func run(cmd *cobra.Command, args []string) error {
 		func() error {
 			return httpServer.Serve(listener)
 		},
-	); err != nil {
+	)
+	err = selectDelegationControlError(err, delegationControlErrCh)
+	if err != nil {
 		debugLog.Printf("Server exited with error: %v", err)
+		return err
+	}
+	if err := persistUnifiedDelegationState(delegationConfig, delegationStatePath); err != nil {
 		return err
 	}
 

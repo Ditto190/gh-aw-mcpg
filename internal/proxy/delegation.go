@@ -18,7 +18,7 @@ import (
 
 var logDelegation = logger.ForFile()
 
-const delegationControlPath = "/internal/awf-enclave-mcp-control/"
+const delegationControlPath = delegation.ControlPathPrefix
 
 type delegationState struct {
 	store      *delegation.Store
@@ -28,12 +28,7 @@ type delegationState struct {
 
 // DelegationConfig enables runtime repository-read delegation and its
 // AWF-authenticated private control channel.
-type DelegationConfig struct {
-	Store             *delegation.Store
-	Capability        *delegation.ControlCapability
-	StatePath         string
-	ControlListenAddr string
-}
+type DelegationConfig = delegation.RuntimeConfig
 
 func newDelegationState(cfg *DelegationConfig) (*delegationState, error) {
 	if cfg == nil {

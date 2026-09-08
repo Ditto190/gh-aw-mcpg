@@ -8,12 +8,14 @@ import (
 	"time"
 
 	"github.com/github/gh-aw-mcpg/internal/config"
+	"github.com/github/gh-aw-mcpg/internal/delegation"
 	"github.com/github/gh-aw-mcpg/internal/difc"
 	"github.com/github/gh-aw-mcpg/internal/githubhttp"
 	"github.com/github/gh-aw-mcpg/internal/guard"
 	"github.com/github/gh-aw-mcpg/internal/launcher"
 	"github.com/github/gh-aw-mcpg/internal/logger"
 	"github.com/github/gh-aw-mcpg/internal/mcp"
+	"github.com/github/gh-aw-mcpg/internal/sanitize"
 	"github.com/github/gh-aw-mcpg/internal/tracing"
 	"github.com/github/gh-aw-mcpg/internal/util"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -112,6 +114,8 @@ type UnifiedServer struct {
 	// Configuration reference for guard loading
 	cfg *config.Config
 
+	delegation *delegation.RuntimeConfig
+
 	// Shutdown state tracking
 	isShutdown     bool
 	shutdownMu     sync.RWMutex
@@ -144,6 +148,12 @@ type UnifiedServer struct {
 // NewUnified creates a new unified MCP server
 func NewUnified(ctx context.Context, cfg *config.Config) (*UnifiedServer, error) {
 	logUnified.Printf("Creating new unified server: sequentialLaunch=%v, servers=%d", cfg.SequentialLaunch, len(cfg.Servers))
+	if cfg.Delegation != nil {
+		if cfg.Delegation.Store == nil || cfg.Delegation.Capability == nil || cfg.Delegation.StatePath == "" {
+			return nil, fmt.Errorf("delegation store, control capability, and state path are required")
+		}
+		sanitize.EnablePrivateSelectorRedaction()
+	}
 
 	l := launcher.New(ctx, cfg)
 
@@ -181,6 +191,7 @@ func NewUnified(ctx context.Context, cfg *config.Config) (*UnifiedServer, error)
 		guardRegistry:  guard.NewRegistry(),
 		DIFCComponents: difcComponents,
 		cfg:            cfg, // Store config for guard loading
+		delegation:     cfg.Delegation,
 
 		// Cache tracer at construction to avoid calling otel.Tracer on every request.
 		CachedTracer: tracing.CachedTracer{Tracer: tracing.Tracer()},

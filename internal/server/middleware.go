@@ -96,7 +96,7 @@ func wrapWithMiddleware(handler http.Handler, logTag string, unifiedServer *Unif
 	// Apply auth middleware if API key is configured (spec 7.1).
 	// Auth is the outermost application-level check so unauthenticated requests are
 	// rejected before HMAC validation (and its body-read overhead) runs.
-	authedHandler := applyAuthIfConfigured(apiKeys, hmacHandler)
+	authedHandler := applyAuthIfConfiguredWithDelegation(apiKeys, unifiedServer.isDelegatedExecutorAuth, hmacHandler)
 
 	// Wrap with OTEL tracing span (outermost, so it covers auth + HMAC + shutdown + logging)
 	tracingHandler := WithOTELTracing(authedHandler, logTag)
