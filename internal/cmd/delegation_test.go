@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"net"
 	"net/http"
 	"testing"
 	"time"
@@ -52,6 +53,34 @@ func TestStartUnifiedDelegationControlServesStatus(t *testing.T) {
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&payload))
 	assert.InEpsilon(t, 1.0, payload["generation"], 0)
 	assert.NoError(t, selectDelegationControlError(nil, controlErrCh))
+}
+
+func TestStartUnifiedDelegationControlFailsWhenListenAddrOccupied(t *testing.T) {
+	previousRedaction := sanitize.PrivateSelectorRedactionEnabled()
+	t.Cleanup(func() { sanitize.SetPrivateSelectorRedaction(previousRedaction) })
+
+	const capabilityKey = "control-capability-key-32-bytes!!"
+	occupiedAddr := availableLoopbackAddr(t)
+	occupyingListener, err := net.Listen("tcp", occupiedAddr)
+	require.NoError(t, err)
+	defer occupyingListener.Close()
+
+	delegationConfig, err := testRuntimeDelegationConfig(t, occupiedAddr, capabilityKey)
+	require.NoError(t, err)
+	cfg := &config.Config{
+		Servers:    map[string]*config.ServerConfig{},
+		Delegation: delegationConfig,
+	}
+	us, err := server.NewUnified(context.Background(), cfg)
+	require.NoError(t, err)
+	defer us.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	controlServer, _, err := startUnifiedDelegationControl(ctx, cancel, us, delegationConfig)
+	require.Error(t, err)
+	assert.Nil(t, controlServer)
+	assert.Contains(t, err.Error(), "failed to listen on private delegation control channel")
 }
 
 func testRuntimeDelegationConfig(t *testing.T, listenAddr, capabilityKey string) (*delegation.RuntimeConfig, error) {

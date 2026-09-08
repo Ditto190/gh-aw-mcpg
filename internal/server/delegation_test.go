@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -103,6 +104,101 @@ func TestDelegatedAuthWithoutGatewayKeyRequiresLiveBearer(t *testing.T) {
 	handler(rec, req)
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 	assert.False(t, called)
+}
+
+func TestRejectDelegatedNonToolMethodsDeniesUnauthorizedMethod(t *testing.T) {
+	delegationConfig, createReq := newUnifiedDelegationConfig(t)
+	created, err := delegationConfig.Store.CreateOrConfirm(createReq)
+	require.NoError(t, err)
+
+	us := &UnifiedServer{delegation: delegationConfig}
+	called := false
+	handler := us.rejectDelegatedNonToolMethods(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	body := `{"jsonrpc":"2.0","id":1,"method":"prompts/get"}`
+	req, err := http.NewRequest(http.MethodPost, "/mcp", strings.NewReader(body))
+	require.NoError(t, err)
+	req.Header.Set("Authorization", created.ExecutorBearer)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusForbidden, rec.Code)
+	assert.False(t, called)
+}
+
+func TestRejectDelegatedNonToolMethodsDeniesBatchedUnauthorizedMethod(t *testing.T) {
+	delegationConfig, createReq := newUnifiedDelegationConfig(t)
+	created, err := delegationConfig.Store.CreateOrConfirm(createReq)
+	require.NoError(t, err)
+
+	us := &UnifiedServer{delegation: delegationConfig}
+
+	testCases := []struct {
+		name string
+		body string
+	}{
+		{
+			name: "batched prompts/list",
+			body: `[{"jsonrpc":"2.0","id":1,"method":"tools/call"},{"jsonrpc":"2.0","id":2,"method":"prompts/list"}]`,
+		},
+		{
+			name: "batched prompts/get",
+			body: `[{"jsonrpc":"2.0","id":1,"method":"tools/list"},{"jsonrpc":"2.0","id":2,"method":"prompts/get"}]`,
+		},
+		{
+			name: "malformed envelope",
+			body: `{"jsonrpc":"2.0","id":1,`,
+		},
+		{
+			name: "batch element missing method",
+			body: `[{"jsonrpc":"2.0","id":1,"method":"tools/list"},{"jsonrpc":"2.0","id":2}]`,
+		},
+		{
+			name: "empty batch",
+			body: `[]`,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			called := false
+			handler := us.rejectDelegatedNonToolMethods(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				called = true
+				w.WriteHeader(http.StatusNoContent)
+			}))
+			req, err := http.NewRequest(http.MethodPost, "/mcp", strings.NewReader(tc.body))
+			require.NoError(t, err)
+			req.Header.Set("Authorization", created.ExecutorBearer)
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+			assert.Equal(t, http.StatusForbidden, rec.Code)
+			assert.False(t, called)
+		})
+	}
+}
+
+func TestRejectDelegatedNonToolMethodsAllowsBatchedToolMethods(t *testing.T) {
+	delegationConfig, createReq := newUnifiedDelegationConfig(t)
+	created, err := delegationConfig.Store.CreateOrConfirm(createReq)
+	require.NoError(t, err)
+
+	us := &UnifiedServer{delegation: delegationConfig}
+	called := false
+	handler := us.rejectDelegatedNonToolMethods(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	body := `[{"jsonrpc":"2.0","id":1,"method":"tools/list"},{"jsonrpc":"2.0","id":2,"method":"tools/call"}]`
+	req, err := http.NewRequest(http.MethodPost, "/mcp", strings.NewReader(body))
+	require.NoError(t, err)
+	req.Header.Set("Authorization", created.ExecutorBearer)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusNoContent, rec.Code)
+	assert.True(t, called)
 }
 
 func TestUnifiedDelegationAuthorizesExactGitHubRepositoryTool(t *testing.T) {

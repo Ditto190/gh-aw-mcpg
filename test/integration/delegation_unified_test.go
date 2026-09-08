@@ -75,6 +75,30 @@ func TestUnifiedDelegationRootCommandWithAgentPolicies(t *testing.T) {
 	require.True(t, ok)
 	require.NotEmpty(t, handle)
 
+	// Negative credential cross-use: an executor bearer must not be usable
+	// as a control-plane capability key, and the control capability key
+	// must not be admitted as a data-plane executor bearer.
+	crossUseReq, err := http.NewRequest(http.MethodPost, "http://"+controlAddr+delegation.ControlPathPrefix+"status", bytes.NewReader([]byte(`{}`)))
+	require.NoError(t, err)
+	crossUseReq.Header.Set("Authorization", bearer)
+	crossUseReq.Header.Set("Content-Type", "application/json")
+	crossUseResp, err := http.DefaultClient.Do(crossUseReq)
+	require.NoError(t, err)
+	crossUseResp.Body.Close()
+	assert.Equal(t, http.StatusForbidden, crossUseResp.StatusCode, "executor bearer must not authenticate to the control listener")
+
+	capabilityAsBearer := delegatedMCPRequest(t, serverURL+"/mcp", capabilityKey, "", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      100,
+		"method":  "initialize",
+		"params": map[string]any{
+			"protocolVersion": "2024-11-05",
+			"capabilities":    map[string]any{},
+			"clientInfo":      map[string]any{"name": "cross-use-test", "version": "1.0.0"},
+		},
+	})
+	assert.Contains(t, capabilityAsBearer, "error", "control capability key must not be admitted as a data-plane executor bearer")
+
 	mcpSessionID := initializeDelegatedMCP(t, serverURL+"/mcp", bearer)
 	tools := delegatedMCPRequest(t, serverURL+"/mcp", bearer, mcpSessionID, map[string]any{
 		"jsonrpc": "2.0",
@@ -163,6 +187,21 @@ func TestUnifiedDelegationRootCommandWithAgentPolicies(t *testing.T) {
 	}))
 	assertDelegatedToolDenied(t, labelReplay)
 
+	// A live (non-revoked, non-expired) identity must survive a gateway
+	// restart and continue to authorize calls against the persisted store.
+	persistent := postDelegationControl(t, controlAddr, capabilityKey, "create-or-confirm", map[string]any{
+		"run_id":           "run-1",
+		"enclave_backend":  "awf-enclave",
+		"enclave_entry_id": "entry-persist",
+		"invocation_id":    "inv-persist",
+		"repository":       "github/gh-aw",
+		"tool_policy":      delegation.ToolPolicyGitHubRepositoryReadV1,
+		"schema_hash":      "sha256:test",
+		"requested_ttl":    50,
+		"idempotency_key":  "key-persist",
+	})
+	persistentBearer := persistent["executor_bearer"].(string)
+
 	stopCommand(t, cmd)
 	cmd, stdout, stderr = startDelegationGateway(t, binaryPath, gatewayAddr, controlAddr, statePath, capabilityKey, envelopeJSON, backend.URL+"/mcp")
 	defer stopCommand(t, cmd)
@@ -176,6 +215,19 @@ func TestUnifiedDelegationRootCommandWithAgentPolicies(t *testing.T) {
 		"enclave_entry_id": "entry-1",
 	})
 	assert.Empty(t, recoveredStatus["labelled_handles"], "revoked delegations must remain revoked after restart")
+
+	persistentStatus := postDelegationControl(t, controlAddr, capabilityKey, "status", map[string]any{
+		"run_id":           "run-1",
+		"enclave_entry_id": "entry-persist",
+	})
+	assert.NotEmpty(t, persistentStatus["labelled_handles"], "a live identity must remain reconciled after restart")
+
+	persistentSessionID := initializeDelegatedMCP(t, serverURL+"/mcp", persistentBearer)
+	persistentCall := delegatedMCPRequest(t, serverURL+"/mcp", persistentBearer, persistentSessionID, toolCallPayload(9, "github___list_issues", map[string]any{
+		"owner": "github",
+		"repo":  "gh-aw",
+	}))
+	assertDelegatedToolSucceeded(t, persistentCall)
 }
 
 func TestUnifiedDelegationRootCommandRejectsPartialActivation(t *testing.T) {
