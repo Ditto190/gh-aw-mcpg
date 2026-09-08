@@ -128,8 +128,7 @@ pub fn label_response_paths(
                     items.len()
                 ));
 
-                let limited_items =
-                    limit_items_with_log(items, tool_names::SEARCH_REPOSITORIES);
+                let limited_items = limit_items_with_log(items, tool_names::SEARCH_REPOSITORIES);
                 let mut labeled_paths = Vec::with_capacity(limited_items.len());
 
                 for (i, item) in limited_items.iter().enumerate() {

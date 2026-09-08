@@ -93,8 +93,7 @@ pub fn label_response_items(
                 ));
 
                 // Limit items to prevent WASM memory exhaustion
-                let items_to_process =
-                    limit_items_with_log(items, tool_names::SEARCH_REPOSITORIES);
+                let items_to_process = limit_items_with_log(items, tool_names::SEARCH_REPOSITORIES);
 
                 let mut private_count = 0;
                 for (i, item) in items_to_process.iter().enumerate() {

@@ -38,9 +38,9 @@ fn apply_repo_visibility_secrecy(
         None => {
             if !ctx.scopes.is_empty()
                 && ctx
-                .scopes
-                .iter()
-                .all(|scope| matches!(scope.scope_kind, ScopeKind::Public))
+                    .scopes
+                    .iter()
+                    .all(|scope| matches!(scope.scope_kind, ScopeKind::Public))
             {
                 return vec![];
             }

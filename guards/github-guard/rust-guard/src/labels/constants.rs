@@ -84,7 +84,7 @@ mod tests {
     }
 
     #[test]
-fn dispatch_constants_match_canonical_values() {
+    fn dispatch_constants_match_canonical_values() {
         assert_eq!(tool_names::ACTIONS_GET, "actions_get");
         assert_eq!(tool_names::UI_GET, "ui_get");
         assert_eq!(tool_names::GET_COMMIT, "get_commit");
@@ -211,8 +211,6 @@ pub mod tool_names {
     pub const SEARCH_REPOSITORIES: &str = "search_repositories";
     pub const ACTIONS_GET: &str = "actions_get";
     pub const UI_GET: &str = "ui_get";
-    pub const GET_COMMIT: &str = "get_commit";
-    pub const SEARCH_REPOSITORIES: &str = "search_repositories";
 }
 
 /// UI metadata methods that are scoped to a specific repository.
