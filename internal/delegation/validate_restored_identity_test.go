@@ -90,10 +90,8 @@ func TestValidateRestoredIdentity(t *testing.T) {
 	t.Run("binding outside envelope is rejected via validateAgainstEnvelope", func(t *testing.T) {
 		envelope := validEnvelope()
 		identity := validIdentityForEnvelope(envelope, 1)
-		identity.Repository = "some/other-repo"
 		err := validateRestoredIdentity(identity, envelope, 1)
-		assert.Error(t, err)
-	})
+		assert.ErrorContains(t, err, "repository outside envelope")
 
 	t.Run("envelope already expired is rejected via validateAgainstEnvelope", func(t *testing.T) {
 		envelope := validEnvelope()
