@@ -76,8 +76,11 @@ func (us *UnifiedServer) registerGuard(serverID string) error {
 			// Runtime safety net for safe-outputs: if the compiler didn't set
 			// sink-visibility but the workflow repo is public, force "public" to
 			// prevent exfiltration. This makes the gateway self-defending even
-			// without compiler cooperation.
-			if effectiveVisibility == "" && guard.IsSafeOutputsServer(serverID) {
+			// without compiler cooperation. Servers exempted from sink-visibility
+			// enforcement (blanket forcePublicRepos=false or an explicit
+			// sinkVisibilityExemptServers entry) opt out of this safety net and
+			// rely on their configured write-sink accept patterns instead.
+			if effectiveVisibility == "" && guard.IsSafeOutputsServer(serverID) && !us.isServerExemptFromSinkVisibility(serverID) {
 				if vis, ok := us.resolveWorkflowRepoVisibility(); ok && vis == githubhttp.RepoVisibilityPublic {
 					effectiveVisibility = "public"
 					logger.LogWarnToServer(serverID, "difc",

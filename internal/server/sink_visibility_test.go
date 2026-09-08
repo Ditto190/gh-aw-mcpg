@@ -9,6 +9,7 @@ import (
 	"github.com/github/gh-aw-mcpg/internal/config"
 	"github.com/github/gh-aw-mcpg/internal/guard"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // ─── isServerExemptFromSinkVisibility ────────────────────────────────────────
@@ -396,4 +397,80 @@ func TestVerifySinkVisibilityAtRuntime_CaseInsensitive(t *testing.T) {
 	result := us.verifySinkVisibilityAtRuntime("github", "PUBLIC")
 	assert.Equal(t, "public", result,
 		"'PUBLIC' should be normalized to 'public' and not trigger override when repo is public")
+}
+
+// ─── safe-outputs safety net exemption ───────────────────────────────────────
+
+// newPublicRepoUnifiedServerForSafeOutputs returns a UnifiedServer configured with a
+// safe-outputs write-sink policy (no sink-visibility) whose workflow repository
+// resolves as public via a stub GitHub API.
+func newPublicRepoUnifiedServerForSafeOutputs(t *testing.T, gw *config.GatewayConfig) *UnifiedServer {
+	t.Helper()
+	t.Setenv(guard.WASMGuardsDirEnvVar, "")
+	t.Setenv("GITHUB_REPOSITORY", "test-owner/test-repo")
+	t.Setenv("GITHUB_TOKEN", "mock-token")
+
+	apiServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"visibility": "public",
+			"private":    false,
+		})
+	}))
+	t.Cleanup(apiServer.Close)
+	t.Setenv("GITHUB_API_URL", apiServer.URL)
+
+	return newMinimalUnifiedServerForGuardTest(&config.Config{
+		Gateway: gw,
+		Servers: map[string]*config.ServerConfig{
+			"safe-outputs": {Type: "http", URL: "https://safe.example.com/mcp"},
+		},
+		GuardPolicy: &config.GuardPolicy{
+			WriteSink: &config.WriteSinkPolicy{
+				Accept: []string{"private:test-owner/private-repo"},
+			},
+		},
+	})
+}
+
+// registerSafeOutputsGuardAndGetVisibility registers the safe-outputs guard and
+// returns the effective sink-visibility of the created write-sink guard.
+func registerSafeOutputsGuardAndGetVisibility(t *testing.T, us *UnifiedServer) string {
+	t.Helper()
+	require.NoError(t, us.registerGuard("safe-outputs"))
+	g := us.guardRegistry.Get("safe-outputs")
+	require.NotNil(t, g)
+	ws, ok := g.(*guard.WriteSinkGuard)
+	require.True(t, ok, "safe-outputs should get a write-sink guard")
+	return ws.SinkVisibility()
+}
+
+// TestRegisterGuard_SafeOutputsSafetyNet_PublicRepoForcesPublic verifies the
+// baseline safety net: without an exemption, a public workflow repo forces
+// sink-visibility="public" for safe-outputs.
+func TestRegisterGuard_SafeOutputsSafetyNet_PublicRepoForcesPublic(t *testing.T) {
+	us := newPublicRepoUnifiedServerForSafeOutputs(t, &config.GatewayConfig{})
+	assert.Equal(t, "public", registerSafeOutputsGuardAndGetVisibility(t, us),
+		"safety net should force sink-visibility=public when no exemption applies")
+}
+
+// TestRegisterGuard_SafeOutputsSafetyNet_ForcePublicReposFalseExempt verifies that
+// the blanket forcePublicRepos=false opt-out exempts safe-outputs from the safety net.
+func TestRegisterGuard_SafeOutputsSafetyNet_ForcePublicReposFalseExempt(t *testing.T) {
+	disabled := false
+	us := newPublicRepoUnifiedServerForSafeOutputs(t, &config.GatewayConfig{
+		ForcePublicRepos: &disabled,
+	})
+	assert.Empty(t, registerSafeOutputsGuardAndGetVisibility(t, us),
+		"forcePublicRepos=false should exempt safe-outputs from the sink-visibility safety net")
+}
+
+// TestRegisterGuard_SafeOutputsSafetyNet_ExemptServerEntry verifies that an explicit
+// sinkVisibilityExemptServers entry exempts safe-outputs from the safety net.
+func TestRegisterGuard_SafeOutputsSafetyNet_ExemptServerEntry(t *testing.T) {
+	us := newPublicRepoUnifiedServerForSafeOutputs(t, &config.GatewayConfig{
+		SinkVisibilityExemptServers: []string{"safe-outputs"},
+	})
+	assert.Empty(t, registerSafeOutputsGuardAndGetVisibility(t, us),
+		"sinkVisibilityExemptServers entry should exempt safe-outputs from the safety net")
 }
