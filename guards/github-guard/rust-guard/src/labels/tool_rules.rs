@@ -38,9 +38,9 @@ fn apply_repo_visibility_secrecy(
         None => {
             if !ctx.scopes.is_empty()
                 && ctx
-                .scopes
-                .iter()
-                .all(|scope| matches!(scope.scope_kind, ScopeKind::Public))
+                    .scopes
+                    .iter()
+                    .all(|scope| matches!(scope.scope_kind, ScopeKind::Public))
             {
                 return vec![];
             }
@@ -604,6 +604,7 @@ pub fn apply_tool_labels(
 
         // === Repository Metadata ===
         tool_names::SEARCH_REPOSITORIES => {
+            // Repository metadata has approved-level integrity
             // Secrecy will be determined per-item based on private flag
             integrity = writer_integrity(repo_id, ctx);
         }

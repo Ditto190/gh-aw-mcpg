@@ -84,6 +84,7 @@ pub fn label_response_items(
     match tool_name {
         // === Repository Search - label private repos with approved-level integrity ===
         tool_names::SEARCH_REPOSITORIES => {
+            // Response has items array with repositories
             // Each item has a "private" boolean field from the GitHub API
             if let Some(items) = actual_response.get("items").and_then(|v| v.as_array()) {
                 crate::log_info(&format!(
