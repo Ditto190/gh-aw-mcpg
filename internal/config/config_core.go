@@ -33,6 +33,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 
+	"github.com/github/gh-aw-mcpg/internal/delegation"
 	"github.com/github/gh-aw-mcpg/internal/logger"
 )
 
@@ -94,6 +95,11 @@ type Config struct {
 
 	// GuardPolicySource describes where GuardPolicy was resolved from (cli|env|config|legacy).
 	GuardPolicySource string `toml:"-" json:"-"`
+
+	// Delegation optionally enables github-repository-delegation-v1 runtime
+	// control/data-plane authorization. It is resolved from environment
+	// activation inputs, never from user configuration.
+	Delegation *delegation.RuntimeConfig `toml:"-" json:"-"`
 }
 
 // GatewayConfig holds global gateway settings.

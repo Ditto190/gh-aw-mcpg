@@ -142,6 +142,14 @@ func TestCreateAgentFilteredUnifiedServer_PolicyIsolation(t *testing.T) {
 	assert.Empty(t, ghostTools, "an agent without a policy sees no tools")
 }
 
+func TestCreateDelegationFilteredUnifiedServer_ClosedToolSurface(t *testing.T) {
+	us := agentVisibilityServer(t)
+
+	tools, err := listToolsViaInMemory(createDelegationFilteredUnifiedServer(us))
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []string{"github___issue_read"}, tools, "delegated sessions see only the closed github-repository-read-v1 tools registered by github")
+}
+
 // TestCreateAgentFilteredUnifiedServer_ConcurrentIsolation exercises the per-agent
 // filtered-server construction concurrently to catch data races (run with -race).
 func TestCreateAgentFilteredUnifiedServer_ConcurrentIsolation(t *testing.T) {

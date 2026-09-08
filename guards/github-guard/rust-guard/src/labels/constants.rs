@@ -211,6 +211,8 @@ pub mod tool_names {
     pub const SEARCH_REPOSITORIES: &str = "search_repositories";
     pub const ACTIONS_GET: &str = "actions_get";
     pub const UI_GET: &str = "ui_get";
+    pub const GET_COMMIT: &str = "get_commit";
+    pub const SEARCH_REPOSITORIES: &str = "search_repositories";
 }
 
 /// UI metadata methods that are scoped to a specific repository.

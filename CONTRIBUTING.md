@@ -489,7 +489,7 @@ The project uses:
 
 - `github.com/spf13/cobra` - CLI framework
 - `github.com/BurntSushi/toml` - TOML parser
-- `github.com/modelcontextprotocol/go-sdk` v1.7.0 - MCP protocol implementation
+- `github.com/modelcontextprotocol/go-sdk` v1.8.0-pre.2 - MCP protocol implementation
 - `github.com/itchyny/gojq` - JQ schema processing
 - `github.com/santhosh-tekuri/jsonschema/v6` - JSON schema validation
 - `github.com/stretchr/testify` - Test assertions
@@ -497,6 +497,12 @@ The project uses:
 - `go.opentelemetry.io/otel` - OpenTelemetry tracing API and span/trace management
 - `golang.org/x/term` - Terminal detection
 - Standard library for JSON, HTTP, exec
+
+The MCP SDK is intentionally pinned to the current pre-release rather than
+downgraded to the latest stable release so the gateway stays aligned with the
+upstream MCP implementation. Before changing this pin, run the SDK canary
+tests documented in [SDK Upgrade Process](#sdk-upgrade-process); they protect
+the gateway's custom reconnect and schema-proxying behavior.
 
 To add a new dependency:
 ```bash
