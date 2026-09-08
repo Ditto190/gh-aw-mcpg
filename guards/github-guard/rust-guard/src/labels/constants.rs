@@ -87,6 +87,8 @@ mod tests {
     fn ui_get_constants_match_dispatch_names() {
         assert_eq!(tool_names::ACTIONS_GET, "actions_get");
         assert_eq!(tool_names::UI_GET, "ui_get");
+        assert_eq!(tool_names::GET_COMMIT, "get_commit");
+        assert_eq!(tool_names::SEARCH_REPOSITORIES, "search_repositories");
         assert_eq!(
             UI_GET_REPO_SCOPED_METHODS,
             &["labels", "milestones", "branches"]
@@ -203,8 +205,10 @@ pub mod tool_names {
     pub const GET_ISSUE: &str = "get_issue";
     pub const LIST_PULL_REQUESTS: &str = "list_pull_requests";
     pub const GET_FILE_CONTENTS: &str = "get_file_contents";
+    pub const GET_COMMIT: &str = "get_commit";
     pub const LIST_COMMITS: &str = "list_commits";
     pub const LIST_RELEASES: &str = "list_releases";
+    pub const SEARCH_REPOSITORIES: &str = "search_repositories";
     pub const ACTIONS_GET: &str = "actions_get";
     pub const UI_GET: &str = "ui_get";
 }

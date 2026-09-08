@@ -443,7 +443,7 @@ pub fn apply_tool_labels(
         }
 
         // === Commits ===
-        "get_commit" | tool_names::LIST_COMMITS | "list_commits_ff_fields_param" => {
+        tool_names::GET_COMMIT | tool_names::LIST_COMMITS | "list_commits_ff_fields_param" => {
             // I(commit) = merged on default branch, approved in private repos, else contributor floor
             // S(commit) = S(repo)
             if !owner.is_empty() && !repo.is_empty() {
@@ -603,7 +603,7 @@ pub fn apply_tool_labels(
         }
 
         // === Repository Metadata ===
-        "search_repositories" => {
+        tool_names::SEARCH_REPOSITORIES => {
             // Repository metadata has approved-level integrity
             // Secrecy will be determined per-item based on private flag
             integrity = writer_integrity(repo_id, ctx);

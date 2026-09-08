@@ -83,7 +83,7 @@ pub fn label_response_items(
 
     match tool_name {
         // === Repository Search - label private repos with approved-level integrity ===
-        "search_repositories" => {
+        tool_names::SEARCH_REPOSITORIES => {
             // Response has items array with repositories
             // Each item has a "private" boolean field from the GitHub API
             if let Some(items) = actual_response.get("items").and_then(|v| v.as_array()) {
@@ -93,7 +93,8 @@ pub fn label_response_items(
                 ));
 
                 // Limit items to prevent WASM memory exhaustion
-                let items_to_process = limit_items_with_log(items, "search_repositories");
+                let items_to_process =
+                    limit_items_with_log(items, tool_names::SEARCH_REPOSITORIES);
 
                 let mut private_count = 0;
                 for (i, item) in items_to_process.iter().enumerate() {
@@ -332,7 +333,7 @@ pub fn label_response_items(
         }
 
         // === Commits - label by branch (default branch = merged) ===
-        tool_names::LIST_COMMITS | "list_commits_ff_fields_param" | "get_commit" => {
+        tool_names::LIST_COMMITS | "list_commits_ff_fields_param" | tool_names::GET_COMMIT => {
             let all_items = collect_items_simple(&actual_response);
 
             // Limit items to prevent WASM memory exhaustion

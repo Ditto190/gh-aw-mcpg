@@ -276,7 +276,7 @@ pub(crate) fn is_repo_private_with_callback(
     for attempt in 0..=1 {
         let result = match call_backend_with_retry(
             callback,
-            "search_repositories",
+            tool_names::SEARCH_REPOSITORIES,
             &args_str,
             MEDIUM_BUFFER_SIZE,
         ) {
