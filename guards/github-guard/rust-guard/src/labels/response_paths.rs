@@ -106,7 +106,7 @@ pub fn label_response_paths(
 
     match tool_name {
         // === Repository Search - label by private/public ===
-        "search_repositories" => {
+        tool_names::SEARCH_REPOSITORIES => {
             let (items_opt, items_key) =
                 if let Some(arr) = actual_response.get("items").and_then(|v| v.as_array()) {
                     (Some(arr), "items")
@@ -128,7 +128,7 @@ pub fn label_response_paths(
                     items.len()
                 ));
 
-                let limited_items = limit_items_with_log(items, "search_repositories");
+                let limited_items = limit_items_with_log(items, tool_names::SEARCH_REPOSITORIES);
                 let mut labeled_paths = Vec::with_capacity(limited_items.len());
 
                 for (i, item) in limited_items.iter().enumerate() {

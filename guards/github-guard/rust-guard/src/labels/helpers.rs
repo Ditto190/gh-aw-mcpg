@@ -9,7 +9,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use serde_json::Value;
 
 use super::backend::GithubMcpCallback;
-use super::constants::{field_names, label_constants, scope_names, URL_FALLBACK_FIELDS};
+use super::constants::{field_names, label_constants, scope_names, tool_names, URL_FALLBACK_FIELDS};
 
 /// Ensures the endorsement gateway-mode warning is emitted at most once per process lifetime.
 static ENDORSEMENT_GATEWAY_WARNING_EMITTED: AtomicBool = AtomicBool::new(false);
@@ -1885,7 +1885,7 @@ pub(crate) fn is_default_branch_commit_context(tool_name: &str, sha_or_ref: &str
         return true;
     }
 
-    tool_name == "get_commit" && looks_like_commit_sha(sha_or_ref)
+    tool_name == tool_names::GET_COMMIT && looks_like_commit_sha(sha_or_ref)
 }
 
 /// Apply the standard post-integrity adjustment pipeline to a content item after
