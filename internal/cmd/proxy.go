@@ -58,7 +58,7 @@ func init() {
 	rootCmd.AddCommand(newProxyCmd())
 }
 
-func resolveDelegationProxyConfig() (*proxy.DelegationConfig, string, error) {
+func resolveDelegationProxyConfig() (*delegation.RuntimeConfig, string, error) {
 	envelopeJSON := os.Getenv("MCP_GATEWAY_DELEGATION_ENVELOPE")
 	capabilityKey := os.Getenv(delegation.EnvControlCapabilityKey)
 	statePath := os.Getenv("MCP_GATEWAY_DELEGATION_STATE_PATH")
@@ -95,7 +95,7 @@ func resolveDelegationProxyConfig() (*proxy.DelegationConfig, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	return &proxy.DelegationConfig{Store: store, Capability: capability, StatePath: statePath, ControlListenAddr: controlListenAddr}, statePath, nil
+	return &delegation.RuntimeConfig{Store: store, Capability: capability, StatePath: statePath, ControlListenAddr: controlListenAddr}, statePath, nil
 }
 
 func newProxyCmd() *cobra.Command {

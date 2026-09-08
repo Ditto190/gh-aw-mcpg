@@ -85,9 +85,11 @@ func wrapWithMiddleware(handler http.Handler, logTag string, unifiedServer *Unif
 	// Wrap SDK handler with detailed logging for JSON-RPC translation debugging
 	loggedHandler := WithSDKLogging(handler, logTag)
 
+	delegationMethodHandler := unifiedServer.rejectDelegatedNonToolMethods(loggedHandler)
+
 	// Apply shutdown check middleware (spec 5.1.3)
 	// This must come before auth to ensure shutdown takes precedence
-	shutdownHandler := rejectIfShutdown(unifiedServer, loggedHandler, "server:"+logTag)
+	shutdownHandler := rejectIfShutdown(unifiedServer, delegationMethodHandler, "server:"+logTag)
 
 	// Apply HMAC signature verification if secret is configured (ASI-07).
 	// HMAC wraps the shutdown handler so only post-auth requests pay the body-read cost.
@@ -96,7 +98,11 @@ func wrapWithMiddleware(handler http.Handler, logTag string, unifiedServer *Unif
 	// Apply auth middleware if API key is configured (spec 7.1).
 	// Auth is the outermost application-level check so unauthenticated requests are
 	// rejected before HMAC validation (and its body-read overhead) runs.
-	authedHandler := applyAuthIfConfigured(apiKeys, hmacHandler)
+	var delegatedAuthenticator func(string) bool
+	if unifiedServer.delegationEnabled() {
+		delegatedAuthenticator = unifiedServer.isDelegatedExecutorAuth
+	}
+	authedHandler := applyAuthIfConfiguredWithDelegation(apiKeys, delegatedAuthenticator, hmacHandler)
 
 	// Wrap with OTEL tracing span (outermost, so it covers auth + HMAC + shutdown + logging)
 	tracingHandler := WithOTELTracing(authedHandler, logTag)

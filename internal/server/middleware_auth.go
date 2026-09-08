@@ -60,6 +60,10 @@ func matchesAnyKey(authHeader string, keys []string) bool {
 // allows multiple concurrent identities, e.g. primary/enclave, to each
 // authenticate with their own identifier).
 func authMiddleware(apiKeys []string, next http.HandlerFunc) http.HandlerFunc {
+	return authMiddlewareWithDelegation(apiKeys, nil, next)
+}
+
+func authMiddlewareWithDelegation(apiKeys []string, delegatedAuthenticator func(string) bool, next http.HandlerFunc) http.HandlerFunc {
 	logAuth.Printf("Initialized auth middleware")
 	return func(w http.ResponseWriter, r *http.Request) {
 		logAuth.Printf("Authenticating request: method=%s, path=%s, remote=%s", r.Method, r.URL.Path, r.RemoteAddr)
@@ -83,7 +87,7 @@ func authMiddleware(apiKeys []string, next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		// Spec 7.1: Authorization header must contain one of the configured API keys directly.
-		if !matchesAnyKey(authHeader, apiKeys) {
+		if !matchesAnyKey(authHeader, apiKeys) && (delegatedAuthenticator == nil || !delegatedAuthenticator(authHeader)) {
 			logAuth.Printf("Rejecting auth request: status=%d, code=%s, detail=%s, path=%s, remote=%s", http.StatusUnauthorized, "unauthorized", "invalid_api_key", r.URL.Path, r.RemoteAddr)
 			rejectRequest(w, r, http.StatusUnauthorized, "unauthorized", "invalid API key", "auth", "authentication_failed", "invalid_api_key")
 			return
@@ -98,9 +102,13 @@ func authMiddleware(apiKeys []string, next http.HandlerFunc) http.HandlerFunc {
 // applyAuthIfConfigured applies authentication middleware if at least one API key is provided.
 // Returns the handler unchanged if apiKeys is empty.
 func applyAuthIfConfigured(apiKeys []string, handler http.HandlerFunc) http.HandlerFunc {
-	if len(apiKeys) > 0 {
+	return applyAuthIfConfiguredWithDelegation(apiKeys, nil, handler)
+}
+
+func applyAuthIfConfiguredWithDelegation(apiKeys []string, delegatedAuthenticator func(string) bool, handler http.HandlerFunc) http.HandlerFunc {
+	if len(apiKeys) > 0 || delegatedAuthenticator != nil {
 		logAuth.Print("Auth key configured, applying middleware")
-		return authMiddleware(apiKeys, handler)
+		return authMiddlewareWithDelegation(apiKeys, delegatedAuthenticator, handler)
 	}
 	logAuth.Print("No auth key configured, skipping middleware")
 	return handler

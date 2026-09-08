@@ -209,6 +209,12 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 	}()
 
 	sessionID := us.getSessionID(ctx)
+	ctx, err := us.authorizeDelegatedToolCall(ctx, serverID, toolName, args)
+	if err != nil {
+		httpStatusCode = 403
+		tracing.RecordSpanError(toolSpan, err, "delegation denied")
+		return mcp.NewErrorCallToolResult(err)
+	}
 	// Propagate a redacted, stable session attribution to the tool call span so it
 	// is queryable on child spans without exposing the raw authenticated identity.
 	if toolSpan.IsRecording() {
@@ -219,7 +225,7 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 	// authenticated agent is not permitted to use. This is defense-in-depth
 	// alongside the per-agent tool-visibility filtering applied at session
 	// establishment (createAgentFilteredServer / createAgentFilteredUnifiedServer).
-	if us.agentPoliciesEnforced() {
+	if us.agentPoliciesEnforced() && !delegatedToolAuthorized(ctx, serverID, toolName) {
 		agentIdentity := guard.GetAgentIDFromContext(ctx)
 		if !us.agentCanUseTool(agentIdentity, serverID, toolName) {
 			logger.LogWarn("client", "tools/call denied by per-agent policy: agent=%s tool=%q server=%s",

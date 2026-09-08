@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/github/gh-aw-mcpg/internal/delegation"
 	"github.com/github/gh-aw-mcpg/internal/logger"
 	"github.com/github/gh-aw-mcpg/internal/util"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -100,5 +101,69 @@ func createAgentFilteredUnifiedServer(us *UnifiedServer, agentID string) *sdk.Se
 
 	logger.LogInfo("client", "Built per-agent unified tool view: agent=%s, tools=%d",
 		util.HashIdentifierForLog(agentID), registered)
+	return server
+}
+
+func createDelegationFilteredUnifiedServer(us *UnifiedServer) *sdk.Server {
+	logUnified.Print("createDelegationFilteredUnifiedServer: building delegated github-repository-read-v1 tool view")
+	server := newSDKServer("awmg-unified-delegation", logTransport)
+
+	us.toolsMu.RLock()
+	tools := make([]ToolInfo, 0, len(us.tools))
+	for _, t := range us.tools {
+		tools = append(tools, *t)
+	}
+	us.toolsMu.RUnlock()
+
+	registered := registerFilteredTools(
+		server,
+		tools,
+		"delegation",
+		func(toolInfo ToolInfo) (string, string) {
+			return toolInfo.BackendID, strings.TrimPrefix(toolInfo.Name, toolInfo.BackendID+"___")
+		},
+		func(_ string, serverID, toolName string) bool {
+			return serverID == "github" && delegation.IsDelegatedTool(toolName)
+		},
+		func(toolInfo ToolInfo) func(context.Context, *sdk.CallToolRequest, interface{}) (*sdk.CallToolResult, interface{}, error) {
+			return toolInfo.Handler
+		},
+	)
+
+	logger.LogInfo("client", "Built delegated unified tool view: tools=%d", registered)
+	return server
+}
+
+func createDelegationFilteredServer(unifiedServer *UnifiedServer, backendID string) *sdk.Server {
+	logRouted.Printf("Creating delegated filtered server: backend=%s", backendID)
+	server := newSDKServer("awmg-"+backendID+"-delegation", logRouted)
+	if backendID != "github" {
+		return server
+	}
+
+	tools := unifiedServer.GetToolsForBackend(backendID)
+	registerFilteredTools(
+		server,
+		tools,
+		"delegation",
+		func(toolInfo ToolInfo) (string, string) {
+			return backendID, toolInfo.Name
+		},
+		func(_ string, _ string, toolName string) bool {
+			return delegation.IsDelegatedTool(toolName)
+		},
+		func(toolInfo ToolInfo) func(context.Context, *sdk.CallToolRequest, interface{}) (*sdk.CallToolResult, interface{}, error) {
+			handler := unifiedServer.GetToolHandler(backendID, toolInfo.Name)
+			if handler == nil {
+				logRouted.Printf("WARNING: No handler found for %s___%s", backendID, toolInfo.Name)
+				return nil
+			}
+			return func(ctx context.Context, req *sdk.CallToolRequest, _ interface{}) (*sdk.CallToolResult, interface{}, error) {
+				logRouted.Printf("[ROUTED] Calling delegated unified handler for: %s", toolInfo.Name)
+				return handler(ctx, req, nil)
+			}
+		},
+	)
+
 	return server
 }

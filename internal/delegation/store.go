@@ -373,6 +373,25 @@ func (s *Store) AuthorizeExecutor(executorBearer, repository, tool string) (stri
 	return identity.Handle, nil
 }
 
+// HasLiveExecutorBearer reports whether executorBearer currently identifies a
+// live delegated executor identity. It intentionally does not authorize any
+// repository or tool; callers must still use AuthorizeExecutor at the actual
+// data-plane operation.
+func (s *Store) HasLiveExecutorBearer(executorBearer string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := time.Now()
+	s.cleanupExpiredLocked(now)
+	if s.recoveryIncomplete || !now.Before(s.envelope.ExpiresAt) {
+		return false
+	}
+	if bearer, ok := strings.CutPrefix(executorBearer, "Bearer "); ok {
+		executorBearer = bearer
+	}
+	_, ok := s.byBearer[sha256.Sum256([]byte(executorBearer))]
+	return ok
+}
+
 func (s *Store) authorize(executorBearer, repository, tool string, bindingMatches func(*Identity) bool) (*Identity, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

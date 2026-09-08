@@ -247,6 +247,20 @@ func TestAuthorizeExecutor_ReturnsIdentityHandleForIsolation(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestHasLiveExecutorBearerTracksRevocation(t *testing.T) {
+	store, _ := newTestStore(t)
+	req := validRequest()
+	created, err := store.CreateOrConfirm(req)
+	require.NoError(t, err)
+
+	assert.True(t, store.HasLiveExecutorBearer(created.ExecutorBearer))
+	assert.True(t, store.HasLiveExecutorBearer("Bearer "+created.ExecutorBearer))
+	assert.False(t, store.HasLiveExecutorBearer(created.Handle), "control handles must not be accepted as executor bearers")
+
+	require.NoError(t, store.Revoke(created.Handle))
+	assert.False(t, store.HasLiveExecutorBearer(created.ExecutorBearer))
+}
+
 func TestExpiry_AutomaticAndExplicit(t *testing.T) {
 	store, _ := newTestStore(t)
 	req := validRequest()
