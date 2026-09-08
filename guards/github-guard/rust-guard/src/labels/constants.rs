@@ -84,7 +84,7 @@ mod tests {
     }
 
     #[test]
-    fn ui_get_constants_match_dispatch_names() {
+fn dispatch_constants_match_canonical_values() {
         assert_eq!(tool_names::ACTIONS_GET, "actions_get");
         assert_eq!(tool_names::UI_GET, "ui_get");
         assert_eq!(tool_names::GET_COMMIT, "get_commit");
