@@ -116,6 +116,9 @@ type NormalizedGuardPolicy struct {
 	DemotionLabel        string         `json:"demotion-label,omitempty"`
 }
 
+// UnmarshalJSON parses a GuardPolicy from either an "allow-only"/"allowonly"
+// or a "write-sink"/"writesink" key (case-insensitive). Exactly one of the two
+// keys must be present; any other top-level field is rejected as unsupported.
 func (p *GuardPolicy) UnmarshalJSON(data []byte) error {
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal(data, &raw); err != nil {
@@ -167,6 +170,9 @@ func (p *GuardPolicy) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// MarshalJSON serializes whichever policy variant is set (AllowOnly or
+// WriteSink) under its corresponding "allow-only"/"write-sink" key, omitting
+// the unset variant.
 func (p GuardPolicy) MarshalJSON() ([]byte, error) {
 	type serializedPolicy struct {
 		AllowOnly *AllowOnlyPolicy `json:"allow-only,omitempty"`
@@ -200,6 +206,9 @@ func GuardPolicyToMap(policy interface{}) (map[string]interface{}, error) {
 	return payload, nil
 }
 
+// UnmarshalJSON parses an AllowOnlyPolicy field by field using
+// case-insensitive key matching, rejecting any unsupported field. Both
+// "repos" and "min-integrity" (or its alias "integrity") are required.
 func (p *AllowOnlyPolicy) UnmarshalJSON(data []byte) error {
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal(data, &raw); err != nil {
@@ -280,6 +289,8 @@ func (p *AllowOnlyPolicy) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// MarshalJSON serializes all AllowOnlyPolicy fields under their canonical
+// hyphenated JSON keys (e.g. "min-integrity", "tool-call-limits").
 func (p AllowOnlyPolicy) MarshalJSON() ([]byte, error) {
 	type serializedAllowOnly struct {
 		Repos                interface{}    `json:"repos"`
