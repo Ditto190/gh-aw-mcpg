@@ -89,6 +89,7 @@ mod tests {
         assert_eq!(tool_names::UI_GET, "ui_get");
         assert_eq!(tool_names::GET_COMMIT, "get_commit");
         assert_eq!(tool_names::SEARCH_REPOSITORIES, "search_repositories");
+        assert_eq!(tool_names::SEARCH_CODE, "search_code");
         assert_eq!(
             UI_GET_REPO_SCOPED_METHODS,
             &["labels", "milestones", "branches"]
@@ -209,6 +210,7 @@ pub mod tool_names {
     pub const LIST_COMMITS: &str = "list_commits";
     pub const LIST_RELEASES: &str = "list_releases";
     pub const SEARCH_REPOSITORIES: &str = "search_repositories";
+    pub const SEARCH_CODE: &str = "search_code";
     pub const ACTIONS_GET: &str = "actions_get";
     pub const UI_GET: &str = "ui_get";
 }

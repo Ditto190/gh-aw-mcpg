@@ -586,7 +586,7 @@ pub fn apply_tool_labels(
         }
 
         // === Code / Commit Search ===
-        "search_code" | "search_code_ff_fields_param" | "search_commits" => {
+        tool_names::SEARCH_CODE | "search_code_ff_fields_param" | "search_commits" => {
             // Repo-scoped search reads. Resolve scope from query repo qualifier first,
             // then fall back to tool_args owner/repo.
             let (s_owner, s_repo, s_repo_id) = resolve_search_scope(tool_args, &owner, &repo);
@@ -1673,7 +1673,7 @@ mod tests {
 
         let search_code_args = serde_json::json!({ "query": "repo:github/copilot auth" });
         assert_same_labels(
-            "search_code",
+            tool_names::SEARCH_CODE,
             "search_code_ff_fields_param",
             &search_code_args,
         );

@@ -615,7 +615,7 @@ mod tests {
         });
 
         let (secrecy, integrity, _desc) = apply_tool_labels(
-            "search_code",
+            tool_names::SEARCH_CODE,
             &tool_args,
             "github/copilot",
             vec![],
