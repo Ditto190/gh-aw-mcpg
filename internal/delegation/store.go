@@ -173,9 +173,9 @@ func (s *Store) CreateOrConfirm(req CreateOrConfirmRequest) (*IdentityResult, er
 }
 
 func (s *Store) createOrConfirmAt(req CreateOrConfirmRequest, now time.Time) (*IdentityResult, error) {
-	logStore.Printf("createOrConfirmAt: runID=%s enclaveEntryID=%s invocationID=%s repository=%s", req.RunID, req.EnclaveEntryID, req.InvocationID, req.Repository)
+logStore.Printf("createOrConfirmAt: runIDHash=%s enclaveEntryIDHash=%s invocationIDHash=%s repositoryHash=%s", hashForAudit(req.RunID), hashForAudit(req.EnclaveEntryID), hashForAudit(req.InvocationID), hashForAudit(req.Repository))
 	if err := s.validateAgainstEnvelope(req, now); err != nil {
-		logStore.Printf("createOrConfirmAt: envelope validation failed for runID=%s: %v", req.RunID, err)
+		logStore.Printf("createOrConfirmAt: envelope validation failed for runIDHash=%s: %v", hashForAudit(req.RunID), err)
 		emitAudit(newAuditEvent("create_or_confirm", req, "denied", "envelope-subset-violation", s.generation))
 		return nil, fmt.Errorf("delegation request denied: %w", err)
 	}
