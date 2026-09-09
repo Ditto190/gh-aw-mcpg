@@ -14,6 +14,7 @@ mod tools;
 
 use labels::constants::policy_integrity;
 use labels::constants::scope_names;
+use labels::constants::tool_names;
 use labels::{
     blocked_integrity, extract_repo_info, extract_repo_info_from_search_query, MinIntegrity,
     PolicyContext, PolicyScopeEntry, ScopeKind,
@@ -512,7 +513,7 @@ fn infer_scope_for_baseline<'a>(
                 .map(|value| Cow::Owned(value.to_string()))
                 .unwrap_or_else(|| Cow::Borrowed(repo_id))
         }
-        "search_code"
+        tool_names::SEARCH_CODE
         | "search_code_ff_fields_param"
         | "search_issues"
         | "search_issues_ff_fields_param"
@@ -1319,7 +1320,7 @@ mod tests {
     fn infer_scope_for_baseline_uses_search_code_query_repo() {
         let tool_args = json!({"query": "repo:lpcox/github-guard README"});
 
-        let inferred = infer_scope_for_baseline("search_code", &tool_args, "");
+        let inferred = infer_scope_for_baseline(tool_names::SEARCH_CODE, &tool_args, "");
         assert!(matches!(&inferred, Cow::Owned(_)));
         assert_eq!(inferred, "lpcox/github-guard");
     }
@@ -1363,7 +1364,7 @@ mod tests {
 
         let tool_args = json!({"query": "repo:lpcox/github-guard README"});
         let (_, integrity, _) = labels::apply_tool_labels(
-            "search_code",
+            tool_names::SEARCH_CODE,
             &tool_args,
             "",
             vec![],
@@ -1372,7 +1373,7 @@ mod tests {
             &ctx,
         );
 
-        let inferred_scope = infer_scope_for_baseline("search_code", &tool_args, "");
+        let inferred_scope = infer_scope_for_baseline(tool_names::SEARCH_CODE, &tool_args, "");
         let baseline = labels::ensure_integrity_baseline(&inferred_scope, integrity, &ctx);
 
         assert_eq!(
