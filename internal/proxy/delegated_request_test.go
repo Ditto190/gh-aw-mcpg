@@ -72,9 +72,15 @@ func delegatedRequest(h http.Handler, method, path, bearer string) *httptest.Res
 }
 
 func TestHandleDelegatedRequest_AuthorizedIssuesListSucceeds(t *testing.T) {
+	ch := make(chan struct {
+		path string
+		auth string
+	}, 1)
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/repos/octo/repo/issues", r.URL.Path)
-		assert.Equal(t, "token "+enclaveTestUpstreamToken, r.Header.Get("Authorization"))
+		ch <- struct {
+			path string
+			auth string
+		}{path: r.URL.Path, auth: r.Header.Get("Authorization")}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`[]`))
 	}))
@@ -84,7 +90,15 @@ func TestHandleDelegatedRequest_AuthorizedIssuesListSucceeds(t *testing.T) {
 	bearer := createDelegatedIdentity(t, store, "octo/repo")
 
 	rec := delegatedRequest(handler, http.MethodGet, "/repos/octo/repo/issues", bearer)
-	assert.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	select {
+	case got := <-ch:
+		assert.Equal(t, "/repos/octo/repo/issues", got.path)
+		assert.Equal(t, "token "+enclaveTestUpstreamToken, got.auth)
+	default:
+		t.Fatal("expected request to reach upstream")
+	}
 }
 
 func TestHandleDelegatedRequest_AuthorizedIssueGetSucceeds(t *testing.T) {
