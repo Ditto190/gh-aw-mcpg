@@ -5,7 +5,11 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/github/gh-aw-mcpg/internal/logger"
 )
+
+var logEnvelope = logger.ForFile()
 
 // Envelope is the compiler-installed, compiler-bounded policy envelope
 // bootstrapped into the controller at gateway startup. Every delegated
@@ -60,8 +64,11 @@ type Envelope struct {
 // per-request binding; use Envelope.Admits for that.
 func (e *Envelope) Validate() error {
 	if e == nil {
+		logEnvelope.Print("Validate: envelope is nil")
 		return fmt.Errorf("delegation envelope is required")
 	}
+	logEnvelope.Printf("Validate: checking envelope run=%s repos=%d owners=%d schemaHashes=%d maxDynamicSchemaHashes=%d",
+		selectorLogID(e.RunID), len(e.AllowedRepositories), len(e.AllowedOwners), len(e.AllowedSchemaHashes), e.MaxDynamicSchemaHashes)
 	if e.RunID == "" {
 		return fmt.Errorf("envelope run id is required")
 	}
@@ -103,6 +110,7 @@ func (e *Envelope) Validate() error {
 	if e.ExpiresAt.IsZero() {
 		return fmt.Errorf("envelope expiry is required")
 	}
+	logEnvelope.Print("Validate: envelope passed all invariant checks")
 	return nil
 }
 
@@ -116,17 +124,26 @@ func (e *Envelope) AllowsRepository(repo string) bool {
 		return true
 	}
 	if len(e.AllowedOwners) == 0 || !IsCanonicalRepositorySelector(repo) {
+		logEnvelope.Printf("AllowsRepository: denied repo=%s (no owner-based admission possible)", selectorLogID(repo))
 		return false
 	}
 	owner, _, ok := strings.Cut(repo, "/")
 	if !ok {
 		return false
 	}
-	return slices.Contains(e.AllowedOwners, owner)
+	allowed := slices.Contains(e.AllowedOwners, owner)
+	if !allowed {
+		logEnvelope.Printf("AllowsRepository: denied repo=%s (owner=%s not in allowed owners)", selectorLogID(repo), selectorLogID(owner))
+	}
+	return allowed
 }
 
 // AllowsSchemaHash reports whether schemaHash is an exact-byte member of the
 // envelope's admitted schema hash set.
 func (e *Envelope) AllowsSchemaHash(schemaHash string) bool {
-	return slices.Contains(e.AllowedSchemaHashes, schemaHash)
+	allowed := slices.Contains(e.AllowedSchemaHashes, schemaHash)
+	if !allowed {
+		logEnvelope.Printf("AllowsSchemaHash: denied schemaHash=%s (not in allowed set of %d)", selectorLogID(schemaHash), len(e.AllowedSchemaHashes))
+	}
+	return allowed
 }
