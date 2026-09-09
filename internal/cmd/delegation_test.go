@@ -114,10 +114,12 @@ func TestPersistUnifiedDelegationStateWrapsSaveStateError(t *testing.T) {
 
 func TestSelectDelegationControlErrorPrefersControlChannelFailure(t *testing.T) {
 	controlErrCh := make(chan error, 1)
-	controlErrCh <- errors.New("control channel boom")
+controlErr := errors.New("control channel boom")
+	controlErrCh <- controlErr
 
 	err := selectDelegationControlError(errors.New("original error"), controlErrCh)
 	require.Error(t, err)
+	assert.ErrorIs(t, err, controlErr)
 	assert.Contains(t, err.Error(), "private delegation control channel failed")
 	assert.Contains(t, err.Error(), "control channel boom")
 }
