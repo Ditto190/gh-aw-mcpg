@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net"
 	"net/http"
+	"os"
 	"testing"
 	"time"
 
@@ -52,7 +54,7 @@ func TestStartUnifiedDelegationControlServesStatus(t *testing.T) {
 	var payload map[string]any
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&payload))
 	assert.InEpsilon(t, 1.0, payload["generation"], 0)
-	assert.NoError(t, selectDelegationControlError(nil, controlErrCh))
+	require.NoError(t, selectDelegationControlError(nil, controlErrCh))
 }
 
 func TestStartUnifiedDelegationControlFailsWhenListenAddrOccupied(t *testing.T) {
@@ -81,6 +83,54 @@ func TestStartUnifiedDelegationControlFailsWhenListenAddrOccupied(t *testing.T) 
 	require.Error(t, err)
 	assert.Nil(t, controlServer)
 	assert.Contains(t, err.Error(), "failed to listen on private delegation control channel")
+}
+
+func TestPersistUnifiedDelegationStateNilConfigIsNoop(t *testing.T) {
+	require.NoError(t, persistUnifiedDelegationState(nil, "/should/not/be/written"))
+}
+
+func TestPersistUnifiedDelegationStateSavesToPath(t *testing.T) {
+	delegationConfig, err := testRuntimeDelegationConfig(t, availableLoopbackAddr(t), "persist-capability-key-32-bytes!")
+	require.NoError(t, err)
+
+	statePath := t.TempDir() + "/persisted-state.json"
+	require.NoError(t, persistUnifiedDelegationState(delegationConfig, statePath))
+
+	data, err := os.ReadFile(statePath)
+	require.NoError(t, err)
+	assert.NotEmpty(t, data)
+}
+
+func TestPersistUnifiedDelegationStateWrapsSaveStateError(t *testing.T) {
+	delegationConfig, err := testRuntimeDelegationConfig(t, availableLoopbackAddr(t), "persist-error-capability-key-32b")
+	require.NoError(t, err)
+
+	// A directory path cannot be written to as a file, forcing SaveState to fail.
+	invalidPath := t.TempDir()
+	err = persistUnifiedDelegationState(delegationConfig, invalidPath)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to persist delegation state")
+}
+
+func TestSelectDelegationControlErrorPrefersControlChannelFailure(t *testing.T) {
+	controlErrCh := make(chan error, 1)
+	controlErr := errors.New("control channel boom")
+	controlErrCh <- controlErr
+
+	err := selectDelegationControlError(errors.New("original error"), controlErrCh)
+	require.Error(t, err)
+	require.ErrorIs(t, err, controlErr)
+	assert.Contains(t, err.Error(), "private delegation control channel failed")
+	assert.Contains(t, err.Error(), "control channel boom")
+}
+
+func TestSelectDelegationControlErrorFallsBackToOriginalError(t *testing.T) {
+	controlErrCh := make(chan error, 1)
+
+	require.NoError(t, selectDelegationControlError(nil, controlErrCh))
+
+	originalErr := errors.New("original error")
+	assert.Equal(t, originalErr, selectDelegationControlError(originalErr, controlErrCh))
 }
 
 func testRuntimeDelegationConfig(t *testing.T, listenAddr, capabilityKey string) (*delegation.RuntimeConfig, error) {
