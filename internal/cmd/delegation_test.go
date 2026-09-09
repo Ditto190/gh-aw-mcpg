@@ -54,7 +54,7 @@ func TestStartUnifiedDelegationControlServesStatus(t *testing.T) {
 	var payload map[string]any
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&payload))
 	assert.InEpsilon(t, 1.0, payload["generation"], 0)
-	assert.NoError(t, selectDelegationControlError(nil, controlErrCh))
+	require.NoError(t, selectDelegationControlError(nil, controlErrCh))
 }
 
 func TestStartUnifiedDelegationControlFailsWhenListenAddrOccupied(t *testing.T) {
@@ -86,7 +86,7 @@ func TestStartUnifiedDelegationControlFailsWhenListenAddrOccupied(t *testing.T) 
 }
 
 func TestPersistUnifiedDelegationStateNilConfigIsNoop(t *testing.T) {
-	assert.NoError(t, persistUnifiedDelegationState(nil, "/should/not/be/written"))
+	require.NoError(t, persistUnifiedDelegationState(nil, "/should/not/be/written"))
 }
 
 func TestPersistUnifiedDelegationStateSavesToPath(t *testing.T) {
@@ -114,12 +114,12 @@ func TestPersistUnifiedDelegationStateWrapsSaveStateError(t *testing.T) {
 
 func TestSelectDelegationControlErrorPrefersControlChannelFailure(t *testing.T) {
 	controlErrCh := make(chan error, 1)
-controlErr := errors.New("control channel boom")
+	controlErr := errors.New("control channel boom")
 	controlErrCh <- controlErr
 
 	err := selectDelegationControlError(errors.New("original error"), controlErrCh)
 	require.Error(t, err)
-	assert.ErrorIs(t, err, controlErr)
+	require.ErrorIs(t, err, controlErr)
 	assert.Contains(t, err.Error(), "private delegation control channel failed")
 	assert.Contains(t, err.Error(), "control channel boom")
 }
@@ -127,7 +127,7 @@ controlErr := errors.New("control channel boom")
 func TestSelectDelegationControlErrorFallsBackToOriginalError(t *testing.T) {
 	controlErrCh := make(chan error, 1)
 
-	assert.NoError(t, selectDelegationControlError(nil, controlErrCh))
+	require.NoError(t, selectDelegationControlError(nil, controlErrCh))
 
 	originalErr := errors.New("original error")
 	assert.Equal(t, originalErr, selectDelegationControlError(originalErr, controlErrCh))
