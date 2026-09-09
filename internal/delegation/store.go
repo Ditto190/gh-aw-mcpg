@@ -12,7 +12,7 @@ import (
 	"github.com/github/gh-aw-mcpg/internal/util"
 )
 
-var logStore = logger.New("delegation:store")
+var logStore = logger.ForFile()
 
 const (
 	handleRandomBytes = 16
