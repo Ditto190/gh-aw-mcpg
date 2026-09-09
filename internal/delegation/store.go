@@ -8,8 +8,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/github/gh-aw-mcpg/internal/logger"
 	"github.com/github/gh-aw-mcpg/internal/util"
 )
+
+var logStore = logger.ForFile()
 
 const (
 	handleRandomBytes = 16
@@ -170,7 +173,9 @@ func (s *Store) CreateOrConfirm(req CreateOrConfirmRequest) (*IdentityResult, er
 }
 
 func (s *Store) createOrConfirmAt(req CreateOrConfirmRequest, now time.Time) (*IdentityResult, error) {
+	logStore.Printf("createOrConfirmAt: runIDHash=%s enclaveEntryIDHash=%s invocationIDHash=%s repositoryHash=%s", hashForAudit(req.RunID), hashForAudit(req.EnclaveEntryID), hashForAudit(req.InvocationID), hashForAudit(req.Repository))
 	if err := s.validateAgainstEnvelope(req, now); err != nil {
+		logStore.Printf("createOrConfirmAt: envelope validation failed for runIDHash=%s: %v", hashForAudit(req.RunID), err)
 		emitAudit(newAuditEvent("create_or_confirm", req, "denied", "envelope-subset-violation", s.generation))
 		return nil, fmt.Errorf("delegation request denied: %w", err)
 	}
@@ -230,6 +235,7 @@ func (s *Store) createOrConfirmAt(req CreateOrConfirmRequest, now time.Time) (*I
 	}
 	s.indexLocked(identity)
 
+	logStore.Printf("createOrConfirmAt: created new identity handle=%s runID=%s expiresAt=%s", identity.Handle, req.RunID, identity.ExpiresAt)
 	emitAudit(newAuditEvent("create_or_confirm", req, "admitted", "created", s.generation))
 	return identity.toResult(), nil
 }
@@ -315,10 +321,12 @@ func (s *Store) Revoke(handle string) error {
 	defer s.mu.Unlock()
 	identity, ok := s.byHandle[handle]
 	if !ok {
+		logStore.Printf("Revoke: handle=%s not found, treating as already-absent", handle)
 		emitAudit(newHandleAuditEvent("revoke", handle, "revoked", "already-absent"))
 		return nil
 	}
 	s.revokeLocked(identity)
+	logStore.Printf("Revoke: revoked identity handle=%s", handle)
 	emitAudit(newIdentityAuditEvent("revoke", identity, "revoked", "explicit"))
 	return nil
 }
@@ -344,6 +352,7 @@ func (s *Store) RevokeByLabels(runID, enclaveEntryID string) int {
 			s.revokeLocked(identity)
 		}
 	}
+	logStore.Printf("RevokeByLabels: runID=%s enclaveEntryID=%s revokedCount=%d", runID, enclaveEntryID, len(handles))
 	emitAudit(newLabelAuditEvent("revoke_by_labels", runID, enclaveEntryID, "revoked", fmt.Sprintf("count=%d", len(handles))))
 	return len(handles)
 }
@@ -413,6 +422,7 @@ func (s *Store) authorize(executorBearer, repository, tool string, bindingMatche
 	}
 	identity, ok := s.byBearer[sha256.Sum256([]byte(executorBearer))]
 	if !ok {
+		logStore.Print("authorize: unknown or revoked delegated identity presented")
 		return nil, fmt.Errorf("unknown or revoked delegated identity")
 	}
 	if !bindingMatches(identity) {
