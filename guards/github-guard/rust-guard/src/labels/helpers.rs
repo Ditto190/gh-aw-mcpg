@@ -1510,7 +1510,10 @@ pub(crate) fn is_search_pr_variant(tool_name: &str) -> bool {
 /// (including the `_ff_fields_param` field-filtered variant). Centralizes
 /// this alias pair so future variants only need to be added once.
 pub(crate) fn is_search_issue_variant(tool_name: &str) -> bool {
-    matches!(tool_name, "search_issues" | "search_issues_ff_fields_param")
+    matches!(
+        tool_name,
+        tool_names::SEARCH_ISSUES | "search_issues_ff_fields_param"
+    )
 }
 
 /// Extract a single object from a GraphQL response for singular queries.

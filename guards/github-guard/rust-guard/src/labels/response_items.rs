@@ -232,9 +232,9 @@ pub fn label_response_items(
         }
 
         // === Issues - label by author status ===
-        "list_issues"
+        tool_names::LIST_ISSUES
         | "list_issues_ff_fields_param"
-        | "search_issues"
+        | tool_names::SEARCH_ISSUES
         | "search_issues_ff_fields_param"
         | tool_names::GET_ISSUE
         | tool_names::ISSUE_READ => {
@@ -253,7 +253,7 @@ pub fn label_response_items(
                 let items = extract_items_slice(&actual_response, "issues");
 
                 // Limit items to prevent WASM memory exhaustion
-                let items_limited = limit_items_with_log(items, "list_issues");
+                let items_limited = limit_items_with_log(items, tool_names::LIST_ISSUES);
 
                 // Get owner/repo from tool_args for contributor verification
                 let (arg_owner, arg_repo, default_repo_full_name) =

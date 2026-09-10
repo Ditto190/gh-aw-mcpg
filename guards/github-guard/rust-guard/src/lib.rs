@@ -515,7 +515,7 @@ fn infer_scope_for_baseline<'a>(
         }
         tool_names::SEARCH_CODE
         | "search_code_ff_fields_param"
-        | "search_issues"
+        | tool_names::SEARCH_ISSUES
         | "search_issues_ff_fields_param"
         | "search_pull_requests"
         | "search_pull_requests_ff_fields_param"

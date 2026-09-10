@@ -250,9 +250,9 @@ pub fn label_response_paths(
         }
 
         // === Issues - label by author contributor status ===
-        "list_issues"
+        tool_names::LIST_ISSUES
         | "list_issues_ff_fields_param"
-        | "search_issues"
+        | tool_names::SEARCH_ISSUES
         | "search_issues_ff_fields_param"
         | tool_names::ISSUE_READ
         | tool_names::GET_ISSUE => {
@@ -270,8 +270,8 @@ pub fn label_response_paths(
                 tool_name,
                 tool_args,
                 &actual_response,
-                "search_issues",
-                "list_issues",
+                tool_names::SEARCH_ISSUES,
+                tool_names::LIST_ISSUES,
                 ctx,
             ) {
                 let mut labeled_paths = Vec::with_capacity(repo_item_ctx.limited_items.len());
