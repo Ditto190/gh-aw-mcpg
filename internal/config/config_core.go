@@ -445,6 +445,14 @@ func (cfg *Config) EnsureGatewayDefaults() {
 // Dynamic sections:
 //   - servers[0].<name>[1].guard_policies[2].<policy>[3].<key>[4+]  (len ≥ 5)
 //   - guards[0].<name>[1].config[2].<key>[3+]                       (len ≥ 4)
+//
+// This manual walk over MetaData.Undecoded() exists because
+// toml.Decoder.SetStrict(true) enforces strict mode for the entire document
+// and cannot be scoped to only the statically-typed fields, so it would
+// reject the dynamic map[string]interface{} sections above. If a future
+// BurntSushi/toml release adds a selective/per-field strict mode (or an
+// allow-list hook), this function can likely be removed in favor of it. See
+// https://github.com/BurntSushi/toml for release notes.
 func isDynamicTOMLPath(key toml.Key) bool {
 	// servers.<name>.guard_policies.<policy>.<key> → indices [0]="servers" [2]="guard_policies", len ≥ 5
 	if len(key) >= 5 && key[0] == "servers" && key[2] == "guard_policies" {
