@@ -54,8 +54,7 @@ func ValidateWriteSinkPolicy(ws *WriteSinkPolicy) error {
 		logGuardPolicy.Print("ValidateWriteSinkPolicy: wildcard accept, policy is valid")
 		return nil
 	}
-	normalized := make([]string, 0, len(ws.Accept))
-	for _, entry := range ws.Accept {
+	if err := util.ValidateUnique(ws.Accept, func(entry string) error {
 		entry = strings.TrimSpace(entry)
 		if err := NonEmptyString(entry, "accept", "write-sink.accept"); err != nil {
 			return err
@@ -66,10 +65,11 @@ func ValidateWriteSinkPolicy(ws *WriteSinkPolicy) error {
 		if err := validateAcceptEntry(entry); err != nil {
 			return fmt.Errorf("write-sink.accept entry %q is invalid: %w", entry, err)
 		}
-		normalized = append(normalized, entry)
-	}
-	if _, found := util.FindDuplicate(normalized); found {
+		return nil
+	}, strings.TrimSpace, func(string) error {
 		return fmt.Errorf("write-sink.accept must not contain duplicates")
+	}); err != nil {
+		return err
 	}
 	return nil
 }
@@ -235,28 +235,35 @@ func normalizeAndValidateScopeArray(scopes []interface{}) ([]string, error) {
 	}
 	logGuardPolicy.Printf("normalizeAndValidateScopeArray: validating %d repo scope entries", len(scopes))
 
-	normalized := make([]string, 0, len(scopes))
-	for _, scopeValue := range scopes {
+	if err := util.ValidateUnique(scopes, func(scopeValue interface{}) error {
 		scopeString, ok := scopeValue.(string)
 		if !ok {
-			return nil, fmt.Errorf("allow-only.repos array values must be strings")
+			return fmt.Errorf("allow-only.repos array values must be strings")
 		}
 
 		scopeString = strings.TrimSpace(scopeString)
 		if err := NonEmptyString(scopeString, "repos", "allow-only.repos"); err != nil {
-			return nil, err
+			return err
 		}
 
 		if scopeString == "all" {
-			return nil, fmt.Errorf("allow-only.repos scope %q cannot be combined with other scopes", scopeString)
+			return fmt.Errorf("allow-only.repos scope %q cannot be combined with other scopes", scopeString)
 		}
 		if scopeString != "public" && !isValidRepoScope(scopeString) {
-			return nil, fmt.Errorf("allow-only.repos scope %q is invalid; expected public, owner/*, owner/repo, or owner/re*", scopeString)
+			return fmt.Errorf("allow-only.repos scope %q is invalid; expected public, owner/*, owner/repo, or owner/re*", scopeString)
 		}
-		normalized = append(normalized, scopeString)
+		return nil
+	}, func(scopeValue interface{}) string {
+		return strings.TrimSpace(scopeValue.(string))
+	}, func(interface{}) error {
+		return fmt.Errorf("allow-only.repos must not contain duplicates")
+	}); err != nil {
+		return nil, err
 	}
-	if _, found := util.FindDuplicate(normalized); found {
-		return nil, fmt.Errorf("allow-only.repos must not contain duplicates")
+
+	normalized := make([]string, len(scopes))
+	for i, scopeValue := range scopes {
+		normalized[i] = strings.TrimSpace(scopeValue.(string))
 	}
 
 	sort.Strings(normalized)

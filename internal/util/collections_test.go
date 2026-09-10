@@ -1,6 +1,8 @@
 package util
 
 import (
+	"errors"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -243,6 +245,40 @@ func TestFindDuplicate(t *testing.T) {
 			duplicate, found := FindDuplicate(tt.items)
 			assert.Equal(t, tt.found, found)
 			assert.Equal(t, tt.duplicate, duplicate)
+		})
+	}
+}
+
+func TestValidateUnique(t *testing.T) {
+	t.Parallel()
+
+	validationError := errors.New("invalid item")
+	duplicateError := errors.New("duplicate item")
+	tests := []struct {
+		name  string
+		items []string
+		want  error
+	}{
+		{name: "unique items", items: []string{"one", "two"}},
+		{name: "validates before duplicate detection", items: []string{"one", "one", "invalid"}, want: duplicateError},
+		{name: "reports validation error before duplicate", items: []string{"one", "invalid", "one"}, want: validationError},
+		{name: "uses normalized duplicate key", items: []string{"one", " ONE "}, want: duplicateError},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			err := ValidateUnique(tt.items, func(item string) error {
+				if item == "invalid" {
+					return validationError
+				}
+				return nil
+			}, func(item string) string {
+				return strings.ToLower(strings.TrimSpace(item))
+			}, func(string) error {
+				return duplicateError
+			})
+			assert.ErrorIs(t, err, tt.want)
 		})
 	}
 }

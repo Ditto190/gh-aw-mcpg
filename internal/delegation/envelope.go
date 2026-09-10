@@ -79,21 +79,29 @@ func (e *Envelope) Validate() error {
 	if len(e.AllowedRepositories) == 0 && len(e.AllowedOwners) == 0 {
 		return fmt.Errorf("envelope must admit at least one repository or owner")
 	}
-	for _, repo := range e.AllowedRepositories {
+	if err := util.ValidateUnique(e.AllowedRepositories, func(repo string) error {
 		if !IsCanonicalRepositorySelector(repo) {
 			return fmt.Errorf("envelope repository %s is not a canonical selector", selectorLogID(repo))
 		}
+		return nil
+	}, func(repo string) string {
+		return repo
+	}, func(repo string) error {
+		return fmt.Errorf("envelope must not contain duplicate repository %s", selectorLogID(repo))
+	}); err != nil {
+		return err
 	}
-	if duplicate, found := util.FindDuplicate(e.AllowedRepositories); found {
-		return fmt.Errorf("envelope must not contain duplicate repository %s", selectorLogID(duplicate))
-	}
-	for _, owner := range e.AllowedOwners {
+	if err := util.ValidateUnique(e.AllowedOwners, func(owner string) error {
 		if !IsCanonicalOwner(owner) {
 			return fmt.Errorf("envelope owner %s is not a canonical selector", selectorLogID(owner))
 		}
-	}
-	if duplicate, found := util.FindDuplicate(e.AllowedOwners); found {
-		return fmt.Errorf("envelope must not contain duplicate owner %s", selectorLogID(duplicate))
+		return nil
+	}, func(owner string) string {
+		return owner
+	}, func(owner string) error {
+		return fmt.Errorf("envelope must not contain duplicate owner %s", selectorLogID(owner))
+	}); err != nil {
+		return err
 	}
 	if e.ToolPolicy != ToolPolicyGitHubRepositoryReadV1 {
 		return fmt.Errorf("unsupported envelope tool policy %q", e.ToolPolicy)
