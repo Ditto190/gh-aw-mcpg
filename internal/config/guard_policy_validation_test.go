@@ -116,6 +116,12 @@ func TestValidateWriteSinkPolicy_DuplicateEntries(t *testing.T) {
 	assert.Contains(t, err.Error(), "duplicates")
 }
 
+func TestValidateWriteSinkPolicy_TrimmedDuplicateEntries(t *testing.T) {
+	err := ValidateWriteSinkPolicy(&WriteSinkPolicy{Accept: []string{"github/repo", " github/repo "}})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "duplicates")
+}
+
 func TestValidateWriteSinkPolicy_SinkVisibility(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -539,6 +545,12 @@ func TestNormalizeAndValidateScopeArray_ValidAndSorted(t *testing.T) {
 
 func TestNormalizeAndValidateScopeArray_Duplicates(t *testing.T) {
 	_, err := normalizeAndValidateScopeArray([]interface{}{"github/repo", "github/repo"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "duplicates")
+}
+
+func TestNormalizeAndValidateScopeArray_TrimmedDuplicates(t *testing.T) {
+	_, err := normalizeAndValidateScopeArray([]interface{}{"github/repo", " github/repo "})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "duplicates")
 }

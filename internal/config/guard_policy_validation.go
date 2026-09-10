@@ -54,7 +54,7 @@ func ValidateWriteSinkPolicy(ws *WriteSinkPolicy) error {
 		logGuardPolicy.Print("ValidateWriteSinkPolicy: wildcard accept, policy is valid")
 		return nil
 	}
-	seen := make(map[string]struct{})
+	normalized := make([]string, 0, len(ws.Accept))
 	for _, entry := range ws.Accept {
 		entry = strings.TrimSpace(entry)
 		if err := NonEmptyString(entry, "accept", "write-sink.accept"); err != nil {
@@ -63,13 +63,13 @@ func ValidateWriteSinkPolicy(ws *WriteSinkPolicy) error {
 		if entry == "*" {
 			return fmt.Errorf("write-sink.accept wildcard \"*\" must be the only entry")
 		}
-		if _, exists := seen[entry]; exists {
-			return fmt.Errorf("write-sink.accept must not contain duplicates")
-		}
-		seen[entry] = struct{}{}
 		if err := validateAcceptEntry(entry); err != nil {
 			return fmt.Errorf("write-sink.accept entry %q is invalid: %w", entry, err)
 		}
+		normalized = append(normalized, entry)
+	}
+	if _, found := util.FindDuplicate(normalized); found {
+		return fmt.Errorf("write-sink.accept must not contain duplicates")
 	}
 	return nil
 }
@@ -235,9 +235,7 @@ func normalizeAndValidateScopeArray(scopes []interface{}) ([]string, error) {
 	}
 	logGuardPolicy.Printf("normalizeAndValidateScopeArray: validating %d repo scope entries", len(scopes))
 
-	seen := make(map[string]struct{}, len(scopes))
 	normalized := make([]string, 0, len(scopes))
-
 	for _, scopeValue := range scopes {
 		scopeString, ok := scopeValue.(string)
 		if !ok {
@@ -255,12 +253,10 @@ func normalizeAndValidateScopeArray(scopes []interface{}) ([]string, error) {
 		if scopeString != "public" && !isValidRepoScope(scopeString) {
 			return nil, fmt.Errorf("allow-only.repos scope %q is invalid; expected public, owner/*, owner/repo, or owner/re*", scopeString)
 		}
-
-		if _, exists := seen[scopeString]; exists {
-			return nil, fmt.Errorf("allow-only.repos must not contain duplicates")
-		}
-		seen[scopeString] = struct{}{}
 		normalized = append(normalized, scopeString)
+	}
+	if _, found := util.FindDuplicate(normalized); found {
+		return nil, fmt.Errorf("allow-only.repos must not contain duplicates")
 	}
 
 	sort.Strings(normalized)

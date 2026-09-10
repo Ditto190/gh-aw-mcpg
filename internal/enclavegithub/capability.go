@@ -160,15 +160,13 @@ func (v *Verifier) validateClaims(claims *Claims, now time.Time) error {
 	if !slices.IsSorted(claims.Operations) {
 		return fmt.Errorf("operations must be lexicographically sorted")
 	}
-	seen := make(map[string]struct{}, len(claims.Operations))
 	for _, operation := range claims.Operations {
 		if !v.policy.AllowsOperation(operation) {
 			return fmt.Errorf("operation outside policy")
 		}
-		if _, exists := seen[operation]; exists {
-			return fmt.Errorf("duplicate operation")
-		}
-		seen[operation] = struct{}{}
+	}
+	if _, found := util.FindDuplicate(claims.Operations); found {
+		return fmt.Errorf("duplicate operation")
 	}
 	if claims.NotBefore <= 0 || claims.Expires <= claims.NotBefore ||
 		claims.Expires-claims.NotBefore > v.policy.MaxCapabilityTTLSeconds {

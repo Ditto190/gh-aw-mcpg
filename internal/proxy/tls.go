@@ -192,21 +192,15 @@ func GenerateSelfSignedTLS(dir string, additionalDNSNames ...string) (*TLSConfig
 }
 
 func normalizeTLSDNSNames(additionalDNSNames []string) ([]string, error) {
-	dnsNames := []string{"localhost"}
-	seen := map[string]struct{}{"localhost": {}}
-
+	normalizedNames := make([]string, 0, len(additionalDNSNames)+1)
+	normalizedNames = append(normalizedNames, "localhost")
 	for _, name := range additionalDNSNames {
 		if err := validateTLSDNSName(name); err != nil {
 			return nil, fmt.Errorf("invalid TLS DNS name %q: %w", name, err)
 		}
-		normalized := strings.ToLower(name)
-		if _, exists := seen[normalized]; exists {
-			continue
-		}
-		seen[normalized] = struct{}{}
-		dnsNames = append(dnsNames, normalized)
+		normalizedNames = append(normalizedNames, strings.ToLower(name))
 	}
-	return dnsNames, nil
+	return util.DeduplicateStrings(normalizedNames, false), nil
 }
 
 func validateTLSDNSName(name string) error {
