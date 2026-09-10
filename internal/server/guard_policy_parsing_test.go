@@ -8,31 +8,121 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestParseServerGuardPolicy_AllowOnly tests parsing guard-policies with allow-only format
+// TestParseServerGuardPolicy_AllowOnly tests config.ParseServerGuardPolicy
+// against the shapes of guard-policies map that the server package hands it,
+// covering both the modern allow-only/write-sink format and the legacy
+// repos/min-integrity format.
 func TestParseServerGuardPolicy_AllowOnly(t *testing.T) {
-	// This is the exact format from smoke-allowonly.lock.yml
-	guardPolicies := map[string]interface{}{
-		"allow-only": map[string]interface{}{
-			"min-integrity": "approved",
-			"repos":         []interface{}{"github/gh-aw*"},
+	tests := []struct {
+		name          string
+		guardPolicies map[string]interface{}
+		check         func(t *testing.T, policy *config.GuardPolicy)
+	}{
+		{
+			// This is the exact format from smoke-allowonly.lock.yml.
+			name: "modern allow-only format with slice repos",
+			guardPolicies: map[string]interface{}{
+				"allow-only": map[string]interface{}{
+					"min-integrity": "approved",
+					"repos":         []interface{}{"github/gh-aw*"},
+				},
+			},
+			check: func(t *testing.T, policy *config.GuardPolicy) {
+				require.NotNil(t, policy.AllowOnly, "policy.AllowOnly should not be nil")
+				assert.Equal(t, "approved", policy.AllowOnly.MinIntegrity)
+
+				reposSlice, ok := policy.AllowOnly.Repos.([]interface{})
+				require.True(t, ok, "repos should be []interface{}, got %T: %v", policy.AllowOnly.Repos, policy.AllowOnly.Repos)
+				require.Len(t, reposSlice, 1)
+				assert.Equal(t, "github/gh-aw*", reposSlice[0])
+			},
+		},
+		{
+			name: "modern allow-only format with string repos",
+			guardPolicies: map[string]interface{}{
+				"allow-only": map[string]interface{}{
+					"min-integrity": "merged",
+					"repos":         "public",
+				},
+			},
+			check: func(t *testing.T, policy *config.GuardPolicy) {
+				require.NotNil(t, policy.AllowOnly)
+				assert.Equal(t, "merged", policy.AllowOnly.MinIntegrity)
+				assert.Equal(t, "public", policy.AllowOnly.Repos)
+			},
+		},
+		{
+			name: "legacy repos/min-integrity format at top level",
+			guardPolicies: map[string]interface{}{
+				"repos":         "all",
+				"min-integrity": "none",
+			},
+			check: func(t *testing.T, policy *config.GuardPolicy) {
+				require.NotNil(t, policy.AllowOnly)
+				assert.Equal(t, "all", policy.AllowOnly.Repos)
+				assert.Equal(t, "none", policy.AllowOnly.MinIntegrity)
+			},
+		},
+		{
+			name: "write-sink format",
+			guardPolicies: map[string]interface{}{
+				"write-sink": map[string]interface{}{
+					"accept": []interface{}{"private:myorg"},
+				},
+			},
+			check: func(t *testing.T, policy *config.GuardPolicy) {
+				require.NotNil(t, policy.WriteSink, "policy.WriteSink should not be nil")
+				assert.Nil(t, policy.AllowOnly, "write-sink policy should not set AllowOnly")
+				assert.Equal(t, []string{"private:myorg"}, policy.WriteSink.Accept)
+			},
 		},
 	}
 
-	policy, err := config.ParseServerGuardPolicy("github", guardPolicies)
-	require.NoError(t, err, "config.ParseServerGuardPolicy should not return error")
-	require.NotNil(t, policy, "policy should not be nil")
-	require.NotNil(t, policy.AllowOnly, "policy.AllowOnly should not be nil")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			policy, err := config.ParseServerGuardPolicy("github", tt.guardPolicies)
+			require.NoError(t, err, "config.ParseServerGuardPolicy should not return error")
+			require.NotNil(t, policy, "policy should not be nil")
+			tt.check(t, policy)
+		})
+	}
+}
 
-	assert.Equal(t, "approved", policy.AllowOnly.MinIntegrity, "MinIntegrity should be 'approved'")
+// TestParseServerGuardPolicy_Errors verifies that malformed guard-policies
+// maps are rejected with a descriptive error instead of silently producing a
+// nil or partially-populated policy.
+func TestParseServerGuardPolicy_Errors(t *testing.T) {
+	tests := []struct {
+		name          string
+		guardPolicies map[string]interface{}
+		wantErr       string
+	}{
+		{
+			name: "invalid repos scope value",
+			guardPolicies: map[string]interface{}{
+				"allow-only": map[string]interface{}{
+					"min-integrity": "approved",
+					"repos":         "not-a-valid-scope",
+				},
+			},
+			wantErr: "repos",
+		},
+		{
+			name: "server-id-nested value is not an object",
+			guardPolicies: map[string]interface{}{
+				"github": "not-a-map",
+			},
+			wantErr: "expected object",
+		},
+	}
 
-	// Repos can be either a string or a slice after parsing
-	// Verify the repos field is present and has the expected value
-	reposSlice, ok := policy.AllowOnly.Repos.([]interface{})
-	if ok {
-		require.Len(t, reposSlice, 1, "repos should have 1 element")
-		assert.Equal(t, "github/gh-aw*", reposSlice[0], "repos[0] should be 'github/gh-aw*'")
-	} else {
-		t.Fatalf("repos is not a []interface{}, got %T: %v", policy.AllowOnly.Repos, policy.AllowOnly.Repos)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			policy, err := config.ParseServerGuardPolicy("github", tt.guardPolicies)
+			require.Error(t, err)
+			assert.Nil(t, policy)
+			assert.Contains(t, err.Error(), tt.wantErr)
+		})
 	}
 }
 
