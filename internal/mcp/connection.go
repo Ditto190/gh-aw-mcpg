@@ -225,6 +225,7 @@ func NewHTTPConnection(ctx context.Context, serverID, url string, headers map[st
 	// headers during a tools/call — that is governed by toolTimeout via context.
 	httpClient := &http.Client{
 		Transport: &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
 			DialContext: (&net.Dialer{
 				Timeout: connectTimeout,
 			}).DialContext,

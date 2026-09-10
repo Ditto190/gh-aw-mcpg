@@ -173,6 +173,7 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 		httpClient: &http.Client{
 			Timeout: 60 * time.Second,
 			Transport: &http.Transport{
+				Proxy:           http.ProxyFromEnvironment,
 				TLSClientConfig: httputil.NewClientTLSConfig(),
 			},
 		},
