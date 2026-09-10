@@ -498,6 +498,11 @@ The project uses:
 - `golang.org/x/term` - Terminal detection
 - Standard library for JSON, HTTP, exec
 
+When adding CLI flags under `internal/cmd/`, prefer Cobra's built-in flag-group
+validation helpers (for example `MarkFlagsMutuallyExclusive`,
+`MarkFlagsOneRequired`, and `MarkFlagsRequiredTogether`) over custom validation
+where the relationship can be expressed directly with Cobra.
+
 The MCP SDK is intentionally pinned to the current pre-release rather than
 downgraded to the latest stable release so the gateway stays aligned with the
 upstream MCP implementation. Before changing this pin, run the SDK canary
