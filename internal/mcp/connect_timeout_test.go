@@ -82,6 +82,19 @@ func TestNewHTTPConnection_DefaultConnectTimeout_ZeroInput(t *testing.T) {
 		"zero connectTimeout should be replaced with defaultConnectTimeout")
 }
 
+func TestNewHTTPConnection_UsesEnvironmentProxyConfig(t *testing.T) {
+	srv := newMinimalTestServer(t)
+	defer srv.Close()
+
+	conn, err := NewHTTPConnection(context.Background(), "test", srv.URL, nil, nil, "", 0, 0)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	transport, ok := conn.httpClient.Transport.(*http.Transport)
+	require.True(t, ok, "HTTP connection should use an http.Transport")
+	assert.NotNil(t, transport.Proxy, "HTTP transport should use environment proxy configuration")
+}
+
 // TestNewHTTPConnection_DefaultConnectTimeout_NegativeInput verifies that a
 // negative connectTimeout is also replaced with defaultConnectTimeout.
 func TestNewHTTPConnection_DefaultConnectTimeout_NegativeInput(t *testing.T) {

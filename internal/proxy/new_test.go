@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"context"
+	"net/http"
 	"os"
 	"path/filepath"
 	"testing"
@@ -65,6 +66,9 @@ func TestNew_SuccessWithoutPolicy(t *testing.T) {
 	assert.Equal(t, DefaultGitHubAPIBase, s.githubAPIURL)
 	assert.Empty(t, s.githubToken)
 	assert.NotNil(t, s.httpClient)
+	transport, ok := s.httpClient.Transport.(*http.Transport)
+	require.True(t, ok, "proxy client should use an http.Transport")
+	assert.NotNil(t, transport.Proxy, "proxy transport should use environment proxy configuration")
 	assert.False(t, s.guardInitialized, "guardInitialized should remain false when no policy is configured")
 }
 
