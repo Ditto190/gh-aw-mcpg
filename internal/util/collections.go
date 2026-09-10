@@ -87,6 +87,23 @@ func FindDuplicate[T comparable](items []T) (T, bool) {
 	return zero, false
 }
 
+// ValidateUnique validates each item before checking its key and reports the
+// first duplicate key.
+func ValidateUnique[T any, K comparable](items []T, validate func(T) error, key func(T) K, duplicateError func(T) error) error {
+	seen := make(map[K]struct{}, len(items))
+	for _, item := range items {
+		if err := validate(item); err != nil {
+			return err
+		}
+		itemKey := key(item)
+		if _, exists := seen[itemKey]; exists {
+			return duplicateError(item)
+		}
+		seen[itemKey] = struct{}{}
+	}
+	return nil
+}
+
 // StringsToAny converts a []string to []any.
 func StringsToAny(input []string) []any {
 	out := make([]any, len(input))

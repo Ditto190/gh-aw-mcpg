@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/github/gh-aw-mcpg/internal/logger"
+	"github.com/github/gh-aw-mcpg/internal/util"
 )
 
 var logEnvelope = logger.ForFile()
@@ -78,25 +79,29 @@ func (e *Envelope) Validate() error {
 	if len(e.AllowedRepositories) == 0 && len(e.AllowedOwners) == 0 {
 		return fmt.Errorf("envelope must admit at least one repository or owner")
 	}
-	seen := make(map[string]struct{}, len(e.AllowedRepositories))
-	for _, repo := range e.AllowedRepositories {
+	if err := util.ValidateUnique(e.AllowedRepositories, func(repo string) error {
 		if !IsCanonicalRepositorySelector(repo) {
 			return fmt.Errorf("envelope repository %s is not a canonical selector", selectorLogID(repo))
 		}
-		if _, dup := seen[repo]; dup {
-			return fmt.Errorf("envelope must not contain duplicate repository %s", selectorLogID(repo))
-		}
-		seen[repo] = struct{}{}
+		return nil
+	}, func(repo string) string {
+		return repo
+	}, func(repo string) error {
+		return fmt.Errorf("envelope must not contain duplicate repository %s", selectorLogID(repo))
+	}); err != nil {
+		return err
 	}
-	seenOwners := make(map[string]struct{}, len(e.AllowedOwners))
-	for _, owner := range e.AllowedOwners {
+	if err := util.ValidateUnique(e.AllowedOwners, func(owner string) error {
 		if !IsCanonicalOwner(owner) {
 			return fmt.Errorf("envelope owner %s is not a canonical selector", selectorLogID(owner))
 		}
-		if _, dup := seenOwners[owner]; dup {
-			return fmt.Errorf("envelope must not contain duplicate owner %s", selectorLogID(owner))
-		}
-		seenOwners[owner] = struct{}{}
+		return nil
+	}, func(owner string) string {
+		return owner
+	}, func(owner string) error {
+		return fmt.Errorf("envelope must not contain duplicate owner %s", selectorLogID(owner))
+	}); err != nil {
+		return err
 	}
 	if e.ToolPolicy != ToolPolicyGitHubRepositoryReadV1 {
 		return fmt.Errorf("unsupported envelope tool policy %q", e.ToolPolicy)
