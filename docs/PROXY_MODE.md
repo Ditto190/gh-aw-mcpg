@@ -340,6 +340,25 @@ update-ca-certificates
 curl --cacert /tmp/gh-aw/mcp-logs/proxy-tls/ca.crt https://localhost:8443/health
 ```
 
+## Delegation Control
+
+In addition to the single-use enclave profile above, the proxy (and the unified gateway) can host
+an AWF-only **delegation control** channel that mints short-lived, invocation-scoped identities for
+dynamically admitted enclaves. It is disabled unless all five `MCP_GATEWAY_DELEGATION_*`
+environment variables are set:
+
+| Variable | Description |
+|----------|-------------|
+| `MCP_GATEWAY_DELEGATION_ENVELOPE` | Compiler-installed JSON policy envelope |
+| `MCP_GATEWAY_DELEGATION_STATE_PATH` | Path where delegated identity state is persisted and recovered |
+| `MCP_GATEWAY_DELEGATION_GENERATION` | Policy generation; mismatching persisted state fails closed |
+| `MCP_GATEWAY_DELEGATION_CONTROL_KEY` | AWF-only capability secret (min 32 bytes) for the control channel |
+| `MCP_GATEWAY_DELEGATION_CONTROL_LISTEN` | Private control listener address, distinct from the proxy listener |
+
+Setting only some of them causes `awmg proxy` to fail fast. See
+[docs/DELEGATION.md](DELEGATION.md) for the envelope format, control endpoints, restart recovery,
+and the security model.
+
 ## Known Limitations
 
 - **GraphQL nested filtering**: Deeply nested GraphQL response structures depend on guard support for item-level labeling.

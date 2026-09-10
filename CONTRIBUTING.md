@@ -8,6 +8,8 @@ Thank you for your interest in contributing to MCP Gateway! This document provid
 2. **Go 1.26.4** (see [installation instructions](https://go.dev/dl/))
 3. **Make** for running build commands
 
+> **Note:** `go.mod` pins the Go toolchain version. If that exact toolchain is not already installed locally, `make build`/`go build` downloads it and therefore needs network access to `proxy.golang.org` (or a configured `GOPROXY`). In offline or restricted environments, pre-install the pinned toolchain.
+
 ## Getting Started
 
 ### Initial Setup

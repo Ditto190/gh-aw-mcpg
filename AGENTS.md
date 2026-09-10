@@ -432,6 +432,12 @@ DEBUG_COLORS=0 DEBUG=* ./awmg --config config.toml
 - `MCP_GATEWAY_ALLOWONLY_SCOPE_REPO` - AllowOnly repo name, requires owner (sets default for `--allowonly-scope-repo`)
 - `MCP_GATEWAY_ALLOWONLY_MIN_INTEGRITY` - AllowOnly integrity level: `none`, `unapproved`, `approved`, `merged` (sets default for `--allowonly-min-integrity`)
 - `MCP_GATEWAY_FORCE_PUBLIC_REPOS` - When `true` (default), automatically forces `repos="public"` allow-only policy when `GITHUB_REPOSITORY` identifies a public repository; set to `false` to opt out. Overridden by `gateway.forcePublicRepos` in JSON stdin config.
+- `MCP_GATEWAY_DELEGATION_ENVELOPE` - Compiler-installed JSON delegation envelope bounding every delegated identity (run ID, enclave backend, allowed repositories/owners, tool policy, schema hashes, max identity TTL, expiry). See [`docs/DELEGATION.md`](docs/DELEGATION.md)
+- `MCP_GATEWAY_DELEGATION_STATE_PATH` - Path where delegated identity state is persisted and recovered at startup
+- `MCP_GATEWAY_DELEGATION_GENERATION` - Unsigned integer policy generation; persisted state from another generation is rejected (fails closed)
+- `MCP_GATEWAY_DELEGATION_CONTROL_KEY` - AWF-only capability secret (min 32 bytes) authenticating the private delegation control channel; never exposed to agents
+- `MCP_GATEWAY_DELEGATION_CONTROL_LISTEN` - `host:port` of the private delegation control listener; must be distinct from the executor-facing listener
+- **Note:** The five `MCP_GATEWAY_DELEGATION_*` variables must be set together; setting only some of them fails startup fast
 - `MCP_GATEWAY_TLS_CERT` - Path to TLS server certificate PEM file; enables HTTPS when set together with `MCP_GATEWAY_TLS_KEY` (sets default for `--tls-cert`)
 - `MCP_GATEWAY_TLS_KEY` - Path to TLS server private key PEM file; required when `MCP_GATEWAY_TLS_CERT` is set (sets default for `--tls-key`)
 - `MCP_GATEWAY_CA_CERT` - Path to CA certificate PEM file for client certificate verification; enables mutual TLS (mTLS) when set alongside `MCP_GATEWAY_TLS_CERT`/`MCP_GATEWAY_TLS_KEY` (sets default for `--tls-ca`)
