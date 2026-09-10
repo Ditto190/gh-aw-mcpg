@@ -434,11 +434,14 @@ func TestHandleControl_Status(t *testing.T) {
 func TestHandleControl_Reconcile(t *testing.T) {
 	t.Run("success clears recovery-incomplete and persists state", func(t *testing.T) {
 		deps, secret := newControlTestDeps(t)
+		deps.Store.recoveryIncomplete = true
+		require.True(t, deps.Store.IsRecoveryIncomplete())
 		w := doControlRequest(t, deps, secret, ControlPathPrefix+"reconcile", http.MethodPost, struct{}{})
 		require.Equal(t, http.StatusOK, w.Code)
 		var resp map[string]bool
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
 		assert.True(t, resp["reconciled"])
+		assert.False(t, deps.Store.IsRecoveryIncomplete())
 
 		_, err := os.Stat(deps.StatePath)
 		require.NoError(t, err)
