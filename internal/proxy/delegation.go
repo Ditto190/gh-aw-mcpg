@@ -1,16 +1,13 @@
 package proxy
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
 
 	"github.com/github/gh-aw-mcpg/internal/delegation"
 	"github.com/github/gh-aw-mcpg/internal/enclavegithub"
-	"github.com/github/gh-aw-mcpg/internal/httputil"
 	"github.com/github/gh-aw-mcpg/internal/logger"
 	"github.com/github/gh-aw-mcpg/internal/tracing"
 	"github.com/github/gh-aw-mcpg/internal/util"
@@ -41,103 +38,11 @@ func newDelegationState(cfg *DelegationConfig) (*delegationState, error) {
 }
 
 func (h *proxyHandler) handleDelegationControl(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost || h.server.delegation.capability.Authenticate(r.Header.Get("Authorization")) != nil {
-		logDelegation.Printf("Delegation control access denied: method=%s path=%s", r.Method, r.URL.Path)
-		httputil.WriteErrorResponse(w, http.StatusForbidden, "delegation_access_denied", "delegation control access denied")
-		return
-	}
-	logDelegation.Printf("Handling delegation control request: path=%s", r.URL.Path)
-
-	switch r.URL.Path {
-	case delegationControlPath + "create-or-confirm":
-		var requestWire delegation.CreateOrConfirmRequestWire
-		if !decodeDelegationJSON(w, r, &requestWire) {
-			return
-		}
-		request, err := requestWire.ToRequest()
-		if err != nil {
-			httputil.WriteErrorResponse(w, http.StatusBadRequest, "invalid_delegation_request", "invalid delegation request")
-			return
-		}
-		result, err := h.server.delegation.store.CreateOrConfirm(request)
-		if err != nil {
-			if !h.persistDelegationState(w) {
-				return
-			}
-			httputil.WriteErrorResponse(w, http.StatusForbidden, "delegation_request_denied", "delegation request denied")
-			return
-		}
-
-		if !h.persistDelegationState(w) {
-			return
-		}
-		httputil.WriteJSONResponse(w, http.StatusOK, result)
-	case delegationControlPath + "revoke":
-		var request struct {
-			Handle string `json:"handle"`
-		}
-		if !decodeDelegationJSON(w, r, &request) {
-			return
-		}
-		if err := h.server.delegation.store.Revoke(request.Handle); err != nil {
-			logDelegation.Printf("Delegation revoke failed for handle_hash=%s", util.HashForLog(request.Handle, 16, ""))
-			httputil.WriteErrorResponse(w, http.StatusInternalServerError, "delegation_revoke_failed", "delegation revoke failed")
-			return
-		}
-		if !h.persistDelegationState(w) {
-			return
-		}
-		httputil.WriteJSONResponse(w, http.StatusOK, map[string]bool{"revoked": true})
-	case delegationControlPath + "revoke-by-labels":
-		var request struct {
-			RunID          string `json:"run_id"`
-			EnclaveEntryID string `json:"enclave_entry_id"`
-		}
-		if !decodeDelegationJSON(w, r, &request) {
-			return
-		}
-		revoked := h.server.delegation.store.RevokeByLabels(request.RunID, request.EnclaveEntryID)
-		logDelegation.Printf("Revoked %d delegation(s) by labels: run_hash=%s enclave_entry_id_hash=%s", revoked, util.HashForLog(request.RunID, 16, ""), util.HashForLog(request.EnclaveEntryID, 16, ""))
-		if !h.persistDelegationState(w) {
-			return
-		}
-		httputil.WriteJSONResponse(w, http.StatusOK, map[string]int{"revoked": revoked})
-	case delegationControlPath + "status":
-		var request struct {
-			RunID          string `json:"run_id"`
-			EnclaveEntryID string `json:"enclave_entry_id"`
-		}
-		if !decodeDelegationJSON(w, r, &request) {
-			return
-		}
-		if request.RunID == "" || request.EnclaveEntryID == "" {
-			httputil.WriteErrorResponse(w, http.StatusBadRequest, "delegation_status_invalid_request", "run_id and enclave_entry_id are required")
-			return
-		}
-		status := h.server.delegation.store.Status()
-		httputil.WriteJSONResponse(w, http.StatusOK, map[string]any{
-			"recovery_incomplete": status.RecoveryIncomplete,
-			"generation":          status.Generation,
-			"live_identity_count": status.LiveIdentityCount,
-			"labelled_handles":    h.server.delegation.store.LabelHandles(request.RunID, request.EnclaveEntryID),
-		})
-	case delegationControlPath + "reconcile":
-		var request struct{}
-		if !decodeDelegationJSON(w, r, &request) {
-			return
-		}
-		// Reconcile explicitly clears the recovery-incomplete flag once
-		// AWF has inspected (and, via revoke/revoke-by-labels, revoked)
-		// any outstanding labelled state from a prior restart, letting new
-		// dynamic admissions resume.
-		if err := h.server.delegation.store.MarkReconciledAndSaveState(h.server.delegation.statePath); err != nil {
-			httputil.WriteErrorResponse(w, http.StatusInternalServerError, "delegation_state_persist_failed", "delegation state persistence failed")
-			return
-		}
-		httputil.WriteJSONResponse(w, http.StatusOK, map[string]bool{"reconciled": true})
-	default:
-		http.NotFound(w, r)
-	}
+	delegation.HandleControl(w, r, delegation.ControlDeps{
+		Store:      h.server.delegation.store,
+		Capability: h.server.delegation.capability,
+		StatePath:  h.server.delegation.statePath,
+	}, logDelegation.Printf)
 }
 
 // ControlHandler returns the private control-plane handler. It is intentionally
@@ -155,26 +60,6 @@ func (s *Server) ControlHandler() http.Handler {
 		}
 		handler.handleDelegationControl(w, r)
 	})
-}
-
-func (h *proxyHandler) persistDelegationState(w http.ResponseWriter) bool {
-	if err := h.server.delegation.store.SaveState(h.server.delegation.statePath); err != nil {
-		httputil.WriteErrorResponse(w, http.StatusInternalServerError, "delegation_state_persist_failed", "delegation state persistence failed")
-		return false
-	}
-	return true
-}
-
-func decodeDelegationJSON(w http.ResponseWriter, r *http.Request, value any) bool {
-	r.Body = http.MaxBytesReader(w, r.Body, 64*1024)
-	defer r.Body.Close()
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
-	if decoder.Decode(value) != nil || decoder.Decode(&struct{}{}) != io.EOF {
-		httputil.WriteErrorResponse(w, http.StatusBadRequest, "invalid_delegation_request", "invalid delegation request")
-		return false
-	}
-	return true
 }
 
 func (h *proxyHandler) handleDelegatedRequest(w http.ResponseWriter, r *http.Request) {
