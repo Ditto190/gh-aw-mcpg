@@ -6,8 +6,11 @@ import (
 	"net/http"
 
 	"github.com/github/gh-aw-mcpg/internal/httputil"
+	"github.com/github/gh-aw-mcpg/internal/logger"
 	"github.com/github/gh-aw-mcpg/internal/util"
 )
+
+var log = logger.New("delegation:control_handler")
 
 // ControlDeps groups the delegation state a control-plane handler needs to
 // authenticate requests, mutate the in-memory store, and persist it. Both
@@ -56,12 +59,14 @@ func HandleControl(w http.ResponseWriter, r *http.Request, deps ControlDeps, log
 		}
 		result, err := deps.Store.CreateOrConfirm(request)
 		if err != nil {
+			log.Printf("create-or-confirm denied: run_hash=%s enclave_entry_id_hash=%s invocation_id_hash=%s", util.HashForLog(request.RunID, 16, ""), util.HashForLog(request.EnclaveEntryID, 16, ""), util.HashForLog(request.InvocationID, 16, ""))
 			if !deps.persistState(w) {
 				return
 			}
 			httputil.WriteErrorResponse(w, http.StatusForbidden, "delegation_request_denied", "delegation request denied")
 			return
 		}
+		log.Printf("create-or-confirm succeeded: run_hash=%s enclave_entry_id_hash=%s handle_hash=%s", util.HashForLog(request.RunID, 16, ""), util.HashForLog(request.EnclaveEntryID, 16, ""), util.HashForLog(result.Handle, 16, ""))
 		if !deps.persistState(w) {
 			return
 		}
@@ -125,9 +130,11 @@ func HandleControl(w http.ResponseWriter, r *http.Request, deps ControlDeps, log
 		// any outstanding labelled state from a prior restart, letting new
 		// dynamic admissions resume.
 		if err := deps.Store.MarkReconciledAndSaveState(deps.StatePath); err != nil {
+			log.Printf("reconcile failed: state_path=%s err=%v", deps.StatePath, err)
 			httputil.WriteErrorResponse(w, http.StatusInternalServerError, "delegation_state_persist_failed", "delegation state persistence failed")
 			return
 		}
+		log.Print("Reconcile succeeded, recovery-incomplete flag cleared")
 		httputil.WriteJSONResponse(w, http.StatusOK, map[string]bool{"reconciled": true})
 	default:
 		http.NotFound(w, r)
