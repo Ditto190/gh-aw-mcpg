@@ -282,7 +282,7 @@ pub fn apply_tool_labels(
         // === Issues (repo-scoped) ===
         tool_names::GET_ISSUE
         | tool_names::ISSUE_READ
-        | "list_issues"
+        | tool_names::LIST_ISSUES
         | "list_issues_ff_remote_mcp_issue_fields"
         | "list_issues_ff_fields_param" => {
             // Issues are user-submitted, low integrity
@@ -341,7 +341,7 @@ pub fn apply_tool_labels(
         }
 
         // Search issues / pull requests: extract repo scope from query or tool_args when available
-        "search_issues"
+        tool_names::SEARCH_ISSUES
         | "search_issues_ff_fields_param"
         | "search_pull_requests"
         | "search_pull_requests_ff_fields_param" => {
