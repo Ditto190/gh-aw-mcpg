@@ -264,6 +264,7 @@ func TestHandleControl_Revoke(t *testing.T) {
 		var revokeResp map[string]bool
 		require.NoError(t, json.Unmarshal(w2.Body.Bytes(), &revokeResp))
 		assert.True(t, revokeResp["revoked"])
+		assert.Zero(t, deps.Store.Status().LiveIdentityCount)
 	})
 
 	t.Run("revoking an unknown handle is idempotent and returns 200", func(t *testing.T) {
