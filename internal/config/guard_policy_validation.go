@@ -235,7 +235,6 @@ func normalizeAndValidateScopeArray(scopes []interface{}) ([]string, error) {
 	}
 	logGuardPolicy.Printf("normalizeAndValidateScopeArray: validating %d repo scope entries", len(scopes))
 
-	normalized := make([]string, 0, len(scopes))
 	if err := util.ValidateUnique(scopes, func(scopeValue interface{}) error {
 		scopeString, ok := scopeValue.(string)
 		if !ok {
@@ -253,7 +252,6 @@ func normalizeAndValidateScopeArray(scopes []interface{}) ([]string, error) {
 		if scopeString != "public" && !isValidRepoScope(scopeString) {
 			return fmt.Errorf("allow-only.repos scope %q is invalid; expected public, owner/*, owner/repo, or owner/re*", scopeString)
 		}
-		normalized = append(normalized, scopeString)
 		return nil
 	}, func(scopeValue interface{}) string {
 		return strings.TrimSpace(scopeValue.(string))
@@ -261,6 +259,11 @@ func normalizeAndValidateScopeArray(scopes []interface{}) ([]string, error) {
 		return fmt.Errorf("allow-only.repos must not contain duplicates")
 	}); err != nil {
 		return nil, err
+	}
+
+	normalized := make([]string, len(scopes))
+	for i, scopeValue := range scopes {
+		normalized[i] = strings.TrimSpace(scopeValue.(string))
 	}
 
 	sort.Strings(normalized)

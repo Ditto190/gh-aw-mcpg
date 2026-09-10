@@ -87,7 +87,8 @@ func FindDuplicate[T comparable](items []T) (T, bool) {
 	return zero, false
 }
 
-// ValidateUnique validates each item and reports the first duplicate key.
+// ValidateUnique validates each item before checking its key and reports the
+// first duplicate key.
 func ValidateUnique[T any, K comparable](items []T, validate func(T) error, key func(T) K, duplicateError func(T) error) error {
 	seen := make(map[K]struct{}, len(items))
 	for _, item := range items {
