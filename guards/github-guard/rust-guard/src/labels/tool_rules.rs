@@ -862,7 +862,7 @@ pub fn apply_tool_labels(
                     baseline_scope = Cow::Owned(format!(
                         "node/{}",
                         tool_args
-                            .get("commentNodeID")
+                            .get(field_names::COMMENT_NODE_ID)
                             .and_then(|v| v.as_str())
                             .unwrap_or("")
                     ));
@@ -872,7 +872,7 @@ pub fn apply_tool_labels(
                     &repo,
                     repo_id,
                     tool_args
-                        .get("commentNodeID")
+                        .get(field_names::COMMENT_NODE_ID)
                         .and_then(|v| v.as_str())
                         .unwrap_or(""),
                     &mut secrecy,
@@ -890,7 +890,7 @@ pub fn apply_tool_labels(
                 baseline_scope = Cow::Owned(format!(
                     "node/{}",
                     tool_args
-                        .get("commentNodeID")
+                        .get(field_names::COMMENT_NODE_ID)
                         .and_then(|v| v.as_str())
                         .unwrap_or("")
                 ));
@@ -900,7 +900,7 @@ pub fn apply_tool_labels(
                 &repo,
                 repo_id,
                 tool_args
-                    .get("commentNodeID")
+                    .get(field_names::COMMENT_NODE_ID)
                     .and_then(|v| v.as_str())
                     .unwrap_or(""),
                 &mut secrecy,
@@ -1130,6 +1130,16 @@ mod tests {
     fn default_ctx() -> PolicyContext {
         PolicyContext::default()
     }
+
+    /// Tools routed through `apply_governance_labels` (repo/org/enterprise-scoped
+    /// governance metadata reads and writes). Shared across the three governance
+    /// test functions below to avoid drift when a new governance tool is added.
+    const GOVERNANCE_TOOLS: [&str; 4] = [
+        "repository_ruleset_read",
+        "custom_properties_read",
+        "custom_properties_write",
+        "create_repository_ruleset",
+    ];
 
     fn private_label(owner: &str, repo: &str, repo_id: &str, ctx: &PolicyContext) -> Vec<String> {
         super::policy_private_scope_label(owner, repo, repo_id, ctx)
@@ -1715,12 +1725,7 @@ mod tests {
         );
         assert_eq!(integrity, none_integrity(repo_id, &ctx));
 
-        let governance_tools = [
-            "repository_ruleset_read",
-            "custom_properties_read",
-            "custom_properties_write",
-            "create_repository_ruleset",
-        ];
+        let governance_tools = GOVERNANCE_TOOLS;
         for tool in governance_tools {
             let (secrecy, integrity, _) = super::apply_tool_labels(
                 tool,
@@ -1947,12 +1952,7 @@ mod tests {
         assert_eq!(secrecy, expected_secrecy);
         assert_eq!(integrity, writer_integrity(repo_id, &ctx));
 
-        for tool in &[
-            "repository_ruleset_read",
-            "custom_properties_read",
-            "custom_properties_write",
-            "create_repository_ruleset",
-        ] {
+        for tool in &GOVERNANCE_TOOLS {
             let (secrecy, integrity, _) =
                 super::apply_tool_labels(tool, &args, repo_id, vec![], vec![], String::new(), &ctx);
             assert_eq!(secrecy, expected_secrecy, "{tool} secrecy");
@@ -1973,12 +1973,7 @@ mod tests {
             ("enterprise", "enterprise", "github-enterprise"),
         ] {
             let args = serde_json::json!({"level": level, field: scope});
-            for tool in &[
-                "repository_ruleset_read",
-                "custom_properties_read",
-                "custom_properties_write",
-                "create_repository_ruleset",
-            ] {
+            for tool in &GOVERNANCE_TOOLS {
                 let (secrecy, integrity, _) =
                     super::apply_tool_labels(tool, &args, "", vec![], vec![], String::new(), &ctx);
                 assert_eq!(
