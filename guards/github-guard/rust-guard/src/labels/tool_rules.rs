@@ -1127,13 +1127,6 @@ mod tests {
     use super::super::helpers::{none_integrity, PolicyContext};
     use super::*;
 
-    const GOVERNANCE_TOOLS: [&str; 4] = [
-        "repository_ruleset_read",
-        "custom_properties_read",
-        "custom_properties_write",
-        "create_repository_ruleset",
-    ];
-
     fn default_ctx() -> PolicyContext {
         PolicyContext::default()
     }
