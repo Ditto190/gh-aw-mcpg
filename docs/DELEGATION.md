@@ -103,9 +103,9 @@ then call `reconcile` to clear the flag before new dynamic admissions resume.
 
 ## Security model
 
-- **Capability isolation.** The control key is AWF-only. Only its SHA-256 digest is retained in
-  memory, and comparison is constant-time over fixed-size digests, so neither the value nor its
-  length leaks through timing or a memory dump.
+- **Capability isolation.** The control key is AWF-only. The capability verifier retains only its
+  SHA-256 digest and compares fixed-size digests in constant time, preventing the verifier's
+  stored value or the key length from leaking through comparison timing.
 - **Listener separation.** The control handler is mounted only on the private control listener and never on the executor-facing data-plane handler; requests to this prefix on the public plane are rejected (the unified mux returns `404`, while proxy delegation returns an access-denied response).
 - **Least privilege.** An identity is bound to exactly one repository, one invocation, and the
   closed `github-repository-read-v1` tool set. In proxy mode, only `GET` requests matching a known
