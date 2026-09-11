@@ -29,6 +29,11 @@ type ControlLogger func(format string, args ...any)
 
 func noopControlLogger(string, ...any) {}
 
+type runEntryRequest struct {
+	RunID          string `json:"run_id"`
+	EnclaveEntryID string `json:"enclave_entry_id"`
+}
+
 // HandleControl implements the AWF-only delegation control-plane HTTP
 // handler shared by internal/proxy and internal/server. Callers are
 // responsible for firewalling this handler off of their public data planes
@@ -57,9 +62,12 @@ func HandleControl(w http.ResponseWriter, r *http.Request, deps ControlDeps, log
 			httputil.WriteErrorResponse(w, http.StatusBadRequest, "invalid_delegation_request", "invalid delegation request")
 			return
 		}
+		runHash := util.HashForLog(request.RunID, 16, "")
+		entryHash := util.HashForLog(request.EnclaveEntryID, 16, "")
+		invocationHash := util.HashForLog(request.InvocationID, 16, "")
 		result, err := deps.Store.CreateOrConfirm(request)
 		if err != nil {
-			logControlHandler.Printf("create-or-confirm denied: run_hash=%s enclave_entry_id_hash=%s invocation_id_hash=%s", util.HashForLog(request.RunID, 16, ""), util.HashForLog(request.EnclaveEntryID, 16, ""), util.HashForLog(request.InvocationID, 16, ""))
+			logControlHandler.Printf("create-or-confirm denied: run_hash=%s enclave_entry_id_hash=%s invocation_id_hash=%s", runHash, entryHash, invocationHash)
 			if !deps.persistState(w) {
 				return
 			}
@@ -69,7 +77,7 @@ func HandleControl(w http.ResponseWriter, r *http.Request, deps ControlDeps, log
 		if !deps.persistState(w) {
 			return
 		}
-		logControlHandler.Printf("create-or-confirm succeeded: run_hash=%s enclave_entry_id_hash=%s invocation_id_hash=%s handle_hash=%s", util.HashForLog(request.RunID, 16, ""), util.HashForLog(request.EnclaveEntryID, 16, ""), util.HashForLog(request.InvocationID, 16, ""), util.HashForLog(result.Handle, 16, ""))
+		logControlHandler.Printf("create-or-confirm succeeded: run_hash=%s enclave_entry_id_hash=%s invocation_id_hash=%s handle_hash=%s", runHash, entryHash, invocationHash, util.HashForLog(result.Handle, 16, ""))
 		httputil.WriteJSONResponse(w, http.StatusOK, result)
 	case ControlPathPrefix + "revoke":
 		var request struct {
@@ -88,10 +96,7 @@ func HandleControl(w http.ResponseWriter, r *http.Request, deps ControlDeps, log
 		}
 		httputil.WriteJSONResponse(w, http.StatusOK, map[string]bool{"revoked": true})
 	case ControlPathPrefix + "revoke-by-labels":
-		var request struct {
-			RunID          string `json:"run_id"`
-			EnclaveEntryID string `json:"enclave_entry_id"`
-		}
+		var request runEntryRequest
 		if !decodeControlJSON(w, r, &request) {
 			return
 		}
@@ -102,10 +107,7 @@ func HandleControl(w http.ResponseWriter, r *http.Request, deps ControlDeps, log
 		}
 		httputil.WriteJSONResponse(w, http.StatusOK, map[string]int{"revoked": revoked})
 	case ControlPathPrefix + "status":
-		var request struct {
-			RunID          string `json:"run_id"`
-			EnclaveEntryID string `json:"enclave_entry_id"`
-		}
+		var request runEntryRequest
 		if !decodeControlJSON(w, r, &request) {
 			return
 		}
