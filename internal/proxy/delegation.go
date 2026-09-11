@@ -35,14 +35,6 @@ func newDelegationState(cfg *DelegationConfig) (*delegationState, error) {
 	return &delegationState{store: cfg.Store, capability: cfg.Capability, statePath: cfg.StatePath}, nil
 }
 
-func (h *proxyHandler) handleDelegationControl(w http.ResponseWriter, r *http.Request) {
-	delegation.HandleControl(w, r, delegation.ControlDeps{
-		Store:      h.server.delegation.store,
-		Capability: h.server.delegation.capability,
-		StatePath:  h.server.delegation.statePath,
-	}, logDelegation.Printf)
-}
-
 // ControlHandler returns the private control-plane handler. It is intentionally
 // separate from Handler so executor-facing GitHub traffic cannot reach control
 // operations even if it presents a valid executor bearer.

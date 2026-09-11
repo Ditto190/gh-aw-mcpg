@@ -273,7 +273,7 @@ func TestDelegationControlLoggingRedactsPrivateSelectors(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, delegationControlPath+op, bytes.NewReader(body))
 		req.Header.Set("Authorization", "Bearer "+capabilityKey)
 		rec := httptest.NewRecorder()
-		handler.handleDelegationControl(rec, req)
+		handler.server.ControlHandler().ServeHTTP(rec, req)
 		return rec
 	}
 
@@ -320,7 +320,7 @@ func TestDelegationControlReconcileValidationAndTransactionality(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, delegationControlPath+"reconcile", bytes.NewReader(body))
 		req.Header.Set("Authorization", "Bearer "+capabilityKey)
 		rec := httptest.NewRecorder()
-		handler.handleDelegationControl(rec, req)
+		handler.server.ControlHandler().ServeHTTP(rec, req)
 		return rec
 	}
 
@@ -399,7 +399,7 @@ func TestDelegationControlReconcileIsTransactional(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, delegationControlPath+"reconcile", bytes.NewReader([]byte(`{}`)))
 		req.Header.Set("Authorization", "Bearer "+capabilityKey)
 		rec := httptest.NewRecorder()
-		handler.handleDelegationControl(rec, req)
+		handler.server.ControlHandler().ServeHTTP(rec, req)
 		return rec
 	}
 

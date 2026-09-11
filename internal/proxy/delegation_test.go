@@ -41,13 +41,13 @@ func TestDelegationControlCreateRequiresCapability(t *testing.T) {
 	require.NoError(t, err)
 
 	denied := httptest.NewRecorder()
-	handler.handleDelegationControl(denied, httptest.NewRequest(http.MethodPost, delegationControlPath+"create-or-confirm", bytes.NewReader(body)))
+	handler.server.ControlHandler().ServeHTTP(denied, httptest.NewRequest(http.MethodPost, delegationControlPath+"create-or-confirm", bytes.NewReader(body)))
 	assert.Equal(t, http.StatusForbidden, denied.Code)
 
 	allowed := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, delegationControlPath+"create-or-confirm", bytes.NewReader(body))
 	request.Header.Set("Authorization", "Bearer "+capabilityKey)
-	handler.handleDelegationControl(allowed, request)
+	handler.server.ControlHandler().ServeHTTP(allowed, request)
 	assert.Equal(t, http.StatusOK, allowed.Code)
 }
 
@@ -77,7 +77,7 @@ func TestDelegationControlStatusAndReconcile(t *testing.T) {
 	createReq := httptest.NewRequest(http.MethodPost, delegationControlPath+"create-or-confirm", bytes.NewReader(createBody))
 	createReq.Header.Set("Authorization", "Bearer "+capabilityKey)
 	createRec := httptest.NewRecorder()
-	handler.handleDelegationControl(createRec, createReq)
+	handler.server.ControlHandler().ServeHTTP(createRec, createReq)
 	require.Equal(t, http.StatusOK, createRec.Code)
 
 	statusBody, err := json.Marshal(map[string]string{"run_id": "run", "enclave_entry_id": "entry"})
@@ -85,7 +85,7 @@ func TestDelegationControlStatusAndReconcile(t *testing.T) {
 	statusReq := httptest.NewRequest(http.MethodPost, delegationControlPath+"status", bytes.NewReader(statusBody))
 	statusReq.Header.Set("Authorization", "Bearer "+capabilityKey)
 	statusRec := httptest.NewRecorder()
-	handler.handleDelegationControl(statusRec, statusReq)
+	handler.server.ControlHandler().ServeHTTP(statusRec, statusReq)
 	require.Equal(t, http.StatusOK, statusRec.Code)
 
 	var status struct {
@@ -103,14 +103,14 @@ func TestDelegationControlStatusAndReconcile(t *testing.T) {
 	reconcileReq := httptest.NewRequest(http.MethodPost, delegationControlPath+"reconcile", bytes.NewReader([]byte("{}")))
 	reconcileReq.Header.Set("Authorization", "Bearer "+capabilityKey)
 	reconcileRec := httptest.NewRecorder()
-	handler.handleDelegationControl(reconcileRec, reconcileReq)
+	handler.server.ControlHandler().ServeHTTP(reconcileRec, reconcileReq)
 	assert.Equal(t, http.StatusOK, reconcileRec.Code)
 	assert.JSONEq(t, `{"reconciled":true}`, reconcileRec.Body.String())
 
 	missingFieldsReq := httptest.NewRequest(http.MethodPost, delegationControlPath+"status", bytes.NewReader([]byte(`{"run_id":"run"}`)))
 	missingFieldsReq.Header.Set("Authorization", "Bearer "+capabilityKey)
 	missingFieldsRec := httptest.NewRecorder()
-	handler.handleDelegationControl(missingFieldsRec, missingFieldsReq)
+	handler.server.ControlHandler().ServeHTTP(missingFieldsRec, missingFieldsReq)
 	assert.Equal(t, http.StatusBadRequest, missingFieldsRec.Code, "status must require both run_id and enclave_entry_id")
 }
 
