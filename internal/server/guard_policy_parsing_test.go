@@ -8,11 +8,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestParseServerGuardPolicy_AllowOnly tests config.ParseServerGuardPolicy
+// TestParseServerGuardPolicy tests config.ParseServerGuardPolicy
 // against the shapes of guard-policies map that the server package hands it,
 // covering both the modern allow-only/write-sink format and the legacy
 // repos/min-integrity format.
-func TestParseServerGuardPolicy_AllowOnly(t *testing.T) {
+func TestParseServerGuardPolicy(t *testing.T) {
 	tests := []struct {
 		name          string
 		guardPolicies map[string]interface{}
