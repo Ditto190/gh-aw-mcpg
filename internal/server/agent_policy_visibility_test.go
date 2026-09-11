@@ -150,6 +150,29 @@ func TestCreateDelegationFilteredUnifiedServer_ClosedToolSurface(t *testing.T) {
 	assert.ElementsMatch(t, []string{"github___issue_read"}, tools, "delegated sessions see only the closed github-repository-read-v1 tools registered by github")
 }
 
+// TestCreateDelegationFilteredServer_GitHubBackend verifies that, in routed
+// mode, the delegation-filtered server for the github backend exposes only
+// the closed github-repository-read-v1 tool set (issue_read/list_issues),
+// filtering out non-delegated tools such as repo_delete.
+func TestCreateDelegationFilteredServer_GitHubBackend(t *testing.T) {
+	us := agentVisibilityServer(t)
+
+	tools, err := listToolsViaInMemory(createDelegationFilteredServer(us, "github"))
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []string{"issue_read"}, tools, "only delegated github tools should be visible")
+}
+
+// TestCreateDelegationFilteredServer_NonGitHubBackend verifies that, for any
+// backend other than github, the delegation-filtered server exposes no tools
+// at all (fail-closed), regardless of what tools that backend registers.
+func TestCreateDelegationFilteredServer_NonGitHubBackend(t *testing.T) {
+	us := agentVisibilityServer(t)
+
+	tools, err := listToolsViaInMemory(createDelegationFilteredServer(us, "fetch"))
+	require.NoError(t, err)
+	assert.Empty(t, tools, "non-github backends must expose no tools to delegated sessions")
+}
+
 // TestCreateAgentFilteredUnifiedServer_ConcurrentIsolation exercises the per-agent
 // filtered-server construction concurrently to catch data races (run with -race).
 func TestCreateAgentFilteredUnifiedServer_ConcurrentIsolation(t *testing.T) {
