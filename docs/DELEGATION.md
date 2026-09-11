@@ -93,9 +93,9 @@ hash, TTL above `max_identity_ttl`, elapsed invocation deadline) are denied with
 ## Restart recovery
 
 State is persisted to `MCP_GATEWAY_DELEGATION_STATE_PATH` after every mutating control operation
-and reloaded at startup. Recovery is all-or-nothing: if the file is missing, unreadable, fails
-integrity verification, or does not match the active generation, the store fails closed with no
-live identities. Restored identities that are revoked or expired are dropped.
+and reloaded at startup. Recovery is all-or-nothing for an existing state file: if it is unreadable, fails
+integrity verification, or does not match the active generation, the store fails closed with no live
+identities. A missing file is treated as a fresh start. Restored identities that are revoked or expired are dropped.
 
 After a restart with outstanding labelled state, the store reports
 `recovery_incomplete: true` from `status`; AWF must inspect (and revoke as needed) that state and
