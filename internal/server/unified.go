@@ -149,8 +149,8 @@ type UnifiedServer struct {
 func NewUnified(ctx context.Context, cfg *config.Config) (*UnifiedServer, error) {
 	logUnified.Printf("Creating new unified server: sequentialLaunch=%v, servers=%d", cfg.SequentialLaunch, len(cfg.Servers))
 	if cfg.Delegation != nil {
-		if cfg.Delegation.Store == nil || cfg.Delegation.Capability == nil || cfg.Delegation.StatePath == "" {
-			return nil, fmt.Errorf("delegation store, control capability, and state path are required")
+		if err := cfg.Delegation.Validate(); err != nil {
+			return nil, err
 		}
 		sanitize.EnablePrivateSelectorRedaction()
 	}
