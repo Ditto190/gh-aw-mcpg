@@ -1,7 +1,6 @@
 package proxy
 
 import (
-	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -31,8 +30,8 @@ func newDelegationState(cfg *DelegationConfig) (*delegationState, error) {
 	if cfg == nil {
 		return nil, nil
 	}
-	if cfg.Store == nil || cfg.Capability == nil || cfg.StatePath == "" {
-		return nil, fmt.Errorf("delegation store, control capability, and state path are required")
+	if err := cfg.Validate(); err != nil {
+		return nil, err
 	}
 	return &delegationState{store: cfg.Store, capability: cfg.Capability, statePath: cfg.StatePath}, nil
 }
