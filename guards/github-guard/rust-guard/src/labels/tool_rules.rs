@@ -1138,6 +1138,16 @@ mod tests {
         PolicyContext::default()
     }
 
+    /// Tools routed through `apply_governance_labels` (repo/org/enterprise-scoped
+    /// governance metadata reads and writes). Shared across the three governance
+    /// test functions below to avoid drift when a new governance tool is added.
+    const GOVERNANCE_TOOLS: [&str; 4] = [
+        "repository_ruleset_read",
+        "custom_properties_read",
+        "custom_properties_write",
+        "create_repository_ruleset",
+    ];
+
     fn private_label(owner: &str, repo: &str, repo_id: &str, ctx: &PolicyContext) -> Vec<String> {
         super::policy_private_scope_label(owner, repo, repo_id, ctx)
     }
@@ -1722,7 +1732,8 @@ mod tests {
         );
         assert_eq!(integrity, none_integrity(repo_id, &ctx));
 
-        for tool in GOVERNANCE_TOOLS {
+        let governance_tools = GOVERNANCE_TOOLS;
+        for tool in governance_tools {
             let (secrecy, integrity, _) = super::apply_tool_labels(
                 tool,
                 &public_repo_args,
