@@ -106,8 +106,7 @@ then call `reconcile` to clear the flag before new dynamic admissions resume.
 - **Capability isolation.** The control key is AWF-only. Only its SHA-256 digest is retained in
   memory, and comparison is constant-time over fixed-size digests, so neither the value nor its
   length leaks through timing or a memory dump.
-- **Listener separation.** The control handler is only mounted on the private control listener and
-  only under `/internal/awf-enclave-mcp-control/`; the data plane returns `404` for it.
+- **Listener separation.** The control handler is mounted only on the private control listener and never on the executor-facing data-plane handler; requests to this prefix on the public plane are rejected (the unified mux returns `404`, while proxy delegation returns an access-denied response).
 - **Least privilege.** An identity is bound to exactly one repository, one invocation, and the
   closed `github-repository-read-v1` tool set. In proxy mode, only `GET` requests matching a known
   enclave route are delegated; in unified mode, delegated calls are restricted to the `github`
