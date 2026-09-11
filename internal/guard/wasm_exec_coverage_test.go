@@ -1,11 +1,17 @@
 package guard
 
 import (
+	"bytes"
 	"context"
+	"io"
+	"os"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/github/gh-aw-mcpg/internal/logger"
 )
 
 // trapLabelAgentWasm exports "label_agent" and "memory". Calling label_agent
@@ -95,6 +101,43 @@ var labelReturnsHugeLenWasm = []byte{
 	0x6d, 0x6f, 0x72, 0x79, 0x02, 0x00, 0x0a, 0x08, 0x01, 0x06, 0x00, 0x41, 0xbf, 0x84, 0x3d, 0x0b,
 }
 
+func captureWasmLogs(t *testing.T, f func()) string {
+	t.Helper()
+	t.Setenv("DEBUG", "*")
+	t.Setenv("DEBUG_COLORS", "0")
+
+	previous := logWasm
+	logWasm = logger.New("guard:wasm")
+	require.True(t, logWasm.Enabled(), "the capture harness must actually enable debug logging")
+	t.Cleanup(func() { logWasm = previous })
+
+	original := os.Stderr
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+	os.Stderr = w
+
+	var (
+		wg  sync.WaitGroup
+		buf bytes.Buffer
+	)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_, _ = io.Copy(&buf, r)
+	}()
+
+	func() {
+		defer func() {
+			os.Stderr = original
+			_ = w.Close()
+		}()
+		f()
+	}()
+	wg.Wait()
+	_ = r.Close()
+	return buf.String()
+}
+
 // TestCallWasmFunction_ActualTrap exercises the real isWasmTrap branch (lines
 // 64-71 of wasm_exec.go) by triggering a genuine wazero "unreachable" trap,
 // rather than a synthetic error string. It verifies that the guard is
@@ -168,13 +211,21 @@ func TestTryCallWasmFunction_FunctionNameFallback(t *testing.T) {
 	mem := g.module.Memory()
 	require.NotNil(t, mem)
 
-	g.mu.Lock()
-	result, requiredSize, err := g.tryCallWasmFunction(context.Background(), fn, mem, []byte(`{}`), 4096)
-	g.mu.Unlock()
+	var (
+		result       []byte
+		requiredSize uint32
+		err          error
+	)
+	logs := captureWasmLogs(t, func() {
+		g.mu.Lock()
+		result, requiredSize, err = g.tryCallWasmFunction(context.Background(), fn, mem, []byte(`{}`), 4096)
+		g.mu.Unlock()
+	})
 
 	require.NoError(t, err)
 	assert.Empty(t, result)
 	assert.Zero(t, requiredSize)
+	assert.Contains(t, logs, "tryCallWasmFunction: guard=function-name-fallback-test, func=<unknown>")
 }
 
 // TestTryCallWasmFunction_AllocatorPath_OutputAllocationFails exercises the
