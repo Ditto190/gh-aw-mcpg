@@ -862,7 +862,7 @@ pub fn apply_tool_labels(
                     baseline_scope = Cow::Owned(format!(
                         "node/{}",
                         tool_args
-                            .get("commentNodeID")
+                            .get(field_names::COMMENT_NODE_ID)
                             .and_then(|v| v.as_str())
                             .unwrap_or("")
                     ));
@@ -872,7 +872,7 @@ pub fn apply_tool_labels(
                     &repo,
                     repo_id,
                     tool_args
-                        .get("commentNodeID")
+                        .get(field_names::COMMENT_NODE_ID)
                         .and_then(|v| v.as_str())
                         .unwrap_or(""),
                     &mut secrecy,
@@ -890,7 +890,7 @@ pub fn apply_tool_labels(
                 baseline_scope = Cow::Owned(format!(
                     "node/{}",
                     tool_args
-                        .get("commentNodeID")
+                        .get(field_names::COMMENT_NODE_ID)
                         .and_then(|v| v.as_str())
                         .unwrap_or("")
                 ));
@@ -900,7 +900,7 @@ pub fn apply_tool_labels(
                 &repo,
                 repo_id,
                 tool_args
-                    .get("commentNodeID")
+                    .get(field_names::COMMENT_NODE_ID)
                     .and_then(|v| v.as_str())
                     .unwrap_or(""),
                 &mut secrecy,
@@ -1126,6 +1126,13 @@ fn check_file_secrecy(
 mod tests {
     use super::super::helpers::{none_integrity, PolicyContext};
     use super::*;
+
+    const GOVERNANCE_TOOLS: [&str; 4] = [
+        "repository_ruleset_read",
+        "custom_properties_read",
+        "custom_properties_write",
+        "create_repository_ruleset",
+    ];
 
     fn default_ctx() -> PolicyContext {
         PolicyContext::default()
@@ -1715,13 +1722,7 @@ mod tests {
         );
         assert_eq!(integrity, none_integrity(repo_id, &ctx));
 
-        let governance_tools = [
-            "repository_ruleset_read",
-            "custom_properties_read",
-            "custom_properties_write",
-            "create_repository_ruleset",
-        ];
-        for tool in governance_tools {
+        for tool in GOVERNANCE_TOOLS {
             let (secrecy, integrity, _) = super::apply_tool_labels(
                 tool,
                 &public_repo_args,
@@ -1755,7 +1756,7 @@ mod tests {
         );
         assert_eq!(integrity, writer_integrity(private_repo_id, &ctx));
 
-        for tool in governance_tools {
+        for tool in GOVERNANCE_TOOLS {
             let (secrecy, integrity, _) = super::apply_tool_labels(
                 tool,
                 &private_repo_args,
@@ -1778,7 +1779,7 @@ mod tests {
             ("enterprise", "enterprise", "github-enterprise"),
         ] {
             let args = serde_json::json!({ "level": level, field: scope });
-            for tool in governance_tools {
+            for tool in GOVERNANCE_TOOLS {
                 let (secrecy, integrity, _) =
                     super::apply_tool_labels(tool, &args, "", vec![], vec![], String::new(), &ctx);
                 assert_eq!(secrecy, private_scope_label(scope), "{tool} ({level})");
@@ -1947,12 +1948,7 @@ mod tests {
         assert_eq!(secrecy, expected_secrecy);
         assert_eq!(integrity, writer_integrity(repo_id, &ctx));
 
-        for tool in &[
-            "repository_ruleset_read",
-            "custom_properties_read",
-            "custom_properties_write",
-            "create_repository_ruleset",
-        ] {
+        for tool in &GOVERNANCE_TOOLS {
             let (secrecy, integrity, _) =
                 super::apply_tool_labels(tool, &args, repo_id, vec![], vec![], String::new(), &ctx);
             assert_eq!(secrecy, expected_secrecy, "{tool} secrecy");
@@ -1973,12 +1969,7 @@ mod tests {
             ("enterprise", "enterprise", "github-enterprise"),
         ] {
             let args = serde_json::json!({"level": level, field: scope});
-            for tool in &[
-                "repository_ruleset_read",
-                "custom_properties_read",
-                "custom_properties_write",
-                "create_repository_ruleset",
-            ] {
+            for tool in &GOVERNANCE_TOOLS {
                 let (secrecy, integrity, _) =
                     super::apply_tool_labels(tool, &args, "", vec![], vec![], String::new(), &ctx);
                 assert_eq!(

@@ -70,6 +70,7 @@ mod tests {
         assert_eq!(desc_prefix::NOTIFICATION, "notification:");
         assert_eq!(field_names::METHOD, "method");
         assert_eq!(field_names::IS_ERROR, "isError");
+        assert_eq!(field_names::COMMENT_NODE_ID, "commentNodeID");
         assert_eq!(field_names::PUBLIC, "public");
     }
 
@@ -143,6 +144,7 @@ pub mod field_names {
     pub const AUTHOR_ASSOCIATION_CAMEL: &str = "authorAssociation";
     pub const LOGIN: &str = "login";
     pub const IS_ERROR: &str = "isError";
+    pub const COMMENT_NODE_ID: &str = "commentNodeID";
 }
 
 /// Canonical repo `visibility` field string values, used to avoid silent
