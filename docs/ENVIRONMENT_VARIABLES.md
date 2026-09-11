@@ -112,6 +112,18 @@ When running `awmg proxy`, these variables configure the upstream GitHub API:
 
 When either enclave variable is set, both are required and proxy startup also requires a GitHub token. Enclave mode rejects `--policy`, trusted-bot overrides, and trusted-user overrides; it synthesizes the guard policy from the enclave policy and forces DIFC propagation mode.
 
+## Delegation Control Variables
+
+These variables enable the AWF-only delegation-control subsystem in `awmg proxy` and in unified gateway mode. They are normally installed by the workflow compiler. All five must be set together — setting only some of them fails startup. See [DELEGATION.md](DELEGATION.md) for the envelope format, control endpoints, and security model.
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `MCP_GATEWAY_DELEGATION_ENVELOPE` | Compiler-installed JSON delegation envelope bounding every identity minted for this run (run ID, enclave backend, allowed repositories/owners, tool policy, schema hashes, max identity TTL, expiry). Unknown fields and trailing JSON are rejected. | (disabled) |
+| `MCP_GATEWAY_DELEGATION_STATE_PATH` | Path where delegated identity state is atomically persisted after each mutating control operation and recovered at startup. | (disabled) |
+| `MCP_GATEWAY_DELEGATION_GENERATION` | Unsigned integer policy generation. Persisted state from a different generation is rejected and the store fails closed with no live identities. | (disabled) |
+| `MCP_GATEWAY_DELEGATION_CONTROL_KEY` | AWF-only capability secret authenticating control-channel requests. Must be at least 32 bytes and must never be exposed to the primary agent or enclave executors. | (disabled) |
+| `MCP_GATEWAY_DELEGATION_CONTROL_LISTEN` | `host:port` of the private delegation control listener. Must be distinct from the executor-facing proxy/gateway listener. | (disabled) |
+
 ## GitHub Actions Runtime Variables
 
 These variables are set automatically by the GitHub Actions runner. The gateway reads them at startup to determine repository context:

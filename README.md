@@ -326,6 +326,7 @@ This maps ~50 REST URL patterns and ~15 GraphQL query patterns to guard tool nam
 | Topic | Link |
 |-------|------|
 | **Proxy Mode** | [docs/PROXY_MODE.md](docs/PROXY_MODE.md) — HTTP forward proxy for DIFC filtering of `gh` CLI and REST/GraphQL requests |
+| **Delegation Control** | [docs/DELEGATION.md](docs/DELEGATION.md) — AWF-only delegation envelope, control channel, and `MCP_GATEWAY_DELEGATION_*` variables |
 | **Integrity Filtering** | [Integrity Filtering Reference](https://github.com/github/gh-aw/blob/main/docs/src/content/docs/reference/integrity.md) — Integrity levels, blocked-users, approval-labels, and filtering configuration |
 | **Configuration Reference** | [docs/CONFIGURATION.md](docs/CONFIGURATION.md) — Server fields, TOML/JSON formats, guard-policy details, custom schemas, gateway fields, validation rules |
 | **Environment Variables** | [docs/ENVIRONMENT_VARIABLES.md](docs/ENVIRONMENT_VARIABLES.md) — All env vars for production, development, Docker, and guard configuration |
