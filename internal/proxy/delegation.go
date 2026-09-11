@@ -4,12 +4,10 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"strings"
 
 	"github.com/github/gh-aw-mcpg/internal/delegation"
 	"github.com/github/gh-aw-mcpg/internal/enclavegithub"
 	"github.com/github/gh-aw-mcpg/internal/logger"
-	"github.com/github/gh-aw-mcpg/internal/tracing"
 	"github.com/github/gh-aw-mcpg/internal/util"
 )
 
@@ -49,17 +47,15 @@ func (h *proxyHandler) handleDelegationControl(w http.ResponseWriter, r *http.Re
 // separate from Handler so executor-facing GitHub traffic cannot reach control
 // operations even if it presents a valid executor bearer.
 func (s *Server) ControlHandler() http.Handler {
-	handler := &proxyHandler{
-		server:       s,
-		CachedTracer: tracing.CachedTracer{Tracer: tracing.Tracer()},
-	}
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if s.delegation == nil || !strings.HasPrefix(r.URL.Path, delegationControlPath) {
-			http.NotFound(w, r)
-			return
+	var deps delegation.ControlDeps
+	if s != nil && s.delegation != nil {
+		deps = delegation.ControlDeps{
+			Store:      s.delegation.store,
+			Capability: s.delegation.capability,
+			StatePath:  s.delegation.statePath,
 		}
-		handler.handleDelegationControl(w, r)
-	})
+	}
+	return delegation.NewControlHTTPHandler(deps, logDelegation.Printf)
 }
 
 func (h *proxyHandler) handleDelegatedRequest(w http.ResponseWriter, r *http.Request) {
