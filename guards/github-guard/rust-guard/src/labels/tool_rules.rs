@@ -720,7 +720,7 @@ pub fn apply_tool_labels(
         }
 
         // === Repository governance and issue discovery ===
-        "find_duplicate" => {
+        tool_names::FIND_DUPLICATE => {
             // Duplicate matching searches repository issues and pull requests.
             // S = S(repo); I = private writer (public results carry no write authority).
             secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
@@ -852,7 +852,7 @@ pub fn apply_tool_labels(
             );
         }
 
-        "discussion_comment_write" => {
+        tool_names::DISCUSSION_COMMENT_WRITE => {
             let method = tool_args
                 .get(field_names::METHOD)
                 .and_then(|v| v.as_str())
@@ -990,7 +990,7 @@ pub fn apply_tool_labels(
         // === Scope-sensitive secret / variable writes ===
         // These are synthetic guard entries for GitHub CLI writes whose backing REST endpoints
         // span multiple scopes (repo/environment, org, and for secrets only, user codespaces).
-        "set_secret" | "delete_secret" | "set_variable" | "delete_variable" => {
+        tool_names::SET_SECRET | tool_names::DELETE_SECRET | "set_variable" | "delete_variable" => {
             let explicit_org = get_first_non_empty_field(
                 tool_args,
                 &["org", "org_name", "organization", "organization_name"],
@@ -1013,7 +1013,7 @@ pub fn apply_tool_labels(
                 secrecy = private_scope_label(&org);
                 integrity = writer_integrity(&org, ctx);
                 baseline_scope = Cow::Owned(org);
-            } else if matches!(tool_name, "set_secret" | "delete_secret") {
+            } else if matches!(tool_name, tool_names::SET_SECRET | tool_names::DELETE_SECRET) {
                 // Only secrets have a user-scoped CLI write path (`/user/codespaces/secrets`).
                 // Actions variables are repo/org/environment scoped, so variable writes do not
                 // fall back to `private:user`.

@@ -218,6 +218,10 @@ pub mod tool_names {
     pub const SEARCH_ISSUES: &str = "search_issues";
     pub const ACTIONS_GET: &str = "actions_get";
     pub const UI_GET: &str = "ui_get";
+    pub const DISCUSSION_COMMENT_WRITE: &str = "discussion_comment_write";
+    pub const FIND_DUPLICATE: &str = "find_duplicate";
+    pub const SET_SECRET: &str = "set_secret";
+    pub const DELETE_SECRET: &str = "delete_secret";
 }
 
 /// UI metadata methods that are scoped to a specific repository.
