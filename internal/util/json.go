@@ -1,5 +1,12 @@
 package util
 
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+)
+
 // DeepCloneJSON creates a deep copy of a JSON-compatible value.
 // It handles the three container types used by encoding/json:
 // map[string]any (JSON objects), []any (JSON arrays),
@@ -22,4 +29,36 @@ func DeepCloneJSON(v any) any {
 	default:
 		return v
 	}
+}
+
+var (
+	// ErrTrailingJSON is returned by DecodeStrictJSON when non-whitespace data
+	// follows the first JSON value.
+	ErrTrailingJSON = errors.New("input must contain exactly one JSON value")
+
+	// ErrMalformedTrailingJSON is returned when malformed data follows the first
+	// JSON value. It wraps ErrTrailingJSON so errors.Is matches both sentinels.
+	ErrMalformedTrailingJSON = fmt.Errorf("%w: malformed trailing data", ErrTrailingJSON)
+)
+
+// DecodeStrictJSON decodes exactly one JSON value from r into value.
+// Unknown fields are rejected, and any data following the first JSON value
+// (other than whitespace) is rejected as well. First-value decode failures are
+// returned unwrapped so callers can add their own context; trailing data is
+// reported as ErrTrailingJSON. Malformed trailing data matches both
+// ErrTrailingJSON and ErrMalformedTrailingJSON and retains its decode error.
+func DecodeStrictJSON(r io.Reader, value any) error {
+	decoder := json.NewDecoder(r)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(value); err != nil {
+		return err
+	}
+	var extra json.RawMessage
+	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
+		if err != nil {
+			return fmt.Errorf("%w: %w", ErrMalformedTrailingJSON, err)
+		}
+		return ErrTrailingJSON
+	}
+	return nil
 }

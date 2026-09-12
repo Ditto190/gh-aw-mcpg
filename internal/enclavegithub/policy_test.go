@@ -80,7 +80,7 @@ func TestParsePolicyRejectsOversizedInput(t *testing.T) {
 
 func TestParsePolicyRejectsTrailingGarbage(t *testing.T) {
 	// Valid policy JSON followed by a non-JSON trailing token must be rejected
-	// by ensureJSONEOF's err != io.EOF, err != nil branch.
+	// by util.DecodeStrictJSON's trailing-decode error branch.
 	raw := validPolicyJSON() + "not-json"
 	_, err := ParsePolicy(raw)
 	require.Error(t, err)
@@ -88,8 +88,8 @@ func TestParsePolicyRejectsTrailingGarbage(t *testing.T) {
 }
 
 func TestParsePolicyRejectsMultipleJSONValues(t *testing.T) {
-	// Two back-to-back valid JSON values must be rejected by ensureJSONEOF's
-	// err == nil branch (exactly one JSON value required).
+	// Two back-to-back valid JSON values must be rejected by util.DecodeStrictJSON's
+	// ErrTrailingJSON branch (exactly one JSON value required).
 	raw := validPolicyJSON() + `{}`
 	_, err := ParsePolicy(raw)
 	require.Error(t, err)

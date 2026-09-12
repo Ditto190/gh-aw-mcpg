@@ -1,16 +1,16 @@
 package enclavegithub
 
 import (
-	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
 	"regexp"
 	"slices"
 	"strings"
 
 	"github.com/github/gh-aw-mcpg/internal/config"
 	"github.com/github/gh-aw-mcpg/internal/logger"
+	"github.com/github/gh-aw-mcpg/internal/util"
 )
 
 var logPolicy = logger.ForFile()
@@ -78,13 +78,11 @@ func ParsePolicy(raw string) (*Policy, error) {
 	}
 
 	var policy Policy
-	decoder := json.NewDecoder(bytes.NewBufferString(raw))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&policy); err != nil {
+	if err := util.DecodeStrictJSON(strings.NewReader(raw), &policy); err != nil {
+		if errors.Is(err, util.ErrTrailingJSON) && !errors.Is(err, util.ErrMalformedTrailingJSON) {
+			return nil, fmt.Errorf("enclave policy must contain exactly one JSON value")
+		}
 		return nil, fmt.Errorf("invalid enclave policy JSON: %w", err)
-	}
-	if err := ensureJSONEOF(decoder); err != nil {
-		return nil, err
 	}
 	if err := policy.Validate(); err != nil {
 		logPolicy.Printf("Enclave policy validation failed for profile %q: %v", policy.Profile, err)
@@ -92,17 +90,6 @@ func ParsePolicy(raw string) (*Policy, error) {
 	}
 	logPolicy.Printf("Enclave policy parsed successfully: profile=%s workflow_run_id=%s repositories=%d", policy.Profile, policy.WorkflowRunID, len(policy.Repositories))
 	return &policy, nil
-}
-
-func ensureJSONEOF(decoder *json.Decoder) error {
-	var extra interface{}
-	if err := decoder.Decode(&extra); err != io.EOF {
-		if err == nil {
-			return fmt.Errorf("enclave policy must contain exactly one JSON value")
-		}
-		return fmt.Errorf("invalid enclave policy JSON: %w", err)
-	}
-	return nil
 }
 
 // Validate checks policy invariants and canonicalizes set-like fields.
