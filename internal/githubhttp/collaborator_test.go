@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/github/gh-aw-mcpg/internal/util"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -302,4 +303,28 @@ func (f *failingReadCloser) Read(_ []byte) (int, error) {
 
 func (f *failingReadCloser) Close() error {
 	return nil
+}
+
+func TestCollaboratorLogFields(t *testing.T) {
+	t.Run("returns raw values when not sensitive", func(t *testing.T) {
+		owner, repo, username := collaboratorLogFields(false, "org", "repo", "user")
+		assert.Equal(t, "org", owner)
+		assert.Equal(t, "repo", repo)
+		assert.Equal(t, "user", username)
+	})
+
+	t.Run("hashes values with per-field salts when sensitive", func(t *testing.T) {
+		owner, repo, username := collaboratorLogFields(true, "org", "repo", "user")
+		assert.Equal(t, util.HashForLog("org", 16, "owner:"), owner)
+		assert.Equal(t, util.HashForLog("repo", 16, "repo:"), repo)
+		assert.Equal(t, util.HashForLog("user", 16, "user:"), username)
+		assert.NotContains(t, owner+repo+username, "org")
+	})
+
+	t.Run("renders empty values as placeholder when sensitive", func(t *testing.T) {
+		owner, repo, username := collaboratorLogFields(true, "", "", "")
+		assert.Equal(t, "(none)", owner)
+		assert.Equal(t, "(none)", repo)
+		assert.Equal(t, "(none)", username)
+	})
 }

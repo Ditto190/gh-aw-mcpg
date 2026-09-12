@@ -376,3 +376,14 @@ func TestParseServerIDFromToolName(t *testing.T) {
 		})
 	}
 }
+
+func TestHashForLogIf(t *testing.T) {
+	// Non-sensitive callers keep the raw value.
+	assert.Equal(t, "octocat", HashForLogIf(false, "octocat", 16, "user:"))
+	assert.Empty(t, HashForLogIf(false, "", 16, "user:"))
+
+	// Sensitive callers get the same token HashForLog would produce.
+	assert.Equal(t, HashForLog("octocat", 16, "user:"), HashForLogIf(true, "octocat", 16, "user:"))
+	assert.Equal(t, "(none)", HashForLogIf(true, "", 16, "user:"))
+	assert.NotContains(t, HashForLogIf(true, "octocat", 16, "user:"), "octocat")
+}

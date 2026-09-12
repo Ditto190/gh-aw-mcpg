@@ -52,6 +52,17 @@ func HashForLog(value string, hexLen int, prefix string) string {
 	return prefix + hex.EncodeToString(sum[:])[:hexLen]
 }
 
+// HashForLogIf returns HashForLog(value, hexLen, prefix) when sensitive is
+// true, and the raw value unchanged otherwise. It exists so that callers which
+// only redact a field in sensitive modes (enclave or delegation) can express
+// that choice inline instead of repeating a conditional block per field.
+func HashForLogIf(sensitive bool, value string, hexLen int, prefix string) string {
+	if !sensitive {
+		return value
+	}
+	return HashForLog(value, hexLen, prefix)
+}
+
 // FormatFutureTime returns a human-readable representation of a future time,
 // combining an RFC3339 timestamp with a relative countdown (e.g. "2026-05-03T12:00:00Z (in 5.0m)").
 // Returns "unknown" when t is the zero value.

@@ -14,6 +14,18 @@ import (
 
 var logCollab = logger.ForFile()
 
+// collaboratorLogFields returns log-safe representations of the owner, repo,
+// and username fields of a get_collaborator_permission call. When sensitive is
+// true (enclave or delegation mode) each field is replaced by a stable,
+// non-reversible hash token; otherwise the raw values are returned unchanged.
+// Centralizing the salts and hash length here keeps the redaction convention
+// consistent across every call site in this package.
+func collaboratorLogFields(sensitive bool, owner, repo, username string) (ownerForLog, repoForLog, usernameForLog string) {
+	return util.HashForLogIf(sensitive, owner, 16, "owner:"),
+		util.HashForLogIf(sensitive, repo, 16, "repo:"),
+		util.HashForLogIf(sensitive, username, 16, "user:")
+}
+
 // ParseCollaboratorPermissionArgs extracts and validates the owner, repo, and
 // username fields from an args map for a get_collaborator_permission call.
 // It returns the (possibly partial) values even on error so that callers can
@@ -45,12 +57,7 @@ func WrapCollaboratorPermission(
 	logPrintf func(format string, args ...interface{}),
 	sensitive bool,
 ) interface{} {
-	ownerForLog, repoForLog, usernameForLog := owner, repo, username
-	if sensitive {
-		ownerForLog = util.HashForLog(owner, 16, "owner:")
-		repoForLog = util.HashForLog(repo, 16, "repo:")
-		usernameForLog = util.HashForLog(username, 16, "user:")
-	}
+	ownerForLog, repoForLog, usernameForLog := collaboratorLogFields(sensitive, owner, repo, username)
 	var permResp map[string]interface{}
 	if jsonErr := json.Unmarshal(body, &permResp); jsonErr == nil {
 		if perm, ok := permResp["permission"].(string); ok {
@@ -83,13 +90,8 @@ func FetchCollaboratorPermission(
 	sensitive bool,
 ) (interface{}, error) {
 	apiPath := fmt.Sprintf("/repos/%s/%s/collaborators/%s/permission", owner, repo, username)
-	ownerForLog, repoForLog, usernameForLog, apiPathForLog := owner, repo, username, apiPath
-	if sensitive {
-		ownerForLog = util.HashForLog(owner, 16, "owner:")
-		repoForLog = util.HashForLog(repo, 16, "repo:")
-		usernameForLog = util.HashForLog(username, 16, "user:")
-		apiPathForLog = util.HashForLog(apiPath, 16, "path:")
-	}
+	ownerForLog, repoForLog, usernameForLog := collaboratorLogFields(sensitive, owner, repo, username)
+	apiPathForLog := util.HashForLogIf(sensitive, apiPath, 16, "path:")
 	logCollab.Printf("FetchCollaboratorPermission: owner=%s, repo=%s, username=%s, apiPath=%s", ownerForLog, repoForLog, usernameForLog, apiPathForLog)
 
 	resp, err := fetch(ctx, apiPath)
