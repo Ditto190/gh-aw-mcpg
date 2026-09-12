@@ -1,8 +1,6 @@
 package delegation
 
 import (
-	"encoding/json"
-	"io"
 	"net/http"
 	"strings"
 
@@ -167,9 +165,7 @@ func (deps ControlDeps) persistState(w http.ResponseWriter) bool {
 func decodeControlJSON(w http.ResponseWriter, r *http.Request, value any) bool {
 	r.Body = http.MaxBytesReader(w, r.Body, 64*1024)
 	defer r.Body.Close()
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
-	if decoder.Decode(value) != nil || decoder.Decode(&struct{}{}) != io.EOF {
+	if err := util.DecodeStrictJSON(r.Body, value); err != nil {
 		httputil.WriteErrorResponse(w, http.StatusBadRequest, "invalid_delegation_request", "invalid delegation request")
 		return false
 	}

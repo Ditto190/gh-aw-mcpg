@@ -1,6 +1,7 @@
 package util
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -279,5 +280,56 @@ func TestDeepCloneJSON(t *testing.T) {
 		require.True(t, ok)
 		assert.Len(t, cloned, len(input))
 		assert.Equal(t, input, cloned)
+	})
+}
+
+func TestDecodeStrictJSON(t *testing.T) {
+	type payload struct {
+		Name string `json:"name"`
+	}
+
+	t.Run("decodes a single JSON value", func(t *testing.T) {
+		var value payload
+		require.NoError(t, DecodeStrictJSON(strings.NewReader(`{"name":"alpha"}`), &value))
+		assert.Equal(t, "alpha", value.Name)
+	})
+
+	t.Run("allows trailing whitespace", func(t *testing.T) {
+		var value payload
+		require.NoError(t, DecodeStrictJSON(strings.NewReader("{\"name\":\"alpha\"}\n  \t"), &value))
+		assert.Equal(t, "alpha", value.Name)
+	})
+
+	t.Run("rejects unknown fields", func(t *testing.T) {
+		var value payload
+		err := DecodeStrictJSON(strings.NewReader(`{"name":"alpha","extra":1}`), &value)
+		require.Error(t, err)
+		assert.NotErrorIs(t, err, ErrTrailingJSON)
+		assert.Contains(t, err.Error(), "unknown field")
+	})
+
+	t.Run("rejects malformed JSON", func(t *testing.T) {
+		var value payload
+		err := DecodeStrictJSON(strings.NewReader(`{`), &value)
+		require.Error(t, err)
+		assert.NotErrorIs(t, err, ErrTrailingJSON)
+	})
+
+	t.Run("rejects a second JSON value", func(t *testing.T) {
+		var value payload
+		err := DecodeStrictJSON(strings.NewReader(`{"name":"alpha"}{}`), &value)
+		require.ErrorIs(t, err, ErrTrailingJSON)
+	})
+
+	t.Run("rejects trailing garbage", func(t *testing.T) {
+		var value payload
+		err := DecodeStrictJSON(strings.NewReader(`{"name":"alpha"}not-json`), &value)
+		require.Error(t, err)
+		assert.NotErrorIs(t, err, ErrTrailingJSON)
+	})
+
+	t.Run("rejects empty input", func(t *testing.T) {
+		var value payload
+		require.Error(t, DecodeStrictJSON(strings.NewReader(""), &value))
 	})
 }

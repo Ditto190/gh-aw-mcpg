@@ -1,18 +1,18 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 
 	"github.com/github/gh-aw-mcpg/internal/config"
@@ -71,13 +71,11 @@ func resolveDelegationProxyConfig() (*delegation.RuntimeConfig, string, error) {
 		return nil, "", fmt.Errorf("MCP_GATEWAY_DELEGATION_ENVELOPE, %s, MCP_GATEWAY_DELEGATION_STATE_PATH, %s, and MCP_GATEWAY_DELEGATION_GENERATION must be configured together", delegation.EnvControlCapabilityKey, delegation.EnvControlListenAddr)
 	}
 	var envelopeWire delegation.EnvelopeWire
-	decoder := json.NewDecoder(bytes.NewReader([]byte(envelopeJSON)))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&envelopeWire); err != nil {
+	if err := util.DecodeStrictJSON(strings.NewReader(envelopeJSON), &envelopeWire); err != nil {
+		if errors.Is(err, util.ErrTrailingJSON) {
+			return nil, "", fmt.Errorf("invalid delegation envelope: trailing JSON")
+		}
 		return nil, "", fmt.Errorf("invalid delegation envelope: %w", err)
-	}
-	if err := decoder.Decode(&struct{}{}); err != io.EOF {
-		return nil, "", fmt.Errorf("invalid delegation envelope: trailing JSON")
 	}
 	envelope, err := envelopeWire.ToEnvelope()
 	if err != nil {

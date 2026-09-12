@@ -5,9 +5,8 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
-	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
 	"slices"
 	"strings"
 	"time"
@@ -121,15 +120,12 @@ func (v *Verifier) verifyTokenAt(token string, now time.Time) (*Claims, error) {
 		return nil, fmt.Errorf("invalid enclave capability")
 	}
 	var claims Claims
-	decoder := json.NewDecoder(bytes.NewReader(payload))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&claims); err != nil {
-		logCapability.Print("Rejected enclave capability: malformed claims JSON")
-		return nil, fmt.Errorf("invalid enclave capability")
-	}
-	var extra interface{}
-	if err := decoder.Decode(&extra); err != io.EOF {
-		logCapability.Print("Rejected enclave capability: trailing data after claims JSON")
+	if err := util.DecodeStrictJSON(bytes.NewReader(payload), &claims); err != nil {
+		if errors.Is(err, util.ErrTrailingJSON) {
+			logCapability.Print("Rejected enclave capability: trailing data after claims JSON")
+		} else {
+			logCapability.Print("Rejected enclave capability: malformed claims JSON")
+		}
 		return nil, fmt.Errorf("invalid enclave capability")
 	}
 	if err := v.validateClaims(&claims, now); err != nil {
