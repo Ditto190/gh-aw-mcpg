@@ -3,6 +3,8 @@
 //! This module provides functions to classify GitHub MCP tools
 //! by their operation type (read, write, merge, delete, etc.)
 
+use crate::labels::constants::tool_names;
+
 /// Upstream github-mcp-server write operations that modify data.
 pub const WRITE_OPERATIONS: &[&str] = &[
     // Keep sorted for binary_search correctness.
@@ -49,7 +51,7 @@ pub const WRITE_OPERATIONS: &[&str] = &[
     "delete_repository_autolink", // gh repo autolink delete — DELETE /repos/.../autolinks/{id}
     "delete_ssh_key",       // gh ssh-key delete — removes a user SSH auth/signing key
     "delete_workflow_run",  // gh run delete — deletes a workflow run record
-    "discussion_comment_write", // creates or edits GitHub Discussion comments
+    tool_names::DISCUSSION_COMMENT_WRITE, // creates or edits GitHub Discussion comments
     "dismiss_notification",
     "edit_discussion", // gh discussion edit   — edits title/body/labels of a discussion
     "edit_release",    // PATCH /repos/.../releases/{id}
@@ -88,7 +90,7 @@ pub const CLI_WRITE_OPERATIONS: &[&str] = &[
     "delete_actions_cache", // gh cache delete — DELETE /repos/.../actions/caches/{id|?key=...}
     "delete_gist",        // gh gist delete
     "delete_project",     // gh project delete — deletes a Projects v2 project
-    "delete_secret",      // gh secret delete — deletes org/repo/env/user codespaces secrets
+    tool_names::DELETE_SECRET, // gh secret delete — deletes org/repo/env/user codespaces secrets
     "delete_variable",    // gh variable delete — deletes org/repo/environment Actions variables
     "disable_workflow",   // gh workflow disable
     "enable_workflow",    // gh workflow enable
@@ -102,7 +104,7 @@ pub const CLI_WRITE_OPERATIONS: &[&str] = &[
     "rerun_failed_jobs",  // gh run rerun --failed — reruns only failed jobs
     "rerun_workflow_job", // gh run rerun --job — reruns a specific job
     "rerun_workflow_run", // gh run rerun — reruns a completed workflow run
-    "set_secret",         // gh secret set
+    tool_names::SET_SECRET, // gh secret set
     "set_variable",       // gh variable set
     "sync_fork",          // gh repo sync
     "transfer_issue",     // gh issue transfer

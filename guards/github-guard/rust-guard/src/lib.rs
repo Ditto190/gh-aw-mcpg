@@ -457,7 +457,7 @@ fn infer_scope_for_baseline<'a>(
         "create_codespace" | "update_codespace" | "delete_codespace" | "stop_codespace" => {
             Cow::Borrowed(scope_names::USER)
         }
-        "set_secret" | "delete_secret" | "set_variable" | "delete_variable" => {
+        tool_names::SET_SECRET | tool_names::DELETE_SECRET | "set_variable" | "delete_variable" => {
             if !repo_id.is_empty() {
                 return Cow::Borrowed(repo_id);
             }
@@ -490,7 +490,10 @@ fn infer_scope_for_baseline<'a>(
                 let repo = tool_args.get("repo").and_then(Value::as_str).unwrap_or("");
                 if !owner.is_empty() && repo.is_empty() {
                     Cow::Owned(owner.to_string())
-                } else if matches!(tool_name, "set_secret" | "delete_secret") {
+                } else if matches!(
+                    tool_name,
+                    tool_names::SET_SECRET | tool_names::DELETE_SECRET
+                ) {
                     Cow::Borrowed(scope_names::USER)
                 } else {
                     Cow::Borrowed("")
