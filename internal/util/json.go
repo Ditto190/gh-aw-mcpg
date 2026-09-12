@@ -45,7 +45,8 @@ var (
 // Unknown fields are rejected, and any data following the first JSON value
 // (other than whitespace) is rejected as well. First-value decode failures are
 // returned unwrapped so callers can add their own context; trailing data is
-// reported as ErrTrailingJSON.
+// reported as ErrTrailingJSON. Malformed trailing data matches both
+// ErrTrailingJSON and ErrMalformedTrailingJSON and retains its decode error.
 func DecodeStrictJSON(r io.Reader, value any) error {
 	decoder := json.NewDecoder(r)
 	decoder.DisallowUnknownFields()
