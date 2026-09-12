@@ -31,11 +31,15 @@ func DeepCloneJSON(v any) any {
 	}
 }
 
-// ErrTrailingJSON is returned by DecodeStrictJSON when non-whitespace data
-// follows the first JSON value. Callers can use errors.Is to distinguish
-// trailing data from a malformed first value and wrap it with a domain-specific
-// message. Malformed trailing data also wraps its decode error.
-var ErrTrailingJSON = errors.New("input must contain exactly one JSON value")
+var (
+	// ErrTrailingJSON is returned by DecodeStrictJSON when non-whitespace data
+	// follows the first JSON value.
+	ErrTrailingJSON = errors.New("input must contain exactly one JSON value")
+
+	// ErrMalformedTrailingJSON is returned when malformed data follows the first
+	// JSON value. It wraps ErrTrailingJSON so errors.Is matches both sentinels.
+	ErrMalformedTrailingJSON = fmt.Errorf("%w: malformed trailing data", ErrTrailingJSON)
+)
 
 // DecodeStrictJSON decodes exactly one JSON value from r into value.
 // Unknown fields are rejected, and any data following the first JSON value
@@ -51,7 +55,7 @@ func DecodeStrictJSON(r io.Reader, value any) error {
 	var extra json.RawMessage
 	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
 		if err != nil {
-			return fmt.Errorf("%w: %v", ErrTrailingJSON, err)
+			return fmt.Errorf("%w: %w", ErrMalformedTrailingJSON, err)
 		}
 		return ErrTrailingJSON
 	}

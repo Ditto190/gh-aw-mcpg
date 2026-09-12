@@ -79,9 +79,7 @@ func ParsePolicy(raw string) (*Policy, error) {
 
 	var policy Policy
 	if err := util.DecodeStrictJSON(strings.NewReader(raw), &policy); err != nil {
-		// A valid second value returns the bare sentinel; malformed trailing
-		// data wraps it so the original policy diagnostic remains distinct.
-		if errors.Is(err, util.ErrTrailingJSON) && errors.Unwrap(err) == nil {
+		if errors.Is(err, util.ErrTrailingJSON) && !errors.Is(err, util.ErrMalformedTrailingJSON) {
 			return nil, fmt.Errorf("enclave policy must contain exactly one JSON value")
 		}
 		return nil, fmt.Errorf("invalid enclave policy JSON: %w", err)

@@ -1,7 +1,7 @@
 package util
 
 import (
-	"errors"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -320,13 +320,16 @@ func TestDecodeStrictJSON(t *testing.T) {
 		var value payload
 		err := DecodeStrictJSON(strings.NewReader(`{"name":"alpha"}{}`), &value)
 		require.ErrorIs(t, err, ErrTrailingJSON)
+		require.NotErrorIs(t, err, ErrMalformedTrailingJSON)
 	})
 
 	t.Run("rejects trailing garbage", func(t *testing.T) {
 		var value payload
 		err := DecodeStrictJSON(strings.NewReader(`{"name":"alpha"}not-json`), &value)
 		require.ErrorIs(t, err, ErrTrailingJSON)
-		require.ErrorIs(t, errors.Unwrap(err), ErrTrailingJSON)
+		require.ErrorIs(t, err, ErrMalformedTrailingJSON)
+		var syntaxErr *json.SyntaxError
+		require.ErrorAs(t, err, &syntaxErr)
 		assert.Contains(t, err.Error(), "invalid character")
 	})
 
