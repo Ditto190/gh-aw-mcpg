@@ -67,21 +67,21 @@ func TestHandleDelegationControl_MethodAndAuth(t *testing.T) {
 	t.Run("rejects non-POST method even with valid auth", func(t *testing.T) {
 		rec := httptest.NewRecorder()
 		req := authedRequest(http.MethodGet, delegationControlPath+"create-or-confirm", body, capabilityKey)
-		handler.handleDelegationControl(rec, req)
+		handler.server.ControlHandler().ServeHTTP(rec, req)
 		assert.Equal(t, http.StatusForbidden, rec.Code)
 	})
 
 	t.Run("rejects missing Authorization header", func(t *testing.T) {
 		rec := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodPost, delegationControlPath+"create-or-confirm", bytes.NewReader(body))
-		handler.handleDelegationControl(rec, req)
+		handler.server.ControlHandler().ServeHTTP(rec, req)
 		assert.Equal(t, http.StatusForbidden, rec.Code)
 	})
 
 	t.Run("rejects wrong capability secret", func(t *testing.T) {
 		rec := httptest.NewRecorder()
 		req := authedRequest(http.MethodPost, delegationControlPath+"create-or-confirm", body, "wrong-secret-that-is-32-bytes!!")
-		handler.handleDelegationControl(rec, req)
+		handler.server.ControlHandler().ServeHTTP(rec, req)
 		assert.Equal(t, http.StatusForbidden, rec.Code)
 	})
 }
@@ -92,7 +92,7 @@ func TestHandleDelegationControl_CreateOrConfirm(t *testing.T) {
 	t.Run("succeeds with valid request and persists state", func(t *testing.T) {
 		rec := httptest.NewRecorder()
 		req := authedRequest(http.MethodPost, delegationControlPath+"create-or-confirm", body, capabilityKey)
-		handler.handleDelegationControl(rec, req)
+		handler.server.ControlHandler().ServeHTTP(rec, req)
 		require.Equal(t, http.StatusOK, rec.Code)
 		assert.Contains(t, rec.Body.String(), "handle")
 	})
@@ -101,7 +101,7 @@ func TestHandleDelegationControl_CreateOrConfirm(t *testing.T) {
 		rec := httptest.NewRecorder()
 		overCeiling := bytes.Replace(body, []byte(`"requested_ttl": 120`), []byte(`"requested_ttl": 121`), 1)
 		req := authedRequest(http.MethodPost, delegationControlPath+"create-or-confirm", overCeiling, capabilityKey)
-		handler.handleDelegationControl(rec, req)
+		handler.server.ControlHandler().ServeHTTP(rec, req)
 		assert.Equal(t, http.StatusForbidden, rec.Code)
 		assert.Contains(t, rec.Body.String(), "delegation_request_denied")
 	})
@@ -109,14 +109,14 @@ func TestHandleDelegationControl_CreateOrConfirm(t *testing.T) {
 	t.Run("rejects malformed JSON body", func(t *testing.T) {
 		rec := httptest.NewRecorder()
 		req := authedRequest(http.MethodPost, delegationControlPath+"create-or-confirm", []byte(`{not json`), capabilityKey)
-		handler.handleDelegationControl(rec, req)
+		handler.server.ControlHandler().ServeHTTP(rec, req)
 		assert.Equal(t, http.StatusBadRequest, rec.Code)
 	})
 
 	t.Run("rejects unknown JSON fields", func(t *testing.T) {
 		rec := httptest.NewRecorder()
 		req := authedRequest(http.MethodPost, delegationControlPath+"create-or-confirm", []byte(`{"unknown_field": true}`), capabilityKey)
-		handler.handleDelegationControl(rec, req)
+		handler.server.ControlHandler().ServeHTTP(rec, req)
 		assert.Equal(t, http.StatusBadRequest, rec.Code)
 	})
 
@@ -134,7 +134,7 @@ func TestHandleDelegationControl_CreateOrConfirm(t *testing.T) {
 			"idempotency_key": "key-2"
 		}`)
 		req := authedRequest(http.MethodPost, delegationControlPath+"create-or-confirm", badBody, capabilityKey)
-		handler.handleDelegationControl(rec, req)
+		handler.server.ControlHandler().ServeHTTP(rec, req)
 		assert.Equal(t, http.StatusForbidden, rec.Code)
 		assert.Contains(t, rec.Body.String(), "delegation_request_denied")
 	})
@@ -159,7 +159,7 @@ func TestHandleDelegationControl_CreateOrConfirm(t *testing.T) {
 			"idempotency_key": "key-persist-fail"
 		}`)
 		req := authedRequest(http.MethodPost, delegationControlPath+"create-or-confirm", freshBody, capabilityKey)
-		badHandler.handleDelegationControl(rec, req)
+		badHandler.server.ControlHandler().ServeHTTP(rec, req)
 		assert.Equal(t, http.StatusInternalServerError, rec.Code)
 		assert.Contains(t, rec.Body.String(), "delegation_state_persist_failed")
 	})
@@ -171,13 +171,13 @@ func TestHandleDelegationControl_Revoke(t *testing.T) {
 	// First create an identity so we have a handle to revoke.
 	createRec := httptest.NewRecorder()
 	createReq := authedRequest(http.MethodPost, delegationControlPath+"create-or-confirm", body, capabilityKey)
-	handler.handleDelegationControl(createRec, createReq)
+	handler.server.ControlHandler().ServeHTTP(createRec, createReq)
 	require.Equal(t, http.StatusOK, createRec.Code)
 
 	t.Run("revoking unknown handle is idempotent success", func(t *testing.T) {
 		rec := httptest.NewRecorder()
 		req := authedRequest(http.MethodPost, delegationControlPath+"revoke", []byte(`{"handle":"does-not-exist"}`), capabilityKey)
-		handler.handleDelegationControl(rec, req)
+		handler.server.ControlHandler().ServeHTTP(rec, req)
 		assert.Equal(t, http.StatusOK, rec.Code)
 		assert.Contains(t, rec.Body.String(), `"revoked":true`)
 	})
@@ -185,7 +185,7 @@ func TestHandleDelegationControl_Revoke(t *testing.T) {
 	t.Run("rejects malformed revoke JSON", func(t *testing.T) {
 		rec := httptest.NewRecorder()
 		req := authedRequest(http.MethodPost, delegationControlPath+"revoke", []byte(`not-json`), capabilityKey)
-		handler.handleDelegationControl(rec, req)
+		handler.server.ControlHandler().ServeHTTP(rec, req)
 		assert.Equal(t, http.StatusBadRequest, rec.Code)
 	})
 
@@ -197,7 +197,7 @@ func TestHandleDelegationControl_Revoke(t *testing.T) {
 		}}}
 		rec := httptest.NewRecorder()
 		req := authedRequest(http.MethodPost, delegationControlPath+"revoke", []byte(`{"handle":"anything"}`), capabilityKey)
-		badHandler.handleDelegationControl(rec, req)
+		badHandler.server.ControlHandler().ServeHTTP(rec, req)
 		// Revoke itself is idempotent and never errors; the 500 here comes
 		// from the subsequent persistDelegationState failure.
 		assert.Equal(t, http.StatusInternalServerError, rec.Code)
@@ -210,14 +210,14 @@ func TestHandleDelegationControl_RevokeByLabels(t *testing.T) {
 
 	createRec := httptest.NewRecorder()
 	createReq := authedRequest(http.MethodPost, delegationControlPath+"create-or-confirm", body, capabilityKey)
-	handler.handleDelegationControl(createRec, createReq)
+	handler.server.ControlHandler().ServeHTTP(createRec, createReq)
 	require.Equal(t, http.StatusOK, createRec.Code)
 
 	t.Run("revokes matching labels and reports count", func(t *testing.T) {
 		rec := httptest.NewRecorder()
 		req := authedRequest(http.MethodPost, delegationControlPath+"revoke-by-labels",
 			[]byte(`{"run_id":"run-1","enclave_entry_id":"entry-1"}`), capabilityKey)
-		handler.handleDelegationControl(rec, req)
+		handler.server.ControlHandler().ServeHTTP(rec, req)
 		assert.Equal(t, http.StatusOK, rec.Code)
 		assert.Contains(t, rec.Body.String(), `"revoked":1`)
 	})
@@ -226,7 +226,7 @@ func TestHandleDelegationControl_RevokeByLabels(t *testing.T) {
 		rec := httptest.NewRecorder()
 		req := authedRequest(http.MethodPost, delegationControlPath+"revoke-by-labels",
 			[]byte(`{"run_id":"no-such-run","enclave_entry_id":"no-such-entry"}`), capabilityKey)
-		handler.handleDelegationControl(rec, req)
+		handler.server.ControlHandler().ServeHTTP(rec, req)
 		assert.Equal(t, http.StatusOK, rec.Code)
 		assert.Contains(t, rec.Body.String(), `"revoked":0`)
 	})
@@ -234,7 +234,7 @@ func TestHandleDelegationControl_RevokeByLabels(t *testing.T) {
 	t.Run("rejects malformed revoke-by-labels JSON", func(t *testing.T) {
 		rec := httptest.NewRecorder()
 		req := authedRequest(http.MethodPost, delegationControlPath+"revoke-by-labels", []byte(`{"bad`), capabilityKey)
-		handler.handleDelegationControl(rec, req)
+		handler.server.ControlHandler().ServeHTTP(rec, req)
 		assert.Equal(t, http.StatusBadRequest, rec.Code)
 	})
 
@@ -247,7 +247,7 @@ func TestHandleDelegationControl_RevokeByLabels(t *testing.T) {
 		rec := httptest.NewRecorder()
 		req := authedRequest(http.MethodPost, delegationControlPath+"revoke-by-labels",
 			[]byte(`{"run_id":"run-1","enclave_entry_id":"entry-1"}`), capabilityKey)
-		badHandler.handleDelegationControl(rec, req)
+		badHandler.server.ControlHandler().ServeHTTP(rec, req)
 		assert.Equal(t, http.StatusInternalServerError, rec.Code)
 	})
 }
@@ -257,6 +257,6 @@ func TestHandleDelegationControl_UnknownPath(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	req := authedRequest(http.MethodPost, delegationControlPath+"unknown-action", body, capabilityKey)
-	handler.handleDelegationControl(rec, req)
+	handler.server.ControlHandler().ServeHTTP(rec, req)
 	assert.Equal(t, http.StatusNotFound, rec.Code)
 }

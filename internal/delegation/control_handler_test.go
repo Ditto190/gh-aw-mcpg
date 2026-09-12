@@ -72,6 +72,35 @@ func TestHandleControl_UnknownPathReturns404(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
+func TestNewControlHTTPHandler_GatesRequests(t *testing.T) {
+	deps, secret := newControlTestDeps(t)
+
+	t.Run("delegation disabled", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, ControlPathPrefix+"status", nil)
+		w := httptest.NewRecorder()
+		NewControlHTTPHandler(ControlDeps{}, nil).ServeHTTP(w, req)
+		assert.Equal(t, http.StatusNotFound, w.Code)
+	})
+
+	t.Run("unrelated path", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/mcp", nil)
+		w := httptest.NewRecorder()
+		NewControlHTTPHandler(deps, nil).ServeHTTP(w, req)
+		assert.Equal(t, http.StatusNotFound, w.Code)
+	})
+
+	t.Run("control path", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, ControlPathPrefix+"status", bytes.NewReader(mustJSON(t, map[string]string{
+			"run_id":           "run-123",
+			"enclave_entry_id": "entry-1",
+		})))
+		req.Header.Set("Authorization", secret)
+		w := httptest.NewRecorder()
+		NewControlHTTPHandler(deps, nil).ServeHTTP(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+	})
+}
+
 func TestHandleControl_CustomLoggerIsInvoked(t *testing.T) {
 	deps, secret := newControlTestDeps(t)
 	var logged []string

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/github/gh-aw-mcpg/internal/httputil"
 	"github.com/github/gh-aw-mcpg/internal/logger"
@@ -28,6 +29,18 @@ type ControlDeps struct {
 type ControlLogger func(format string, args ...any)
 
 func noopControlLogger(string, ...any) {}
+
+// NewControlHTTPHandler returns a delegation control-plane handler that hides
+// the control endpoint when delegation is disabled or the path is unrelated.
+func NewControlHTTPHandler(deps ControlDeps, logf ControlLogger) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if deps.Store == nil || !strings.HasPrefix(r.URL.Path, ControlPathPrefix) {
+			http.NotFound(w, r)
+			return
+		}
+		HandleControl(w, r, deps, logf)
+	})
+}
 
 type runEntryRequest struct {
 	RunID          string `json:"run_id"`

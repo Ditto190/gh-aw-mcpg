@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
 
 	"github.com/github/gh-aw-mcpg/internal/delegation"
 	"github.com/github/gh-aw-mcpg/internal/guard"
@@ -171,19 +170,13 @@ func parseDelegatedRequestMethods(body []byte) ([]string, bool) {
 // intentionally separate from the MCP data plane so executor bearers cannot
 // reach control operations through /mcp.
 func (us *UnifiedServer) ControlHandler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !us.delegationEnabled() || !strings.HasPrefix(r.URL.Path, delegation.ControlPathPrefix) {
-			http.NotFound(w, r)
-			return
+	var deps delegation.ControlDeps
+	if us.delegationEnabled() {
+		deps = delegation.ControlDeps{
+			Store:      us.delegation.Store,
+			Capability: us.delegation.Capability,
+			StatePath:  us.delegation.StatePath,
 		}
-		us.handleDelegationControl(w, r)
-	})
-}
-
-func (us *UnifiedServer) handleDelegationControl(w http.ResponseWriter, r *http.Request) {
-	delegation.HandleControl(w, r, delegation.ControlDeps{
-		Store:      us.delegation.Store,
-		Capability: us.delegation.Capability,
-		StatePath:  us.delegation.StatePath,
-	}, logServerDelegation.Printf)
+	}
+	return delegation.NewControlHTTPHandler(deps, logServerDelegation.Printf)
 }
