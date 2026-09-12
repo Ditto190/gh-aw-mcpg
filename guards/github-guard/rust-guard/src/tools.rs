@@ -10,116 +10,116 @@ pub const WRITE_OPERATIONS: &[&str] = &[
     // Keep sorted for binary_search correctness.
     "actions_run_trigger",
     "add_comment_to_pending_review",
-    "add_deploy_key",
-    "add_gpg_key", // gh gpg-key add — adds a user GPG signing key
     "add_issue_comment",
     "add_issue_comment_reaction", // POST /repos/.../issues/comments/{id}/reactions
     "add_issue_reaction",         // POST /repos/.../issues/{number}/reactions
     "add_pull_request_review_comment_reaction", // POST /repos/.../pulls/comments/{id}/reactions
     "add_reply_to_pull_request_comment",
-    "add_ssh_key",          // gh ssh-key add — adds a user SSH auth/signing key
-    "archive_project_item", // gh project item-archive — archives a Projects v2 item
     "assign_copilot_to_issue",
     "assign_copilot_to_issue_with_intent",
-    "close_issue",        // gh issue close
-    "close_pull_request", // gh pr close
     "create_branch",
-    "create_codespace",  // gh codespace create — POST /user/codespaces
-    "create_discussion", // gh discussion create — creates a discussion in a repository
     "create_gist",
     "create_issue",
-    "create_linked_branch", // gh issue develop — creates a linked branch via GraphQL createLinkedBranch
     "create_or_update_file",
-    "create_project_draft_item", // gh project item-create — adds a draft issue via GraphQL addProjectV2DraftIssue
-    "create_project_field",      // gh project field-create — creates a Projects v2 field
     "create_pull_request",
     "create_pull_request_with_copilot",
-    "create_release", // POST /repos/.../releases
     "create_repository",
-    "create_repository_autolink", // gh repo autolink create — POST /repos/.../autolinks
-    "create_repository_ruleset",  // creates a repository ruleset
-    "delete_codespace", // gh codespace delete — DELETE /user/codespaces/{name} or /orgs/{org}/members/{user}/codespaces/{name}
-    "delete_deploy_key",
+    "create_repository_ruleset", // creates a repository ruleset
     "delete_file",
-    "delete_gpg_key",       // gh gpg-key delete — removes a user GPG signing key
-    "delete_issue",         // gh issue delete — deletes an issue via GraphQL deleteIssue
-    "delete_issue_comment", // DELETE /repos/.../issues/comments/{id}
-    "delete_project_field", // gh project field-delete — deletes a Projects v2 field
-    "delete_release",       // DELETE /repos/.../releases/{id}
-    "delete_release_asset", // gh release delete-asset — deletes a release asset
-    "delete_repository",    // gh repo delete — permanently deletes a repository
-    "delete_repository_autolink", // gh repo autolink delete — DELETE /repos/.../autolinks/{id}
-    "delete_ssh_key",       // gh ssh-key delete — removes a user SSH auth/signing key
-    "delete_workflow_run",  // gh run delete — deletes a workflow run record
+    "delete_repository",
     tool_names::DISCUSSION_COMMENT_WRITE, // creates or edits GitHub Discussion comments
     "dismiss_notification",
-    "edit_discussion", // gh discussion edit   — edits title/body/labels of a discussion
-    "edit_release",    // PATCH /repos/.../releases/{id}
-    "edit_repository", // gh repo edit — can change visibility, security settings
     "fork_repository",
     "label_write",
-    "lock_issue",        // gh issue lock
-    "lock_pull_request", // gh pr lock
     "mark_all_notifications_read",
-    "mark_project_template", // gh project mark-template — GraphQL markProjectV2AsTemplate
     "projects_write",
     "push_files",
-    "reopen_issue",        // gh issue reopen
-    "reopen_pull_request", // gh pr reopen
     "request_copilot_review",
-    "revert_pull_request", // gh pr revert — creates revert branch + PR
     "star_repository",
-    "stop_codespace", // gh codespace stop — POST /user|/orgs/.../codespaces/.../stop
-    "unarchive_project_item", // gh project item-archive --undo — unarchives a Projects v2 item
-    "unlock_issue",   // gh issue unlock
-    "unlock_pull_request", // gh pr unlock
-    "unmark_project_template", // gh project mark-template --undo — GraphQL unmarkProjectV2AsTemplate
     "unstar_repository",
-    "update_codespace", // gh codespace edit — PATCH /user/codespaces/{codespace_name}
-    "update_issue_comment", // PATCH /repos/.../issues/comments/{id}
-    "upload_release_asset", // gh release upload
 ];
 
 /// Synthetic write operations reachable through GitHub CLI but not current upstream MCP tools.
 pub const CLI_WRITE_OPERATIONS: &[&str] = &[
     // Keep sorted for binary_search correctness.
-    "archive_repository", // gh repo archive — blocked: repo settings change unsupported
-    "cancel_workflow_run", // gh run cancel — cancels an in-progress workflow run
-    "copy_project",       // gh project copy — creates a new Projects v2 board
-    "create_project",     // gh project create — GraphQL createProjectV2
-    "delete_actions_cache", // gh cache delete — DELETE /repos/.../actions/caches/{id|?key=...}
-    "delete_gist",        // gh gist delete
-    "delete_project",     // gh project delete — deletes a Projects v2 project
+    "add_deploy_key",             // gh repo deploy-key add — POST /repos/.../keys
+    "add_gpg_key",                // gh gpg-key add — adds a user GPG signing key
+    "add_ssh_key",                // gh ssh-key add — adds a user SSH auth/signing key
+    "archive_project_item",       // gh project item-archive — archives a Projects v2 item
+    "archive_repository",         // gh repo archive — blocked: repo settings change unsupported
+    "cancel_workflow_run",        // gh run cancel — cancels an in-progress workflow run
+    "close_issue",                // gh issue close
+    "close_pull_request",         // gh pr close
+    "copy_project",               // gh project copy — creates a new Projects v2 board
+    "create_codespace",           // gh codespace create — POST /user/codespaces
+    "create_discussion",          // gh discussion create — creates a discussion in a repository
+    "create_linked_branch", // gh issue develop — creates a linked branch via GraphQL createLinkedBranch
+    "create_project",       // gh project create — GraphQL createProjectV2
+    "create_project_draft_item", // gh project item-create — adds a draft issue via GraphQL addProjectV2DraftIssue
+    "create_project_field",      // gh project field-create — creates a Projects v2 field
+    "create_release",            // POST /repos/.../releases
+    "create_repository_autolink", // gh repo autolink create — POST /repos/.../autolinks
+    "delete_actions_cache",      // gh cache delete — DELETE /repos/.../actions/caches/{id|?key=...}
+    "delete_codespace", // gh codespace delete — DELETE /user/codespaces/{name} or /orgs/{org}/members/{user}/codespaces/{name}
+    "delete_deploy_key", // gh repo deploy-key delete — DELETE /repos/.../keys/{id}
+    "delete_gist",      // gh gist delete
+    "delete_gpg_key",   // gh gpg-key delete — removes a user GPG signing key
+    "delete_issue",     // gh issue delete — deletes an issue via GraphQL deleteIssue
+    "delete_issue_comment", // DELETE /repos/.../issues/comments/{id}
+    "delete_project",   // gh project delete — deletes a Projects v2 project
+    "delete_project_field", // gh project field-delete — deletes a Projects v2 field
+    "delete_release",   // DELETE /repos/.../releases/{id}
+    "delete_release_asset", // gh release delete-asset — deletes a release asset
+    "delete_repository_autolink", // gh repo autolink delete — DELETE /repos/.../autolinks/{id}
     tool_names::DELETE_SECRET, // gh secret delete — deletes org/repo/env/user codespaces secrets
-    "delete_variable",    // gh variable delete — deletes org/repo/environment Actions variables
-    "disable_workflow",   // gh workflow disable
-    "enable_workflow",    // gh workflow enable
+    "delete_ssh_key",   // gh ssh-key delete — removes a user SSH auth/signing key
+    "delete_variable",  // gh variable delete — deletes org/repo/environment Actions variables
+    "delete_workflow_run", // gh run delete — deletes a workflow run record
+    "disable_workflow", // gh workflow disable
+    "edit_discussion",  // gh discussion edit   — edits title/body/labels of a discussion
+    "edit_release",     // PATCH /repos/.../releases/{id}
+    "edit_repository",  // gh repo edit — can change visibility, security settings
+    "enable_workflow",  // gh workflow enable
     "force_cancel_workflow_run", // gh run cancel --force — force-cancels a workflow run
-    "link_project",       // gh project link — links a Projects v2 board to a repository or team
+    "link_project",     // gh project link — links a Projects v2 board to a repository or team
+    "lock_issue",       // gh issue lock
+    "lock_pull_request", // gh pr lock
+    "mark_project_template", // gh project mark-template — GraphQL markProjectV2AsTemplate
     "mark_pull_request_as_draft", // gh pr ready --undo (convert back to draft)
     "mark_pull_request_as_ready_for_review", // gh pr ready (mark ready for review)
-    "pin_issue",          // gh issue pin
-    "rebuild_codespace",  // gh codespace rebuild — Codespaces session RebuildContainer RPC
-    "rename_repository",  // gh repo rename — blocked: breaks clone URLs and integrations
-    "rerun_failed_jobs",  // gh run rerun --failed — reruns only failed jobs
+    "pin_issue",        // gh issue pin
+    "rebuild_codespace", // gh codespace rebuild — Codespaces session RebuildContainer RPC
+    "rename_repository", // gh repo rename — blocked: breaks clone URLs and integrations
+    "reopen_issue",     // gh issue reopen
+    "reopen_pull_request", // gh pr reopen
+    "rerun_failed_jobs", // gh run rerun --failed — reruns only failed jobs
     "rerun_workflow_job", // gh run rerun --job — reruns a specific job
     "rerun_workflow_run", // gh run rerun — reruns a completed workflow run
+    "revert_pull_request", // gh pr revert — creates revert branch + PR
     tool_names::SET_SECRET, // gh secret set
-    "set_variable",       // gh variable set
-    "sync_fork",          // gh repo sync
-    "transfer_issue",     // gh issue transfer
-    "transfer_repository", // gh repo transfer — blocked: repo ownership transfer is irreversible
+    "set_variable",     // gh variable set
+    "stop_codespace",   // gh codespace stop — POST /user|/orgs/.../codespaces/.../stop
+    "sync_fork",        // gh repo sync
+    "transfer_issue",   // gh issue transfer
+    "unarchive_project_item", // gh project item-archive --undo — unarchives a Projects v2 item
     "unarchive_repository", // gh repo unarchive — blocked: symmetric to archive_repository
-    "unlink_project",     // gh project unlink — unlinks a Projects v2 board
-    "unpin_issue",        // gh issue unpin
+    "unlink_project",   // gh project unlink — unlinks a Projects v2 board
+    "unlock_issue",     // gh issue unlock
+    "unlock_pull_request", // gh pr unlock
+    "unmark_project_template", // gh project mark-template --undo — GraphQL unmarkProjectV2AsTemplate
+    "unpin_issue",             // gh issue unpin
+    "update_codespace",        // gh codespace edit — PATCH /user/codespaces/{codespace_name}
     "update_codespace_port_visibility", // gh codespace ports visibility — session UpdatePortVisibility RPC
+    "update_issue_comment",             // PATCH /repos/.../issues/comments/{id}
     "update_project", // gh project close/edit/reopen — updates Projects v2 metadata/status
+    "upload_release_asset", // gh release upload
 ];
 
 /// Synthetic non-MCP write operations owned by the guard/runtime.
 pub const SYNTHETIC_WRITE_OPERATIONS: &[&str] = &[
     // Keep sorted for binary_search correctness.
     "enable_toolset", // Dynamically enables additional toolsets, expanding agent capabilities
+    "transfer_repository", // defensively blocked; no current `gh` command performs repo transfer
 ];
 
 /// Deprecated compatibility aliases for write operations.
@@ -739,6 +739,10 @@ mod tests {
 
     #[test]
     fn test_release_issue_comment_and_repository_write_tools_are_write_operations() {
+        assert!(
+            WRITE_OPERATIONS.binary_search(&"delete_repository").is_ok(),
+            "delete_repository must be explicitly listed in WRITE_OPERATIONS"
+        );
         for op in &[
             "create_release",
             "delete_issue",
@@ -750,8 +754,9 @@ mod tests {
             "upload_release_asset",
         ] {
             assert!(
-                WRITE_OPERATIONS.binary_search(op).is_ok(),
-                "{op} must be explicitly listed in WRITE_OPERATIONS"
+                WRITE_OPERATIONS.binary_search(op).is_ok()
+                    || CLI_WRITE_OPERATIONS.binary_search(op).is_ok(),
+                "{op} must be explicitly listed in an upstream or CLI write bucket"
             );
             assert!(
                 is_write_operation(op),
@@ -815,6 +820,67 @@ mod tests {
             .is_ok());
         assert!(is_read_write_operation("custom_properties_write"));
         assert!(!is_write_operation("custom_properties_write"));
+    }
+
+    #[test]
+    fn test_cli_only_operations_are_not_in_upstream_mcp_buckets() {
+        for op in &[
+            "add_deploy_key",
+            "close_issue",
+            "create_codespace",
+            "create_discussion",
+            "create_release",
+            "delete_issue",
+            "delete_workflow_run",
+            "edit_repository",
+            "lock_issue",
+            "revert_pull_request",
+            "unlock_pull_request",
+            "update_issue_comment",
+            "upload_release_asset",
+        ] {
+            assert!(
+                CLI_WRITE_OPERATIONS.binary_search(op).is_ok(),
+                "{op} is CLI-only and must be listed in CLI_WRITE_OPERATIONS"
+            );
+            assert!(
+                WRITE_OPERATIONS.binary_search(op).is_err(),
+                "{op} is CLI-only and must not be listed in WRITE_OPERATIONS"
+            );
+            assert!(
+                READ_WRITE_OPERATIONS.binary_search(op).is_err(),
+                "{op} is CLI-only and must not be listed in READ_WRITE_OPERATIONS"
+            );
+            assert!(
+                is_write_operation(op),
+                "{op} must still be classified as a write operation"
+            );
+        }
+    }
+
+    #[test]
+    fn test_transfer_repository_is_a_synthetic_guard_owned_write() {
+        assert!(
+            SYNTHETIC_WRITE_OPERATIONS
+                .binary_search(&"transfer_repository")
+                .is_ok(),
+            "transfer_repository has no current `gh` command and must live in \
+             SYNTHETIC_WRITE_OPERATIONS"
+        );
+        assert!(
+            CLI_WRITE_OPERATIONS
+                .binary_search(&"transfer_repository")
+                .is_err(),
+            "transfer_repository must not remain a stale CLI bucket entry"
+        );
+        assert!(
+            is_write_operation("transfer_repository"),
+            "transfer_repository must still be classified as a write operation"
+        );
+        assert!(
+            is_blocked_tool("transfer_repository"),
+            "transfer_repository must remain unconditionally blocked"
+        );
     }
 
     #[test]
