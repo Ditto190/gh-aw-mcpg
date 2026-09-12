@@ -174,6 +174,31 @@ func TestExtractURLDomains(t *testing.T) {
 			input: "https://valid.com/path https://example.com/%ZZ",
 			want:  []string{"valid.com"},
 		},
+		{
+			// A malformed IPv6-style host ("[::1" with no closing bracket) is another
+			// shape of *url.Error that exercises the same skip-and-continue branch as
+			// invalid percent-encoding, confirming the parse-error path is general.
+			name:  "malformed IPv6 host is skipped",
+			input: "https://[::1/path",
+			want:  nil,
+		},
+		{
+			// A control character in the URL triggers a *url.Error from url.Parse;
+			// mixed with a valid URL, only the valid one should be retained.
+			name:  "control character URL is skipped, valid URL retained",
+			input: "https://valid.com https://example.com/\x00path",
+			want:  []string{"valid.com"},
+		},
+		{
+			name:  "text with only whitespace returns nil",
+			input: "   \t\n  ",
+			want:  nil,
+		},
+		{
+			name:  "URL with query containing special characters",
+			input: "https://example.com/search?q=a%20b&x=1",
+			want:  []string{"example.com"},
+		},
 	}
 
 	for _, tt := range tests {
@@ -181,6 +206,33 @@ func TestExtractURLDomains(t *testing.T) {
 			t.Parallel()
 			got := ExtractURLDomains(tt.input)
 			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+// TestExtractURLDomains_URLPattern verifies the exported urlPattern regexp itself
+// behaves as documented: it requires a non-empty hostname candidate immediately
+// after the scheme and stops at common delimiter characters.
+func TestExtractURLDomains_URLPattern(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		input   string
+		matches bool
+	}{
+		{name: "http scheme matches", input: "http://a.com", matches: true},
+		{name: "https scheme matches", input: "https://a.com", matches: true},
+		{name: "ftp scheme does not match", input: "ftp://a.com", matches: false},
+		{name: "scheme with no host does not match", input: "https://", matches: false},
+		{name: "scheme followed by whitespace does not match", input: "https:// a.com", matches: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := urlPattern.MatchString(tt.input)
+			assert.Equal(t, tt.matches, got, "urlPattern.MatchString(%q)", tt.input)
 		})
 	}
 }
