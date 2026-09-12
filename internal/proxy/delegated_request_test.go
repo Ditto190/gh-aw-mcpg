@@ -35,9 +35,9 @@ func newDelegatedTestHandler(t *testing.T, upstreamURL string, allowedRepos ...s
 	}
 	server := newTestServerWithStub(t, upstreamURL, g, difc.EnforcementPropagate)
 	server.githubToken = enclaveTestUpstreamToken
-	server.delegation = &delegationState{
-		store:     store,
-		statePath: t.TempDir() + "/state.json",
+	server.delegation = &DelegationConfig{
+		Store:     store,
+		StatePath: t.TempDir() + "/state.json",
 	}
 	return &proxyHandler{server: server}, store
 }

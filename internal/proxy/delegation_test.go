@@ -31,7 +31,7 @@ func TestDelegationControlCreateRequiresCapability(t *testing.T) {
 	capabilityKey := strings.Repeat("a", 32)
 	capability, err := delegation.NewControlCapability(capabilityKey)
 	require.NoError(t, err)
-	handler := &proxyHandler{server: &Server{delegation: &delegationState{store: store, capability: capability, statePath: t.TempDir() + "/state.json"}}}
+	handler := &proxyHandler{server: &Server{delegation: &DelegationConfig{Store: store, Capability: capability, StatePath: t.TempDir() + "/state.json"}}}
 
 	body, err := json.Marshal(delegation.CreateOrConfirmRequestWire{
 		RunID: "run", EnclaveBackend: "backend", EnclaveEntryID: "entry", InvocationID: "inv",
@@ -66,7 +66,7 @@ func TestDelegationControlStatusAndReconcile(t *testing.T) {
 	capabilityKey := strings.Repeat("a", 32)
 	capability, err := delegation.NewControlCapability(capabilityKey)
 	require.NoError(t, err)
-	handler := &proxyHandler{server: &Server{delegation: &delegationState{store: store, capability: capability, statePath: t.TempDir() + "/state.json"}}}
+	handler := &proxyHandler{server: &Server{delegation: &DelegationConfig{Store: store, Capability: capability, StatePath: t.TempDir() + "/state.json"}}}
 
 	createBody, err := json.Marshal(delegation.CreateOrConfirmRequestWire{
 		RunID: "run", EnclaveBackend: "backend", EnclaveEntryID: "entry", InvocationID: "inv",

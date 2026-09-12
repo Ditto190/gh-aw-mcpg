@@ -34,10 +34,10 @@ func newTestDelegationHandler(t *testing.T) (*proxyHandler, string, []byte) {
 	capability, err := delegation.NewControlCapability(capabilityKey)
 	require.NoError(t, err)
 
-	handler := &proxyHandler{server: &Server{delegation: &delegationState{
-		store:      store,
-		capability: capability,
-		statePath:  t.TempDir() + "/state.json",
+	handler := &proxyHandler{server: &Server{delegation: &DelegationConfig{
+		Store:      store,
+		Capability: capability,
+		StatePath:  t.TempDir() + "/state.json",
 	}}}
 
 	body := []byte(`{
@@ -141,10 +141,10 @@ func TestHandleDelegationControl_CreateOrConfirm(t *testing.T) {
 
 	t.Run("persist failure surfaces 500 on create success path", func(t *testing.T) {
 		// Point statePath at an unwritable directory to force SaveState to fail.
-		badHandler := &proxyHandler{server: &Server{delegation: &delegationState{
-			store:      handler.server.delegation.store,
-			capability: handler.server.delegation.capability,
-			statePath:  "/nonexistent-dir-xyz/state.json",
+		badHandler := &proxyHandler{server: &Server{delegation: &DelegationConfig{
+			Store:      handler.server.delegation.Store,
+			Capability: handler.server.delegation.Capability,
+			StatePath:  "/nonexistent-dir-xyz/state.json",
 		}}}
 		rec := httptest.NewRecorder()
 		freshBody := []byte(`{
@@ -190,10 +190,10 @@ func TestHandleDelegationControl_Revoke(t *testing.T) {
 	})
 
 	t.Run("persist failure on revoke surfaces 500", func(t *testing.T) {
-		badHandler := &proxyHandler{server: &Server{delegation: &delegationState{
-			store:      handler.server.delegation.store,
-			capability: handler.server.delegation.capability,
-			statePath:  "/nonexistent-dir-xyz/state.json",
+		badHandler := &proxyHandler{server: &Server{delegation: &DelegationConfig{
+			Store:      handler.server.delegation.Store,
+			Capability: handler.server.delegation.Capability,
+			StatePath:  "/nonexistent-dir-xyz/state.json",
 		}}}
 		rec := httptest.NewRecorder()
 		req := authedRequest(http.MethodPost, delegationControlPath+"revoke", []byte(`{"handle":"anything"}`), capabilityKey)
@@ -239,10 +239,10 @@ func TestHandleDelegationControl_RevokeByLabels(t *testing.T) {
 	})
 
 	t.Run("persist failure on revoke-by-labels surfaces 500", func(t *testing.T) {
-		badHandler := &proxyHandler{server: &Server{delegation: &delegationState{
-			store:      handler.server.delegation.store,
-			capability: handler.server.delegation.capability,
-			statePath:  "/nonexistent-dir-xyz/state.json",
+		badHandler := &proxyHandler{server: &Server{delegation: &DelegationConfig{
+			Store:      handler.server.delegation.Store,
+			Capability: handler.server.delegation.Capability,
+			StatePath:  "/nonexistent-dir-xyz/state.json",
 		}}}
 		rec := httptest.NewRecorder()
 		req := authedRequest(http.MethodPost, delegationControlPath+"revoke-by-labels",

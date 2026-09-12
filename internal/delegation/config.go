@@ -31,3 +31,13 @@ func (c *RuntimeConfig) Validate() error {
 	}
 	return nil
 }
+
+// ControlDeps returns the control-plane dependencies carried by this runtime
+// config. A nil config yields the zero value, which NewControlHTTPHandler
+// treats as "delegation disabled".
+func (c *RuntimeConfig) ControlDeps() ControlDeps {
+	if c == nil {
+		return ControlDeps{}
+	}
+	return ControlDeps{Store: c.Store, Capability: c.Capability, StatePath: c.StatePath}
+}
