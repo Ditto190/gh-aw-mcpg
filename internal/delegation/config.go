@@ -17,8 +17,17 @@ type RuntimeConfig struct {
 
 // Validate reports an error if a required runtime delegation field is missing.
 func (c *RuntimeConfig) Validate() error {
-	if c == nil || c.Store == nil || c.Capability == nil || c.StatePath == "" {
-		return fmt.Errorf("delegation store, control capability, and state path are required")
+	if c == nil {
+		return fmt.Errorf("delegation runtime config is required")
+	}
+	if c.Store == nil {
+		return fmt.Errorf("delegation store is required")
+	}
+	if c.Capability == nil {
+		return fmt.Errorf("delegation control capability is required")
+	}
+	if c.StatePath == "" {
+		return fmt.Errorf("delegation state path is required")
 	}
 	return nil
 }
