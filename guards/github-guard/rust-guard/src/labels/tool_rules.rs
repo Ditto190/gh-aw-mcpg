@@ -1760,7 +1760,7 @@ mod tests {
         );
         assert_eq!(integrity, writer_integrity(private_repo_id, &ctx));
 
-        for tool in governance_tools {
+        for tool in GOVERNANCE_TOOLS {
             let (secrecy, integrity, _) = super::apply_tool_labels(
                 tool,
                 &private_repo_args,
@@ -1783,7 +1783,7 @@ mod tests {
             ("enterprise", "enterprise", "github-enterprise"),
         ] {
             let args = serde_json::json!({ "level": level, field: scope });
-            for tool in governance_tools {
+            for tool in GOVERNANCE_TOOLS {
                 let (secrecy, integrity, _) =
                     super::apply_tool_labels(tool, &args, "", vec![], vec![], String::new(), &ctx);
                 assert_eq!(secrecy, private_scope_label(scope), "{tool} ({level})");

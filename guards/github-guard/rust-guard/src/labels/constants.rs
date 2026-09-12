@@ -70,6 +70,7 @@ mod tests {
         assert_eq!(desc_prefix::NOTIFICATION, "notification:");
         assert_eq!(field_names::METHOD, "method");
         assert_eq!(field_names::IS_ERROR, "isError");
+        assert_eq!(field_names::COMMENT_NODE_ID, "commentNodeID");
         assert_eq!(field_names::PUBLIC, "public");
     }
 
