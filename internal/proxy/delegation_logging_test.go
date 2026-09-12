@@ -357,19 +357,19 @@ func TestDelegationControlReconcileValidationAndTransactionality(t *testing.T) {
 	})
 
 	t.Run("a failed persist does not mark a healthy store unreconciled", func(t *testing.T) {
-		s.delegation.statePath = filepath.Join(t.TempDir(), "non-existent-dir", "state.json")
+		s.delegation.StatePath = filepath.Join(t.TempDir(), "non-existent-dir", "state.json")
 		rec := postRaw([]byte(`{}`))
 		assert.Equal(t, http.StatusInternalServerError, rec.Code)
-		assert.False(t, s.delegation.store.IsRecoveryIncomplete(),
+		assert.False(t, s.delegation.Store.IsRecoveryIncomplete(),
 			"a store that was never in recovery must not be closed by a failed reconcile persist")
 	})
 
 	t.Run("succeeds on empty object and persists state", func(t *testing.T) {
 		statePath := filepath.Join(t.TempDir(), "valid-state.json")
-		s.delegation.statePath = statePath
+		s.delegation.StatePath = statePath
 		rec := postRaw([]byte(`{}`))
 		assert.Equal(t, http.StatusOK, rec.Code)
-		assert.False(t, s.delegation.store.IsRecoveryIncomplete())
+		assert.False(t, s.delegation.Store.IsRecoveryIncomplete())
 		assert.FileExists(t, statePath)
 	})
 }
@@ -391,7 +391,7 @@ func TestDelegationControlReconcileIsTransactional(t *testing.T) {
 	incomplete, err := delegation.LoadStore(corruptPath, redactionEnvelope(), 1)
 	require.NoError(t, err)
 	require.True(t, incomplete.IsRecoveryIncomplete(), "a corrupt state file must load fail closed")
-	s.delegation.store = incomplete
+	s.delegation.Store = incomplete
 
 	handler := &proxyHandler{server: s}
 	capabilityKey := strings.Repeat("c", 32)
@@ -404,14 +404,14 @@ func TestDelegationControlReconcileIsTransactional(t *testing.T) {
 	}
 
 	// A failed persist must not open the gate.
-	s.delegation.statePath = filepath.Join(t.TempDir(), "non-existent-dir", "state.json")
+	s.delegation.StatePath = filepath.Join(t.TempDir(), "non-existent-dir", "state.json")
 	assert.Equal(t, http.StatusInternalServerError, postReconcile().Code)
 	assert.True(t, incomplete.IsRecoveryIncomplete(),
 		"reconcile must stay fail closed when its state write fails")
 
 	// A successful persist opens it, and the durable state agrees.
 	statePath := filepath.Join(t.TempDir(), "state.json")
-	s.delegation.statePath = statePath
+	s.delegation.StatePath = statePath
 	assert.Equal(t, http.StatusOK, postReconcile().Code)
 	assert.False(t, incomplete.IsRecoveryIncomplete())
 

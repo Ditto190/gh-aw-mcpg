@@ -14,39 +14,19 @@ var logDelegation = logger.ForFile()
 
 const delegationControlPath = delegation.ControlPathPrefix
 
-type delegationState struct {
-	store      *delegation.Store
-	capability *delegation.ControlCapability
-	statePath  string
-}
-
 // DelegationConfig enables runtime repository-read delegation and its
 // AWF-authenticated private control channel.
 type DelegationConfig = delegation.RuntimeConfig
-
-func newDelegationState(cfg *DelegationConfig) (*delegationState, error) {
-	if cfg == nil {
-		return nil, nil
-	}
-	if err := cfg.Validate(); err != nil {
-		return nil, err
-	}
-	return &delegationState{store: cfg.Store, capability: cfg.Capability, statePath: cfg.StatePath}, nil
-}
 
 // ControlHandler returns the private control-plane handler. It is intentionally
 // separate from Handler so executor-facing GitHub traffic cannot reach control
 // operations even if it presents a valid executor bearer.
 func (s *Server) ControlHandler() http.Handler {
-	var deps delegation.ControlDeps
-	if s != nil && s.delegation != nil {
-		deps = delegation.ControlDeps{
-			Store:      s.delegation.store,
-			Capability: s.delegation.capability,
-			StatePath:  s.delegation.statePath,
-		}
+	var cfg *DelegationConfig
+	if s != nil {
+		cfg = s.delegation
 	}
-	return delegation.NewControlHTTPHandler(deps, logDelegation.Printf)
+	return delegation.NewControlHTTPHandler(cfg.ControlDeps(), logDelegation.Printf)
 }
 
 func (h *proxyHandler) handleDelegatedRequest(w http.ResponseWriter, r *http.Request) {
@@ -71,7 +51,7 @@ func (h *proxyHandler) handleDelegatedRequest(w http.ResponseWriter, r *http.Req
 		writeEnclaveDenied(w)
 		return
 	}
-	handle, err := h.server.delegation.store.AuthorizeExecutor(r.Header.Get("Authorization"), route.FullRepo(), toolName)
+	handle, err := h.server.delegation.Store.AuthorizeExecutor(r.Header.Get("Authorization"), route.FullRepo(), toolName)
 	if err != nil {
 		logDelegation.Printf("Executor not authorized for tool=%s repo_hash=%s", toolName, util.HashForLog(route.FullRepo(), 16, ""))
 		writeEnclaveDenied(w)

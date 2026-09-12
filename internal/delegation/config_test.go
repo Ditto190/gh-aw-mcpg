@@ -35,3 +35,24 @@ func TestRuntimeConfigValidate(t *testing.T) {
 		})
 	}
 }
+
+func TestRuntimeConfigControlDeps(t *testing.T) {
+	t.Run("nil config yields disabled deps", func(t *testing.T) {
+		var config *RuntimeConfig
+		assert.Equal(t, ControlDeps{}, config.ControlDeps())
+	})
+
+	t.Run("forwards control fields", func(t *testing.T) {
+		config := &RuntimeConfig{
+			Store:             &Store{},
+			Capability:        &ControlCapability{},
+			StatePath:         "/tmp/delegation-state.json",
+			ControlListenAddr: "127.0.0.1:9000",
+		}
+		assert.Equal(t, ControlDeps{
+			Store:      config.Store,
+			Capability: config.Capability,
+			StatePath:  config.StatePath,
+		}, config.ControlDeps())
+	})
+}

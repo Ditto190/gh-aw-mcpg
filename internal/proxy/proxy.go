@@ -58,7 +58,7 @@ type Server struct {
 	guardInitialized bool
 
 	enclave    *enclaveState
-	delegation *delegationState
+	delegation *DelegationConfig
 }
 
 // EnclaveConfig enables the fail-closed issues-read-v1 proxy profile.
@@ -114,12 +114,13 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 	if cfg.Enclave != nil && cfg.Delegation != nil {
 		return nil, fmt.Errorf("enclave and delegation proxy modes cannot be combined")
 	}
-	delegation, err := newDelegationState(cfg.Delegation)
-	if err != nil {
-		return nil, err
-	}
-	if delegation != nil && cfg.GitHubToken == "" {
-		return nil, fmt.Errorf("GitHub token is required for delegation proxy mode")
+	if cfg.Delegation != nil {
+		if err := cfg.Delegation.Validate(); err != nil {
+			return nil, err
+		}
+		if cfg.GitHubToken == "" {
+			return nil, fmt.Errorf("GitHub token is required for delegation proxy mode")
+		}
 	}
 	if cfg.Enclave != nil {
 		if cfg.Enclave.Policy == nil || cfg.Enclave.Verifier == nil {
@@ -138,7 +139,7 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 	// and the run/entry/invocation identifiers bound to it are all secrets.
 	// Enable process-wide redaction before anything else in the request path
 	// can log, so a missed call site cannot disclose them under DEBUG=*.
-	if cfg.Enclave != nil || delegation != nil {
+	if cfg.Enclave != nil || cfg.Delegation != nil {
 		sanitize.EnablePrivateSelectorRedaction()
 	}
 
@@ -169,7 +170,7 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 		DIFCComponents: difcComponents,
 		githubToken:    cfg.GitHubToken,
 		githubAPIURL:   apiURL,
-		delegation:     delegation,
+		delegation:     cfg.Delegation,
 		httpClient: &http.Client{
 			Timeout: 60 * time.Second,
 			Transport: &http.Transport{
