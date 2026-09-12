@@ -141,7 +141,6 @@ pub const READ_WRITE_OPERATIONS: &[&str] = &[
     "delete_pending_pull_request_review", // DELETE /repos/.../pulls/{number}/reviews/{id}
     "issue_dependency_write", // GraphQL addBlockedBy/removeBlockedBy after resolving issue IDs
     "issue_write",
-    "issue_write_ff_remote_mcp_issue_fields", // feature-flag variant of issue_write
     "manage_notification_subscription",
     "manage_repository_notification_subscription",
     "merge_pull_request",
@@ -180,6 +179,7 @@ pub const CLI_READ_WRITE_OPERATIONS: &[&str] = &[
 /// Deprecated compatibility aliases for read-write operations.
 pub const DEPRECATED_READ_WRITE_ALIASES: &[&str] = &[
     // Keep sorted for binary_search correctness.
+    "issue_write_ff_remote_mcp_issue_fields", // deprecated feature-flag alias of issue_write
     "update_project_item", // deprecated alias for projects_write (updateProjectV2ItemFieldValue)
 ];
 
@@ -530,10 +530,19 @@ mod tests {
 
     #[test]
     fn test_deprecated_alias_read_write_operations() {
-        assert!(
-            is_read_write_operation("update_project_item"),
-            "update_project_item (deprecated alias) must be classified as a read-write operation"
-        );
+        for op in &[
+            "issue_write_ff_remote_mcp_issue_fields",
+            "update_project_item",
+        ] {
+            assert!(
+                is_read_write_operation(op),
+                "{op} (deprecated alias) must be classified as a read-write operation"
+            );
+            assert!(
+                READ_WRITE_OPERATIONS.binary_search(op).is_err(),
+                "{op} (deprecated alias) must not be listed in READ_WRITE_OPERATIONS"
+            );
+        }
     }
 
     #[test]
@@ -826,16 +835,44 @@ mod tests {
     fn test_cli_only_operations_are_not_in_upstream_mcp_buckets() {
         for op in &[
             "add_deploy_key",
+            "add_gpg_key",
+            "add_ssh_key",
+            "archive_project_item",
             "close_issue",
+            "close_pull_request",
             "create_codespace",
             "create_discussion",
+            "create_linked_branch",
+            "create_project_draft_item",
+            "create_project_field",
             "create_release",
+            "create_repository_autolink",
+            "delete_codespace",
+            "delete_deploy_key",
+            "delete_gpg_key",
             "delete_issue",
+            "delete_issue_comment",
+            "delete_project_field",
+            "delete_release",
+            "delete_release_asset",
+            "delete_repository_autolink",
+            "delete_ssh_key",
             "delete_workflow_run",
+            "edit_discussion",
+            "edit_release",
             "edit_repository",
             "lock_issue",
+            "lock_pull_request",
+            "mark_project_template",
+            "reopen_issue",
+            "reopen_pull_request",
             "revert_pull_request",
+            "stop_codespace",
+            "unarchive_project_item",
+            "unlock_issue",
             "unlock_pull_request",
+            "unmark_project_template",
+            "update_codespace",
             "update_issue_comment",
             "upload_release_asset",
         ] {
