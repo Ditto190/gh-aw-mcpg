@@ -304,7 +304,7 @@ func TestDecodeStrictJSON(t *testing.T) {
 		var value payload
 		err := DecodeStrictJSON(strings.NewReader(`{"name":"alpha","extra":1}`), &value)
 		require.Error(t, err)
-		assert.NotErrorIs(t, err, ErrTrailingJSON)
+		require.NotErrorIs(t, err, ErrTrailingJSON)
 		assert.Contains(t, err.Error(), "unknown field")
 	})
 
@@ -312,7 +312,7 @@ func TestDecodeStrictJSON(t *testing.T) {
 		var value payload
 		err := DecodeStrictJSON(strings.NewReader(`{`), &value)
 		require.Error(t, err)
-		assert.NotErrorIs(t, err, ErrTrailingJSON)
+		require.NotErrorIs(t, err, ErrTrailingJSON)
 	})
 
 	t.Run("rejects a second JSON value", func(t *testing.T) {
@@ -324,8 +324,8 @@ func TestDecodeStrictJSON(t *testing.T) {
 	t.Run("rejects trailing garbage", func(t *testing.T) {
 		var value payload
 		err := DecodeStrictJSON(strings.NewReader(`{"name":"alpha"}not-json`), &value)
-		require.Error(t, err)
-		assert.NotErrorIs(t, err, ErrTrailingJSON)
+		require.ErrorIs(t, err, ErrTrailingJSON)
+		assert.NotEqual(t, ErrTrailingJSON, err)
 	})
 
 	t.Run("rejects empty input", func(t *testing.T) {

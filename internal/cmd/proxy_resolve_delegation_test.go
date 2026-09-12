@@ -148,6 +148,18 @@ func TestResolveDelegationProxyConfig_TrailingJSON_ReturnsError(t *testing.T) {
 	assert.Contains(t, err.Error(), "trailing JSON")
 }
 
+func TestResolveDelegationProxyConfig_TrailingGarbage_ReturnsError(t *testing.T) {
+	envelopeJSON := validDelegationEnvelopeJSON(t) + "not-json"
+	setAllDelegationEnvVars(t, envelopeJSON, "some-capability-key-that-is-long-enough", "/tmp/gh-aw/agent/state.json", "1", "127.0.0.1:9999")
+
+	cfg, statePath, err := resolveDelegationProxyConfig()
+
+	require.Error(t, err)
+	assert.Nil(t, cfg)
+	assert.Empty(t, statePath)
+	assert.EqualError(t, err, "invalid delegation envelope: trailing JSON")
+}
+
 func TestResolveDelegationProxyConfig_UnknownFieldInEnvelope_ReturnsError(t *testing.T) {
 	envelopeJSON := `{"run_id":"run-1","enclave_backend":"backend-1","allowed_repositories":["owner/repo"],"tool_policy":"github-repository-read-v1","max_dynamic_schema_hashes":1,"max_identity_ttl":300000000000,"expires_at":"2099-01-01T00:00:00Z","unknown_field":true}`
 	setAllDelegationEnvVars(t, envelopeJSON, "some-capability-key-that-is-long-enough", "/tmp/gh-aw/agent/state.json", "1", "127.0.0.1:9999")

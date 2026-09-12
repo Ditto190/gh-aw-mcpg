@@ -3,6 +3,7 @@ package util
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 )
 
@@ -30,16 +31,17 @@ func DeepCloneJSON(v any) any {
 	}
 }
 
-// ErrTrailingJSON is returned by DecodeStrictJSON when the input contains more
-// than one JSON value. Callers can use errors.Is to distinguish trailing data
-// from a malformed first value and wrap it with a domain-specific message.
+// ErrTrailingJSON is returned by DecodeStrictJSON when non-whitespace data
+// follows the first JSON value. Callers can use errors.Is to distinguish
+// trailing data from a malformed first value and wrap it with a domain-specific
+// message. Malformed trailing data also wraps its decode error.
 var ErrTrailingJSON = errors.New("input must contain exactly one JSON value")
 
 // DecodeStrictJSON decodes exactly one JSON value from r into value.
 // Unknown fields are rejected, and any data following the first JSON value
-// (other than whitespace) is rejected as well. Decode failures are returned
-// unwrapped so callers can add their own context; trailing data is reported as
-// ErrTrailingJSON.
+// (other than whitespace) is rejected as well. First-value decode failures are
+// returned unwrapped so callers can add their own context; trailing data is
+// reported as ErrTrailingJSON.
 func DecodeStrictJSON(r io.Reader, value any) error {
 	decoder := json.NewDecoder(r)
 	decoder.DisallowUnknownFields()
@@ -48,10 +50,10 @@ func DecodeStrictJSON(r io.Reader, value any) error {
 	}
 	var extra json.RawMessage
 	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
-		if err == nil {
-			return ErrTrailingJSON
+		if err != nil {
+			return fmt.Errorf("%w: %w", ErrTrailingJSON, err)
 		}
-		return err
+		return ErrTrailingJSON
 	}
 	return nil
 }

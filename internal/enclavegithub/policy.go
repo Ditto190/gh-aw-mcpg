@@ -2,7 +2,6 @@ package enclavegithub
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"regexp"
 	"slices"
@@ -79,7 +78,7 @@ func ParsePolicy(raw string) (*Policy, error) {
 
 	var policy Policy
 	if err := util.DecodeStrictJSON(strings.NewReader(raw), &policy); err != nil {
-		if errors.Is(err, util.ErrTrailingJSON) {
+		if err == util.ErrTrailingJSON {
 			return nil, fmt.Errorf("enclave policy must contain exactly one JSON value")
 		}
 		return nil, fmt.Errorf("invalid enclave policy JSON: %w", err)

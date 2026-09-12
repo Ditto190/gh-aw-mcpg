@@ -274,6 +274,16 @@ func TestVerifier_VerifyToken_StructuralErrors(t *testing.T) {
 		_, err = v.verifyTokenAt(bad, now)
 		assert.Error(t, err)
 	})
+
+	t.Run("payload has trailing malformed data", func(t *testing.T) {
+		claims := validClaims(policy, now)
+		payload, err := json.Marshal(claims)
+		require.NoError(t, err)
+		trailing := append(payload, []byte(`not-json`)...)
+		bad := mintTokenFromPayload(v.key, trailing)
+		_, err = v.verifyTokenAt(bad, now)
+		assert.Error(t, err)
+	})
 }
 
 func TestVerifier_ValidateClaims(t *testing.T) {
