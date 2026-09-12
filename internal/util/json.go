@@ -51,7 +51,7 @@ func DecodeStrictJSON(r io.Reader, value any) error {
 	var extra json.RawMessage
 	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
 		if err != nil {
-			return fmt.Errorf("%w: %w", ErrTrailingJSON, err)
+			return fmt.Errorf("%w: %v", ErrTrailingJSON, err)
 		}
 		return ErrTrailingJSON
 	}

@@ -1,6 +1,7 @@
 package util
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -325,7 +326,8 @@ func TestDecodeStrictJSON(t *testing.T) {
 		var value payload
 		err := DecodeStrictJSON(strings.NewReader(`{"name":"alpha"}not-json`), &value)
 		require.ErrorIs(t, err, ErrTrailingJSON)
-		assert.NotEqual(t, ErrTrailingJSON, err)
+		require.ErrorIs(t, errors.Unwrap(err), ErrTrailingJSON)
+		assert.Contains(t, err.Error(), "invalid character")
 	})
 
 	t.Run("rejects empty input", func(t *testing.T) {
