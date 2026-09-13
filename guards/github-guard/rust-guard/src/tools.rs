@@ -140,6 +140,7 @@ pub const READ_WRITE_OPERATIONS: &[&str] = &[
     "custom_properties_write",         // updates repository/org custom properties
     "delete_pending_pull_request_review", // DELETE /repos/.../pulls/{number}/reviews/{id}
     "issue_dependency_write", // GraphQL addBlockedBy/removeBlockedBy after resolving issue IDs
+    "issue_dependency_write_ff_issue_dependencies", // current upstream feature-flagged issue dependency mutation
     "issue_write",
     "manage_notification_subscription",
     "manage_repository_notification_subscription",

@@ -720,8 +720,10 @@ pub fn apply_tool_labels(
         }
 
         // === Repository governance and issue discovery ===
-        tool_names::FIND_DUPLICATE => {
+        tool_names::FIND_DUPLICATE | "find_duplicate_ff_duplicate_detection" => {
             // Duplicate matching searches repository issues and pull requests.
+            // The ff_duplicate_detection suffix is the current upstream feature-flagged
+            // tool name; it shares the same repo-scoped secrecy/integrity as find_duplicate.
             // S = S(repo); I = private writer (public results carry no write authority).
             secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
             integrity = private_writer_integrity(repo_id, repo_private, ctx);
