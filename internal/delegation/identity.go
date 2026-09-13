@@ -1,6 +1,12 @@
 package delegation
 
-import "time"
+import (
+	"time"
+
+	"github.com/github/gh-aw-mcpg/internal/logger"
+)
+
+var logIdentity = logger.ForFile()
 
 // CreateOrConfirmRequest is the internal duration-based form of an
 // AWF-authenticated request to create or confirm exactly one delegated
@@ -110,6 +116,7 @@ type Identity struct {
 // Repository) against any identity already stored under this key and treats
 // a mismatch as terminal rather than silently keying on it.
 func invocationScopeKey(runID, enclaveEntryID, invocationID string) string {
+	logIdentity.Printf("invocationScopeKey: runID=%s, enclaveEntryID=%s, invocationID=%s", runID, enclaveEntryID, invocationID)
 	return runID + "\x00" + enclaveEntryID + "\x00" + invocationID
 }
 
@@ -133,6 +140,7 @@ type IdentityResult struct {
 }
 
 func (id *Identity) toResult() *IdentityResult {
+	logIdentity.Printf("toResult: handle=%s, repository=%s, expiresAt=%s", id.Handle, id.Repository, id.ExpiresAt)
 	return &IdentityResult{
 		Handle:                   id.Handle,
 		ExecutorBearer:           id.ExecutorBearer,
@@ -151,7 +159,11 @@ func (id *Identity) toResult() *IdentityResult {
 // by toResult) always stands. Per the ADR, any mismatch here is terminal: the
 // caller must revoke any partial identity and fail the request.
 func (id *Identity) bindingEquals(req CreateOrConfirmRequest) bool {
-	return id.binding() == bindingFromRequest(req) && id.RequestedTTL == req.RequestedTTL
+	equal := id.binding() == bindingFromRequest(req) && id.RequestedTTL == req.RequestedTTL
+	if !equal {
+		logIdentity.Printf("bindingEquals: mismatch for handle=%s, invocationID=%s", id.Handle, req.InvocationID)
+	}
+	return equal
 }
 
 func (id *Identity) binding() delegationBinding {
@@ -162,6 +174,7 @@ func (id *Identity) toRequest() CreateOrConfirmRequest {
 	requestedTTL := id.RequestedTTL
 	if requestedTTL == 0 {
 		requestedTTL = id.ExpiresAt.Sub(id.CreatedAt)
+		logIdentity.Printf("toRequest: handle=%s had zero RequestedTTL, derived %v from CreatedAt/ExpiresAt", id.Handle, requestedTTL)
 	}
 	return id.delegationBinding.toRequest(requestedTTL, id.IdempotencyKey)
 }
