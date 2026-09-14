@@ -116,7 +116,7 @@ type Identity struct {
 // Repository) against any identity already stored under this key and treats
 // a mismatch as terminal rather than silently keying on it.
 func invocationScopeKey(runID, enclaveEntryID, invocationID string) string {
-	logIdentity.Printf("invocationScopeKey: runID=%s, enclaveEntryID=%s, invocationID=%s", runID, enclaveEntryID, invocationID)
+	logIdentity.Printf("invocationScopeKey: runIDHash=%s, enclaveEntryIDHash=%s, invocationIDHash=%s", hashForAudit(runID), hashForAudit(enclaveEntryID), hashForAudit(invocationID))
 	return runID + "\x00" + enclaveEntryID + "\x00" + invocationID
 }
 
