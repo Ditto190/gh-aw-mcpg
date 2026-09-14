@@ -1,6 +1,8 @@
 package server
 
 import (
+	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -205,5 +207,30 @@ func TestGetCircuitBreaker(t *testing.T) {
 		require.NotNil(t, cb)
 		assert.Equal(t, circuitClosed, cb.State(), "lazily created CB should start CLOSED")
 		assert.NoError(t, cb.Allow())
+	})
+
+	t.Run("concurrent creation for distinct server IDs is race-free", func(t *testing.T) {
+		t.Parallel()
+		us := &UnifiedServer{}
+
+		const numServers = 50
+		var wg sync.WaitGroup
+		results := make([]*circuitBreaker, numServers)
+		for i := 0; i < numServers; i++ {
+			wg.Add(1)
+			go func(i int) {
+				defer wg.Done()
+				serverID := fmt.Sprintf("server-%d", i)
+				results[i] = us.getCircuitBreaker(serverID)
+			}(i)
+		}
+		wg.Wait()
+
+		for i, cb := range results {
+			require.NotNilf(t, cb, "circuit breaker for server-%d should not be nil", i)
+			// Calling again should return the same cached instance.
+			same := us.getCircuitBreaker(fmt.Sprintf("server-%d", i))
+			assert.Samef(t, cb, same, "server-%d should return the same cached circuit breaker instance", i)
+		}
 	})
 }

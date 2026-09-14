@@ -104,7 +104,8 @@ type UnifiedServer struct {
 	allowedToolSets map[string]map[string]bool
 
 	// circuitBreakers holds a per-backend rate-limit circuit breaker keyed by server ID.
-	circuitBreakers map[string]*circuitBreaker
+	circuitBreakers   map[string]*circuitBreaker
+	circuitBreakersMu sync.RWMutex
 
 	// DIFC components
 	guardRegistry *guard.Registry

@@ -14,6 +14,7 @@ import (
 	"github.com/github/gh-aw-mcpg/internal/launcher"
 	"github.com/github/gh-aw-mcpg/internal/logger"
 	"github.com/github/gh-aw-mcpg/internal/mcp"
+	"github.com/github/gh-aw-mcpg/internal/syncutil"
 	"github.com/github/gh-aw-mcpg/internal/tracing"
 	"github.com/github/gh-aw-mcpg/internal/util"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -143,15 +144,17 @@ func (g *guardBackendCaller) callCollaboratorPermission(ctx context.Context, arg
 // getCircuitBreaker returns the circuit breaker for serverID, creating one with
 // defaults if none exists (e.g., when called from tests that bypass NewUnified).
 func (us *UnifiedServer) getCircuitBreaker(serverID string) *circuitBreaker {
+	us.circuitBreakersMu.Lock()
 	if us.circuitBreakers == nil {
 		us.circuitBreakers = make(map[string]*circuitBreaker)
 	}
-	if cb, ok := us.circuitBreakers[serverID]; ok {
-		return cb
-	}
-	logUnified.Printf("Creating new circuit breaker for serverID=%s (threshold=%d, cooldown=%v)", serverID, DefaultRateLimitThreshold, DefaultRateLimitCooldown)
-	cb := newCircuitBreaker(serverID, DefaultRateLimitThreshold, DefaultRateLimitCooldown)
-	us.circuitBreakers[serverID] = cb
+	cache := us.circuitBreakers
+	us.circuitBreakersMu.Unlock()
+
+	cb, _ := syncutil.MapGetOrCreate(&us.circuitBreakersMu, cache, serverID, func() (*circuitBreaker, error) {
+		logUnified.Printf("Creating new circuit breaker for serverID=%s (threshold=%d, cooldown=%v)", serverID, DefaultRateLimitThreshold, DefaultRateLimitCooldown)
+		return newCircuitBreaker(serverID, DefaultRateLimitThreshold, DefaultRateLimitCooldown), nil
+	})
 	return cb
 }
 
