@@ -115,8 +115,20 @@ func setMinimalValidProxyFlags(t *testing.T) {
 	proxyOTLPEndpoint = ""
 	proxyOTLPService = "mcpg"
 	proxyOTLPSampleRate = 1.0
-	proxyForcePublicRepo = false
+proxyForcePublicRepo = false
 	shutdownTimeout = 2 * time.Second
+
+	for _, key := range []string{
+		"MCP_GATEWAY_ENCLAVE_POLICY_JSON",
+		"MCP_GATEWAY_ENCLAVE_CAPABILITY_KEY",
+		"MCP_GATEWAY_DELEGATION_ENVELOPE",
+		"MCP_GATEWAY_DELEGATION_CONTROL_KEY",
+		"MCP_GATEWAY_DELEGATION_STATE_PATH",
+		"MCP_GATEWAY_DELEGATION_GENERATION",
+		"MCP_GATEWAY_DELEGATION_CONTROL_LISTEN",
+	} {
+		t.Setenv(key, "")
+	}
 }
 
 // TestRunProxy_GracefulShutdownViaContextCancellation exercises runProxy's
