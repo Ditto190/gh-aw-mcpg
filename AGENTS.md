@@ -31,10 +31,13 @@ Quick reference for AI agents working with MCP Gateway (Go-based MCP proxy serve
   - `config_env.go`, `config_feature.go`, `config_tracing.go` - Environment- and feature-specific config helpers
   - `validation.go`, `validation_env.go`, `validation_schema.go` - Fail-fast field, environment, and schema validation
   - `validation_test.go` - Comprehensive validation tests
+- `internal/delegation/` - Delegation envelope, capability, and audit logic
 - `internal/difc/` - Decentralized Information Flow Control
+- `internal/enclavegithub/` - Enclave-scoped GitHub capability/policy/route handling for delegation
 - `internal/envutil/` - Environment variable and Docker env-arg utilities
 - `internal/githubhttp/` - GitHub API-specific HTTP helpers (auth headers, collaborator permission, rate-limit parsing)
 - `internal/guard/` - Security guards (NoopGuard, WasmGuard, WriteSinkGuard)
+- `internal/hmacutil/` - HMAC-SHA256 request signing and verification helpers
 - `internal/httputil/` - Generic HTTP helper utilities (server, proxy)
 - `internal/jqutil/` - Shared gojq compiler options (security: $ENV access disabled)
 - `internal/launcher/` - Backend process management
@@ -42,8 +45,10 @@ Quick reference for AI agents working with MCP Gateway (Go-based MCP proxy serve
 - `internal/mcp/` - MCP protocol types with enhanced error logging
 - `internal/mcpresult/` - MCP result text content helpers
 - `internal/middleware/` - HTTP middleware (jq schema processing)
+- `internal/mountspec/` - Container bind-mount declaration parsing
 - `internal/oidc/` - GitHub Actions OIDC token provider and caching
 - `internal/proxy/` - Filtering HTTP proxy for the GitHub API with DIFC enforcement
+- `internal/restroute/` - Shared REST path-matching helpers
 - `internal/sanitize/` - Sensitive data redaction utilities (`SanitizeString`, `SanitizeJSON`, `RedactSecret`) for safe log output
 - `internal/server/` - HTTP server (routed/unified modes)
 - `internal/util/` - String, formatting, randomness, and JSON deep-clone utilities
