@@ -161,8 +161,17 @@ func TestRunProxy_TLSGracefulShutdown(t *testing.T) {
 	resetProxyFlagsForTest(t)
 	proxyCmd := newProxyCmd()
 	setMinimalValidProxyFlags(t)
-	proxyTLS = true
+proxyTLS = true
 	proxyTLSDir = t.TempDir()
+	for _, key := range []string{
+		"NODE_EXTRA_CA_CERTS",
+		"SSL_CERT_FILE",
+		"GIT_SSL_CAINFO",
+		"CURL_CA_BUNDLE",
+		"REQUESTS_CA_BUNDLE",
+	} {
+		t.Setenv(key, os.Getenv(key))
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	proxyCmd.SetContext(ctx)
