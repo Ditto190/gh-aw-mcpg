@@ -115,7 +115,7 @@ func setMinimalValidProxyFlags(t *testing.T) {
 	proxyOTLPEndpoint = ""
 	proxyOTLPService = "mcpg"
 	proxyOTLPSampleRate = 1.0
-proxyForcePublicRepo = false
+	proxyForcePublicRepo = false
 	shutdownTimeout = 2 * time.Second
 
 	for _, key := range []string{
@@ -173,7 +173,7 @@ func TestRunProxy_TLSGracefulShutdown(t *testing.T) {
 	resetProxyFlagsForTest(t)
 	proxyCmd := newProxyCmd()
 	setMinimalValidProxyFlags(t)
-proxyTLS = true
+	proxyTLS = true
 	proxyTLSDir = t.TempDir()
 	for _, key := range []string{
 		"NODE_EXTRA_CA_CERTS",
