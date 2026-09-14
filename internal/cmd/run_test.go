@@ -7,9 +7,77 @@ import (
 	"testing"
 	"time"
 
+	"github.com/github/gh-aw-mcpg/internal/difc"
+	"github.com/github/gh-aw-mcpg/internal/proxy"
+	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace/noop"
 )
+
+// setFlagsForTest sets the named flags on cmd to the given values and
+// registers a t.Cleanup that restores each flag's original value and
+// "Changed" bit. Using cmd.Flags().Set() alone is insufficient because it
+// leaves the flag's Changed bit set to true even after the value is restored
+// to its default, which makes later run() invocations treat the flag as an
+// explicit CLI override and leak state between tests.
+func setFlagsForTest(t *testing.T, cmd *cobra.Command, values map[string]string) {
+	t.Helper()
+
+	type savedFlag struct {
+		flag    *pflag.Flag
+		value   string
+		changed bool
+	}
+	saved := make([]savedFlag, 0, len(values))
+	for name := range values {
+		f := cmd.Flags().Lookup(name)
+		require.NotNilf(t, f, "flag %q not found", name)
+		saved = append(saved, savedFlag{flag: f, value: f.Value.String(), changed: f.Changed})
+	}
+
+	for name, value := range values {
+		require.NoError(t, cmd.Flags().Set(name, value))
+	}
+
+	t.Cleanup(func() {
+		for _, s := range saved {
+			_ = s.flag.Value.Set(s.value)
+			s.flag.Changed = s.changed
+		}
+	})
+}
+
+// runWithStdin temporarily replaces os.Stdin with a pipe fed with the given
+// content, invokes run() and restores os.Stdin before returning. This mirrors
+// the pattern used throughout internal/config's test suite for exercising
+// LoadFromStdin (which reads directly from os.Stdin). It returns any error
+// encountered (including failure to create the pipe) instead of failing the
+// test directly, since this helper may be invoked from a goroutine where
+// require/t.FailNow would not propagate the failure to the caller.
+func runWithStdin(t *testing.T, content string) error {
+	t.Helper()
+
+	r, w, err := os.Pipe()
+	if err != nil {
+		return err
+	}
+	oldStdin := os.Stdin
+	os.Stdin = r
+	defer func() {
+		os.Stdin = oldStdin
+		_ = r.Close()
+	}()
+
+	go func() {
+		_, _ = w.Write([]byte(content))
+		_ = w.Close()
+	}()
+
+	return run(rootCmd, nil)
+}
 
 // resetRunFlagsForTest saves the current values of all package-level flag
 // variables consumed by run() and returns a restore function. This allows
@@ -236,10 +304,7 @@ func TestRun_InvalidGuardsMode(t *testing.T) {
 	// Simulate the flag having been explicitly set on the command line so that
 	// applyLaunchAndGuardsOverrides validates it.
 	cmd := rootCmd
-	require.NoError(t, cmd.Flags().Set("guards-mode", "not-a-real-mode"))
-	t.Cleanup(func() {
-		_ = cmd.Flags().Set("guards-mode", "strict")
-	})
+	setFlagsForTest(t, cmd, map[string]string{"guards-mode": "not-a-real-mode"})
 
 	rootCmd.SetContext(context.Background())
 	t.Cleanup(func() { rootCmd.SetContext(context.Background()) })
@@ -301,6 +366,628 @@ url = "http://127.0.0.1:1"
 	select {
 	case err := <-errCh:
 		require.NoError(t, err, "run() should start successfully with only gateway.agentIds configured")
+	case <-time.After(5 * time.Second):
+		t.Fatal("run() did not return within the expected shutdown window")
+	}
+}
+
+// resetGuardPolicyFlagsForTest saves/restores the guard-policy-related flag
+// variables and their underlying Cobra flags (including each flag's Changed
+// bit) so tests can set them without leaking state into later tests. This
+// must be called before the test mutates any of these flags via
+// rootCmd.Flags().Set(...).
+func resetGuardPolicyFlagsForTest(t *testing.T) {
+	t.Helper()
+	origGuardPolicyJSON := guardPolicyJSON
+	origAllowOnlyPublic := allowOnlyPublic
+	origAllowOnlyOwner := allowOnlyOwner
+	origAllowOnlyRepo := allowOnlyRepo
+	origAllowOnlyMinInt := allowOnlyMinInt
+
+	flagNames := []string{
+		"guard-policy-json",
+		"allowonly-scope-public",
+		"allowonly-scope-owner",
+		"allowonly-scope-repo",
+		"allowonly-min-integrity",
+	}
+	type savedFlag struct {
+		flag    *pflag.Flag
+		value   string
+		changed bool
+	}
+	saved := make([]savedFlag, 0, len(flagNames))
+	for _, name := range flagNames {
+		f := rootCmd.Flags().Lookup(name)
+		require.NotNilf(t, f, "flag %q not found", name)
+		saved = append(saved, savedFlag{flag: f, value: f.Value.String(), changed: f.Changed})
+	}
+
+	t.Cleanup(func() {
+		guardPolicyJSON = origGuardPolicyJSON
+		allowOnlyPublic = origAllowOnlyPublic
+		allowOnlyOwner = origAllowOnlyOwner
+		allowOnlyRepo = origAllowOnlyRepo
+		allowOnlyMinInt = origAllowOnlyMinInt
+		for _, s := range saved {
+			_ = s.flag.Value.Set(s.value)
+			s.flag.Changed = s.changed
+		}
+	})
+}
+
+// TestRun_ConfigFromStdin verifies that run() reads and loads configuration
+// from stdin (rather than a file) when --config-stdin is set, exercising the
+// configStdin branch of both the log-source selection and the config.LoadFromStdin
+// call, which previously had 0% coverage.
+func TestRun_ConfigFromStdin(t *testing.T) {
+	resetRunFlagsForTest(t)
+
+	configStdin = true
+	configFile = ""
+	envFile = ""
+	listenAddr = "127.0.0.1:0"
+	routedMode = true
+	unifiedMode = false
+	logDir = t.TempDir()
+	payloadDir = t.TempDir()
+	wasmCacheDir = t.TempDir()
+	shutdownTimeout = 2 * time.Second
+	difcMode = "strict"
+
+	stdinJSON := `{
+		"mcpServers": {
+			"testserver": {
+				"type": "http",
+				"url": "http://127.0.0.1:1"
+			}
+		},
+		"gateway": {
+			"port": 3000,
+			"domain": "localhost",
+			"agentId": "test-agent-id"
+		}
+	}`
+
+	ctx, cancel := context.WithCancel(context.Background())
+	rootCmd.SetContext(ctx)
+	t.Cleanup(func() { rootCmd.SetContext(context.Background()) })
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- runWithStdin(t, stdinJSON)
+	}()
+
+	time.Sleep(200 * time.Millisecond)
+	cancel()
+
+	select {
+	case err := <-errCh:
+		require.NoError(t, err, "run() should start successfully reading config from stdin")
+	case <-time.After(5 * time.Second):
+		t.Fatal("run() did not return within the expected shutdown window")
+	}
+}
+
+// TestRun_InvalidStdinConfig verifies that run() surfaces a wrapped error when
+// --config-stdin is set but the piped JSON is invalid, exercising the stdin
+// error-handling branch of config loading.
+func TestRun_InvalidStdinConfig(t *testing.T) {
+	resetRunFlagsForTest(t)
+
+	configStdin = true
+	configFile = ""
+	envFile = ""
+	listenAddr = "127.0.0.1:0"
+	routedMode = true
+	unifiedMode = false
+	logDir = t.TempDir()
+	wasmCacheDir = t.TempDir()
+	shutdownTimeout = 2 * time.Second
+	difcMode = "strict"
+
+	rootCmd.SetContext(context.Background())
+	t.Cleanup(func() { rootCmd.SetContext(context.Background()) })
+
+	err := runWithStdin(t, "not valid json{{{")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to load config")
+}
+
+// TestRun_MultipleServersLoggedWithNames verifies that run() logs server names
+// when more than one MCP server is configured (the serverNames non-empty
+// branch), and starts successfully.
+func TestRun_MultipleServersLoggedWithNames(t *testing.T) {
+	resetRunFlagsForTest(t)
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	content := `[gateway]
+port = 3000
+agent_id = "test-agent-id"
+
+[servers.serverone]
+type = "http"
+url = "http://127.0.0.1:1"
+
+[servers.servertwo]
+type = "http"
+url = "http://127.0.0.1:2"
+`
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
+
+	configFile = path
+	configStdin = false
+	envFile = ""
+	listenAddr = "127.0.0.1:0"
+	routedMode = true
+	unifiedMode = false
+	logDir = t.TempDir()
+	wasmCacheDir = t.TempDir()
+	shutdownTimeout = 2 * time.Second
+	difcMode = "strict"
+
+	ctx, cancel := context.WithCancel(context.Background())
+	rootCmd.SetContext(ctx)
+	t.Cleanup(func() { rootCmd.SetContext(context.Background()) })
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- run(rootCmd, nil)
+	}()
+
+	time.Sleep(200 * time.Millisecond)
+	cancel()
+
+	select {
+	case err := <-errCh:
+		require.NoError(t, err, "run() should start successfully with multiple servers configured")
+	case <-time.After(5 * time.Second):
+		t.Fatal("run() did not return within the expected shutdown window")
+	}
+}
+
+// TestRun_ValidateEnvFailsWithoutRequiredEnvVars verifies that run() returns a
+// wrapped environment-validation error when --validate-env is set and the
+// required MCP_GATEWAY_* environment variables are absent, without starting
+// any server. This exercises the validateEnv branch and its error-return path.
+func TestRun_ValidateEnvFailsWithoutRequiredEnvVars(t *testing.T) {
+	resetRunFlagsForTest(t)
+
+	origValidateEnv := validateEnv
+	t.Cleanup(func() { validateEnv = origValidateEnv })
+
+	for _, name := range []string{"MCP_GATEWAY_PORT", "MCP_GATEWAY_DOMAIN", "MCP_GATEWAY_AGENT_ID"} {
+		t.Setenv(name, "")
+		require.NoError(t, os.Unsetenv(name))
+	}
+
+	configFile = writeMinimalConfigFile(t)
+	configStdin = false
+	envFile = ""
+	listenAddr = "127.0.0.1:0"
+	routedMode = true
+	unifiedMode = false
+	logDir = t.TempDir()
+	wasmCacheDir = t.TempDir()
+	shutdownTimeout = 2 * time.Second
+	difcMode = "strict"
+	validateEnv = true
+
+	rootCmd.SetContext(context.Background())
+	t.Cleanup(func() { rootCmd.SetContext(context.Background()) })
+
+	err := run(rootCmd, nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "environment validation failed")
+}
+
+// TestRun_GuardPolicyOverrideFromFlags verifies that run() applies a guard
+// policy override resolved from CLI flags (--guard-policy-json) onto the
+// loaded config, exercising the policyOverride != nil branch, and starts
+// successfully with the override configured.
+func TestRun_GuardPolicyOverrideFromFlags(t *testing.T) {
+	resetRunFlagsForTest(t)
+	resetGuardPolicyFlagsForTest(t)
+
+	configFile = writeMinimalConfigFile(t)
+	configStdin = false
+	envFile = ""
+	listenAddr = "127.0.0.1:0"
+	routedMode = true
+	unifiedMode = false
+	logDir = t.TempDir()
+	wasmCacheDir = t.TempDir()
+	shutdownTimeout = 2 * time.Second
+	difcMode = "strict"
+
+	require.NoError(t, rootCmd.Flags().Set("guard-policy-json", `{"allow-only":{"repos":"public","min-integrity":"none"}}`))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	rootCmd.SetContext(ctx)
+	t.Cleanup(func() { rootCmd.SetContext(context.Background()) })
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- run(rootCmd, nil)
+	}()
+
+	time.Sleep(200 * time.Millisecond)
+	cancel()
+
+	select {
+	case err := <-errCh:
+		require.NoError(t, err, "run() should start successfully with a guard policy override from CLI flags")
+	case <-time.After(5 * time.Second):
+		t.Fatal("run() did not return within the expected shutdown window")
+	}
+}
+
+// TestRun_InvalidGuardPolicyOverrideFromFlags verifies that run() surfaces a
+// wrapped error when --guard-policy-json contains invalid JSON, exercising
+// the resolveGuardPolicyFromFlags error-return branch.
+func TestRun_InvalidGuardPolicyOverrideFromFlags(t *testing.T) {
+	resetRunFlagsForTest(t)
+	resetGuardPolicyFlagsForTest(t)
+
+	configFile = writeMinimalConfigFile(t)
+	configStdin = false
+	envFile = ""
+	listenAddr = "127.0.0.1:0"
+	routedMode = true
+	unifiedMode = false
+	logDir = t.TempDir()
+	wasmCacheDir = t.TempDir()
+	shutdownTimeout = 2 * time.Second
+	difcMode = "strict"
+
+	require.NoError(t, rootCmd.Flags().Set("guard-policy-json", "not-valid-json"))
+
+	rootCmd.SetContext(context.Background())
+	t.Cleanup(func() { rootCmd.SetContext(context.Background()) })
+
+	err := run(rootCmd, nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid guard policy configuration")
+}
+
+// TestRun_SinkServerIDsConfiguredWithUnknownServer verifies that run() parses
+// --guards-sink-server-ids, sets the DIFC sink server IDs, and logs a warning
+// (without failing) when a configured sink server ID does not match any
+// configured backend server. This exercises the non-empty resolvedSinkServerIDs
+// branch and its per-ID "not configured" warning path.
+func TestRun_SinkServerIDsConfiguredWithUnknownServer(t *testing.T) {
+	resetRunFlagsForTest(t)
+
+	configFile = writeMinimalConfigFile(t)
+	configStdin = false
+	envFile = ""
+	listenAddr = "127.0.0.1:0"
+	routedMode = true
+	unifiedMode = false
+	logDir = t.TempDir()
+	wasmCacheDir = t.TempDir()
+	shutdownTimeout = 2 * time.Second
+	difcMode = "strict"
+	difcSinkServerIDs = "testserver,unknown-server"
+	t.Cleanup(func() { difc.SetSinkServerIDs(nil) })
+
+	ctx, cancel := context.WithCancel(context.Background())
+	rootCmd.SetContext(ctx)
+	t.Cleanup(func() { rootCmd.SetContext(context.Background()) })
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- run(rootCmd, nil)
+	}()
+
+	time.Sleep(200 * time.Millisecond)
+	cancel()
+
+	select {
+	case err := <-errCh:
+		require.NoError(t, err, "run() should start successfully even when a sink server ID is unrecognized")
+	case <-time.After(5 * time.Second):
+		t.Fatal("run() did not return within the expected shutdown window")
+	}
+}
+
+// TestRun_InvalidSinkServerIDs verifies that run() surfaces a wrapped error
+// when --guards-sink-server-ids contains an invalid value (whitespace),
+// exercising the difc.ParseSinkServerIDs error-return branch.
+func TestRun_InvalidSinkServerIDs(t *testing.T) {
+	resetRunFlagsForTest(t)
+
+	configFile = writeMinimalConfigFile(t)
+	configStdin = false
+	envFile = ""
+	listenAddr = "127.0.0.1:0"
+	routedMode = true
+	unifiedMode = false
+	logDir = t.TempDir()
+	wasmCacheDir = t.TempDir()
+	shutdownTimeout = 2 * time.Second
+	difcMode = "strict"
+	difcSinkServerIDs = "has whitespace"
+
+	rootCmd.SetContext(context.Background())
+	t.Cleanup(func() { rootCmd.SetContext(context.Background()) })
+
+	err := run(rootCmd, nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid --guards-sink-server-ids value")
+}
+
+// TestRun_SequentialLaunchEnabled verifies that run() takes the sequential
+// launch log branch and starts successfully when --sequential-launch is set.
+func TestRun_SequentialLaunchEnabled(t *testing.T) {
+	resetRunFlagsForTest(t)
+
+	configFile = writeMinimalConfigFile(t)
+	configStdin = false
+	envFile = ""
+	listenAddr = "127.0.0.1:0"
+	routedMode = true
+	unifiedMode = false
+	logDir = t.TempDir()
+	wasmCacheDir = t.TempDir()
+	shutdownTimeout = 2 * time.Second
+	difcMode = "strict"
+	sequentialLaunch = true
+
+	setFlagsForTest(t, rootCmd, map[string]string{"sequential-launch": "true"})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	rootCmd.SetContext(ctx)
+	t.Cleanup(func() { rootCmd.SetContext(context.Background()) })
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- run(rootCmd, nil)
+	}()
+
+	time.Sleep(200 * time.Millisecond)
+	cancel()
+
+	select {
+	case err := <-errCh:
+		require.NoError(t, err, "run() should start successfully with sequential launch enabled")
+	case <-time.After(5 * time.Second):
+		t.Fatal("run() did not return within the expected shutdown window")
+	}
+}
+
+// TestRun_TLSEnabled verifies that run() takes the TLS listener branch: it
+// generates/uses a self-signed certificate pair, wraps the TCP listener with
+// TLS, and shuts down gracefully. This exercises the tlsEnabled=true path of
+// setupTLSListener as invoked from run().
+func TestRun_TLSEnabled(t *testing.T) {
+	resetRunFlagsForTest(t)
+
+	configFile = writeMinimalConfigFile(t)
+	configStdin = false
+	envFile = ""
+	listenAddr = "127.0.0.1:0"
+	routedMode = true
+	unifiedMode = false
+	logDir = t.TempDir()
+	wasmCacheDir = t.TempDir()
+	shutdownTimeout = 2 * time.Second
+	difcMode = "strict"
+
+	tlsDir := t.TempDir()
+	tlsCfg, err := proxy.GenerateSelfSignedTLS(tlsDir)
+	require.NoError(t, err)
+	tlsCertPath = tlsCfg.CertPath
+	tlsKeyPath = tlsCfg.KeyPath
+
+	ctx, cancel := context.WithCancel(context.Background())
+	rootCmd.SetContext(ctx)
+	t.Cleanup(func() { rootCmd.SetContext(context.Background()) })
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- run(rootCmd, nil)
+	}()
+
+	time.Sleep(200 * time.Millisecond)
+	cancel()
+
+	select {
+	case err := <-errCh:
+		require.NoError(t, err, "run() should start successfully with TLS enabled")
+	case <-time.After(5 * time.Second):
+		t.Fatal("run() did not return within the expected shutdown window")
+	}
+}
+
+// TestRun_HMACSecretEnabled verifies that run() logs the HMAC request-signing
+// enabled message and starts successfully when --hmac-secret is configured.
+func TestRun_HMACSecretEnabled(t *testing.T) {
+	resetRunFlagsForTest(t)
+
+	configFile = writeMinimalConfigFile(t)
+	configStdin = false
+	envFile = ""
+	listenAddr = "127.0.0.1:0"
+	routedMode = true
+	unifiedMode = false
+	logDir = t.TempDir()
+	wasmCacheDir = t.TempDir()
+	shutdownTimeout = 2 * time.Second
+	difcMode = "strict"
+	hmacSecret = "a-very-long-shared-hmac-secret-value-1234567890"
+
+	ctx, cancel := context.WithCancel(context.Background())
+	rootCmd.SetContext(ctx)
+	t.Cleanup(func() { rootCmd.SetContext(context.Background()) })
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- run(rootCmd, nil)
+	}()
+
+	time.Sleep(200 * time.Millisecond)
+	cancel()
+
+	select {
+	case err := <-errCh:
+		require.NoError(t, err, "run() should start successfully with HMAC secret configured")
+	case <-time.After(5 * time.Second):
+		t.Fatal("run() did not return within the expected shutdown window")
+	}
+}
+
+// TestRun_InvalidTLSConfiguration verifies that run() surfaces a wrapped error
+// from setupTLSListener when only --tls-cert is set without --tls-key,
+// exercising the setupTLSListener error-return branch inside run().
+func TestRun_InvalidTLSConfiguration(t *testing.T) {
+	resetRunFlagsForTest(t)
+
+	configFile = writeMinimalConfigFile(t)
+	configStdin = false
+	envFile = ""
+	listenAddr = "127.0.0.1:0"
+	routedMode = true
+	unifiedMode = false
+	logDir = t.TempDir()
+	wasmCacheDir = t.TempDir()
+	shutdownTimeout = 2 * time.Second
+	difcMode = "strict"
+	tlsCertPath = filepath.Join(t.TempDir(), "cert.pem")
+	tlsKeyPath = ""
+
+	rootCmd.SetContext(context.Background())
+	t.Cleanup(func() { rootCmd.SetContext(context.Background()) })
+
+	err := run(rootCmd, nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "--tls-cert and --tls-key must both be provided together")
+}
+
+// TestRun_PartialDelegationEnvVars verifies that run() surfaces a wrapped
+// error from resolveDelegationProxyConfig when only some of the
+// MCP_GATEWAY_DELEGATION_* environment variables are set, exercising the
+// delegation-config error-return branch inside run().
+func TestRun_PartialDelegationEnvVars(t *testing.T) {
+	resetRunFlagsForTest(t)
+
+	t.Setenv("MCP_GATEWAY_DELEGATION_ENVELOPE", `{"runId":"run-1"}`)
+	t.Setenv("MCP_GATEWAY_DELEGATION_STATE_PATH", "")
+	t.Setenv("MCP_GATEWAY_DELEGATION_GENERATION", "")
+	// Intentionally leave capability key and control listen addr env vars unset.
+
+	configFile = writeMinimalConfigFile(t)
+	configStdin = false
+	envFile = ""
+	listenAddr = "127.0.0.1:0"
+	routedMode = true
+	unifiedMode = false
+	logDir = t.TempDir()
+	wasmCacheDir = t.TempDir()
+	shutdownTimeout = 2 * time.Second
+	difcMode = "strict"
+
+	rootCmd.SetContext(context.Background())
+	t.Cleanup(func() { rootCmd.SetContext(context.Background()) })
+
+	err := run(rootCmd, nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "must be configured together")
+}
+
+// TestRun_SinkServerIDsEnvVarLogged verifies that run() logs the resolved
+// value of MCP_GATEWAY_GUARDS_SINK_SERVER_IDS when the environment variable is
+// set, exercising the os.LookupEnv "exists" branch that is independent of the
+// --guards-sink-server-ids CLI flag.
+func TestRun_SinkServerIDsEnvVarLogged(t *testing.T) {
+	resetRunFlagsForTest(t)
+
+	t.Setenv("MCP_GATEWAY_GUARDS_SINK_SERVER_IDS", "testserver")
+
+	configFile = writeMinimalConfigFile(t)
+	configStdin = false
+	envFile = ""
+	listenAddr = "127.0.0.1:0"
+	routedMode = true
+	unifiedMode = false
+	logDir = t.TempDir()
+	wasmCacheDir = t.TempDir()
+	shutdownTimeout = 2 * time.Second
+	difcMode = "strict"
+	difcSinkServerIDs = ""
+	t.Cleanup(func() { difc.SetSinkServerIDs(nil) })
+
+	ctx, cancel := context.WithCancel(context.Background())
+	rootCmd.SetContext(ctx)
+	t.Cleanup(func() { rootCmd.SetContext(context.Background()) })
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- run(rootCmd, nil)
+	}()
+
+	time.Sleep(200 * time.Millisecond)
+	cancel()
+
+	select {
+	case err := <-errCh:
+		require.NoError(t, err, "run() should start successfully when MCP_GATEWAY_GUARDS_SINK_SERVER_IDS env var is set")
+	case <-time.After(5 * time.Second):
+		t.Fatal("run() did not return within the expected shutdown window")
+	}
+}
+
+// TestRun_OTLPTracingEnabled verifies that run() takes the tracing-enabled
+// logging branch (tracingProvider.IsEnabled() == true) when --otlp-endpoint is
+// configured, and starts/shuts down successfully. The exporter never actually
+// flushes any spans over the network within the short test window, so no real
+// OTLP collector is required.
+func TestRun_OTLPTracingEnabled(t *testing.T) {
+	resetRunFlagsForTest(t)
+
+	origOTLPEndpoint := otlpEndpoint
+	t.Cleanup(func() {
+		otlpEndpoint = origOTLPEndpoint
+	})
+
+	configFile = writeMinimalConfigFile(t)
+	configStdin = false
+	envFile = ""
+	listenAddr = "127.0.0.1:0"
+	routedMode = true
+	unifiedMode = false
+	logDir = t.TempDir()
+	wasmCacheDir = t.TempDir()
+	shutdownTimeout = 2 * time.Second
+	difcMode = "strict"
+
+	// applyTracingOverrides reads the otlpEndpoint global directly (populated
+	// normally via registerTracingFlags/--otlp-endpoint); set it here since
+	// that flag isn't registered on the plain rootCmd used by these tests.
+	otlpEndpoint = "http://127.0.0.1:1/v1/traces"
+
+	// Enabling tracing installs an SDK provider as the global OTel tracer
+	// provider. run() shuts that provider down but does not replace the
+	// global value, so restore a noop provider afterward to avoid leaving a
+	// stopped provider installed globally for later tests.
+	t.Cleanup(func() { otel.SetTracerProvider(noop.NewTracerProvider()) })
+
+	ctx, cancel := context.WithCancel(context.Background())
+	rootCmd.SetContext(ctx)
+	t.Cleanup(func() { rootCmd.SetContext(context.Background()) })
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- run(rootCmd, nil)
+	}()
+
+	time.Sleep(200 * time.Millisecond)
+	cancel()
+
+	select {
+	case err := <-errCh:
+		require.NoError(t, err, "run() should start successfully with OTLP tracing enabled")
 	case <-time.After(5 * time.Second):
 		t.Fatal("run() did not return within the expected shutdown window")
 	}
