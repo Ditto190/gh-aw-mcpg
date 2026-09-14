@@ -269,6 +269,104 @@ func TestValidatePositiveIntegerRule(t *testing.T) {
 	}
 }
 
+func TestValidateMinimumRule(t *testing.T) {
+	tests := []struct {
+		name       string
+		value      int
+		min        int
+		shouldErr  bool
+		errMsg     string
+		suggestion string
+	}{
+		{
+			name:      "value at minimum passes",
+			value:     10,
+			min:       10,
+			shouldErr: false,
+		},
+		{
+			name:       "value below minimum returns expected message",
+			value:      9,
+			min:        10,
+			shouldErr:  true,
+			errMsg:     "toolTimeout must be at least 10, got 9",
+			suggestion: "Use a value of at least 10 seconds",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateMinimumRule(
+				tt.value,
+				tt.min,
+				"toolTimeout",
+				"gateway.toolTimeout",
+				"timeout minimum",
+				"Timeout minimum",
+				fmt.Sprintf("is below minimum %d", tt.min),
+				fmt.Sprintf("toolTimeout must be at least %d, got %d", tt.min, tt.value),
+				fmt.Sprintf("Use a value of at least %d seconds", tt.min),
+			)
+
+			if tt.shouldErr {
+				require.NotNil(t, err, "Expected validation error but got none")
+				assert.Contains(t, err.Message, tt.errMsg, "Error message should contain expected text")
+				assert.Equal(t, tt.suggestion, err.Suggestion, "Suggestion should match")
+				return
+			}
+
+			require.NoError(t, validationErrAsError(err), "Unexpected validation error")
+		})
+	}
+}
+
+func TestValidateInclusiveRangeRule(t *testing.T) {
+	tests := []struct {
+		name      string
+		value     int
+		shouldErr bool
+		errMsg    string
+	}{
+		{
+			name:      "value in range passes",
+			value:     8080,
+			shouldErr: false,
+		},
+		{
+			name:      "value below range returns expected message",
+			value:     0,
+			shouldErr: true,
+			errMsg:    "port must be between 1 and 65535, got 0",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateInclusiveRangeRule(
+				tt.value,
+				1,
+				65535,
+				"port",
+				"gateway.port",
+				"port range",
+				"Port",
+				"out of range",
+				fmt.Sprintf("port must be between 1 and 65535, got %d", tt.value),
+				"Use a valid port number (e.g., 8080)",
+			)
+
+			if tt.shouldErr {
+				require.NotNil(t, err, "Expected validation error but got none")
+				assert.Contains(t, err.Message, tt.errMsg, "Error message should contain expected text")
+				assert.Equal(t, "Use a valid port number (e.g., 8080)", err.Suggestion, "Suggestion should match")
+				return
+			}
+
+			require.NoError(t, validationErrAsError(err), "Unexpected validation error")
+		})
+	}
+}
+
 func TestMountFormat(t *testing.T) {
 	tests := []struct {
 		name      string
