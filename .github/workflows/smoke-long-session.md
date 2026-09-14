@@ -213,7 +213,7 @@ expectation even if the default changes in future versions.
   "gateway": {
     "port": 18766,
     "domain": "localhost",
-    "apiKey": "smoke-test-key",
+    "agentId": "smoke-test-key",
     "toolTimeout": 60
   }
 }
