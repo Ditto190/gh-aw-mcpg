@@ -7,23 +7,69 @@ import (
 	"testing"
 	"time"
 
+	"github.com/github/gh-aw-mcpg/internal/difc"
 	"github.com/github/gh-aw-mcpg/internal/proxy"
+	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace/noop"
 )
+
+// setFlagsForTest sets the named flags on cmd to the given values and
+// registers a t.Cleanup that restores each flag's original value and
+// "Changed" bit. Using cmd.Flags().Set() alone is insufficient because it
+// leaves the flag's Changed bit set to true even after the value is restored
+// to its default, which makes later run() invocations treat the flag as an
+// explicit CLI override and leak state between tests.
+func setFlagsForTest(t *testing.T, cmd *cobra.Command, values map[string]string) {
+	t.Helper()
+
+	type savedFlag struct {
+		flag    *pflag.Flag
+		value   string
+		changed bool
+	}
+	saved := make([]savedFlag, 0, len(values))
+	for name := range values {
+		f := cmd.Flags().Lookup(name)
+		require.NotNilf(t, f, "flag %q not found", name)
+		saved = append(saved, savedFlag{flag: f, value: f.Value.String(), changed: f.Changed})
+	}
+
+	for name, value := range values {
+		require.NoError(t, cmd.Flags().Set(name, value))
+	}
+
+	t.Cleanup(func() {
+		for _, s := range saved {
+			_ = s.flag.Value.Set(s.value)
+			s.flag.Changed = s.changed
+		}
+	})
+}
 
 // runWithStdin temporarily replaces os.Stdin with a pipe fed with the given
 // content, invokes run() and restores os.Stdin before returning. This mirrors
 // the pattern used throughout internal/config's test suite for exercising
-// LoadFromStdin (which reads directly from os.Stdin).
+// LoadFromStdin (which reads directly from os.Stdin). It returns any error
+// encountered (including failure to create the pipe) instead of failing the
+// test directly, since this helper may be invoked from a goroutine where
+// require/t.FailNow would not propagate the failure to the caller.
 func runWithStdin(t *testing.T, content string) error {
 	t.Helper()
 
 	r, w, err := os.Pipe()
-	require.NoError(t, err)
+	if err != nil {
+		return err
+	}
 	oldStdin := os.Stdin
 	os.Stdin = r
-	t.Cleanup(func() { os.Stdin = oldStdin })
+	defer func() {
+		os.Stdin = oldStdin
+		_ = r.Close()
+	}()
 
 	go func() {
 		_, _ = w.Write([]byte(content))
@@ -258,10 +304,7 @@ func TestRun_InvalidGuardsMode(t *testing.T) {
 	// Simulate the flag having been explicitly set on the command line so that
 	// applyLaunchAndGuardsOverrides validates it.
 	cmd := rootCmd
-	require.NoError(t, cmd.Flags().Set("guards-mode", "not-a-real-mode"))
-	t.Cleanup(func() {
-		_ = cmd.Flags().Set("guards-mode", "strict")
-	})
+	setFlagsForTest(t, cmd, map[string]string{"guards-mode": "not-a-real-mode"})
 
 	rootCmd.SetContext(context.Background())
 	t.Cleanup(func() { rootCmd.SetContext(context.Background()) })
@@ -329,7 +372,10 @@ url = "http://127.0.0.1:1"
 }
 
 // resetGuardPolicyFlagsForTest saves/restores the guard-policy-related flag
-// variables so tests can set them without leaking state.
+// variables and their underlying Cobra flags (including each flag's Changed
+// bit) so tests can set them without leaking state into later tests. This
+// must be called before the test mutates any of these flags via
+// rootCmd.Flags().Set(...).
 func resetGuardPolicyFlagsForTest(t *testing.T) {
 	t.Helper()
 	origGuardPolicyJSON := guardPolicyJSON
@@ -337,17 +383,36 @@ func resetGuardPolicyFlagsForTest(t *testing.T) {
 	origAllowOnlyOwner := allowOnlyOwner
 	origAllowOnlyRepo := allowOnlyRepo
 	origAllowOnlyMinInt := allowOnlyMinInt
+
+	flagNames := []string{
+		"guard-policy-json",
+		"allowonly-scope-public",
+		"allowonly-scope-owner",
+		"allowonly-scope-repo",
+		"allowonly-min-integrity",
+	}
+	type savedFlag struct {
+		flag    *pflag.Flag
+		value   string
+		changed bool
+	}
+	saved := make([]savedFlag, 0, len(flagNames))
+	for _, name := range flagNames {
+		f := rootCmd.Flags().Lookup(name)
+		require.NotNilf(t, f, "flag %q not found", name)
+		saved = append(saved, savedFlag{flag: f, value: f.Value.String(), changed: f.Changed})
+	}
+
 	t.Cleanup(func() {
 		guardPolicyJSON = origGuardPolicyJSON
 		allowOnlyPublic = origAllowOnlyPublic
 		allowOnlyOwner = origAllowOnlyOwner
 		allowOnlyRepo = origAllowOnlyRepo
 		allowOnlyMinInt = origAllowOnlyMinInt
-		_ = rootCmd.Flags().Set("guard-policy-json", "")
-		_ = rootCmd.Flags().Set("allowonly-scope-public", "false")
-		_ = rootCmd.Flags().Set("allowonly-scope-owner", "")
-		_ = rootCmd.Flags().Set("allowonly-scope-repo", "")
-		_ = rootCmd.Flags().Set("allowonly-min-integrity", "")
+		for _, s := range saved {
+			_ = s.flag.Value.Set(s.value)
+			s.flag.Changed = s.changed
+		}
 	})
 }
 
@@ -605,6 +670,7 @@ func TestRun_SinkServerIDsConfiguredWithUnknownServer(t *testing.T) {
 	shutdownTimeout = 2 * time.Second
 	difcMode = "strict"
 	difcSinkServerIDs = "testserver,unknown-server"
+	t.Cleanup(func() { difc.SetSinkServerIDs(nil) })
 
 	ctx, cancel := context.WithCancel(context.Background())
 	rootCmd.SetContext(ctx)
@@ -669,8 +735,7 @@ func TestRun_SequentialLaunchEnabled(t *testing.T) {
 	difcMode = "strict"
 	sequentialLaunch = true
 
-	require.NoError(t, rootCmd.Flags().Set("sequential-launch", "true"))
-	t.Cleanup(func() { _ = rootCmd.Flags().Set("sequential-launch", "false") })
+	setFlagsForTest(t, rootCmd, map[string]string{"sequential-launch": "true"})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	rootCmd.SetContext(ctx)
@@ -851,6 +916,7 @@ func TestRun_SinkServerIDsEnvVarLogged(t *testing.T) {
 	shutdownTimeout = 2 * time.Second
 	difcMode = "strict"
 	difcSinkServerIDs = ""
+	t.Cleanup(func() { difc.SetSinkServerIDs(nil) })
 
 	ctx, cancel := context.WithCancel(context.Background())
 	rootCmd.SetContext(ctx)
@@ -900,6 +966,12 @@ func TestRun_OTLPTracingEnabled(t *testing.T) {
 	// normally via registerTracingFlags/--otlp-endpoint); set it here since
 	// that flag isn't registered on the plain rootCmd used by these tests.
 	otlpEndpoint = "http://127.0.0.1:1/v1/traces"
+
+	// Enabling tracing installs an SDK provider as the global OTel tracer
+	// provider. run() shuts that provider down but does not replace the
+	// global value, so restore a noop provider afterward to avoid leaving a
+	// stopped provider installed globally for later tests.
+	t.Cleanup(func() { otel.SetTracerProvider(noop.NewTracerProvider()) })
 
 	ctx, cancel := context.WithCancel(context.Background())
 	rootCmd.SetContext(ctx)
