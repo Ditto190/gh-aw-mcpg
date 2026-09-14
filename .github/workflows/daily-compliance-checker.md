@@ -147,7 +147,7 @@ Review each section of the specification systematically. For **CHANGED FILES fro
 - Configuration via stdin in JSON format ✓
 - Support for `mcpServers` object structure ✓
 - Server configuration fields (container, entrypoint, entrypointArgs, mounts, env, type, url) ✓
-- Gateway configuration fields (port, domain, apiKey, startupTimeout, toolTimeout) ✓
+- Gateway configuration fields (port, domain, agentId, startupTimeout, toolTimeout) ✓
 - Variable expression rendering with `${VAR_NAME}` syntax ✓
 - Fail-fast on undefined variables ✓
 - Schema validation with helpful error messages ✓

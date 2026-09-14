@@ -34,9 +34,13 @@ type StdinConfig struct {
 // StdinGatewayConfig represents gateway configuration in stdin JSON format.
 // Uses pointers for optional fields to distinguish between unset and zero values.
 type StdinGatewayConfig struct {
-	Port                        *int                      `json:"port,omitempty"`
-	AgentID                     string                    `json:"agentId,omitempty"`
-	AgentIDs                    []string                  `json:"agentIds,omitempty"`
+	Port     *int     `json:"port,omitempty"`
+	AgentID  string   `json:"agentId,omitempty"`
+	AgentIDs []string `json:"agentIds,omitempty"`
+	// APIKey is a deprecated alias for AgentID, retained for internal callers that
+	// unmarshal or construct StdinGatewayConfig without schema validation. Raw
+	// JSON stdin payloads containing "apiKey" are rejected by schema validation
+	// (additionalProperties: false) before this field is consulted.
 	APIKey                      string                    `json:"apiKey,omitempty"`
 	Domain                      string                    `json:"domain,omitempty"`
 	StartupTimeout              *int                      `json:"startupTimeout,omitempty"`

@@ -194,7 +194,9 @@ Or run manually:
 
 # Run with JSON stdin config (the CLI requires --config or --config-stdin)
 # The JSON schema requires a top-level "gateway" object with port, domain,
-# and one of agentId or apiKey before any server is started.
+# and one of agentId or agentIds before any server is started.
+# Note: apiKey is a deprecated alias for agent_id in TOML config only; it is
+# rejected by JSON stdin schema validation.
 echo '{
   "gateway": {"port": 3000, "domain": "localhost", "agentId": "your-agent-id"},
   "mcpServers": {"github": {"type": "stdio", "container": "ghcr.io/github/github-mcp-server:latest"}}
