@@ -81,10 +81,13 @@ func GetEnvInt(envKey string, defaultValue int) int {
 	return getEnvWithValidator(
 		envKey,
 		defaultValue,
-		func(string) (int, error) {
-			value, _, err := GetEnvIntRaw(envKey)
+func(envValue string) (int, error) {
+			value, err := strconv.Atoi(envValue)
+			if err != nil {
+				logEnvUtil.Printf("GetEnvIntRaw: %s=%q could not be parsed as an integer", envKey, sanitize.RedactSecret(envValue))
+			}
 			return value, err
-		},
+		}
 		func(value int) bool { return value > 0 },
 		func(key string, value int) {
 			logEnvUtil.Printf("GetEnvInt: %s=%d", key, value)
