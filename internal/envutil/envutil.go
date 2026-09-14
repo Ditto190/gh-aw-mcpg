@@ -1,6 +1,7 @@
 package envutil
 
 import (
+	"errors"
 	"os"
 	"strconv"
 	"strings"
@@ -11,6 +12,32 @@ import (
 )
 
 var logEnvUtil = logger.ForFile()
+var errUnrecognizedBool = errors.New("unrecognized boolean value")
+
+func getEnvWithValidator[T any](
+	envKey string,
+	defaultValue T,
+	parse func(string) (T, error),
+	isValid func(T) bool,
+	logValid func(string, T),
+	invalidValueLogFormat string,
+) T {
+	envValue := os.Getenv(envKey)
+	if envValue == "" {
+		return defaultValue
+	}
+
+	value, err := parse(envValue)
+	if err == nil && isValid(value) {
+		if logValid != nil && logEnvUtil.Enabled() {
+			logValid(envKey, value)
+		}
+		return value
+	}
+
+	logEnvUtil.Printf(invalidValueLogFormat, envKey, sanitize.RedactSecret(envValue), defaultValue)
+	return defaultValue
+}
 
 // HasEnvVar reports whether the named environment variable is present in the
 // process environment, regardless of whether its value is empty.
@@ -51,18 +78,19 @@ func GetEnvIntRaw(envKey string) (int, bool, error) {
 // or is not positive (> 0), it returns the defaultValue.
 // This function validates that the value is a positive integer.
 func GetEnvInt(envKey string, defaultValue int) int {
-	value, ok, err := GetEnvIntRaw(envKey)
-	if !ok {
-		return defaultValue
-	}
-	if err == nil && value > 0 {
-		if logEnvUtil.Enabled() {
-			logEnvUtil.Printf("GetEnvInt: %s=%d", envKey, value)
-		}
-		return value
-	}
-	logEnvUtil.Printf("GetEnvInt: %s=%q is not a valid positive integer, using default=%d", envKey, sanitize.RedactSecret(os.Getenv(envKey)), defaultValue)
-	return defaultValue
+	return getEnvWithValidator(
+		envKey,
+		defaultValue,
+		func(string) (int, error) {
+			value, _, err := GetEnvIntRaw(envKey)
+			return value, err
+		},
+		func(value int) bool { return value > 0 },
+		func(key string, value int) {
+			logEnvUtil.Printf("GetEnvInt: %s=%d", key, value)
+		},
+		"GetEnvInt: %s=%q is not a valid positive integer, using default=%d",
+	)
 }
 
 // GetEnvDuration returns the time.Duration value of the environment variable specified by envKey.
@@ -70,16 +98,16 @@ func GetEnvInt(envKey string, defaultValue int) int {
 // or is not positive (> 0), it returns the defaultValue.
 // Accepts any string valid for time.ParseDuration (e.g. "2h", "30m", "90s").
 func GetEnvDuration(envKey string, defaultValue time.Duration) time.Duration {
-	if envValue := os.Getenv(envKey); envValue != "" {
-		if d, err := time.ParseDuration(envValue); err == nil && d > 0 {
-			if logEnvUtil.Enabled() {
-				logEnvUtil.Printf("GetEnvDuration: %s=%v", envKey, d)
-			}
-			return d
-		}
-		logEnvUtil.Printf("GetEnvDuration: %s=%q is not a valid positive duration, using default=%v", envKey, sanitize.RedactSecret(envValue), defaultValue)
-	}
-	return defaultValue
+	return getEnvWithValidator(
+		envKey,
+		defaultValue,
+		time.ParseDuration,
+		func(value time.Duration) bool { return value > 0 },
+		func(key string, value time.Duration) {
+			logEnvUtil.Printf("GetEnvDuration: %s=%v", key, value)
+		},
+		"GetEnvDuration: %s=%q is not a valid positive duration, using default=%v",
+	)
 }
 
 // GetEnvBool returns the boolean value of the environment variable specified by envKey.
@@ -88,14 +116,21 @@ func GetEnvDuration(envKey string, defaultValue time.Duration) time.Duration {
 // Falsy values (case-insensitive): "0", "false", "no", "off"
 // Any other value returns the defaultValue.
 func GetEnvBool(envKey string, defaultValue bool) bool {
-	if envValue := os.Getenv(envKey); envValue != "" {
-		switch strings.ToLower(envValue) {
-		case "1", "true", "yes", "on":
-			return true
-		case "0", "false", "no", "off":
-			return false
-		}
-		logEnvUtil.Printf("GetEnvBool: %s=%q is not a recognized boolean value, using default=%v", envKey, sanitize.RedactSecret(envValue), defaultValue)
-	}
-	return defaultValue
+	return getEnvWithValidator(
+		envKey,
+		defaultValue,
+		func(envValue string) (bool, error) {
+			switch strings.ToLower(envValue) {
+			case "1", "true", "yes", "on":
+				return true, nil
+			case "0", "false", "no", "off":
+				return false, nil
+			default:
+				return false, errUnrecognizedBool
+			}
+		},
+		func(bool) bool { return true },
+		nil,
+		"GetEnvBool: %s=%q is not a recognized boolean value, using default=%v",
+	)
 }
