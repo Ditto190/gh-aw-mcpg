@@ -73,38 +73,38 @@ pub const CLI_WRITE_OPERATIONS: &[&str] = &[
     "delete_repository_autolink", // gh repo autolink delete — DELETE /repos/.../autolinks/{id}
     tool_names::DELETE_SECRET, // gh secret delete — deletes org/repo/env/user codespaces secrets
     "delete_ssh_key",   // gh ssh-key delete — removes a user SSH auth/signing key
-    "delete_variable",  // gh variable delete — deletes org/repo/environment Actions variables
-    "delete_workflow_run", // gh run delete — deletes a workflow run record
-    "disable_workflow", // gh workflow disable
-    "edit_discussion",  // gh discussion edit   — edits title/body/labels of a discussion
-    "edit_release",     // PATCH /repos/.../releases/{id}
-    "edit_repository",  // gh repo edit — can change visibility, security settings
-    "enable_workflow",  // gh workflow enable
+    tool_names::DELETE_VARIABLE, // gh variable delete — deletes org/repo/environment Actions variables
+    "delete_workflow_run",       // gh run delete — deletes a workflow run record
+    "disable_workflow",          // gh workflow disable
+    "edit_discussion",           // gh discussion edit   — edits title/body/labels of a discussion
+    "edit_release",              // PATCH /repos/.../releases/{id}
+    "edit_repository",           // gh repo edit — can change visibility, security settings
+    "enable_workflow",           // gh workflow enable
     "force_cancel_workflow_run", // gh run cancel --force — force-cancels a workflow run
-    "link_project",     // gh project link — links a Projects v2 board to a repository or team
-    "lock_issue",       // gh issue lock
+    "link_project", // gh project link — links a Projects v2 board to a repository or team
+    "lock_issue",   // gh issue lock
     "lock_pull_request", // gh pr lock
     "mark_project_template", // gh project mark-template — GraphQL markProjectV2AsTemplate
     "mark_pull_request_as_draft", // gh pr ready --undo (convert back to draft)
     "mark_pull_request_as_ready_for_review", // gh pr ready (mark ready for review)
-    "pin_issue",        // gh issue pin
+    "pin_issue",    // gh issue pin
     "rebuild_codespace", // gh codespace rebuild — Codespaces session RebuildContainer RPC
     "rename_repository", // gh repo rename — blocked: breaks clone URLs and integrations
-    "reopen_issue",     // gh issue reopen
+    "reopen_issue", // gh issue reopen
     "reopen_pull_request", // gh pr reopen
     "rerun_failed_jobs", // gh run rerun --failed — reruns only failed jobs
     "rerun_workflow_job", // gh run rerun --job — reruns a specific job
     "rerun_workflow_run", // gh run rerun — reruns a completed workflow run
     "revert_pull_request", // gh pr revert — creates revert branch + PR
     tool_names::SET_SECRET, // gh secret set
-    "set_variable",     // gh variable set
-    "stop_codespace",   // gh codespace stop — POST /user|/orgs/.../codespaces/.../stop
-    "sync_fork",        // gh repo sync
-    "transfer_issue",   // gh issue transfer
+    tool_names::SET_VARIABLE, // gh variable set
+    "stop_codespace", // gh codespace stop — POST /user|/orgs/.../codespaces/.../stop
+    "sync_fork",    // gh repo sync
+    "transfer_issue", // gh issue transfer
     "unarchive_project_item", // gh project item-archive --undo — unarchives a Projects v2 item
     "unarchive_repository", // gh repo unarchive — blocked: symmetric to archive_repository
-    "unlink_project",   // gh project unlink — unlinks a Projects v2 board
-    "unlock_issue",     // gh issue unlock
+    "unlink_project", // gh project unlink — unlinks a Projects v2 board
+    "unlock_issue", // gh issue unlock
     "unlock_pull_request", // gh pr unlock
     "unmark_project_template", // gh project mark-template --undo — GraphQL unmarkProjectV2AsTemplate
     "unpin_issue",             // gh issue unpin

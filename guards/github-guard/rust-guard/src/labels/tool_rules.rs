@@ -6,7 +6,7 @@
 use serde_json::Value;
 
 use super::constants::{
-    desc_prefix, field_names, scope_names, tool_names, SENSITIVE_FILE_KEYWORDS,
+    desc_prefix, field_names, scope_names, tool_names, ORG_FIELD_ALIASES, SENSITIVE_FILE_KEYWORDS,
     SENSITIVE_FILE_PATTERNS, SENSITIVE_PATH_PREFIXES, UI_GET_ACCESS_SENSITIVE_METHODS,
     UI_GET_GITHUB_APPROVED_METHODS, UI_GET_REPO_SCOPED_METHODS,
 };
@@ -123,10 +123,7 @@ fn apply_governance_labels(
     ctx: &PolicyContext,
 ) {
     let scope = match get_string_field(tool_args, "level").as_str() {
-        "organization" => get_first_non_empty_field(
-            tool_args,
-            &["org", "org_name", "organization", "organization_name"],
-        ),
+        "organization" => get_first_non_empty_field(tool_args, ORG_FIELD_ALIASES),
         "enterprise" => get_first_non_empty_field(tool_args, &["enterprise", "enterprise_name"]),
         _ => String::new(),
     };
@@ -992,11 +989,11 @@ pub fn apply_tool_labels(
         // === Scope-sensitive secret / variable writes ===
         // These are synthetic guard entries for GitHub CLI writes whose backing REST endpoints
         // span multiple scopes (repo/environment, org, and for secrets only, user codespaces).
-        tool_names::SET_SECRET | tool_names::DELETE_SECRET | "set_variable" | "delete_variable" => {
-            let explicit_org = get_first_non_empty_field(
-                tool_args,
-                &["org", "org_name", "organization", "organization_name"],
-            );
+        tool_names::SET_SECRET
+        | tool_names::DELETE_SECRET
+        | tool_names::SET_VARIABLE
+        | tool_names::DELETE_VARIABLE => {
+            let explicit_org = get_first_non_empty_field(tool_args, ORG_FIELD_ALIASES);
             // Synthetic CLI coverage uses owner-only arguments for org-scoped writes.
             // User-scoped secret writes do not include an owner, so owner-without-repo
             // is treated as an org-level operation here.
