@@ -55,7 +55,7 @@ const streamableMaxRetries = -1
 // relying on the zero-value default, so an SDK change to that default does
 // not silently alter the gateway's memory-exhaustion protection against
 // oversized events from backend servers.
-const sseMaxEventSize = sdk.DefaultMaxEventSize
+const sseMaxEventSize = 16 << 20 // 16 MiB
 
 // requestIDCounter is used to generate unique request IDs for HTTP requests
 var requestIDCounter uint64
