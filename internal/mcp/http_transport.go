@@ -48,6 +48,15 @@ const MCPProtocolVersion = "2025-11-25"
 // TestMaxRetriesSentinelCanary for an automated guard against SDK changes.
 const streamableMaxRetries = -1
 
+// sseMaxEventSize bounds the number of bytes buffered while reading a single
+// server-sent event on SSE-capable transports (StreamableClientTransport's
+// standalone SSE stream and SSEClientTransport). The gateway sets this
+// explicitly to the SDK's own default (sdk.DefaultMaxEventSize) rather than
+// relying on the zero-value default, so an SDK change to that default does
+// not silently alter the gateway's memory-exhaustion protection against
+// oversized events from backend servers.
+const sseMaxEventSize = 16 << 20 // 16 MiB
+
 // requestIDCounter is used to generate unique request IDs for HTTP requests
 var requestIDCounter uint64
 
@@ -84,6 +93,19 @@ func newStreamableTransport(url string, httpClient *http.Client) *sdk.Streamable
 		// See StreamableClientTransport.DisableStandaloneSSE in the SDK docs and
 		// TestDisableStandaloneSSECanary for an automated guard against SDK changes.
 		DisableStandaloneSSE: true,
+		// See sseMaxEventSize for rationale.
+		MaxEventSize: sseMaxEventSize,
+	}
+}
+
+// newSSETransport constructs the SDK SSE transport with the gateway's
+// required settings. Keep this aligned with reconnectSDKTransport.
+func newSSETransport(url string, httpClient *http.Client) *sdk.SSEClientTransport {
+	return &sdk.SSEClientTransport{
+		Endpoint:   url,
+		HTTPClient: httpClient,
+		// See sseMaxEventSize for rationale.
+		MaxEventSize: sseMaxEventSize,
 	}
 }
 
@@ -411,10 +433,7 @@ func trySSETransport(ctx context.Context, cancel context.CancelFunc, serverID, u
 		HTTPTransportSSE,
 		"SSE",
 		func(url string, httpClient *http.Client) sdk.Transport {
-			return &sdk.SSEClientTransport{
-				Endpoint:   url,
-				HTTPClient: httpClient,
-			}
+			return newSSETransport(url, httpClient)
 		},
 		keepAlive,
 		connectTimeout,
