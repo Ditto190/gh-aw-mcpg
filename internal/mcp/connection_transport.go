@@ -61,10 +61,7 @@ func (c *Connection) reconnectSDKTransport() error {
 		case HTTPTransportStreamable:
 			transport = newStreamableTransport(c.httpURL, headerClient)
 		case HTTPTransportSSE:
-			transport = &sdk.SSEClientTransport{
-				Endpoint:   c.httpURL,
-				HTTPClient: headerClient,
-			}
+			transport = newSSETransport(c.httpURL, headerClient)
 		default:
 			return fmt.Errorf("cannot reconnect: unsupported transport type %s", c.httpTransportType)
 		}

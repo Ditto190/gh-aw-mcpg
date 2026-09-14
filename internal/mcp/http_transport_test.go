@@ -1457,6 +1457,15 @@ func TestNewStreamableTransport(t *testing.T) {
 	require.NotNil(t, transport.HTTPClient)
 	require.Equal(t, streamableMaxRetries, transport.MaxRetries)
 	require.True(t, transport.DisableStandaloneSSE)
+	require.Equal(t, sseMaxEventSize, transport.MaxEventSize)
+}
+
+func TestNewSSETransport(t *testing.T) {
+	transport := newSSETransport("https://example.test/sse", &http.Client{})
+
+	require.Equal(t, "https://example.test/sse", transport.Endpoint)
+	require.NotNil(t, transport.HTTPClient)
+	require.Equal(t, sseMaxEventSize, transport.MaxEventSize)
 }
 
 // TestDisableStandaloneSSECanary is a canary test for SDK upgrades.
