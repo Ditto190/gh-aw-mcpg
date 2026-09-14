@@ -37,8 +37,8 @@ pub mod policy_integrity {
 #[cfg(test)]
 mod tests {
     use super::{
-        desc_prefix, field_names, policy_integrity, tool_names, SENSITIVE_PATH_PREFIXES,
-        UI_GET_ACCESS_SENSITIVE_METHODS, UI_GET_GITHUB_APPROVED_METHODS,
+        desc_prefix, field_names, policy_integrity, tool_names, ORG_FIELD_ALIASES,
+        SENSITIVE_PATH_PREFIXES, UI_GET_ACCESS_SENSITIVE_METHODS, UI_GET_GITHUB_APPROVED_METHODS,
         UI_GET_REPO_SCOPED_METHODS, URL_FALLBACK_FIELDS,
     };
 
@@ -85,6 +85,14 @@ mod tests {
     }
 
     #[test]
+    fn org_field_aliases_are_canonical() {
+        assert_eq!(
+            ORG_FIELD_ALIASES,
+            &["org", "org_name", "organization", "organization_name"]
+        );
+    }
+
+    #[test]
     fn dispatch_constants_match_canonical_values() {
         assert_eq!(tool_names::ACTIONS_GET, "actions_get");
         assert_eq!(tool_names::UI_GET, "ui_get");
@@ -93,6 +101,10 @@ mod tests {
         assert_eq!(tool_names::SEARCH_CODE, "search_code");
         assert_eq!(tool_names::LIST_ISSUES, "list_issues");
         assert_eq!(tool_names::SEARCH_ISSUES, "search_issues");
+        assert_eq!(tool_names::SET_SECRET, "set_secret");
+        assert_eq!(tool_names::DELETE_SECRET, "delete_secret");
+        assert_eq!(tool_names::SET_VARIABLE, "set_variable");
+        assert_eq!(tool_names::DELETE_VARIABLE, "delete_variable");
         assert_eq!(
             UI_GET_REPO_SCOPED_METHODS,
             &["labels", "milestones", "branches"]
@@ -191,6 +203,12 @@ pub const SENSITIVE_PATH_PREFIXES: &[&str] = &[".github/workflows/"];
 /// specific.
 pub const URL_FALLBACK_FIELDS: &[&str] = &["repository_url", "html_url", "url"];
 
+/// Field names that may carry an explicit organization identifier across
+/// different tool argument shapes (governance reads/writes and
+/// scope-sensitive secret/variable writes). Centralized so both call sites
+/// stay in sync if a new org-alias field is ever added.
+pub const ORG_FIELD_ALIASES: &[&str] = &["org", "org_name", "organization", "organization_name"];
+
 /// Buffer size constants for backend calls
 pub const SMALL_BUFFER_SIZE: usize = 256 * 1024; // 256KB
 pub const MEDIUM_BUFFER_SIZE: usize = 512 * 1024; // 512KB
@@ -223,6 +241,8 @@ pub mod tool_names {
     pub const FIND_DUPLICATE: &str = "find_duplicate";
     pub const SET_SECRET: &str = "set_secret";
     pub const DELETE_SECRET: &str = "delete_secret";
+    pub const SET_VARIABLE: &str = "set_variable";
+    pub const DELETE_VARIABLE: &str = "delete_variable";
 }
 
 /// UI metadata methods that are scoped to a specific repository.

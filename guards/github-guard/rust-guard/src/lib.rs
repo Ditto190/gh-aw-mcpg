@@ -457,7 +457,10 @@ fn infer_scope_for_baseline<'a>(
         "create_codespace" | "update_codespace" | "delete_codespace" | "stop_codespace" => {
             Cow::Borrowed(scope_names::USER)
         }
-        tool_names::SET_SECRET | tool_names::DELETE_SECRET | "set_variable" | "delete_variable" => {
+        tool_names::SET_SECRET
+        | tool_names::DELETE_SECRET
+        | tool_names::SET_VARIABLE
+        | tool_names::DELETE_VARIABLE => {
             if !repo_id.is_empty() {
                 return Cow::Borrowed(repo_id);
             }
