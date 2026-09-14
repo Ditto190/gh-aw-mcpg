@@ -25,17 +25,18 @@ var (
 // PortRange validates that a port is in the valid range (1-65535)
 // Returns nil if valid, *ValidationError if invalid
 func PortRange(port int, jsonPath string) *ValidationError {
-	logValidationRules.Printf("Validating port range: port=%d, jsonPath=%s", port, jsonPath)
-	if port < 1 || port > 65535 {
-		return newValidationError(
-			fmt.Sprintf("Port validation failed: port=%d out of range", port),
-			"port",
-			fmt.Sprintf("port must be between 1 and 65535, got %d", port),
-			jsonPath,
-			"Use a valid port number (e.g., 8080)",
-		)
-	}
-	return nil
+	return validateInclusiveRangeRule(
+		port,
+		1,
+		65535,
+		"port",
+		jsonPath,
+		"port range",
+		"Port",
+		"out of range",
+		fmt.Sprintf("port must be between 1 and 65535, got %d", port),
+		"Use a valid port number (e.g., 8080)",
+	)
 }
 
 // validateNonEmptyStringSlice validates that, when defined is true, values is a non-empty
@@ -59,12 +60,40 @@ func validateNonEmptyStringSlice(values []string, defined bool, fieldName, specS
 }
 
 func validatePositiveIntegerRule(value int, fieldName, jsonPath, logLabel, failureLabel, suggestion string) *ValidationError {
-	logValidationRules.Printf("Validating %s: field=%s, value=%d, jsonPath=%s", logLabel, fieldName, value, jsonPath)
-	if value < 1 {
+	return validateMinimumRule(
+		value,
+		1,
+		fieldName,
+		jsonPath,
+		logLabel,
+		failureLabel,
+		"is not positive",
+		fmt.Sprintf("%s must be a positive integer (>= 1), got %d", fieldName, value),
+		suggestion,
+	)
+}
+
+func validateMinimumRule(value, min int, fieldName, jsonPath, logLabel, failureLabel, failureReason, userMessage, suggestion string) *ValidationError {
+	logValidationRules.Printf("Validating %s: field=%s, value=%d, min=%d, jsonPath=%s", logLabel, fieldName, value, min, jsonPath)
+	if value < min {
 		return newValidationError(
-			fmt.Sprintf("%s validation failed: %s=%d is not positive", failureLabel, fieldName, value),
+			fmt.Sprintf("%s validation failed: %s=%d %s", failureLabel, fieldName, value, failureReason),
 			fieldName,
-			fmt.Sprintf("%s must be a positive integer (>= 1), got %d", fieldName, value),
+			userMessage,
+			jsonPath,
+			suggestion,
+		)
+	}
+	return nil
+}
+
+func validateInclusiveRangeRule(value, min, max int, fieldName, jsonPath, logLabel, failureLabel, failureReason, userMessage, suggestion string) *ValidationError {
+	logValidationRules.Printf("Validating %s: field=%s, value=%d, min=%d, max=%d, jsonPath=%s", logLabel, fieldName, value, min, max, jsonPath)
+	if value < min || value > max {
+		return newValidationError(
+			fmt.Sprintf("%s validation failed: %s=%d %s", failureLabel, fieldName, value, failureReason),
+			fieldName,
+			userMessage,
 			jsonPath,
 			suggestion,
 		)
@@ -101,34 +130,35 @@ func PositiveInteger(value int, fieldName, jsonPath string) *ValidationError {
 // TimeoutMinimum validates that a timeout value is at least min.
 // Returns nil if valid, *ValidationError if below the minimum.
 func TimeoutMinimum(timeout, min int, fieldName, jsonPath string) *ValidationError {
-	logValidationRules.Printf("Validating timeout minimum: field=%s, value=%d, min=%d, jsonPath=%s", fieldName, timeout, min, jsonPath)
-	if timeout < min {
-		return newValidationError(
-			fmt.Sprintf("Timeout minimum validation failed: %s=%d is below minimum %d", fieldName, timeout, min),
-			fieldName,
-			fmt.Sprintf("%s must be at least %d, got %d", fieldName, min, timeout),
-			jsonPath,
-			fmt.Sprintf("Use a value of at least %d seconds", min),
-		)
-	}
-	return nil
+	return validateMinimumRule(
+		timeout,
+		min,
+		fieldName,
+		jsonPath,
+		"timeout minimum",
+		"Timeout minimum",
+		fmt.Sprintf("is below minimum %d", min),
+		fmt.Sprintf("%s must be at least %d, got %d", fieldName, min, timeout),
+		fmt.Sprintf("Use a value of at least %d seconds", min),
+	)
 }
 
 // TimeoutRange validates that a timeout value is within [min, max] (inclusive).
 // Returns nil if valid, *ValidationError if outside the range.
 func TimeoutRange(timeout, min, max int, fieldName, jsonPath string) *ValidationError {
-	logValidationRules.Printf("Validating timeout range: field=%s, value=%d, min=%d, max=%d, jsonPath=%s", fieldName, timeout, min, max, jsonPath)
-	if timeout < min || timeout > max {
-		suggestedTimeout := min + (max-min)/2
-		return newValidationError(
-			fmt.Sprintf("Timeout range validation failed: %s=%d is outside [%d, %d]", fieldName, timeout, min, max),
-			fieldName,
-			fmt.Sprintf("%s must be between %d and %d, got %d", fieldName, min, max, timeout),
-			jsonPath,
-			fmt.Sprintf("Use a value between %d and %d seconds (e.g., %d)", min, max, suggestedTimeout),
-		)
-	}
-	return nil
+	suggestedTimeout := min + (max-min)/2
+	return validateInclusiveRangeRule(
+		timeout,
+		min,
+		max,
+		fieldName,
+		jsonPath,
+		"timeout range",
+		"Timeout range",
+		fmt.Sprintf("is outside [%d, %d]", min, max),
+		fmt.Sprintf("%s must be between %d and %d, got %d", fieldName, min, max, timeout),
+		fmt.Sprintf("Use a value between %d and %d seconds (e.g., %d)", min, max, suggestedTimeout),
+	)
 }
 
 func mountValidationError(jsonPath string, index int, message, suggestion string) *ValidationError {
