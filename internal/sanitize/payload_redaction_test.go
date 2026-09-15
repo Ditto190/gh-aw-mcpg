@@ -2,6 +2,8 @@ package sanitize
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"testing"
@@ -41,7 +43,7 @@ func TestRedactedPayloadRenderings(t *testing.T) {
 	text := RedactedPayloadText(payload)
 	assert.NotContains(text, "SENTINEL-PRIVATE")
 	assert.Contains(text, "bytes=38")
-	assert.Contains(text, "digest=sha256:")
+	assert.Contains(text, "digest=hmac:")
 
 	encoded := RedactedPayloadJSON(payload)
 	assert.NotContains(string(encoded), "SENTINEL-PRIVATE")
@@ -55,6 +57,11 @@ func TestRedactedPayloadRenderings(t *testing.T) {
 	// The digest is stable so identical payloads stay correlatable across lines.
 	assert.Equal(PayloadDigest(payload), PayloadDigest(payload))
 	assert.NotEqual(PayloadDigest(payload), PayloadDigest([]byte(`{"result":{}}`)))
+
+	// The digest is keyed with a per-process secret, so an artifact reader cannot
+	// recover a payload drawn from a small candidate set by hashing guesses.
+	plain := sha256.Sum256(payload)
+	assert.NotContains(text, hex.EncodeToString(plain[:])[:16])
 }
 
 func TestRedactErrorForLog(t *testing.T) {
@@ -66,5 +73,5 @@ func TestRedactErrorForLog(t *testing.T) {
 
 	category := RedactErrorForLog(errors.New("backend returned SENTINEL-PRIVATE"))
 	assert.NotContains(category, "SENTINEL-PRIVATE")
-	assert.Contains(category, "error sha256:")
+	assert.Contains(category, "error hmac:")
 }

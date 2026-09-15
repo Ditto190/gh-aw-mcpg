@@ -77,7 +77,7 @@ func TestLogRPCForSession_EnclaveSessionRedactsEverySink(t *testing.T) {
 	require.NoError(json.Unmarshal(requestEntry.Payload, &payload))
 	assert.Equal(true, payload["redacted"])
 	assert.Equal("enclave_payload_redacted", payload["reason"])
-	assert.Contains(payload["digest"], "sha256:")
+	assert.Contains(payload["digest"], "hmac:")
 
 	var responseEntry JSONLRPCMessage
 	require.NoError(json.Unmarshal([]byte(lines[1]), &responseEntry))

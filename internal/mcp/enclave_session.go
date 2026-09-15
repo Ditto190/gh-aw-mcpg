@@ -1,6 +1,10 @@
 package mcp
 
-import "context"
+import (
+	"context"
+
+	"github.com/github/gh-aw-mcpg/internal/sanitize"
+)
 
 // EnclaveSessionContextKey marks a request context as belonging to an enclave-scoped
 // session. The marker is attached once, when the session is established, and travels
@@ -21,4 +25,16 @@ func IsEnclaveSession(ctx context.Context) bool {
 	}
 	enclave, _ := ctx.Value(EnclaveSessionContextKey).(bool)
 	return enclave
+}
+
+// RedactRequestValueForLog returns value unchanged for ordinary traffic and a
+// stable keyed digest for enclave-scoped traffic. Method-specific debug logs
+// (e.g. the resources/read URI) carry request arguments just like a tools/call
+// payload does, so they resolve the same redaction decision from the request
+// context instead of bypassing it.
+func RedactRequestValueForLog(ctx context.Context, value string) string {
+	if sanitize.ShouldRedactPayload(IsEnclaveSession(ctx)) {
+		return sanitize.KeyedDigest(value)
+	}
+	return value
 }

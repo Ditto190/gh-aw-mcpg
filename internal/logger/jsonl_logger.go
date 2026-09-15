@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/github/gh-aw-mcpg/internal/sanitize"
-	"github.com/github/gh-aw-mcpg/internal/util"
 )
 
 // JSONLLogger manages logging RPC messages to a JSONL file (one JSON object per line)
@@ -200,16 +199,16 @@ type FilteredItemLogEntry struct {
 }
 
 // RedactForEnclave returns a copy of the entry with every item-identifying field reduced to a
-// stable, non-reversible hash and every free-text field passed through private-selector
+// per-process-keyed, non-reversible token and every free-text field passed through private-selector
 // redaction. DIFC decisions stay diagnosable (server, tool, tags, and a correlatable item
 // token) while the private resource the decision was made about is never persisted.
 func (e FilteredItemLogEntry) RedactForEnclave() FilteredItemLogEntry {
 	redacted := e
-	redacted.Description = util.HashForLog(e.Description, redactedFieldHashLen, "item:")
-	redacted.HTMLURL = util.HashForLog(e.HTMLURL, redactedFieldHashLen, "url:")
-	redacted.AuthorLogin = util.HashForLog(e.AuthorLogin, redactedFieldHashLen, "user:")
-	redacted.Number = util.HashForLog(e.Number, redactedFieldHashLen, "num:")
-	redacted.SHA = util.HashForLog(e.SHA, redactedFieldHashLen, "sha:")
+	redacted.Description = "item:" + sanitize.KeyedDigest(e.Description)
+	redacted.HTMLURL = "url:" + sanitize.KeyedDigest(e.HTMLURL)
+	redacted.AuthorLogin = "user:" + sanitize.KeyedDigest(e.AuthorLogin)
+	redacted.Number = "num:" + sanitize.KeyedDigest(e.Number)
+	redacted.SHA = "sha:" + sanitize.KeyedDigest(e.SHA)
 	redacted.Reason = sanitize.RedactPrivateSelectors(e.Reason)
 	redacted.SecrecyTags = redactTags(e.SecrecyTags)
 	redacted.IntegrityTags = redactTags(e.IntegrityTags)
@@ -217,9 +216,6 @@ func (e FilteredItemLogEntry) RedactForEnclave() FilteredItemLogEntry {
 	redacted.AgentIntegrityTags = redactTags(e.AgentIntegrityTags)
 	return redacted
 }
-
-// redactedFieldHashLen is the hex length of hashes substituted for item-identifying fields.
-const redactedFieldHashLen = 16
 
 // redactTags applies private-selector redaction to each DIFC tag, preserving the tag list
 // shape (and therefore the comparability of agent and resource labels).

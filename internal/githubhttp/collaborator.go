@@ -26,6 +26,14 @@ func collaboratorLogFields(sensitive bool, owner, repo, username string) (ownerF
 		util.HashForLogIf(sensitive, username, 16, "user:")
 }
 
+// CollaboratorSelectorsForLog exposes collaboratorLogFields to callers outside
+// this package (e.g. the guard-internal metadata call in internal/server) so
+// every log site that mentions a collaborator selector shares one redaction
+// convention instead of hand-rolling its own.
+func CollaboratorSelectorsForLog(sensitive bool, owner, repo, username string) (ownerForLog, repoForLog, usernameForLog string) {
+	return collaboratorLogFields(sensitive, owner, repo, username)
+}
+
 // ParseCollaboratorPermissionArgs extracts and validates the owner, repo, and
 // username fields from an args map for a get_collaborator_permission call.
 // It returns the (possibly partial) values even on error so that callers can

@@ -17,13 +17,19 @@ var logSDK = logger.New("server:sdk-frontend")
 // WithSDKLogging wraps an SDK StreamableHTTPHandler to log JSON-RPC translation results.
 // This captures the request/response at the HTTP boundary to understand what the SDK
 // sees and what it returns, particularly for debugging protocol state issues.
-func WithSDKLogging(handler http.Handler, mode string) http.Handler {
+//
+// us is used only to resolve whether the request belongs to an enclave-scoped session.
+// This boundary sees complete request and response bodies, so it must reach the same
+// redaction decision as the inner sinks; a nil us (tests, non-gateway callers) simply
+// falls back to the process-wide redaction mode.
+func WithSDKLogging(handler http.Handler, mode string, us *UnifiedServer) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		startTime := time.Now()
 
 		// Extract session info for logging context
 		sessionID := extractSessionIDFromRequest(r)
 		mcpSessionID := r.Header.Get("Mcp-Session-Id")
+		redactPayload := sanitize.ShouldRedactPayload(us.isEnclaveSession(sessionID))
 
 		// Log incoming request
 		logSDK.Printf(">>> SDK Request [%s] session=%s mcp-session=%s method=%s path=%s",
@@ -42,6 +48,9 @@ func WithSDKLogging(handler http.Handler, mode string) http.Handler {
 				logSDK.Printf("    JSON-RPC Request: method=%s id=%v", jsonrpcReq.Method, jsonrpcReq.ID)
 				logger.LogDebug("sdk-frontend", "JSON-RPC request parsed: mode=%s, method=%s, id=%v, session=%s",
 					mode, jsonrpcReq.Method, jsonrpcReq.ID, util.FormatSessionIDForLog(sessionID))
+			} else if redactPayload {
+				logSDK.Printf("    Failed to parse JSON-RPC request: %s", sanitize.RedactErrorForLog(err))
+				logSDK.Printf("    Raw body: %s", sanitize.RedactedPayloadText(requestBody))
 			} else {
 				logSDK.Printf("    Failed to parse JSON-RPC request: %v", err)
 				sanitizedBody := sanitize.SanitizeString(string(requestBody))
@@ -56,6 +65,9 @@ func WithSDKLogging(handler http.Handler, mode string) http.Handler {
 		handler.ServeHTTP(lw, r)
 
 		duration := time.Since(startTime)
+		// The inner handler mutates *r in place when it injects the session context, so an
+		// enclave marker attached during session establishment is visible here.
+		redactPayload = redactPayload || sanitize.ShouldRedactPayload(mcp.IsEnclaveSession(r.Context()))
 
 		// Parse and log response
 		responseBody := lw.Body()
@@ -68,11 +80,17 @@ func WithSDKLogging(handler http.Handler, mode string) http.Handler {
 					logSDK.Printf("<<< SDK Response [%s] ERROR status=%d duration=%v",
 						mode, lw.StatusCode, duration)
 					logSDK.Printf("    JSON-RPC Error: code=%d message=%q",
-						jsonrpcResp.Error.Code, jsonrpcResp.Error.Message)
+						jsonrpcResp.Error.Code, sdkErrorMessageForLog(jsonrpcResp.Error.Message, redactPayload))
 
 					// Check for specific error types
 					errorCode := jsonrpcResp.Error.Code
 					errorMsg := jsonrpcResp.Error.Message
+					// Backend error messages routinely quote the failing request or response
+					// content, so enclave traffic logs only a correlatable token.
+					loggedErrorMsg := errorMsg
+					if redactPayload {
+						loggedErrorMsg = sanitize.KeyedDigest(errorMsg)
+					}
 
 					// Log tool not found errors specifically for better monitoring
 					// Error code -32602 (Invalid params) is used by the SDK for unknown tools
@@ -82,7 +100,7 @@ func WithSDKLogging(handler http.Handler, mode string) http.Handler {
 						logSDK.Printf("    ⚠️  TOOL NOT FOUND ERROR")
 						logger.LogWarn("client",
 							"Tool not found: mode=%s, method=%s, session=%s, code=%d, message=%q",
-							mode, jsonrpcReq.Method, util.FormatSessionIDForLog(sessionID), errorCode, errorMsg)
+							mode, jsonrpcReq.Method, util.FormatSessionIDForLog(sessionID), errorCode, loggedErrorMsg)
 					}
 
 					// Log detailed error info for protocol state issues
@@ -97,12 +115,12 @@ func WithSDKLogging(handler http.Handler, mode string) http.Handler {
 						logger.LogWarn("sdk-frontend",
 							"Protocol state error: mode=%s, method=%s, session=%s, mcp_session=%s, error=%q",
 							mode, jsonrpcReq.Method, util.FormatSessionIDForLog(sessionID),
-							util.FormatSessionIDForLog(mcpSessionID), errorMsg)
+							util.FormatSessionIDForLog(mcpSessionID), loggedErrorMsg)
 					} else if (errorCode != -32602 && errorCode != -32601) || jsonrpcReq.Method != "tools/call" {
 						// Only log as general error if not already logged above
 						logger.LogError("sdk-frontend",
 							"JSON-RPC error: mode=%s, method=%s, code=%d, message=%q",
-							mode, jsonrpcReq.Method, errorCode, errorMsg)
+							mode, jsonrpcReq.Method, errorCode, loggedErrorMsg)
 					}
 				} else {
 					// Success response
@@ -119,11 +137,15 @@ func WithSDKLogging(handler http.Handler, mode string) http.Handler {
 				// Could be SSE stream or other format
 				logSDK.Printf("<<< SDK Response [%s] status=%d duration=%v (non-JSON or stream)",
 					mode, lw.StatusCode, duration)
-				sanitizedResp := sanitize.SanitizeString(string(responseBody))
-				if len(sanitizedResp) < 500 {
-					logSDK.Printf("    Raw response (sanitized): %s", sanitizedResp)
+				if redactPayload {
+					logSDK.Printf("    Raw response: %s", sanitize.RedactedPayloadText(responseBody))
 				} else {
-					logSDK.Printf("    Raw response (sanitized, truncated): %.500s...", sanitizedResp)
+					sanitizedResp := sanitize.SanitizeString(string(responseBody))
+					if len(sanitizedResp) < 500 {
+						logSDK.Printf("    Raw response (sanitized): %s", sanitizedResp)
+					} else {
+						logSDK.Printf("    Raw response (sanitized, truncated): %.500s...", sanitizedResp)
+					}
 				}
 			}
 		} else {
@@ -131,6 +153,15 @@ func WithSDKLogging(handler http.Handler, mode string) http.Handler {
 				mode, lw.StatusCode, duration)
 		}
 	})
+}
+
+// sdkErrorMessageForLog renders a JSON-RPC error message for a log line, reducing it
+// to a keyed token when the traffic is enclave-scoped.
+func sdkErrorMessageForLog(message string, redact bool) string {
+	if redact {
+		return sanitize.KeyedDigest(message)
+	}
+	return message
 }
 
 // withResponseLogging wraps an http.Handler to log response bodies

@@ -27,7 +27,7 @@ func logFilteredItems(ctx context.Context, serverID, toolName string, filtered *
 	logDifcLog.Printf("Logging filtered items: serverID=%s, toolName=%s, count=%d", serverID, toolName, len(filtered.Filtered))
 	redactEnclave := sanitize.ShouldRedactPayload(mcp.IsEnclaveSession(ctx))
 	for _, detail := range filtered.Filtered {
-		entry := buildFilteredItemLogEntry(serverID, toolName, detail)
+		entry := buildFilteredItemLogEntry(serverID, toolName, detail, redactEnclave)
 		if redactEnclave {
 			entry = entry.RedactForEnclave()
 		}
@@ -43,7 +43,10 @@ func logFilteredItems(ctx context.Context, serverID, toolName string, filtered *
 }
 
 // buildFilteredItemLogEntry constructs a logger.FilteredItemLogEntry from a filtered item.
-func buildFilteredItemLogEntry(serverID, toolName string, detail difc.FilteredItemDetail) logger.FilteredItemLogEntry {
+// redactEnclave suppresses the debug emissions that would otherwise copy the raw
+// item metadata into the file logger under DEBUG=*; the returned entry is redacted
+// by the caller.
+func buildFilteredItemLogEntry(serverID, toolName string, detail difc.FilteredItemDetail, redactEnclave bool) logger.FilteredItemLogEntry {
 	entry := logger.FilteredItemLogEntry{
 		ServerID: serverID,
 		ToolName: toolName,
@@ -54,7 +57,9 @@ func buildFilteredItemLogEntry(serverID, toolName string, detail difc.FilteredIt
 		entry.Description = detail.Item.Labels.Description
 		entry.SecrecyTags = difc.TagsToStrings(detail.Item.Labels.Secrecy.Label.GetTags())
 		entry.IntegrityTags = difc.TagsToStrings(detail.Item.Labels.Integrity.Label.GetTags())
-		logDifcLog.Printf("Filtered item labels: description=%s, secrecy=%v, integrity=%v", entry.Description, entry.SecrecyTags, entry.IntegrityTags)
+		if !redactEnclave {
+			logDifcLog.Printf("Filtered item labels: description=%s, secrecy=%v, integrity=%v", entry.Description, entry.SecrecyTags, entry.IntegrityTags)
+		}
 	}
 
 	// Extract identifying metadata from the raw item data.
@@ -80,7 +85,9 @@ func buildFilteredItemLogEntry(serverID, toolName string, detail difc.FilteredIt
 			entry.Number = s
 		}
 		entry.SHA = util.GetStringFromMap(m, "sha")
-		logDifcLog.Printf("Filtered item metadata: author=%s, number=%s, url=%s", entry.AuthorLogin, entry.Number, entry.HTMLURL)
+		if !redactEnclave {
+			logDifcLog.Printf("Filtered item metadata: author=%s, number=%s, url=%s", entry.AuthorLogin, entry.Number, entry.HTMLURL)
+		}
 	}
 
 	return entry
@@ -119,7 +126,11 @@ const maxFilteredItemsInNotice = 5
 // annotation to a partial or empty list), this returns an actual Go error that the caller
 // can surface as an MCP IsError result.  It prevents agents from misinterpreting a
 // "filtered" single-item response (e.g. issue_read) as "resource not found".
-func buildDIFCSingleItemFilteredError(detail difc.FilteredItemDetail) error {
+//
+// The message is returned to the requesting agent, which is already authorized to know
+// the item was withheld; ctx only gates the diagnostic debug emission, which would
+// otherwise copy the item description into the exported file logger under DEBUG=*.
+func buildDIFCSingleItemFilteredError(ctx context.Context, detail difc.FilteredItemDetail) error {
 	policyLabel := difcPolicyLabel([]difc.FilteredItemDetail{detail})
 
 	desc := ""
@@ -136,7 +147,9 @@ func buildDIFCSingleItemFilteredError(detail difc.FilteredItemDetail) error {
 	if detail.Reason != "" {
 		msg = fmt.Sprintf("%s (%s)", msg, detail.Reason)
 	}
-	logDifcLog.Printf("buildDIFCSingleItemFilteredError: description=%s, policy=%s, reason=%s", desc, policyLabel, detail.Reason)
+	if !sanitize.ShouldRedactPayload(mcp.IsEnclaveSession(ctx)) {
+		logDifcLog.Printf("buildDIFCSingleItemFilteredError: description=%s, policy=%s, reason=%s", desc, policyLabel, detail.Reason)
+	}
 	return errors.New(msg)
 }
 

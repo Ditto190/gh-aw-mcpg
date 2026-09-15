@@ -251,7 +251,7 @@ func TestBuildFilteredItemLogEntry_WithNilLabels(t *testing.T) {
 		Reason: "some reason",
 	}
 
-	entry := buildFilteredItemLogEntry("srv", "tool_name", detail)
+	entry := buildFilteredItemLogEntry("srv", "tool_name", detail, false)
 
 	assert.Equal(t, "srv", entry.ServerID)
 	assert.Equal(t, "tool_name", entry.ToolName)
@@ -273,7 +273,7 @@ func TestBuildFilteredItemLogEntry_ExtractAuthorLogin_UserObject(t *testing.T) {
 		"pr:org/repo#3", "secrecy tag missing from agent label", nil, nil,
 	)
 
-	entry := buildFilteredItemLogEntry("github", "list_prs", detail)
+	entry := buildFilteredItemLogEntry("github", "list_prs", detail, false)
 	assert.Equal(t, "bob", entry.AuthorLogin)
 }
 
@@ -288,7 +288,7 @@ func TestBuildFilteredItemLogEntry_ExtractAuthorLogin_AuthorObject(t *testing.T)
 		"commit:abc123", "integrity level below agent threshold", nil, nil,
 	)
 
-	entry := buildFilteredItemLogEntry("github", "list_commits", detail)
+	entry := buildFilteredItemLogEntry("github", "list_commits", detail, false)
 	assert.Equal(t, "carol", entry.AuthorLogin)
 	assert.Equal(t, "abc123", entry.SHA)
 }
@@ -303,7 +303,7 @@ func TestBuildFilteredItemLogEntry_ExtractNumberField_JsonNumber(t *testing.T) {
 		"issue", "secrecy requirements not met by agent", nil, nil,
 	)
 
-	entry := buildFilteredItemLogEntry("github", "list_issues", detail)
+	entry := buildFilteredItemLogEntry("github", "list_issues", detail, false)
 	assert.Equal(t, "999", entry.Number)
 }
 
@@ -351,7 +351,7 @@ func TestBuildFilteredItemLogEntry_AuthorLoginEdgeCases(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			detail := newTestFilteredItem(tt.data, "item", "reason", nil, nil)
-			entry := buildFilteredItemLogEntry("github", "list_items", detail)
+			entry := buildFilteredItemLogEntry("github", "list_items", detail, false)
 			assert.Equal(t, tt.wantAuthor, entry.AuthorLogin)
 		})
 	}
@@ -372,7 +372,7 @@ func TestBuildFilteredItemLogEntry_NumberEdgeCases(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			detail := newTestFilteredItem(tt.data, "item", "reason", nil, nil)
-			entry := buildFilteredItemLogEntry("github", "list_items", detail)
+			entry := buildFilteredItemLogEntry("github", "list_items", detail, false)
 			assert.Equal(t, tt.wantNumber, entry.Number)
 		})
 	}
@@ -390,7 +390,7 @@ func TestBuildFilteredItemLogEntry_NonMapData(t *testing.T) {
 	}
 
 	assert.NotPanics(t, func() {
-		entry := buildFilteredItemLogEntry("github", "tool", detail)
+		entry := buildFilteredItemLogEntry("github", "tool", detail, false)
 		assert.Empty(t, entry.HTMLURL)
 		assert.Empty(t, entry.Number)
 		assert.Empty(t, entry.AuthorLogin)
@@ -635,7 +635,7 @@ func TestDifcPolicyLabel(t *testing.T) {
 func TestBuildDIFCSingleItemFilteredError_IntegrityViolation(t *testing.T) {
 	detail := newIntegrityFilteredItem("issue:org/repo#42", "integrity too low for agent context")
 
-	err := buildDIFCSingleItemFilteredError(detail)
+	err := buildDIFCSingleItemFilteredError(context.Background(), detail)
 
 	require.Error(t, err)
 	require.ErrorContains(t, err, "[Filtered]")
@@ -649,7 +649,7 @@ func TestBuildDIFCSingleItemFilteredError_IntegrityViolation(t *testing.T) {
 func TestBuildDIFCSingleItemFilteredError_SecrecyViolation(t *testing.T) {
 	detail := newSecrecyFilteredItem("resource:actions_get", "secrecy requirements not met")
 
-	err := buildDIFCSingleItemFilteredError(detail)
+	err := buildDIFCSingleItemFilteredError(context.Background(), detail)
 
 	require.Error(t, err)
 	require.ErrorContains(t, err, "[Filtered]")
@@ -667,7 +667,7 @@ func TestBuildDIFCSingleItemFilteredError_NoDescription(t *testing.T) {
 		IsSecrecyViolation: false,
 	}
 
-	err := buildDIFCSingleItemFilteredError(detail)
+	err := buildDIFCSingleItemFilteredError(context.Background(), detail)
 
 	require.Error(t, err)
 	require.ErrorContains(t, err, "[Filtered]")
@@ -680,7 +680,7 @@ func TestBuildDIFCSingleItemFilteredError_NoDescription(t *testing.T) {
 func TestBuildDIFCSingleItemFilteredError_NoReason(t *testing.T) {
 	detail := newIntegrityFilteredItem("issue:org/repo#7", "")
 
-	err := buildDIFCSingleItemFilteredError(detail)
+	err := buildDIFCSingleItemFilteredError(context.Background(), detail)
 
 	require.Error(t, err)
 	require.ErrorContains(t, err, "[Filtered]")

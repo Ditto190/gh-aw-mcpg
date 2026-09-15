@@ -2,6 +2,10 @@ package sanitize
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,8 +13,6 @@ import (
 	"strconv"
 	"sync"
 	"sync/atomic"
-
-	"github.com/github/gh-aw-mcpg/internal/util"
 )
 
 // Payload redaction exists for enclave-scoped MCP traffic. An enclave agent is
@@ -33,14 +35,59 @@ const EnvRawPayloadLogs = "MCP_GATEWAY_UNSAFE_RAW_ENCLAVE_PAYLOAD_LOGS"
 
 // redactedPayloadDigestLen is the hex length of the payload digest included in
 // redacted log entries. It is long enough to correlate repeated payloads across
-// log lines and short enough to stay unusable as a content oracle.
+// log lines and short enough to keep entries readable.
 const redactedPayloadDigestLen = 16
+
+// digestPrefix marks a token produced by KeyedDigest. The token is an HMAC, not
+// a bare hash, so it is labelled distinctly from the plain SHA-256 tokens used
+// for non-sensitive attribution elsewhere.
+const digestPrefix = "hmac:"
 
 var (
 	payloadRedaction  atomic.Bool
 	rawPayloadOnce    sync.Once
 	rawPayloadAllowed atomic.Bool
+	digestKeyOnce     sync.Once
+	digestKey         []byte
 )
+
+// payloadDigestKey returns the per-process secret used to key redaction
+// digests. A plain (even truncated) SHA-256 of a redacted value is recoverable
+// by dictionary attack whenever the value comes from a small enumerable set —
+// repository names, file paths, issue numbers, logins — and the digests are
+// published in an artifact readable by anyone. Keying the digest with a random
+// secret that never leaves the process preserves the only property logs need
+// (equal values produce equal tokens within one run) while making the token
+// useless to an artifact reader.
+func payloadDigestKey() []byte {
+	digestKeyOnce.Do(func() {
+		key := make([]byte, sha256.Size)
+		if _, err := rand.Read(key); err != nil {
+			// Without a secret key, a digest would be attackable; emit no digest
+			// at all rather than a guessable one.
+			return
+		}
+		digestKey = key
+	})
+	return digestKey
+}
+
+// KeyedDigest returns a stable, non-reversible, per-process-keyed token for a
+// value that must not be persisted in an exported log. Empty values render as
+// "(none)". Tokens are comparable within a single process run and carry no
+// information to a reader of the resulting artifact.
+func KeyedDigest(value string) string {
+	if value == "" {
+		return "(none)"
+	}
+	key := payloadDigestKey()
+	if key == nil {
+		return digestPrefix + "unavailable"
+	}
+	mac := hmac.New(sha256.New, key)
+	mac.Write([]byte(value))
+	return digestPrefix + hex.EncodeToString(mac.Sum(nil))[:redactedPayloadDigestLen]
+}
 
 // rawPayloadLogsAllowed reports whether the privileged raw-payload opt-in is
 // set. It is resolved once per process because it gates a security default.
@@ -99,9 +146,9 @@ func RawPayloadLogsAllowed() bool {
 }
 
 // PayloadDigest returns a stable, non-reversible digest of payload suitable for
-// correlating identical payloads across log lines.
+// correlating identical payloads across log lines within one process run.
 func PayloadDigest(payload []byte) string {
-	return util.HashForLog(string(payload), redactedPayloadDigestLen, "sha256:")
+	return KeyedDigest(string(payload))
 }
 
 // RedactedPayloadText returns the metadata-only rendering of payload used by the
@@ -149,6 +196,6 @@ func RedactErrorForLog(err error) string {
 	case errors.Is(err, context.Canceled):
 		return "canceled"
 	default:
-		return "error " + util.HashForLog(err.Error(), redactedPayloadDigestLen, "sha256:")
+		return "error " + KeyedDigest(err.Error())
 	}
 }

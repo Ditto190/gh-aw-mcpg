@@ -78,6 +78,11 @@ func TestEnclaveSessionPayloadsAbsentFromExportedArtifacts(t *testing.T) {
 		"--unified",
 		"--log-dir", logDir,
 	)
+	// Public workflows commonly run the gateway with DEBUG=* enabled, and every debug
+	// logger also copies its output into the exported file logger. Running the
+	// regression in that mode is the only way it covers the configuration whose
+	// artifacts are actually published.
+	cmd.Env = append(os.Environ(), "DEBUG=*", "DEBUG_COLORS=0")
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 	cmd.Stdin = bytes.NewReader(configJSON)
