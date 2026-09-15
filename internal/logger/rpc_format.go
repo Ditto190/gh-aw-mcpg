@@ -88,6 +88,12 @@ func formatRPCMessage(info *RPCMessageInfo) string {
 	sb.WriteString(strconv.Itoa(info.PayloadSize))
 	sb.WriteByte('b')
 
+	// Tool name (preserved separately when the payload is redacted)
+	if info.ToolName != "" {
+		sb.WriteString(" tool:")
+		sb.WriteString(info.ToolName)
+	}
+
 	// Error (if present)
 	if info.Error != "" {
 		sb.WriteString(" err:")
@@ -101,6 +107,35 @@ func formatRPCMessage(info *RPCMessageInfo) string {
 	}
 
 	return sb.String()
+}
+
+// markdownToolName returns the tool name to display for a tools/call message, preferring the
+// explicitly carried name (set when the payload is redacted) over parsing the payload.
+func markdownToolName(info *RPCMessageInfo) string {
+	if info.ToolName != "" {
+		return info.ToolName
+	}
+	if info.Method != "tools/call" {
+		return ""
+	}
+	return toolNameFromRequestPayload(info.Method, []byte(info.Payload))
+}
+
+// toolNameFromRequestPayload extracts params.name from a tools/call request payload.
+// It returns "" for any other method or when the payload is not a parseable tools/call request.
+func toolNameFromRequestPayload(method string, payload []byte) string {
+	if method != "tools/call" || len(payload) == 0 {
+		return ""
+	}
+	var data struct {
+		Params struct {
+			Name string `json:"name"`
+		} `json:"params"`
+	}
+	if err := json.Unmarshal(payload, &data); err != nil {
+		return ""
+	}
+	return data.Params.Name
 }
 
 // isEffectivelyEmpty checks if the data is effectively empty (only contains params: null)
@@ -163,16 +198,10 @@ func formatRPCMessageMarkdown(info *RPCMessageInfo) string {
 		if info.Method != "" {
 			message = fmt.Sprintf("**%s**%s`%s`", info.ServerID, dir, info.Method)
 
-			// For tools/call, extract and display the tool name
-			if info.Method == "tools/call" && info.Payload != "" {
-				var data map[string]interface{}
-				if err := json.Unmarshal([]byte(info.Payload), &data); err == nil {
-					if params, ok := data["params"].(map[string]interface{}); ok {
-						if toolName, ok := params["name"].(string); ok && toolName != "" {
-							message += fmt.Sprintf(" `%s`", toolName)
-						}
-					}
-				}
+			// For tools/call, extract and display the tool name. When the payload has
+			// been redacted the name is carried on the info struct instead.
+			if toolName := markdownToolName(info); toolName != "" {
+				message += fmt.Sprintf(" `%s`", toolName)
 			}
 		} else {
 			message = fmt.Sprintf("**%s**%s`resp`", info.ServerID, dir)

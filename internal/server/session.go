@@ -190,12 +190,17 @@ func isSinglePathSegmentSessionID(sessionID string) bool {
 
 // injectSessionContext stores the session ID and optional backend ID into the request context.
 // If backendID is empty, only session ID is injected (unified mode).
+// When enclaveSession is true, the enclave provenance marker is attached so downstream
+// logging reduces every payload for this request to metadata.
 // Returns the modified request with updated context.
-func injectSessionContext(r *http.Request, sessionID, backendID string) *http.Request {
-	logSession.Printf("Injecting session context: sessionID=%s, backendID=%s", util.FormatSessionIDForLog(sessionID), backendID)
+func injectSessionContext(r *http.Request, sessionID, backendID string, enclaveSession bool) *http.Request {
+	logSession.Printf("Injecting session context: sessionID=%s, backendID=%s, enclave=%v", util.FormatSessionIDForLog(sessionID), backendID, enclaveSession)
 
 	ctx := context.WithValue(r.Context(), SessionIDContextKey, sessionID)
 	ctx = guard.SetAgentIDInContext(ctx, sessionID)
+	if enclaveSession {
+		ctx = mcp.WithEnclaveSession(ctx)
+	}
 
 	if backendID != "" {
 		logSession.Printf("Adding backend ID to context: backendID=%s", backendID)
@@ -211,7 +216,9 @@ func injectSessionContext(r *http.Request, sessionID, backendID string) *http.Re
 // session ID. Used by both routed and unified StreamableHTTP session establishment
 // callbacks. When authEnabled is true, the identity is derived solely from the
 // Authorization header (X-Agent-ID cannot override the authenticated principal).
-func setupSessionCallback(r *http.Request, backendID string, authEnabled bool) (string, bool) {
+// isEnclaveSession, when non-nil, reports whether the resolved identity is
+// enclave-scoped; such sessions have their request bodies and payloads redacted.
+func setupSessionCallback(r *http.Request, backendID string, authEnabled bool, isEnclaveSession func(string) bool) (string, bool) {
 	sessionID := extractAndValidateSession(r, authEnabled)
 	if sessionID == "" {
 		return "", false
@@ -225,9 +232,11 @@ func setupSessionCallback(r *http.Request, backendID string, authEnabled bool) (
 			r.RemoteAddr, r.Method, r.URL.Path, util.HashIdentifierForLog(sessionID))
 	}
 
-	logHTTPRequestBody(r, sessionID, backendID)
+	enclaveSession := isEnclaveSession != nil && isEnclaveSession(sessionID)
 
-	*r = *injectSessionContext(r, sessionID, backendID)
+	logHTTPRequestBody(r, sessionID, backendID, enclaveSession)
+
+	*r = *injectSessionContext(r, sessionID, backendID, enclaveSession)
 
 	return sessionID, true
 }

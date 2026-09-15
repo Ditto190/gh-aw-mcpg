@@ -73,6 +73,8 @@ type RPCMessageInfo struct {
 	PayloadSize int                 // Size of the payload in bytes
 	Payload     string              // First N characters of payload (sanitized)
 	Error       string              // Error message if any (for responses)
+	ToolName    string              // Tool name for tools/call requests, preserved when the payload is redacted
+	Redacted    bool                // Whether the payload was reduced to metadata only
 }
 
 // newRPCMessageInfoFromSanitized builds an RPCMessageInfo from an already-sanitized
@@ -96,7 +98,13 @@ func newRPCMessageInfoFromSanitized(direction RPCMessageDirection, messageType R
 
 // logRPCMessageToAll routes a single RPC message to all log sinks (text, markdown, JSONL).
 // It uses the withGlobalLogger helper from global_helpers.go to handle mutex locking and nil-checking.
-func logRPCMessageToAll(direction RPCMessageDirection, messageType RPCMessageType, serverID, method string, payload []byte, err error, agentSecrecy, agentIntegrity []string) {
+// When enclaveSession is set (or process-wide payload redaction is active), the payload never
+// reaches any sink: every format receives metadata only.
+func logRPCMessageToAll(direction RPCMessageDirection, messageType RPCMessageType, serverID, method string, payload []byte, err error, agentSecrecy, agentIntegrity []string, enclaveSession bool) {
+	if sanitize.ShouldRedactPayload(enclaveSession) {
+		logRedactedRPCMessageToAll(direction, messageType, serverID, method, payload, err, agentSecrecy, agentIntegrity)
+		return
+	}
 	// Sanitize the payload string once, then share across all sinks.
 	// SanitizeString runs 10 compiled regex patterns; computing it once and
 	// passing the result to both preview builders and the JSONL logger avoids
@@ -118,16 +126,55 @@ func logRPCMessageToAll(direction RPCMessageDirection, messageType RPCMessageTyp
 	logRPCMessageJSONLWithTagsAndSanitized(direction, messageType, serverID, method, sanitize.SanitizeJSONFromString(sanitized), err, agentSecrecy, agentIntegrity)
 }
 
+// logRedactedRPCMessageToAll routes an enclave-scoped RPC message to all log sinks with the
+// payload replaced by metadata (byte count and a stable digest) and the error reduced to a
+// coarse category. Direction, server, method, tool name, size, and DIFC tags are preserved so
+// the call stays diagnosable without its content.
+func logRedactedRPCMessageToAll(direction RPCMessageDirection, messageType RPCMessageType, serverID, method string, payload []byte, err error, agentSecrecy, agentIntegrity []string) {
+	toolName := toolNameFromRequestPayload(method, payload)
+	info := &RPCMessageInfo{
+		Direction:   direction,
+		MessageType: messageType,
+		ServerID:    serverID,
+		Method:      method,
+		PayloadSize: len(payload),
+		Payload:     sanitize.RedactedPayloadText(payload),
+		Error:       sanitize.RedactErrorForLog(err),
+		ToolName:    toolName,
+		Redacted:    true,
+	}
+
+	LogDebug("rpc", "%s", formatRPCMessage(info))
+
+	withGlobalLogger(&globalMarkdownMu, &globalMarkdownLogger, func(logger *MarkdownLogger) {
+		logger.Log(LogLevelDebug, "rpc", "%s", formatRPCMessageMarkdown(info))
+	})
+
+	logRPCMessageJSONLRedacted(direction, messageType, serverID, method, toolName, len(payload), sanitize.RedactedPayloadJSON(payload), info.Error, agentSecrecy, agentIntegrity)
+}
+
 // LogRPCRequest logs an RPC request message to text, markdown, and JSONL logs.
 // agentSecrecy and agentIntegrity are optional and only affect JSONL output.
 func LogRPCRequest(direction RPCMessageDirection, serverID, method string, payload []byte, agentSecrecy, agentIntegrity []string) {
-	logRPCMessageToAll(direction, RPCMessageRequest, serverID, method, payload, nil, agentSecrecy, agentIntegrity)
+	LogRPCRequestForSession(direction, serverID, method, payload, agentSecrecy, agentIntegrity, false)
+}
+
+// LogRPCRequestForSession logs an RPC request message, redacting the payload when the call
+// originates from an enclave-scoped session.
+func LogRPCRequestForSession(direction RPCMessageDirection, serverID, method string, payload []byte, agentSecrecy, agentIntegrity []string, enclaveSession bool) {
+	logRPCMessageToAll(direction, RPCMessageRequest, serverID, method, payload, nil, agentSecrecy, agentIntegrity, enclaveSession)
 }
 
 // LogRPCResponse logs an RPC response message to text, markdown, and JSONL logs.
 // agentSecrecy and agentIntegrity are optional and only affect JSONL output.
 func LogRPCResponse(direction RPCMessageDirection, serverID string, payload []byte, err error, agentSecrecy, agentIntegrity []string) {
-	logRPCMessageToAll(direction, RPCMessageResponse, serverID, "", payload, err, agentSecrecy, agentIntegrity)
+	LogRPCResponseForSession(direction, serverID, payload, err, agentSecrecy, agentIntegrity, false)
+}
+
+// LogRPCResponseForSession logs an RPC response message, redacting the payload when the call
+// originates from an enclave-scoped session.
+func LogRPCResponseForSession(direction RPCMessageDirection, serverID string, payload []byte, err error, agentSecrecy, agentIntegrity []string, enclaveSession bool) {
+	logRPCMessageToAll(direction, RPCMessageResponse, serverID, "", payload, err, agentSecrecy, agentIntegrity, enclaveSession)
 }
 
 // LogRPCMessage logs a generic RPC message with custom info.

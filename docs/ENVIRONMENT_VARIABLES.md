@@ -110,7 +110,15 @@ When running `awmg proxy`, these variables configure the upstream GitHub API:
 | `MCP_GATEWAY_ENCLAVE_POLICY_JSON` | Enables the fail-closed `issues-read-v1` enclave profile with a compiler-generated workflow/run/repository/operation policy. Must be paired with `MCP_GATEWAY_ENCLAVE_CAPABILITY_KEY`. | (disabled) |
 | `MCP_GATEWAY_ENCLAVE_CAPABILITY_KEY` | Workflow-run root key used only to verify AWF-minted invocation capabilities. Must be exactly 64 lowercase hex characters and must not be exposed to the enclave. | (disabled) |
 
-When either enclave variable is set, both are required and proxy startup also requires a GitHub token. Enclave mode rejects `--policy`, trusted-bot overrides, and trusted-user overrides; it synthesizes the guard policy from the enclave policy and forces DIFC propagation mode.
+When either enclave variable is set, both are required and proxy startup also requires a GitHub token. Enclave mode rejects `--policy`, trusted-bot overrides, and trusted-user overrides; it synthesizes the guard policy from the enclave policy and forces DIFC propagation mode. It also enables process-wide payload redaction, so no request or response body reaches `rpc-messages.jsonl`, `proxy.log`, or `gateway.md`.
+
+## Enclave Payload Redaction
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `MCP_GATEWAY_UNSAFE_RAW_ENCLAVE_PAYLOAD_LOGS` | Privileged opt-in that restores raw MCP payload logging for enclave-scoped sessions. Intended for local debugging only: enabling it republishes private enclave payloads into any exported workflow artifact. | `false` |
+
+Enclave-scoped traffic — agents whose per-agent policy sets `enclave = true`, delegated executor sessions, and every request handled by the enclave proxy profile — is logged as metadata only (direction, server, method, tool name, byte count, payload digest, outcome, sanitized error category, DIFC labels). Non-enclave logging behavior is unchanged.
 
 ## Delegation Control Variables
 

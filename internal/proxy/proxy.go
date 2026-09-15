@@ -141,6 +141,7 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 	// can log, so a missed call site cannot disclose them under DEBUG=*.
 	if cfg.Enclave != nil || cfg.Delegation != nil {
 		sanitize.EnablePrivateSelectorRedaction()
+		sanitize.EnablePayloadRedaction()
 	}
 
 	apiURL := cfg.GitHubAPIURL

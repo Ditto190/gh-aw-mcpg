@@ -89,7 +89,9 @@ func readAndRestoreRequestBody(r *http.Request) ([]byte, error) {
 // logHTTPRequestBody logs the request body for debugging purposes.
 // It reads the body, logs it, and restores it so it can be read again.
 // The backendID parameter is optional and can be empty for unified mode.
-func logHTTPRequestBody(r *http.Request, sessionID, backendID string) {
+// When enclaveSession is true the body — which carries the tool arguments of an
+// enclave-scoped call — is reduced to metadata instead of being persisted.
+func logHTTPRequestBody(r *http.Request, sessionID, backendID string, enclaveSession bool) {
 	logServerHelpers.Printf("Checking request body: method=%s, hasBody=%v, sessionID=%s", r.Method, r.Body != nil, util.FormatSessionIDForLog(sessionID))
 
 	if r.Method != http.MethodPost {
@@ -110,6 +112,9 @@ func logHTTPRequestBody(r *http.Request, sessionID, backendID string) {
 	logServerHelpers.Printf("Request body read: size=%d bytes, sessionID=%s, backendID=%s", len(bodyBytes), util.FormatSessionIDForLog(sessionID), backendID)
 
 	sanitizedBody := sanitize.SanitizeString(string(bodyBytes))
+	if sanitize.ShouldRedactPayload(enclaveSession) {
+		sanitizedBody = sanitize.RedactedPayloadText(bodyBytes)
+	}
 
 	if backendID != "" {
 		logger.LogDebug("client", "MCP client request body, backend=%s, body=%s", backendID, sanitizedBody)

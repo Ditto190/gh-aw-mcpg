@@ -33,6 +33,17 @@ type AgentPolicy struct {
 	// AllowOnly is an optional per-agent allow-only guard policy applied to this
 	// agent's DIFC guard session. Enforcement requires an active (non-noop) guard.
 	AllowOnly *AllowOnlyPolicy `toml:"allow-only" json:"allow-only,omitempty"`
+
+	// Enclave marks this identity as enclave-scoped. An enclave agent is only
+	// authorized to disclose the bounded result its broker validated, so the
+	// gateway records metadata for its MCP traffic and never persists request
+	// arguments or response content in any exported log or summary.
+	Enclave bool `toml:"enclave" json:"enclave,omitempty"`
+}
+
+// IsEnclave reports whether the agent identity is enclave-scoped.
+func (p *AgentPolicy) IsEnclave() bool {
+	return p != nil && p.Enclave
 }
 
 // AllowsServer reports whether the agent may access the named MCP server.

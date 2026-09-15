@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -92,7 +93,7 @@ func TestLogCoarseDIFCDenial_EmitsAuditEntry(t *testing.T) {
 	agent := difc.NewAgentLabels("agent")
 	agent.Secrecy.Label.Add("private:github/gh-aw")
 	agent.Integrity.Label.Add("none:public")
-	logCoarseDIFCDenial("safeoutputs", "create_issue", &guard.PipelineAccessDenied{
+	logCoarseDIFCDenial(context.Background(), "safeoutputs", "create_issue", &guard.PipelineAccessDenied{
 		Resource: resource, AgentLabels: agent,
 		EvalResult: &difc.EvaluationResult{Reason: "integrity too low"},
 	})
@@ -146,7 +147,7 @@ func TestLogFilteredItems_EmitsValidJSONWithExpectedFields(t *testing.T) {
 		Filtered: []difc.FilteredItemDetail{item},
 	}
 
-	logFilteredItems("github", "list_issues", filtered)
+	logFilteredItems(context.Background(), "github", "list_issues", filtered)
 
 	// Close loggers to flush all writes before reading.
 	cleanup()
@@ -203,7 +204,7 @@ func TestLogFilteredItems_MultipleItems(t *testing.T) {
 		},
 	}
 
-	logFilteredItems("github", "list_issues", filtered)
+	logFilteredItems(context.Background(), "github", "list_issues", filtered)
 	cleanup()
 
 	lines := readLogLines(t, filepath.Join(tmpDir, "mcp-gateway.log"), "[DIFC-FILTERED]")
@@ -227,7 +228,7 @@ func TestLogFilteredItems_EmptyFiltered(t *testing.T) {
 	cleanup := initTestLoggers(t, tmpDir)
 	defer cleanup()
 
-	logFilteredItems("github", "list_issues", &difc.FilteredCollectionLabeledData{
+	logFilteredItems(context.Background(), "github", "list_issues", &difc.FilteredCollectionLabeledData{
 		Filtered: []difc.FilteredItemDetail{},
 	})
 	cleanup()

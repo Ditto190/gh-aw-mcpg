@@ -11,6 +11,7 @@ import (
 	"github.com/github/gh-aw-mcpg/internal/guard"
 	"github.com/github/gh-aw-mcpg/internal/httputil"
 	"github.com/github/gh-aw-mcpg/internal/logger"
+	"github.com/github/gh-aw-mcpg/internal/mcp"
 	"github.com/github/gh-aw-mcpg/internal/util"
 )
 
@@ -62,6 +63,9 @@ func (us *UnifiedServer) authorizeDelegatedToolCall(ctx context.Context, serverI
 		return ctx, err
 	}
 	ctx = guard.SetAgentIDInContext(ctx, "delegation:"+handle)
+	// Delegation admits enclaves dynamically: keep the enclave provenance marker on the
+	// context even when the tool call reaches this path without session establishment.
+	ctx = mcp.WithEnclaveSession(ctx)
 	ctx = context.WithValue(ctx, delegatedToolAuthorizationKey{}, delegatedToolAuthorization{
 		serverID: serverID,
 		toolName: toolName,

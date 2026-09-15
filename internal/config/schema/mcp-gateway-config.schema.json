@@ -484,6 +484,10 @@
               "allow-only": {
                 "type": "object",
                 "description": "Optional per-agent allow-only guard policy (same shape as a guard-policies allow-only policy). Applied to this agent's DIFC guard session; enforcement requires an active (non-noop) guard."
+              },
+              "enclave": {
+                "type": "boolean",
+                "description": "Marks this identity as enclave-scoped. MCP request arguments and response content for this agent's sessions are never persisted to rpc-messages.jsonl, mcp-gateway.log, the per-server logs, gateway.md, or telemetry; only metadata (direction, server, tool, size, outcome, digest, DIFC labels) is recorded."
               }
             },
             "additionalProperties": false

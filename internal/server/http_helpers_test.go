@@ -110,7 +110,7 @@ func TestSetupSessionCallback(t *testing.T) {
 				req.Header.Set("Authorization", tt.authHeader)
 			}
 
-			sessionID, ok := setupSessionCallback(req, tt.backendID, false)
+			sessionID, ok := setupSessionCallback(req, tt.backendID, false, nil)
 
 			assert.Equal(t, tt.expectOK, ok, "ok flag should match expected")
 			assert.Equal(t, tt.expectedSession, sessionID, "returned session ID should match")
@@ -150,7 +150,7 @@ func TestSetupSessionCallback_MutatesRequest(t *testing.T) {
 	// Verify context does not have session ID before call
 	assert.Nil(t, req.Context().Value(SessionIDContextKey), "context should be empty before call")
 
-	sessionID, ok := setupSessionCallback(req, "backend-a", false)
+	sessionID, ok := setupSessionCallback(req, "backend-a", false, nil)
 
 	require.True(t, ok, "call should succeed")
 	assert.Equal(t, "my-session-id", sessionID, "returned session ID should match")
@@ -431,7 +431,7 @@ func TestLogHTTPRequestBody(t *testing.T) {
 			}
 
 			// Call the function
-			logHTTPRequestBody(req, tt.sessionID, tt.backendID)
+			logHTTPRequestBody(req, tt.sessionID, tt.backendID, false)
 
 			// Verify body can still be read after logging
 			if tt.body != "" {
@@ -453,7 +453,7 @@ func TestLogHTTPRequestBody_ReadFailure(t *testing.T) {
 	req.Body = frc
 
 	assert.NotPanics(t, func() {
-		logHTTPRequestBody(req, "session-fail", "backend-fail")
+		logHTTPRequestBody(req, "session-fail", "backend-fail", false)
 	})
 	assert.True(t, frc.closed, "the original failing body should have been closed")
 }
@@ -490,7 +490,7 @@ func TestInjectSessionContext(t *testing.T) {
 			req := httptest.NewRequest("POST", "/mcp", nil)
 
 			// Inject context
-			modifiedReq := injectSessionContext(req, tt.sessionID, tt.backendID)
+			modifiedReq := injectSessionContext(req, tt.sessionID, tt.backendID, false)
 
 			// Verify session ID is in context
 			sessionIDFromCtx := modifiedReq.Context().Value(SessionIDContextKey)
@@ -528,7 +528,7 @@ func TestInjectSessionContext_PreservesExistingContext(t *testing.T) {
 	req = req.WithContext(ctx)
 
 	// Inject session context
-	modifiedReq := injectSessionContext(req, "session-123", "backend-1")
+	modifiedReq := injectSessionContext(req, "session-123", "backend-1", false)
 
 	// Verify both values are present
 	sessionID := modifiedReq.Context().Value(SessionIDContextKey)

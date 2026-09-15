@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/github/gh-aw-mcpg/internal/sanitize"
+	"github.com/github/gh-aw-mcpg/internal/util"
 )
 
 // JSONLLogger manages logging RPC messages to a JSONL file (one JSON object per line)
@@ -44,7 +45,10 @@ type JSONLRPCMessage struct {
 	Error          string          `json:"error,omitempty"`
 	AgentSecrecy   []string        `json:"agent_secrecy,omitempty"`
 	AgentIntegrity []string        `json:"agent_integrity,omitempty"`
-	Payload        json.RawMessage `json:"payload"` // Full sanitized payload as raw JSON
+	ToolName       string          `json:"tool_name,omitempty"`     // Tool name, preserved when the payload is redacted
+	Redacted       bool            `json:"redacted,omitempty"`      // True when payload holds metadata only
+	PayloadSize    int             `json:"payload_bytes,omitempty"` // Original payload size, recorded when redacted
+	Payload        json.RawMessage `json:"payload"`                 // Full sanitized payload as raw JSON
 }
 
 // jsonlLoggerFactory bundles the setup and error-handler for JSONLLogger.
@@ -144,6 +148,37 @@ func logRPCMessageJSONLWithTagsAndSanitized(direction RPCMessageDirection, messa
 	})
 }
 
+// logRPCMessageJSONLRedacted writes an enclave-scoped RPC message whose payload has already
+// been reduced to metadata. The entry records direction, server, method, tool name, size, DIFC
+// tags, and a sanitized error category, but never the payload content.
+func logRPCMessageJSONLRedacted(direction RPCMessageDirection, messageType RPCMessageType, serverID, method, toolName string, payloadSize int, redactedPayload json.RawMessage, errCategory string, agentSecrecy, agentIntegrity []string) {
+	withGlobalLogger(&globalJSONLMu, &globalJSONLLogger, func(logger *JSONLLogger) {
+		entry := &JSONLRPCMessage{
+			Timestamp:   time.Now().UTC().Format(jsonTimestampLayout),
+			Event:       messageType.JSONLEvent(),
+			Schema:      rpcMessageSchemaV2,
+			Direction:   string(direction),
+			ServerID:    serverID,
+			Method:      method,
+			ToolName:    toolName,
+			Redacted:    true,
+			PayloadSize: payloadSize,
+			Payload:     redactedPayload,
+			Error:       errCategory,
+		}
+
+		if len(agentSecrecy) > 0 {
+			entry.AgentSecrecy = append([]string(nil), agentSecrecy...)
+		}
+		if len(agentIntegrity) > 0 {
+			entry.AgentIntegrity = append([]string(nil), agentIntegrity...)
+		}
+
+		// Best effort logging - don't fail if JSONL logging fails
+		_ = logger.LogMessage(entry)
+	})
+}
+
 // FilteredItemLogEntry holds the data fields for a DIFC-filtered item.
 // It is used for both text log output ([DIFC-FILTERED] JSON lines) and as
 // the embedded payload in JSONLFilteredItem for JSONL log output.
@@ -162,6 +197,41 @@ type FilteredItemLogEntry struct {
 	HTMLURL             string   `json:"html_url,omitempty"`
 	Number              string   `json:"number,omitempty"`
 	SHA                 string   `json:"sha,omitempty"`
+}
+
+// RedactForEnclave returns a copy of the entry with every item-identifying field reduced to a
+// stable, non-reversible hash and every free-text field passed through private-selector
+// redaction. DIFC decisions stay diagnosable (server, tool, tags, and a correlatable item
+// token) while the private resource the decision was made about is never persisted.
+func (e FilteredItemLogEntry) RedactForEnclave() FilteredItemLogEntry {
+	redacted := e
+	redacted.Description = util.HashForLog(e.Description, redactedFieldHashLen, "item:")
+	redacted.HTMLURL = util.HashForLog(e.HTMLURL, redactedFieldHashLen, "url:")
+	redacted.AuthorLogin = util.HashForLog(e.AuthorLogin, redactedFieldHashLen, "user:")
+	redacted.Number = util.HashForLog(e.Number, redactedFieldHashLen, "num:")
+	redacted.SHA = util.HashForLog(e.SHA, redactedFieldHashLen, "sha:")
+	redacted.Reason = sanitize.RedactPrivateSelectors(e.Reason)
+	redacted.SecrecyTags = redactTags(e.SecrecyTags)
+	redacted.IntegrityTags = redactTags(e.IntegrityTags)
+	redacted.AgentSecrecyTags = redactTags(e.AgentSecrecyTags)
+	redacted.AgentIntegrityTags = redactTags(e.AgentIntegrityTags)
+	return redacted
+}
+
+// redactedFieldHashLen is the hex length of hashes substituted for item-identifying fields.
+const redactedFieldHashLen = 16
+
+// redactTags applies private-selector redaction to each DIFC tag, preserving the tag list
+// shape (and therefore the comparability of agent and resource labels).
+func redactTags(tags []string) []string {
+	if tags == nil {
+		return nil
+	}
+	redacted := make([]string, len(tags))
+	for i, tag := range tags {
+		redacted[i] = sanitize.RedactPrivateSelectors(tag)
+	}
+	return redacted
 }
 
 // JSONLFilteredItem represents a DIFC-filtered item logged to the JSONL stream.

@@ -123,7 +123,7 @@ func TestWithOTELTracing_WorksWithSessionInContext(t *testing.T) {
 	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Replicate what setupSessionCallback does: mutate *r so the enrichment
 		// closure can read the session ID from r.Context() after ServeHTTP.
-		*r = *injectSessionContext(r, testSessionID, "test-backend")
+		*r = *injectSessionContext(r, testSessionID, "test-backend", false)
 		w.WriteHeader(http.StatusOK)
 	})
 
@@ -152,7 +152,7 @@ func TestWithOTELTracing_SessionIDReadAfterInnerHandler(t *testing.T) {
 	// Wrap the inner handler so we can inspect the session ID that the enrichment
 	// closure sees (by reading it from the same request context after ServeHTTP).
 	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		*r = *injectSessionContext(r, expectedSessionID, "backend-a")
+		*r = *injectSessionContext(r, expectedSessionID, "backend-a", false)
 		w.WriteHeader(http.StatusOK)
 	})
 

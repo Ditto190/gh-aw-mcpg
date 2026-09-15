@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,6 +10,8 @@ import (
 	"github.com/github/gh-aw-mcpg/internal/difc"
 	"github.com/github/gh-aw-mcpg/internal/guard"
 	"github.com/github/gh-aw-mcpg/internal/logger"
+	"github.com/github/gh-aw-mcpg/internal/mcp"
+	"github.com/github/gh-aw-mcpg/internal/sanitize"
 	"github.com/github/gh-aw-mcpg/internal/util"
 )
 
@@ -18,10 +21,16 @@ var logDifcLog = logger.ForFile()
 // Each item is written as a [DIFC-FILTERED] JSON entry to both the unified and
 // per-server text log files (via LogInfoToServer), and as a difc_filtered event
 // in the JSONL log.
-func logFilteredItems(serverID, toolName string, filtered *difc.FilteredCollectionLabeledData) {
+// For enclave-scoped sessions the item-identifying fields are reduced to stable hashes so the
+// filter decision stays diagnosable without persisting private resource metadata.
+func logFilteredItems(ctx context.Context, serverID, toolName string, filtered *difc.FilteredCollectionLabeledData) {
 	logDifcLog.Printf("Logging filtered items: serverID=%s, toolName=%s, count=%d", serverID, toolName, len(filtered.Filtered))
+	redactEnclave := sanitize.ShouldRedactPayload(mcp.IsEnclaveSession(ctx))
 	for _, detail := range filtered.Filtered {
 		entry := buildFilteredItemLogEntry(serverID, toolName, detail)
+		if redactEnclave {
+			entry = entry.RedactForEnclave()
+		}
 		b, err := json.Marshal(entry)
 		if err != nil {
 			logger.LogInfoToServer(serverID, "difc", "Failed to marshal filtered item log entry: %v", err)
@@ -77,7 +86,7 @@ func buildFilteredItemLogEntry(serverID, toolName string, detail difc.FilteredIt
 	return entry
 }
 
-func logCoarseDIFCDenial(serverID, toolName string, denied *guard.PipelineAccessDenied) {
+func logCoarseDIFCDenial(ctx context.Context, serverID, toolName string, denied *guard.PipelineAccessDenied) {
 	entry := logger.FilteredItemLogEntry{
 		ServerID:            serverID,
 		ToolName:            toolName,
@@ -88,6 +97,9 @@ func logCoarseDIFCDenial(serverID, toolName string, denied *guard.PipelineAccess
 		AgentSecrecyTags:    difc.TagsToStrings(denied.AgentLabels.Secrecy.Label.GetTags()),
 		AgentIntegrityTags:  difc.TagsToStrings(denied.AgentLabels.Integrity.Label.GetTags()),
 		AgentLabelsComplete: true,
+	}
+	if sanitize.ShouldRedactPayload(mcp.IsEnclaveSession(ctx)) {
+		entry = entry.RedactForEnclave()
 	}
 	b, err := json.Marshal(entry)
 	if err != nil {

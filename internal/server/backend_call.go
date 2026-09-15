@@ -14,6 +14,7 @@ import (
 	"github.com/github/gh-aw-mcpg/internal/launcher"
 	"github.com/github/gh-aw-mcpg/internal/logger"
 	"github.com/github/gh-aw-mcpg/internal/mcp"
+	"github.com/github/gh-aw-mcpg/internal/sanitize"
 	"github.com/github/gh-aw-mcpg/internal/syncutil"
 	"github.com/github/gh-aw-mcpg/internal/tracing"
 	"github.com/github/gh-aw-mcpg/internal/util"
@@ -300,10 +301,10 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 		if denied, detailedErr := guard.HandlePrePhaseError(err); denied != nil {
 			logger.LogWarn("difc", "Access DENIED for agent %s to %s: %s",
 				util.HashIdentifierForLog(agentID), denied.Resource.Description, denied.EvalResult.Reason)
-			logCoarseDIFCDenial(serverID, toolName, denied)
+			logCoarseDIFCDenial(ctx, serverID, toolName, denied)
 			if toolSpan.IsRecording() {
 				toolSpan.AddEvent("difc.access_denied", oteltrace.WithAttributes(
-					attribute.String("reason", denied.EvalResult.Reason),
+					attribute.String("reason", sanitize.SanitizeString(denied.EvalResult.Reason)),
 				))
 			}
 			tracing.RecordSpanError(toolSpan, detailedErr, "access denied: "+denied.EvalResult.Reason)
@@ -417,7 +418,7 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 
 		if difcFiltered.GetFilteredCount() > 0 {
 			logUnified.Printf("[DIFC] Filtered out %d items due to DIFC policy", difcFiltered.GetFilteredCount())
-			logFilteredItems(serverID, toolName, difcFiltered)
+			logFilteredItems(ctx, serverID, toolName, difcFiltered)
 
 			// **Single-item entirely filtered**: return a structured MCP error so the agent
 			// cannot misinterpret "filtered" as "resource not found" (e.g. issue_read).
