@@ -12,6 +12,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/github/gh-aw-mcpg/internal/config"
 )
 
@@ -225,4 +227,155 @@ func TestCreateHTTPServerForRoutedMode_AgentAccessDenied(t *testing.T) {
 
 	assert.NotEqual(t, http.StatusInternalServerError, rrAllowed.Code, "permitted agent's session establishment should not fail")
 	t.Logf("allowed-agent response: status=%d body=%s", rrAllowed.Code, rrAllowed.Body.String())
+}
+
+// TestSupportedProtocolVersions_ExcludesLatest verifies that
+// supportedProtocolVersions omits the SDK's newest protocol version. The
+// gateway's HTTP handlers are stateful (session-ID based); the newest
+// protocol version enables a stateless "server/discover" negotiation path
+// (SEP-2575) that native clients probe first. Advertising it would let
+// discovery succeed while leaving the client on a sessionless path that our
+// stateful handlers reject with CodeUnsupportedProtocolVersion (-32022). See
+// https://github.com/github/gh-aw-mcpg/issues/13196.
+func TestSupportedProtocolVersions_ExcludesLatest(t *testing.T) {
+	all := sdk.SupportedProtocolVersions()
+	require.NotEmpty(t, all, "SDK must report at least one supported protocol version")
+
+	got := supportedProtocolVersions()
+
+	assert.NotContains(t, got, all[0], "gateway must not advertise the newest (stateless-capable) protocol version %q", all[0])
+	assert.ElementsMatch(t, all[1:], got, "gateway should advertise all legacy versions")
+	assert.Len(t, got, len(all)-1)
+}
+
+// mcpDiscoverRequest builds a minimal MCP "server/discover" (SEP-2575) JSON-RPC
+// request body, used to verify that the gateway's stateful HTTP handlers do
+// not advertise a protocol version that would put clients on a sessionless
+// negotiation path.
+func mcpDiscoverRequest(t *testing.T, path, authHeader string) *http.Request {
+	t.Helper()
+	discoverReq := map[string]interface{}{
+		"jsonrpc": "2.0",
+		"id":      1,
+		"method":  "server/discover",
+		"params": map[string]interface{}{
+			"_meta": map[string]interface{}{
+				// SEP-2575 requires calls that opt into the new sessionless
+				// protocol to carry this _meta triple (see
+				// mcp.validateRequestMeta / mcp.MetaKeyProtocolVersion).
+				"io.modelcontextprotocol/protocolVersion":    "2026-07-28",
+				"io.modelcontextprotocol/clientCapabilities": map[string]interface{}{},
+			},
+		},
+	}
+	bodyBytes, err := json.Marshal(discoverReq)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodPost, path, bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json, text/event-stream")
+	// Real clients probing SEP-2575 discovery also advertise the modern
+	// protocol version via this header (see streamable.go's
+	// protocolVersionFromContext).
+	req.Header.Set("MCP-Protocol-Version", "2026-07-28")
+	// Modern-protocol requests must also carry the standard Mcp-Method header
+	// matching the JSON-RPC body (see streamable_headers.go validateMcpHeaders).
+	req.Header.Set("Mcp-Method", "server/discover")
+	if authHeader != "" {
+		req.Header.Set("Authorization", authHeader)
+	}
+	return req
+}
+
+// discoverRejectionSupportedVersions extracts the "error.data.supported" field
+// from a server/discover JSON-RPC error response, handling both plain-JSON and
+// SSE-formatted ("data: ...") streamable HTTP responses. It also asserts that
+// the response is indeed an error carrying [sdk.CodeUnsupportedProtocolVersion].
+func discoverRejectionSupportedVersions(t *testing.T, body []byte) []string {
+	t.Helper()
+	jsonPayload := body
+	if bytes.Contains(body, []byte("data: ")) {
+		for _, line := range bytes.Split(body, []byte("\n")) {
+			if bytes.HasPrefix(line, []byte("data: ")) {
+				jsonPayload = bytes.TrimPrefix(line, []byte("data: "))
+				break
+			}
+		}
+	}
+
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(jsonPayload, &resp), "failed to decode discover response: %s", body)
+
+	errObj, ok := resp["error"].(map[string]interface{})
+	require.True(t, ok, "expected discover to be rejected with an error, got: %s", body)
+
+	code, ok := errObj["code"].(float64)
+	require.True(t, ok, "expected numeric error code, got: %v", errObj["code"])
+	assert.Equal(t, int64(sdk.CodeUnsupportedProtocolVersion), int64(code), "expected CodeUnsupportedProtocolVersion (-32022)")
+
+	rawData, ok := errObj["data"].(map[string]interface{})
+	require.True(t, ok, "expected error.data in discover rejection: %v", errObj)
+
+	rawVersions, ok := rawData["supported"].([]interface{})
+	require.True(t, ok, "expected error.data.supported array in discover rejection: %v", rawData)
+
+	versions := make([]string, 0, len(rawVersions))
+	for _, v := range rawVersions {
+		versions = append(versions, v.(string))
+	}
+	return versions
+}
+
+// TestCreateHTTPServerForMCP_DiscoverRejectsLatestProtocolVersion verifies
+// that a SEP-2575 "server/discover" probe advertising the SDK's newest
+// protocol version against the unified /mcp endpoint is rejected with
+// CodeUnsupportedProtocolVersion and a supported-versions list that omits the
+// newest version. This is what causes a compliant native client to fall back
+// to the supported legacy "initialize" handshake instead of remaining on a
+// sessionless negotiation path that the gateway's stateful handlers reject.
+// See https://github.com/github/gh-aw-mcpg/issues/13196.
+func TestCreateHTTPServerForMCP_DiscoverRejectsLatestProtocolVersion(t *testing.T) {
+	us, err := NewUnified(context.Background(), &config.Config{})
+	require.NoError(t, err)
+	t.Cleanup(func() { us.Close() })
+
+	httpServer := CreateHTTPServerForMCP(":0", us, nil, "")
+
+	req := mcpDiscoverRequest(t, "/mcp", "test-token")
+	rr := httptest.NewRecorder()
+	httpServer.Handler.ServeHTTP(rr, req)
+
+	require.Equal(t, http.StatusBadRequest, rr.Code, "discover rejection is returned as an HTTP 400 with a JSON-RPC error body: %s", rr.Body.String())
+
+	versions := discoverRejectionSupportedVersions(t, rr.Body.Bytes())
+	latest := sdk.SupportedProtocolVersions()[0]
+	assert.NotContains(t, versions, latest, "discover rejection must not advertise the stateless-capable latest protocol version %q", latest)
+	assert.NotEmpty(t, versions, "discover rejection should still report legacy protocol versions")
+}
+
+// TestCreateHTTPServerForRoutedMode_DiscoverRejectsLatestProtocolVersion is
+// the routed-mode counterpart of
+// TestCreateHTTPServerForMCP_DiscoverRejectsLatestProtocolVersion.
+func TestCreateHTTPServerForRoutedMode_DiscoverRejectsLatestProtocolVersion(t *testing.T) {
+	cfg := &config.Config{
+		Servers: map[string]*config.ServerConfig{
+			"github": {Command: "docker", Args: []string{}},
+		},
+	}
+	us, err := NewUnified(context.Background(), cfg)
+	require.NoError(t, err)
+	t.Cleanup(func() { us.Close() })
+
+	httpServer := CreateHTTPServerForRoutedMode("127.0.0.1:0", us, nil, "")
+
+	req := mcpDiscoverRequest(t, "/mcp/github", "test-token")
+	rr := httptest.NewRecorder()
+	httpServer.Handler.ServeHTTP(rr, req)
+
+	require.Equal(t, http.StatusBadRequest, rr.Code, "discover rejection is returned as an HTTP 400 with a JSON-RPC error body: %s", rr.Body.String())
+
+	versions := discoverRejectionSupportedVersions(t, rr.Body.Bytes())
+	latest := sdk.SupportedProtocolVersions()[0]
+	assert.NotContains(t, versions, latest, "discover rejection must not advertise the stateless-capable latest protocol version %q", latest)
+	assert.NotEmpty(t, versions, "discover rejection should still report legacy protocol versions")
 }

@@ -269,6 +269,8 @@ For the full server field list (including shared fields such as `registry` and T
 
 **Transport**: JSON-RPC 2.0 over stdio (containerized Docker) or HTTP (session state preserved)
 
+**Client protocol compatibility**: The gateway's HTTP handlers (`/mcp`, `/mcp/{serverID}`) are stateful, keying sessions off `Mcp-Session-Id` and the legacy `initialize` handshake. The gateway advertises only the legacy MCP protocol versions it supports (excluding the SDK's newest, stateless-capable version) so that clients probing the newer sessionless `server/discover` negotiation (SEP-2575) receive an `UnsupportedProtocolVersion` (`-32022`) response and correctly fall back to `initialize` instead of remaining on a sessionless path that these handlers cannot serve.
+
 **Routing**: Routed mode (`/mcp/{serverID}`) exposes each backend at its own endpoint. Unified mode (`/mcp`) routes to all configured servers through a single endpoint.
 
 **Security**: WASM-based DIFC guards enforce secrecy and integrity labels per request. Guards are loaded from `MCP_GATEWAY_WASM_GUARDS_DIR` and assigned per-server. Authentication uses the configured agent identifier value per MCP spec 7.1 (`Authorization: <agent-id>`), and session routing can also use `X-Agent-ID`.

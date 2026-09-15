@@ -16,6 +16,33 @@ import (
 var logHTTPServer = logger.ForFile()
 var logTransport = logger.New("server:transport")
 
+// supportedProtocolVersions restricts the MCP protocol versions this gateway
+// negotiates to the legacy, stateful "initialize" handshake versions.
+//
+// The HTTP handlers registered by newSDKServer (see buildMCPHandler /
+// StreamableHTTPHandler usage) remain stateful: sessions are keyed off the
+// established Mcp-Session-Id and rely on the legacy initialize handshake.
+// The SDK's newest protocol version enables a stateless "server/discover"
+// negotiation path (SEP-2575) that native clients (e.g. Copilot CLI) probe
+// first. If the gateway advertises that version, discovery succeeds but the
+// client then issues stateless requests that our stateful handlers reject
+// with CodeUnsupportedProtocolVersion (-32022). Omitting the latest version
+// here causes discover to report only the legacy versions, so compliant
+// clients fall back to the supported initialize handshake instead.
+func supportedProtocolVersions() []string {
+	versions := sdk.SupportedProtocolVersions()
+	legacy := make([]string, 0, len(versions))
+	for _, protocolVersion := range versions {
+		if protocolVersion < statelessProtocolVersion {
+			legacy = append(legacy, protocolVersion)
+		}
+	}
+	if len(legacy) == 0 {
+		panic("MCP SDK exposes no legacy protocol versions")
+	}
+	return legacy
+}
+
 // newSDKServer creates a new MCP SDK server with the given implementation name and debug logger.
 // This consolidates the sdk.NewServer construction shared by routed and unified server modes.
 func newSDKServer(name string, log *logger.Logger) *sdk.Server {
@@ -24,7 +51,8 @@ func newSDKServer(name string, log *logger.Logger) *sdk.Server {
 		Name:    name,
 		Version: version.Get(),
 	}, &sdk.ServerOptions{
-		Logger: logger.NewSlogLoggerWithHandler(log),
+		Logger:                    logger.NewSlogLoggerWithHandler(log),
+		SupportedProtocolVersions: supportedProtocolVersions(),
 	})
 }
 
