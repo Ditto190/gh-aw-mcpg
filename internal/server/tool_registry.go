@@ -298,14 +298,22 @@ func (us *UnifiedServer) registerToolsFromBackendContext(ctx context.Context, se
 			// Extract arguments from the request params (not the args parameter which is SDK internal state)
 			toolArgs, err := mcp.ParseToolArguments(req)
 			if err != nil {
-				logger.LogError("client", "Failed to unmarshal tool arguments, tool=%s, error=%v", toolNameCopy, err)
+				if sanitize.ShouldRedactPayload(mcp.IsEnclaveSession(ctx)) {
+					logger.LogError("client", "Failed to unmarshal tool arguments, tool=%s, error=%s", toolNameCopy, sanitize.RedactErrorForLog(err))
+				} else {
+					logger.LogError("client", "Failed to unmarshal tool arguments, tool=%s, error=%v", toolNameCopy, err)
+				}
 				return mcp.NewErrorCallToolResult(err)
 			}
 
 			// Log the MCP tool call request
 			sessionID := us.getSessionID(ctx)
+			redactPayload := sanitize.ShouldRedactPayload(mcp.IsEnclaveSession(ctx))
 			argsJSON, _ := json.Marshal(toolArgs)
 			sanitizedArgs := sanitize.SanitizeString(string(argsJSON))
+			if redactPayload {
+				sanitizedArgs = sanitize.RedactedPayloadText(argsJSON)
+			}
 			logger.LogInfo("client", "MCP tool call request, session=%s, tool=%s, args=%s", util.FormatSessionIDForLog(sessionID), toolNameCopy, sanitizedArgs)
 
 			// Check session is initialized
@@ -318,7 +326,14 @@ func (us *UnifiedServer) registerToolsFromBackendContext(ctx context.Context, se
 
 			// Log the MCP tool call response
 			if err != nil {
-				logger.LogError("client", "MCP tool call error, session=%s, tool=%s, error=%v", util.FormatSessionIDForLog(sessionID), toolNameCopy, err)
+				if redactPayload {
+					logger.LogError("client", "MCP tool call error, session=%s, tool=%s, error=%s", util.FormatSessionIDForLog(sessionID), toolNameCopy, sanitize.RedactErrorForLog(err))
+				} else {
+					logger.LogError("client", "MCP tool call error, session=%s, tool=%s, error=%v", util.FormatSessionIDForLog(sessionID), toolNameCopy, err)
+				}
+			} else if redactPayload {
+				resultJSON, _ := json.Marshal(data)
+				logger.LogInfo("client", "MCP tool call response, session=%s, tool=%s, result=%s", util.FormatSessionIDForLog(sessionID), toolNameCopy, sanitize.RedactedPayloadText(resultJSON))
 			} else {
 				logger.LogInfo("client", "MCP tool call response, session=%s, tool=%s, result=%s", util.FormatSessionIDForLog(sessionID), toolNameCopy, sanitize.MarshalAndSanitize(data))
 			}
