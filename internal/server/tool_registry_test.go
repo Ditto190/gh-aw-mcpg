@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -1129,4 +1130,201 @@ func TestArgumentValidationBypassCanary(t *testing.T) {
 			"registerToolWithoutValidation needs to be updated")
 	assert.False(result.IsError)
 	assert.True(handlerCalled.Load(), "Handler must be called even when arguments violate the schema")
+}
+
+// TestEnsureToolsRegistered covers the caching, "not configured", retry-deferral, and
+// success paths of ensureToolsRegistered using table-driven subtests sharing common
+// helpers. Each subtest builds its own UnifiedServer so registration state does not
+// leak between cases.
+func TestEnsureToolsRegistered(t *testing.T) {
+	t.Run("unconfigured backend returns not-configured error", func(t *testing.T) {
+		require := require.New(t)
+		assert := assert.New(t)
+
+		cfg := &config.Config{
+			Servers: map[string]*config.ServerConfig{
+				"alpha": {Type: "http", URL: "http://127.0.0.1:1"},
+			},
+		}
+		us, err := NewUnified(context.Background(), cfg)
+		require.NoError(err)
+		defer us.Close()
+
+		// "ghost" was never registered in backendRegistration, so registrationLock
+		// is nil and the function must fail fast without attempting discovery.
+		err = us.ensureToolsRegistered(context.Background(), "ghost")
+		require.Error(err)
+		assert.Contains(err.Error(), `backend "ghost" is not configured`)
+	})
+
+	t.Run("already registered backend returns nil without re-discovery", func(t *testing.T) {
+		require := require.New(t)
+		assert := assert.New(t)
+
+		backend := newMockBackend(t, "alpha", []string{"do_thing"})
+		defer backend.Close()
+
+		cfg := &config.Config{
+			Servers: map[string]*config.ServerConfig{
+				"alpha": {Type: "http", URL: backend.URL},
+			},
+		}
+		us, err := NewUnified(context.Background(), cfg)
+		require.NoError(err)
+		defer us.Close()
+
+		// First call performs discovery and registers the backend's tools.
+		require.NoError(us.ensureToolsRegistered(context.Background(), "alpha"))
+		us.toolsMu.RLock()
+		_, registered := us.tools["alpha___do_thing"]
+		us.toolsMu.RUnlock()
+		require.True(registered, "tool should be registered after first ensureToolsRegistered call")
+
+		// Second call hits the `registered` cache and must return nil immediately,
+		// exercising the fast-path check under the read lock.
+		assert.NoError(us.ensureToolsRegistered(context.Background(), "alpha"))
+	})
+
+	t.Run("failed backend defers retry until interval elapses", func(t *testing.T) {
+		require := require.New(t)
+		assert := assert.New(t)
+
+		// Backend that never responds to initialize, forcing registration to fail fast.
+		cfg := &config.Config{
+			Servers: map[string]*config.ServerConfig{
+				"broken": {Type: "http", URL: "http://127.0.0.1:1"},
+			},
+		}
+		us, err := NewUnified(context.Background(), cfg)
+		require.NoError(err)
+		defer us.Close()
+
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+
+		firstErr := us.ensureToolsRegistered(ctx, "broken")
+		require.Error(firstErr, "unreachable backend should fail registration")
+
+		// Immediately retrying within backendRegistrationRetryInterval must return the
+		// exact same cached failure without attempting discovery again.
+		secondErr := us.ensureToolsRegistered(context.Background(), "broken")
+		require.Error(secondErr)
+		assert.Equal(firstErr.Error(), secondErr.Error(),
+			"deferred retry should return the cached failure, not attempt rediscovery")
+	})
+
+	// TestEnsureToolsRegistered/double-checked_locking_finds_already_registered_backend
+	// exercises the inner `if registered` and `if retryDeferred` re-checks performed
+	// after acquiring registrationLock. Two goroutines race for the lock; the winner
+	// performs discovery while blocked on a controllable tools/list response, and the
+	// loser must observe the now-registered backend via the double-check rather than
+	// calling registerToolsFromBackendContext a second time.
+	t.Run("double-checked locking finds already registered backend", func(t *testing.T) {
+		require := require.New(t)
+		assert := assert.New(t)
+
+		var toolsListCalls atomic.Int32
+		unblock := make(chan struct{})
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			var req map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			switch req["method"] {
+			case "initialize":
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"jsonrpc": "2.0",
+					"id":      req["id"],
+					"result": map[string]interface{}{
+						"protocolVersion": "2024-11-05",
+						"capabilities":    map[string]interface{}{},
+						"serverInfo":      map[string]interface{}{"name": "racy", "version": "1.0"},
+					},
+				})
+			case "tools/list":
+				n := toolsListCalls.Add(1)
+				if n > 1 {
+					// Only block calls after the initial NewUnified() startup registration;
+					// that first call must complete normally so construction doesn't hang.
+					<-unblock
+				}
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"jsonrpc": "2.0",
+					"id":      req["id"],
+					"result": map[string]interface{}{
+						"tools": []map[string]interface{}{
+							{
+								"name":        "do_thing",
+								"description": "Tool do_thing",
+								"inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{}},
+							},
+						},
+					},
+				})
+			default:
+				w.WriteHeader(http.StatusBadRequest)
+			}
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{
+			Servers: map[string]*config.ServerConfig{
+				"racy": {Type: "http", URL: srv.URL},
+			},
+		}
+		us, err := NewUnified(context.Background(), cfg)
+		require.NoError(err)
+		defer us.Close()
+
+		// NewUnified's own startup registration already called tools/list once
+		// (n=1, unblocked immediately above). Force re-registration by clearing the
+		// cached "registered" flag so both goroutines below observe a fresh miss at
+		// the outer check and race for registrationLock.
+		us.registrationMu.Lock()
+		us.registeredBackends["racy"] = false
+		us.registrationMu.Unlock()
+
+		// Hold registrationLock ourselves so both goroutines below are guaranteed to
+		// block on registrationLock.Lock() until we release it, ensuring a clean race.
+		us.registrationMu.RLock()
+		registrationLock := us.backendRegistration["racy"]
+		us.registrationMu.RUnlock()
+		require.NotNil(registrationLock)
+		registrationLock.Lock()
+
+		var wg sync.WaitGroup
+		errs := make(chan error, 2)
+		wg.Add(2)
+		for range 2 {
+			go func() {
+				defer wg.Done()
+				errs <- us.ensureToolsRegistered(context.Background(), "racy")
+			}()
+		}
+
+		// Release our hold; one goroutine wins the lock and calls tools/list (blocking
+		// on `unblock`), the other queues behind registrationLock.Lock().
+		registrationLock.Unlock()
+
+		require.Eventually(func() bool {
+			return toolsListCalls.Load() == 2
+		}, time.Second, time.Millisecond, "expected exactly one goroutine to reach tools/list on the second round")
+
+		// Let the winner's tools/list call complete; it registers the backend and
+		// releases registrationLock, allowing the loser to acquire it and observe
+		// `registered == true` via the double-check.
+		close(unblock)
+
+		wg.Wait()
+		close(errs)
+		for err := range errs {
+			assert.NoError(err, "both racing calls should ultimately succeed")
+		}
+		assert.Equal(int32(2), toolsListCalls.Load(),
+			"the double-check must prevent the losing goroutine from calling tools/list a second time (1 startup call + 1 racing call)")
+	})
 }
