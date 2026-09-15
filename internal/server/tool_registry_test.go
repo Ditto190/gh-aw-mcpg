@@ -1325,7 +1325,7 @@ func TestEnsureToolsRegistered(t *testing.T) {
 		wg.Wait()
 		close(errs)
 		for err := range errs {
-			assert.NoError(err, "both racing calls should ultimately succeed")
+			require.NoError(err, "both racing calls should ultimately succeed")
 		}
 		assert.Equal(int32(2), toolsListCalls.Load(),
 			"the double-check must prevent the losing goroutine from calling tools/list a second time (1 startup call + 1 racing call)")
