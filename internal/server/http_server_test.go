@@ -311,7 +311,7 @@ func discoverRejectionSupportedVersions(t *testing.T, body []byte) []string {
 
 	code, ok := errObj["code"].(float64)
 	require.True(t, ok, "expected numeric error code, got: %v", errObj["code"])
-	assert.Equal(t, float64(sdk.CodeUnsupportedProtocolVersion), code, "expected CodeUnsupportedProtocolVersion (-32022)")
+	assert.Equal(t, int64(sdk.CodeUnsupportedProtocolVersion), int64(code), "expected CodeUnsupportedProtocolVersion (-32022)")
 
 	rawData, ok := errObj["data"].(map[string]interface{})
 	require.True(t, ok, "expected error.data in discover rejection: %v", errObj)
