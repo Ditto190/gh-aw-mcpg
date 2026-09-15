@@ -307,10 +307,13 @@ gh-aw-mcpg/
     ├── auth/                  # Authentication header parsing and middleware
     ├── cmd/                   # CLI commands (cobra)
     ├── config/                # Configuration loading (TOML/JSON)
+    ├── delegation/            # Delegation envelope, capability, and audit logic
     ├── difc/                  # Decentralized Information Flow Control
+    ├── enclavegithub/         # Enclave-scoped GitHub capability/policy/route handling for delegation
     ├── envutil/               # Environment variable utilities
     ├── githubhttp/            # GitHub API-specific HTTP helpers (auth headers, collaborator permission, rate-limit parsing)
     ├── guard/                 # Security guards (NoopGuard, WasmGuard, WriteSinkGuard)
+    ├── hmacutil/              # HMAC-SHA256 request signing and verification helpers
     ├── httputil/              # Shared HTTP helper utilities (server responses, proxy transport)
     ├── jqutil/                # Shared gojq compiler options (security: $ENV access disabled)
     ├── launcher/              # Backend server management
@@ -318,8 +321,10 @@ gh-aw-mcpg/
     ├── mcp/                   # MCP protocol types & connection
     ├── mcpresult/             # MCP result text content helpers
     ├── middleware/            # HTTP middleware (jq schema processing)
+    ├── mountspec/             # Container bind-mount declaration parsing
     ├── oidc/                  # OIDC authentication for HTTP MCP backends
     ├── proxy/                 # HTTP forward proxy for DIFC filtering
+    ├── restroute/             # Shared REST path-matching helpers
     ├── sanitize/              # Sensitive data redaction utilities for logging
     ├── server/                # HTTP server (routed/unified modes)
     ├── util/                  # String, formatting, randomness, and JSON deep-clone utilities
@@ -337,10 +342,13 @@ gh-aw-mcpg/
 - **`internal/auth/`** - Authentication header parsing and middleware
 - **`internal/cmd/`** - CLI implementation using Cobra framework
 - **`internal/config/`** - Configuration parsing for TOML and JSON formats
+- **`internal/delegation/`** - Delegation envelope, capability, and audit logic
 - **`internal/difc/`** - Decentralized Information Flow Control
+- **`internal/enclavegithub/`** - Enclave-scoped GitHub capability/policy/route handling for delegation
 - **`internal/envutil/`** - Environment variable utilities
 - **`internal/githubhttp/`** - GitHub API-specific HTTP helpers (auth headers, collaborator permission, rate-limit parsing)
 - **`internal/guard/`** - Guard framework for resource labeling
+- **`internal/hmacutil/`** - HMAC-SHA256 request signing and verification helpers
 - **`internal/httputil/`** - Shared HTTP helper utilities (server responses, proxy transport)
 - **`internal/jqutil/`** - Shared gojq compiler options (security: `$ENV` access disabled)
 - **`internal/launcher/`** - Backend process management (Docker, stdio)
@@ -348,8 +356,10 @@ gh-aw-mcpg/
 - **`internal/mcp/`** - MCP protocol types and JSON-RPC handling
 - **`internal/mcpresult/`** - MCP result text content helpers
 - **`internal/middleware/`** - HTTP middleware (jq schema processing)
+- **`internal/mountspec/`** - Container bind-mount declaration parsing
 - **`internal/oidc/`** - OIDC authentication for HTTP MCP backends
 - **`internal/proxy/`** - HTTP forward proxy applying DIFC filtering to `gh` CLI and REST/GraphQL requests
+- **`internal/restroute/`** - Shared REST path-matching helpers
 - **`internal/sanitize/`** - Sensitive data redaction utilities (`SanitizeString`, `SanitizeJSON`, `RedactSecret`) for safe log output
 - **`internal/server/`** - HTTP server with routed and unified modes
 - **`internal/util/`** - String, formatting, randomness, and JSON deep-clone utilities
