@@ -52,9 +52,10 @@ func TestInitProvider_IsEnabled_SDK(t *testing.T) {
 	assert.True(t, provider.IsEnabled(), "SDK provider should report IsEnabled=true")
 }
 
-func TestInitProvider_ExportsGzipCompressedSpans(t *testing.T) {
+func TestInitProvider_HonorsCompressionOptOut(t *testing.T) {
 	ctx := context.Background()
 	t.Setenv("GH_AW_OTLP_ENDPOINTS", "")
+	t.Setenv("OTEL_EXPORTER_OTLP_TRACES_COMPRESSION", "none")
 
 	received := make(chan http.Header, 1)
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -66,7 +67,7 @@ func TestInitProvider_ExportsGzipCompressedSpans(t *testing.T) {
 	provider, err := tracing.InitProvider(ctx, &config.TracingConfig{Endpoint: ts.URL})
 	require.NoError(t, err)
 
-	_, span := provider.Tracer().Start(ctx, "gzip-test-span")
+	_, span := provider.Tracer().Start(ctx, "compression-opt-out-test-span")
 	span.End()
 
 	shutdownCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
@@ -75,9 +76,9 @@ func TestInitProvider_ExportsGzipCompressedSpans(t *testing.T) {
 
 	select {
 	case headers := <-received:
-		assert.Equal(t, "gzip", headers.Get("Content-Encoding"))
+		assert.Empty(t, headers.Get("Content-Encoding"))
 	case <-time.After(3 * time.Second):
-		t.Fatal("timed out waiting for gzip-compressed OTLP export request")
+		t.Fatal("timed out waiting for OTLP export request")
 	}
 }
 
