@@ -31,7 +31,7 @@ func TestLogInboundRPCResponseFromResult_LogsMarshaledResponseAndReturnsResultAn
 		Result:  []byte(`{"ok":true}`),
 	}
 
-	result, err := logInboundRPCResponseFromResult("test-server", expectedResult, expectedErr, nil)
+	result, err := logInboundRPCResponseFromResult("test-server", expectedResult, expectedErr, nil, false)
 
 	assert.Same(expectedResult, result)
 	require.ErrorIs(err, expectedErr)
@@ -58,7 +58,7 @@ func TestLogInboundRPCResponseFromResult_LogsMarshaledResponseAndReturnsResultAn
 func TestLogInboundRPCResponseFromResult_AllowsNilResult(t *testing.T) {
 	assert := assert.New(t)
 
-	result, err := logInboundRPCResponseFromResult("test-server", nil, nil, nil)
+	result, err := logInboundRPCResponseFromResult("test-server", nil, nil, nil, false)
 
 	assert.Nil(result)
 	assert.NoError(err)

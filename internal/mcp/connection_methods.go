@@ -90,7 +90,7 @@ func (c *Connection) readResource(ctx context.Context, params any) (*Response, e
 		URI string `json:"uri"`
 	}
 	return callParamMethod(c, params, func(p readResourceParams) (any, error) {
-		logConn.Printf("readResource: reading resource uri=%s from serverID=%s", p.URI, c.serverID)
+		logConn.Printf("readResource: reading resource uri=%s from serverID=%s", RedactRequestValueForLog(ctx, p.URI), c.serverID)
 		return c.getSDKSession().ReadResource(ctx, &sdk.ReadResourceParams{
 			URI: p.URI,
 		})
@@ -103,7 +103,7 @@ func (c *Connection) getPrompt(ctx context.Context, params any) (*Response, erro
 		Arguments map[string]string `json:"arguments"`
 	}
 	return callParamMethod(c, params, func(p getPromptParams) (any, error) {
-		logConn.Printf("getPrompt: getting prompt name=%s from serverID=%s", p.Name, c.serverID)
+		logConn.Printf("getPrompt: getting prompt name=%s from serverID=%s", RedactRequestValueForLog(ctx, p.Name), c.serverID)
 		return c.getSDKSession().GetPrompt(ctx, &sdk.GetPromptParams{
 			Name:      p.Name,
 			Arguments: p.Arguments,

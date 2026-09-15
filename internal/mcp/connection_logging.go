@@ -36,27 +36,29 @@ func snapshotTags(snapshot *AgentTagsSnapshot) ([]string, []string) {
 }
 
 // logOutboundRPCRequest logs an outbound RPC request, optionally attaching agent DIFC tag snapshots.
-func logOutboundRPCRequest(serverID string, method string, payload []byte, snapshot *AgentTagsSnapshot) {
-	logConnLogging.Printf("Outbound RPC request: serverID=%s, method=%s, payloadBytes=%d", serverID, method, len(payload))
+// enclaveSession carries the request's enclave provenance so the payload is reduced to metadata.
+func logOutboundRPCRequest(serverID string, method string, payload []byte, snapshot *AgentTagsSnapshot, enclaveSession bool) {
+	logConnLogging.Printf("Outbound RPC request: serverID=%s, method=%s, payloadBytes=%d, enclave=%v", serverID, method, len(payload), enclaveSession)
 	agentSecrecy, agentIntegrity := snapshotTags(snapshot)
-	logger.LogRPCRequest(logger.RPCDirectionOutbound, serverID, method, payload, agentSecrecy, agentIntegrity)
+	logger.LogRPCRequestForSession(logger.RPCDirectionOutbound, serverID, method, payload, agentSecrecy, agentIntegrity, enclaveSession)
 }
 
 // logInboundRPCResponse logs an inbound RPC response, optionally attaching agent DIFC tag snapshots.
-func logInboundRPCResponse(serverID string, payload []byte, err error, snapshot *AgentTagsSnapshot) {
-	logConnLogging.Printf("Inbound RPC response: serverID=%s, payloadBytes=%d, hasError=%v", serverID, len(payload), err != nil)
+// enclaveSession carries the request's enclave provenance so the payload is reduced to metadata.
+func logInboundRPCResponse(serverID string, payload []byte, err error, snapshot *AgentTagsSnapshot, enclaveSession bool) {
+	logConnLogging.Printf("Inbound RPC response: serverID=%s, payloadBytes=%d, hasError=%v, enclave=%v", serverID, len(payload), err != nil, enclaveSession)
 	agentSecrecy, agentIntegrity := snapshotTags(snapshot)
-	logger.LogRPCResponse(logger.RPCDirectionInbound, serverID, payload, err, agentSecrecy, agentIntegrity)
+	logger.LogRPCResponseForSession(logger.RPCDirectionInbound, serverID, payload, err, agentSecrecy, agentIntegrity, enclaveSession)
 }
 
 // logInboundRPCResponseFromResult attempts to marshal a response payload for logging,
 // silently ignores marshal failures, logs the inbound response, and returns the
 // original result and error unchanged.
-func logInboundRPCResponseFromResult(serverID string, result *Response, err error, snapshot *AgentTagsSnapshot) (*Response, error) {
+func logInboundRPCResponseFromResult(serverID string, result *Response, err error, snapshot *AgentTagsSnapshot, enclaveSession bool) (*Response, error) {
 	var responsePayload []byte
 	if result != nil {
 		responsePayload, _ = json.Marshal(result)
 	}
-	logInboundRPCResponse(serverID, responsePayload, err, snapshot)
+	logInboundRPCResponse(serverID, responsePayload, err, snapshot, enclaveSession)
 	return result, err
 }

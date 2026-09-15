@@ -1,0 +1,81 @@
+package server
+
+import (
+	"bytes"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/github/gh-aw-mcpg/internal/config"
+	"github.com/github/gh-aw-mcpg/internal/logger"
+	"github.com/github/gh-aw-mcpg/internal/mcp"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// enclaveSentinel stands in for private repository content carried by an
+// enclave-scoped MCP request. It must never reach an exported log sink.
+const enclaveSentinel = "SENTINEL-PRIVATE-ARGUMENT"
+
+func TestIsEnclaveSession_AgentPolicyFlag(t *testing.T) {
+	assert := assert.New(t)
+
+	us := &UnifiedServer{cfg: &config.Config{Gateway: &config.GatewayConfig{
+		AgentPolicies: map[string]*config.AgentPolicy{
+			"enclave-agent": {Servers: []string{"github"}, Enclave: true},
+			"primary-agent": {Servers: []string{"github"}},
+		},
+	}}}
+
+	assert.True(us.isEnclaveSession("enclave-agent"))
+	assert.False(us.isEnclaveSession("primary-agent"))
+	assert.False(us.isEnclaveSession("unknown-agent"))
+}
+
+func TestSetupSessionCallback_MarksEnclaveProvenance(t *testing.T) {
+	assert := assert.New(t)
+
+	us := &UnifiedServer{cfg: &config.Config{Gateway: &config.GatewayConfig{
+		AgentPolicies: map[string]*config.AgentPolicy{
+			"enclave-agent": {Servers: []string{"github"}, Enclave: true},
+			"primary-agent": {Servers: []string{"github"}},
+		},
+	}}}
+
+	enclaveReq := httptest.NewRequest(http.MethodPost, "/mcp", nil)
+	enclaveReq.Header.Set("Authorization", "enclave-agent")
+	_, ok := setupSessionCallback(enclaveReq, "", true, us.isEnclaveSession)
+	assert.True(ok)
+	assert.True(mcp.IsEnclaveSession(enclaveReq.Context()),
+		"enclave provenance must travel with the request context")
+
+	primaryReq := httptest.NewRequest(http.MethodPost, "/mcp", nil)
+	primaryReq.Header.Set("Authorization", "primary-agent")
+	_, ok = setupSessionCallback(primaryReq, "", true, us.isEnclaveSession)
+	assert.True(ok)
+	assert.False(mcp.IsEnclaveSession(primaryReq.Context()),
+		"non-enclave sessions keep their existing behavior")
+}
+
+func TestLogHTTPRequestBody_EnclaveSessionRedactsBody(t *testing.T) {
+	assert := assert.New(t)
+	require := require.New(t)
+
+	logDir := filepath.Join(t.TempDir(), "logs")
+	require.NoError(logger.InitFileLogger(logDir, "test.log"))
+	t.Cleanup(func() { logger.CloseAllLoggers() })
+
+	body := `{"method":"tools/call","params":{"arguments":{"query":"` + enclaveSentinel + `"}}}`
+	req := httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewBufferString(body))
+	logHTTPRequestBody(req, "enclave-agent", "github", true)
+
+	logger.CloseAllLoggers()
+
+	content, err := os.ReadFile(filepath.Join(logDir, "test.log"))
+	require.NoError(err)
+	assert.NotContains(string(content), enclaveSentinel,
+		"enclave request arguments must not be persisted")
+	assert.Contains(string(content), "[REDACTED enclave payload")
+}

@@ -120,7 +120,7 @@ func TestWithSDKLogging_PassesResponseThrough(t *testing.T) {
 
 			capture := &handlerCapture{}
 			inner := makeInnerHandler(capture, tt.responseStatus, tt.responseBody)
-			wrapped := WithSDKLogging(inner, "test-mode")
+			wrapped := WithSDKLogging(inner, "test-mode", nil)
 
 			var reqBody io.Reader
 			if tt.requestBody != nil {
@@ -150,7 +150,7 @@ func TestWithSDKLogging_PreservesRequestBodyForInnerHandler(t *testing.T) {
 
 	capture := &handlerCapture{}
 	inner := makeInnerHandler(capture, http.StatusOK, makeJSONRPCSuccessResponse(42, "ok"))
-	wrapped := WithSDKLogging(inner, "routed")
+	wrapped := WithSDKLogging(inner, "routed", nil)
 
 	req := httptest.NewRequest("POST", "/mcp", bytes.NewBuffer(requestBody))
 	w := httptest.NewRecorder()
@@ -168,7 +168,7 @@ func TestWithSDKLogging_GetRequestBodyNotRead(t *testing.T) {
 
 	capture := &handlerCapture{}
 	inner := makeInnerHandler(capture, http.StatusOK, makeJSONRPCSuccessResponse(1, nil))
-	wrapped := WithSDKLogging(inner, "unified")
+	wrapped := WithSDKLogging(inner, "unified", nil)
 
 	req := httptest.NewRequest("GET", "/mcp", bytes.NewBuffer(someBody))
 	w := httptest.NewRecorder()
@@ -185,7 +185,7 @@ func TestWithSDKLogging_GetRequestBodyNotRead(t *testing.T) {
 func TestWithSDKLogging_InvalidJSONRequestBody(t *testing.T) {
 	capture := &handlerCapture{}
 	inner := makeInnerHandler(capture, http.StatusOK, makeJSONRPCSuccessResponse(1, nil))
-	wrapped := WithSDKLogging(inner, "test")
+	wrapped := WithSDKLogging(inner, "test", nil)
 
 	req := httptest.NewRequest("POST", "/mcp", strings.NewReader("not-valid-json"))
 	w := httptest.NewRecorder()
@@ -204,7 +204,7 @@ func TestWithSDKLogging_ToolNotFoundError_InvalidParams(t *testing.T) {
 
 	capture := &handlerCapture{}
 	inner := makeInnerHandler(capture, http.StatusOK, responseBody)
-	wrapped := WithSDKLogging(inner, "routed")
+	wrapped := WithSDKLogging(inner, "routed", nil)
 
 	req := httptest.NewRequest("POST", "/mcp", bytes.NewBuffer(requestBody))
 	w := httptest.NewRecorder()
@@ -225,7 +225,7 @@ func TestWithSDKLogging_ToolNotFoundError_MethodNotFound(t *testing.T) {
 
 	capture := &handlerCapture{}
 	inner := makeInnerHandler(capture, http.StatusOK, responseBody)
-	wrapped := WithSDKLogging(inner, "unified")
+	wrapped := WithSDKLogging(inner, "unified", nil)
 
 	req := httptest.NewRequest("POST", "/mcp", bytes.NewBuffer(requestBody))
 	w := httptest.NewRecorder()
@@ -244,7 +244,7 @@ func TestWithSDKLogging_ProtocolStateError_SessionInitialization(t *testing.T) {
 
 	capture := &handlerCapture{}
 	inner := makeInnerHandler(capture, http.StatusOK, responseBody)
-	wrapped := WithSDKLogging(inner, "routed")
+	wrapped := WithSDKLogging(inner, "routed", nil)
 
 	req := httptest.NewRequest("POST", "/mcp", bytes.NewBuffer(requestBody))
 	req.Header.Set("Authorization", "test-api-key-abc123")
@@ -265,7 +265,7 @@ func TestWithSDKLogging_ProtocolStateError_InvalidDuring(t *testing.T) {
 
 	capture := &handlerCapture{}
 	inner := makeInnerHandler(capture, http.StatusOK, responseBody)
-	wrapped := WithSDKLogging(inner, "unified")
+	wrapped := WithSDKLogging(inner, "unified", nil)
 
 	req := httptest.NewRequest("POST", "/mcp", bytes.NewBuffer(requestBody))
 	w := httptest.NewRecorder()
@@ -284,7 +284,7 @@ func TestWithSDKLogging_GeneralJSONRPCError(t *testing.T) {
 
 	capture := &handlerCapture{}
 	inner := makeInnerHandler(capture, http.StatusBadRequest, responseBody)
-	wrapped := WithSDKLogging(inner, "test")
+	wrapped := WithSDKLogging(inner, "test", nil)
 
 	req := httptest.NewRequest("POST", "/mcp", bytes.NewBuffer(requestBody))
 	w := httptest.NewRecorder()
@@ -304,7 +304,7 @@ func TestWithSDKLogging_NonJSONResponse(t *testing.T) {
 
 	capture := &handlerCapture{}
 	inner := makeInnerHandler(capture, http.StatusOK, sseBody)
-	wrapped := WithSDKLogging(inner, "routed")
+	wrapped := WithSDKLogging(inner, "routed", nil)
 
 	req := httptest.NewRequest("POST", "/mcp", bytes.NewBuffer(requestBody))
 	w := httptest.NewRecorder()
@@ -325,7 +325,7 @@ func TestWithSDKLogging_LargeNonJSONResponse(t *testing.T) {
 
 	capture := &handlerCapture{}
 	inner := makeInnerHandler(capture, http.StatusOK, largeBody)
-	wrapped := WithSDKLogging(inner, "unified")
+	wrapped := WithSDKLogging(inner, "unified", nil)
 
 	req := httptest.NewRequest("POST", "/mcp", bytes.NewBuffer(requestBody))
 	w := httptest.NewRecorder()
@@ -343,7 +343,7 @@ func TestWithSDKLogging_LargeNonJSONResponse(t *testing.T) {
 func TestWithSDKLogging_EmptyResponseBody(t *testing.T) {
 	capture := &handlerCapture{}
 	inner := makeInnerHandler(capture, http.StatusAccepted, nil)
-	wrapped := WithSDKLogging(inner, "test")
+	wrapped := WithSDKLogging(inner, "test", nil)
 
 	req := httptest.NewRequest("POST", "/mcp", bytes.NewBuffer(makeJSONRPCRequest("notifications/initialized", nil)))
 	w := httptest.NewRecorder()
@@ -363,7 +363,7 @@ func TestWithSDKLogging_AuthorizationAndMcpSessionHeaders(t *testing.T) {
 
 	capture := &handlerCapture{}
 	inner := makeInnerHandler(capture, http.StatusOK, responseBody)
-	wrapped := WithSDKLogging(inner, "routed")
+	wrapped := WithSDKLogging(inner, "routed", nil)
 
 	req := httptest.NewRequest("POST", "/mcp", bytes.NewBuffer(makeJSONRPCRequest("initialize", 1)))
 	req.Header.Set("Authorization", "my-secret-api-key")
@@ -387,7 +387,7 @@ func TestWithSDKLogging_ModeString(t *testing.T) {
 			responseBody := makeJSONRPCSuccessResponse(1, nil)
 			capture := &handlerCapture{}
 			inner := makeInnerHandler(capture, http.StatusOK, responseBody)
-			wrapped := WithSDKLogging(inner, mode)
+			wrapped := WithSDKLogging(inner, mode, nil)
 
 			req := httptest.NewRequest("GET", "/mcp", nil)
 			w := httptest.NewRecorder()
@@ -410,7 +410,7 @@ func TestWithSDKLogging_ToolNotFoundError_NonToolsCallMethod(t *testing.T) {
 
 	capture := &handlerCapture{}
 	inner := makeInnerHandler(capture, http.StatusOK, responseBody)
-	wrapped := WithSDKLogging(inner, "test")
+	wrapped := WithSDKLogging(inner, "test", nil)
 
 	req := httptest.NewRequest("POST", "/mcp", bytes.NewBuffer(requestBody))
 	w := httptest.NewRecorder()
@@ -426,7 +426,7 @@ func TestWithSDKLogging_ToolNotFoundError_NonToolsCallMethod(t *testing.T) {
 func TestWithSDKLogging_PostRequestWithNilBody(t *testing.T) {
 	capture := &handlerCapture{}
 	inner := makeInnerHandler(capture, http.StatusOK, makeJSONRPCSuccessResponse(1, nil))
-	wrapped := WithSDKLogging(inner, "test")
+	wrapped := WithSDKLogging(inner, "test", nil)
 
 	req := httptest.NewRequest("POST", "/mcp", nil)
 	w := httptest.NewRecorder()
@@ -443,7 +443,7 @@ func TestWithSDKLogging_ReturnsHTTPHandler(t *testing.T) {
 	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
-	wrapped := WithSDKLogging(inner, "test")
+	wrapped := WithSDKLogging(inner, "test", nil)
 	require.NotNil(t, wrapped, "WithSDKLogging must return a non-nil http.Handler")
 }
 
@@ -455,7 +455,7 @@ func TestWithSDKLogging_JSONRPCSuccessWithResultNil(t *testing.T) {
 
 	capture := &handlerCapture{}
 	inner := makeInnerHandler(capture, http.StatusOK, responseBody)
-	wrapped := WithSDKLogging(inner, "test")
+	wrapped := WithSDKLogging(inner, "test", nil)
 
 	req := httptest.NewRequest("POST", "/mcp", bytes.NewBuffer(requestBody))
 	w := httptest.NewRecorder()

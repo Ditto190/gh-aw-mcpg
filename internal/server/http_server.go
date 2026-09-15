@@ -77,7 +77,7 @@ func CreateHTTPServerForMCP(addr string, unifiedServer *UnifiedServer, apiKeys [
 			// Subsequent JSON-RPC messages in the same session are handled by the SDK
 			// We use the Authorization header value as the session ID
 			// This groups all requests from the same agent (same auth value) into one session
-			sessionID, ok := setupSessionCallback(r, "", authEnabled)
+			sessionID, ok := setupSessionCallback(r, "", authEnabled, unifiedServer.isEnclaveSession)
 			if !ok {
 				// Return nil to reject the connection
 				// The SDK will handle sending an appropriate error response
@@ -146,7 +146,7 @@ func CreateHTTPServerForRoutedMode(addr string, unifiedServer *UnifiedServer, ap
 			}
 
 			finalHandler := buildMCPHandler(func(r *http.Request) *sdk.Server {
-				sessionID, ok := setupSessionCallback(r, backendID, authEnabled)
+				sessionID, ok := setupSessionCallback(r, backendID, authEnabled, unifiedServer.isEnclaveSession)
 				if !ok {
 					return nil
 				}

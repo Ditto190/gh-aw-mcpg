@@ -85,7 +85,7 @@ func TestSetupSessionCallback_AuthEnabled_SpoofingRejected(t *testing.T) {
 	req.Header.Set("Authorization", "victim-agent")
 	req.Header.Set("X-Agent-ID", "attacker-agent")
 
-	sessionID, ok := setupSessionCallback(req, "", true)
+	sessionID, ok := setupSessionCallback(req, "", true, nil)
 	assert.True(t, ok)
 	assert.Equal(t, "victim-agent", sessionID, "authenticated identity must come from Authorization only")
 
@@ -104,6 +104,6 @@ func TestSetupSessionCallback_AuthEnabled_BlankRejected(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/mcp", nil)
 	req.Header.Set("X-Agent-ID", "attacker-agent")
 
-	_, ok := setupSessionCallback(req, "", true)
+	_, ok := setupSessionCallback(req, "", true, nil)
 	assert.False(t, ok, "blank Authorization must be rejected when auth is enabled")
 }

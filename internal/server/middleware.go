@@ -83,7 +83,7 @@ func wrapWithMiddleware(handler http.Handler, logTag string, unifiedServer *Unif
 	logServerHelpers.Printf("Wrapping handler with middleware: logTag=%s, authEnabled=%v, hmacEnabled=%v", logTag, len(apiKeys) > 0, hmacSecret != "")
 
 	// Wrap SDK handler with detailed logging for JSON-RPC translation debugging
-	loggedHandler := WithSDKLogging(handler, logTag)
+	loggedHandler := WithSDKLogging(handler, logTag, unifiedServer)
 
 	delegationMethodHandler := unifiedServer.rejectDelegatedNonToolMethods(loggedHandler)
 

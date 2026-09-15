@@ -14,6 +14,7 @@ import (
 	"github.com/github/gh-aw-mcpg/internal/launcher"
 	"github.com/github/gh-aw-mcpg/internal/logger"
 	"github.com/github/gh-aw-mcpg/internal/mcp"
+	"github.com/github/gh-aw-mcpg/internal/sanitize"
 	"github.com/github/gh-aw-mcpg/internal/syncutil"
 	"github.com/github/gh-aw-mcpg/internal/tracing"
 	"github.com/github/gh-aw-mcpg/internal/util"
@@ -102,14 +103,19 @@ func (g *guardBackendCaller) callCollaboratorPermission(ctx context.Context, arg
 	}
 
 	owner, repo, username, err := githubhttp.ParseCollaboratorPermissionArgs(argsMap)
+	// The guard-internal metadata call carries the same private selectors as the
+	// agent-visible call it is labeling, so every log site below resolves the
+	// enclave redaction decision from the originating request context.
+	sensitive := sanitize.ShouldRedactPayload(mcp.IsEnclaveSession(g.ctx))
+	logOwner, logRepo, logUser := githubhttp.CollaboratorSelectorsForLog(sensitive, owner, repo, username)
 	if err != nil {
-		logUnified.Printf("get_collaborator_permission: missing required args (owner=%q repo=%q username=%q)", owner, repo, username)
+		logUnified.Printf("get_collaborator_permission: missing required args (owner=%q repo=%q username=%q)", logOwner, logRepo, logUser)
 		return nil, err
 	}
 
 	token := envutil.LookupGitHubToken()
 	if token == "" {
-		logUnified.Printf("get_collaborator_permission: no GitHub token available for %s/%s user %s, skipping", owner, repo, username)
+		logUnified.Printf("get_collaborator_permission: no GitHub token available for %s/%s user %s, skipping", logOwner, logRepo, logUser)
 		return nil, fmt.Errorf("get_collaborator_permission: no GitHub token available")
 	}
 
@@ -120,25 +126,35 @@ func (g *guardBackendCaller) callCollaboratorPermission(ctx context.Context, arg
 		repo,
 		username,
 		func(ctx context.Context, apiPath string) (*http.Response, error) {
-			logUnified.Printf("get_collaborator_permission: GET %s (for %s/%s user %s)", apiPath, owner, repo, username)
+			logUnified.Printf("get_collaborator_permission: GET %s (for %s/%s user %s)",
+				util.HashForLogIf(sensitive, apiPath, 16, "path:"), logOwner, logRepo, logUser)
 			resp, err := githubhttp.DoGitHubGET(ctx, apiURL, apiPath, "token "+token)
 			if err != nil {
-				logUnified.Printf("get_collaborator_permission: REST call failed for %s/%s user %s: %v", owner, repo, username, err)
+				logUnified.Printf("get_collaborator_permission: REST call failed for %s/%s user %s: %s",
+					logOwner, logRepo, logUser, redactErrorIf(sensitive, err))
 				return nil, fmt.Errorf("REST call failed: %w", err)
 			}
 			return resp, nil
 		},
 		logUnified.Printf,
-		// This is the launcher-backed unified/routed server, which has no
-		// enclave or delegation mode (those only exist in internal/proxy.Server);
-		// there is no private-repository selector to redact here.
-		false,
+		sensitive,
 	)
 	if err != nil {
-		logUnified.Printf("get_collaborator_permission: request failed for %s/%s user %s: %v", owner, repo, username, err)
+		logUnified.Printf("get_collaborator_permission: request failed for %s/%s user %s: %s",
+			logOwner, logRepo, logUser, redactErrorIf(sensitive, err))
 		return nil, fmt.Errorf("get_collaborator_permission: %w", err)
 	}
 	return result, nil
+}
+
+// redactErrorIf renders err for a log line, reducing it to a coarse category
+// plus a keyed digest when redact is set. Backend errors routinely embed
+// response bodies, so they cannot be persisted verbatim for enclave traffic.
+func redactErrorIf(redact bool, err error) string {
+	if redact {
+		return sanitize.RedactErrorForLog(err)
+	}
+	return fmt.Sprintf("%v", err)
 }
 
 // getCircuitBreaker returns the circuit breaker for serverID, creating one with
@@ -177,7 +193,7 @@ func (us *UnifiedServer) isToolAllowed(serverID, toolName string) bool {
 func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName string, args interface{}) (*sdk.CallToolResult, interface{}, error) {
 	// Note: Session validation happens at the tool registration level via closures
 	// The closure captures the request and validates before calling this method
-	logUnified.Printf("callBackendTool: serverID=%s, toolName=%s, args=%+v", serverID, toolName, args)
+	logUnified.Printf("callBackendTool: serverID=%s, toolName=%s", serverID, toolName)
 
 	// Apply the configured tool timeout as a context deadline so backend calls
 	// (including HTTP backends) are bounded by toolTimeout rather than hanging
@@ -218,6 +234,17 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 		tracing.RecordSpanError(toolSpan, err, "delegation denied")
 		return mcp.NewErrorCallToolResult(err)
 	}
+	// Resolve the redaction decision after delegation authorization, which is where a
+	// delegated executor acquires the enclave marker, so every log site below (including
+	// the request arguments) honors it.
+	redactEnclave := sanitize.ShouldRedactPayload(mcp.IsEnclaveSession(ctx))
+	if redactEnclave {
+		argsJSON, _ := json.Marshal(args)
+		logUnified.Printf("callBackendTool: args=%s", sanitize.RedactedPayloadText(argsJSON))
+	} else {
+		logUnified.Printf("callBackendTool: args=%+v", args)
+	}
+
 	// Propagate a redacted, stable session attribution to the tool call span so it
 	// is queryable on child spans without exposing the raw authenticated identity.
 	if toolSpan.IsRecording() {
@@ -298,19 +325,31 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 	ctx, pre, err := guard.RunPipelinePrePhases(ctx, pipelineIn)
 	if err != nil {
 		if denied, detailedErr := guard.HandlePrePhaseError(err); denied != nil {
+			// The denied resource description and reason name the private resource the
+			// decision was made about, so enclave traffic logs only correlatable tokens.
+			deniedDesc := denied.Resource.Description
+			deniedReason := sanitize.SanitizeString(denied.EvalResult.Reason)
+			if redactEnclave {
+				deniedDesc = "item:" + sanitize.KeyedDigest(deniedDesc)
+				deniedReason = sanitize.RedactPrivateSelectors(deniedReason)
+			}
 			logger.LogWarn("difc", "Access DENIED for agent %s to %s: %s",
-				util.HashIdentifierForLog(agentID), denied.Resource.Description, denied.EvalResult.Reason)
-			logCoarseDIFCDenial(serverID, toolName, denied)
+				util.HashIdentifierForLog(agentID), deniedDesc, deniedReason)
+			logCoarseDIFCDenial(ctx, serverID, toolName, denied)
 			if toolSpan.IsRecording() {
 				toolSpan.AddEvent("difc.access_denied", oteltrace.WithAttributes(
-					attribute.String("reason", denied.EvalResult.Reason),
+					attribute.String("reason", deniedReason),
 				))
 			}
-			tracing.RecordSpanError(toolSpan, detailedErr, "access denied: "+denied.EvalResult.Reason)
+			if redactEnclave {
+				tracing.RecordSpanErrorSafe(toolSpan, detailedErr, "access denied: "+deniedReason)
+			} else {
+				tracing.RecordSpanError(toolSpan, detailedErr, "access denied: "+deniedReason)
+			}
 			httpStatusCode = 403
 			return mcp.NewErrorCallToolResult(detailedErr)
 		}
-		logger.LogWarn("difc", "Guard labeling failed: %v", err)
+		logger.LogWarn("difc", "Guard labeling failed: %s", redactErrorIf(redactEnclave, err))
 		httpStatusCode = 500
 		return mcp.NewErrorCallToolResult(fmt.Errorf("guard labeling failed: %w", err))
 	}
@@ -380,7 +419,7 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 	// **Phase 4: Guard labels the response data (for fine-grained filtering)**
 	labeledData, err := guard.RunPipelinePhase4(ctx, pipelineIn, pre, backendResult)
 	if err != nil {
-		logger.LogWarn("difc", "Response labeling failed: %v", err)
+		logger.LogWarn("difc", "Response labeling failed: %s", redactErrorIf(redactEnclave, err))
 		httpStatusCode = 500
 		return mcp.NewErrorCallToolResult(fmt.Errorf("response labeling failed: %w", err))
 	}
@@ -417,7 +456,7 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 
 		if difcFiltered.GetFilteredCount() > 0 {
 			logUnified.Printf("[DIFC] Filtered out %d items due to DIFC policy", difcFiltered.GetFilteredCount())
-			logFilteredItems(serverID, toolName, difcFiltered)
+			logFilteredItems(ctx, serverID, toolName, difcFiltered)
 
 			// **Single-item entirely filtered**: return a structured MCP error so the agent
 			// cannot misinterpret "filtered" as "resource not found" (e.g. issue_read).
@@ -426,8 +465,8 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 			// and should still receive the notice-only behavior so agents see an empty list
 			// rather than an unexpected error.
 			if IsSingularReadTool(toolName) && difcFiltered.GetAccessibleCount() == 0 && difcFiltered.GetFilteredCount() == 1 {
-				filteredErr := buildDIFCSingleItemFilteredError(difcFiltered.Filtered[0])
-				logger.LogWarn("difc", "Single item filtered — returning MCP error: %v", filteredErr)
+				filteredErr := buildDIFCSingleItemFilteredError(ctx, difcFiltered.Filtered[0])
+				logger.LogWarn("difc", "Single item filtered — returning MCP error: %s", redactErrorIf(redactEnclave, filteredErr))
 				httpStatusCode = 403
 				return mcp.NewErrorCallToolResult(filteredErr)
 			}

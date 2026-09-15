@@ -657,6 +657,25 @@ Each policy may also carry an optional `allow-only` block with the same shape as
 agent's DIFC guard session and takes precedence over server/global guard policies
 for that agent; enforcement requires an active (non-noop) guard.
 
+A policy may also set `enclave = true` (TOML) / `"enclave": true` (JSON stdin) to
+mark the identity as **enclave-scoped**. An enclave agent is authorized to disclose
+only the bounded result its broker validated, but gateway logs are commonly uploaded
+as workflow artifacts by a job running outside the enclave. For such sessions the
+gateway therefore records **metadata only** — timestamp, direction, server, method,
+tool name, byte count, payload digest, outcome, sanitized error category, and DIFC
+labels — and never persists MCP request arguments or response content in
+`rpc-messages.jsonl`, `mcp-gateway.log`, the per-server logs, `gateway.md`, or
+telemetry attributes. DIFC filter/denial entries for these sessions have their
+item-identifying fields (description, URL, author, number, SHA) replaced by stable
+tokens. Every such token (including the payload digest) is an HMAC keyed with a
+secret generated per gateway process and never written to an artifact, so equal
+values stay correlatable within one run while a reader of the exported logs cannot
+recover a value by hashing candidate guesses. Delegated executor sessions are always
+treated as enclave-scoped. Raw
+payload logging can be restored for local debugging only with the privileged
+[`MCP_GATEWAY_UNSAFE_RAW_ENCLAVE_PAYLOAD_LOGS`](ENVIRONMENT_VARIABLES.md) opt-in,
+which must never be enabled in a workflow that exports its logs.
+
 Omitting `agent_policies` entirely leaves a singular agent with full access
 (backward compatible). With multiple `agent_ids`, every identity must have a
 policy; startup otherwise fails closed.
@@ -674,9 +693,11 @@ servers = ["github", "fetch"]
 [gateway.agent_policies.primary-agent.tools]
 fetch = ["*"]
 
-# enclave-agent: read-only slice of github, with a per-agent allow-only policy
+# enclave-agent: read-only slice of github, with a per-agent allow-only policy.
+# enclave = true keeps its MCP payloads out of every exported log and summary.
 [gateway.agent_policies.enclave-agent]
 servers = ["github"]
+enclave = true
 
 [gateway.agent_policies.enclave-agent.tools]
 github = ["search_code", "get_file_contents"]
@@ -702,7 +723,8 @@ min-integrity = "none"
       "enclave-agent": {
         "servers": ["github"],
         "tools": { "github": ["search_code", "get_file_contents"] },
-        "allow-only": { "repos": "public", "min-integrity": "none" }
+        "allow-only": { "repos": "public", "min-integrity": "none" },
+        "enclave": true
       }
     }
   }

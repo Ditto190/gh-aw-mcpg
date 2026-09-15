@@ -356,6 +356,7 @@ func (c *Connection) SendRequest(method string, params any) (*Response, error) {
 // SendRequestWithServerID sends a JSON-RPC request with server ID for logging
 // The ctx parameter is used to extract session ID for HTTP MCP servers
 func (c *Connection) SendRequestWithServerID(ctx context.Context, method string, params any, serverID string) (*Response, error) {
+	enclaveSession := IsEnclaveSession(ctx)
 	snapshot, hasSnapshot := GetAgentTagsSnapshotFromContext(ctx)
 	shouldAttachAgentTags := hasSnapshot && difc.IsSinkServerID(serverID)
 	var loggingSnapshot *AgentTagsSnapshot
@@ -369,7 +370,7 @@ func (c *Connection) SendRequestWithServerID(ctx context.Context, method string,
 		"method":  method,
 		"params":  params,
 	})
-	logOutboundRPCRequest(serverID, method, requestPayload, loggingSnapshot)
+	logOutboundRPCRequest(serverID, method, requestPayload, loggingSnapshot, enclaveSession)
 
 	var result *Response
 	var err error
@@ -390,7 +391,7 @@ func (c *Connection) SendRequestWithServerID(ctx context.Context, method string,
 		result, err = c.callSDKMethod(ctx, method, params)
 	}
 
-	return logInboundRPCResponseFromResult(serverID, result, err, loggingSnapshot)
+	return logInboundRPCResponseFromResult(serverID, result, err, loggingSnapshot, enclaveSession)
 }
 
 // requireSDKSession validates that a session is available for SDK operations.
