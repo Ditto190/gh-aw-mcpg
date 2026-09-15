@@ -30,13 +30,17 @@ var logTransport = logger.New("server:transport")
 // here causes discover to report only the legacy versions, so compliant
 // clients fall back to the supported initialize handshake instead.
 func supportedProtocolVersions() []string {
-	// sdk.SupportedProtocolVersions() returns the newest version first; drop
-	// it to retain only the legacy, stateful-handshake versions.
 	versions := sdk.SupportedProtocolVersions()
-	if len(versions) <= 1 {
-		return versions
+	legacy := make([]string, 0, len(versions))
+	for _, protocolVersion := range versions {
+		if protocolVersion < statelessProtocolVersion {
+			legacy = append(legacy, protocolVersion)
+		}
 	}
-	return versions[1:]
+	if len(legacy) == 0 {
+		panic("MCP SDK exposes no legacy protocol versions")
+	}
+	return legacy
 }
 
 // newSDKServer creates a new MCP SDK server with the given implementation name and debug logger.
