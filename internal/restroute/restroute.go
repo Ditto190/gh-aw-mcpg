@@ -27,7 +27,7 @@ func Match(path string, pattern *regexp.Regexp) []string {
 	if matches == nil {
 		log.Printf("Match: no match for pattern %q against path", pattern.String())
 	} else {
-		log.Printf("Match: pattern %q matched path with %d submatches", pattern.String(), len(matches))
+		log.Printf("Match: pattern %q matched path with %d submatches", pattern.String(), len(matches)-1)
 	}
 	return matches
 }
