@@ -52,10 +52,12 @@ func TestRedactedPayloadRenderings(t *testing.T) {
 	require.NoError(json.Unmarshal(encoded, &decoded))
 	assert.Equal(true, decoded["redacted"])
 	assert.Equal("enclave_payload_redacted", decoded["reason"])
-	assert.Equal(float64(len(payload)), decoded["bytes"])
+	assert.InDelta(float64(len(payload)), decoded["bytes"], 0)
 
 	// The digest is stable so identical payloads stay correlatable across lines.
-	assert.Equal(PayloadDigest(payload), PayloadDigest(payload))
+	firstDigest := PayloadDigest(payload)
+	secondDigest := PayloadDigest(payload)
+	assert.Equal(firstDigest, secondDigest)
 	assert.NotEqual(PayloadDigest(payload), PayloadDigest([]byte(`{"result":{}}`)))
 
 	// The digest is keyed with a per-process secret, so an artifact reader cannot
