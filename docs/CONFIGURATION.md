@@ -667,7 +667,11 @@ labels — and never persists MCP request arguments or response content in
 `rpc-messages.jsonl`, `mcp-gateway.log`, the per-server logs, `gateway.md`, or
 telemetry attributes. DIFC filter/denial entries for these sessions have their
 item-identifying fields (description, URL, author, number, SHA) replaced by stable
-hashes. Delegated executor sessions are always treated as enclave-scoped. Raw
+tokens. Every such token (including the payload digest) is an HMAC keyed with a
+secret generated per gateway process and never written to an artifact, so equal
+values stay correlatable within one run while a reader of the exported logs cannot
+recover a value by hashing candidate guesses. Delegated executor sessions are always
+treated as enclave-scoped. Raw
 payload logging can be restored for local debugging only with the privileged
 [`MCP_GATEWAY_UNSAFE_RAW_ENCLAVE_PAYLOAD_LOGS`](ENVIRONMENT_VARIABLES.md) opt-in,
 which must never be enabled in a workflow that exports its logs.
