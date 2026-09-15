@@ -1174,6 +1174,9 @@ func TestEnsureToolsRegistered(t *testing.T) {
 		defer us.Close()
 
 		// First call performs discovery and registers the backend's tools.
+		us.registrationMu.Lock()
+		us.registeredBackends["alpha"] = false
+		us.registrationMu.Unlock()
 		require.NoError(us.ensureToolsRegistered(context.Background(), "alpha"))
 		us.toolsMu.RLock()
 		_, registered := us.tools["alpha___do_thing"]
