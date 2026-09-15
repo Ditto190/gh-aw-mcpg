@@ -503,10 +503,10 @@ fn infer_scope_for_baseline<'a>(
                 }
             }
         }
-        "repository_ruleset_read"
-        | "custom_properties_read"
-        | "custom_properties_write"
-        | "create_repository_ruleset" => {
+        tool_names::REPOSITORY_RULESET_READ
+        | tool_names::CUSTOM_PROPERTIES_READ
+        | tool_names::CUSTOM_PROPERTIES_WRITE
+        | tool_names::CREATE_REPOSITORY_RULESET => {
             let scope_field = match tool_args.get("level").and_then(Value::as_str) {
                 Some("organization") => "org",
                 Some("enterprise") => "enterprise",
@@ -523,7 +523,7 @@ fn infer_scope_for_baseline<'a>(
         | "search_code_ff_fields_param"
         | tool_names::SEARCH_ISSUES
         | "search_issues_ff_fields_param"
-        | "search_pull_requests"
+        | tool_names::SEARCH_PULL_REQUESTS
         | "search_pull_requests_ff_fields_param"
         | "search_commits" => {
             if !repo_id.is_empty() {
@@ -1402,7 +1402,8 @@ mod tests {
     #[test]
     fn infer_scope_for_baseline_uses_search_pull_requests_query_repo() {
         let tool_args = json!({"query": "repo:github/gh-aw-mcpg is:pr is:open"});
-        let inferred = infer_scope_for_baseline("search_pull_requests", &tool_args, "");
+        let inferred =
+            infer_scope_for_baseline(tool_names::SEARCH_PULL_REQUESTS, &tool_args, "");
         assert_eq!(inferred, "github/gh-aw-mcpg");
     }
 
@@ -1625,10 +1626,10 @@ mod tests {
     #[test]
     fn infer_scope_for_baseline_uses_governance_target_level() {
         for tool in &[
-            "repository_ruleset_read",
-            "custom_properties_read",
-            "custom_properties_write",
-            "create_repository_ruleset",
+            tool_names::REPOSITORY_RULESET_READ,
+            tool_names::CUSTOM_PROPERTIES_READ,
+            tool_names::CUSTOM_PROPERTIES_WRITE,
+            tool_names::CREATE_REPOSITORY_RULESET,
         ] {
             assert_eq!(
                 infer_scope_for_baseline(

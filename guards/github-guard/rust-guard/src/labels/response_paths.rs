@@ -170,7 +170,7 @@ pub fn label_response_paths(
         // === Pull Requests - label by merged state ===
         tool_names::LIST_PULL_REQUESTS
         | "list_pull_requests_ff_fields_param"
-        | "search_pull_requests"
+        | tool_names::SEARCH_PULL_REQUESTS
         | "search_pull_requests_ff_fields_param"
         | tool_names::PULL_REQUEST_READ
         | tool_names::GET_PULL_REQUEST => {
@@ -187,7 +187,7 @@ pub fn label_response_paths(
                 tool_name,
                 tool_args,
                 &actual_response,
-                "search_pull_requests",
+                tool_names::SEARCH_PULL_REQUESTS,
                 tool_names::LIST_PULL_REQUESTS,
                 ctx,
             ) {
@@ -1389,7 +1389,7 @@ mod tests {
             }]
         });
         assert_alias_path_labels_match(
-            "search_pull_requests",
+            tool_names::SEARCH_PULL_REQUESTS,
             "search_pull_requests_ff_fields_param",
             &search_pr_args,
             &search_pr_response,
