@@ -140,7 +140,7 @@ pub fn label_response_items(
         // === Pull Requests - label by merged state ===
         tool_names::LIST_PULL_REQUESTS
         | "list_pull_requests_ff_fields_param"
-        | "search_pull_requests"
+        | tool_names::SEARCH_PULL_REQUESTS
         | "search_pull_requests_ff_fields_param"
         | tool_names::PULL_REQUEST_READ
         | tool_names::GET_PULL_REQUEST => {

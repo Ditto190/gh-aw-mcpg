@@ -1502,7 +1502,7 @@ pub(crate) fn is_mcp_text_wrapper(response: &Value) -> bool {
 pub(crate) fn is_search_pr_variant(tool_name: &str) -> bool {
     matches!(
         tool_name,
-        "search_pull_requests" | "search_pull_requests_ff_fields_param"
+        tool_names::SEARCH_PULL_REQUESTS | "search_pull_requests_ff_fields_param"
     )
 }
 

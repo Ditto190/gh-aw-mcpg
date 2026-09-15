@@ -101,6 +101,20 @@ mod tests {
         assert_eq!(tool_names::SEARCH_CODE, "search_code");
         assert_eq!(tool_names::LIST_ISSUES, "list_issues");
         assert_eq!(tool_names::SEARCH_ISSUES, "search_issues");
+        assert_eq!(tool_names::SEARCH_PULL_REQUESTS, "search_pull_requests");
+        assert_eq!(
+            tool_names::REPOSITORY_RULESET_READ,
+            "repository_ruleset_read"
+        );
+        assert_eq!(tool_names::CUSTOM_PROPERTIES_READ, "custom_properties_read");
+        assert_eq!(
+            tool_names::CUSTOM_PROPERTIES_WRITE,
+            "custom_properties_write"
+        );
+        assert_eq!(
+            tool_names::CREATE_REPOSITORY_RULESET,
+            "create_repository_ruleset"
+        );
         assert_eq!(tool_names::SET_SECRET, "set_secret");
         assert_eq!(tool_names::DELETE_SECRET, "delete_secret");
         assert_eq!(tool_names::SET_VARIABLE, "set_variable");
@@ -235,6 +249,11 @@ pub mod tool_names {
     pub const SEARCH_CODE: &str = "search_code";
     pub const LIST_ISSUES: &str = "list_issues";
     pub const SEARCH_ISSUES: &str = "search_issues";
+    pub const SEARCH_PULL_REQUESTS: &str = "search_pull_requests";
+    pub const REPOSITORY_RULESET_READ: &str = "repository_ruleset_read";
+    pub const CUSTOM_PROPERTIES_READ: &str = "custom_properties_read";
+    pub const CUSTOM_PROPERTIES_WRITE: &str = "custom_properties_write";
+    pub const CREATE_REPOSITORY_RULESET: &str = "create_repository_ruleset";
     pub const ACTIONS_GET: &str = "actions_get";
     pub const UI_GET: &str = "ui_get";
     pub const DISCUSSION_COMMENT_WRITE: &str = "discussion_comment_write";

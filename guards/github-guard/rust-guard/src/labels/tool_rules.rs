@@ -340,7 +340,7 @@ pub fn apply_tool_labels(
         // Search issues / pull requests: extract repo scope from query or tool_args when available
         tool_names::SEARCH_ISSUES
         | "search_issues_ff_fields_param"
-        | "search_pull_requests"
+        | tool_names::SEARCH_PULL_REQUESTS
         | "search_pull_requests_ff_fields_param" => {
             let (s_owner, s_repo, s_repo_id) = resolve_search_scope(tool_args, &owner, &repo);
             if !s_repo_id.is_empty() {
@@ -725,7 +725,7 @@ pub fn apply_tool_labels(
             secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
             integrity = private_writer_integrity(repo_id, repo_private, ctx);
         }
-        "repository_ruleset_read" | "custom_properties_read" => {
+        tool_names::REPOSITORY_RULESET_READ | tool_names::CUSTOM_PROPERTIES_READ => {
             // Governance metadata is repository, organization, or enterprise scoped.
             // S = S(target); I = writer(target).
             apply_governance_labels(
@@ -838,7 +838,7 @@ pub fn apply_tool_labels(
         }
 
         // === Governance writes (repository/org/enterprise-scoped) ===
-        "custom_properties_write" | "create_repository_ruleset" => {
+        tool_names::CUSTOM_PROPERTIES_WRITE | tool_names::CREATE_REPOSITORY_RULESET => {
             apply_governance_labels(
                 tool_args,
                 &owner,
@@ -1134,10 +1134,10 @@ mod tests {
     /// governance metadata reads and writes). Shared across the three governance
     /// test functions below to avoid drift when a new governance tool is added.
     const GOVERNANCE_TOOLS: [&str; 4] = [
-        "repository_ruleset_read",
-        "custom_properties_read",
-        "custom_properties_write",
-        "create_repository_ruleset",
+        tool_names::REPOSITORY_RULESET_READ,
+        tool_names::CUSTOM_PROPERTIES_READ,
+        tool_names::CUSTOM_PROPERTIES_WRITE,
+        tool_names::CREATE_REPOSITORY_RULESET,
     ];
 
     fn private_label(owner: &str, repo: &str, repo_id: &str, ctx: &PolicyContext) -> Vec<String> {
@@ -1696,7 +1696,7 @@ mod tests {
 
         let search_pr_args = serde_json::json!({ "query": "repo:github/copilot is:pr fix" });
         assert_same_labels(
-            "search_pull_requests",
+            tool_names::SEARCH_PULL_REQUESTS,
             "search_pull_requests_ff_fields_param",
             &search_pr_args,
         );
