@@ -52,6 +52,35 @@ func TestInitProvider_IsEnabled_SDK(t *testing.T) {
 	assert.True(t, provider.IsEnabled(), "SDK provider should report IsEnabled=true")
 }
 
+func TestInitProvider_ExportsGzipCompressedSpans(t *testing.T) {
+	ctx := context.Background()
+	t.Setenv("GH_AW_OTLP_ENDPOINTS", "")
+
+	received := make(chan http.Header, 1)
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		received <- r.Header.Clone()
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+
+	provider, err := tracing.InitProvider(ctx, &config.TracingConfig{Endpoint: ts.URL})
+	require.NoError(t, err)
+
+	_, span := provider.Tracer().Start(ctx, "gzip-test-span")
+	span.End()
+
+	shutdownCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	require.NoError(t, provider.Shutdown(shutdownCtx))
+
+	select {
+	case headers := <-received:
+		assert.Equal(t, "gzip", headers.Get("Content-Encoding"))
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for gzip-compressed OTLP export request")
+	}
+}
+
 // TestInitProvider_FanOut_GHAWOTLPEndpoints verifies that when GH_AW_OTLP_ENDPOINTS
 // is set, spans are delivered to every listed endpoint.
 func TestInitProvider_FanOut_GHAWOTLPEndpoints(t *testing.T) {
