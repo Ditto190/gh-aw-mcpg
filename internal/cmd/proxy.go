@@ -178,7 +178,9 @@ Local usage:
 
 	// Only require --guard-wasm when no baked-in guard is available
 	if defaultGuard == "" {
-		cmd.MarkFlagRequired("guard-wasm")
+		if err := cmd.MarkFlagRequired("guard-wasm"); err != nil {
+			logProxyCmd.Printf("Failed to mark --guard-wasm as required: %v", err)
+		}
 	}
 
 	// Use MarkFlagDirname for directory flags (cobra best practice)
