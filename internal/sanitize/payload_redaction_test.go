@@ -74,14 +74,14 @@ func TestKeyedDigestEmptyValue(t *testing.T) {
 // enclave and delegation profiles: it must actually flip the flag that
 // ShouldRedactPayload / PayloadRedactionEnabled read.
 func TestEnablePayloadRedaction(t *testing.T) {
-previous := PayloadRedactionEnabled()
-previousRaw := RawPayloadLogsAllowed()
-t.Cleanup(func() {
-	SetPayloadRedaction(previous)
-	SetRawPayloadLogsAllowed(previousRaw)
-})
-SetRawPayloadLogsAllowed(false)
-SetPayloadRedaction(false)
+	previous := PayloadRedactionEnabled()
+	previousRaw := RawPayloadLogsAllowed()
+	t.Cleanup(func() {
+		SetPayloadRedaction(previous)
+		SetRawPayloadLogsAllowed(previousRaw)
+	})
+	SetRawPayloadLogsAllowed(false)
+	SetPayloadRedaction(false)
 	assert.False(t, PayloadRedactionEnabled())
 
 	EnablePayloadRedaction()
