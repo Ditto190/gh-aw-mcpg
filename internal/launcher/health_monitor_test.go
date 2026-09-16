@@ -51,11 +51,11 @@ func TestHealthMonitor_RunningServerResetsFailureCounter(t *testing.T) {
 	l.recordStart("test-server")
 
 	hm := NewHealthMonitor(l, 50*time.Millisecond)
-	hm.consecutiveFailures["test-server"] = 2
+	setFailures(hm, "test-server", 2)
 
 	hm.checkAll()
 
-	assert.Equal(t, 0, hm.consecutiveFailures["test-server"])
+	assert.Equal(t, 0, hm.consecutiveFailures.Get("test-server"))
 }
 
 func TestHealthMonitor_ErrorStateIncrementsFailureCounter(t *testing.T) {
@@ -73,7 +73,7 @@ func TestHealthMonitor_ErrorStateIncrementsFailureCounter(t *testing.T) {
 	hm.checkAll()
 
 	// Server should have failed restart and incremented counter
-	assert.Equal(t, 1, hm.consecutiveFailures["bad-server"])
+	assert.Equal(t, 1, hm.consecutiveFailures.Get("bad-server"))
 }
 
 func TestHealthMonitor_StopsRetryingAtMaxFailures(t *testing.T) {
@@ -83,7 +83,7 @@ func TestHealthMonitor_StopsRetryingAtMaxFailures(t *testing.T) {
 	l := newTestLauncher(servers)
 
 	hm := NewHealthMonitor(l, time.Hour)
-	hm.consecutiveFailures["bad-server"] = maxConsecutiveRestartFailures
+	setFailures(hm, "bad-server", maxConsecutiveRestartFailures)
 
 	// Simulate error state
 	l.recordError("bad-server", "still broken")
@@ -91,7 +91,7 @@ func TestHealthMonitor_StopsRetryingAtMaxFailures(t *testing.T) {
 	hm.checkAll()
 
 	// Should not have incremented further
-	assert.Equal(t, maxConsecutiveRestartFailures, hm.consecutiveFailures["bad-server"])
+	assert.Equal(t, maxConsecutiveRestartFailures, hm.consecutiveFailures.Get("bad-server"))
 
 	// Error should still be present (no restart attempted)
 	state := l.GetServerState("bad-server")
@@ -190,12 +190,12 @@ func TestHealthMonitor_ErrorStateReachesMaxFailures(t *testing.T) {
 
 	hm := NewHealthMonitor(l, time.Hour)
 	// One below the cap so the next failure increments to exactly maxConsecutiveRestartFailures.
-	hm.consecutiveFailures["bad-server"] = maxConsecutiveRestartFailures - 1
+	setFailures(hm, "bad-server", maxConsecutiveRestartFailures-1)
 
 	hm.checkAll()
 
 	// Counter must now equal the cap (not exceed it).
-	assert.Equal(t, maxConsecutiveRestartFailures, hm.consecutiveFailures["bad-server"])
+	assert.Equal(t, maxConsecutiveRestartFailures, hm.consecutiveFailures.Get("bad-server"))
 }
 
 // TestHealthMonitor_SuccessfulRestartResetsFailureCounter tests that a successful
@@ -214,14 +214,22 @@ func TestHealthMonitor_SuccessfulRestartResetsFailureCounter(t *testing.T) {
 	l.recordError("http-srv", "connection refused")
 
 	hm := NewHealthMonitor(l, time.Hour)
-	hm.consecutiveFailures["http-srv"] = 1
+	setFailures(hm, "http-srv", 1)
 
 	// checkAll finds "error" state → calls handleErrorState →
 	// clearServerForRestart + GetOrLaunch (HTTP mock succeeds) → resets counter.
 	hm.checkAll()
 
-	assert.Equal(t, 0, hm.consecutiveFailures["http-srv"])
+	assert.Equal(t, 0, hm.consecutiveFailures.Get("http-srv"))
 
 	state := l.GetServerState("http-srv")
 	assert.Equal(t, "running", state.Status)
+}
+
+// setFailures seeds the consecutive-failure counter for serverID to count.
+func setFailures(hm *HealthMonitor, serverID string, count int) {
+	hm.consecutiveFailures.Reset(serverID)
+	for i := 0; i < count; i++ {
+		hm.consecutiveFailures.Increment(serverID)
+	}
 }

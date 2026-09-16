@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/github/gh-aw-mcpg/internal/logger"
+	"github.com/github/gh-aw-mcpg/internal/util"
 )
 
 const (
@@ -26,21 +27,19 @@ type HealthMonitor struct {
 	doneCh   chan struct{}
 
 	// Track consecutive restart failures per server to avoid infinite retry loops.
-	consecutiveFailures map[string]int
+	consecutiveFailures *util.FailureCounter[string]
 }
 
 // NewHealthMonitor creates a health monitor for the given launcher.
 func NewHealthMonitor(l *Launcher, interval time.Duration) *HealthMonitor {
-	if interval <= 0 {
-		interval = DefaultHealthCheckInterval
-	}
+	interval = util.PositiveOrDefault(interval, DefaultHealthCheckInterval)
 	logHealth.Printf("Creating health monitor: interval=%v, maxRestartFailures=%d", interval, maxConsecutiveRestartFailures)
 	return &HealthMonitor{
 		launcher:            l,
 		interval:            interval,
 		stopCh:              make(chan struct{}),
 		doneCh:              make(chan struct{}),
-		consecutiveFailures: make(map[string]int),
+		consecutiveFailures: util.NewFailureCounter[string](),
 	}
 }
 
@@ -92,17 +91,16 @@ func (hm *HealthMonitor) checkAll() {
 			hm.handleErrorState(serverID, state)
 		case "running":
 			// Reset consecutive failure counter on healthy server.
-			if hm.consecutiveFailures[serverID] > 0 {
-				logHealth.Printf("Server recovered: resetting failure counter for serverID=%s (was %d)", serverID, hm.consecutiveFailures[serverID])
-				hm.consecutiveFailures[serverID] = 0
+			if previous := hm.consecutiveFailures.Reset(serverID); previous > 0 {
+				logHealth.Printf("Server recovered: resetting failure counter for serverID=%s (was %d)", serverID, previous)
 			}
 		}
 	}
 }
 
 func (hm *HealthMonitor) handleErrorState(serverID string, state ServerState) {
-	failures := hm.consecutiveFailures[serverID]
-	if failures >= maxConsecutiveRestartFailures {
+	failures := hm.consecutiveFailures.Get(serverID)
+	if hm.consecutiveFailures.Exceeded(serverID, maxConsecutiveRestartFailures) {
 		// Already logged when the threshold was reached; stay silent.
 		logHealth.Printf("Skipping restart for serverID=%s: max failures reached (%d/%d)", serverID, failures, maxConsecutiveRestartFailures)
 		return
@@ -116,10 +114,10 @@ func (hm *HealthMonitor) handleErrorState(serverID string, state ServerState) {
 
 	_, err := GetOrLaunch(hm.launcher, serverID)
 	if err != nil {
-		hm.consecutiveFailures[serverID] = failures + 1
+		failures = hm.consecutiveFailures.Increment(serverID)
 		logger.LogError("backend", "Health check: restart failed for server %q: %v (attempt %d/%d)",
-			serverID, err, failures+1, maxConsecutiveRestartFailures)
-		if hm.consecutiveFailures[serverID] >= maxConsecutiveRestartFailures {
+			serverID, err, failures, maxConsecutiveRestartFailures)
+		if failures >= maxConsecutiveRestartFailures {
 			logger.LogError("backend",
 				"Health check: server %q reached max restart attempts (%d), will not retry until gateway restart",
 				serverID, maxConsecutiveRestartFailures)
@@ -127,7 +125,7 @@ func (hm *HealthMonitor) handleErrorState(serverID string, state ServerState) {
 		return
 	}
 
-	hm.consecutiveFailures[serverID] = 0
+	hm.consecutiveFailures.Reset(serverID)
 	logHealth.Printf("Successfully restarted server: serverID=%s", serverID)
 	logger.LogInfo("backend", "Health check: successfully restarted server %q", serverID)
 }
