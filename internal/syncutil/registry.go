@@ -80,13 +80,24 @@ func (r *Registry[K, V]) Keys() []K {
 }
 
 // Range calls fn for each registered entry. Iteration stops when fn returns false.
-// fn must not modify the Registry.
+// Iteration runs over a snapshot taken while the read lock is held, so fn may
+// call any Registry method without deadlocking, but it may observe entries that
+// were concurrently removed or miss entries that were concurrently added.
 func (r *Registry[K, V]) Range(fn func(K, V) bool) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
+	type entry struct {
+		key   K
+		value V
+	}
 
+	r.mu.RLock()
+	snapshot := make([]entry, 0, len(r.entries))
 	for key, value := range r.entries {
-		if !fn(key, value) {
+		snapshot = append(snapshot, entry{key: key, value: value})
+	}
+	r.mu.RUnlock()
+
+	for _, e := range snapshot {
+		if !fn(e.key, e.value) {
 			return
 		}
 	}

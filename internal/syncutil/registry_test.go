@@ -10,23 +10,26 @@ import (
 )
 
 func TestRegistryCRUD(t *testing.T) {
+	assert := assert.New(t)
+	require := require.New(t)
+
 	registry := syncutil.NewRegistry[string, int]()
 
 	registry.Set("one", 1)
 	registry.Set("two", 2)
 
 	value, ok := registry.Get("one")
-	require.True(t, ok)
-	assert.Equal(t, 1, value)
-	assert.True(t, registry.Has("one"))
-	assert.ElementsMatch(t, []string{"one", "two"}, registry.Keys())
-	assert.Equal(t, 2, registry.Len())
+	require.True(ok)
+	assert.Equal(1, value)
+	assert.True(registry.Has("one"))
+	assert.ElementsMatch([]string{"one", "two"}, registry.Keys())
+	assert.Equal(2, registry.Len())
 
 	registry.Remove("one")
 	_, ok = registry.Get("one")
-	assert.False(t, ok)
-	assert.False(t, registry.Has("one"))
-	assert.Equal(t, 1, registry.Len())
+	assert.False(ok)
+	assert.False(registry.Has("one"))
+	assert.Equal(1, registry.Len())
 }
 
 func TestRegistryRange(t *testing.T) {
@@ -43,21 +46,43 @@ func TestRegistryRange(t *testing.T) {
 	assert.Equal(t, map[string]int{"one": 1, "two": 2}, entries)
 }
 
+func TestRegistryRangeCallbackMayReadRegistry(t *testing.T) {
+	assert := assert.New(t)
+
+	registry := syncutil.NewRegistry[string, int]()
+	registry.Set("one", 1)
+	registry.Set("two", 2)
+
+	seen := 0
+	registry.Range(func(key string, _ int) bool {
+		// Callbacks may call Registry methods because Range iterates a snapshot.
+		assert.True(registry.Has(key))
+		seen++
+		return true
+	})
+
+	assert.Equal(2, seen)
+}
+
 func TestRegistryGetOrCreate(t *testing.T) {
+	assert := assert.New(t)
+
 	registry := syncutil.NewRegistry[string, int]()
 	registry.Set("existing", 1)
 
 	createCalled := false
-	assert.Equal(t, 1, registry.GetOrCreate("existing", func() int {
+	assert.Equal(1, registry.GetOrCreate("existing", func() int {
 		createCalled = true
 		return 2
 	}))
-	assert.False(t, createCalled)
-	assert.Equal(t, 2, registry.GetOrCreate("new", func() int { return 2 }))
-	assert.Equal(t, 2, registry.Len())
+	assert.False(createCalled)
+	assert.Equal(2, registry.GetOrCreate("new", func() int { return 2 }))
+	assert.Equal(2, registry.Len())
 }
 
 func TestRegistryGetOrCreateConcurrent(t *testing.T) {
+	assert := assert.New(t)
+
 	registry := syncutil.NewRegistry[string, int]()
 	const goroutines = 100
 
@@ -68,7 +93,7 @@ func TestRegistryGetOrCreateConcurrent(t *testing.T) {
 	for range goroutines {
 		go func() {
 			defer wg.Done()
-			assert.Equal(t, 1, registry.GetOrCreate("key", func() int {
+			assert.Equal(1, registry.GetOrCreate("key", func() int {
 				createMu.Lock()
 				defer createMu.Unlock()
 				createCount++
@@ -78,5 +103,5 @@ func TestRegistryGetOrCreateConcurrent(t *testing.T) {
 	}
 	wg.Wait()
 
-	assert.Equal(t, 1, createCount)
+	assert.Equal(1, createCount)
 }
