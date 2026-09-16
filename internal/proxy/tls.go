@@ -94,19 +94,11 @@ func GenerateSelfSignedTLS(dir string, additionalDNSNames ...string) (*TLSConfig
 	notBefore := time.Now().Add(-1 * time.Hour)
 	notAfter := notBefore.Add(24 * time.Hour)
 
-	caTemplate := &x509.Certificate{
-		SerialNumber: caSerial,
-		Subject: pkix.Name{
-			Organization: []string{"MCPG Proxy"},
-			CommonName:   "MCPG Proxy CA",
-		},
-		NotBefore:             notBefore,
-		NotAfter:              notAfter,
-		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
-		BasicConstraintsValid: true,
-		IsCA:                  true,
-		MaxPathLen:            0,
-	}
+	caTemplate := newCertTemplate(caSerial, "MCPG Proxy CA", notBefore, notAfter)
+	caTemplate.KeyUsage = x509.KeyUsageCertSign | x509.KeyUsageCRLSign
+	caTemplate.BasicConstraintsValid = true
+	caTemplate.IsCA = true
+	caTemplate.MaxPathLen = 0
 
 	caCertDER, err := x509.CreateCertificate(rand.Reader, caTemplate, caTemplate, &caKey.PublicKey, caKey)
 	if err != nil {
@@ -131,19 +123,11 @@ func GenerateSelfSignedTLS(dir string, additionalDNSNames ...string) (*TLSConfig
 		return nil, err
 	}
 
-	serverTemplate := &x509.Certificate{
-		SerialNumber: serverSerial,
-		Subject: pkix.Name{
-			Organization: []string{"MCPG Proxy"},
-			CommonName:   "localhost",
-		},
-		DNSNames:    dnsNames,
-		IPAddresses: []net.IP{net.IPv4(127, 0, 0, 1), net.IPv6loopback},
-		NotBefore:   time.Now().Add(-1 * time.Hour),
-		NotAfter:    time.Now().Add(24 * time.Hour),
-		KeyUsage:    x509.KeyUsageDigitalSignature,
-		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-	}
+	serverTemplate := newCertTemplate(serverSerial, "localhost", notBefore, notAfter)
+	serverTemplate.DNSNames = dnsNames
+	serverTemplate.IPAddresses = []net.IP{net.IPv4(127, 0, 0, 1), net.IPv6loopback}
+	serverTemplate.KeyUsage = x509.KeyUsageDigitalSignature
+	serverTemplate.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}
 
 	serverCertDER, err := x509.CreateCertificate(rand.Reader, serverTemplate, caCert, &serverKey.PublicKey, caKey)
 	if err != nil {
@@ -265,6 +249,22 @@ func randomSerial() (*big.Int, error) {
 	}
 	logTLS.Printf("generated random serial number: %s", serial)
 	return serial, nil
+}
+
+// newCertTemplate builds a minimal x509.Certificate template shared by the
+// CA and server certificates generated in GenerateSelfSignedTLS. Callers set
+// any additional fields (KeyUsage, DNSNames, IsCA, etc.) specific to their
+// certificate kind after this returns.
+func newCertTemplate(serial *big.Int, commonName string, notBefore, notAfter time.Time) *x509.Certificate {
+	return &x509.Certificate{
+		SerialNumber: serial,
+		Subject: pkix.Name{
+			Organization: []string{"MCPG Proxy"},
+			CommonName:   commonName,
+		},
+		NotBefore: notBefore,
+		NotAfter:  notAfter,
+	}
 }
 
 func writePEM(path, blockType string, derBytes []byte, perm os.FileMode) error {
