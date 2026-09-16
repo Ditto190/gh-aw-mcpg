@@ -123,12 +123,8 @@ func GenerateSelfSignedTLS(dir string, additionalDNSNames ...string) (*TLSConfig
 		return nil, err
 	}
 
-	serverTemplate := newCertTemplate(
-		serverSerial,
-		"localhost",
-		time.Now().Add(-1*time.Hour),
-		time.Now().Add(24*time.Hour),
-	)
+	serverNow := time.Now()
+	serverTemplate := newCertTemplate(serverSerial, "localhost", serverNow.Add(-time.Hour), serverNow.Add(24*time.Hour))
 	serverTemplate.DNSNames = dnsNames
 	serverTemplate.IPAddresses = []net.IP{net.IPv4(127, 0, 0, 1), net.IPv6loopback}
 	serverTemplate.KeyUsage = x509.KeyUsageDigitalSignature
