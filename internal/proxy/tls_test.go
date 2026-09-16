@@ -223,6 +223,29 @@ func TestGenerateSelfSignedTLS(t *testing.T) {
 		assert.Equal(t, 25*time.Hour, validity, "cert validity should be 25h (24h + 1h backdate)")
 	})
 
+	t.Run("CA certificate does not expire before the server certificate", func(t *testing.T) {
+		dir := t.TempDir()
+		tlsCfg, err := GenerateSelfSignedTLS(dir)
+		require.NoError(t, err)
+
+		leaf, err := x509.ParseCertificate(tlsCfg.Config.Certificates[0].Certificate[0])
+		require.NoError(t, err)
+
+		caCertPEM, err := os.ReadFile(tlsCfg.CACertPath)
+		require.NoError(t, err)
+		caBlock, _ := pem.Decode(caCertPEM)
+		require.NotNil(t, caBlock)
+		caCert, err := x509.ParseCertificate(caBlock.Bytes)
+		require.NoError(t, err)
+
+		assert.False(t, caCert.NotAfter.Before(leaf.NotAfter),
+			"CA cert must not expire before the leaf certificate it issued")
+		assert.True(t, caCert.NotBefore.Equal(leaf.NotBefore),
+			"CA and leaf certificates should share the same NotBefore")
+		assert.True(t, caCert.NotAfter.Equal(leaf.NotAfter),
+			"CA and leaf certificates should share the same NotAfter")
+	})
+
 	t.Run("returns error when directory cannot be created", func(t *testing.T) {
 		parent := t.TempDir()
 		dir := filepath.Join(parent, "not-a-directory")
