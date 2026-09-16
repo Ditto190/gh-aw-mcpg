@@ -962,7 +962,7 @@ func TestAgentRegistry_SetDefaultLabels_ConcurrentWithGetOrCreate(t *testing.T) 
 		observed++
 		secrecyGen := strings.TrimPrefix(pair[0], "secret-")
 		integrityGen := strings.TrimPrefix(pair[1], "trust-")
-		require.NotEqual("", secrecyGen, "agent should have exactly one secrecy default tag")
+		require.NotEmpty(secrecyGen, "agent should have exactly one secrecy default tag")
 		assert.Equal(secrecyGen, integrityGen, "agent defaults must come from the same generation")
 	}
 	assert.Positive(observed, "expected at least one agent to be created")
