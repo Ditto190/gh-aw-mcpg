@@ -119,6 +119,10 @@ mod tests {
         assert_eq!(tool_names::DELETE_SECRET, "delete_secret");
         assert_eq!(tool_names::SET_VARIABLE, "set_variable");
         assert_eq!(tool_names::DELETE_VARIABLE, "delete_variable");
+        assert_eq!(tool_names::LIST_GISTS, "list_gists");
+        assert_eq!(tool_names::GET_GIST, "get_gist");
+        assert_eq!(tool_names::LIST_PROJECT_ITEMS, "list_project_items");
+        assert_eq!(tool_names::PROJECTS_LIST, "projects_list");
         assert_eq!(
             UI_GET_REPO_SCOPED_METHODS,
             &["labels", "milestones", "branches"]
@@ -262,6 +266,10 @@ pub mod tool_names {
     pub const DELETE_SECRET: &str = "delete_secret";
     pub const SET_VARIABLE: &str = "set_variable";
     pub const DELETE_VARIABLE: &str = "delete_variable";
+    pub const LIST_GISTS: &str = "list_gists";
+    pub const GET_GIST: &str = "get_gist";
+    pub const LIST_PROJECT_ITEMS: &str = "list_project_items";
+    pub const PROJECTS_LIST: &str = "projects_list";
 }
 
 /// UI metadata methods that are scoped to a specific repository.

@@ -381,11 +381,11 @@ pub fn label_response_items(
         }
 
         // === Gists - label by visibility ===
-        "list_gists" | "get_gist" => {
+        tool_names::LIST_GISTS | tool_names::GET_GIST => {
             let all_items = collect_items_simple(&actual_response);
 
             // Limit items to prevent WASM memory exhaustion
-            let items_limited = limit_items_with_log(all_items.as_slice(), "list_gists");
+            let items_limited = limit_items_with_log(all_items.as_slice(), tool_names::LIST_GISTS);
 
             let gist_integrity = reader_integrity(scope_names::USER, ctx);
             let gist_integrity_shared: SharedLabels = gist_integrity.into();

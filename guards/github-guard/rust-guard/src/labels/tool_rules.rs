@@ -632,8 +632,8 @@ pub fn apply_tool_labels(
 
         // === GitHub Projects (org-scoped) ===
         // Canonical names (projects_list, projects_get) plus deprecated aliases
-        "list_projects" | "get_project" | "list_project_fields" | "list_project_items"
-        | "projects_list" | "projects_get" => {
+        "list_projects" | "get_project" | "list_project_fields" | tool_names::LIST_PROJECT_ITEMS
+        | tool_names::PROJECTS_LIST | "projects_get" => {
             // Projects are org-scoped; creating/managing projects requires org membership.
             // I = approved:<owner> — equivalent to MEMBER author_association
             // S = empty by default (public project); per-item secrecy for items is refined in
@@ -645,7 +645,7 @@ pub fn apply_tool_labels(
         }
 
         // === Gists (user-scoped) ===
-        "list_gists" | "get_gist" | "create_gist" | "update_gist" => {
+        tool_names::LIST_GISTS | tool_names::GET_GIST | "create_gist" | "update_gist" => {
             // Gists are user content; secrecy depends on public/secret flag.
             // Resource-level: conservative labeling; response labeling refines per-item.
             // S = private:user (conservative — some gists may be secret)
