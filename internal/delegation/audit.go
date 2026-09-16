@@ -5,6 +5,8 @@ import (
 	"github.com/github/gh-aw-mcpg/internal/util"
 )
 
+var logAudit = logger.New("delegation:audit")
+
 // hashForAudit returns a stable, non-reversible attribution token for a
 // sensitive value (repository selector, identity handle, idempotency key).
 // Audit records must never disclose an unredacted private repository name,
@@ -40,6 +42,7 @@ type AuditEvent struct {
 }
 
 func newAuditEvent(operation string, req CreateOrConfirmRequest, outcome, reason string, generation uint64) AuditEvent {
+	logAudit.Printf("Building audit event: operation=%s, outcome=%s, reason=%s, generation=%d", operation, outcome, reason, generation)
 	return AuditEvent{
 		Operation:      operation,
 		RunIDHash:      hashForAudit(req.RunID),
@@ -61,6 +64,7 @@ func newAuditEventWithHandle(operation string, req CreateOrConfirmRequest, outco
 // newIdentityAuditEvent builds an audit event for an operation keyed off an
 // already-known Identity (revoke, expire) rather than an inbound request.
 func newIdentityAuditEvent(operation string, identity *Identity, outcome, reason string) AuditEvent {
+	logAudit.Printf("Building identity audit event: operation=%s, outcome=%s, reason=%s, generation=%d", operation, outcome, reason, identity.PolicyGeneration)
 	return AuditEvent{
 		Operation:      operation,
 		RunIDHash:      hashForAudit(identity.RunID),
@@ -77,6 +81,7 @@ func newIdentityAuditEvent(operation string, identity *Identity, outcome, reason
 // newHandleAuditEvent builds an audit event for a revoke request whose
 // handle does not (or no longer) resolves to a stored Identity.
 func newHandleAuditEvent(operation, handle, outcome, reason string) AuditEvent {
+	logAudit.Printf("Building handle audit event: operation=%s, outcome=%s, reason=%s (identity not found for handle)", operation, outcome, reason)
 	return AuditEvent{
 		Operation:  operation,
 		HandleHash: hashForAudit(handle),
@@ -88,6 +93,7 @@ func newHandleAuditEvent(operation, handle, outcome, reason string) AuditEvent {
 // newLabelAuditEvent builds an audit event for a label-scoped bulk
 // revocation, which is not bound to a single identity or request.
 func newLabelAuditEvent(operation, runID, enclaveEntryID, outcome, reason string) AuditEvent {
+	logAudit.Printf("Building label-scoped audit event: operation=%s, entry=%s, outcome=%s, reason=%s", operation, enclaveEntryID, outcome, reason)
 	return AuditEvent{
 		Operation:      operation,
 		RunIDHash:      hashForAudit(runID),
