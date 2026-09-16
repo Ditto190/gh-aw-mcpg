@@ -219,7 +219,7 @@ func TestGenerateSelfSignedTLS(t *testing.T) {
 		require.NoError(t, err)
 
 		validity := leaf.NotAfter.Sub(leaf.NotBefore)
-		assert.InDelta(t, 25*3600, validity.Seconds(), 3600, "cert validity should be ~25h (24h + 1h backdate)")
+		assert.InDelta(t, 25*3600, validity.Seconds(), 1, "cert validity should be ~25h (24h + 1h backdate)")
 	})
 
 	t.Run("returns error when directory cannot be created", func(t *testing.T) {
