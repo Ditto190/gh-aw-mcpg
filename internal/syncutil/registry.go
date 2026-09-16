@@ -39,7 +39,8 @@ func (r *Registry[K, V]) Has(key K) bool {
 }
 
 // GetOrCreate returns the value for key, creating and storing it when absent.
-// create is called while the registry write lock is held.
+// create is called while the registry write lock is held and must not call a
+// method on the same Registry.
 func (r *Registry[K, V]) GetOrCreate(key K, create func() V) V {
 	r.mu.RLock()
 	value, ok := r.entries[key]

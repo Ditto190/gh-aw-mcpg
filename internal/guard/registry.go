@@ -116,7 +116,7 @@ func (r *Registry) Close(ctx context.Context) {
 		c  interface{ Close(context.Context) error }
 	}
 
-	closers := make([]closableGuard, 0)
+	closers := make([]closableGuard, 0, r.guards.Len())
 	r.guards.Range(func(id string, g Guard) bool {
 		if c, ok := g.(interface{ Close(context.Context) error }); ok {
 			closers = append(closers, closableGuard{id: id, c: c})
