@@ -3,8 +3,8 @@ package util
 import "sync"
 
 // FailureCounter tracks consecutive failures per key with "increment on
-// failure, reset to zero on success, cap once a threshold is reached"
-// semantics. It is safe for concurrent use.
+// failure, reset to zero on success" semantics, so callers can cap retries
+// once a threshold is reached. It is safe for concurrent use.
 //
 // It exists so components that need bounded-retry bookkeeping (circuit
 // breakers, health monitors, ...) share a single, tested implementation of
@@ -42,18 +42,6 @@ func (fc *FailureCounter[K]) Reset(key K) int {
 	previous := fc.counts[key]
 	delete(fc.counts, key)
 	return previous
-}
-
-// Exceeded reports whether the consecutive-failure count for key has reached
-// threshold. A threshold of zero or less is treated as "no cap" and always
-// returns false.
-func (fc *FailureCounter[K]) Exceeded(key K, threshold int) bool {
-	if threshold <= 0 {
-		return false
-	}
-	fc.mu.Lock()
-	defer fc.mu.Unlock()
-	return fc.counts[key] >= threshold
 }
 
 // positiveNumber constrains PositiveOrDefault to numeric types where "unset"

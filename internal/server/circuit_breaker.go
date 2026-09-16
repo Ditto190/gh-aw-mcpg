@@ -67,6 +67,10 @@ type circuitBreaker struct {
 	state    circuitBreakerState
 	openedAt time.Time
 	// failures tracks consecutive rate-limit errors for this breaker's server.
+	// The shared util.FailureCounter is used (rather than a bare int) so the
+	// "increment on failure, reset on success" bookkeeping has a single
+	// implementation shared with launcher.HealthMonitor. All mutations still
+	// happen under cb.mu, which keeps the count consistent with cb.state.
 	failures *util.FailureCounter[string]
 	// resetAt is the time when the upstream rate limit resets, parsed from
 	// the X-RateLimit-Reset header or the tool response message.

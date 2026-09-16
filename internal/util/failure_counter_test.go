@@ -27,26 +27,6 @@ func TestFailureCounter_IncrementResetGet(t *testing.T) {
 	assert.Equal(0, fc.Reset("unknown"))
 }
 
-func TestFailureCounter_Exceeded(t *testing.T) {
-	assert := assert.New(t)
-
-	fc := NewFailureCounter[string]()
-	assert.False(fc.Exceeded("a", 2))
-
-	fc.Increment("a")
-	assert.False(fc.Exceeded("a", 2))
-
-	fc.Increment("a")
-	assert.True(fc.Exceeded("a", 2))
-
-	fc.Reset("a")
-	assert.False(fc.Exceeded("a", 2))
-
-	fc.Increment("a")
-	assert.False(fc.Exceeded("a", 0), "non-positive max means no cap")
-	assert.False(fc.Exceeded("a", -1), "non-positive max means no cap")
-}
-
 func TestFailureCounter_ConcurrentAccess(t *testing.T) {
 	fc := NewFailureCounter[string]()
 
@@ -57,7 +37,6 @@ func TestFailureCounter_ConcurrentAccess(t *testing.T) {
 			defer wg.Done()
 			fc.Increment("shared")
 			fc.Get("shared")
-			fc.Exceeded("shared", 10)
 		}()
 	}
 	wg.Wait()
