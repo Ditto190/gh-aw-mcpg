@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -219,7 +220,7 @@ func TestGenerateSelfSignedTLS(t *testing.T) {
 		require.NoError(t, err)
 
 		validity := leaf.NotAfter.Sub(leaf.NotBefore)
-		assert.InDelta(t, 25*3600, validity.Seconds(), 3600, "cert validity should be ~25h (24h + 1h backdate)")
+		assert.Equal(t, 25*time.Hour, validity, "cert validity should be 25h (24h + 1h backdate)")
 	})
 
 	t.Run("returns error when directory cannot be created", func(t *testing.T) {
