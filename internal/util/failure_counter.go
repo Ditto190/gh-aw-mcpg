@@ -45,14 +45,15 @@ func (fc *FailureCounter[K]) Reset(key K) int {
 }
 
 // Exceeded reports whether the consecutive-failure count for key has reached
-// max. A max of zero or less is treated as "no cap" and always returns false.
-func (fc *FailureCounter[K]) Exceeded(key K, max int) bool {
-	if max <= 0 {
+// threshold. A threshold of zero or less is treated as "no cap" and always
+// returns false.
+func (fc *FailureCounter[K]) Exceeded(key K, threshold int) bool {
+	if threshold <= 0 {
 		return false
 	}
 	fc.mu.Lock()
 	defer fc.mu.Unlock()
-	return fc.counts[key] >= max
+	return fc.counts[key] >= threshold
 }
 
 // positiveNumber constrains PositiveOrDefault to numeric types where "unset"

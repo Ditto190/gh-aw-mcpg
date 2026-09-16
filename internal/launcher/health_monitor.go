@@ -100,7 +100,7 @@ func (hm *HealthMonitor) checkAll() {
 
 func (hm *HealthMonitor) handleErrorState(serverID string, state ServerState) {
 	failures := hm.consecutiveFailures.Get(serverID)
-	if hm.consecutiveFailures.Exceeded(serverID, maxConsecutiveRestartFailures) {
+	if failures >= maxConsecutiveRestartFailures {
 		// Already logged when the threshold was reached; stay silent.
 		logHealth.Printf("Skipping restart for serverID=%s: max failures reached (%d/%d)", serverID, failures, maxConsecutiveRestartFailures)
 		return
