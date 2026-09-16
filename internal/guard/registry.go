@@ -46,35 +46,41 @@ func (r *Registry) Get(serverID string) Guard {
 
 // Has checks if a guard is registered for a server
 func (r *Registry) Has(serverID string) bool {
-	_, ok := r.guards.Get(serverID)
-	return ok
+	return r.guards.Has(serverID)
 }
 
 // HasNonNoopGuard returns true if any registered guard is not a noop guard
 func (r *Registry) HasNonNoopGuard() bool {
-	guards := r.guards.Entries()
-	for _, g := range guards {
+	found := false
+	r.guards.Range(func(_ string, g Guard) bool {
 		if g.Name() != "noop" {
-			logRegistry.Printf("HasNonNoopGuard: found non-noop guard=%s, registeredCount=%d", g.Name(), len(guards))
-			return true
+			logRegistry.Printf("HasNonNoopGuard: found non-noop guard=%s", g.Name())
+			found = true
+			return false
 		}
+		return true
+	})
+	if !found {
+		logRegistry.Print("HasNonNoopGuard: all registered guards are noop")
 	}
-	logRegistry.Printf("HasNonNoopGuard: all %d registered guard(s) are noop", len(guards))
-	return false
+	return found
 }
 
 // HasNonNoopSourceGuard returns true if any registered source-labeling guard
 // is not a noop guard. Write-sink guards do not contribute agent labels.
 func (r *Registry) HasNonNoopSourceGuard() bool {
-	for _, g := range r.guards.Entries() {
+	found := false
+	r.guards.Range(func(_ string, g Guard) bool {
 		if g.Name() != "noop" {
 			if _, ok := g.(*WriteSinkGuard); ok {
-				continue
+				return true
 			}
-			return true
+			found = true
+			return false
 		}
-	}
-	return false
+		return true
+	})
+	return found
 }
 
 // Remove removes a guard registration
@@ -93,11 +99,11 @@ func (r *Registry) List() []string {
 
 // GetGuardInfo returns information about all registered guards
 func (r *Registry) GetGuardInfo() map[string]string {
-	guards := r.guards.Entries()
-	info := make(map[string]string, len(guards))
-	for serverID, guard := range guards {
+	info := make(map[string]string)
+	r.guards.Range(func(serverID string, guard Guard) bool {
 		info[serverID] = guard.Name()
-	}
+		return true
+	})
 	logRegistry.Printf("GetGuardInfo: returning info for %d guard(s)", len(info))
 	return info
 }
@@ -110,13 +116,13 @@ func (r *Registry) Close(ctx context.Context) {
 		c  interface{ Close(context.Context) error }
 	}
 
-	guards := r.guards.Entries()
-	closers := make([]closableGuard, 0, len(guards))
-	for id, g := range guards {
+	closers := make([]closableGuard, 0)
+	r.guards.Range(func(id string, g Guard) bool {
 		if c, ok := g.(interface{ Close(context.Context) error }); ok {
 			closers = append(closers, closableGuard{id: id, c: c})
 		}
-	}
+		return true
+	})
 	for _, guard := range closers {
 		if err := guard.c.Close(ctx); err != nil {
 			logger.LogWarn("guard", "Failed to close guard for server %s: %v", guard.id, err)

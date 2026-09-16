@@ -30,6 +30,14 @@ func (r *Registry[K, V]) Get(key K) (V, bool) {
 	return value, ok
 }
 
+// Has reports whether key is registered.
+func (r *Registry[K, V]) Has(key K) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	_, ok := r.entries[key]
+	return ok
+}
+
 // GetOrCreate returns the value for key, creating and storing it when absent.
 // create is called while the registry write lock is held.
 func (r *Registry[K, V]) GetOrCreate(key K, create func() V) V {
@@ -70,16 +78,17 @@ func (r *Registry[K, V]) Keys() []K {
 	return keys
 }
 
-// Entries returns a snapshot of all registered key-value pairs.
-func (r *Registry[K, V]) Entries() map[K]V {
+// Range calls fn for each registered entry. Iteration stops when fn returns false.
+// fn must not modify the Registry.
+func (r *Registry[K, V]) Range(fn func(K, V) bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	entries := make(map[K]V, len(r.entries))
 	for key, value := range r.entries {
-		entries[key] = value
+		if !fn(key, value) {
+			return
+		}
 	}
-	return entries
 }
 
 // Len returns the number of registered entries.

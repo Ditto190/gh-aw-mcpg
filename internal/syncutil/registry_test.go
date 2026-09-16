@@ -18,14 +18,29 @@ func TestRegistryCRUD(t *testing.T) {
 	value, ok := registry.Get("one")
 	require.True(t, ok)
 	assert.Equal(t, 1, value)
+	assert.True(t, registry.Has("one"))
 	assert.ElementsMatch(t, []string{"one", "two"}, registry.Keys())
-	assert.Equal(t, map[string]int{"one": 1, "two": 2}, registry.Entries())
 	assert.Equal(t, 2, registry.Len())
 
 	registry.Remove("one")
 	_, ok = registry.Get("one")
 	assert.False(t, ok)
+	assert.False(t, registry.Has("one"))
 	assert.Equal(t, 1, registry.Len())
+}
+
+func TestRegistryRange(t *testing.T) {
+	registry := syncutil.NewRegistry[string, int]()
+	registry.Set("one", 1)
+	registry.Set("two", 2)
+
+	entries := map[string]int{}
+	registry.Range(func(key string, value int) bool {
+		entries[key] = value
+		return true
+	})
+
+	assert.Equal(t, map[string]int{"one": 1, "two": 2}, entries)
 }
 
 func TestRegistryGetOrCreate(t *testing.T) {
