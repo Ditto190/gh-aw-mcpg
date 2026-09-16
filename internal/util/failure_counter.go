@@ -55,8 +55,8 @@ type positiveNumber interface {
 // otherwise. It captures the recurring "if configured value <= 0, use the
 // package default" idiom in one place.
 func PositiveOrDefault[T positiveNumber](value, fallback T) T {
-	if value <= 0 {
-		return fallback
+	if value > 0 {
+		return value
 	}
-	return value
+	return fallback
 }
