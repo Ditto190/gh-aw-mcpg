@@ -613,6 +613,56 @@ func TestGetEnvIntRealWorldScenarios(t *testing.T) {
 	})
 }
 
+// TestGetEnvInt_InvalidFallbackLogsRedactedValue exercises the fallback branch
+// in GetEnvInt taken when the raw value parses but is not a valid positive
+// integer (err == nil but value <= 0), which is otherwise never reached by the
+// table-driven tests above (they only assert on the returned value, not on
+// which log line fires). This specifically covers envutil.go:64, the
+// "not a valid positive integer" log statement, distinguishing it from the
+// GetEnvIntRaw parse-error log at line 43.
+func TestGetEnvInt_InvalidFallbackLogsRedactedValue(t *testing.T) {
+	tests := []struct {
+		name     string
+		envValue string
+	}{
+		{name: "zero value falls back without parse error", envValue: "0"},
+		{name: "negative value falls back without parse error", envValue: "-5"},
+		{name: "non-numeric value falls back with parse error", envValue: "not-a-number"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("TEST_INT_FALLBACK_VAR", tt.envValue)
+			result := GetEnvInt("TEST_INT_FALLBACK_VAR", 999)
+			assert.Equal(t, 999, result, "should fall back to defaultValue for invalid/non-positive input %q", tt.envValue)
+		})
+	}
+}
+
+// TestGetEnvDuration_InvalidFallbackLogsRedactedValue exercises the fallback
+// branch in GetEnvDuration taken when time.ParseDuration succeeds but the
+// duration is not positive, and separately when parsing fails outright. Both
+// paths converge on the same log statement at envutil.go:80, which the
+// existing table-driven TestGetEnvDuration test does not directly assert on.
+func TestGetEnvDuration_InvalidFallbackLogsRedactedValue(t *testing.T) {
+	tests := []struct {
+		name     string
+		envValue string
+	}{
+		{name: "zero duration falls back without parse error", envValue: "0s"},
+		{name: "negative duration falls back without parse error", envValue: "-30m"},
+		{name: "unparseable duration falls back with parse error", envValue: "not-a-duration"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("TEST_DURATION_FALLBACK_VAR", tt.envValue)
+			result := GetEnvDuration("TEST_DURATION_FALLBACK_VAR", 5*time.Minute)
+			assert.Equal(t, 5*time.Minute, result, "should fall back to defaultValue for invalid/non-positive input %q", tt.envValue)
+		})
+	}
+}
+
 // TestGetEnvInt_DebugLoggingEnabled exercises the logEnvUtil.Enabled() debug-log
 // branch in GetEnvInt, which is otherwise never taken in normal test runs.
 // logEnvUtil is a package-level *logger.Logger whose enabled state is computed
