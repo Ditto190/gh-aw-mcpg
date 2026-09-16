@@ -64,9 +64,14 @@ var logCircuitBreaker = logger.ForFile()
 type circuitBreaker struct {
 	mu sync.Mutex
 
-	state             circuitBreakerState
-	consecutiveErrors int
-	openedAt          time.Time
+	state    circuitBreakerState
+	openedAt time.Time
+	// failures tracks consecutive rate-limit errors for this breaker's server.
+	// The shared util.FailureCounter is used (rather than a bare int) so the
+	// "increment on failure, reset on success" bookkeeping has a single
+	// implementation shared with launcher.HealthMonitor. All mutations still
+	// happen under cb.mu, which keeps the count consistent with cb.state.
+	failures *util.FailureCounter[string]
 	// resetAt is the time when the upstream rate limit resets, parsed from
 	// the X-RateLimit-Reset header or the tool response message.
 	resetAt       time.Time
@@ -90,16 +95,13 @@ type circuitBreaker struct {
 // threshold is the number of consecutive rate-limit errors before opening;
 // cooldown is how long to stay OPEN before probing.
 func newCircuitBreaker(serverID string, threshold int, cooldown time.Duration) *circuitBreaker {
-	if threshold <= 0 {
-		threshold = DefaultRateLimitThreshold
-	}
-	if cooldown <= 0 {
-		cooldown = DefaultRateLimitCooldown
-	}
+	threshold = util.PositiveOrDefault(threshold, DefaultRateLimitThreshold)
+	cooldown = util.PositiveOrDefault(cooldown, DefaultRateLimitCooldown)
 	logCircuitBreaker.Printf("Creating circuit breaker: serverID=%s, threshold=%d, cooldown=%v", serverID, threshold, cooldown)
 	return &circuitBreaker{
 		serverID:  serverID,
 		state:     circuitClosed,
+		failures:  util.NewFailureCounter[string](),
 		threshold: threshold,
 		cooldown:  cooldown,
 		nowFunc:   time.Now,
@@ -223,10 +225,9 @@ func (cb *circuitBreaker) RecordSuccess() {
 	defer cb.mu.Unlock()
 
 	prev := cb.state
-	if cb.consecutiveErrors > 0 {
-		logCircuitBreaker.Printf("server %q circuit breaker resetting consecutive error count: %d → 0", cb.serverID, cb.consecutiveErrors)
+	if previousErrors := cb.failures.Reset(cb.serverID); previousErrors > 0 {
+		logCircuitBreaker.Printf("server %q circuit breaker resetting consecutive error count: %d → 0", cb.serverID, previousErrors)
 	}
-	cb.consecutiveErrors = 0
 	cb.probeInFlight = false
 	cb.probeStartedAt = time.Time{}
 	if cb.state == circuitHalfOpen {
@@ -246,28 +247,28 @@ func (cb *circuitBreaker) RecordRateLimit(resetAt time.Time) {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
 
-	cb.consecutiveErrors++
+	consecutiveErrors := cb.failures.Increment(cb.serverID)
 	cb.probeInFlight = false
 	cb.probeStartedAt = time.Time{}
 	if !resetAt.IsZero() {
 		cb.resetAt = resetAt
 	}
 	logCircuitBreaker.Printf("server %q recording rate-limit: consecutiveErrors=%d/%d, state=%s, hasResetAt=%v",
-		cb.serverID, cb.consecutiveErrors, cb.threshold, cb.state, !cb.resetAt.IsZero())
+		cb.serverID, consecutiveErrors, cb.threshold, cb.state, !cb.resetAt.IsZero())
 
 	switch cb.state {
 	case circuitClosed:
-		if cb.consecutiveErrors >= cb.threshold {
+		if consecutiveErrors >= cb.threshold {
 			cb.state = circuitOpen
 			cb.openedAt = cb.nowFunc()
 			logger.LogError("backend",
 				"circuit breaker for server %q OPENED after %d consecutive rate-limit errors; resets at %s",
-				cb.serverID, cb.consecutiveErrors, util.FormatFutureTime(cb.resetAt))
-			logCircuitBreaker.Printf("server %q circuit breaker CLOSED → OPEN (errors=%d)", cb.serverID, cb.consecutiveErrors)
+				cb.serverID, consecutiveErrors, util.FormatFutureTime(cb.resetAt))
+			logCircuitBreaker.Printf("server %q circuit breaker CLOSED → OPEN (errors=%d)", cb.serverID, consecutiveErrors)
 		} else {
 			logger.LogWarn("backend",
 				"rate-limit error for server %q (consecutive=%d/%d); resets at %s",
-				cb.serverID, cb.consecutiveErrors, cb.threshold, util.FormatFutureTime(cb.resetAt))
+				cb.serverID, consecutiveErrors, cb.threshold, util.FormatFutureTime(cb.resetAt))
 		}
 
 	case circuitHalfOpen:
@@ -281,7 +282,7 @@ func (cb *circuitBreaker) RecordRateLimit(resetAt time.Time) {
 
 	case circuitOpen:
 		// Already open — update reset time.
-		logCircuitBreaker.Printf("server %q recording rate-limit while already OPEN (consecutiveErrors=%d)", cb.serverID, cb.consecutiveErrors)
+		logCircuitBreaker.Printf("server %q recording rate-limit while already OPEN (consecutiveErrors=%d)", cb.serverID, consecutiveErrors)
 		logger.LogWarn("backend", "server %q circuit breaker still OPEN; resets at %s",
 			cb.serverID, util.FormatFutureTime(cb.resetAt))
 	}
