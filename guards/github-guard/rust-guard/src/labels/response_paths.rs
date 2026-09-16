@@ -546,11 +546,11 @@ pub fn label_response_paths(
         }
 
         // === Gists - contributor-level ===
-        "list_gists" => {
+        tool_names::LIST_GISTS => {
             let items = actual_response.as_array();
 
             if let Some(items) = items {
-                let limited_items = limit_items_with_log(items, "list_gists");
+                let limited_items = limit_items_with_log(items, tool_names::LIST_GISTS);
                 let mut labeled_paths = Vec::with_capacity(limited_items.len());
                 // Hoist loop-invariant labels: Arc::clone is free.
                 let gist_integrity: crate::SharedLabels =
@@ -585,12 +585,12 @@ pub fn label_response_paths(
 
         // === GitHub Project Items - heterogeneous ISSUE / PULL_REQUEST / DRAFT_ISSUE ===
         // projects_list is the new canonical name (replaces list_project_items)
-        "list_project_items" | "projects_list" => {
+        tool_names::LIST_PROJECT_ITEMS | tool_names::PROJECTS_LIST => {
             let (arg_owner, _, _) = extract_repo_info(tool_args);
             let (items, items_path) = extract_items_array(&actual_response);
 
             if let Some(items) = items {
-                let limited_items = limit_items_with_log(items, "list_project_items");
+                let limited_items = limit_items_with_log(items, tool_names::LIST_PROJECT_ITEMS);
                 let mut labeled_paths = Vec::with_capacity(limited_items.len());
 
                 for (i, item) in limited_items.iter().enumerate() {
