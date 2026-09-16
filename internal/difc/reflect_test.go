@@ -24,7 +24,7 @@ func TestBuildReflectResponse_EmptyRegistry(t *testing.T) {
 
 func TestBuildReflectResponse_SkipsNilAgentEntries(t *testing.T) {
 	reg := NewAgentRegistry()
-	reg.agents["broken"] = nil
+	reg.agents.Set("broken", nil)
 
 	resp := BuildReflectResponse(DIFCComponents{
 		Mode:          EnforcementStrict,

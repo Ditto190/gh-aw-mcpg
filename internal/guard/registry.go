@@ -6,41 +6,35 @@ import (
 	"sync"
 
 	"github.com/github/gh-aw-mcpg/internal/logger"
+	"github.com/github/gh-aw-mcpg/internal/syncutil"
 )
 
 var logRegistry = logger.ForFile()
 
 // Registry manages guard instances for different MCP servers
 type Registry struct {
-	guards map[string]Guard // serverID -> guard
-	mu     sync.RWMutex
+	guards *syncutil.Registry[string, Guard] // serverID -> guard
 }
 
 // NewRegistry creates a new guard registry
 func NewRegistry() *Registry {
 	logRegistry.Print("Creating new guard registry")
 	return &Registry{
-		guards: make(map[string]Guard),
+		guards: syncutil.NewRegistry[string, Guard](),
 	}
 }
 
 // Register registers a guard for a specific server
 func (r *Registry) Register(serverID string, guard Guard) {
 	logRegistry.Printf("Registering guard for serverID=%s, guardName=%s", serverID, guard.Name())
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	r.guards[serverID] = guard
+	r.guards.Set(serverID, guard)
 	logger.LogInfo("guard", "Registered guard '%s' for server '%s'", guard.Name(), serverID)
 }
 
 // Get retrieves the guard for a server, or returns a noop guard if not found
 func (r *Registry) Get(serverID string) Guard {
 	logRegistry.Printf("Getting guard for serverID=%s", serverID)
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	if guard, ok := r.guards[serverID]; ok {
+	if guard, ok := r.guards.Get(serverID); ok {
 		logRegistry.Printf("Found guard for serverID=%s, guardName=%s", serverID, guard.Name())
 		return guard
 	}
@@ -52,32 +46,27 @@ func (r *Registry) Get(serverID string) Guard {
 
 // Has checks if a guard is registered for a server
 func (r *Registry) Has(serverID string) bool {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	_, ok := r.guards[serverID]
+	_, ok := r.guards.Get(serverID)
 	return ok
 }
 
 // HasNonNoopGuard returns true if any registered guard is not a noop guard
 func (r *Registry) HasNonNoopGuard() bool {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	for _, g := range r.guards {
+	guards := r.guards.Entries()
+	for _, g := range guards {
 		if g.Name() != "noop" {
-			logRegistry.Printf("HasNonNoopGuard: found non-noop guard=%s, registeredCount=%d", g.Name(), len(r.guards))
+			logRegistry.Printf("HasNonNoopGuard: found non-noop guard=%s, registeredCount=%d", g.Name(), len(guards))
 			return true
 		}
 	}
-	logRegistry.Printf("HasNonNoopGuard: all %d registered guard(s) are noop", len(r.guards))
+	logRegistry.Printf("HasNonNoopGuard: all %d registered guard(s) are noop", len(guards))
 	return false
 }
 
 // HasNonNoopSourceGuard returns true if any registered source-labeling guard
 // is not a noop guard. Write-sink guards do not contribute agent labels.
 func (r *Registry) HasNonNoopSourceGuard() bool {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	for _, g := range r.guards {
+	for _, g := range r.guards.Entries() {
 		if g.Name() != "noop" {
 			if _, ok := g.(*WriteSinkGuard); ok {
 				continue
@@ -91,32 +80,22 @@ func (r *Registry) HasNonNoopSourceGuard() bool {
 // Remove removes a guard registration
 func (r *Registry) Remove(serverID string) {
 	logRegistry.Printf("Removing guard for serverID=%s", serverID)
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	delete(r.guards, serverID)
+	r.guards.Remove(serverID)
 	logger.LogInfo("guard", "Removed guard for server '%s'", serverID)
 }
 
 // List returns all registered server IDs
 func (r *Registry) List() []string {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	serverIDs := make([]string, 0, len(r.guards))
-	for id := range r.guards {
-		serverIDs = append(serverIDs, id)
-	}
+	serverIDs := r.guards.Keys()
 	logRegistry.Printf("List: returning %d registered server ID(s)", len(serverIDs))
 	return serverIDs
 }
 
 // GetGuardInfo returns information about all registered guards
 func (r *Registry) GetGuardInfo() map[string]string {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	info := make(map[string]string)
-	for serverID, guard := range r.guards {
+	guards := r.guards.Entries()
+	info := make(map[string]string, len(guards))
+	for serverID, guard := range guards {
 		info[serverID] = guard.Name()
 	}
 	logRegistry.Printf("GetGuardInfo: returning info for %d guard(s)", len(info))
@@ -131,15 +110,13 @@ func (r *Registry) Close(ctx context.Context) {
 		c  interface{ Close(context.Context) error }
 	}
 
-	r.mu.RLock()
-	closers := make([]closableGuard, 0, len(r.guards))
-	for id, g := range r.guards {
+	guards := r.guards.Entries()
+	closers := make([]closableGuard, 0, len(guards))
+	for id, g := range guards {
 		if c, ok := g.(interface{ Close(context.Context) error }); ok {
 			closers = append(closers, closableGuard{id: id, c: c})
 		}
 	}
-	r.mu.RUnlock()
-
 	for _, guard := range closers {
 		if err := guard.c.Close(ctx); err != nil {
 			logger.LogWarn("guard", "Failed to close guard for server %s: %v", guard.id, err)
