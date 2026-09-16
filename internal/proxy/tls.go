@@ -166,7 +166,8 @@ func GenerateSelfSignedTLS(dir string, additionalDNSNames ...string) (*TLSConfig
 
 	tlsCfg := httputil.NewServerTLSConfig(serverCertPair)
 
-	logTLS.Printf("TLS certificates generated in %s (valid %s)", dir, certValidityWindow)
+	logTLS.Printf("TLS certificates generated in %s (notBefore=%s, notAfter=%s)", dir,
+		serverTemplate.NotBefore.Format(time.RFC3339), serverTemplate.NotAfter.Format(time.RFC3339))
 
 	return &TLSConfig{
 		CACertPath: caCertPath,
