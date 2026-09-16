@@ -1,6 +1,8 @@
 package difc
 
 import (
+	"fmt"
+	"strings"
 	"sync"
 	"testing"
 
@@ -897,6 +899,73 @@ func TestAgentRegistry_SetDefaultLabels_DoesNotAffectExisting(t *testing.T) {
 	newAgent := registry.GetOrCreate("new-agent")
 	assert.ElementsMatch(t, []Tag{"new-secret"}, newAgent.GetSecrecyTags())
 	assert.ElementsMatch(t, []Tag{"new-trust"}, newAgent.GetIntegrityTags())
+}
+
+// TestAgentRegistry_SetDefaultLabels_ConcurrentWithGetOrCreate verifies that
+// updating defaults while agents are created concurrently never yields a torn
+// snapshot: each new agent gets a matching secrecy/integrity default pair.
+func TestAgentRegistry_SetDefaultLabels_ConcurrentWithGetOrCreate(t *testing.T) {
+	assert := assert.New(t)
+	require := require.New(t)
+
+	registry := NewAgentRegistryWithDefaults(
+		[]Tag{"secret-0"},
+		[]Tag{"trust-0"},
+	)
+
+	const updates = 200
+	const creators = 8
+
+	done := make(chan struct{})
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		defer close(done)
+		for i := 1; i <= updates; i++ {
+			registry.SetDefaultLabels(
+				[]Tag{Tag(fmt.Sprintf("secret-%d", i))},
+				[]Tag{Tag(fmt.Sprintf("trust-%d", i))},
+			)
+		}
+	}()
+
+	pairs := make(chan [2]string, creators*updates)
+	wg.Add(creators)
+	for c := range creators {
+		go func() {
+			defer wg.Done()
+			for i := 0; ; i++ {
+				select {
+				case <-done:
+					return
+				default:
+				}
+				agent := registry.GetOrCreate(fmt.Sprintf("agent-%d-%d", c, i))
+				secrecy := agent.GetSecrecyTags()
+				integrity := agent.GetIntegrityTags()
+				if len(secrecy) != 1 || len(integrity) != 1 {
+					pairs <- [2]string{"", ""}
+					return
+				}
+				pairs <- [2]string{string(secrecy[0]), string(integrity[0])}
+			}
+		}()
+	}
+
+	wg.Wait()
+	close(pairs)
+
+	observed := 0
+	for pair := range pairs {
+		observed++
+		secrecyGen := strings.TrimPrefix(pair[0], "secret-")
+		integrityGen := strings.TrimPrefix(pair[1], "trust-")
+		require.NotEmpty(secrecyGen, "agent should have exactly one secrecy default tag")
+		assert.Equal(secrecyGen, integrityGen, "agent defaults must come from the same generation")
+	}
+	assert.Positive(observed, "expected at least one agent to be created")
 }
 
 // TestAgentLabels_AddSecrecyTags tests adding multiple secrecy tags at once

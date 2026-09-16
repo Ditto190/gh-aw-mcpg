@@ -213,19 +213,19 @@ func (a *AgentLabels) GetIntegrityTags() []Tag {
 
 // AgentRegistry manages agent labels across all agents
 type AgentRegistry struct {
-	agents map[string]*AgentLabels
-	mu     sync.RWMutex
+	agents *syncutil.Registry[string, *AgentLabels]
 
 	// Default labels for new agents
 	defaultSecrecy   []Tag
 	defaultIntegrity []Tag
+	defaultsMu       sync.RWMutex
 }
 
 // NewAgentRegistry creates a new agent registry
 func NewAgentRegistry() *AgentRegistry {
 	logAgent.Print("Creating new agent registry")
 	return &AgentRegistry{
-		agents:           make(map[string]*AgentLabels),
+		agents:           syncutil.NewRegistry[string, *AgentLabels](),
 		defaultSecrecy:   []Tag{},
 		defaultIntegrity: []Tag{},
 	}
@@ -235,7 +235,7 @@ func NewAgentRegistry() *AgentRegistry {
 func NewAgentRegistryWithDefaults(defaultSecrecy []Tag, defaultIntegrity []Tag) *AgentRegistry {
 	logAgent.Printf("Creating agent registry with defaults: secrecyTags=%d, integrityTags=%d", len(defaultSecrecy), len(defaultIntegrity))
 	return &AgentRegistry{
-		agents:           make(map[string]*AgentLabels),
+		agents:           syncutil.NewRegistry[string, *AgentLabels](),
 		defaultSecrecy:   defaultSecrecy,
 		defaultIntegrity: defaultIntegrity,
 	}
@@ -245,20 +245,19 @@ func NewAgentRegistryWithDefaults(defaultSecrecy []Tag, defaultIntegrity []Tag) 
 func (r *AgentRegistry) GetOrCreate(agentID string) *AgentLabels {
 	logAgent.Printf("GetOrCreate called for agentID=%s", util.HashIdentifierForLog(agentID))
 
-	labels, _ := syncutil.MapGetOrCreate(&r.mu, r.agents, agentID, func() (*AgentLabels, error) {
+	return r.agents.GetOrCreate(agentID, func() *AgentLabels {
+		r.defaultsMu.RLock()
+		defer r.defaultsMu.RUnlock()
 		labels := NewAgentLabelsWithTags(agentID, r.defaultSecrecy, r.defaultIntegrity)
 		logAgent.Printf("Created new agent: %s with default labels (secrecy: %v, integrity: %v)",
 			util.HashIdentifierForLog(agentID), r.defaultSecrecy, r.defaultIntegrity)
-		return labels, nil
+		return labels
 	})
-	return labels
 }
 
 // Get retrieves an agent's labels if they exist
 func (r *AgentRegistry) Get(agentID string) (*AgentLabels, bool) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	labels, ok := r.agents[agentID]
+	labels, ok := r.agents.Get(agentID)
 	logAgent.Printf("Retrieving agent labels: agentID=%s, found=%v", util.HashIdentifierForLog(agentID), ok)
 	return labels, ok
 }
@@ -266,11 +265,8 @@ func (r *AgentRegistry) Get(agentID string) (*AgentLabels, bool) {
 // Register creates a new agent with specific initial labels
 func (r *AgentRegistry) Register(agentID string, secrecyTags []Tag, integrityTags []Tag) *AgentLabels {
 	logAgent.Printf("Registering agent with explicit labels: agentID=%s, secrecyTags=%v, integrityTags=%v", util.HashIdentifierForLog(agentID), secrecyTags, integrityTags)
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
 	labels := NewAgentLabelsWithTags(agentID, secrecyTags, integrityTags)
-	r.agents[agentID] = labels
+	r.agents.Set(agentID, labels)
 
 	logAgent.Printf("Registered agent: %s with labels (secrecy: %v, integrity: %v)",
 		util.HashIdentifierForLog(agentID), secrecyTags, integrityTags)
@@ -281,36 +277,25 @@ func (r *AgentRegistry) Register(agentID string, secrecyTags []Tag, integrityTag
 // Remove removes an agent from the registry
 func (r *AgentRegistry) Remove(agentID string) {
 	logAgent.Printf("Removing agent from registry: agentID=%s", util.HashIdentifierForLog(agentID))
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	delete(r.agents, agentID)
+	r.agents.Remove(agentID)
 	logAgent.Printf("Removed agent: %s", util.HashIdentifierForLog(agentID))
 }
 
 // Count returns the number of registered agents
 func (r *AgentRegistry) Count() int {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	return len(r.agents)
+	return r.agents.Len()
 }
 
 // GetAllAgentIDs returns all registered agent IDs
 func (r *AgentRegistry) GetAllAgentIDs() []string {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	ids := make([]string, 0, len(r.agents))
-	for id := range r.agents {
-		ids = append(ids, id)
-	}
-	return ids
+	return r.agents.Keys()
 }
 
 // SetDefaultLabels sets the default labels for new agents
 func (r *AgentRegistry) SetDefaultLabels(secrecy []Tag, integrity []Tag) {
 	logAgent.Printf("Setting default labels: secrecyTags=%v, integrityTags=%v", secrecy, integrity)
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	r.defaultsMu.Lock()
+	defer r.defaultsMu.Unlock()
 	r.defaultSecrecy = secrecy
 	r.defaultIntegrity = integrity
 	logAgent.Printf("Updated default agent labels (secrecy: %v, integrity: %v)", secrecy, integrity)
