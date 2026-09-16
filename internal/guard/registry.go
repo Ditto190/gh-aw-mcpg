@@ -73,6 +73,7 @@ func (r *Registry) HasNonNoopSourceGuard() bool {
 	r.guards.Range(func(_ string, g Guard) bool {
 		if g.Name() != "noop" {
 			if _, ok := g.(*WriteSinkGuard); ok {
+				// Continue searching; write-sink guards do not label sources.
 				return true
 			}
 			found = true
