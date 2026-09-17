@@ -5,7 +5,7 @@ import (
 	"github.com/github/gh-aw-mcpg/internal/util"
 )
 
-var logAudit = logger.New("delegation:audit")
+var logAudit = logger.ForFile()
 
 // hashForAudit returns a stable, non-reversible attribution token for a
 // sensitive value (repository selector, identity handle, idempotency key).
