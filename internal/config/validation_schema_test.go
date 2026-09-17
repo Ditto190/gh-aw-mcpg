@@ -29,8 +29,8 @@ func TestCompilerAssertsFormat(t *testing.T) {
 			schema, err := compiler.Compile(schemaURL)
 			require.NoError(t, err)
 
-			assert.Error(t, schema.Validate(map[string]any{"url": "not a URI"}))
-			assert.NoError(t, schema.Validate(map[string]any{"url": "https://example.com"}))
+			require.Error(t, schema.Validate(map[string]any{"url": "not a URI"}))
+			require.NoError(t, schema.Validate(map[string]any{"url": "https://example.com"}))
 		})
 	}
 }
