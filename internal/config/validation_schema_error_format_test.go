@@ -237,6 +237,51 @@ func TestFormatErrorContext(t *testing.T) {
 			prefix:       ">>",
 			wantContains: []string{">>Details:", ">>  →"},
 		},
+		{
+			name:         "type error kind without Want falls back to generic type keyword guidance",
+			errorKind:    &kind.Type{Got: "string", Want: nil},
+			prefix:       "",
+			wantContains: []string{"Type mismatch - the value type doesn't match"},
+			wantNotContain: []string{
+				"expected string", // the concrete "expected %s, got %s" message must NOT be produced
+			},
+		},
+		{
+			name:         "enum error kind without Want falls back to generic enum keyword guidance",
+			errorKind:    &kind.Enum{Got: "bad", Want: nil},
+			prefix:       "",
+			wantContains: []string{"Invalid value - the field has a restricted set of allowed values"},
+			wantNotContain: []string{
+				"allowed values:", // the concrete "allowed values: ..." message must NOT be produced
+			},
+		},
+		{
+			name:         "required error kind without Missing falls back to generic required keyword guidance",
+			errorKind:    &kind.Required{Missing: nil},
+			prefix:       "",
+			wantContains: []string{"Required field(s) are missing"},
+			wantNotContain: []string{
+				"Missing required field(s):",
+			},
+		},
+		{
+			name:         "dependentRequired error kind without Missing falls back to generic required keyword guidance",
+			errorKind:    &kind.DependentRequired{Prop: "x", Missing: nil},
+			prefix:       "",
+			wantContains: []string{"Required field(s) are missing"},
+			wantNotContain: []string{
+				"Missing required field(s) for",
+			},
+		},
+		{
+			name:         "propertyNames error kind without Property falls back to generic propertyNames keyword guidance",
+			errorKind:    &kind.PropertyNames{Property: ""},
+			prefix:       "",
+			wantContains: []string{"Object contains a property name that violates the propertyNames schema"},
+			wantNotContain: []string{
+				"Invalid property name",
+			},
+		},
 	}
 
 	for _, tt := range tests {
