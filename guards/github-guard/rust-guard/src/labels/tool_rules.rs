@@ -330,10 +330,10 @@ pub fn apply_tool_labels(
         // block via is_blocked_tool(). Covers: irreversible ownership changes
         // (transfer_repository) and unsupported gh-repo operations (archive, unarchive,
         // rename).
-        "transfer_repository"
-        | "archive_repository"
-        | "unarchive_repository"
-        | "rename_repository" => {
+        tool_names::TRANSFER_REPOSITORY
+        | tool_names::ARCHIVE_REPOSITORY
+        | tool_names::UNARCHIVE_REPOSITORY
+        | tool_names::RENAME_REPOSITORY => {
             secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
         }
 

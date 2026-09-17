@@ -1470,8 +1470,8 @@ pub(crate) fn is_search_result_wrapper(response: &Value) -> bool {
 pub fn search_result_total_count(response: &Value) -> Option<u64> {
     response
         .get("total_count")
-        .and_then(|v| v.as_u64())
-        .or_else(|| response.get("totalCount").and_then(|v| v.as_u64()))
+        .and_then(Value::as_u64)
+        .or_else(|| response.get("totalCount").and_then(Value::as_u64))
 }
 
 /// Returns the first element of an MCP content-wrapper array, e.g. the
