@@ -79,6 +79,32 @@ func runWithStdin(t *testing.T, content string) error {
 	return run(rootCmd, nil)
 }
 
+// runAndExpectGracefulShutdown starts runFn in a background goroutine, waits
+// briefly for the server to finish starting up (config load, wasm cache
+// setup, server construction, listener bind), then cancels ctx and asserts
+// that runFn returns nil within the shutdown window. Centralizing this
+// start/cancel/await pattern avoids duplicating the same errCh/select
+// boilerplate (and its t.Fatal timeout branch) across every test that
+// exercises a successful startup-then-shutdown path of run().
+func runAndExpectGracefulShutdown(t *testing.T, cancel context.CancelFunc, runFn func() error, msgAndArgs ...interface{}) {
+	t.Helper()
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- runFn()
+	}()
+
+	time.Sleep(200 * time.Millisecond)
+	cancel()
+
+	select {
+	case err := <-errCh:
+		require.NoError(t, err, msgAndArgs...)
+	case <-time.After(5 * time.Second):
+		require.Fail(t, "run() did not return within the expected shutdown window")
+	}
+}
+
 // resetRunFlagsForTest saves the current values of all package-level flag
 // variables consumed by run() and returns a restore function. This allows
 // tests to freely mutate global flag state (set by Cobra during normal CLI
@@ -183,23 +209,8 @@ func TestRun_GracefulShutdownViaContextCancellation(t *testing.T) {
 	rootCmd.SetContext(ctx)
 	t.Cleanup(func() { rootCmd.SetContext(context.Background()) })
 
-	errCh := make(chan error, 1)
-	go func() {
-		errCh <- run(rootCmd, nil)
-	}()
-
-	// Give the server a brief moment to finish starting up (config load,
-	// wasm cache setup, unified server construction, listener bind) before
-	// requesting shutdown.
-	time.Sleep(200 * time.Millisecond)
-	cancel()
-
-	select {
-	case err := <-errCh:
-		require.NoError(t, err, "run() should shut down gracefully without error when context is cancelled")
-	case <-time.After(5 * time.Second):
-		t.Fatal("run() did not return within the expected shutdown window")
-	}
+	runAndExpectGracefulShutdown(t, cancel, func() error { return run(rootCmd, nil) },
+		"run() should shut down gracefully without error when context is cancelled")
 }
 
 // TestRun_InvalidConfigFile verifies that run() surfaces a wrapped error when
@@ -355,20 +366,8 @@ url = "http://127.0.0.1:1"
 	rootCmd.SetContext(ctx)
 	t.Cleanup(func() { rootCmd.SetContext(context.Background()) })
 
-	errCh := make(chan error, 1)
-	go func() {
-		errCh <- run(rootCmd, nil)
-	}()
-
-	time.Sleep(200 * time.Millisecond)
-	cancel()
-
-	select {
-	case err := <-errCh:
-		require.NoError(t, err, "run() should start successfully with only gateway.agentIds configured")
-	case <-time.After(5 * time.Second):
-		t.Fatal("run() did not return within the expected shutdown window")
-	}
+	runAndExpectGracefulShutdown(t, cancel, func() error { return run(rootCmd, nil) },
+		"run() should start successfully with only gateway.agentIds configured")
 }
 
 // resetGuardPolicyFlagsForTest saves/restores the guard-policy-related flag
@@ -453,20 +452,8 @@ func TestRun_ConfigFromStdin(t *testing.T) {
 	rootCmd.SetContext(ctx)
 	t.Cleanup(func() { rootCmd.SetContext(context.Background()) })
 
-	errCh := make(chan error, 1)
-	go func() {
-		errCh <- runWithStdin(t, stdinJSON)
-	}()
-
-	time.Sleep(200 * time.Millisecond)
-	cancel()
-
-	select {
-	case err := <-errCh:
-		require.NoError(t, err, "run() should start successfully reading config from stdin")
-	case <-time.After(5 * time.Second):
-		t.Fatal("run() did not return within the expected shutdown window")
-	}
+	runAndExpectGracefulShutdown(t, cancel, func() error { return runWithStdin(t, stdinJSON) },
+		"run() should start successfully reading config from stdin")
 }
 
 // TestRun_InvalidStdinConfig verifies that run() surfaces a wrapped error when
@@ -531,20 +518,8 @@ url = "http://127.0.0.1:2"
 	rootCmd.SetContext(ctx)
 	t.Cleanup(func() { rootCmd.SetContext(context.Background()) })
 
-	errCh := make(chan error, 1)
-	go func() {
-		errCh <- run(rootCmd, nil)
-	}()
-
-	time.Sleep(200 * time.Millisecond)
-	cancel()
-
-	select {
-	case err := <-errCh:
-		require.NoError(t, err, "run() should start successfully with multiple servers configured")
-	case <-time.After(5 * time.Second):
-		t.Fatal("run() did not return within the expected shutdown window")
-	}
+	runAndExpectGracefulShutdown(t, cancel, func() error { return run(rootCmd, nil) },
+		"run() should start successfully with multiple servers configured")
 }
 
 // TestRun_ValidateEnvFailsWithoutRequiredEnvVars verifies that run() returns a
@@ -607,20 +582,8 @@ func TestRun_GuardPolicyOverrideFromFlags(t *testing.T) {
 	rootCmd.SetContext(ctx)
 	t.Cleanup(func() { rootCmd.SetContext(context.Background()) })
 
-	errCh := make(chan error, 1)
-	go func() {
-		errCh <- run(rootCmd, nil)
-	}()
-
-	time.Sleep(200 * time.Millisecond)
-	cancel()
-
-	select {
-	case err := <-errCh:
-		require.NoError(t, err, "run() should start successfully with a guard policy override from CLI flags")
-	case <-time.After(5 * time.Second):
-		t.Fatal("run() did not return within the expected shutdown window")
-	}
+	runAndExpectGracefulShutdown(t, cancel, func() error { return run(rootCmd, nil) },
+		"run() should start successfully with a guard policy override from CLI flags")
 }
 
 // TestRun_InvalidGuardPolicyOverrideFromFlags verifies that run() surfaces a
@@ -676,20 +639,8 @@ func TestRun_SinkServerIDsConfiguredWithUnknownServer(t *testing.T) {
 	rootCmd.SetContext(ctx)
 	t.Cleanup(func() { rootCmd.SetContext(context.Background()) })
 
-	errCh := make(chan error, 1)
-	go func() {
-		errCh <- run(rootCmd, nil)
-	}()
-
-	time.Sleep(200 * time.Millisecond)
-	cancel()
-
-	select {
-	case err := <-errCh:
-		require.NoError(t, err, "run() should start successfully even when a sink server ID is unrecognized")
-	case <-time.After(5 * time.Second):
-		t.Fatal("run() did not return within the expected shutdown window")
-	}
+	runAndExpectGracefulShutdown(t, cancel, func() error { return run(rootCmd, nil) },
+		"run() should start successfully even when a sink server ID is unrecognized")
 }
 
 // TestRun_InvalidSinkServerIDs verifies that run() surfaces a wrapped error
@@ -741,20 +692,8 @@ func TestRun_SequentialLaunchEnabled(t *testing.T) {
 	rootCmd.SetContext(ctx)
 	t.Cleanup(func() { rootCmd.SetContext(context.Background()) })
 
-	errCh := make(chan error, 1)
-	go func() {
-		errCh <- run(rootCmd, nil)
-	}()
-
-	time.Sleep(200 * time.Millisecond)
-	cancel()
-
-	select {
-	case err := <-errCh:
-		require.NoError(t, err, "run() should start successfully with sequential launch enabled")
-	case <-time.After(5 * time.Second):
-		t.Fatal("run() did not return within the expected shutdown window")
-	}
+	runAndExpectGracefulShutdown(t, cancel, func() error { return run(rootCmd, nil) },
+		"run() should start successfully with sequential launch enabled")
 }
 
 // TestRun_TLSEnabled verifies that run() takes the TLS listener branch: it
@@ -785,20 +724,8 @@ func TestRun_TLSEnabled(t *testing.T) {
 	rootCmd.SetContext(ctx)
 	t.Cleanup(func() { rootCmd.SetContext(context.Background()) })
 
-	errCh := make(chan error, 1)
-	go func() {
-		errCh <- run(rootCmd, nil)
-	}()
-
-	time.Sleep(200 * time.Millisecond)
-	cancel()
-
-	select {
-	case err := <-errCh:
-		require.NoError(t, err, "run() should start successfully with TLS enabled")
-	case <-time.After(5 * time.Second):
-		t.Fatal("run() did not return within the expected shutdown window")
-	}
+	runAndExpectGracefulShutdown(t, cancel, func() error { return run(rootCmd, nil) },
+		"run() should start successfully with TLS enabled")
 }
 
 // TestRun_HMACSecretEnabled verifies that run() logs the HMAC request-signing
@@ -822,20 +749,8 @@ func TestRun_HMACSecretEnabled(t *testing.T) {
 	rootCmd.SetContext(ctx)
 	t.Cleanup(func() { rootCmd.SetContext(context.Background()) })
 
-	errCh := make(chan error, 1)
-	go func() {
-		errCh <- run(rootCmd, nil)
-	}()
-
-	time.Sleep(200 * time.Millisecond)
-	cancel()
-
-	select {
-	case err := <-errCh:
-		require.NoError(t, err, "run() should start successfully with HMAC secret configured")
-	case <-time.After(5 * time.Second):
-		t.Fatal("run() did not return within the expected shutdown window")
-	}
+	runAndExpectGracefulShutdown(t, cancel, func() error { return run(rootCmd, nil) },
+		"run() should start successfully with HMAC secret configured")
 }
 
 // TestRun_InvalidTLSConfiguration verifies that run() surfaces a wrapped error
@@ -922,20 +837,8 @@ func TestRun_SinkServerIDsEnvVarLogged(t *testing.T) {
 	rootCmd.SetContext(ctx)
 	t.Cleanup(func() { rootCmd.SetContext(context.Background()) })
 
-	errCh := make(chan error, 1)
-	go func() {
-		errCh <- run(rootCmd, nil)
-	}()
-
-	time.Sleep(200 * time.Millisecond)
-	cancel()
-
-	select {
-	case err := <-errCh:
-		require.NoError(t, err, "run() should start successfully when MCP_GATEWAY_GUARDS_SINK_SERVER_IDS env var is set")
-	case <-time.After(5 * time.Second):
-		t.Fatal("run() did not return within the expected shutdown window")
-	}
+	runAndExpectGracefulShutdown(t, cancel, func() error { return run(rootCmd, nil) },
+		"run() should start successfully when MCP_GATEWAY_GUARDS_SINK_SERVER_IDS env var is set")
 }
 
 // TestRun_OTLPTracingEnabled verifies that run() takes the tracing-enabled
@@ -977,18 +880,6 @@ func TestRun_OTLPTracingEnabled(t *testing.T) {
 	rootCmd.SetContext(ctx)
 	t.Cleanup(func() { rootCmd.SetContext(context.Background()) })
 
-	errCh := make(chan error, 1)
-	go func() {
-		errCh <- run(rootCmd, nil)
-	}()
-
-	time.Sleep(200 * time.Millisecond)
-	cancel()
-
-	select {
-	case err := <-errCh:
-		require.NoError(t, err, "run() should start successfully with OTLP tracing enabled")
-	case <-time.After(5 * time.Second):
-		t.Fatal("run() did not return within the expected shutdown window")
-	}
+	runAndExpectGracefulShutdown(t, cancel, func() error { return run(rootCmd, nil) },
+		"run() should start successfully with OTLP tracing enabled")
 }
