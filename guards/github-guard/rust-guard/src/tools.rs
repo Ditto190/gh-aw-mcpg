@@ -45,17 +45,17 @@ pub const WRITE_OPERATIONS: &[&str] = &[
 /// Synthetic write operations reachable through GitHub CLI but not current upstream MCP tools.
 pub const CLI_WRITE_OPERATIONS: &[&str] = &[
     // Keep sorted for binary_search correctness.
-    "add_deploy_key",             // gh repo deploy-key add — POST /repos/.../keys
-    "add_gpg_key",                // gh gpg-key add — adds a user GPG signing key
-    "add_ssh_key",                // gh ssh-key add — adds a user SSH auth/signing key
-    "archive_project_item",       // gh project item-archive — archives a Projects v2 item
-    "archive_repository",         // gh repo archive — blocked: repo settings change unsupported
-    "cancel_workflow_run",        // gh run cancel — cancels an in-progress workflow run
-    "close_issue",                // gh issue close
-    "close_pull_request",         // gh pr close
-    "copy_project",               // gh project copy — creates a new Projects v2 board
-    "create_codespace",           // gh codespace create — POST /user/codespaces
-    "create_discussion",          // gh discussion create — creates a discussion in a repository
+    "add_deploy_key",               // gh repo deploy-key add — POST /repos/.../keys
+    "add_gpg_key",                  // gh gpg-key add — adds a user GPG signing key
+    "add_ssh_key",                  // gh ssh-key add — adds a user SSH auth/signing key
+    "archive_project_item",         // gh project item-archive — archives a Projects v2 item
+    tool_names::ARCHIVE_REPOSITORY, // gh repo archive — blocked: repo settings change unsupported
+    "cancel_workflow_run",          // gh run cancel — cancels an in-progress workflow run
+    "close_issue",                  // gh issue close
+    "close_pull_request",           // gh pr close
+    "copy_project",                 // gh project copy — creates a new Projects v2 board
+    "create_codespace",             // gh codespace create — POST /user/codespaces
+    "create_discussion",            // gh discussion create — creates a discussion in a repository
     "create_linked_branch", // gh issue develop — creates a linked branch via GraphQL createLinkedBranch
     "create_project",       // gh project create — GraphQL createProjectV2
     "create_project_draft_item", // gh project item-create — adds a draft issue via GraphQL addProjectV2DraftIssue
@@ -92,7 +92,7 @@ pub const CLI_WRITE_OPERATIONS: &[&str] = &[
     "mark_pull_request_as_ready_for_review", // gh pr ready (mark ready for review)
     "pin_issue",    // gh issue pin
     "rebuild_codespace", // gh codespace rebuild — Codespaces session RebuildContainer RPC
-    "rename_repository", // gh repo rename — blocked: breaks clone URLs and integrations
+    tool_names::RENAME_REPOSITORY, // gh repo rename — blocked: breaks clone URLs and integrations
     "reopen_issue", // gh issue reopen
     "reopen_pull_request", // gh pr reopen
     "rerun_failed_jobs", // gh run rerun --failed — reruns only failed jobs
@@ -105,10 +105,10 @@ pub const CLI_WRITE_OPERATIONS: &[&str] = &[
     "sync_fork",    // gh repo sync
     "transfer_issue", // gh issue transfer
     "unarchive_project_item", // gh project item-archive --undo — unarchives a Projects v2 item
-    "unarchive_repository", // gh repo unarchive — blocked: symmetric to archive_repository
-    "unlink_project", // gh project unlink — unlinks a Projects v2 board
-    "unlock_issue", // gh issue unlock
-    "unlock_pull_request", // gh pr unlock
+    tool_names::UNARCHIVE_REPOSITORY, // gh repo unarchive — blocked: symmetric to archive_repository
+    "unlink_project",                 // gh project unlink — unlinks a Projects v2 board
+    "unlock_issue",                   // gh issue unlock
+    "unlock_pull_request",            // gh pr unlock
     "unmark_project_template", // gh project mark-template --undo — GraphQL unmarkProjectV2AsTemplate
     "unpin_issue",             // gh issue unpin
     "update_codespace",        // gh codespace edit — PATCH /user/codespaces/{codespace_name}
@@ -122,7 +122,7 @@ pub const CLI_WRITE_OPERATIONS: &[&str] = &[
 pub const SYNTHETIC_WRITE_OPERATIONS: &[&str] = &[
     // Keep sorted for binary_search correctness.
     "enable_toolset", // Dynamically enables additional toolsets, expanding agent capabilities
-    "transfer_repository", // defensively blocked; no current `gh` command performs repo transfer
+    tool_names::TRANSFER_REPOSITORY, // defensively blocked; no current `gh` command performs repo transfer
 ];
 
 /// Deprecated compatibility aliases for write operations.
@@ -231,11 +231,11 @@ pub(crate) fn is_unlock_operation(tool_name: &str) -> bool {
 /// Keep sorted for `binary_search` correctness (see `blocked_tools_are_sorted` test).
 /// Entries here should also be classified by `is_write_operation` or `is_read_write_operation`.
 pub const BLOCKED_TOOLS: &[&str] = &[
-    "archive_repository",   // repo settings change; unsupported
-    "create_agent_task",    // unsupported agent-task creation
-    "rename_repository",    // breaks clone URLs and integrations
-    "transfer_repository",  // irreversible ownership transfer
-    "unarchive_repository", // symmetric to archive_repository
+    tool_names::ARCHIVE_REPOSITORY,   // repo settings change; unsupported
+    "create_agent_task",              // unsupported agent-task creation
+    tool_names::RENAME_REPOSITORY,    // breaks clone URLs and integrations
+    tool_names::TRANSFER_REPOSITORY,  // irreversible ownership transfer
+    tool_names::UNARCHIVE_REPOSITORY, // symmetric to archive_repository
 ];
 
 /// Returns `true` if `tool_name` is in [`BLOCKED_TOOLS`] — denied regardless of agent integrity.
@@ -374,7 +374,7 @@ mod tests {
     #[test]
     fn test_is_blocked_tool_transfer_repository() {
         assert!(
-            is_blocked_tool("transfer_repository"),
+            is_blocked_tool(tool_names::TRANSFER_REPOSITORY),
             "transfer_repository must be unconditionally blocked"
         );
     }
@@ -382,9 +382,9 @@ mod tests {
     #[test]
     fn test_is_blocked_tool_repo_modifying_operations() {
         for op in &[
-            "archive_repository",
-            "unarchive_repository",
-            "rename_repository",
+            tool_names::ARCHIVE_REPOSITORY,
+            tool_names::UNARCHIVE_REPOSITORY,
+            tool_names::RENAME_REPOSITORY,
         ] {
             assert!(
                 is_blocked_tool(op),
@@ -410,7 +410,7 @@ mod tests {
     #[test]
     fn test_transfer_repository_is_write_operation() {
         assert!(
-            is_write_operation("transfer_repository"),
+            is_write_operation(tool_names::TRANSFER_REPOSITORY),
             "transfer_repository must be classified as a write operation"
         );
     }
@@ -418,9 +418,9 @@ mod tests {
     #[test]
     fn test_repo_modifying_operations_are_write_operations() {
         for op in &[
-            "archive_repository",
-            "unarchive_repository",
-            "rename_repository",
+            tool_names::ARCHIVE_REPOSITORY,
+            tool_names::UNARCHIVE_REPOSITORY,
+            tool_names::RENAME_REPOSITORY,
         ] {
             assert!(
                 is_write_operation(op),
@@ -903,23 +903,23 @@ mod tests {
     fn test_transfer_repository_is_a_synthetic_guard_owned_write() {
         assert!(
             SYNTHETIC_WRITE_OPERATIONS
-                .binary_search(&"transfer_repository")
+                .binary_search(&tool_names::TRANSFER_REPOSITORY)
                 .is_ok(),
             "transfer_repository has no current `gh` command and must live in \
              SYNTHETIC_WRITE_OPERATIONS"
         );
         assert!(
             CLI_WRITE_OPERATIONS
-                .binary_search(&"transfer_repository")
+                .binary_search(&tool_names::TRANSFER_REPOSITORY)
                 .is_err(),
             "transfer_repository must not remain a stale CLI bucket entry"
         );
         assert!(
-            is_write_operation("transfer_repository"),
+            is_write_operation(tool_names::TRANSFER_REPOSITORY),
             "transfer_repository must still be classified as a write operation"
         );
         assert!(
-            is_blocked_tool("transfer_repository"),
+            is_blocked_tool(tool_names::TRANSFER_REPOSITORY),
             "transfer_repository must remain unconditionally blocked"
         );
     }
