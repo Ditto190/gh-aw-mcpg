@@ -123,6 +123,10 @@ mod tests {
         assert_eq!(tool_names::GET_GIST, "get_gist");
         assert_eq!(tool_names::LIST_PROJECT_ITEMS, "list_project_items");
         assert_eq!(tool_names::PROJECTS_LIST, "projects_list");
+        assert_eq!(tool_names::ARCHIVE_REPOSITORY, "archive_repository");
+        assert_eq!(tool_names::UNARCHIVE_REPOSITORY, "unarchive_repository");
+        assert_eq!(tool_names::RENAME_REPOSITORY, "rename_repository");
+        assert_eq!(tool_names::TRANSFER_REPOSITORY, "transfer_repository");
         assert_eq!(
             UI_GET_REPO_SCOPED_METHODS,
             &["labels", "milestones", "branches"]
@@ -274,6 +278,10 @@ pub mod tool_names {
     pub const GET_GIST: &str = "get_gist";
     pub const LIST_PROJECT_ITEMS: &str = "list_project_items";
     pub const PROJECTS_LIST: &str = "projects_list";
+    pub const ARCHIVE_REPOSITORY: &str = "archive_repository";
+    pub const UNARCHIVE_REPOSITORY: &str = "unarchive_repository";
+    pub const RENAME_REPOSITORY: &str = "rename_repository";
+    pub const TRANSFER_REPOSITORY: &str = "transfer_repository";
 }
 
 /// UI metadata methods that are scoped to a specific repository.

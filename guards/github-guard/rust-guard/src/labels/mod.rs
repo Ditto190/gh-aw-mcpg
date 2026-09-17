@@ -5425,7 +5425,7 @@ mod tests {
         });
 
         let (secrecy, _integrity, _desc) = apply_tool_labels(
-            "transfer_repository",
+            tool_names::TRANSFER_REPOSITORY,
             &tool_args,
             repo_id,
             vec![],

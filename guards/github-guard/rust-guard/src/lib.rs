@@ -1784,7 +1784,7 @@ mod tests {
         });
 
         let (_, integrity, _) = labels::apply_tool_labels(
-            "transfer_repository",
+            tool_names::TRANSFER_REPOSITORY,
             &tool_args,
             repo_id,
             vec![],
@@ -1792,11 +1792,12 @@ mod tests {
             String::new(),
             &ctx,
         );
-        let baseline_scope = infer_scope_for_baseline("transfer_repository", &tool_args, repo_id);
+        let baseline_scope =
+            infer_scope_for_baseline(tool_names::TRANSFER_REPOSITORY, &tool_args, repo_id);
         let after_baseline = labels::ensure_integrity_baseline(&baseline_scope, integrity, &ctx);
 
         // Simulate the is_blocked_tool override performed in label_resource
-        let final_integrity = if tools::is_blocked_tool("transfer_repository") {
+        let final_integrity = if tools::is_blocked_tool(tool_names::TRANSFER_REPOSITORY) {
             let scope = if repo_id.is_empty() {
                 scope_names::GLOBAL
             } else {
