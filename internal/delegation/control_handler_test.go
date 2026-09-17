@@ -101,6 +101,33 @@ func TestNewControlHTTPHandler_GatesRequests(t *testing.T) {
 	})
 }
 
+func TestNewControlHTTPHandlerForConfig(t *testing.T) {
+	deps, secret := newControlTestDeps(t)
+
+	t.Run("delegation disabled", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, ControlPathPrefix+"status", nil)
+		w := httptest.NewRecorder()
+		NewControlHTTPHandlerForConfig(nil, nil).ServeHTTP(w, req)
+		assert.Equal(t, http.StatusNotFound, w.Code)
+	})
+
+	t.Run("forwards runtime config", func(t *testing.T) {
+		config := &RuntimeConfig{
+			Store:      deps.Store,
+			Capability: deps.Capability,
+			StatePath:  deps.StatePath,
+		}
+		req := httptest.NewRequest(http.MethodPost, ControlPathPrefix+"status", bytes.NewReader(mustJSON(t, map[string]string{
+			"run_id":           "run-123",
+			"enclave_entry_id": "entry-1",
+		})))
+		req.Header.Set("Authorization", secret)
+		w := httptest.NewRecorder()
+		NewControlHTTPHandlerForConfig(config, nil).ServeHTTP(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+	})
+}
+
 func TestHandleControl_CustomLoggerIsInvoked(t *testing.T) {
 	deps, secret := newControlTestDeps(t)
 	var logged []string

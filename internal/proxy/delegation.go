@@ -22,11 +22,10 @@ type DelegationConfig = delegation.RuntimeConfig
 // separate from Handler so executor-facing GitHub traffic cannot reach control
 // operations even if it presents a valid executor bearer.
 func (s *Server) ControlHandler() http.Handler {
-	var cfg *DelegationConfig
-	if s != nil {
-		cfg = s.delegation
+	if s == nil {
+		return delegation.NewControlHTTPHandlerForConfig(nil, logDelegation.Printf)
 	}
-	return delegation.NewControlHTTPHandler(cfg.ControlDeps(), logDelegation.Printf)
+	return delegation.NewControlHTTPHandlerForConfig(s.delegation, logDelegation.Printf)
 }
 
 func (h *proxyHandler) handleDelegatedRequest(w http.ResponseWriter, r *http.Request) {

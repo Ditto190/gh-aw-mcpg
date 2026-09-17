@@ -174,9 +174,8 @@ func parseDelegatedRequestMethods(body []byte) ([]string, bool) {
 // intentionally separate from the MCP data plane so executor bearers cannot
 // reach control operations through /mcp.
 func (us *UnifiedServer) ControlHandler() http.Handler {
-	var cfg *delegation.RuntimeConfig
-	if us.delegationEnabled() {
-		cfg = us.delegation
+	if !us.delegationEnabled() {
+		return delegation.NewControlHTTPHandlerForConfig(nil, logServerDelegation.Printf)
 	}
-	return delegation.NewControlHTTPHandler(cfg.ControlDeps(), logServerDelegation.Printf)
+	return delegation.NewControlHTTPHandlerForConfig(us.delegation, logServerDelegation.Printf)
 }

@@ -40,6 +40,11 @@ func NewControlHTTPHandler(deps ControlDeps, logf ControlLogger) http.Handler {
 	})
 }
 
+// NewControlHTTPHandlerForConfig returns a control-plane handler for cfg.
+func NewControlHTTPHandlerForConfig(cfg *RuntimeConfig, logf ControlLogger) http.Handler {
+	return NewControlHTTPHandler(cfg.ControlDeps(), logf)
+}
+
 type runEntryRequest struct {
 	RunID          string `json:"run_id"`
 	EnclaveEntryID string `json:"enclave_entry_id"`
