@@ -45,17 +45,17 @@ pub const WRITE_OPERATIONS: &[&str] = &[
 /// Synthetic write operations reachable through GitHub CLI but not current upstream MCP tools.
 pub const CLI_WRITE_OPERATIONS: &[&str] = &[
     // Keep sorted for binary_search correctness.
-    "add_deploy_key",             // gh repo deploy-key add — POST /repos/.../keys
-    "add_gpg_key",                // gh gpg-key add — adds a user GPG signing key
-    "add_ssh_key",                // gh ssh-key add — adds a user SSH auth/signing key
-    "archive_project_item",       // gh project item-archive — archives a Projects v2 item
+    "add_deploy_key",               // gh repo deploy-key add — POST /repos/.../keys
+    "add_gpg_key",                  // gh gpg-key add — adds a user GPG signing key
+    "add_ssh_key",                  // gh ssh-key add — adds a user SSH auth/signing key
+    "archive_project_item",         // gh project item-archive — archives a Projects v2 item
     tool_names::ARCHIVE_REPOSITORY, // gh repo archive — blocked: repo settings change unsupported
-    "cancel_workflow_run",        // gh run cancel — cancels an in-progress workflow run
-    "close_issue",                // gh issue close
-    "close_pull_request",         // gh pr close
-    "copy_project",               // gh project copy — creates a new Projects v2 board
-    "create_codespace",           // gh codespace create — POST /user/codespaces
-    "create_discussion",          // gh discussion create — creates a discussion in a repository
+    "cancel_workflow_run",          // gh run cancel — cancels an in-progress workflow run
+    "close_issue",                  // gh issue close
+    "close_pull_request",           // gh pr close
+    "copy_project",                 // gh project copy — creates a new Projects v2 board
+    "create_codespace",             // gh codespace create — POST /user/codespaces
+    "create_discussion",            // gh discussion create — creates a discussion in a repository
     "create_linked_branch", // gh issue develop — creates a linked branch via GraphQL createLinkedBranch
     "create_project",       // gh project create — GraphQL createProjectV2
     "create_project_draft_item", // gh project item-create — adds a draft issue via GraphQL addProjectV2DraftIssue
@@ -106,9 +106,9 @@ pub const CLI_WRITE_OPERATIONS: &[&str] = &[
     "transfer_issue", // gh issue transfer
     "unarchive_project_item", // gh project item-archive --undo — unarchives a Projects v2 item
     tool_names::UNARCHIVE_REPOSITORY, // gh repo unarchive — blocked: symmetric to archive_repository
-    "unlink_project", // gh project unlink — unlinks a Projects v2 board
-    "unlock_issue", // gh issue unlock
-    "unlock_pull_request", // gh pr unlock
+    "unlink_project",                 // gh project unlink — unlinks a Projects v2 board
+    "unlock_issue",                   // gh issue unlock
+    "unlock_pull_request",            // gh pr unlock
     "unmark_project_template", // gh project mark-template --undo — GraphQL unmarkProjectV2AsTemplate
     "unpin_issue",             // gh issue unpin
     "update_codespace",        // gh codespace edit — PATCH /user/codespaces/{codespace_name}
@@ -231,10 +231,10 @@ pub(crate) fn is_unlock_operation(tool_name: &str) -> bool {
 /// Keep sorted for `binary_search` correctness (see `blocked_tools_are_sorted` test).
 /// Entries here should also be classified by `is_write_operation` or `is_read_write_operation`.
 pub const BLOCKED_TOOLS: &[&str] = &[
-    tool_names::ARCHIVE_REPOSITORY, // repo settings change; unsupported
-    "create_agent_task",             // unsupported agent-task creation
-    tool_names::RENAME_REPOSITORY,   // breaks clone URLs and integrations
-    tool_names::TRANSFER_REPOSITORY, // irreversible ownership transfer
+    tool_names::ARCHIVE_REPOSITORY,   // repo settings change; unsupported
+    "create_agent_task",              // unsupported agent-task creation
+    tool_names::RENAME_REPOSITORY,    // breaks clone URLs and integrations
+    tool_names::TRANSFER_REPOSITORY,  // irreversible ownership transfer
     tool_names::UNARCHIVE_REPOSITORY, // symmetric to archive_repository
 ];
 

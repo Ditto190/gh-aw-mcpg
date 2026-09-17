@@ -123,6 +123,10 @@ mod tests {
         assert_eq!(tool_names::GET_GIST, "get_gist");
         assert_eq!(tool_names::LIST_PROJECT_ITEMS, "list_project_items");
         assert_eq!(tool_names::PROJECTS_LIST, "projects_list");
+        assert_eq!(tool_names::ARCHIVE_REPOSITORY, "archive_repository");
+        assert_eq!(tool_names::UNARCHIVE_REPOSITORY, "unarchive_repository");
+        assert_eq!(tool_names::RENAME_REPOSITORY, "rename_repository");
+        assert_eq!(tool_names::TRANSFER_REPOSITORY, "transfer_repository");
         assert_eq!(
             UI_GET_REPO_SCOPED_METHODS,
             &["labels", "milestones", "branches"]
