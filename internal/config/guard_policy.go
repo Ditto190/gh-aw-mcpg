@@ -187,11 +187,13 @@ func (p GuardPolicy) MarshalJSON() ([]byte, error) {
 // decode to a JSON object.
 func GuardPolicyToMap(policy interface{}) (map[string]interface{}, error) {
 	if policy == nil {
+		logGuardPolicy.Print("GuardPolicyToMap: policy is nil, rejecting")
 		return nil, fmt.Errorf("policy is required")
 	}
 
 	policyJSON, err := json.Marshal(policy)
 	if err != nil {
+		logGuardPolicy.Printf("GuardPolicyToMap: failed to serialize policy of type %T: %v", policy, err)
 		return nil, fmt.Errorf("failed to serialize policy: %w", err)
 	}
 
@@ -203,6 +205,7 @@ func GuardPolicyToMap(policy interface{}) (map[string]interface{}, error) {
 		return nil, fmt.Errorf("policy must decode to a JSON object")
 	}
 
+	logGuardPolicy.Printf("GuardPolicyToMap: converted policy of type %T to map with %d keys", policy, len(payload))
 	return payload, nil
 }
 
@@ -278,6 +281,7 @@ func (p *AllowOnlyPolicy) UnmarshalJSON(data []byte) error {
 	}
 
 	if p.Repos == nil {
+		logGuardPolicy.Print("UnmarshalJSON: allow-only policy rejected, missing repos field")
 		return fmt.Errorf("allow-only must include repos")
 	}
 	if err := RequiredStringField(strings.TrimSpace(p.MinIntegrity), "min-integrity", "allow-only.min-integrity",
@@ -396,5 +400,7 @@ var WriteSinkAcceptRules = "see godoc" // exists for documentation only
 
 // IsWriteSinkPolicy returns true if this policy configures a write-sink guard.
 func (p *GuardPolicy) IsWriteSinkPolicy() bool {
-	return p != nil && p.WriteSink != nil
+	isWriteSink := p != nil && p.WriteSink != nil
+	logGuardPolicy.Printf("IsWriteSinkPolicy: result=%v", isWriteSink)
+	return isWriteSink
 }
