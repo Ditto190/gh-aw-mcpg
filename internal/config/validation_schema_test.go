@@ -2,12 +2,38 @@ package config
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/github/gh-aw-mcpg/internal/version"
+	"github.com/santhosh-tekuri/jsonschema/v6"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestCompilerAssertsFormat(t *testing.T) {
+	for name, newCompiler := range map[string]func() *jsonschema.Compiler{
+		"default":            newCompiler,
+		"with schema loader": newCompilerWithSchemaLoader,
+	} {
+		t.Run(name, func(t *testing.T) {
+			const schemaURL = "https://test.example.com/schema.json"
+			schemaDoc, err := jsonschema.UnmarshalJSON(strings.NewReader(`{
+				"type": "object",
+				"properties": {"url": {"type": "string", "format": "uri"}}
+			}`))
+			require.NoError(t, err)
+
+			compiler := newCompiler()
+			require.NoError(t, compiler.AddResource(schemaURL, schemaDoc))
+			schema, err := compiler.Compile(schemaURL)
+			require.NoError(t, err)
+
+			assert.Error(t, schema.Validate(map[string]any{"url": "not a URI"}))
+			assert.NoError(t, schema.Validate(map[string]any{"url": "https://example.com"}))
+		})
+	}
+}
 
 func TestValidateJSONSchema(t *testing.T) {
 	tests := []struct {

@@ -226,7 +226,9 @@ func (l *schemaURLLoader) reserveBytes(size int) error {
 
 // newCompiler creates a JSON Schema compiler using the library defaults (Draft 2020-12).
 func newCompiler() *jsonschema.Compiler {
-	return jsonschema.NewCompiler()
+	compiler := jsonschema.NewCompiler()
+	compiler.AssertFormat()
+	return compiler
 }
 
 // newCompilerWithSchemaLoader creates a compiler that can resolve remote $ref URLs
