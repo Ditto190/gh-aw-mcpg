@@ -916,13 +916,13 @@ func TestAgentRegistry_SetDefaultLabels_ConcurrentWithGetOrCreate(t *testing.T) 
 	const updates = 200
 	const creators = 8
 
-	done := make(chan struct{})
+	start := make(chan struct{})
 	var wg sync.WaitGroup
 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		defer close(done)
+		<-start
 		for i := 1; i <= updates; i++ {
 			registry.SetDefaultLabels(
 				[]Tag{Tag(fmt.Sprintf("secret-%d", i))},
@@ -936,12 +936,8 @@ func TestAgentRegistry_SetDefaultLabels_ConcurrentWithGetOrCreate(t *testing.T) 
 	for c := range creators {
 		go func() {
 			defer wg.Done()
-			for i := 0; ; i++ {
-				select {
-				case <-done:
-					return
-				default:
-				}
+			<-start
+			for i := 0; i < updates; i++ {
 				agent := registry.GetOrCreate(fmt.Sprintf("agent-%d-%d", c, i))
 				secrecy := agent.GetSecrecyTags()
 				integrity := agent.GetIntegrityTags()
@@ -954,6 +950,7 @@ func TestAgentRegistry_SetDefaultLabels_ConcurrentWithGetOrCreate(t *testing.T) 
 		}()
 	}
 
+	close(start)
 	wg.Wait()
 	close(pairs)
 
