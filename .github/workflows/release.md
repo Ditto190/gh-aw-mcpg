@@ -259,10 +259,10 @@ jobs:
 
       # Enables emulation so the amd64 runner can build arm64 too
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4.3.0
+        uses: docker/setup-qemu-action@v4.4.0
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4.3.0
+        uses: docker/setup-buildx-action@v4.4.1
 
       - name: Log in to GHCR
         uses: docker/login-action@v4.6.0
@@ -289,7 +289,7 @@ jobs:
           test -f guards/github-guard/github-guard-rust.wasm
 
       - name: Build and push (multi-arch)
-        uses: docker/build-push-action@v7.3.0
+        uses: docker/build-push-action@v7.4.0
         with:
           context: .
           push: true
