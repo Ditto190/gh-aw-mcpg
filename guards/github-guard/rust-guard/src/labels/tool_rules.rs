@@ -778,6 +778,9 @@ pub fn apply_tool_labels(
         | "add_issue_reaction"
         | "add_issue_comment_reaction"
         | "add_pull_request_review_comment_reaction"
+        | tool_names::REMOVE_ISSUE_REACTION
+        | tool_names::REMOVE_ISSUE_COMMENT_REACTION
+        | tool_names::REMOVE_PULL_REQUEST_REVIEW_COMMENT_REACTION
         // Granular PR mutation
         | "close_pull_request"
         | "reopen_pull_request"
@@ -2665,6 +2668,9 @@ mod tests {
             "add_issue_reaction",
             "add_issue_comment_reaction",
             "add_pull_request_review_comment_reaction",
+            tool_names::REMOVE_ISSUE_REACTION,
+            tool_names::REMOVE_ISSUE_COMMENT_REACTION,
+            tool_names::REMOVE_PULL_REQUEST_REVIEW_COMMENT_REACTION,
         ] {
             let (secrecy, integrity, _desc) = super::apply_tool_labels(
                 op,
