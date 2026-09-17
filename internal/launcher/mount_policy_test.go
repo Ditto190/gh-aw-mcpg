@@ -282,6 +282,36 @@ func TestCanonicalizePathHandlesMissingLeafDirectories(t *testing.T) {
 	assert.Error(t, err)
 }
 
+// TestCanonicalizePathRejectsNonNotExistError covers the "!os.IsNotExist(err)"
+// branch in canonicalizePath: when filepath.EvalSymlinks fails with an error
+// other than "not exist" (e.g. ENOTDIR from treating a regular file as a
+// directory component), canonicalizePath must surface a generic resolution
+// error instead of silently walking further up the tree.
+func TestCanonicalizePathRejectsNonNotExistError(t *testing.T) {
+	base := t.TempDir()
+	file := filepath.Join(base, "not-a-directory")
+	require.NoError(t, os.WriteFile(file, []byte("x"), 0o644))
+
+	_, err := canonicalizePath(filepath.Join(file, "child"))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot resolve path")
+}
+
+// TestValidateMountRejectsUncanonicalizableSource covers ValidateMount's
+// canonicalizePath error branch: a source whose ancestor path component is a
+// regular file (making resolution fail with a non-"not exist" error) must be
+// rejected with a "cannot be canonicalized" message before any root matching
+// is attempted.
+func TestValidateMountRejectsUncanonicalizableSource(t *testing.T) {
+	policy, _, tmp := newTestPolicy(t)
+	file := filepath.Join(tmp, "not-a-directory")
+	require.NoError(t, os.WriteFile(file, []byte("x"), 0o644))
+
+	err := policy.ValidateMount(filepath.Join(file, "child") + ":/dest:ro")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot be canonicalized")
+}
+
 // TestLaunchStdioConnectionEnforcesMountPolicy verifies that mount policy
 // violations are rejected before the backend process is launched.
 func TestLaunchStdioConnectionEnforcesMountPolicy(t *testing.T) {
