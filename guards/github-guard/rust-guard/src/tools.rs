@@ -34,6 +34,9 @@ pub const WRITE_OPERATIONS: &[&str] = &[
     "mark_all_notifications_read",
     "projects_write",
     "push_files",
+    tool_names::REMOVE_ISSUE_COMMENT_REACTION, // DELETE /repos/.../issues/comments/{id}/reactions/{reaction_id}
+    tool_names::REMOVE_ISSUE_REACTION, // DELETE /repos/.../issues/{number}/reactions/{reaction_id}
+    tool_names::REMOVE_PULL_REQUEST_REVIEW_COMMENT_REACTION, // DELETE /repos/.../pulls/comments/{id}/reactions/{reaction_id}
     "request_copilot_review",
     "star_repository",
     "unstar_repository",
@@ -1017,6 +1020,9 @@ mod tests {
             "add_issue_reaction",
             "add_issue_comment_reaction",
             "add_pull_request_review_comment_reaction",
+            tool_names::REMOVE_ISSUE_REACTION,
+            tool_names::REMOVE_ISSUE_COMMENT_REACTION,
+            tool_names::REMOVE_PULL_REQUEST_REVIEW_COMMENT_REACTION,
         ] {
             assert!(
                 is_write_operation(op),

@@ -266,6 +266,10 @@ pub mod tool_names {
     pub const DELETE_SECRET: &str = "delete_secret";
     pub const SET_VARIABLE: &str = "set_variable";
     pub const DELETE_VARIABLE: &str = "delete_variable";
+    pub const REMOVE_ISSUE_COMMENT_REACTION: &str = "remove_issue_comment_reaction";
+    pub const REMOVE_ISSUE_REACTION: &str = "remove_issue_reaction";
+    pub const REMOVE_PULL_REQUEST_REVIEW_COMMENT_REACTION: &str =
+        "remove_pull_request_review_comment_reaction";
     pub const LIST_GISTS: &str = "list_gists";
     pub const GET_GIST: &str = "get_gist";
     pub const LIST_PROJECT_ITEMS: &str = "list_project_items";
