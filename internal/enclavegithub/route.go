@@ -50,8 +50,8 @@ func (r *Route) FullRepo() string {
 	return strings.ToLower(r.Owner + "/" + r.Repo)
 }
 
-// MatchRoute matches only the versioned enclave issue-read REST surface.
-func MatchRoute(path string, query url.Values) (*Route, error) {
+// MatchEnclaveRoute matches only the versioned enclave issue-read REST surface.
+func MatchEnclaveRoute(path string, query url.Values) (*Route, error) {
 	logRoute.Printf("Matching enclave route: path=%s", path)
 	var route Route
 	for _, candidate := range enclaveRoutes {

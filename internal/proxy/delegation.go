@@ -39,7 +39,7 @@ func (h *proxyHandler) handleDelegatedRequest(w http.ResponseWriter, r *http.Req
 		writeEnclaveDenied(w)
 		return
 	}
-	route, err := enclavegithub.MatchRoute(path, query)
+	route, err := enclavegithub.MatchEnclaveRoute(path, query)
 	if err != nil {
 		logDelegation.Printf("No matching enclave route for path_hash=%s", util.HashForLog(path, 16, ""))
 		writeEnclaveDenied(w)
