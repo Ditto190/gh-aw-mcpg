@@ -282,6 +282,7 @@ pub mod tool_names {
     pub const UNARCHIVE_REPOSITORY: &str = "unarchive_repository";
     pub const RENAME_REPOSITORY: &str = "rename_repository";
     pub const TRANSFER_REPOSITORY: &str = "transfer_repository";
+    pub const GET_JOB_LOGS: &str = "get_job_logs";
 }
 
 /// UI metadata methods that are scoped to a specific repository.
@@ -292,3 +293,15 @@ pub const UI_GET_GITHUB_APPROVED_METHODS: &[&str] = &["issue_types", "issue_fiel
 
 /// UI metadata methods that expose access-sensitive membership/reviewer data.
 pub const UI_GET_ACCESS_SENSITIVE_METHODS: &[&str] = &["assignees", "reviewers"];
+
+/// Security-sensitive alert tools that are always private:repo + writer
+/// integrity regardless of repository visibility (may expose secret values
+/// or security findings).
+pub const SECURITY_ALERT_TOOLS: &[&str] = &[
+    "list_secret_scanning_alerts",
+    "get_secret_scanning_alert",
+    "list_code_scanning_alerts",
+    "get_code_scanning_alert",
+    "list_dependabot_alerts",
+    "get_dependabot_alert",
+];

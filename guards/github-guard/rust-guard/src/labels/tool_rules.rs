@@ -6,9 +6,9 @@
 use serde_json::Value;
 
 use super::constants::{
-    desc_prefix, field_names, scope_names, tool_names, ORG_FIELD_ALIASES, SENSITIVE_FILE_KEYWORDS,
-    SENSITIVE_FILE_PATTERNS, SENSITIVE_PATH_PREFIXES, UI_GET_ACCESS_SENSITIVE_METHODS,
-    UI_GET_GITHUB_APPROVED_METHODS, UI_GET_REPO_SCOPED_METHODS,
+    desc_prefix, field_names, scope_names, tool_names, ORG_FIELD_ALIASES, SECURITY_ALERT_TOOLS,
+    SENSITIVE_FILE_KEYWORDS, SENSITIVE_FILE_PATTERNS, SENSITIVE_PATH_PREFIXES,
+    UI_GET_ACCESS_SENSITIVE_METHODS, UI_GET_GITHUB_APPROVED_METHODS, UI_GET_REPO_SCOPED_METHODS,
 };
 use super::helpers::{
     author_association_floor_from_str, elevate_via_collaborator_permission,
@@ -474,12 +474,7 @@ pub fn apply_tool_labels(
         // === Security-sensitive data: always private regardless of repo visibility ===
         // Covers: secret scanning alerts (may contain actual secret values), code scanning
         // and Dependabot alerts (security findings). All are private:repo + writer integrity.
-        "list_secret_scanning_alerts"
-        | "get_secret_scanning_alert"
-        | "list_code_scanning_alerts"
-        | "get_code_scanning_alert"
-        | "list_dependabot_alerts"
-        | "get_dependabot_alert" => {
+        t if SECURITY_ALERT_TOOLS.contains(&t) => {
             secrecy = policy_private_scope_label(&owner, &repo, repo_id, ctx);
             integrity = writer_integrity(repo_id, ctx);
         }
@@ -487,7 +482,7 @@ pub fn apply_tool_labels(
         // === Actions log and artifact reads (repo-scoped) ===
         // S = S(repo) — inherits from repository visibility
         // I = writer
-        "get_job_logs" => {
+        tool_names::GET_JOB_LOGS => {
             secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
             integrity = writer_integrity(repo_id, ctx);
         }
@@ -2000,7 +1995,7 @@ mod tests {
         let expected_secrecy = private_label("octocat", "hello-world", repo_id, &ctx);
         let expected_integrity = writer_integrity(repo_id, &ctx);
 
-        for tool in &["list_secret_scanning_alerts", "get_secret_scanning_alert"] {
+        for tool in SECURITY_ALERT_TOOLS.iter().take(2).copied() {
             let (secrecy, integrity, _) =
                 super::apply_tool_labels(tool, &args, repo_id, vec![], vec![], String::new(), &ctx);
             assert_eq!(
@@ -2022,12 +2017,7 @@ mod tests {
         let expected_secrecy = private_label("octocat", "hello-world", repo_id, &ctx);
         let expected_integrity = writer_integrity(repo_id, &ctx);
 
-        for tool in &[
-            "list_code_scanning_alerts",
-            "get_code_scanning_alert",
-            "list_dependabot_alerts",
-            "get_dependabot_alert",
-        ] {
+        for tool in SECURITY_ALERT_TOOLS.iter().skip(2).copied() {
             let (secrecy, integrity, _) =
                 super::apply_tool_labels(tool, &args, repo_id, vec![], vec![], String::new(), &ctx);
             assert_eq!(
@@ -2049,7 +2039,7 @@ mod tests {
         let _guard = crate::labels::backend::cache_repo_visibility_for_tests(repo_id, false);
 
         let (secrecy, integrity, _) = super::apply_tool_labels(
-            "get_job_logs",
+            tool_names::GET_JOB_LOGS,
             &args,
             repo_id,
             vec![],
@@ -2077,7 +2067,7 @@ mod tests {
         let _guard = crate::labels::backend::cache_repo_visibility_for_tests(repo_id, true);
 
         let (secrecy, integrity, _) = super::apply_tool_labels(
-            "get_job_logs",
+            tool_names::GET_JOB_LOGS,
             &args,
             repo_id,
             vec![],

@@ -2467,7 +2467,7 @@ mod tests {
         });
 
         let (secrecy, integrity, _desc) = apply_tool_labels(
-            "get_job_logs",
+            tool_names::GET_JOB_LOGS,
             &tool_args,
             "github/copilot",
             vec![],
