@@ -185,7 +185,7 @@ func TestHandleDelegatedRequest_UnmatchedRouteDenied(t *testing.T) {
 
 func TestHandleDelegatedRequest_UnsupportedQueryParamDenied(t *testing.T) {
 	// issues.get (single-issue GET) allows no query keys at all, so any
-	// query parameter makes MatchRoute fail even though the path matches.
+	// query parameter makes MatchEnclaveRoute fail even though the path matches.
 	handler, store := newDelegatedTestHandler(t, "http://unused.invalid", "octo/repo")
 	bearer := createDelegatedIdentity(t, store, "octo/repo")
 

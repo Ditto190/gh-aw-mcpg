@@ -341,7 +341,7 @@ func TestVerifierRejectsInvalidCapabilities(t *testing.T) {
 	}
 }
 
-func TestMatchRoute(t *testing.T) {
+func TestMatchEnclaveRoute(t *testing.T) {
 	tests := []struct {
 		path      string
 		query     url.Values
@@ -353,14 +353,14 @@ func TestMatchRoute(t *testing.T) {
 		{"/repos/github/gh-aw/issues/12/comments", url.Values{"per_page": {"100"}}, OperationIssueCommentsList, "github/gh-aw"},
 	}
 	for _, tt := range tests {
-		route, err := MatchRoute(tt.path, tt.query)
+		route, err := MatchEnclaveRoute(tt.path, tt.query)
 		require.NoError(t, err)
 		assert.Equal(t, tt.operation, route.Operation)
 		assert.Equal(t, tt.repo, route.FullRepo())
 	}
 }
 
-func TestMatchRouteRejectsBroadSurface(t *testing.T) {
+func TestMatchEnclaveRouteRejectsBroadSurface(t *testing.T) {
 	tests := []struct {
 		path  string
 		query url.Values
@@ -375,7 +375,7 @@ func TestMatchRouteRejectsBroadSurface(t *testing.T) {
 		{"/repos/./repo/issues", nil},
 	}
 	for _, tt := range tests {
-		_, err := MatchRoute(tt.path, tt.query)
+		_, err := MatchEnclaveRoute(tt.path, tt.query)
 		require.Error(t, err)
 	}
 }
