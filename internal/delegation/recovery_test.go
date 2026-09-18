@@ -997,8 +997,7 @@ func TestParsePersistedState(t *testing.T) {
 		assert.False(t, ok)
 	})
 
-	t.Run("rejects a file whose body is exactly the checksum length with no separator", func(t *testing.T) {
-		// sep <= 0 when trimmed is no longer than the checksum itself.
+	t.Run("rejects input one byte shorter than the minimum file length", func(t *testing.T) {
 		checksumHex := strings.Repeat("a", 64)
 		raw := []byte(checksumHex + "\n")
 
