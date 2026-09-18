@@ -6,9 +6,10 @@
 use serde_json::Value;
 
 use super::constants::{
-    desc_prefix, field_names, scope_names, tool_names, ORG_FIELD_ALIASES, SECURITY_ALERT_TOOLS,
-    SENSITIVE_FILE_KEYWORDS, SENSITIVE_FILE_PATTERNS, SENSITIVE_PATH_PREFIXES,
-    UI_GET_ACCESS_SENSITIVE_METHODS, UI_GET_GITHUB_APPROVED_METHODS, UI_GET_REPO_SCOPED_METHODS,
+    desc_prefix, field_names, scope_names, tool_names, CODE_SCANNING_DEPENDABOT_ALERT_TOOLS,
+    ORG_FIELD_ALIASES, SECRET_SCANNING_ALERT_TOOLS, SENSITIVE_FILE_KEYWORDS,
+    SENSITIVE_FILE_PATTERNS, SENSITIVE_PATH_PREFIXES, UI_GET_ACCESS_SENSITIVE_METHODS,
+    UI_GET_GITHUB_APPROVED_METHODS, UI_GET_REPO_SCOPED_METHODS,
 };
 use super::helpers::{
     author_association_floor_from_str, elevate_via_collaborator_permission,
@@ -474,7 +475,9 @@ pub fn apply_tool_labels(
         // === Security-sensitive data: always private regardless of repo visibility ===
         // Covers: secret scanning alerts (may contain actual secret values), code scanning
         // and Dependabot alerts (security findings). All are private:repo + writer integrity.
-        t if SECURITY_ALERT_TOOLS.contains(&t) => {
+        t if SECRET_SCANNING_ALERT_TOOLS.contains(&t)
+            || CODE_SCANNING_DEPENDABOT_ALERT_TOOLS.contains(&t) =>
+        {
             secrecy = policy_private_scope_label(&owner, &repo, repo_id, ctx);
             integrity = writer_integrity(repo_id, ctx);
         }
@@ -1995,7 +1998,7 @@ mod tests {
         let expected_secrecy = private_label("octocat", "hello-world", repo_id, &ctx);
         let expected_integrity = writer_integrity(repo_id, &ctx);
 
-        for tool in SECURITY_ALERT_TOOLS.iter().take(2).copied() {
+        for tool in SECRET_SCANNING_ALERT_TOOLS.iter().copied() {
             let (secrecy, integrity, _) =
                 super::apply_tool_labels(tool, &args, repo_id, vec![], vec![], String::new(), &ctx);
             assert_eq!(
@@ -2017,7 +2020,7 @@ mod tests {
         let expected_secrecy = private_label("octocat", "hello-world", repo_id, &ctx);
         let expected_integrity = writer_integrity(repo_id, &ctx);
 
-        for tool in SECURITY_ALERT_TOOLS.iter().skip(2).copied() {
+        for tool in CODE_SCANNING_DEPENDABOT_ALERT_TOOLS.iter().copied() {
             let (secrecy, integrity, _) =
                 super::apply_tool_labels(tool, &args, repo_id, vec![], vec![], String::new(), &ctx);
             assert_eq!(

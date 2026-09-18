@@ -294,12 +294,14 @@ pub const UI_GET_GITHUB_APPROVED_METHODS: &[&str] = &["issue_types", "issue_fiel
 /// UI metadata methods that expose access-sensitive membership/reviewer data.
 pub const UI_GET_ACCESS_SENSITIVE_METHODS: &[&str] = &["assignees", "reviewers"];
 
-/// Security-sensitive alert tools that are always private:repo + writer
-/// integrity regardless of repository visibility (may expose secret values
-/// or security findings).
-pub const SECURITY_ALERT_TOOLS: &[&str] = &[
-    "list_secret_scanning_alerts",
-    "get_secret_scanning_alert",
+/// Secret-scanning alert tools that are always private:repo + writer integrity
+/// regardless of repository visibility (may expose secret values).
+pub const SECRET_SCANNING_ALERT_TOOLS: &[&str] =
+    &["list_secret_scanning_alerts", "get_secret_scanning_alert"];
+
+/// Code-scanning and Dependabot alert tools that are always private:repo +
+/// writer integrity regardless of repository visibility (security findings).
+pub const CODE_SCANNING_DEPENDABOT_ALERT_TOOLS: &[&str] = &[
     "list_code_scanning_alerts",
     "get_code_scanning_alert",
     "list_dependabot_alerts",
