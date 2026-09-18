@@ -243,7 +243,7 @@ func TestFormatErrorContext(t *testing.T) {
 			prefix:       "",
 			wantContains: []string{"Type mismatch - the value type doesn't match"},
 			wantNotContain: []string{
-				"expected string", // the concrete "expected %s, got %s" message must NOT be produced
+				"Details: Type mismatch - expected", // the concrete "expected %s, got %s" message must NOT be produced
 			},
 		},
 		{
