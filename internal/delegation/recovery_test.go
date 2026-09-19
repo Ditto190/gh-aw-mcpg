@@ -907,3 +907,139 @@ func TestLoadStore_CorruptFileRefusesPreCrashBearer(t *testing.T) {
 	require.NoError(t, err)
 	assertFailedClosedRecovery(t, reloaded, created.ExecutorBearer)
 }
+
+// validPersistedStateBytes builds a well-formed "<json>\n<64-hex-checksum>\n"
+// byte slice for a given JSON body, mirroring the format saveStateLocked
+// writes and parsePersistedState expects to read back.
+func validPersistedStateBytes(body []byte) []byte {
+	checksum := sha256.Sum256(body)
+	return append(append([]byte{}, body...), []byte("\n"+hex.EncodeToString(checksum[:])+"\n")...)
+}
+
+func TestParsePersistedState(t *testing.T) {
+	validBody := []byte(`{"version":3,"generation":1,"recovery_incomplete":false,"identities":{}}`)
+
+	t.Run("accepts a well-formed file and decodes the body", func(t *testing.T) {
+		raw := validPersistedStateBytes(validBody)
+
+		state, ok := parsePersistedState(raw)
+
+		require.True(t, ok)
+		assert.Equal(t, 3, state.Version)
+		assert.Equal(t, uint64(1), state.Generation)
+		assert.False(t, state.RecoveryIncomplete)
+		assert.Empty(t, state.Identities)
+	})
+
+	t.Run("accepts a file carrying persisted identities and schema hashes", func(t *testing.T) {
+		now := time.Now().Round(time.Second)
+		id := Identity{
+			delegationBinding: delegationBinding{
+				RunID:               "run-123",
+				EnclaveBackend:      "awf-enclave",
+				EnclaveEntryID:      "entry-1",
+				InvocationID:        "inv-1",
+				Repository:          "github/gh-aw",
+				ToolPolicy:          ToolPolicyGitHubRepositoryReadV1,
+				SchemaHash:          "sha256:abc",
+				InvocationExpiresAt: now.Add(time.Hour),
+			},
+			Handle:           "dlg_handle1",
+			ExecutorBearer:   "dlgbearer_bearer1",
+			ExpiresAt:        now.Add(time.Hour),
+			PolicyGeneration: 1,
+			IdempotencyKey:   "idem-1",
+			CreatedAt:        now,
+		}
+		body := []byte(fmt.Sprintf(
+			`{"version":3,"generation":1,"recovery_incomplete":true,"identities":{"dlg_handle1":%s},"dynamic_schema_hashes":["sha256:dyn"]}`,
+			marshalJSON(id)))
+		raw := validPersistedStateBytes(body)
+
+		state, ok := parsePersistedState(raw)
+
+		require.True(t, ok)
+		assert.True(t, state.RecoveryIncomplete)
+		require.Contains(t, state.Identities, "dlg_handle1")
+		assert.Equal(t, id.Handle, state.Identities["dlg_handle1"].Handle)
+		assert.Equal(t, []string{"sha256:dyn"}, state.DynamicSchemaHashes)
+	})
+
+	t.Run("rejects empty input", func(t *testing.T) {
+		_, ok := parsePersistedState([]byte{})
+		assert.False(t, ok)
+	})
+
+	t.Run("rejects input shorter than the checksum footer", func(t *testing.T) {
+		_, ok := parsePersistedState([]byte("short\n"))
+		assert.False(t, ok)
+	})
+
+	t.Run("rejects input not ending in a newline", func(t *testing.T) {
+		raw := validPersistedStateBytes(validBody)
+		raw = raw[:len(raw)-1] // drop the trailing newline
+		raw = append(raw, 'x')
+
+		_, ok := parsePersistedState(raw)
+
+		assert.False(t, ok)
+	})
+
+	t.Run("rejects a file missing the newline separating body and checksum", func(t *testing.T) {
+		checksum := sha256.Sum256(validBody)
+		// Concatenate body and checksum hex directly, with no separating
+		// newline before the 64-hex-char checksum, only the final trailing
+		// newline that the top-level length/suffix check requires.
+		raw := append(append([]byte{}, validBody...), []byte(hex.EncodeToString(checksum[:])+"\n")...)
+
+		_, ok := parsePersistedState(raw)
+
+		assert.False(t, ok)
+	})
+
+	t.Run("rejects input one byte shorter than the minimum file length", func(t *testing.T) {
+		checksumHex := strings.Repeat("a", 64)
+		raw := []byte(checksumHex + "\n")
+
+		_, ok := parsePersistedState(raw)
+
+		assert.False(t, ok)
+	})
+
+	t.Run("rejects a non-hex checksum footer", func(t *testing.T) {
+		body := validBody
+		notHex := strings.Repeat("z", 64)
+		raw := append(append([]byte{}, body...), []byte("\n"+notHex+"\n")...)
+
+		_, ok := parsePersistedState(raw)
+
+		assert.False(t, ok)
+	})
+
+	t.Run("rejects a mismatched checksum", func(t *testing.T) {
+		body := validBody
+		wrongChecksum := sha256.Sum256([]byte("different content"))
+		raw := append(append([]byte{}, body...), []byte("\n"+hex.EncodeToString(wrongChecksum[:])+"\n")...)
+
+		_, ok := parsePersistedState(raw)
+
+		assert.False(t, ok)
+	})
+
+	t.Run("rejects a body that is valid-checksummed but not valid JSON", func(t *testing.T) {
+		raw := validPersistedStateBytes([]byte("not json at all"))
+
+		_, ok := parsePersistedState(raw)
+
+		assert.False(t, ok)
+	})
+
+	t.Run("rejects truncated content even when the footer still parses as hex", func(t *testing.T) {
+		raw := validPersistedStateBytes(validBody)
+		truncated := raw[:len(raw)/2]
+
+		_, ok := parsePersistedState(truncated)
+
+		assert.False(t, ok)
+	})
+}
