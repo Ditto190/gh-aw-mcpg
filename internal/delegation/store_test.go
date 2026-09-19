@@ -96,15 +96,20 @@ func TestCreateOrConfirm_RejectsOutsideEnvelope(t *testing.T) {
 	store, _ := newTestStore(t)
 
 	cases := map[string]func(*CreateOrConfirmRequest){
-		"wrong run":         func(r *CreateOrConfirmRequest) { r.RunID = "other-run" },
-		"wrong backend":     func(r *CreateOrConfirmRequest) { r.EnclaveBackend = "other-backend" },
-		"unlisted repo":     func(r *CreateOrConfirmRequest) { r.Repository = "someone-else/private-repo" },
-		"noncanonical repo": func(r *CreateOrConfirmRequest) { r.Repository = "GitHub/gh-aw" },
-		"wrong tool policy": func(r *CreateOrConfirmRequest) { r.ToolPolicy = "github-repository-write-v1" },
-		"unlisted schema":   func(r *CreateOrConfirmRequest) { r.SchemaHash = "sha256:unknown" },
-		"ttl over cap":      func(r *CreateOrConfirmRequest) { r.RequestedTTL = time.Hour },
-		"missing entry id":  func(r *CreateOrConfirmRequest) { r.EnclaveEntryID = "" },
-		"missing idem key":  func(r *CreateOrConfirmRequest) { r.IdempotencyKey = "" },
+		"wrong run":          func(r *CreateOrConfirmRequest) { r.RunID = "other-run" },
+		"wrong backend":      func(r *CreateOrConfirmRequest) { r.EnclaveBackend = "other-backend" },
+		"unlisted repo":      func(r *CreateOrConfirmRequest) { r.Repository = "someone-else/private-repo" },
+		"noncanonical repo":  func(r *CreateOrConfirmRequest) { r.Repository = "GitHub/gh-aw" },
+		"wrong tool policy":  func(r *CreateOrConfirmRequest) { r.ToolPolicy = "github-repository-write-v1" },
+		"unlisted schema":    func(r *CreateOrConfirmRequest) { r.SchemaHash = "sha256:unknown" },
+		"ttl over cap":       func(r *CreateOrConfirmRequest) { r.RequestedTTL = time.Hour },
+		"missing entry id":   func(r *CreateOrConfirmRequest) { r.EnclaveEntryID = "" },
+		"missing idem key":   func(r *CreateOrConfirmRequest) { r.IdempotencyKey = "" },
+		"missing invocation": func(r *CreateOrConfirmRequest) { r.InvocationID = "" },
+		"missing schema":     func(r *CreateOrConfirmRequest) { r.SchemaHash = "" },
+		"invocation deadline elapsed": func(r *CreateOrConfirmRequest) {
+			r.InvocationExpiresAt = time.Now().Add(-time.Minute)
+		},
 	}
 	for name, mutate := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -259,6 +264,66 @@ func TestHasLiveExecutorBearerTracksRevocation(t *testing.T) {
 
 	require.NoError(t, store.Revoke(created.Handle))
 	assert.False(t, store.HasLiveExecutorBearer(created.ExecutorBearer))
+}
+
+func TestHasLiveExecutorBearer_FalseWhenRecoveryIncompleteOrEnvelopeExpired(t *testing.T) {
+	store, _ := newTestStore(t)
+	req := validRequest()
+	created, err := store.CreateOrConfirm(req)
+	require.NoError(t, err)
+
+	store.mu.Lock()
+	store.recoveryIncomplete = true
+	store.mu.Unlock()
+	assert.False(t, store.HasLiveExecutorBearer(created.ExecutorBearer), "recovery-incomplete stores must never report a live bearer")
+	store.markReconciled()
+
+	store.mu.Lock()
+	store.envelope.ExpiresAt = time.Now().Add(-time.Minute)
+	store.mu.Unlock()
+	assert.False(t, store.HasLiveExecutorBearer(created.ExecutorBearer), "an expired envelope must never report a live bearer")
+}
+
+func TestAuthorize_BearerPrefixIsStrippedBeforeLookup(t *testing.T) {
+	store, _ := newTestStore(t)
+	req := validRequest()
+	created, err := store.CreateOrConfirm(req)
+	require.NoError(t, err)
+
+	assert.NoError(t, store.Authorize("Bearer "+created.ExecutorBearer, req.RunID, req.EnclaveBackend, req.Repository, "issue_read"))
+}
+
+func TestAuthorize_RejectsRecoveryIncompleteAndExpiredEnvelope(t *testing.T) {
+	store, _ := newTestStore(t)
+	req := validRequest()
+	created, err := store.CreateOrConfirm(req)
+	require.NoError(t, err)
+
+	store.mu.Lock()
+	store.recoveryIncomplete = true
+	store.mu.Unlock()
+	assert.Error(t, store.Authorize(created.ExecutorBearer, req.RunID, req.EnclaveBackend, req.Repository, "issue_read"), "authorize must fail closed while recovery is incomplete")
+	store.markReconciled()
+
+	store.mu.Lock()
+	store.envelope.ExpiresAt = time.Now().Add(-time.Minute)
+	store.mu.Unlock()
+	assert.Error(t, store.Authorize(created.ExecutorBearer, req.RunID, req.EnclaveBackend, req.Repository, "issue_read"), "authorize must reject once the envelope has expired")
+}
+
+func TestNewStore_RejectsInvalidEnvelope(t *testing.T) {
+	_, err := NewStore(&Envelope{}, 1)
+	assert.Error(t, err, "an envelope that fails Validate must be rejected by NewStore")
+}
+
+func TestAdmitSchemaHashLocked_RejectsUnlistedHashUnderClosedSet(t *testing.T) {
+	store, _ := newTestStore(t)
+
+	store.mu.Lock()
+	admitted := store.admitSchemaHashLocked("sha256:not-in-closed-set")
+	store.mu.Unlock()
+
+	assert.False(t, admitted, "a hash outside a closed AllowedSchemaHashes set must never be admitted, even dynamically")
 }
 
 func TestExpiry_AutomaticAndExplicit(t *testing.T) {
