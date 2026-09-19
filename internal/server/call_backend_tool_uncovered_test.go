@@ -83,8 +83,7 @@ func TestCallBackendTool_GuardForSessionError_MultiAgentNonIsolatedGuard(t *test
 	require.NotNil(result, "callBackendTool must always return non-nil CallToolResult")
 	assert.True(result.IsError, "result should be marked as error when guardForSession fails")
 	assert.Nil(data, "no data should be returned when guardForSession fails")
-	require.Error(callErr)
-	assert.ErrorContains(callErr, "failed to create isolated guard session")
+	require.ErrorContains(callErr, "failed to create isolated guard session")
 	assert.ErrorContains(callErr, "simulated session guard creation failure")
 }
 
