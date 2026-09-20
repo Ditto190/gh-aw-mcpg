@@ -310,9 +310,11 @@ func (us *UnifiedServer) registerToolsFromBackendContext(ctx context.Context, se
 			sessionID := us.getSessionID(ctx)
 			redactPayload := sanitize.ShouldRedactPayload(mcp.IsEnclaveSession(ctx))
 			argsJSON, _ := json.Marshal(toolArgs)
-			sanitizedArgs := sanitize.SanitizeString(string(argsJSON))
+			var sanitizedArgs string
 			if redactPayload {
 				sanitizedArgs = sanitize.RedactedPayloadText(argsJSON)
+			} else {
+				sanitizedArgs = sanitize.SanitizeString(string(argsJSON))
 			}
 			logger.LogInfo("client", "MCP tool call request, session=%s, tool=%s, args=%s", util.FormatSessionIDForLog(sessionID), toolNameCopy, sanitizedArgs)
 
