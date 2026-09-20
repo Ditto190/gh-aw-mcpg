@@ -243,6 +243,10 @@ func TestCallBackendTool_RateLimitResponse_RecordsResetAtEventAttribute(t *testi
 	// !resetAt.IsZero() branch (adding the "reset_at" span event attribute) ran.
 	cb := us.getCircuitBreaker("rl-resetat-server")
 	require.NotNil(cb)
+	cb.mu.Lock()
+	resetAt := cb.resetAt
+	cb.mu.Unlock()
+	assert.False(resetAt.IsZero())
 }
 
 // ─── Phase 5: labeled-data conversion error ────────────────────────────────────
