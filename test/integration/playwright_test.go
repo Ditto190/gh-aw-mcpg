@@ -4,14 +4,15 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"os"
 	"os/exec"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
-	"time"
 )
 
 // isDockerRegistryNetworkError detects Docker registry connectivity failures from
@@ -406,11 +407,17 @@ CMD ["node", "mock-mcp-server.js"]
 	imageName := "test-playwright-mcp-mock:test"
 	t.Logf("Building test container image: %s", imageName)
 
-	buildCmd := exec.Command("docker", "build", "-t", imageName, tmpDir)
+	buildCtx, cancelBuild := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancelBuild()
+
+	buildCmd := exec.CommandContext(buildCtx, "docker", "build", "-t", imageName, tmpDir)
 	buildOutput, err := buildCmd.CombinedOutput()
 	if err != nil {
 		outputStr := string(buildOutput)
 		t.Logf("Build output:\n%s", outputStr)
+		if errors.Is(buildCtx.Err(), context.DeadlineExceeded) {
+			t.Skip("Skipping test: Docker build timed out")
+		}
 		if isDockerRegistryNetworkError(outputStr) {
 			t.Skipf("Skipping test: Docker build failed due to network issues: %v", err)
 		}
