@@ -519,7 +519,7 @@ where the relationship can be expressed directly with Cobra.
 
 The MCP SDK is pinned to the specific version recorded in `go.mod`. Before
 changing this pin, run the SDK canary tests documented in
-[SDK Upgrade Process](#sdk-upgrade-process); they protect the gateway's custom
+[SDK Upgrade Process](AGENTS.md#sdk-upgrade-process); they protect the gateway's custom
 reconnect and schema-proxying behavior.
 
 To add a new dependency:
