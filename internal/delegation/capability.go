@@ -42,8 +42,10 @@ type ControlCapability struct {
 // used to recover or forge the capability value.
 func NewControlCapability(secret string) (*ControlCapability, error) {
 	if len(secret) < minControlCapabilityBytes {
+		logDelegationCapability.Printf("Rejected delegation-control capability: secret too short (min=%d bytes)", minControlCapabilityBytes)
 		return nil, fmt.Errorf("delegation control capability must be at least %d bytes", minControlCapabilityBytes)
 	}
+	logDelegationCapability.Print("Delegation-control capability initialized")
 	return &ControlCapability{expected: sha256.Sum256([]byte(secret))}, nil
 }
 
@@ -56,6 +58,7 @@ func (c *ControlCapability) Authenticate(authorizationHeader string) error {
 	value := authorizationHeader
 	if after, ok := strings.CutPrefix(authorizationHeader, "Bearer "); ok {
 		value = after
+		logDelegationCapability.Print("Authenticate: stripped Bearer prefix from Authorization header")
 	}
 	if value == "" {
 		logDelegationCapability.Print("Rejected delegation-control request: missing capability")
@@ -66,5 +69,6 @@ func (c *ControlCapability) Authenticate(authorizationHeader string) error {
 		logDelegationCapability.Print("Rejected delegation-control request: capability mismatch")
 		return fmt.Errorf("invalid delegation-control capability")
 	}
+	logDelegationCapability.Print("Authenticate: delegation-control capability accepted")
 	return nil
 }
