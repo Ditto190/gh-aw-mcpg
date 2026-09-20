@@ -68,6 +68,5 @@ func (c *ControlCapability) Authenticate(authorizationHeader string) error {
 		logDelegationCapability.Print("Rejected delegation-control request: capability mismatch")
 		return fmt.Errorf("invalid delegation-control capability")
 	}
-	logDelegationCapability.Print("Authenticate: delegation-control capability accepted")
 	return nil
 }
