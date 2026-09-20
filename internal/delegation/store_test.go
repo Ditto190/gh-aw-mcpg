@@ -302,7 +302,7 @@ func TestAuthorize_RejectsRecoveryIncompleteAndExpiredEnvelope(t *testing.T) {
 	store.mu.Lock()
 	store.recoveryIncomplete = true
 	store.mu.Unlock()
-	assert.Error(t, store.Authorize(created.ExecutorBearer, req.RunID, req.EnclaveBackend, req.Repository, "issue_read"), "authorize must fail closed while recovery is incomplete")
+	require.Error(t, store.Authorize(created.ExecutorBearer, req.RunID, req.EnclaveBackend, req.Repository, "issue_read"), "authorize must fail closed while recovery is incomplete")
 	store.markReconciled()
 
 	store.mu.Lock()
