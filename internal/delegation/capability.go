@@ -58,7 +58,6 @@ func (c *ControlCapability) Authenticate(authorizationHeader string) error {
 	value := authorizationHeader
 	if after, ok := strings.CutPrefix(authorizationHeader, "Bearer "); ok {
 		value = after
-		logDelegationCapability.Print("Authenticate: stripped Bearer prefix from Authorization header")
 	}
 	if value == "" {
 		logDelegationCapability.Print("Rejected delegation-control request: missing capability")
