@@ -130,7 +130,8 @@ fn apply_governance_labels(
     };
 
     if scope.is_empty() {
-        *secrecy = apply_repo_visibility_secrecy(owner, repo, repo_id, secrecy.clone(), ctx);
+        *secrecy =
+            apply_repo_visibility_secrecy(owner, repo, repo_id, std::mem::take(secrecy), ctx);
         *integrity = writer_integrity(repo_id, ctx);
     } else {
         *secrecy = private_scope_label(&scope);
@@ -164,7 +165,13 @@ fn apply_dispatch_repo_labels(
     *secrecy = if effective_owner.is_empty() || effective_repo.is_empty() {
         policy_private_scope_label("", "", scope, ctx)
     } else {
-        apply_repo_visibility_secrecy(effective_owner, effective_repo, scope, secrecy.clone(), ctx)
+        apply_repo_visibility_secrecy(
+            effective_owner,
+            effective_repo,
+            scope,
+            std::mem::take(secrecy),
+            ctx,
+        )
     };
     *integrity = writer_integrity(scope, ctx);
 }
@@ -916,7 +923,7 @@ pub fn apply_tool_labels(
         }
 
         // === Repository creation/fork (user/org-scoped writes) ===
-        "create_repository" | "fork_repository" => {
+        tool_names::CREATE_REPOSITORY | tool_names::FORK_REPOSITORY => {
             // Creating/forking repositories is account-scoped and does not return repo content.
             // S = public (empty); I = writer(github)
             secrecy = vec![];
@@ -1035,7 +1042,7 @@ pub fn apply_tool_labels(
         }
 
         // === Star/unstar operations (account-scoped writes) ===
-        "star_repository" | "unstar_repository" => {
+        tool_names::STAR_REPOSITORY | tool_names::UNSTAR_REPOSITORY => {
             // Starring changes authenticated-user affinity state.
             // S = private:user; I = writer(user)
             secrecy = private_user_label();
@@ -2823,7 +2830,7 @@ mod tests {
         // Seed a non-empty secrecy label to verify the match arm actively clears it.
         let inherited_secrecy = vec!["private:some/repo".to_string()];
 
-        for op in &["create_repository", "fork_repository"] {
+        for op in &[tool_names::CREATE_REPOSITORY, tool_names::FORK_REPOSITORY] {
             let (secrecy, integrity, _desc) = super::apply_tool_labels(
                 op,
                 &args,
