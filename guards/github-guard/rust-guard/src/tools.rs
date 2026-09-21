@@ -26,7 +26,7 @@ pub const WRITE_OPERATIONS: &[&str] = &[
     tool_names::CREATE_REPOSITORY,
     "create_repository_ruleset", // creates a repository ruleset
     "delete_file",
-    "delete_repository",
+    tool_names::DELETE_REPOSITORY,
     tool_names::DISCUSSION_COMMENT_WRITE, // creates or edits GitHub Discussion comments
     "dismiss_notification",
     tool_names::FORK_REPOSITORY,
@@ -555,7 +555,7 @@ mod tests {
             "copy_project",
             "delete_issue",
             "delete_project",
-            "delete_repository",
+            tool_names::DELETE_REPOSITORY,
             "link_project",
             "unlink_project",
             "update_issue_comment",
@@ -753,7 +753,9 @@ mod tests {
     #[test]
     fn test_release_issue_comment_and_repository_write_tools_are_write_operations() {
         assert!(
-            WRITE_OPERATIONS.binary_search(&"delete_repository").is_ok(),
+            WRITE_OPERATIONS
+                .binary_search(&tool_names::DELETE_REPOSITORY)
+                .is_ok(),
             "delete_repository must be explicitly listed in WRITE_OPERATIONS"
         );
         for op in &[
@@ -761,7 +763,7 @@ mod tests {
             "delete_issue",
             "delete_issue_comment",
             "delete_release",
-            "delete_repository",
+            tool_names::DELETE_REPOSITORY,
             "edit_release",
             "update_issue_comment",
             "upload_release_asset",

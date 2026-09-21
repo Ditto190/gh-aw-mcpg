@@ -286,6 +286,7 @@ pub mod tool_names {
     pub const STAR_REPOSITORY: &str = "star_repository";
     pub const UNSTAR_REPOSITORY: &str = "unstar_repository";
     pub const CREATE_REPOSITORY: &str = "create_repository";
+    pub const DELETE_REPOSITORY: &str = "delete_repository";
     pub const FORK_REPOSITORY: &str = "fork_repository";
 }
 
