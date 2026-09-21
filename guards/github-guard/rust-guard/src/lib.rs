@@ -451,9 +451,11 @@ fn infer_scope_for_baseline<'a>(
         | "mark_all_notifications_read"
         | "manage_notification_subscription"
         | "manage_repository_notification_subscription"
-        | "star_repository"
-        | "unstar_repository" => Cow::Borrowed(scope_names::USER),
-        "create_repository" | "fork_repository" => Cow::Borrowed(scope_names::GITHUB),
+        | tool_names::STAR_REPOSITORY
+        | tool_names::UNSTAR_REPOSITORY => Cow::Borrowed(scope_names::USER),
+        tool_names::CREATE_REPOSITORY | tool_names::FORK_REPOSITORY => {
+            Cow::Borrowed(scope_names::GITHUB)
+        }
         "create_codespace" | "update_codespace" | "delete_codespace" | "stop_codespace" => {
             Cow::Borrowed(scope_names::USER)
         }
@@ -1343,7 +1345,7 @@ mod tests {
     #[test]
     fn infer_scope_for_baseline_borrows_github_scope_for_repo_creation() {
         let tool_args = json!({});
-        let inferred = infer_scope_for_baseline("create_repository", &tool_args, "");
+        let inferred = infer_scope_for_baseline(tool_names::CREATE_REPOSITORY, &tool_args, "");
 
         assert!(matches!(inferred, Cow::Borrowed(scope_names::GITHUB)));
     }
@@ -1459,7 +1461,7 @@ mod tests {
     #[test]
     fn infer_scope_for_baseline_uses_github_scope_for_repo_creation_tools() {
         let tool_args = json!({ "name": "new-repo" });
-        for tool in &["create_repository", "fork_repository"] {
+        for tool in &[tool_names::CREATE_REPOSITORY, tool_names::FORK_REPOSITORY] {
             let inferred = infer_scope_for_baseline(tool, &tool_args, "");
             assert_eq!(
                 inferred,
@@ -1508,7 +1510,7 @@ mod tests {
         let tool_args = json!({ "owner": "github", "repo": "gh-aw-mcpg" });
         let repo_id = "github/gh-aw-mcpg";
 
-        for tool in &["star_repository", "unstar_repository"] {
+        for tool in &[tool_names::STAR_REPOSITORY, tool_names::UNSTAR_REPOSITORY] {
             let (_, integrity, _) = labels::apply_tool_labels(
                 tool,
                 &tool_args,
@@ -1535,7 +1537,7 @@ mod tests {
     fn repo_creation_integrity_preserved_after_baseline() {
         let ctx = PolicyContext::default();
         let tool_args = json!({ "name": "new-repo" });
-        for tool in &["create_repository", "fork_repository"] {
+        for tool in &[tool_names::CREATE_REPOSITORY, tool_names::FORK_REPOSITORY] {
             let (_, integrity, _) = labels::apply_tool_labels(
                 tool,
                 &tool_args,

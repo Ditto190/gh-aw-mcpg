@@ -283,6 +283,10 @@ pub mod tool_names {
     pub const RENAME_REPOSITORY: &str = "rename_repository";
     pub const TRANSFER_REPOSITORY: &str = "transfer_repository";
     pub const GET_JOB_LOGS: &str = "get_job_logs";
+    pub const STAR_REPOSITORY: &str = "star_repository";
+    pub const UNSTAR_REPOSITORY: &str = "unstar_repository";
+    pub const CREATE_REPOSITORY: &str = "create_repository";
+    pub const FORK_REPOSITORY: &str = "fork_repository";
 }
 
 /// UI metadata methods that are scoped to a specific repository.
