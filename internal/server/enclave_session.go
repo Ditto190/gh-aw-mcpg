@@ -1,5 +1,7 @@
 package server
 
+import "github.com/github/gh-aw-mcpg/internal/util"
+
 // isEnclaveSession reports whether sessionID belongs to an enclave-scoped identity.
 //
 // Two identities are enclave-scoped: an agent whose per-agent policy sets
@@ -12,7 +14,10 @@ func (us *UnifiedServer) isEnclaveSession(sessionID string) bool {
 		return false
 	}
 	if us.isDelegatedExecutorSession(sessionID) {
+		logUnified.Printf("isEnclaveSession: session=%s is a delegated executor, treating as enclave-scoped", util.FormatSessionIDForLog(sessionID))
 		return true
 	}
-	return us.cfg.AgentPolicyFor(sessionID).IsEnclave()
+	enclave := us.cfg.AgentPolicyFor(sessionID).IsEnclave()
+	logUnified.Printf("isEnclaveSession: session=%s, agentPolicyEnclave=%v", util.FormatSessionIDForLog(sessionID), enclave)
+	return enclave
 }
