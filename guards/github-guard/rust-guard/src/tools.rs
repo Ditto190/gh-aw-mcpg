@@ -23,13 +23,13 @@ pub const WRITE_OPERATIONS: &[&str] = &[
     "create_or_update_file",
     "create_pull_request",
     "create_pull_request_with_copilot",
-    "create_repository",
+    tool_names::CREATE_REPOSITORY,
     "create_repository_ruleset", // creates a repository ruleset
     "delete_file",
     "delete_repository",
     tool_names::DISCUSSION_COMMENT_WRITE, // creates or edits GitHub Discussion comments
     "dismiss_notification",
-    "fork_repository",
+    tool_names::FORK_REPOSITORY,
     "label_write",
     "mark_all_notifications_read",
     "projects_write",
@@ -38,8 +38,8 @@ pub const WRITE_OPERATIONS: &[&str] = &[
     tool_names::REMOVE_ISSUE_REACTION, // DELETE /repos/.../issues/{number}/reactions/{reaction_id}
     tool_names::REMOVE_PULL_REQUEST_REVIEW_COMMENT_REACTION, // DELETE /repos/.../pulls/comments/{id}/reactions/{reaction_id}
     "request_copilot_review",
-    "star_repository",
-    "unstar_repository",
+    tool_names::STAR_REPOSITORY,
+    tool_names::UNSTAR_REPOSITORY,
 ];
 
 /// Synthetic write operations reachable through GitHub CLI but not current upstream MCP tools.
