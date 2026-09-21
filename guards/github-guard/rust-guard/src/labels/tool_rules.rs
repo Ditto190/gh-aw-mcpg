@@ -835,7 +835,7 @@ pub fn apply_tool_labels(
         | "delete_issue"
         | "update_issue_comment"
         | "delete_issue_comment"
-        | "delete_repository"
+        | tool_names::DELETE_REPOSITORY
         | "create_release"
         | "edit_release"
         | "delete_release"

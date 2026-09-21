@@ -5828,7 +5828,7 @@ mod tests {
         });
         let repo_id = "github/copilot";
 
-        for op in &["delete_issue", "delete_repository"] {
+        for op in &["delete_issue", constants::tool_names::DELETE_REPOSITORY] {
             let (secrecy, integrity, _desc) =
                 apply_tool_labels(op, &tool_args, repo_id, vec![], vec![], String::new(), &ctx);
 
