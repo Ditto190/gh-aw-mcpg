@@ -305,6 +305,37 @@ func (f *failingReadCloser) Close() error {
 	return nil
 }
 
+// TestCollaboratorSelectorsForLog pins the exported cross-package wrapper
+// around collaboratorLogFields. Other packages (e.g. internal/server) call
+// this entry point directly rather than the unexported helper, so it needs
+// its own coverage independent of collaboratorLogFields's own tests.
+func TestCollaboratorSelectorsForLog(t *testing.T) {
+	t.Run("returns raw values when not sensitive", func(t *testing.T) {
+		owner, repo, username := CollaboratorSelectorsForLog(false, "org", "repo", "user")
+		assert.Equal(t, "org", owner)
+		assert.Equal(t, "repo", repo)
+		assert.Equal(t, "user", username)
+	})
+
+	t.Run("hashes values with per-field salts when sensitive", func(t *testing.T) {
+		owner, repo, username := CollaboratorSelectorsForLog(true, "private-org", "private-repo", "eve")
+		assert.Equal(t, util.HashForLog("private-org", 16, "owner:"), owner)
+		assert.Equal(t, util.HashForLog("private-repo", 16, "repo:"), repo)
+		assert.Equal(t, util.HashForLog("eve", 16, "user:"), username)
+		assert.NotContains(t, owner+repo+username, "private-org")
+		assert.NotContains(t, owner+repo+username, "private-repo")
+		assert.NotContains(t, owner+repo+username, "eve")
+	})
+
+	t.Run("delegates to the same redaction convention as collaboratorLogFields", func(t *testing.T) {
+		exportedOwner, exportedRepo, exportedUsername := CollaboratorSelectorsForLog(true, "org", "repo", "user")
+		internalOwner, internalRepo, internalUsername := collaboratorLogFields(true, "org", "repo", "user")
+		assert.Equal(t, internalOwner, exportedOwner)
+		assert.Equal(t, internalRepo, exportedRepo)
+		assert.Equal(t, internalUsername, exportedUsername)
+	})
+}
+
 func TestCollaboratorLogFields(t *testing.T) {
 	t.Run("returns raw values when not sensitive", func(t *testing.T) {
 		owner, repo, username := collaboratorLogFields(false, "org", "repo", "user")
