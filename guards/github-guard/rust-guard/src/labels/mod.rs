@@ -2802,7 +2802,7 @@ mod tests {
         let tool_args = json!({ "owner": "github", "repo": "copilot" });
 
         let (secrecy, integrity, _desc) = apply_tool_labels(
-            "list_discussions",
+            tool_names::LIST_DISCUSSIONS,
             &tool_args,
             "github/copilot",
             vec![],
@@ -2839,7 +2839,7 @@ mod tests {
         });
 
         let (secrecy, integrity, _desc) = apply_tool_labels(
-            "get_discussion",
+            tool_names::GET_DISCUSSION,
             &tool_args,
             "github/copilot",
             vec![],
@@ -2866,7 +2866,7 @@ mod tests {
         });
 
         let (secrecy, integrity, _desc) = apply_tool_labels(
-            "get_discussion_comments",
+            tool_names::GET_DISCUSSION_COMMENTS,
             &tool_args,
             "github/copilot",
             vec![],
@@ -2889,7 +2889,7 @@ mod tests {
         let tool_args = json!({ "owner": "github", "repo": "copilot" });
 
         let (secrecy, integrity, _desc) = apply_tool_labels(
-            "list_discussion_categories",
+            tool_names::LIST_DISCUSSION_CATEGORIES,
             &tool_args,
             "github/copilot",
             vec![],
@@ -5909,11 +5909,11 @@ mod tests {
         });
 
         for tool_name in &[
-            "cancel_workflow_run",
-            "force_cancel_workflow_run",
-            "rerun_workflow_run",
-            "rerun_failed_jobs",
-            "rerun_workflow_job",
+            tool_names::CANCEL_WORKFLOW_RUN,
+            tool_names::FORCE_CANCEL_WORKFLOW_RUN,
+            tool_names::RERUN_WORKFLOW_RUN,
+            tool_names::RERUN_FAILED_JOBS,
+            tool_names::RERUN_WORKFLOW_JOB,
         ] {
             let (_secrecy, integrity, _desc) = apply_tool_labels(
                 tool_name,
