@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/github/gh-aw-mcpg/internal/config"
@@ -15,14 +16,29 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// toolCallLogLines returns only the log lines emitted by the
+// registerToolsFromBackendContext handler closure itself (the "MCP tool
+// call ..." lines), filtering out unrelated lines logged by other
+// middleware (e.g. the payload jq middleware also logs the raw backend
+// error at debug level for its own bookkeeping). This keeps assertions
+// about redaction focused on the behavior under test.
+func toolCallLogLines(logOutput string) string {
+	var kept []string
+	for _, line := range strings.Split(logOutput, "\n") {
+		if strings.Contains(line, "MCP tool call") || strings.Contains(line, "Failed to unmarshal tool arguments") {
+			kept = append(kept, line)
+		}
+	}
+	return strings.Join(kept, "\n")
+}
+
 // TestRegisterToolsFromBackend_HandlerInvocation_Redaction exercises the
-// argument-parse-error, request-log, requireSession-failure, and
-// response-log branches of the tool handler closure created inside
-// registerToolsFromBackendContext (internal/server/tool_registry.go), under
-// both the normal (non-redacted) and enclave-session (redacted) code paths.
-// These branches are otherwise only reached indirectly via the MCP
-// transport in integration tests and were previously uncovered by unit
-// tests.
+// argument-parse-error, request-log, and response-log branches of the tool
+// handler closure created inside registerToolsFromBackendContext
+// (internal/server/tool_registry.go), under both the normal (non-redacted)
+// and enclave-session (redacted) code paths. These branches are otherwise
+// only reached indirectly via the MCP transport in integration tests and
+// were previously uncovered by unit tests.
 func TestRegisterToolsFromBackend_HandlerInvocation_Redaction(t *testing.T) {
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req map[string]interface{}
@@ -118,11 +134,19 @@ func TestRegisterToolsFromBackend_HandlerInvocation_Redaction(t *testing.T) {
 				Arguments: json.RawMessage(`{not valid json`),
 			},
 		}
-		result, data, err := echoTool.Handler(ctx, req, nil)
+		var result *sdk.CallToolResult
+		var data interface{}
+		var err error
+		logOutput := captureServerLog(t, func() {
+			result, data, err = echoTool.Handler(ctx, req, nil)
+		})
+		handlerLog := toolCallLogLines(logOutput)
 		require.Error(err)
 		require.NotNil(result)
 		assert.True(result.IsError)
 		assert.Nil(data)
+		assert.NotContains(handlerLog, "looking for value", "raw parse-error text must not appear in an enclave-session log")
+		assert.Contains(handlerLog, "error hmac:", "the redacted error digest marker must be present")
 	})
 
 	t.Run("valid arguments under enclave session take the redacted request/response log branches", func(t *testing.T) {
@@ -133,14 +157,23 @@ func TestRegisterToolsFromBackend_HandlerInvocation_Redaction(t *testing.T) {
 		req := &sdk.CallToolRequest{
 			Params: &sdk.CallToolParamsRaw{
 				Name:      "redaction-backend___echo",
-				Arguments: json.RawMessage(`{"message":"hi"}`),
+				Arguments: json.RawMessage(`{"message":"top-secret-request-payload"}`),
 			},
 		}
-		result, data, err := echoTool.Handler(ctx, req, nil)
+		var result *sdk.CallToolResult
+		var data interface{}
+		var err error
+		logOutput := captureServerLog(t, func() {
+			result, data, err = echoTool.Handler(ctx, req, nil)
+		})
+		handlerLog := toolCallLogLines(logOutput)
 		require.NoError(err)
 		require.NotNil(result)
 		assert.False(result.IsError)
 		assert.NotNil(data)
+		assert.NotContains(handlerLog, "top-secret-request-payload", "raw enclave request payload must not appear in the log")
+		assert.NotContains(handlerLog, "echoed", "raw enclave response payload must not appear in the log")
+		assert.Contains(handlerLog, "[REDACTED enclave payload", "the redacted payload marker must be present")
 	})
 
 	t.Run("backend error under enclave session takes the redacted error-log branch", func(t *testing.T) {
@@ -154,11 +187,19 @@ func TestRegisterToolsFromBackend_HandlerInvocation_Redaction(t *testing.T) {
 				Arguments: json.RawMessage(`{}`),
 			},
 		}
-		result, data, err := boomTool.Handler(ctx, req, nil)
+		var result *sdk.CallToolResult
+		var data interface{}
+		var err error
+		logOutput := captureServerLog(t, func() {
+			result, data, err = boomTool.Handler(ctx, req, nil)
+		})
+		handlerLog := toolCallLogLines(logOutput)
 		require.Error(err)
 		require.NotNil(result)
 		assert.True(result.IsError)
 		assert.Nil(data)
+		assert.NotContains(handlerLog, "simulated backend failure", "raw backend error text must not appear in an enclave-session log")
+		assert.Contains(handlerLog, "error hmac:", "the redacted error digest marker must be present")
 	})
 
 	t.Run("backend error without enclave session takes the non-redacted error-log branch", func(t *testing.T) {
@@ -172,32 +213,49 @@ func TestRegisterToolsFromBackend_HandlerInvocation_Redaction(t *testing.T) {
 				Arguments: json.RawMessage(`{}`),
 			},
 		}
-		result, data, err := boomTool.Handler(ctx, req, nil)
+		var result *sdk.CallToolResult
+		var data interface{}
+		var err error
+		logOutput := captureServerLog(t, func() {
+			result, data, err = boomTool.Handler(ctx, req, nil)
+		})
+		handlerLog := toolCallLogLines(logOutput)
 		require.Error(err)
 		require.NotNil(result)
 		assert.True(result.IsError)
 		assert.Nil(data)
+		assert.Contains(handlerLog, "simulated backend failure", "non-enclave sessions must log the raw backend error text")
 	})
 
 	t.Run("global payload redaction flag also takes the redacted response-log branch", func(t *testing.T) {
 		assert := assert.New(t)
 		require := require.New(t)
 
+		previousRedaction := sanitize.PayloadRedactionEnabled()
 		sanitize.SetPayloadRedaction(true)
-		t.Cleanup(func() { sanitize.SetPayloadRedaction(false) })
+		t.Cleanup(func() { sanitize.SetPayloadRedaction(previousRedaction) })
 
 		ctx := context.WithValue(context.Background(), SessionIDContextKey, "global-redaction-session")
 		req := &sdk.CallToolRequest{
 			Params: &sdk.CallToolParamsRaw{
 				Name:      "redaction-backend___echo",
-				Arguments: json.RawMessage(`{"message":"hi"}`),
+				Arguments: json.RawMessage(`{"message":"top-secret-global-payload"}`),
 			},
 		}
-		result, data, err := echoTool.Handler(ctx, req, nil)
+		var result *sdk.CallToolResult
+		var data interface{}
+		var err error
+		logOutput := captureServerLog(t, func() {
+			result, data, err = echoTool.Handler(ctx, req, nil)
+		})
+		handlerLog := toolCallLogLines(logOutput)
 		require.NoError(err)
 		require.NotNil(result)
 		assert.False(result.IsError)
 		assert.NotNil(data)
+		assert.NotContains(handlerLog, "top-secret-global-payload", "raw request payload must not appear in the log when the global redaction flag is set")
+		assert.NotContains(handlerLog, "echoed", "raw response payload must not appear in the log when the global redaction flag is set")
+		assert.Contains(handlerLog, "[REDACTED enclave payload", "the redacted payload marker must be present")
 	})
 }
 
@@ -282,8 +340,15 @@ func TestRegisterToolsFromBackend_ToolResponseFilterWrapsHandler(t *testing.T) {
 			Arguments: json.RawMessage(`{}`),
 		},
 	}
-	result, _, err := tool.Handler(ctx, req, nil)
+	result, data, err := tool.Handler(ctx, req, nil)
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	assert.False(t, result.IsError)
+
+	// The jq filter ".items" must replace the raw backend result (whose
+	// "content" text was "raw result") with just the "items" array.
+	dataJSON, marshalErr := json.Marshal(data)
+	require.NoError(t, marshalErr)
+	assert.JSONEq(t, `["a","b","c"]`, string(dataJSON))
+	assert.NotContains(t, string(dataJSON), "raw result", "the unfiltered backend content must not survive the jq filter")
 }
