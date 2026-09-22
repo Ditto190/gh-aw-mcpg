@@ -183,13 +183,16 @@ func (us *UnifiedServer) requireGuardPolicyIfGuardEnabled(serverID string, g gua
 // otherwise let guarded source labels reach an unconfigured safe-outputs sink.
 func (us *UnifiedServer) validateSafeOutputsGuards() error {
 	if !us.enableDIFC || us.Evaluator.GetMode() != difc.EnforcementStrict || !us.guardRegistry.HasNonNoopSourceGuard() {
+		logGuardInit.Print("Skipping safe-outputs guard validation: DIFC disabled, not strict mode, or no non-noop source guard")
 		return nil
 	}
 	for _, serverID := range us.launcher.ServerIDs() {
 		if guard.IsSafeOutputsServer(serverID) && us.guardRegistry.Get(serverID).Name() == "noop" {
+			logGuardInit.Printf("Safe-outputs guard validation failed: serverID=%s has noop guard while strict DIFC sources are configured", serverID)
 			return fmt.Errorf("safe-outputs server %q requires a write-sink guard policy when guarded DIFC sources are configured", serverID)
 		}
 	}
+	logGuardInit.Print("Safe-outputs guard validation passed")
 	return nil
 }
 
@@ -218,6 +221,8 @@ func (us *UnifiedServer) guardForSession(ctx context.Context, sessionID, serverI
 		return instance, nil
 	}
 
+	logGuardInit.Printf("Creating isolated guard session instance: session=%s, serverID=%s, template=%s",
+		util.HashIdentifierForLog(sessionID), serverID, template.Name())
 	instance, err := guard.NewSessionGuard(ctx, template)
 	if err != nil {
 		return nil, err
@@ -234,6 +239,7 @@ func (us *UnifiedServer) closeSessionGuards(ctx context.Context) {
 	}
 	us.sessionMu.RUnlock()
 
+	logGuardInit.Printf("Closing isolated guard instances for %d session(s)", len(sessions))
 	for _, session := range sessions {
 		session.guardMu.Lock()
 		for serverID, instance := range session.guardInstances {
