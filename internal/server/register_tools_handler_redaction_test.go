@@ -21,7 +21,10 @@ import (
 // call ..." lines), filtering out unrelated lines logged by other
 // middleware (e.g. the payload jq middleware also logs the raw backend
 // error at debug level for its own bookkeeping). This keeps assertions
-// about redaction focused on the behavior under test.
+// about redaction focused on the behavior under test. Callers must pair
+// this with a require.NotEmpty check on the result so a wording change to
+// the filtered log messages fails the test loudly instead of silently
+// matching zero lines.
 func toolCallLogLines(logOutput string) string {
 	var kept []string
 	for _, line := range strings.Split(logOutput, "\n") {
@@ -141,6 +144,7 @@ func TestRegisterToolsFromBackend_HandlerInvocation_Redaction(t *testing.T) {
 			result, data, err = echoTool.Handler(ctx, req, nil)
 		})
 		handlerLog := toolCallLogLines(logOutput)
+		require.NotEmpty(handlerLog, "expected at least one tool-call log line; log message text may have drifted from toolCallLogLines' filter")
 		require.Error(err)
 		require.NotNil(result)
 		assert.True(result.IsError)
@@ -167,6 +171,7 @@ func TestRegisterToolsFromBackend_HandlerInvocation_Redaction(t *testing.T) {
 			result, data, err = echoTool.Handler(ctx, req, nil)
 		})
 		handlerLog := toolCallLogLines(logOutput)
+		require.NotEmpty(handlerLog, "expected at least one tool-call log line; log message text may have drifted from toolCallLogLines' filter")
 		require.NoError(err)
 		require.NotNil(result)
 		assert.False(result.IsError)
@@ -194,6 +199,7 @@ func TestRegisterToolsFromBackend_HandlerInvocation_Redaction(t *testing.T) {
 			result, data, err = boomTool.Handler(ctx, req, nil)
 		})
 		handlerLog := toolCallLogLines(logOutput)
+		require.NotEmpty(handlerLog, "expected at least one tool-call log line; log message text may have drifted from toolCallLogLines' filter")
 		require.Error(err)
 		require.NotNil(result)
 		assert.True(result.IsError)
@@ -220,6 +226,7 @@ func TestRegisterToolsFromBackend_HandlerInvocation_Redaction(t *testing.T) {
 			result, data, err = boomTool.Handler(ctx, req, nil)
 		})
 		handlerLog := toolCallLogLines(logOutput)
+		require.NotEmpty(handlerLog, "expected at least one tool-call log line; log message text may have drifted from toolCallLogLines' filter")
 		require.Error(err)
 		require.NotNil(result)
 		assert.True(result.IsError)
@@ -249,6 +256,7 @@ func TestRegisterToolsFromBackend_HandlerInvocation_Redaction(t *testing.T) {
 			result, data, err = echoTool.Handler(ctx, req, nil)
 		})
 		handlerLog := toolCallLogLines(logOutput)
+		require.NotEmpty(handlerLog, "expected at least one tool-call log line; log message text may have drifted from toolCallLogLines' filter")
 		require.NoError(err)
 		require.NotNil(result)
 		assert.False(result.IsError)
