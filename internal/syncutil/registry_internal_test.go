@@ -24,7 +24,7 @@ func TestRegistryGetOrCreateDoubleCheckPreventsRedundantCreate(t *testing.T) {
 	registry := NewRegistry[string, int]()
 
 	var createCount atomic.Int32
-	missed := make(chan struct{}, 2)
+	initialLookups := make(chan bool, 2)
 	release := make(chan struct{})
 	results := make(chan int, 2)
 	var releaseOnce sync.Once
@@ -32,19 +32,20 @@ func TestRegistryGetOrCreateDoubleCheckPreventsRedundantCreate(t *testing.T) {
 
 	for range 2 {
 		go func() {
-			results <- registry.getOrCreate("key", func() int {
+			_, ok := registry.Get("key")
+			initialLookups <- ok
+			<-release
+			results <- registry.getOrCreateAfterMiss("key", func() int {
 				createCount.Add(1)
 				return 42
-			}, func() {
-				missed <- struct{}{}
-				<-release
 			})
 		}()
 	}
 
 	for i := 0; i < 2; i++ {
 		select {
-		case <-missed:
+		case ok := <-initialLookups:
+			assert.False(ok)
 		case <-time.After(time.Second):
 			require.FailNow("timed out waiting for both goroutines to observe the initial miss")
 		}
