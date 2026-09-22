@@ -45,6 +45,8 @@ func (r *Registry[K, V]) GetOrCreate(key K, create func() V) V {
 	return r.getOrCreate(key, create, nil)
 }
 
+// getOrCreate invokes afterMiss, when non-nil, after the initial read misses
+// and before acquiring the write lock. Tests use it to coordinate lock races.
 func (r *Registry[K, V]) getOrCreate(key K, create func() V, afterMiss func()) V {
 	r.mu.RLock()
 	value, ok := r.entries[key]

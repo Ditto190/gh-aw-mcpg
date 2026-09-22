@@ -5,6 +5,7 @@
 package syncutil
 
 import (
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -26,6 +27,8 @@ func TestRegistryGetOrCreateDoubleCheckPreventsRedundantCreate(t *testing.T) {
 	missed := make(chan struct{}, 2)
 	release := make(chan struct{})
 	results := make(chan int, 2)
+	var releaseOnce sync.Once
+	defer releaseOnce.Do(func() { close(release) })
 
 	for range 2 {
 		go func() {
@@ -47,7 +50,7 @@ func TestRegistryGetOrCreateDoubleCheckPreventsRedundantCreate(t *testing.T) {
 		}
 	}
 
-	close(release)
+	releaseOnce.Do(func() { close(release) })
 
 	for i := 0; i < 2; i++ {
 		select {
