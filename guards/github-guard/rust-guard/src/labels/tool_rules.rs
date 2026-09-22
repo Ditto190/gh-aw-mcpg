@@ -543,15 +543,15 @@ pub fn apply_tool_labels(
         // === Repo-scoped resources: visibility-inherited secrecy, approved integrity ===
         // S = inherits from repo visibility; I = approved (writer-level)
         "actions_list"
-        | "get_discussion"
-        | "get_discussion_comments"
+        | tool_names::GET_DISCUSSION
+        | tool_names::GET_DISCUSSION_COMMENTS
         | "get_label"
         | "get_repository"
         | "get_repository_tree"
         | "get_tag"
         | "list_branches"
-        | "list_discussion_categories"
-        | "list_discussions"
+        | tool_names::LIST_DISCUSSION_CATEGORIES
+        | tool_names::LIST_DISCUSSIONS
         | "list_label"
         | tool_names::LIST_RELEASES
         | "list_releases_ff_fields_param"
@@ -760,8 +760,8 @@ pub fn apply_tool_labels(
         | "add_comment_to_pending_review"
         | "add_reply_to_pull_request_comment"
         // Discussion
-        | "create_discussion" // gh discussion create — creates a discussion in a repository
-        | "edit_discussion" // gh discussion edit   — edits title/body/labels of a discussion
+        | tool_names::CREATE_DISCUSSION // gh discussion create — creates a discussion in a repository
+        | tool_names::EDIT_DISCUSSION // gh discussion edit   — edits title/body/labels of a discussion
         // Granular issue mutation
         | "close_issue"
         | "reopen_issue"
@@ -818,11 +818,11 @@ pub fn apply_tool_labels(
         | "run_workflow"
         | "delete_workflow_run_logs"
         | "delete_workflow_run"
-        | "cancel_workflow_run"
-        | "force_cancel_workflow_run"
-        | "rerun_workflow_run"
-        | "rerun_failed_jobs"
-        | "rerun_workflow_job"
+        | tool_names::CANCEL_WORKFLOW_RUN
+        | tool_names::FORCE_CANCEL_WORKFLOW_RUN
+        | tool_names::RERUN_WORKFLOW_RUN
+        | tool_names::RERUN_FAILED_JOBS
+        | tool_names::RERUN_WORKFLOW_JOB
         // Copilot / repo settings / revert
         | "assign_copilot_to_issue"
         | "assign_copilot_to_issue_with_intent"
@@ -2859,10 +2859,10 @@ mod tests {
         let repo_id = "octocat/hello-world";
 
         for op in &[
-            "get_discussion",
-            "get_discussion_comments",
-            "list_discussion_categories",
-            "list_discussions",
+            tool_names::GET_DISCUSSION,
+            tool_names::GET_DISCUSSION_COMMENTS,
+            tool_names::LIST_DISCUSSION_CATEGORIES,
+            tool_names::LIST_DISCUSSIONS,
         ] {
             let (secrecy, integrity, _desc) =
                 super::apply_tool_labels(op, &args, repo_id, vec![], vec![], String::new(), &ctx);

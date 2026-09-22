@@ -446,11 +446,11 @@ mod tests {
     fn test_workflow_run_cancel_rerun_are_write_operations() {
         for op in &[
             "delete_workflow_run",
-            "cancel_workflow_run",
-            "force_cancel_workflow_run",
-            "rerun_workflow_run",
-            "rerun_failed_jobs",
-            "rerun_workflow_job",
+            tool_names::CANCEL_WORKFLOW_RUN,
+            tool_names::FORCE_CANCEL_WORKFLOW_RUN,
+            tool_names::RERUN_WORKFLOW_RUN,
+            tool_names::RERUN_FAILED_JOBS,
+            tool_names::RERUN_WORKFLOW_JOB,
         ] {
             assert!(
                 is_write_operation(op),
@@ -847,7 +847,7 @@ mod tests {
             "close_issue",
             "close_pull_request",
             "create_codespace",
-            "create_discussion",
+            tool_names::CREATE_DISCUSSION,
             "create_linked_branch",
             "create_project_draft_item",
             "create_project_field",
@@ -864,7 +864,7 @@ mod tests {
             "delete_repository_autolink",
             "delete_ssh_key",
             "delete_workflow_run",
-            "edit_discussion",
+            tool_names::EDIT_DISCUSSION,
             "edit_release",
             "edit_repository",
             "lock_issue",
@@ -983,7 +983,7 @@ mod tests {
 
     #[test]
     fn test_create_and_edit_discussion_are_write_operations() {
-        for op in &["create_discussion", "edit_discussion"] {
+        for op in &[tool_names::CREATE_DISCUSSION, tool_names::EDIT_DISCUSSION] {
             assert!(
                 is_write_operation(op),
                 "{op} must be classified as a write operation"
