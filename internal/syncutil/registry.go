@@ -42,11 +42,18 @@ func (r *Registry[K, V]) Has(key K) bool {
 // create is called while the registry write lock is held and must not call a
 // method on the same Registry.
 func (r *Registry[K, V]) GetOrCreate(key K, create func() V) V {
+	return r.getOrCreate(key, create, nil)
+}
+
+func (r *Registry[K, V]) getOrCreate(key K, create func() V, afterMiss func()) V {
 	r.mu.RLock()
 	value, ok := r.entries[key]
 	r.mu.RUnlock()
 	if ok {
 		return value
+	}
+	if afterMiss != nil {
+		afterMiss()
 	}
 
 	r.mu.Lock()
