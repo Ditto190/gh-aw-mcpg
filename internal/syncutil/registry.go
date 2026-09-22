@@ -49,13 +49,18 @@ func (r *Registry[K, V]) GetOrCreate(key K, create func() V) V {
 		return value
 	}
 
+	return r.getOrCreateAfterMiss(key, create)
+}
+
+// getOrCreateAfterMiss performs the write-locked double-check after a read miss.
+func (r *Registry[K, V]) getOrCreateAfterMiss(key K, create func() V) V {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if value, ok = r.entries[key]; ok {
+	if value, ok := r.entries[key]; ok {
 		return value
 	}
 
-	value = create()
+	value := create()
 	r.entries[key] = value
 	return value
 }
