@@ -10,7 +10,7 @@ permissions:
   issues: read
   copilot-requests: write
 
-model: gpt-5.4
+model: gpt-5.6
 engine:
   id: copilot
 network:
