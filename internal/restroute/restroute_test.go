@@ -1,10 +1,13 @@
 package restroute
 
 import (
+	"os"
+	"os/exec"
 	"regexp"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestStripQuery(t *testing.T) {
@@ -82,4 +85,25 @@ func TestMatch(t *testing.T) {
 			assert.Equal(t, tt.want, Match(tt.path, pattern))
 		})
 	}
+}
+
+// TestStripQuery_DebugLoggingEnabled exercises the log.Enabled() debug-log
+// branch in StripQuery, which is otherwise never taken in normal test runs.
+// log is a package-level *logger.Logger whose enabled state is computed once
+// at package init time from the DEBUG environment variable present when the
+// test binary started, so t.Setenv cannot retroactively flip it. Instead this
+// test re-execs itself in a subprocess with DEBUG=* set beforehand, verifying
+// the debug branch runs without panicking and produces the expected result.
+func TestStripQuery_DebugLoggingEnabled(t *testing.T) {
+	if os.Getenv("GO_WANT_DEBUG_SUBPROCESS") == "1" {
+		require.True(t, log.Enabled(), "expected logger to be enabled when DEBUG=* is set before process start")
+		assert.Equal(t, "/repos/github/gh-aw/issues", StripQuery("/repos/github/gh-aw/issues?page=1"))
+		return
+	}
+
+	cmd := exec.Command(os.Args[0], "-test.run=TestStripQuery_DebugLoggingEnabled", "-test.v")
+	cmd.Env = append(os.Environ(), "GO_WANT_DEBUG_SUBPROCESS=1", "DEBUG=*")
+	out, err := cmd.CombinedOutput()
+	require.NoError(t, err, "subprocess output:\n%s", out)
+	assert.Contains(t, string(out), "PASS")
 }
