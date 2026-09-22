@@ -92,7 +92,7 @@ func TestRegisterToolsFromBackend_HandlerInvocation_Redaction(t *testing.T) {
 			_ = json.NewEncoder(w).Encode(map[string]interface{}{
 				"jsonrpc": "2.0", "id": req["id"],
 				"result": map[string]interface{}{
-					"content": []map[string]interface{}{{"type": "text", "text": "echoed"}},
+					"content": []map[string]interface{}{{"type": "text", "text": "echoed-response-sentinel-value"}},
 				},
 			})
 		}
@@ -172,7 +172,7 @@ func TestRegisterToolsFromBackend_HandlerInvocation_Redaction(t *testing.T) {
 		assert.False(result.IsError)
 		assert.NotNil(data)
 		assert.NotContains(handlerLog, "top-secret-request-payload", "raw enclave request payload must not appear in the log")
-		assert.NotContains(handlerLog, "echoed", "raw enclave response payload must not appear in the log")
+		assert.NotContains(handlerLog, "echoed-response-sentinel-value", "raw enclave response payload must not appear in the log")
 		assert.Contains(handlerLog, "[REDACTED enclave payload", "the redacted payload marker must be present")
 	})
 
@@ -254,7 +254,7 @@ func TestRegisterToolsFromBackend_HandlerInvocation_Redaction(t *testing.T) {
 		assert.False(result.IsError)
 		assert.NotNil(data)
 		assert.NotContains(handlerLog, "top-secret-global-payload", "raw request payload must not appear in the log when the global redaction flag is set")
-		assert.NotContains(handlerLog, "echoed", "raw response payload must not appear in the log when the global redaction flag is set")
+		assert.NotContains(handlerLog, "echoed-response-sentinel-value", "raw response payload must not appear in the log when the global redaction flag is set")
 		assert.Contains(handlerLog, "[REDACTED enclave payload", "the redacted payload marker must be present")
 	})
 }
@@ -350,5 +350,4 @@ func TestRegisterToolsFromBackend_ToolResponseFilterWrapsHandler(t *testing.T) {
 	dataJSON, marshalErr := json.Marshal(data)
 	require.NoError(t, marshalErr)
 	assert.JSONEq(t, `["a","b","c"]`, string(dataJSON))
-	assert.NotContains(t, string(dataJSON), "raw result", "the unfiltered backend content must not survive the jq filter")
 }
