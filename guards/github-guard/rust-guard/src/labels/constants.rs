@@ -288,6 +288,17 @@ pub mod tool_names {
     pub const CREATE_REPOSITORY: &str = "create_repository";
     pub const DELETE_REPOSITORY: &str = "delete_repository";
     pub const FORK_REPOSITORY: &str = "fork_repository";
+    pub const GET_DISCUSSION: &str = "get_discussion";
+    pub const LIST_DISCUSSIONS: &str = "list_discussions";
+    pub const GET_DISCUSSION_COMMENTS: &str = "get_discussion_comments";
+    pub const LIST_DISCUSSION_CATEGORIES: &str = "list_discussion_categories";
+    pub const CREATE_DISCUSSION: &str = "create_discussion";
+    pub const EDIT_DISCUSSION: &str = "edit_discussion";
+    pub const CANCEL_WORKFLOW_RUN: &str = "cancel_workflow_run";
+    pub const FORCE_CANCEL_WORKFLOW_RUN: &str = "force_cancel_workflow_run";
+    pub const RERUN_WORKFLOW_RUN: &str = "rerun_workflow_run";
+    pub const RERUN_FAILED_JOBS: &str = "rerun_failed_jobs";
+    pub const RERUN_WORKFLOW_JOB: &str = "rerun_workflow_job";
 }
 
 /// UI metadata methods that are scoped to a specific repository.

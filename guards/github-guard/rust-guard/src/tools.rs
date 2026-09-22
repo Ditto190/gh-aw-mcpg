@@ -45,17 +45,17 @@ pub const WRITE_OPERATIONS: &[&str] = &[
 /// Synthetic write operations reachable through GitHub CLI but not current upstream MCP tools.
 pub const CLI_WRITE_OPERATIONS: &[&str] = &[
     // Keep sorted for binary_search correctness.
-    "add_deploy_key",               // gh repo deploy-key add — POST /repos/.../keys
-    "add_gpg_key",                  // gh gpg-key add — adds a user GPG signing key
-    "add_ssh_key",                  // gh ssh-key add — adds a user SSH auth/signing key
-    "archive_project_item",         // gh project item-archive — archives a Projects v2 item
-    tool_names::ARCHIVE_REPOSITORY, // gh repo archive — blocked: repo settings change unsupported
-    "cancel_workflow_run",          // gh run cancel — cancels an in-progress workflow run
-    "close_issue",                  // gh issue close
-    "close_pull_request",           // gh pr close
-    "copy_project",                 // gh project copy — creates a new Projects v2 board
-    "create_codespace",             // gh codespace create — POST /user/codespaces
-    "create_discussion",            // gh discussion create — creates a discussion in a repository
+    "add_deploy_key",                // gh repo deploy-key add — POST /repos/.../keys
+    "add_gpg_key",                   // gh gpg-key add — adds a user GPG signing key
+    "add_ssh_key",                   // gh ssh-key add — adds a user SSH auth/signing key
+    "archive_project_item",          // gh project item-archive — archives a Projects v2 item
+    tool_names::ARCHIVE_REPOSITORY,  // gh repo archive — blocked: repo settings change unsupported
+    tool_names::CANCEL_WORKFLOW_RUN, // gh run cancel — cancels an in-progress workflow run
+    "close_issue",                   // gh issue close
+    "close_pull_request",            // gh pr close
+    "copy_project",                  // gh project copy — creates a new Projects v2 board
+    "create_codespace",              // gh codespace create — POST /user/codespaces
+    tool_names::CREATE_DISCUSSION,   // gh discussion create — creates a discussion in a repository
     "create_linked_branch", // gh issue develop — creates a linked branch via GraphQL createLinkedBranch
     "create_project",       // gh project create — GraphQL createProjectV2
     "create_project_draft_item", // gh project item-create — adds a draft issue via GraphQL addProjectV2DraftIssue
@@ -79,11 +79,11 @@ pub const CLI_WRITE_OPERATIONS: &[&str] = &[
     tool_names::DELETE_VARIABLE, // gh variable delete — deletes org/repo/environment Actions variables
     "delete_workflow_run",       // gh run delete — deletes a workflow run record
     "disable_workflow",          // gh workflow disable
-    "edit_discussion",           // gh discussion edit   — edits title/body/labels of a discussion
+    tool_names::EDIT_DISCUSSION, // gh discussion edit   — edits title/body/labels of a discussion
     "edit_release",              // PATCH /repos/.../releases/{id}
     "edit_repository",           // gh repo edit — can change visibility, security settings
     "enable_workflow",           // gh workflow enable
-    "force_cancel_workflow_run", // gh run cancel --force — force-cancels a workflow run
+    tool_names::FORCE_CANCEL_WORKFLOW_RUN, // gh run cancel --force — force-cancels a workflow run
     "link_project", // gh project link — links a Projects v2 board to a repository or team
     "lock_issue",   // gh issue lock
     "lock_pull_request", // gh pr lock
@@ -95,9 +95,9 @@ pub const CLI_WRITE_OPERATIONS: &[&str] = &[
     tool_names::RENAME_REPOSITORY, // gh repo rename — blocked: breaks clone URLs and integrations
     "reopen_issue", // gh issue reopen
     "reopen_pull_request", // gh pr reopen
-    "rerun_failed_jobs", // gh run rerun --failed — reruns only failed jobs
-    "rerun_workflow_job", // gh run rerun --job — reruns a specific job
-    "rerun_workflow_run", // gh run rerun — reruns a completed workflow run
+    tool_names::RERUN_FAILED_JOBS, // gh run rerun --failed — reruns only failed jobs
+    tool_names::RERUN_WORKFLOW_JOB, // gh run rerun --job — reruns a specific job
+    tool_names::RERUN_WORKFLOW_RUN, // gh run rerun — reruns a completed workflow run
     "revert_pull_request", // gh pr revert — creates revert branch + PR
     tool_names::SET_SECRET, // gh secret set
     tool_names::SET_VARIABLE, // gh variable set
@@ -446,11 +446,11 @@ mod tests {
     fn test_workflow_run_cancel_rerun_are_write_operations() {
         for op in &[
             "delete_workflow_run",
-            "cancel_workflow_run",
-            "force_cancel_workflow_run",
-            "rerun_workflow_run",
-            "rerun_failed_jobs",
-            "rerun_workflow_job",
+            tool_names::CANCEL_WORKFLOW_RUN,
+            tool_names::FORCE_CANCEL_WORKFLOW_RUN,
+            tool_names::RERUN_WORKFLOW_RUN,
+            tool_names::RERUN_FAILED_JOBS,
+            tool_names::RERUN_WORKFLOW_JOB,
         ] {
             assert!(
                 is_write_operation(op),
@@ -847,7 +847,7 @@ mod tests {
             "close_issue",
             "close_pull_request",
             "create_codespace",
-            "create_discussion",
+            tool_names::CREATE_DISCUSSION,
             "create_linked_branch",
             "create_project_draft_item",
             "create_project_field",
@@ -864,7 +864,7 @@ mod tests {
             "delete_repository_autolink",
             "delete_ssh_key",
             "delete_workflow_run",
-            "edit_discussion",
+            tool_names::EDIT_DISCUSSION,
             "edit_release",
             "edit_repository",
             "lock_issue",
@@ -983,7 +983,7 @@ mod tests {
 
     #[test]
     fn test_create_and_edit_discussion_are_write_operations() {
-        for op in &["create_discussion", "edit_discussion"] {
+        for op in &[tool_names::CREATE_DISCUSSION, tool_names::EDIT_DISCUSSION] {
             assert!(
                 is_write_operation(op),
                 "{op} must be classified as a write operation"
