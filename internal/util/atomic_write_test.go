@@ -65,6 +65,25 @@ func TestRemoveTempFile(t *testing.T) {
 	})
 }
 
+func TestSyncParentDir(t *testing.T) {
+	t.Run("succeeds for an existing directory", func(t *testing.T) {
+		filePath := filepath.Join(t.TempDir(), "state.json")
+
+		err := syncParentDir(filePath)
+
+		require.NoError(t, err)
+	})
+
+	t.Run("fails when the parent directory does not exist", func(t *testing.T) {
+		filePath := filepath.Join(t.TempDir(), "missing", "state.json")
+
+		err := syncParentDir(filePath)
+
+		require.Error(t, err)
+		assert.True(t, os.IsNotExist(err), "expected a not-exist error, got %v", err)
+	})
+}
+
 func tempFiles(t *testing.T, dir string) []string {
 	t.Helper()
 	entries, err := os.ReadDir(dir)

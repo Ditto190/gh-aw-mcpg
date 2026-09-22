@@ -16,6 +16,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// TestControlHandlerNilServerReturnsNotFound exercises the s == nil guard in
+// (*Server).ControlHandler: a nil receiver must still yield a safe handler
+// (not a panic) that hides the control endpoint, matching a disabled
+// delegation config.
+func TestControlHandlerNilServerReturnsNotFound(t *testing.T) {
+	var server *Server
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, delegationControlPath+"create-or-confirm", bytes.NewReader([]byte(`{}`)))
+	server.ControlHandler().ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusNotFound, rec.Code, "nil server's control handler must hide the endpoint rather than panic")
+}
+
 func TestDelegationControlCreateRequiresCapability(t *testing.T) {
 	envelope := &delegation.Envelope{
 		RunID:               "run",
