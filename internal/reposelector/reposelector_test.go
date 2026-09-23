@@ -132,3 +132,26 @@ func TestIsLegacyRepositorySelector(t *testing.T) {
 		})
 	}
 }
+
+func TestIsTraversalRepoName(t *testing.T) {
+	tests := []struct {
+		name     string
+		repoName string
+		want     bool
+	}{
+		{"single dot", ".", true},
+		{"double dot", "..", true},
+		{"embedded double dot", "foo..bar", true},
+		{"trailing double dot", "foo..", true},
+		{"ordinary name", "gh-aw", false},
+		{"single dot inside name", "gh.aw", false},
+		{"leading dot", ".github", false},
+		{"empty string", "", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, IsTraversalRepoName(tt.repoName), "IsTraversalRepoName(%q)", tt.repoName)
+		})
+	}
+}
