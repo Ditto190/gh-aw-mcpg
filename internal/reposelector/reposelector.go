@@ -6,9 +6,8 @@
 //
 //   - The canonical grammar (IsCanonicalOwner, IsCanonicalRepositorySelector)
 //     matches github/gh-aw-firewall ADR 0001 ("Agent enclave repository
-//     admission") exactly and mirrors GitHub's own login rules: an owner is
-//     1-39 characters of lowercase alphanumerics and hyphens, starting with an
-//     alphanumeric.
+//     admission") exactly: an owner is 1-39 characters of lowercase
+//     alphanumerics and hyphens, starting with an alphanumeric.
 //   - The legacy grammar (IsLegacyOwner, IsLegacyRepositorySelector)
 //     additionally permits '_' in the owner segment for backward compatibility
 //     with previously accepted guard-policy and enclave-policy inputs. New
