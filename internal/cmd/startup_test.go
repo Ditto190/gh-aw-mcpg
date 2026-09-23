@@ -108,10 +108,10 @@ func TestSetupTLSListener_SuccessCases(t *testing.T) {
 func TestSetupTLSListener_ListenFailure(t *testing.T) {
 	t.Parallel()
 
-occupyingListener, err := net.Listen("tcp", "127.0.0.1:0")
-require.NoError(t, err)
-defer occupyingListener.Close()
-occupiedAddr := occupyingListener.Addr().String()
+	occupyingListener, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	defer occupyingListener.Close()
+	occupiedAddr := occupyingListener.Addr().String()
 
 	listener, tlsEnabled, err := setupTLSListener(occupiedAddr, "", "", "")
 	require.Error(t, err)
