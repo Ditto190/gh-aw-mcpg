@@ -42,9 +42,9 @@ func TestServeHTTP_GraphQLBodyReadError(t *testing.T) {
 // early-return branch in ServeHTTP's introspection passthrough (handler.go
 // lines 145-147) when forwarding the introspection query to upstream fails.
 func TestServeHTTP_GraphQLIntrospectionUpstreamFailure(t *testing.T) {
-s := newTestServer(t, "http://unused")
-s.httpClient = &http.Client{Transport: &bodyErrorTransport{}}
-h := &proxyHandler{server: s}
+	s := newTestServer(t, "http://unused")
+	s.httpClient = &http.Client{Transport: &bodyErrorTransport{}}
+	h := &proxyHandler{server: s}
 
 	gqlBody := []byte(`{"query":"{ __schema { types { name } } }"}`)
 	req := httptest.NewRequest(http.MethodPost, "/graphql", nopReader(gqlBody))
