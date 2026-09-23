@@ -1,6 +1,7 @@
 package sanitize
 
 import (
+	"regexp"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -14,6 +15,18 @@ func withRedaction(t *testing.T) {
 	previous := PrivateSelectorRedactionEnabled()
 	SetPrivateSelectorRedaction(true)
 	t.Cleanup(func() { SetPrivateSelectorRedaction(previous) })
+}
+
+// TestReplaceKeyedWithoutCaptureGroup exercises replaceKeyed's fallback branch
+// for a pattern with no capture group. Every production regex passed to
+// replaceKeyed has a leading capture group that supplies the "<key>=" prefix
+// in the redacted output; this test pins the defensive len(groups) < 2 branch
+// that hashes the whole match instead when a caller's pattern has none.
+func TestReplaceKeyedWithoutCaptureGroup(t *testing.T) {
+	noGroupRe := regexp.MustCompile(`secret-\d+`)
+	result := replaceKeyed("token=secret-12345 remains", noGroupRe, "sel:")
+	assert.NotContains(t, result, "secret-12345")
+	assert.Contains(t, result, "sel:")
 }
 
 func TestRedactPrivateSelectors(t *testing.T) {

@@ -6,6 +6,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"os"
+	"os/exec"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -86,6 +88,52 @@ func TestEnablePayloadRedaction(t *testing.T) {
 
 	EnablePayloadRedaction()
 	assert.True(t, PayloadRedactionEnabled(), "EnablePayloadRedaction must turn on process-wide redaction")
+}
+
+// TestRawPayloadLogsAllowed_EnvParsing exercises rawPayloadLogsAllowed's
+// sync.Once-guarded environment-variable parse branch, which
+// SetRawPayloadLogsAllowed bypasses in every other test in this file. Because
+// rawPayloadOnce can only run its function once per process, this test
+// re-execs itself in subprocesses with EnvRawPayloadLogs set to a valid and
+// then an invalid value, verifying both the truthy-parse and parse-error
+// paths of the Do body.
+func TestRawPayloadLogsAllowed_EnvParsing(t *testing.T) {
+	if os.Getenv("GO_WANT_RAW_PAYLOAD_SUBPROCESS") == "1" {
+		want := os.Getenv("GO_WANT_RAW_PAYLOAD_EXPECTED") == "true"
+		assert.Equal(t, want, rawPayloadLogsAllowed())
+		return
+	}
+
+	tests := []struct {
+		name     string
+		envValue string
+		expected bool
+	}{
+		{"valid true value enables raw payload logs", "true", true},
+		{"invalid value falls back to disabled", "not-a-bool", false},
+		{"unset value falls back to disabled", "", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := exec.Command(os.Args[0], "-test.run=TestRawPayloadLogsAllowed_EnvParsing", "-test.v")
+			cmd.Env = append(os.Environ(),
+				"GO_WANT_RAW_PAYLOAD_SUBPROCESS=1",
+				"GO_WANT_RAW_PAYLOAD_EXPECTED="+boolString(tt.expected),
+				EnvRawPayloadLogs+"="+tt.envValue,
+			)
+			out, err := cmd.CombinedOutput()
+			require.NoError(t, err, "subprocess output:\n%s", out)
+			assert.Contains(t, string(out), "PASS")
+		})
+	}
+}
+
+func boolString(b bool) string {
+	if b {
+		return "true"
+	}
+	return "false"
 }
 
 func TestRedactErrorForLog(t *testing.T) {
