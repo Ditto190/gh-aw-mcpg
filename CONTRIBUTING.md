@@ -324,6 +324,7 @@ gh-aw-mcpg/
     ├── mountspec/             # Container bind-mount declaration parsing
     ├── oidc/                  # OIDC authentication for HTTP MCP backends
     ├── proxy/                 # HTTP forward proxy for DIFC filtering
+    ├── reposelector/          # GitHub owner/repo selector validation (guard/enclave/delegation policies)
     ├── restroute/             # Shared REST path-matching helpers
     ├── sanitize/              # Sensitive data redaction utilities for logging
     ├── server/                # HTTP server (routed/unified modes)
@@ -359,6 +360,7 @@ gh-aw-mcpg/
 - **`internal/mountspec/`** - Container bind-mount declaration parsing
 - **`internal/oidc/`** - OIDC authentication for HTTP MCP backends
 - **`internal/proxy/`** - HTTP forward proxy applying DIFC filtering to `gh` CLI and REST/GraphQL requests
+- **`internal/reposelector/`** - Canonical and legacy GitHub owner/repository selector validation used by guard policies, enclave policies, and delegated identities
 - **`internal/restroute/`** - Shared REST path-matching helpers
 - **`internal/sanitize/`** - Sensitive data redaction utilities (`SanitizeString`, `SanitizeJSON`, `RedactSecret`) for safe log output
 - **`internal/server/`** - HTTP server with routed and unified modes
