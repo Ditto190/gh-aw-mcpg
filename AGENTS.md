@@ -561,7 +561,7 @@ The `go.opentelemetry.io/otel*` modules (`otel`, `otel/sdk`, `otel/trace`, `otel
 |---|---|---|
 | `TestSpanExporterInterfaceCanary` | `internal/tracing/otel_upgrade_canary_test.go` | `sdktrace.SpanExporter` method set/signatures that `fanoutExporter` implements by hand |
 | `TestTracerProviderShutdownFlushesCanary` | `internal/tracing/otel_upgrade_canary_test.go` | `TracerProvider.Shutdown` flushes buffered spans and is idempotent (`Provider.Shutdown` never calls `ForceFlush`) |
-| `TestSchemaURL` | `internal/tracing/semconv_test.go` | semconv version stays in lockstep with the pinned `otel/sdk` (avoids "conflicting Schema URL" resource errors) |
+| `TestSchemaURL_MatchesPinnedSemconvVersion` | `internal/tracing/semconv_test.go` | semconv version stays in lockstep with the pinned `otel/sdk` (avoids "conflicting Schema URL" resource errors) |
 
 ```bash
 go test ./internal/tracing/ -run 'Canary|TestSchemaURL' -v
