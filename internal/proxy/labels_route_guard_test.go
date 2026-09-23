@@ -50,15 +50,15 @@ func labelsUpstream(t *testing.T, labels []map[string]interface{}) *httptest.Ser
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		enc := json.NewEncoder(w)
-		switch {
-		case r.URL.Path == "/repos/testorg/testrepo/labels":
+		switch r.URL.Path {
+		case "/repos/testorg/testrepo/labels":
 			enc.Encode(labels) //nolint:errcheck
-		case r.URL.Path == "/search/repositories":
+		case "/search/repositories":
 			enc.Encode(map[string]interface{}{ //nolint:errcheck
 				"total_count": 1,
 				"items":       []interface{}{publicRepo},
 			})
-		case r.URL.Path == "/repos/testorg/testrepo":
+		case "/repos/testorg/testrepo":
 			enc.Encode(publicRepo) //nolint:errcheck
 		default:
 			enc.Encode(map[string]interface{}{}) //nolint:errcheck
