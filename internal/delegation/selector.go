@@ -71,7 +71,7 @@ func IsCanonicalRepositorySelector(selector string) bool {
 		return false
 	}
 	if !reposelector.IsCanonicalRepoName(name) {
-		if name == "." || name == ".." || strings.Contains(name, "..") {
+		if reposelector.IsTraversalRepoName(name) {
 			logSelector.Print("rejected repository selector: repo segment is '.', '..', or contains '..'")
 		} else {
 			logSelector.Print("rejected repository selector: does not match canonical owner/repo pattern")

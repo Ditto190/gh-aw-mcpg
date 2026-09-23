@@ -56,7 +56,14 @@ func IsCanonicalRepoName(name string) bool {
 	if !repoNamePattern.MatchString(name) {
 		return false
 	}
-	return name != "." && name != ".." && !strings.Contains(name, "..")
+	return !IsTraversalRepoName(name)
+}
+
+// IsTraversalRepoName reports whether name is one of the traversal-like
+// repository names IsCanonicalRepoName rejects: "." or any name containing
+// "..", which also covers "..".
+func IsTraversalRepoName(name string) bool {
+	return name == "." || strings.Contains(name, "..")
 }
 
 // IsCanonicalRepositorySelector reports whether selector is an exact canonical
