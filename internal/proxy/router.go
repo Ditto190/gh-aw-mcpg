@@ -267,7 +267,7 @@ var routes = []route{
 	},
 	{
 		pattern:     regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/labels$`),
-		toolName:    "list_labels",
+		toolName:    "list_label",
 		extractArgs: repoArgsExtractor,
 	},
 

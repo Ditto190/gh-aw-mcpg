@@ -91,7 +91,7 @@ func TestRouteMatchKeyDispatchCorrectness(t *testing.T) {
 		{"/repos/o/r/commits", "list_commits"},
 		{"/repos/o/r/branches", "list_branches"},
 		{"/repos/o/r/releases/latest", "get_latest_release"},
-		{"/repos/o/r/labels", "list_labels"},
+		{"/repos/o/r/labels", "list_label"},
 		{"/repos/o/r/discussions", "list_discussions"},
 		{"/repos/o/r/git/trees/abc", "get_file_contents"},
 		{"/search/code", "search_code"},
