@@ -221,6 +221,46 @@ func TestRegisterGuard_WriteSinkPolicy_CreatesWriteSinkGuard(t *testing.T) {
 		"write-sink policy should create a WriteSinkGuard")
 }
 
+// TestRegisterGuard_WriteSinkPolicy_NonSafeOutputs_DefaultsSinkVisibilityPublic
+// covers the "security-by-default" branch in registerGuard (guard_init.go:70-74):
+// when a non-safe-outputs server has a write-sink policy with no explicit
+// sink-visibility configured, and the server is not exempted, registerGuard
+// must default effectiveVisibility to "public" before constructing the
+// WriteSinkGuard. Using a serverID other than "safe-outputs"/"safeoutputs"
+// ensures guard.IsSafeOutputsServer returns false, and omitting
+// SinkVisibilityExemptServers/ForcePublicRepos=false ensures
+// isServerExemptFromSinkVisibility also returns false, so this branch (rather
+// than the safe-outputs safety net at lines 83-89) is the one exercised.
+func TestRegisterGuard_WriteSinkPolicy_NonSafeOutputs_DefaultsSinkVisibilityPublic(t *testing.T) {
+	t.Setenv(guard.WASMGuardsDirEnvVar, "")
+	t.Setenv("GITHUB_REPOSITORY", "")
+
+	cfg := &config.Config{
+		Servers: map[string]*config.ServerConfig{
+			"external-sink": {
+				Type: "http",
+				GuardPolicies: map[string]interface{}{
+					"write-sink": map[string]interface{}{
+						"accept": []interface{}{"*"},
+						// sink-visibility intentionally omitted.
+					},
+				},
+			},
+		},
+	}
+	us := newMinimalUnifiedServerForGuardTest(cfg)
+
+	err := us.registerGuard("external-sink")
+
+	require.NoError(t, err)
+	registeredGuard := us.guardRegistry.Get("external-sink")
+	require.NotNil(t, registeredGuard)
+	writeSinkGuard, ok := registeredGuard.(*guard.WriteSinkGuard)
+	require.True(t, ok, "expected a WriteSinkGuard to be registered")
+	assert.Equal(t, guard.SinkVisibilityPublic, writeSinkGuard.SinkVisibility(),
+		"non-safe-outputs write-sink server with no configured sink-visibility should default to public")
+}
+
 // TestRegisterGuard_WriteSinkPolicy_MultipleAcceptPatterns ensures write-sink guard
 // creation works correctly with multiple accept patterns.
 func TestRegisterGuard_WriteSinkPolicy_MultipleAcceptPatterns(t *testing.T) {
@@ -356,6 +396,60 @@ func TestRegisterGuard_WasmDirSet_InvalidWasmFile_FallsBackToConfigGuard(t *test
 	require.NoError(t, err)
 	assert.Equal(t, "noop", us.guardRegistry.Get("github").Name(),
 		"invalid WASM file should fall back to noop guard")
+}
+
+// TestRegisterGuard_WasmDirSet_ValidWasmFile_LoadsDiscoveredGuard covers the
+// success branch in registerGuard (guard_init.go:56-58) where guard.FindGuardFile
+// discovers a valid per-server WASM guard under $MCP_GATEWAY_WASM_GUARDS_DIR and
+// guard.NewWasmGuard successfully loads it. This differs from
+// TestCreateGuardFromConfig_WasmType_Success_ViaRegisterGuard, which exercises
+// the wasm guard loaded via cfg.Guards / serverCfg.Guard — here the guard is
+// discovered purely via the WASM guards directory convention, with no
+// cfg.Guards entry and no serverCfg.Guard name, so g is populated by the
+// "else" branch at the top of registerGuard rather than createGuardFromConfig.
+//
+// A non-"github" serverID is used so discovery cannot be satisfied by the
+// baked-in container guard at guard.ContainerGuardWasmPath, which
+// guard.FindGuardFile checks first for the "github" server. GITHUB_REPOSITORY
+// is cleared so no repo-visibility API request is attempted.
+func TestRegisterGuard_WasmDirSet_ValidWasmFile_LoadsDiscoveredGuard(t *testing.T) {
+	const serverID = "discovered-wasm-server"
+
+	rootDir := t.TempDir()
+	t.Setenv(guard.WASMGuardsDirEnvVar, rootDir)
+	t.Setenv("GITHUB_REPOSITORY", "")
+
+	serverDir := filepath.Join(rootDir, serverID)
+	require.NoError(t, os.MkdirAll(serverDir, 0o755))
+	require.NoError(t, os.WriteFile(
+		filepath.Join(serverDir, "valid.wasm"),
+		fullGuardWasm,
+		0o644,
+	))
+
+	cfg := &config.Config{
+		Servers: map[string]*config.ServerConfig{
+			serverID: {
+				Type: "http",
+				GuardPolicies: map[string]interface{}{
+					"allow-only": map[string]interface{}{
+						"repos":         "public",
+						"min-integrity": "none",
+					},
+				},
+			},
+		},
+	}
+	us := newMinimalUnifiedServerForGuardTest(cfg)
+
+	err := us.registerGuard(serverID)
+
+	require.NoError(t, err)
+	registeredGuard := us.guardRegistry.Get(serverID)
+	require.NotNil(t, registeredGuard)
+	wasmGuard, ok := registeredGuard.(*guard.WasmGuard)
+	require.True(t, ok, "expected the discovered WASM guard to be registered")
+	t.Cleanup(func() { require.NoError(t, wasmGuard.Close(t.Context())) })
 }
 
 // TestRegisterGuard_WasmDirSet_ReadDirError_WarnsAndContinues covers the error
