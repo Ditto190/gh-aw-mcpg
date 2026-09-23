@@ -47,13 +47,15 @@ func newDelegatedTestHandler(t *testing.T, upstreamURL string, allowedRepos ...s
 func createDelegatedIdentity(t *testing.T, store *delegation.Store, repo string) string {
 	t.Helper()
 	result, err := store.CreateOrConfirm(delegation.CreateOrConfirmRequest{
-		RunID:          "run-1",
-		EnclaveBackend: "backend",
-		EnclaveEntryID: "entry-1",
-		InvocationID:   "invocation-1",
-		Repository:     repo,
-		ToolPolicy:     delegation.ToolPolicyGitHubRepositoryReadV1,
-		SchemaHash:     "sha256:test",
+		RequestCore: delegation.RequestCore{
+			RunID:          "run-1",
+			EnclaveBackend: "backend",
+			EnclaveEntryID: "entry-1",
+			InvocationID:   "invocation-1",
+			Repository:     repo,
+			ToolPolicy:     delegation.ToolPolicyGitHubRepositoryReadV1,
+			SchemaHash:     "sha256:test",
+		},
 		RequestedTTL:   time.Minute,
 		IdempotencyKey: "idempotency-key-1",
 	})

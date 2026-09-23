@@ -8,32 +8,41 @@ import (
 
 var logIdentity = logger.ForFile()
 
+// RequestCore is the single source of truth for the delegation request
+// tuple that must remain byte-identical across create, confirm, wire
+// transport, and restart recovery. It is embedded by CreateOrConfirmRequest,
+// delegationBinding, and CreateOrConfirmRequestWire so the field set can only
+// be changed in one place.
+type RequestCore struct {
+	// RunID must equal the envelope's bound workflow run.
+	RunID string `json:"run_id"`
+	// EnclaveBackend must equal the envelope's single AWF enclave backend.
+	EnclaveBackend string `json:"enclave_backend"`
+	// EnclaveEntryID identifies the enclave entry (frontmatter block) this
+	// invocation belongs to.
+	EnclaveEntryID string `json:"enclave_entry_id"`
+	// InvocationID identifies one bounded enclave invocation.
+	InvocationID string `json:"invocation_id"`
+	// Repository is the canonical, exact-byte owner/repo selector chosen
+	// for this invocation. It must already be canonical: the Store performs
+	// no trimming, case folding, Unicode normalization, or URL decoding.
+	Repository string `json:"repository"`
+	// ToolPolicy must equal ToolPolicyGitHubRepositoryReadV1.
+	ToolPolicy string `json:"tool_policy"`
+	// SchemaHash is the finite response schema hash approved for this
+	// invocation; it must be a member of the envelope's allowed set.
+	SchemaHash string `json:"schema_hash"`
+	// AdmittedDefaultBranchSHA is the default-branch SHA AWF resolved
+	// during live-read admission, when known at request time.
+	AdmittedDefaultBranchSHA string `json:"admitted_default_branch_sha,omitempty"`
+}
+
 // CreateOrConfirmRequest is the internal duration-based form of an
 // AWF-authenticated request to create or confirm exactly one delegated
 // identity. Every field must be a strict subset of the compiler-installed
 // Envelope; the Store rejects anything wider than the envelope allows.
 type CreateOrConfirmRequest struct {
-	// RunID must equal the envelope's bound workflow run.
-	RunID string
-	// EnclaveBackend must equal the envelope's single AWF enclave backend.
-	EnclaveBackend string
-	// EnclaveEntryID identifies the enclave entry (frontmatter block) this
-	// invocation belongs to.
-	EnclaveEntryID string
-	// InvocationID identifies one bounded enclave invocation.
-	InvocationID string
-	// Repository is the canonical, exact-byte owner/repo selector chosen
-	// for this invocation. It must already be canonical: the Store performs
-	// no trimming, case folding, Unicode normalization, or URL decoding.
-	Repository string
-	// ToolPolicy must equal ToolPolicyGitHubRepositoryReadV1.
-	ToolPolicy string
-	// SchemaHash is the finite response schema hash approved for this
-	// invocation; it must be a member of the envelope's allowed set.
-	SchemaHash string
-	// AdmittedDefaultBranchSHA is the default-branch SHA AWF resolved
-	// during live-read admission, when known at request time.
-	AdmittedDefaultBranchSHA string
+	RequestCore
 	// RequestedTTL bounds how long the identity should live; it is capped
 	// by (and must not exceed) the envelope's MaxIdentityTTL.
 	RequestedTTL time.Duration
@@ -48,44 +57,23 @@ type CreateOrConfirmRequest struct {
 // delegationBinding is the request/identity tuple that must remain identical
 // across create, confirm, and restart recovery.
 type delegationBinding struct {
-	RunID                    string    `json:"run_id"`
-	EnclaveBackend           string    `json:"enclave_backend"`
-	EnclaveEntryID           string    `json:"enclave_entry_id"`
-	InvocationID             string    `json:"invocation_id"`
-	Repository               string    `json:"repository"`
-	ToolPolicy               string    `json:"tool_policy"`
-	SchemaHash               string    `json:"schema_hash"`
-	AdmittedDefaultBranchSHA string    `json:"admitted_default_branch_sha,omitempty"`
-	InvocationExpiresAt      time.Time `json:"invocation_expires_at,omitempty"`
+	RequestCore
+	InvocationExpiresAt time.Time `json:"invocation_expires_at,omitempty"`
 }
 
 func bindingFromRequest(req CreateOrConfirmRequest) delegationBinding {
 	return delegationBinding{
-		RunID:                    req.RunID,
-		EnclaveBackend:           req.EnclaveBackend,
-		EnclaveEntryID:           req.EnclaveEntryID,
-		InvocationID:             req.InvocationID,
-		Repository:               req.Repository,
-		ToolPolicy:               req.ToolPolicy,
-		SchemaHash:               req.SchemaHash,
-		AdmittedDefaultBranchSHA: req.AdmittedDefaultBranchSHA,
-		InvocationExpiresAt:      req.InvocationExpiresAt.Round(0).UTC(),
+		RequestCore:         req.RequestCore,
+		InvocationExpiresAt: req.InvocationExpiresAt.Round(0).UTC(),
 	}
 }
 
 func (b delegationBinding) toRequest(requestedTTL time.Duration, idempotencyKey string) CreateOrConfirmRequest {
 	return CreateOrConfirmRequest{
-		RunID:                    b.RunID,
-		EnclaveBackend:           b.EnclaveBackend,
-		EnclaveEntryID:           b.EnclaveEntryID,
-		InvocationID:             b.InvocationID,
-		Repository:               b.Repository,
-		ToolPolicy:               b.ToolPolicy,
-		SchemaHash:               b.SchemaHash,
-		AdmittedDefaultBranchSHA: b.AdmittedDefaultBranchSHA,
-		RequestedTTL:             requestedTTL,
-		InvocationExpiresAt:      b.InvocationExpiresAt,
-		IdempotencyKey:           idempotencyKey,
+		RequestCore:         b.RequestCore,
+		RequestedTTL:        requestedTTL,
+		InvocationExpiresAt: b.InvocationExpiresAt,
+		IdempotencyKey:      idempotencyKey,
 	}
 }
 

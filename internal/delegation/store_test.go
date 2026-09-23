@@ -18,16 +18,18 @@ func newTestStore(t *testing.T) (*Store, *Envelope) {
 
 func validRequest() CreateOrConfirmRequest {
 	return CreateOrConfirmRequest{
-		RunID:                    "run-123",
-		EnclaveBackend:           "awf-enclave",
-		EnclaveEntryID:           "entry-1",
-		InvocationID:             "inv-1",
-		Repository:               "github/gh-aw",
-		ToolPolicy:               ToolPolicyGitHubRepositoryReadV1,
-		SchemaHash:               "sha256:abc",
-		AdmittedDefaultBranchSHA: "deadbeef",
-		RequestedTTL:             time.Minute,
-		IdempotencyKey:           "idem-1",
+		RequestCore: RequestCore{
+			RunID:                    "run-123",
+			EnclaveBackend:           "awf-enclave",
+			EnclaveEntryID:           "entry-1",
+			InvocationID:             "inv-1",
+			Repository:               "github/gh-aw",
+			ToolPolicy:               ToolPolicyGitHubRepositoryReadV1,
+			SchemaHash:               "sha256:abc",
+			AdmittedDefaultBranchSHA: "deadbeef",
+		},
+		RequestedTTL:   time.Minute,
+		IdempotencyKey: "idem-1",
 	}
 }
 
