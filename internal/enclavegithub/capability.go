@@ -13,6 +13,7 @@ import (
 
 	"github.com/github/gh-aw-mcpg/internal/hmacutil"
 	"github.com/github/gh-aw-mcpg/internal/logger"
+	"github.com/github/gh-aw-mcpg/internal/reposelector"
 	"github.com/github/gh-aw-mcpg/internal/util"
 )
 
@@ -147,7 +148,7 @@ func (v *Verifier) validateClaims(claims *Claims, now time.Time) error {
 		!invocationPattern.MatchString(claims.Invocation) {
 		return fmt.Errorf("invalid invocation")
 	}
-	if !repositoryPattern.MatchString(claims.Repo) || !v.policy.HasRepository(claims.Repo) {
+	if !reposelector.IsLegacyRepositorySelector(claims.Repo) || !v.policy.HasRepository(claims.Repo) {
 		return fmt.Errorf("invalid assigned repository")
 	}
 	if len(claims.Operations) == 0 {

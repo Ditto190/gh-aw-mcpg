@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/github/gh-aw-mcpg/internal/reposelector"
 	"github.com/github/gh-aw-mcpg/internal/util"
 )
 
@@ -315,38 +316,18 @@ func isValidRepoScope(scope string) bool {
 	return true
 }
 
-// isValidTokenString returns true if s is a non-empty string of at most maxLen
-// lowercase-alphanumeric, underscore, or hyphen characters.
-func isValidTokenString(s string, maxLen int) bool {
-	if len(s) < 1 || len(s) > maxLen {
-		return false
-	}
-	for i := 0; i < len(s); i++ {
-		if !isScopeTokenChar(s[i]) {
-			return false
-		}
-	}
-	return true
-}
-
+// isValidRepoOwner reports whether owner is a valid guard-policy owner
+// segment. The grammar lives in internal/reposelector, the single source of
+// truth shared with the enclave-policy and delegation validators; guard
+// policies use the legacy variant, which also permits '_' in the owner.
 func isValidRepoOwner(owner string) bool {
-	return isValidTokenString(owner, 39)
+	return reposelector.IsLegacyOwner(owner)
 }
 
+// isValidRepoName reports whether repo is a valid repository-name segment,
+// delegating to the shared canonical grammar in internal/reposelector.
 func isValidRepoName(repo string) bool {
-	if len(repo) < 1 || len(repo) > 100 {
-		return false
-	}
-	for i := 0; i < len(repo); i++ {
-		if !isScopeTokenChar(repo[i]) && repo[i] != '.' {
-			return false
-		}
-	}
-	return true
-}
-
-func isScopeTokenChar(char byte) bool {
-	return (char >= 'a' && char <= 'z') || (char >= '0' && char <= '9') || char == '_' || char == '-'
+	return reposelector.IsCanonicalRepoName(repo)
 }
 
 // normalizeStringSlice trims, validates, deduplicates, and normalizes entries
