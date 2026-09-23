@@ -5,7 +5,10 @@ import (
 	"net/url"
 
 	"github.com/github/gh-aw-mcpg/internal/enclavegithub"
+	"github.com/github/gh-aw-mcpg/internal/logger"
 )
+
+var logEnclaveRequest = logger.ForFile()
 
 // enclaveDenial identifies the stage that rejected an enclave-style request.
 // Every stage produces the same client-visible denial; the distinct values only
@@ -62,8 +65,10 @@ func (p enclaveRequestPlan) ok() bool {
 // (and additionally enforces the cross-repo public-visibility rule), while
 // handleDelegatedRequest authorizes against the delegated-identity store.
 func planEnclaveRequest(r *http.Request) enclaveRequestPlan {
+	logEnclaveRequest.Printf("planEnclaveRequest: method=%s", r.Method)
 	path, ok := enclavePath(r.URL.Path, r.URL.RawPath)
 	if !ok {
+		logEnclaveRequest.Print("planEnclaveRequest: denied, request path is not an enclave path")
 		return enclaveRequestPlan{denial: enclaveDenialPath}
 	}
 	return planEnclaveRequestForPath(r, path)
@@ -76,17 +81,20 @@ func planEnclaveRequestForPath(r *http.Request, path string) enclaveRequestPlan 
 	plan := enclaveRequestPlan{path: path}
 
 	if r.Method != http.MethodGet || hasEnclaveGETBody(r) {
+		logEnclaveRequest.Printf("planEnclaveRequestForPath: denied, invalid request shape (method=%s, hasBody=%t)", r.Method, hasEnclaveGETBody(r))
 		plan.denial = enclaveDenialRequestShape
 		return plan
 	}
 	query, err := url.ParseQuery(r.URL.RawQuery)
 	if err != nil {
+		logEnclaveRequest.Print("planEnclaveRequestForPath: denied, failed to parse query string")
 		plan.denial = enclaveDenialRequestShape
 		return plan
 	}
 
 	route, err := enclavegithub.MatchEnclaveRoute(path, query)
 	if err != nil {
+		logEnclaveRequest.Print("planEnclaveRequestForPath: denied, no enclave route matched")
 		plan.denial = enclaveDenialRoute
 		return plan
 	}
@@ -94,6 +102,7 @@ func planEnclaveRequestForPath(r *http.Request, path string) enclaveRequestPlan 
 
 	toolName, args := enclaveToolAndArgs(route)
 	if toolName == "" {
+		logEnclaveRequest.Print("planEnclaveRequestForPath: denied, matched route has no backing MCP tool")
 		plan.denial = enclaveDenialTool
 		return plan
 	}
@@ -104,6 +113,7 @@ func planEnclaveRequestForPath(r *http.Request, path string) enclaveRequestPlan 
 	if r.URL.RawQuery != "" {
 		plan.fullPath += "?" + r.URL.RawQuery
 	}
+	logEnclaveRequest.Printf("planEnclaveRequestForPath: accepted, tool=%s", toolName)
 	return plan
 }
 
