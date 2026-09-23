@@ -191,9 +191,8 @@ func TestHandleControl_CreateOrConfirm(t *testing.T) {
 				ToolPolicy:     ToolPolicyGitHubRepositoryReadV1,
 				SchemaHash:     "sha256:abc",
 			},
-			RequestedTTLSeconds: 0,
-			// invalid: must be positive
-			IdempotencyKey: "idem-1",
+			RequestedTTLSeconds: 0, // invalid: must be positive
+			IdempotencyKey:      "idem-1",
 		}
 		w := doControlRequest(t, deps, secret, ControlPathPrefix+"create-or-confirm", http.MethodPost, wire)
 		assert.Equal(t, http.StatusBadRequest, w.Code)

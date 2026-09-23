@@ -214,11 +214,10 @@ func TestLoadStore_FailsClosedOnDuplicateLiveInvocationKeys(t *testing.T) {
 				RunID:          "run-123",
 				EnclaveBackend: "awf-enclave",
 				EnclaveEntryID: "entry-1",
-				InvocationID:   "inv-1",
+				InvocationID:   "inv-1", // same invocation ID
+				Repository:     "github/gh-aw",
 				ToolPolicy:     ToolPolicyGitHubRepositoryReadV1,
 				SchemaHash:     "sha256:abc",
-				// same invocation ID
-				Repository: "github/gh-aw",
 			},
 			InvocationExpiresAt: now.Add(time.Hour),
 		},
@@ -281,11 +280,10 @@ func TestLoadStore_FailsClosedOnDuplicateLiveAndTerminalInvocationKeys(t *testin
 				RunID:          "run-123",
 				EnclaveBackend: "awf-enclave",
 				EnclaveEntryID: "entry-1",
-				InvocationID:   "inv-1",
+				InvocationID:   "inv-1", // same invocation ID
+				Repository:     "github/gh-aw",
 				ToolPolicy:     ToolPolicyGitHubRepositoryReadV1,
 				SchemaHash:     "sha256:abc",
-				// same invocation ID
-				Repository: "github/gh-aw",
 			},
 			InvocationExpiresAt: now.Add(time.Hour),
 		},
