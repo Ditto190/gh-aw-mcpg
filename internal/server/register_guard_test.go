@@ -233,6 +233,7 @@ func TestRegisterGuard_WriteSinkPolicy_CreatesWriteSinkGuard(t *testing.T) {
 // than the safe-outputs safety net at lines 83-89) is the one exercised.
 func TestRegisterGuard_WriteSinkPolicy_NonSafeOutputs_DefaultsSinkVisibilityPublic(t *testing.T) {
 	t.Setenv(guard.WASMGuardsDirEnvVar, "")
+	t.Setenv("GITHUB_REPOSITORY", "")
 
 	cfg := &config.Config{
 		Servers: map[string]*config.ServerConfig{
@@ -406,11 +407,19 @@ func TestRegisterGuard_WasmDirSet_InvalidWasmFile_FallsBackToConfigGuard(t *test
 // discovered purely via the WASM guards directory convention, with no
 // cfg.Guards entry and no serverCfg.Guard name, so g is populated by the
 // "else" branch at the top of registerGuard rather than createGuardFromConfig.
+//
+// A non-"github" serverID is used so discovery cannot be satisfied by the
+// baked-in container guard at guard.ContainerGuardWasmPath, which
+// guard.FindGuardFile checks first for the "github" server. GITHUB_REPOSITORY
+// is cleared so no repo-visibility API request is attempted.
 func TestRegisterGuard_WasmDirSet_ValidWasmFile_LoadsDiscoveredGuard(t *testing.T) {
+	const serverID = "discovered-wasm-server"
+
 	rootDir := t.TempDir()
 	t.Setenv(guard.WASMGuardsDirEnvVar, rootDir)
+	t.Setenv("GITHUB_REPOSITORY", "")
 
-	serverDir := filepath.Join(rootDir, "github")
+	serverDir := filepath.Join(rootDir, serverID)
 	require.NoError(t, os.MkdirAll(serverDir, 0o755))
 	require.NoError(t, os.WriteFile(
 		filepath.Join(serverDir, "valid.wasm"),
@@ -420,7 +429,7 @@ func TestRegisterGuard_WasmDirSet_ValidWasmFile_LoadsDiscoveredGuard(t *testing.
 
 	cfg := &config.Config{
 		Servers: map[string]*config.ServerConfig{
-			"github": {
+			serverID: {
 				Type: "http",
 				GuardPolicies: map[string]interface{}{
 					"allow-only": map[string]interface{}{
@@ -433,10 +442,10 @@ func TestRegisterGuard_WasmDirSet_ValidWasmFile_LoadsDiscoveredGuard(t *testing.
 	}
 	us := newMinimalUnifiedServerForGuardTest(cfg)
 
-	err := us.registerGuard("github")
+	err := us.registerGuard(serverID)
 
 	require.NoError(t, err)
-	registeredGuard := us.guardRegistry.Get("github")
+	registeredGuard := us.guardRegistry.Get(serverID)
 	require.NotNil(t, registeredGuard)
 	wasmGuard, ok := registeredGuard.(*guard.WasmGuard)
 	require.True(t, ok, "expected the discovered WASM guard to be registered")
