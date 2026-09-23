@@ -196,8 +196,8 @@ func hasEnclaveGETBody(r *http.Request) bool {
 }
 
 func (h *proxyHandler) handleEnclaveRequest(w http.ResponseWriter, r *http.Request) {
-	plan := planEnclaveRequest(r)
-	if plan.denial == enclaveDenialPath {
+	path, ok := enclavePath(r.URL.Path, r.URL.RawPath)
+	if !ok {
 		logEnclave.Printf("Enclave request denied: invalid path %q", r.URL.Path)
 		writeEnclaveDenied(w)
 		return
@@ -209,6 +209,7 @@ func (h *proxyHandler) handleEnclaveRequest(w http.ResponseWriter, r *http.Reque
 		writeEnclaveDenied(w)
 		return
 	}
+	plan := planEnclaveRequestForPath(r, path)
 	if plan.denial == enclaveDenialRequestShape {
 		writeEnclaveDenied(w)
 		return

@@ -66,6 +66,13 @@ func planEnclaveRequest(r *http.Request) enclaveRequestPlan {
 	if !ok {
 		return enclaveRequestPlan{denial: enclaveDenialPath}
 	}
+	return planEnclaveRequestForPath(r, path)
+}
+
+// planEnclaveRequestForPath performs the planning stages after path extraction.
+// The enclave handler calls it only after capability verification so route
+// matching and its diagnostics cannot run for unauthenticated requests.
+func planEnclaveRequestForPath(r *http.Request, path string) enclaveRequestPlan {
 	plan := enclaveRequestPlan{path: path}
 
 	if r.Method != http.MethodGet || hasEnclaveGETBody(r) {

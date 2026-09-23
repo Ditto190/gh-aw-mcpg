@@ -112,6 +112,16 @@ func TestPlanEnclaveRequestStripsHostPrefix(t *testing.T) {
 	assert.Equal(t, enclavegithub.OperationIssueCommentsList, plan.route.Operation)
 }
 
+func TestPlanEnclaveRequestForPathRunsPostAuthorizationStages(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/untrusted/original/path", nil)
+
+	plan := planEnclaveRequestForPath(req, "/repos/owner/repo/issues")
+
+	require.True(t, plan.ok())
+	assert.Equal(t, "/repos/owner/repo/issues", plan.path)
+	assert.Equal(t, "list_issues", plan.toolName)
+}
+
 func TestEnclaveToolAndArgsUnsupportedOperation(t *testing.T) {
 	// enclaveToolAndArgs is the tool-resolution step of planEnclaveRequest; an
 	// operation with no backing MCP tool yields an empty tool name, which the
