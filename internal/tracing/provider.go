@@ -167,6 +167,10 @@ func InitProvider(ctx context.Context, cfg *config.TracingConfig) (*Provider, er
 				MaxInterval:     30 * time.Second,
 				MaxElapsedTime:  time.Minute,
 			}),
+			// TODO(otel >= v1.47.0): add otlptracehttp.WithMaxResponseSize to bound how
+			// much of an OTLP error response body the exporter buffers. The option is
+			// only available from v1.47.0 onwards; add it when the otel* modules are
+			// bumped past the v1.46.0 pin in go.mod.
 		}
 		if exporterHeaders != nil {
 			opts = append(opts, otlptracehttp.WithHeaders(exporterHeaders))
