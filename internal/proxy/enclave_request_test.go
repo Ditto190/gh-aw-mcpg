@@ -113,8 +113,9 @@ func TestPlanEnclaveRequestStripsHostPrefix(t *testing.T) {
 }
 
 func TestEnclaveToolAndArgsUnsupportedOperation(t *testing.T) {
-	// Defensive branch: a route whose operation has no backing MCP tool is
-	// rejected by planEnclaveRequest with enclaveDenialTool.
+	// enclaveToolAndArgs is the tool-resolution step of planEnclaveRequest; an
+	// operation with no backing MCP tool yields an empty tool name, which the
+	// planner turns into an enclaveDenialTool denial.
 	toolName, args := enclaveToolAndArgs(&enclavegithub.Route{Operation: "issues.delete", Owner: "owner", Repo: "repo"})
 
 	assert.Empty(t, toolName)
