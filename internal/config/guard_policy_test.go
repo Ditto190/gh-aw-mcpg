@@ -504,6 +504,10 @@ func TestIsValidRepoScope(t *testing.T) {
 		{"repo with dot", "owner/repo.name", true},
 		{"repo with uppercase", "owner/Repo", false},
 		{"repo with space", "owner/repo name", false},
+		{"repo with parent traversal", "owner/..", false},
+		{"repo with embedded traversal", "owner/foo..bar", false},
+		{"owner with leading underscore", "_owner/repo", false},
+		{"owner with leading hyphen", "-owner/repo", false},
 
 		// Wildcard edge cases
 		{"double wildcard", "owner/**", false},
@@ -548,6 +552,8 @@ func TestIsValidRepoOwner(t *testing.T) {
 		{"space", "my org", false},
 		{"at sign", "my@org", false},
 		{"mixed valid chars", "my-org_123", true},
+		{"leading underscore", "_myorg", false},
+		{"leading hyphen", "-myorg", false},
 	}
 
 	for _, tt := range tests {
@@ -577,6 +583,9 @@ func TestIsValidRepoName(t *testing.T) {
 		{"dot", "my.repo", true},
 		{"space", "my repo", false},
 		{"mixed valid chars", "my-repo_123", true},
+		{"single dot", ".", false},
+		{"double dot", "..", false},
+		{"embedded double dot", "my..repo", false},
 	}
 
 	for _, tt := range tests {
@@ -1152,21 +1161,6 @@ func TestValidateGuardPolicy(t *testing.T) {
 		require.Error(t, err)
 		assert.ErrorContains(t, err, `allow-only.tool-call-limits["issue_read"] must be >= 0`)
 	})
-}
-
-// TestIsScopeTokenChar tests valid and invalid characters for scope tokens.
-func TestIsScopeTokenChar(t *testing.T) {
-	validChars := "abcdefghijklmnopqrstuvwxyz0123456789_-"
-	for i := 0; i < len(validChars); i++ {
-		c := validChars[i]
-		assert.True(t, isScopeTokenChar(c), "expected isScopeTokenChar(%q) == true", c)
-	}
-
-	invalidChars := "ABCDEFGHIJKLMNOPQRSTUVWXYZ./ @#$%^&*()"
-	for i := 0; i < len(invalidChars); i++ {
-		c := invalidChars[i]
-		assert.False(t, isScopeTokenChar(c), "expected isScopeTokenChar(%q) == false", c)
-	}
 }
 
 // TestNormalizeGuardPolicyReactionEndorsement tests the new reaction-based endorsement fields.

@@ -489,28 +489,6 @@ pub fn apply_tool_labels(
             integrity = writer_integrity(repo_id, ctx);
         }
 
-        // === Actions log and artifact reads (repo-scoped) ===
-        // S = S(repo) — inherits from repository visibility
-        // I = writer
-        tool_names::GET_JOB_LOGS => {
-            secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
-            integrity = writer_integrity(repo_id, ctx);
-        }
-
-        // === Code quality findings (repo-scoped) ===
-        // S = S(repo) — inherits from repository visibility
-        // I = writer (requires repo write access to post/view code quality findings)
-        "get_code_quality_finding" => {
-            secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
-            integrity = writer_integrity(repo_id, ctx);
-        }
-
-        // === Actions: Workflow/Artifact Metadata and Artifact Downloads ===
-        tool_names::ACTIONS_GET => {
-            secrecy = apply_repo_visibility_secrecy(&owner, &repo, repo_id, secrecy, ctx);
-            integrity = writer_integrity(repo_id, ctx);
-        }
-
         // === UI metadata dispatch (repo/org-scoped, method-dependent) ===
         // Mirrors existing rules for list_label, list_branches, list_issue_types,
         // list_issue_fields, and list_repository_collaborators.
@@ -540,15 +518,18 @@ pub fn apply_tool_labels(
             }
         }
 
-        // === Repo-scoped resources: visibility-inherited secrecy, approved integrity ===
-        // S = inherits from repo visibility; I = approved (writer-level)
+        // === Actions reads, code quality findings, and other repo-scoped resources ===
+        // S = inherits from repo visibility; I = writer
         "actions_list"
+        | tool_names::ACTIONS_GET
         | tool_names::GET_DISCUSSION
         | tool_names::GET_DISCUSSION_COMMENTS
+        | "get_code_quality_finding"
         | "get_label"
         | "get_repository"
         | "get_repository_tree"
         | "get_tag"
+        | tool_names::GET_JOB_LOGS
         | "list_branches"
         | tool_names::LIST_DISCUSSION_CATEGORIES
         | tool_names::LIST_DISCUSSIONS

@@ -7,11 +7,11 @@
 package delegation
 
 import (
-	"regexp"
 	"slices"
 	"strings"
 
 	"github.com/github/gh-aw-mcpg/internal/logger"
+	"github.com/github/gh-aw-mcpg/internal/reposelector"
 )
 
 var logSelector = logger.ForFile()
@@ -49,44 +49,37 @@ func IsDelegatedTool(tool string) bool {
 	return ok
 }
 
-// canonicalSelectorPattern mirrors the ADR's owner/repo shape. Go's RE2 engine
-// does not support the lookahead assertions in the ADR's PCRE expression
-// (?!\.\.?$)(?!.*\.\.), so those two invariants (repo segment is not "." or
-// "..", and does not contain "..") are enforced separately in
-// IsCanonicalRepositorySelector.
-var canonicalSelectorPattern = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,38})/[a-z0-9._-]{1,100}$`)
-
 // IsCanonicalRepositorySelector reports whether selector is already the exact
 // canonical ASCII byte sequence required by the ADR:
 //
 //	^[a-z0-9](?:[a-z0-9-]{0,38})/(?!\.\.?$)(?!.*\.\.)[a-z0-9._-]{1,100}$
 //
-// There is no trimming, case folding, Unicode normalization, URL decoding, or
-// alternate syntax: callers must reject any selector for which this returns
-// false rather than attempt to normalize it.
+// The grammar itself lives in internal/reposelector, the single source of
+// truth shared with the guard-policy and enclave-policy validators; this
+// wrapper only adds the per-branch rejection logging delegation admission
+// depends on. There is no trimming, case folding, Unicode normalization, URL
+// decoding, or alternate syntax: callers must reject any selector for which
+// this returns false rather than attempt to normalize it.
 func IsCanonicalRepositorySelector(selector string) bool {
 	if !isASCII(selector) {
 		logSelector.Print("rejected repository selector: non-ASCII bytes present")
 		return false
 	}
-	if !canonicalSelectorPattern.MatchString(selector) {
+	owner, name, found := strings.Cut(selector, "/")
+	if !found || !reposelector.IsCanonicalOwner(owner) {
 		logSelector.Print("rejected repository selector: does not match canonical owner/repo pattern")
 		return false
 	}
-	// canonicalSelectorPattern requires a '/' separator, so it is always
-	// present once the pattern above has matched.
-	name := selector[strings.IndexByte(selector, '/')+1:]
-	if name == "." || name == ".." || strings.Contains(name, "..") {
-		logSelector.Print("rejected repository selector: repo segment is '.', '..', or contains '..'")
+	if !reposelector.IsCanonicalRepoName(name) {
+		if reposelector.IsTraversalRepoName(name) {
+			logSelector.Print("rejected repository selector: repo segment is '.', '..', or contains '..'")
+		} else {
+			logSelector.Print("rejected repository selector: does not match canonical owner/repo pattern")
+		}
 		return false
 	}
 	return true
 }
-
-// canonicalOwnerPattern is the owner-segment half of
-// canonicalSelectorPattern, used to validate an envelope's AllowedOwners
-// independent of any specific repository name.
-var canonicalOwnerPattern = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,38})$`)
 
 // IsCanonicalOwner reports whether selector is already the exact canonical
 // ASCII byte sequence required for a repository owner:
@@ -94,7 +87,7 @@ var canonicalOwnerPattern = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,38})$`)
 // normalization, or URL decoding: callers must reject any selector for which
 // this returns false rather than attempt to normalize it.
 func IsCanonicalOwner(selector string) bool {
-	ok := isASCII(selector) && canonicalOwnerPattern.MatchString(selector)
+	ok := isASCII(selector) && reposelector.IsCanonicalOwner(selector)
 	if !ok {
 		logSelector.Print("rejected owner selector: not a canonical ASCII owner segment")
 	}

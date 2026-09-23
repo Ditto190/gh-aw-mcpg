@@ -37,13 +37,15 @@ func newUnifiedDelegationConfig(t *testing.T) (*delegation.RuntimeConfig, delega
 			StatePath:         t.TempDir() + "/state.json",
 			ControlListenAddr: "127.0.0.1:0",
 		}, delegation.CreateOrConfirmRequest{
-			RunID:          "run-1",
-			EnclaveBackend: "awf-enclave",
-			EnclaveEntryID: "entry-1",
-			InvocationID:   "inv-1",
-			Repository:     "github/gh-aw",
-			ToolPolicy:     delegation.ToolPolicyGitHubRepositoryReadV1,
-			SchemaHash:     "sha256:test",
+			RequestCore: delegation.RequestCore{
+				RunID:          "run-1",
+				EnclaveBackend: "awf-enclave",
+				EnclaveEntryID: "entry-1",
+				InvocationID:   "inv-1",
+				Repository:     "github/gh-aw",
+				ToolPolicy:     delegation.ToolPolicyGitHubRepositoryReadV1,
+				SchemaHash:     "sha256:test",
+			},
 			RequestedTTL:   time.Minute,
 			IdempotencyKey: "key-1",
 		}

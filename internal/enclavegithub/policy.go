@@ -10,6 +10,7 @@ import (
 
 	"github.com/github/gh-aw-mcpg/internal/config"
 	"github.com/github/gh-aw-mcpg/internal/logger"
+	"github.com/github/gh-aw-mcpg/internal/reposelector"
 	"github.com/github/gh-aw-mcpg/internal/util"
 )
 
@@ -32,7 +33,6 @@ const (
 )
 
 var (
-	repositoryPattern  = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9_.-]{0,38})/[a-z0-9_.-]{1,100}$`)
 	runIdentityPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,63}$`)
 	invocationPattern  = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.:-]{0,255}$`)
 	validOperations    = map[string]struct{}{
@@ -117,7 +117,7 @@ func (p *Policy) Validate() error {
 	seenRepos := make(map[string]struct{}, len(p.Repositories))
 	for i := range p.Repositories {
 		repo := &p.Repositories[i]
-		if !repositoryPattern.MatchString(repo.Repo) {
+		if !reposelector.IsLegacyRepositorySelector(repo.Repo) {
 			return fmt.Errorf("repositories[%d].repo must be canonical lowercase owner/name", i)
 		}
 		if _, exists := seenRepos[repo.Repo]; exists {
@@ -176,7 +176,7 @@ func (p *Policy) RepositorySensitivity(repo string) (string, bool) {
 // NormalizeRepository returns a canonical lowercase owner/name repository.
 func NormalizeRepository(repo string) (string, bool) {
 	normalized := strings.ToLower(repo)
-	return normalized, repositoryPattern.MatchString(normalized)
+	return normalized, reposelector.IsLegacyRepositorySelector(normalized)
 }
 
 // AllowsOperation reports whether operation is enabled by the compiler policy.

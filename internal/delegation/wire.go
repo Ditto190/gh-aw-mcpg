@@ -49,17 +49,10 @@ func (w EnvelopeWire) ToEnvelope() (*Envelope, error) {
 // CreateOrConfirmRequestWire is the JSON representation accepted by the
 // private delegation control endpoint. Duration fields are whole seconds.
 type CreateOrConfirmRequestWire struct {
-	RunID                    string    `json:"run_id"`
-	EnclaveBackend           string    `json:"enclave_backend"`
-	EnclaveEntryID           string    `json:"enclave_entry_id"`
-	InvocationID             string    `json:"invocation_id"`
-	Repository               string    `json:"repository"`
-	ToolPolicy               string    `json:"tool_policy"`
-	SchemaHash               string    `json:"schema_hash"`
-	AdmittedDefaultBranchSHA string    `json:"admitted_default_branch_sha,omitempty"`
-	RequestedTTLSeconds      int64     `json:"requested_ttl"`
-	InvocationExpiresAt      time.Time `json:"invocation_expires_at,omitempty"`
-	IdempotencyKey           string    `json:"idempotency_key"`
+	RequestCore
+	RequestedTTLSeconds int64     `json:"requested_ttl"`
+	InvocationExpiresAt time.Time `json:"invocation_expires_at,omitempty"`
+	IdempotencyKey      string    `json:"idempotency_key"`
 }
 
 // ToRequest validates wire-specific fields and converts them to the internal
@@ -72,17 +65,10 @@ func (w CreateOrConfirmRequestWire) ToRequest() (CreateOrConfirmRequest, error) 
 		return CreateOrConfirmRequest{}, err
 	}
 	return CreateOrConfirmRequest{
-		RunID:                    w.RunID,
-		EnclaveBackend:           w.EnclaveBackend,
-		EnclaveEntryID:           w.EnclaveEntryID,
-		InvocationID:             w.InvocationID,
-		Repository:               w.Repository,
-		ToolPolicy:               w.ToolPolicy,
-		SchemaHash:               w.SchemaHash,
-		AdmittedDefaultBranchSHA: w.AdmittedDefaultBranchSHA,
-		RequestedTTL:             requestedTTL,
-		InvocationExpiresAt:      w.InvocationExpiresAt,
-		IdempotencyKey:           w.IdempotencyKey,
+		RequestCore:         w.RequestCore,
+		RequestedTTL:        requestedTTL,
+		InvocationExpiresAt: w.InvocationExpiresAt,
+		IdempotencyKey:      w.IdempotencyKey,
 	}, nil
 }
 

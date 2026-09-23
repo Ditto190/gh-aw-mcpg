@@ -37,13 +37,15 @@ func TestResolveDelegationProxyConfig_MaxIdentityTTLIsSeconds(t *testing.T) {
 	require.NoError(t, err)
 
 	request := delegation.CreateOrConfirmRequest{
-		RunID:          "run-1",
-		EnclaveBackend: "backend-1",
-		EnclaveEntryID: "entry-1",
-		InvocationID:   "invocation-1",
-		Repository:     "github/gh-aw",
-		ToolPolicy:     delegation.ToolPolicyGitHubRepositoryReadV1,
-		SchemaHash:     "sha256:test",
+		RequestCore: delegation.RequestCore{
+			RunID:          "run-1",
+			EnclaveBackend: "backend-1",
+			EnclaveEntryID: "entry-1",
+			InvocationID:   "invocation-1",
+			Repository:     "github/gh-aw",
+			ToolPolicy:     delegation.ToolPolicyGitHubRepositoryReadV1,
+			SchemaHash:     "sha256:test",
+		},
 		RequestedTTL:   120 * time.Second,
 		IdempotencyKey: "key-1",
 	}

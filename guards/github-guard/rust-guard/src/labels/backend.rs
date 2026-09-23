@@ -1537,12 +1537,7 @@ fn repo_visibility_from_items(value: &Value, repo_id: &str) -> Option<bool> {
     // search_repositories shape: { items: [...] }
     if let Some(items) = value.get("items").and_then(|v| v.as_array()) {
         for item in items {
-            let item_repo_id = repo_id_from_repo_object(item);
-            if item_repo_id
-                .as_deref()
-                .map(|id| id.eq_ignore_ascii_case(repo_id))
-                .unwrap_or(false)
-            {
+            if item_matches_repo_id(item, repo_id) {
                 return private_flag_from_repo_object(item);
             }
         }
@@ -1551,24 +1546,14 @@ fn repo_visibility_from_items(value: &Value, repo_id: &str) -> Option<bool> {
     // Also support plain array responses
     if let Some(items) = value.as_array() {
         for item in items {
-            let item_repo_id = repo_id_from_repo_object(item);
-            if item_repo_id
-                .as_deref()
-                .map(|id| id.eq_ignore_ascii_case(repo_id))
-                .unwrap_or(false)
-            {
+            if item_matches_repo_id(item, repo_id) {
                 return private_flag_from_repo_object(item);
             }
         }
     }
 
     // Sometimes a direct single-object response may be returned
-    let item_repo_id = repo_id_from_repo_object(value);
-    if item_repo_id
-        .as_deref()
-        .map(|id| id.eq_ignore_ascii_case(repo_id))
-        .unwrap_or(false)
-    {
+    if item_matches_repo_id(value, repo_id) {
         return private_flag_from_repo_object(value);
     }
 
@@ -1664,11 +1649,7 @@ fn extract_owner_is_org(response: &Value, repo_id: &str) -> Option<bool> {
 fn find_org_in_items(items: &[Value], repo_id: &str) -> Option<bool> {
     items
         .iter()
-        .find(|item| {
-            repo_id_from_repo_object(item)
-                .map(|item_repo_id| item_repo_id.eq_ignore_ascii_case(repo_id))
-                .unwrap_or(false)
-        })
+        .find(|item| item_matches_repo_id(item, repo_id))
         .and_then(owner_type_from_repo_object)
 }
 
@@ -1688,12 +1669,7 @@ fn owner_is_org_from_items(value: &Value, repo_id: &str) -> Option<bool> {
     }
 
     // Single-object response
-    let item_repo_id = repo_id_from_repo_object(value);
-    if item_repo_id
-        .as_deref()
-        .map(|id| id.eq_ignore_ascii_case(repo_id))
-        .unwrap_or(false)
-    {
+    if item_matches_repo_id(value, repo_id) {
         return owner_type_from_repo_object(value);
     }
 
@@ -1744,6 +1720,11 @@ fn repo_id_from_repo_object(item: &Value) -> Option<String> {
     None
 }
 
+/// Returns whether the repository ID in `item` matches `repo_id`, ignoring ASCII case.
+fn item_matches_repo_id(item: &Value, repo_id: &str) -> bool {
+    repo_id_from_repo_object(item).is_some_and(|id| id.eq_ignore_ascii_case(repo_id))
+}
+
 #[cfg(test)]
 mod tests_dedup {
     use super::*;
@@ -1792,5 +1773,18 @@ mod tests_dedup {
     fn repo_id_ignores_empty_full_name() {
         let item = json!({"full_name": "", "fullName": "x/y"});
         assert_eq!(repo_id_from_repo_object(&item).as_deref(), Some("x/y"));
+    }
+
+    #[test]
+    fn item_matches_repo_id_is_case_insensitive_and_requires_an_id() {
+        assert!(item_matches_repo_id(
+            &json!({"full_name": "Acme/Widget"}),
+            "acme/widget"
+        ));
+        assert!(!item_matches_repo_id(
+            &json!({"full_name": "acme/other"}),
+            "acme/widget"
+        ));
+        assert!(!item_matches_repo_id(&json!({}), "acme/widget"));
     }
 }
