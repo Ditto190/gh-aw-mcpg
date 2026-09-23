@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -210,42 +209,36 @@ func (h *proxyHandler) handleEnclaveRequest(w http.ResponseWriter, r *http.Reque
 		writeEnclaveDenied(w)
 		return
 	}
-	if r.Method != http.MethodGet || hasEnclaveGETBody(r) {
+	plan := planEnclaveRequestForPath(r, path)
+	if plan.denial == enclaveDenialRequestShape {
 		writeEnclaveDenied(w)
 		return
 	}
-
-	query, err := url.ParseQuery(r.URL.RawQuery)
-	if err != nil {
+	if !plan.routeAllowedBy(claims) {
+		logEnclave.Printf("Enclave request denied: agentID=%s, path=%q not permitted by route/operation policy", util.HashIdentifierForLog(claims.AgentID()), plan.path)
 		writeEnclaveDenied(w)
 		return
 	}
-	route, err := enclavegithub.MatchEnclaveRoute(path, query)
-	if err != nil || !claims.AllowsOperation(route.Operation) {
-		logEnclave.Printf("Enclave request denied: agentID=%s, path=%q not permitted by route/operation policy", util.HashIdentifierForLog(claims.AgentID()), path)
+	if plan.denial == enclaveDenialTool {
+		logEnclave.Printf("Enclave request denied: agentID=%s, no MCP tool for matched enclave route path=%q", util.HashIdentifierForLog(claims.AgentID()), plan.path)
 		writeEnclaveDenied(w)
 		return
 	}
 	h.server.seedEnclaveAssignedRepositorySecrecy(claims.AgentID(), claims.Repo)
 
-	targetRepo := route.FullRepo()
+	// Cross-repo reads are only permitted against public repositories. This
+	// check is specific to capability-verified enclave requests; delegated
+	// identities are instead scoped to their allowed repositories by the
+	// delegation store.
+	targetRepo := plan.route.FullRepo()
 	if targetRepo != claims.Repo && !h.server.enclaveRepositoryIsPublic(r.Context(), targetRepo) {
 		logEnclave.Printf("Enclave request denied: agentID=%s attempted cross-repo access to non-public repo=%s (assigned=%s)", util.HashIdentifierForLog(claims.AgentID()), targetRepo, claims.Repo)
 		writeEnclaveDenied(w)
 		return
 	}
-	toolName, args := enclaveToolAndArgs(route)
-	if toolName == "" {
-		writeEnclaveDenied(w)
-		return
-	}
-	fullPath := path
-	if r.URL.RawQuery != "" {
-		fullPath += "?" + r.URL.RawQuery
-	}
-	logEnclave.Printf("Enclave request authorized: agentID=%s, tool=%s, repo=%s", util.HashIdentifierForLog(claims.AgentID()), toolName, targetRepo)
+	logEnclave.Printf("Enclave request authorized: agentID=%s, tool=%s, repo=%s", util.HashIdentifierForLog(claims.AgentID()), plan.toolName, targetRepo)
 	ctx := withEnclaveAuthorization(r.Context(), claims.AgentID(), claims.Repo)
-	h.handleWithDIFC(w, r.WithContext(ctx), fullPath, toolName, args, nil)
+	h.handleWithDIFC(w, r.WithContext(ctx), plan.fullPath, plan.toolName, plan.args, nil)
 }
 
 func (s *Server) seedEnclaveAssignedRepositorySecrecy(agentID, repo string) {

@@ -2,10 +2,8 @@ package proxy
 
 import (
 	"net/http"
-	"net/url"
 
 	"github.com/github/gh-aw-mcpg/internal/delegation"
-	"github.com/github/gh-aw-mcpg/internal/enclavegithub"
 	"github.com/github/gh-aw-mcpg/internal/logger"
 	"github.com/github/gh-aw-mcpg/internal/util"
 )
@@ -29,42 +27,29 @@ func (s *Server) ControlHandler() http.Handler {
 }
 
 func (h *proxyHandler) handleDelegatedRequest(w http.ResponseWriter, r *http.Request) {
-	path, ok := enclavePath(r.URL.Path, r.URL.RawPath)
-	if !ok || r.Method != http.MethodGet || hasEnclaveGETBody(r) {
+	plan := planEnclaveRequest(r)
+	if !plan.ok() {
+		switch plan.denial {
+		case enclaveDenialRoute:
+			logDelegation.Printf("No matching enclave route for path_hash=%s", util.HashForLog(plan.path, 16, ""))
+		case enclaveDenialTool:
+			logDelegation.Printf("No MCP tool for matched enclave route path_hash=%s", util.HashForLog(plan.path, 16, ""))
+		}
 		writeEnclaveDenied(w)
 		return
 	}
-	query, err := url.ParseQuery(r.URL.RawQuery)
+	repo := plan.route.FullRepo()
+	handle, err := h.server.delegation.Store.AuthorizeExecutor(r.Header.Get("Authorization"), repo, plan.toolName)
 	if err != nil {
+		logDelegation.Printf("Executor not authorized for tool=%s repo_hash=%s", plan.toolName, util.HashForLog(repo, 16, ""))
 		writeEnclaveDenied(w)
 		return
 	}
-	route, err := enclavegithub.MatchEnclaveRoute(path, query)
-	if err != nil {
-		logDelegation.Printf("No matching enclave route for path_hash=%s", util.HashForLog(path, 16, ""))
-		writeEnclaveDenied(w)
-		return
-	}
-	toolName, args := enclaveToolAndArgs(route)
-	if toolName == "" {
-		writeEnclaveDenied(w)
-		return
-	}
-	handle, err := h.server.delegation.Store.AuthorizeExecutor(r.Header.Get("Authorization"), route.FullRepo(), toolName)
-	if err != nil {
-		logDelegation.Printf("Executor not authorized for tool=%s repo_hash=%s", toolName, util.HashForLog(route.FullRepo(), 16, ""))
-		writeEnclaveDenied(w)
-		return
-	}
-	fullPath := path
-	if r.URL.RawQuery != "" {
-		fullPath += "?" + r.URL.RawQuery
-	}
-	logDelegation.Printf("Delegating request: tool=%s repo_hash=%s path_hash=%s", toolName, util.HashForLog(route.FullRepo(), 16, ""), util.HashForLog(path, 16, ""))
+	logDelegation.Printf("Delegating request: tool=%s repo_hash=%s path_hash=%s", plan.toolName, util.HashForLog(repo, 16, ""), util.HashForLog(plan.path, 16, ""))
 	// Bind this request to a delegation-specific isolation context, keyed
 	// on the identity's own opaque handle and assigned repository, rather
 	// than letting it fall through to the shared fallback proxy DIFC
 	// identity used by ordinary (non-delegated, non-enclave) requests.
-	ctx := withEnclaveAuthorization(r.Context(), "delegation:"+handle, route.FullRepo())
-	h.handleWithDIFC(w, r.WithContext(ctx), fullPath, toolName, args, nil)
+	ctx := withEnclaveAuthorization(r.Context(), "delegation:"+handle, repo)
+	h.handleWithDIFC(w, r.WithContext(ctx), plan.fullPath, plan.toolName, plan.args, nil)
 }
