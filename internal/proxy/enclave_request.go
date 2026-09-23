@@ -101,8 +101,8 @@ func planEnclaveRequest(r *http.Request) enclaveRequestPlan {
 }
 
 // routeAllowedBy reports whether the plan matched a route whose operation is
-// permitted by claims. It tolerates plans denied before route matching, where
-// route is nil.
+// permitted by claims. Plans denied before route matching have no route and are
+// never allowed, so route is only dereferenced once matching succeeded.
 func (p enclaveRequestPlan) routeAllowedBy(claims *enclavegithub.Claims) bool {
-	return p.ok() && claims.AllowsOperation(p.route.Operation)
+	return p.route != nil && claims.AllowsOperation(p.route.Operation)
 }
