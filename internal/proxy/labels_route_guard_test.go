@@ -8,6 +8,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/github/gh-aw-mcpg/internal/guard"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -91,6 +92,11 @@ func TestHandler_ListLabels_RealGuard_ApprovedIntegrity(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.NotNil(t, s)
+	t.Cleanup(func() {
+		if wg, ok := s.guard.(*guard.WasmGuard); ok {
+			assert.NoError(t, wg.Close(context.Background()))
+		}
+	})
 
 	// Sanity: the route under test must resolve to the guard's tool name.
 	m := MatchRoute("/repos/testorg/testrepo/labels")

@@ -144,11 +144,27 @@ jobs:
       - name: Set up Rust
         uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2.0.0
         with:
+          target: wasm32-wasip1
           cache-workspaces: guards/github-guard/rust-guard
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
 
       - name: Run Rust guard unit tests
         working-directory: guards/github-guard/rust-guard
         run: cargo test --lib
+
+      - name: Build WASM guard
+        working-directory: guards/github-guard
+        run: make build
+
+      - name: Run Go tests that require the compiled WASM guard
+        env:
+          AWMG_WASM_GUARD_PATH: ${{ github.workspace }}/guards/github-guard/github-guard-rust.wasm
+        run: go test -count=1 -timeout=5m ./internal/proxy/...
 
   race-test:
     runs-on: ubuntu-latest
