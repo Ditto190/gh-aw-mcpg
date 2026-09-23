@@ -156,13 +156,15 @@ func TestLoadStore_FailsClosedOnLegacyVersion(t *testing.T) {
 	now := time.Now()
 	id := Identity{
 		delegationBinding: delegationBinding{
-			RunID:               "run-123",
-			EnclaveBackend:      "awf-enclave",
-			EnclaveEntryID:      "entry-1",
-			InvocationID:        "inv-1",
-			Repository:          "github/gh-aw",
-			ToolPolicy:          ToolPolicyGitHubRepositoryReadV1,
-			SchemaHash:          "sha256:abc",
+			RequestCore: RequestCore{
+				RunID:          "run-123",
+				EnclaveBackend: "awf-enclave",
+				EnclaveEntryID: "entry-1",
+				InvocationID:   "inv-1",
+				Repository:     "github/gh-aw",
+				ToolPolicy:     ToolPolicyGitHubRepositoryReadV1,
+				SchemaHash:     "sha256:abc",
+			},
 			InvocationExpiresAt: now.Add(time.Hour),
 		},
 		Handle:           "dlg_legacy123",
@@ -188,13 +190,15 @@ func TestLoadStore_FailsClosedOnDuplicateLiveInvocationKeys(t *testing.T) {
 	now := time.Now()
 	id1 := Identity{
 		delegationBinding: delegationBinding{
-			RunID:               "run-123",
-			EnclaveBackend:      "awf-enclave",
-			EnclaveEntryID:      "entry-1",
-			InvocationID:        "inv-1",
-			Repository:          "github/gh-aw",
-			ToolPolicy:          ToolPolicyGitHubRepositoryReadV1,
-			SchemaHash:          "sha256:abc",
+			RequestCore: RequestCore{
+				RunID:          "run-123",
+				EnclaveBackend: "awf-enclave",
+				EnclaveEntryID: "entry-1",
+				InvocationID:   "inv-1",
+				Repository:     "github/gh-aw",
+				ToolPolicy:     ToolPolicyGitHubRepositoryReadV1,
+				SchemaHash:     "sha256:abc",
+			},
 			InvocationExpiresAt: now.Add(time.Hour),
 		},
 		Handle:           "dlg_handle1",
@@ -206,13 +210,16 @@ func TestLoadStore_FailsClosedOnDuplicateLiveInvocationKeys(t *testing.T) {
 	}
 	id2 := Identity{
 		delegationBinding: delegationBinding{
-			RunID:               "run-123",
-			EnclaveBackend:      "awf-enclave",
-			EnclaveEntryID:      "entry-1",
-			InvocationID:        "inv-1", // same invocation ID
-			Repository:          "github/gh-aw",
-			ToolPolicy:          ToolPolicyGitHubRepositoryReadV1,
-			SchemaHash:          "sha256:abc",
+			RequestCore: RequestCore{
+				RunID:          "run-123",
+				EnclaveBackend: "awf-enclave",
+				EnclaveEntryID: "entry-1",
+				InvocationID:   "inv-1",
+				ToolPolicy:     ToolPolicyGitHubRepositoryReadV1,
+				SchemaHash:     "sha256:abc",
+				// same invocation ID
+				Repository: "github/gh-aw",
+			},
 			InvocationExpiresAt: now.Add(time.Hour),
 		},
 		Handle:           "dlg_handle2",
@@ -250,13 +257,15 @@ func TestLoadStore_FailsClosedOnDuplicateLiveAndTerminalInvocationKeys(t *testin
 	now := time.Now()
 	live := Identity{
 		delegationBinding: delegationBinding{
-			RunID:               "run-123",
-			EnclaveBackend:      "awf-enclave",
-			EnclaveEntryID:      "entry-1",
-			InvocationID:        "inv-1",
-			Repository:          "github/gh-aw",
-			ToolPolicy:          ToolPolicyGitHubRepositoryReadV1,
-			SchemaHash:          "sha256:abc",
+			RequestCore: RequestCore{
+				RunID:          "run-123",
+				EnclaveBackend: "awf-enclave",
+				EnclaveEntryID: "entry-1",
+				InvocationID:   "inv-1",
+				Repository:     "github/gh-aw",
+				ToolPolicy:     ToolPolicyGitHubRepositoryReadV1,
+				SchemaHash:     "sha256:abc",
+			},
 			InvocationExpiresAt: now.Add(time.Hour),
 		},
 		Handle:           "dlg_live",
@@ -268,13 +277,16 @@ func TestLoadStore_FailsClosedOnDuplicateLiveAndTerminalInvocationKeys(t *testin
 	}
 	terminal := Identity{
 		delegationBinding: delegationBinding{
-			RunID:               "run-123",
-			EnclaveBackend:      "awf-enclave",
-			EnclaveEntryID:      "entry-1",
-			InvocationID:        "inv-1", // same invocation ID
-			Repository:          "github/gh-aw",
-			ToolPolicy:          ToolPolicyGitHubRepositoryReadV1,
-			SchemaHash:          "sha256:abc",
+			RequestCore: RequestCore{
+				RunID:          "run-123",
+				EnclaveBackend: "awf-enclave",
+				EnclaveEntryID: "entry-1",
+				InvocationID:   "inv-1",
+				ToolPolicy:     ToolPolicyGitHubRepositoryReadV1,
+				SchemaHash:     "sha256:abc",
+				// same invocation ID
+				Repository: "github/gh-aw",
+			},
 			InvocationExpiresAt: now.Add(time.Hour),
 		},
 		Handle:           "dlg_terminal",
@@ -312,13 +324,15 @@ func TestLoadStore_FailsClosedWhenUniqueDynamicSchemaHashesExceedEnvelopeBound(t
 	now := time.Now()
 	id1 := Identity{
 		delegationBinding: delegationBinding{
-			RunID:               "run-123",
-			EnclaveBackend:      "awf-enclave",
-			EnclaveEntryID:      "entry-1",
-			InvocationID:        "inv-1",
-			Repository:          "github/gh-aw",
-			ToolPolicy:          ToolPolicyGitHubRepositoryReadV1,
-			SchemaHash:          "sha256:hash1",
+			RequestCore: RequestCore{
+				RunID:          "run-123",
+				EnclaveBackend: "awf-enclave",
+				EnclaveEntryID: "entry-1",
+				InvocationID:   "inv-1",
+				Repository:     "github/gh-aw",
+				ToolPolicy:     ToolPolicyGitHubRepositoryReadV1,
+				SchemaHash:     "sha256:hash1",
+			},
 			InvocationExpiresAt: now.Add(time.Hour),
 		},
 		Handle:           "dlg_1",
@@ -330,13 +344,15 @@ func TestLoadStore_FailsClosedWhenUniqueDynamicSchemaHashesExceedEnvelopeBound(t
 	}
 	id2 := Identity{
 		delegationBinding: delegationBinding{
-			RunID:               "run-123",
-			EnclaveBackend:      "awf-enclave",
-			EnclaveEntryID:      "entry-1",
-			InvocationID:        "inv-2",
-			Repository:          "github/gh-aw",
-			ToolPolicy:          ToolPolicyGitHubRepositoryReadV1,
-			SchemaHash:          "sha256:hash2",
+			RequestCore: RequestCore{
+				RunID:          "run-123",
+				EnclaveBackend: "awf-enclave",
+				EnclaveEntryID: "entry-1",
+				InvocationID:   "inv-2",
+				Repository:     "github/gh-aw",
+				ToolPolicy:     ToolPolicyGitHubRepositoryReadV1,
+				SchemaHash:     "sha256:hash2",
+			},
 			InvocationExpiresAt: now.Add(time.Hour),
 		},
 		Handle:           "dlg_2",
@@ -611,13 +627,15 @@ func TestSaveState_ConcurrentCallsRemainConsistent(t *testing.T) {
 func persistedIdentity(handle, bearer, invocationID string, now time.Time) Identity {
 	return Identity{
 		delegationBinding: delegationBinding{
-			RunID:               "run-123",
-			EnclaveBackend:      "awf-enclave",
-			EnclaveEntryID:      "entry-1",
-			InvocationID:        invocationID,
-			Repository:          "github/gh-aw",
-			ToolPolicy:          ToolPolicyGitHubRepositoryReadV1,
-			SchemaHash:          "sha256:abc",
+			RequestCore: RequestCore{
+				RunID:          "run-123",
+				EnclaveBackend: "awf-enclave",
+				EnclaveEntryID: "entry-1",
+				InvocationID:   invocationID,
+				Repository:     "github/gh-aw",
+				ToolPolicy:     ToolPolicyGitHubRepositoryReadV1,
+				SchemaHash:     "sha256:abc",
+			},
 			InvocationExpiresAt: now.Add(time.Hour),
 		},
 		Handle:           handle,
@@ -935,13 +953,15 @@ func TestParsePersistedState(t *testing.T) {
 		now := time.Now().Round(time.Second)
 		id := Identity{
 			delegationBinding: delegationBinding{
-				RunID:               "run-123",
-				EnclaveBackend:      "awf-enclave",
-				EnclaveEntryID:      "entry-1",
-				InvocationID:        "inv-1",
-				Repository:          "github/gh-aw",
-				ToolPolicy:          ToolPolicyGitHubRepositoryReadV1,
-				SchemaHash:          "sha256:abc",
+				RequestCore: RequestCore{
+					RunID:          "run-123",
+					EnclaveBackend: "awf-enclave",
+					EnclaveEntryID: "entry-1",
+					InvocationID:   "inv-1",
+					Repository:     "github/gh-aw",
+					ToolPolicy:     ToolPolicyGitHubRepositoryReadV1,
+					SchemaHash:     "sha256:abc",
+				},
 				InvocationExpiresAt: now.Add(time.Hour),
 			},
 			Handle:           "dlg_handle1",

@@ -148,13 +148,15 @@ func newDelegationRedactionServer(t *testing.T, upstreamURL string) (*Server, st
 	t.Cleanup(func() { sanitize.SetPrivateSelectorRedaction(false) })
 
 	identity, err := store.CreateOrConfirm(delegation.CreateOrConfirmRequest{
-		RunID:          redactionRunID,
-		EnclaveBackend: "awf-enclave",
-		EnclaveEntryID: redactionEntryID,
-		InvocationID:   redactionInvID,
-		Repository:     redactionSelector,
-		ToolPolicy:     delegation.ToolPolicyGitHubRepositoryReadV1,
-		SchemaHash:     "sha256:test",
+		RequestCore: delegation.RequestCore{
+			RunID:          redactionRunID,
+			EnclaveBackend: "awf-enclave",
+			EnclaveEntryID: redactionEntryID,
+			InvocationID:   redactionInvID,
+			Repository:     redactionSelector,
+			ToolPolicy:     delegation.ToolPolicyGitHubRepositoryReadV1,
+			SchemaHash:     "sha256:test",
+		},
 		RequestedTTL:   time.Minute,
 		IdempotencyKey: "idem-1",
 	})
@@ -279,13 +281,15 @@ func TestDelegationControlLoggingRedactsPrivateSelectors(t *testing.T) {
 
 	logs := captureProxyLogs(t, func() {
 		require.Equal(t, http.StatusOK, post("create-or-confirm", delegation.CreateOrConfirmRequestWire{
-			RunID:               redactionRunID,
-			EnclaveBackend:      "awf-enclave",
-			EnclaveEntryID:      redactionEntryID,
-			InvocationID:        redactionInvID,
-			Repository:          redactionSelector,
-			ToolPolicy:          delegation.ToolPolicyGitHubRepositoryReadV1,
-			SchemaHash:          "sha256:test",
+			RequestCore: delegation.RequestCore{
+				RunID:          redactionRunID,
+				EnclaveBackend: "awf-enclave",
+				EnclaveEntryID: redactionEntryID,
+				InvocationID:   redactionInvID,
+				Repository:     redactionSelector,
+				ToolPolicy:     delegation.ToolPolicyGitHubRepositoryReadV1,
+				SchemaHash:     "sha256:test",
+			},
 			RequestedTTLSeconds: 60,
 			IdempotencyKey:      "idem-1",
 		}).Code)

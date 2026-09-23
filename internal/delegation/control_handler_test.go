@@ -153,13 +153,15 @@ func TestHandleControl_CreateOrConfirm(t *testing.T) {
 	t.Run("success creates a new identity and persists state", func(t *testing.T) {
 		deps, secret := newControlTestDeps(t)
 		wire := CreateOrConfirmRequestWire{
-			RunID:               "run-123",
-			EnclaveBackend:      "awf-enclave",
-			EnclaveEntryID:      "entry-1",
-			InvocationID:        "inv-1",
-			Repository:          "github/gh-aw",
-			ToolPolicy:          ToolPolicyGitHubRepositoryReadV1,
-			SchemaHash:          "sha256:abc",
+			RequestCore: RequestCore{
+				RunID:          "run-123",
+				EnclaveBackend: "awf-enclave",
+				EnclaveEntryID: "entry-1",
+				InvocationID:   "inv-1",
+				Repository:     "github/gh-aw",
+				ToolPolicy:     ToolPolicyGitHubRepositoryReadV1,
+				SchemaHash:     "sha256:abc",
+			},
 			RequestedTTLSeconds: 60,
 			IdempotencyKey:      "idem-1",
 		}
@@ -180,15 +182,18 @@ func TestHandleControl_CreateOrConfirm(t *testing.T) {
 	t.Run("invalid wire fields (bad requested_ttl) return 400", func(t *testing.T) {
 		deps, secret := newControlTestDeps(t)
 		wire := CreateOrConfirmRequestWire{
-			RunID:               "run-123",
-			EnclaveBackend:      "awf-enclave",
-			EnclaveEntryID:      "entry-1",
-			InvocationID:        "inv-1",
-			Repository:          "github/gh-aw",
-			ToolPolicy:          ToolPolicyGitHubRepositoryReadV1,
-			SchemaHash:          "sha256:abc",
-			RequestedTTLSeconds: 0, // invalid: must be positive
-			IdempotencyKey:      "idem-1",
+			RequestCore: RequestCore{
+				RunID:          "run-123",
+				EnclaveBackend: "awf-enclave",
+				EnclaveEntryID: "entry-1",
+				InvocationID:   "inv-1",
+				Repository:     "github/gh-aw",
+				ToolPolicy:     ToolPolicyGitHubRepositoryReadV1,
+				SchemaHash:     "sha256:abc",
+			},
+			RequestedTTLSeconds: 0,
+			// invalid: must be positive
+			IdempotencyKey: "idem-1",
 		}
 		w := doControlRequest(t, deps, secret, ControlPathPrefix+"create-or-confirm", http.MethodPost, wire)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
@@ -224,13 +229,15 @@ func TestHandleControl_CreateOrConfirm(t *testing.T) {
 	t.Run("store rejection (mismatched idempotent replay) returns 403 and still persists state", func(t *testing.T) {
 		deps, secret := newControlTestDeps(t)
 		wire := CreateOrConfirmRequestWire{
-			RunID:               "run-123",
-			EnclaveBackend:      "awf-enclave",
-			EnclaveEntryID:      "entry-1",
-			InvocationID:        "inv-1",
-			Repository:          "github/gh-aw",
-			ToolPolicy:          ToolPolicyGitHubRepositoryReadV1,
-			SchemaHash:          "sha256:abc",
+			RequestCore: RequestCore{
+				RunID:          "run-123",
+				EnclaveBackend: "awf-enclave",
+				EnclaveEntryID: "entry-1",
+				InvocationID:   "inv-1",
+				Repository:     "github/gh-aw",
+				ToolPolicy:     ToolPolicyGitHubRepositoryReadV1,
+				SchemaHash:     "sha256:abc",
+			},
 			RequestedTTLSeconds: 60,
 			IdempotencyKey:      "idem-1",
 		}
@@ -254,13 +261,15 @@ func TestHandleControl_CreateOrConfirm(t *testing.T) {
 		deps.StatePath = badDir
 
 		wire := CreateOrConfirmRequestWire{
-			RunID:               "run-123",
-			EnclaveBackend:      "awf-enclave",
-			EnclaveEntryID:      "entry-1",
-			InvocationID:        "inv-1",
-			Repository:          "github/gh-aw",
-			ToolPolicy:          ToolPolicyGitHubRepositoryReadV1,
-			SchemaHash:          "sha256:abc",
+			RequestCore: RequestCore{
+				RunID:          "run-123",
+				EnclaveBackend: "awf-enclave",
+				EnclaveEntryID: "entry-1",
+				InvocationID:   "inv-1",
+				Repository:     "github/gh-aw",
+				ToolPolicy:     ToolPolicyGitHubRepositoryReadV1,
+				SchemaHash:     "sha256:abc",
+			},
 			RequestedTTLSeconds: 60,
 			IdempotencyKey:      "idem-1",
 		}
@@ -271,13 +280,15 @@ func TestHandleControl_CreateOrConfirm(t *testing.T) {
 	t.Run("persist failure after store rejection still returns the persist failure status", func(t *testing.T) {
 		deps, secret := newControlTestDeps(t)
 		wire := CreateOrConfirmRequestWire{
-			RunID:               "run-123",
-			EnclaveBackend:      "awf-enclave",
-			EnclaveEntryID:      "entry-1",
-			InvocationID:        "inv-1",
-			Repository:          "github/gh-aw",
-			ToolPolicy:          ToolPolicyGitHubRepositoryReadV1,
-			SchemaHash:          "sha256:abc",
+			RequestCore: RequestCore{
+				RunID:          "run-123",
+				EnclaveBackend: "awf-enclave",
+				EnclaveEntryID: "entry-1",
+				InvocationID:   "inv-1",
+				Repository:     "github/gh-aw",
+				ToolPolicy:     ToolPolicyGitHubRepositoryReadV1,
+				SchemaHash:     "sha256:abc",
+			},
 			RequestedTTLSeconds: 60,
 			IdempotencyKey:      "idem-1",
 		}
@@ -300,13 +311,15 @@ func TestHandleControl_Revoke(t *testing.T) {
 	t.Run("success revokes an existing handle and persists state", func(t *testing.T) {
 		deps, secret := newControlTestDeps(t)
 		wire := CreateOrConfirmRequestWire{
-			RunID:               "run-123",
-			EnclaveBackend:      "awf-enclave",
-			EnclaveEntryID:      "entry-1",
-			InvocationID:        "inv-1",
-			Repository:          "github/gh-aw",
-			ToolPolicy:          ToolPolicyGitHubRepositoryReadV1,
-			SchemaHash:          "sha256:abc",
+			RequestCore: RequestCore{
+				RunID:          "run-123",
+				EnclaveBackend: "awf-enclave",
+				EnclaveEntryID: "entry-1",
+				InvocationID:   "inv-1",
+				Repository:     "github/gh-aw",
+				ToolPolicy:     ToolPolicyGitHubRepositoryReadV1,
+				SchemaHash:     "sha256:abc",
+			},
 			RequestedTTLSeconds: 60,
 			IdempotencyKey:      "idem-1",
 		}
@@ -335,13 +348,15 @@ func TestHandleControl_Revoke(t *testing.T) {
 	t.Run("persist failure after successful revoke returns 500", func(t *testing.T) {
 		deps, secret := newControlTestDeps(t)
 		wire := CreateOrConfirmRequestWire{
-			RunID:               "run-123",
-			EnclaveBackend:      "awf-enclave",
-			EnclaveEntryID:      "entry-1",
-			InvocationID:        "inv-1",
-			Repository:          "github/gh-aw",
-			ToolPolicy:          ToolPolicyGitHubRepositoryReadV1,
-			SchemaHash:          "sha256:abc",
+			RequestCore: RequestCore{
+				RunID:          "run-123",
+				EnclaveBackend: "awf-enclave",
+				EnclaveEntryID: "entry-1",
+				InvocationID:   "inv-1",
+				Repository:     "github/gh-aw",
+				ToolPolicy:     ToolPolicyGitHubRepositoryReadV1,
+				SchemaHash:     "sha256:abc",
+			},
 			RequestedTTLSeconds: 60,
 			IdempotencyKey:      "idem-1",
 		}
@@ -372,13 +387,15 @@ func TestHandleControl_RevokeByLabels(t *testing.T) {
 	t.Run("revokes zero or more matching identities and persists state", func(t *testing.T) {
 		deps, secret := newControlTestDeps(t)
 		wire := CreateOrConfirmRequestWire{
-			RunID:               "run-123",
-			EnclaveBackend:      "awf-enclave",
-			EnclaveEntryID:      "entry-1",
-			InvocationID:        "inv-1",
-			Repository:          "github/gh-aw",
-			ToolPolicy:          ToolPolicyGitHubRepositoryReadV1,
-			SchemaHash:          "sha256:abc",
+			RequestCore: RequestCore{
+				RunID:          "run-123",
+				EnclaveBackend: "awf-enclave",
+				EnclaveEntryID: "entry-1",
+				InvocationID:   "inv-1",
+				Repository:     "github/gh-aw",
+				ToolPolicy:     ToolPolicyGitHubRepositoryReadV1,
+				SchemaHash:     "sha256:abc",
+			},
 			RequestedTTLSeconds: 60,
 			IdempotencyKey:      "idem-1",
 		}
@@ -433,13 +450,15 @@ func TestHandleControl_Status(t *testing.T) {
 	t.Run("success returns store status and labelled handles", func(t *testing.T) {
 		deps, secret := newControlTestDeps(t)
 		wire := CreateOrConfirmRequestWire{
-			RunID:               "run-123",
-			EnclaveBackend:      "awf-enclave",
-			EnclaveEntryID:      "entry-1",
-			InvocationID:        "inv-1",
-			Repository:          "github/gh-aw",
-			ToolPolicy:          ToolPolicyGitHubRepositoryReadV1,
-			SchemaHash:          "sha256:abc",
+			RequestCore: RequestCore{
+				RunID:          "run-123",
+				EnclaveBackend: "awf-enclave",
+				EnclaveEntryID: "entry-1",
+				InvocationID:   "inv-1",
+				Repository:     "github/gh-aw",
+				ToolPolicy:     ToolPolicyGitHubRepositoryReadV1,
+				SchemaHash:     "sha256:abc",
+			},
 			RequestedTTLSeconds: 60,
 			IdempotencyKey:      "idem-1",
 		}

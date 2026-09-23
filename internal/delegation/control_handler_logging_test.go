@@ -55,13 +55,15 @@ func captureControlHandlerLogs(t *testing.T, f func()) string {
 
 func TestHandleControl_CreateOrConfirmSuccessLogging(t *testing.T) {
 	wire := CreateOrConfirmRequestWire{
-		RunID:               "run-123",
-		EnclaveBackend:      "awf-enclave",
-		EnclaveEntryID:      "entry-1",
-		InvocationID:        "inv-1",
-		Repository:          "github/gh-aw",
-		ToolPolicy:          ToolPolicyGitHubRepositoryReadV1,
-		SchemaHash:          "sha256:abc",
+		RequestCore: RequestCore{
+			RunID:          "run-123",
+			EnclaveBackend: "awf-enclave",
+			EnclaveEntryID: "entry-1",
+			InvocationID:   "inv-1",
+			Repository:     "github/gh-aw",
+			ToolPolicy:     ToolPolicyGitHubRepositoryReadV1,
+			SchemaHash:     "sha256:abc",
+		},
 		RequestedTTLSeconds: 60,
 		IdempotencyKey:      "idem-1",
 	}
