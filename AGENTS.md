@@ -553,6 +553,25 @@ If either canary fails after an upgrade, **stop and investigate** before merging
 - `TestMaxRetriesSentinelCanary` failure → SDK changed `MaxRetries: -1` semantics; update `streamableMaxRetries` and reconnect logic in `internal/mcp/http_transport.go`.
 - `TestArgumentValidationBypassCanary` failure → SDK added argument validation to the `AddTool` method path; switch to a different bypass mechanism and update `registerToolWithoutValidation` in `internal/server/tool_registry.go`.
 
+### OpenTelemetry Upgrade Process
+
+The `go.opentelemetry.io/otel*` modules (`otel`, `otel/sdk`, `otel/trace`, `otel/exporters/otlp/otlptrace/otlptracehttp`) share a single version and must be bumped together. The gateway hand-implements `sdktrace.SpanExporter` (`internal/tracing/fanout.go`) and relies on `TracerProvider.Shutdown` flushing buffered spans, so verify these canaries after every bump:
+
+| Test | File | Guards |
+|---|---|---|
+| `TestSpanExporterInterfaceCanary` | `internal/tracing/otel_upgrade_canary_test.go` | `sdktrace.SpanExporter` method set/signatures that `fanoutExporter` implements by hand |
+| `TestTracerProviderShutdownFlushesCanary` | `internal/tracing/otel_upgrade_canary_test.go` | `TracerProvider.Shutdown` flushes buffered spans and is idempotent (`Provider.Shutdown` never calls `ForceFlush`) |
+| `TestSchemaURL` | `internal/tracing/semconv_test.go` | semconv version stays in lockstep with the pinned `otel/sdk` (avoids "conflicting Schema URL" resource errors) |
+
+```bash
+go test ./internal/tracing/ -run 'Canary|TestSchemaURL' -v
+```
+
+If a canary fails after an upgrade, **stop and investigate** before merging:
+- `TestSpanExporterInterfaceCanary` failure → the SDK reshaped `SpanExporter`; update `fanoutExporter` in `internal/tracing/fanout.go`.
+- `TestTracerProviderShutdownFlushesCanary` failure → shutdown no longer flushes; add an explicit `ForceFlush` in `Provider.Shutdown` (`internal/tracing/provider.go`).
+- `TestSchemaURL` failure → follow the semconv upgrade steps documented at the top of `internal/tracing/semconv.go`.
+
 ## Resources
 
 - [README.md](./README.md) - Full documentation
