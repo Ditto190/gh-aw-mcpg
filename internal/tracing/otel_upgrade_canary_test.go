@@ -26,7 +26,7 @@ import (
 //
 // Upgrade gate: this canary and TestTracerProviderShutdownFlushesCanary must both
 // pass before accepting a go.opentelemetry.io/otel* upgrade, alongside the semconv
-// lockstep check in TestSchemaURL (semconv_test.go).
+// lockstep check in TestSchemaURL_MatchesPinnedSemconvVersion (semconv_test.go).
 func TestSpanExporterInterfaceCanary(t *testing.T) {
 	assert := assert.New(t)
 	require := require.New(t)
