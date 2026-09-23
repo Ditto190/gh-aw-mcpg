@@ -29,9 +29,10 @@ import (
 // lockstep check in TestSchemaURL (semconv_test.go).
 func TestSpanExporterInterfaceCanary(t *testing.T) {
 	assert := assert.New(t)
+	require := require.New(t)
 
 	exporterType := reflect.TypeOf((*sdktrace.SpanExporter)(nil)).Elem()
-	require.Equal(t, reflect.Interface, exporterType.Kind())
+	require.Equal(reflect.Interface, exporterType.Kind())
 
 	// Method set must stay exactly ExportSpans + Shutdown (alphabetical order).
 	wantSignatures := map[string]string{
@@ -66,6 +67,7 @@ func TestSpanExporterInterfaceCanary(t *testing.T) {
 // exit without any error surfacing.
 func TestTracerProviderShutdownFlushesCanary(t *testing.T) {
 	assert := assert.New(t)
+	require := require.New(t)
 
 	// Record span names eagerly: the batch span processor reuses (and clears) the
 	// slice it hands to the exporter, and tracetest.InMemoryExporter discards its
@@ -81,7 +83,7 @@ func TestTracerProviderShutdownFlushesCanary(t *testing.T) {
 	span.End()
 	assert.Empty(exporter.names(), "span should still be buffered before Shutdown")
 
-	require.NoError(t, tp.Shutdown(context.Background()),
+	require.NoError(tp.Shutdown(context.Background()),
 		"TracerProvider.Shutdown should succeed")
 	assert.Equal([]string{"canary-span"}, exporter.names(),
 		"TracerProvider.Shutdown must flush buffered spans; review Provider.Shutdown in provider.go")
