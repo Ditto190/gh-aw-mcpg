@@ -105,5 +105,5 @@ func TestStripQuery_DebugLoggingEnabled(t *testing.T) {
 	cmd.Env = append(os.Environ(), "GO_WANT_DEBUG_SUBPROCESS=1", "DEBUG=*")
 	out, err := cmd.CombinedOutput()
 	require.NoError(t, err, "subprocess output:\n%s", out)
-	assert.Contains(t, string(out), "PASS")
+assert.Contains(t, string(out), "StripQuery: stripped query string from path")
 }
