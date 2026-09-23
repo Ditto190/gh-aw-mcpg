@@ -213,7 +213,7 @@ func (h *proxyHandler) handleEnclaveRequest(w http.ResponseWriter, r *http.Reque
 		writeEnclaveDenied(w)
 		return
 	}
-	if !plan.ok() || !claims.AllowsOperation(plan.route.Operation) {
+	if !plan.routeAllowedBy(claims) {
 		logEnclave.Printf("Enclave request denied: agentID=%s, path=%q not permitted by route/operation policy", util.HashIdentifierForLog(claims.AgentID()), plan.path)
 		writeEnclaveDenied(w)
 		return

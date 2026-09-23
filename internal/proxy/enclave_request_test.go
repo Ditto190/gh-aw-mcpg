@@ -111,3 +111,12 @@ func TestPlanEnclaveRequestStripsHostPrefix(t *testing.T) {
 	require.NotNil(t, plan.route)
 	assert.Equal(t, enclavegithub.OperationIssueCommentsList, plan.route.Operation)
 }
+
+func TestEnclaveToolAndArgsUnsupportedOperation(t *testing.T) {
+	// Defensive branch: a route whose operation has no backing MCP tool is
+	// rejected by planEnclaveRequest with enclaveDenialTool.
+	toolName, args := enclaveToolAndArgs(&enclavegithub.Route{Operation: "issues.delete", Owner: "owner", Repo: "repo"})
+
+	assert.Empty(t, toolName)
+	assert.Nil(t, args)
+}
