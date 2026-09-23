@@ -102,6 +102,24 @@ func TestSetupTLSListener_SuccessCases(t *testing.T) {
 	}
 }
 
+// TestSetupTLSListener_ListenFailure exercises the net.Listen error branch,
+// previously untested: setupTLSListener must surface a wrapped error and
+// return a nil listener when the requested address is already occupied.
+func TestSetupTLSListener_ListenFailure(t *testing.T) {
+	t.Parallel()
+
+	occupiedAddr := availableLoopbackAddr(t)
+	occupyingListener, err := net.Listen("tcp", occupiedAddr)
+	require.NoError(t, err)
+	defer occupyingListener.Close()
+
+	listener, tlsEnabled, err := setupTLSListener(occupiedAddr, "", "", "")
+	require.Error(t, err)
+	assert.Nil(t, listener)
+	assert.False(t, tlsEnabled)
+	assert.Contains(t, err.Error(), "failed to listen on")
+}
+
 func TestSetupTLSListener_ClosesListenerOnTLSFailure(t *testing.T) {
 	t.Parallel()
 
