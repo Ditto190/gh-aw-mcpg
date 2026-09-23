@@ -29,8 +29,11 @@ func (s *Server) ControlHandler() http.Handler {
 func (h *proxyHandler) handleDelegatedRequest(w http.ResponseWriter, r *http.Request) {
 	plan := planEnclaveRequest(r)
 	if !plan.ok() {
-		if plan.denial == enclaveDenialRoute || plan.denial == enclaveDenialTool {
+		switch plan.denial {
+		case enclaveDenialRoute:
 			logDelegation.Printf("No matching enclave route for path_hash=%s", util.HashForLog(plan.path, 16, ""))
+		case enclaveDenialTool:
+			logDelegation.Printf("No MCP tool for matched enclave route path_hash=%s", util.HashForLog(plan.path, 16, ""))
 		}
 		writeEnclaveDenied(w)
 		return
