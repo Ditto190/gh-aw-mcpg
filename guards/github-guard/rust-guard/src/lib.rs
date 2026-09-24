@@ -200,15 +200,12 @@ fn try_write_json_output(
     output_size: u32,
     fn_name: &str,
 ) -> i32 {
-    let len = match u32::try_from(output_json.len()) {
-        Ok(n) => n,
-        Err(_) => {
-            log_error(&format!(
-                "    FAILED: output too large ({} bytes)",
-                output_json.len()
-            ));
-            return -1;
-        }
+    let Ok(len) = u32::try_from(output_json.len()) else {
+        log_error(&format!(
+            "    FAILED: output too large ({} bytes)",
+            output_json.len()
+        ));
+        return -1;
     };
     if len > output_size {
         log_error(&format!(
@@ -1117,15 +1114,12 @@ pub extern "C" fn label_response(
 #[no_mangle]
 pub extern "C" fn alloc(size: u32) -> u32 {
     log_debug(&format!(">>> alloc({})", size));
-    let layout = match Layout::from_size_align(size as usize, 8) {
-        Ok(l) => l,
-        Err(_) => {
-            log_error(&format!(
-                "    alloc FAILED: invalid layout for size {}",
-                size
-            ));
-            return 0;
-        }
+    let Ok(layout) = Layout::from_size_align(size as usize, 8) else {
+        log_error(&format!(
+            "    alloc FAILED: invalid layout for size {}",
+            size
+        ));
+        return 0;
     };
     let ptr = unsafe { std_alloc(layout) as u32 };
     log_debug(&format!("<<< alloc returning ptr={}", ptr));
@@ -1140,15 +1134,12 @@ pub extern "C" fn dealloc(ptr: u32, size: u32) {
         log_debug("    dealloc skipped (null ptr or zero size)");
         return;
     }
-    let layout = match Layout::from_size_align(size as usize, 8) {
-        Ok(l) => l,
-        Err(_) => {
-            log_error(&format!(
-                "    dealloc FAILED: invalid layout for size {}",
-                size
-            ));
-            return;
-        }
+    let Ok(layout) = Layout::from_size_align(size as usize, 8) else {
+        log_error(&format!(
+            "    dealloc FAILED: invalid layout for size {}",
+            size
+        ));
+        return;
     };
     unsafe { std_dealloc(ptr as *mut u8, layout) }
     log_debug("<<< dealloc complete");
