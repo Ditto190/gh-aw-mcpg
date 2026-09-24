@@ -696,9 +696,8 @@ pub(crate) fn has_maintainer_reaction_with_callback(
         return false;
     }
 
-    let (owner, repo) = match split_repo_id(repo_full_name) {
-        Some(pair) => pair,
-        None => return false,
+    let Some((owner, repo)) = split_repo_id(repo_full_name) else {
+        return false;
     };
 
     // Try to get per-user reaction nodes.
@@ -1837,9 +1836,8 @@ pub(crate) fn elevate_via_collaborator_permission(
     if integrity_rank(repo_full_name, &integrity, ctx) >= WRITER_RANK || author_login.is_empty() {
         return integrity;
     }
-    let (owner, repo) = match split_repo_id(repo_full_name) {
-        Some(pair) => pair,
-        None => return integrity,
+    let Some((owner, repo)) = split_repo_id(repo_full_name) else {
+        return integrity;
     };
     crate::log_debug(&format!(
         "[integrity] {}:{}: author_association floor below writer (rank={}), checking collaborator permission for {}",
