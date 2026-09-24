@@ -8,6 +8,55 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestWithEnclaveSession(t *testing.T) {
+	assert := assert.New(t)
+
+	ctx := WithEnclaveSession(context.Background())
+
+	assert.True(ctx.Value(EnclaveSessionContextKey).(bool), "WithEnclaveSession must set the marker to true")
+	assert.True(IsEnclaveSession(ctx))
+}
+
+func TestIsEnclaveSession(t *testing.T) {
+	tests := []struct {
+		name string
+		ctx  context.Context
+		want bool
+	}{
+		{
+			name: "nil context is treated as non-enclave",
+			ctx:  nil,
+			want: false,
+		},
+		{
+			name: "background context without marker is non-enclave",
+			ctx:  context.Background(),
+			want: false,
+		},
+		{
+			name: "context marked via WithEnclaveSession is enclave",
+			ctx:  WithEnclaveSession(context.Background()),
+			want: true,
+		},
+		{
+			name: "context with non-bool value for the key is non-enclave",
+			ctx:  context.WithValue(context.Background(), EnclaveSessionContextKey, "not-a-bool"),
+			want: false,
+		},
+		{
+			name: "context with marker explicitly false is non-enclave",
+			ctx:  context.WithValue(context.Background(), EnclaveSessionContextKey, false),
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, IsEnclaveSession(tt.ctx))
+		})
+	}
+}
+
 func TestRedactRequestValueForLog(t *testing.T) {
 	assert := assert.New(t)
 
@@ -21,4 +70,7 @@ func TestRedactRequestValueForLog(t *testing.T) {
 	assert.NotContains(redacted, "acme/secret")
 	assert.Equal(sanitize.KeyedDigest("repo://acme/secret/file.go"), redacted)
 	assert.Equal(redacted, RedactRequestValueForLog(enclaveCtx, "repo://acme/secret/file.go"))
+
+	// Nil context must not panic and is treated as non-enclave, ordinary traffic.
+	assert.Equal("repo://acme/secret/file.go", RedactRequestValueForLog(nil, "repo://acme/secret/file.go")) //nolint:staticcheck // intentionally passing nil to exercise IsEnclaveSession's nil-context branch
 }
