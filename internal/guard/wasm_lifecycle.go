@@ -24,6 +24,8 @@ var logWasm = logger.New("guard:wasm")
 
 var globalCompilationCacheMu sync.Mutex
 
+// WASMGuardsDirEnvVar is the environment variable name for the root directory
+// containing per-server WASM guards (<root>/<serverID>/*.wasm).
 const WASMGuardsDirEnvVar = "MCP_GATEWAY_WASM_GUARDS_DIR"
 
 // ContainerGuardWasmPath is the baked-in guard path in the container image.
