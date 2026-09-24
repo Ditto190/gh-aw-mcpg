@@ -37,13 +37,16 @@ func CollaboratorSelectorsForLog(sensitive bool, owner, repo, username string) (
 // ParseCollaboratorPermissionArgs extracts and validates the owner, repo, and
 // username fields from an args map for a get_collaborator_permission call.
 // It returns the (possibly partial) values even on error so that callers can
-// include them in diagnostic log messages.
-func ParseCollaboratorPermissionArgs(argsMap map[string]interface{}) (owner, repo, username string, err error) {
+// include them in diagnostic log messages. When sensitive is true (enclave or
+// delegation mode), the partial values are hashed before being written to this
+// package's diagnostic log line so private selectors are never disclosed.
+func ParseCollaboratorPermissionArgs(argsMap map[string]interface{}, sensitive bool) (owner, repo, username string, err error) {
 	owner = util.GetStringFromMap(argsMap, "owner")
 	repo = util.GetStringFromMap(argsMap, "repo")
 	username = util.GetStringFromMap(argsMap, "username")
 	if owner == "" || repo == "" || username == "" {
-		logCollab.Printf("ParseCollaboratorPermissionArgs: missing required fields: owner=%q, repo=%q, username=%q", owner, repo, username)
+		ownerForLog, repoForLog, usernameForLog := collaboratorLogFields(sensitive, owner, repo, username)
+		logCollab.Printf("ParseCollaboratorPermissionArgs: missing required fields: owner=%q, repo=%q, username=%q", ownerForLog, repoForLog, usernameForLog)
 		err = fmt.Errorf("get_collaborator_permission: missing owner/repo/username")
 	}
 	return

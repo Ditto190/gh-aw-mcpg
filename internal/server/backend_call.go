@@ -102,11 +102,11 @@ func (g *guardBackendCaller) callCollaboratorPermission(ctx context.Context, arg
 		return nil, fmt.Errorf("get_collaborator_permission: unexpected args type: %T", args)
 	}
 
-	owner, repo, username, err := githubhttp.ParseCollaboratorPermissionArgs(argsMap)
 	// The guard-internal metadata call carries the same private selectors as the
 	// agent-visible call it is labeling, so every log site below resolves the
 	// enclave redaction decision from the originating request context.
 	sensitive := sanitize.ShouldRedactPayload(mcp.IsEnclaveSession(g.ctx))
+	owner, repo, username, err := githubhttp.ParseCollaboratorPermissionArgs(argsMap, sensitive)
 	logOwner, logRepo, logUser := githubhttp.CollaboratorSelectorsForLog(sensitive, owner, repo, username)
 	if err != nil {
 		logUnified.Printf("get_collaborator_permission: missing required args (owner=%q repo=%q username=%q)", logOwner, logRepo, logUser)

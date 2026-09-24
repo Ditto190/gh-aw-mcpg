@@ -382,7 +382,7 @@ func (r *restBackendCaller) CallTool(ctx context.Context, toolName string, args 
 
 	case "get_collaborator_permission":
 		var parseErr error
-		collabOwner, collabRepo, collabUsername, parseErr = githubhttp.ParseCollaboratorPermissionArgs(argsMap)
+		collabOwner, collabRepo, collabUsername, parseErr = githubhttp.ParseCollaboratorPermissionArgs(argsMap, sensitive)
 		if parseErr != nil {
 			if sensitive {
 				logProxy.Printf("restBackendCaller: get_collaborator_permission missing args")

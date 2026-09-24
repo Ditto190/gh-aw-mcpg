@@ -1,14 +1,18 @@
 package githubhttp
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
+	"sync"
 	"testing"
 
+	"github.com/github/gh-aw-mcpg/internal/logger"
 	"github.com/github/gh-aw-mcpg/internal/util"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -21,7 +25,7 @@ func TestParseCollaboratorPermissionArgs(t *testing.T) {
 			"repo":     "myrepo",
 			"username": "alice",
 		}
-		owner, repo, username, err := ParseCollaboratorPermissionArgs(argsMap)
+		owner, repo, username, err := ParseCollaboratorPermissionArgs(argsMap, false)
 		require.NoError(t, err)
 		assert.Equal(t, "myorg", owner)
 		assert.Equal(t, "myrepo", repo)
@@ -33,7 +37,7 @@ func TestParseCollaboratorPermissionArgs(t *testing.T) {
 			"repo":     "myrepo",
 			"username": "alice",
 		}
-		owner, repo, username, err := ParseCollaboratorPermissionArgs(argsMap)
+		owner, repo, username, err := ParseCollaboratorPermissionArgs(argsMap, false)
 		require.Error(t, err)
 		require.ErrorContains(t, err, "missing owner/repo/username")
 		assert.Empty(t, owner)
@@ -46,7 +50,7 @@ func TestParseCollaboratorPermissionArgs(t *testing.T) {
 			"owner":    "myorg",
 			"username": "alice",
 		}
-		owner, repo, username, err := ParseCollaboratorPermissionArgs(argsMap)
+		owner, repo, username, err := ParseCollaboratorPermissionArgs(argsMap, false)
 		require.Error(t, err)
 		require.ErrorContains(t, err, "missing owner/repo/username")
 		assert.Equal(t, "myorg", owner)
@@ -59,7 +63,7 @@ func TestParseCollaboratorPermissionArgs(t *testing.T) {
 			"owner": "myorg",
 			"repo":  "myrepo",
 		}
-		owner, repo, username, err := ParseCollaboratorPermissionArgs(argsMap)
+		owner, repo, username, err := ParseCollaboratorPermissionArgs(argsMap, false)
 		require.Error(t, err)
 		require.ErrorContains(t, err, "missing owner/repo/username")
 		assert.Equal(t, "myorg", owner)
@@ -72,11 +76,95 @@ func TestParseCollaboratorPermissionArgs(t *testing.T) {
 			"owner": "myorg",
 			"repo":  "myrepo",
 		}
-		owner, repo, username, err := ParseCollaboratorPermissionArgs(argsMap)
+		owner, repo, username, err := ParseCollaboratorPermissionArgs(argsMap, false)
 		require.Error(t, err)
 		assert.Equal(t, "myorg", owner)
 		assert.Equal(t, "myrepo", repo)
 		assert.Empty(t, username)
+	})
+}
+
+// captureCollaboratorLogs runs f with DEBUG=* and returns everything this
+// package's debug logger wrote to stderr. The package-level logger resolves
+// DEBUG once, at package initialization, so it has to be rebuilt after the
+// environment is set or it stays disabled and the assertions become vacuous.
+//
+// This helper swaps the package-level logger and os.Stderr, so tests using it
+// must not call t.Parallel().
+func captureCollaboratorLogs(t *testing.T, f func()) string {
+	t.Helper()
+	t.Setenv("DEBUG", "*")
+	t.Setenv("DEBUG_COLORS", "0")
+
+	prev := logCollab
+	logCollab = logger.New("githubhttp:collaborator")
+	require.True(t, logCollab.Enabled(), "the capture harness must actually enable debug logging")
+	t.Cleanup(func() { logCollab = prev })
+
+	original := os.Stderr
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+	os.Stderr = w
+
+	var (
+		wg  sync.WaitGroup
+		buf bytes.Buffer
+	)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_, _ = io.Copy(&buf, r)
+	}()
+
+	func() {
+		defer func() {
+			os.Stderr = original
+			_ = w.Close()
+		}()
+		f()
+	}()
+	wg.Wait()
+	_ = r.Close()
+	return buf.String()
+}
+
+// TestParseCollaboratorPermissionArgs_Logging verifies that the diagnostic log
+// line emitted for a partially-populated args map never discloses the raw
+// owner/repo/username selectors when the caller is in a sensitive (enclave or
+// delegation) mode, while keeping them for diagnosability otherwise.
+func TestParseCollaboratorPermissionArgs_Logging(t *testing.T) {
+	const (
+		secretOwner = "octosecretorg"
+		secretRepo  = "privaterepo9"
+	)
+	argsMap := map[string]interface{}{
+		"owner": secretOwner,
+		"repo":  secretRepo,
+		// username missing so the diagnostic log line is emitted
+	}
+
+	t.Run("sensitive mode hashes the partial selectors", func(t *testing.T) {
+		var err error
+		logs := captureCollaboratorLogs(t, func() {
+			_, _, _, err = ParseCollaboratorPermissionArgs(argsMap, true)
+		})
+		require.ErrorContains(t, err, "missing owner/repo/username")
+
+		assert.Contains(t, logs, "ParseCollaboratorPermissionArgs: missing required fields", "the diagnostic log line must still be emitted")
+		assert.NotContains(t, logs, secretOwner, "the raw owner must never be logged in sensitive mode")
+		assert.NotContains(t, logs, secretRepo, "the raw repository name must never be logged in sensitive mode")
+		assert.Contains(t, logs, util.HashForLog(secretOwner, 16, "owner:"))
+		assert.Contains(t, logs, util.HashForLog(secretRepo, 16, "repo:"))
+	})
+
+	t.Run("non-sensitive mode keeps the partial selectors", func(t *testing.T) {
+		var err error
+		logs := captureCollaboratorLogs(t, func() {
+			_, _, _, err = ParseCollaboratorPermissionArgs(argsMap, false)
+		})
+		require.Error(t, err)
+		assert.Contains(t, logs, secretOwner)
+		assert.Contains(t, logs, secretRepo)
 	})
 }
 
