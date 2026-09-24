@@ -25,7 +25,7 @@ func withRedaction(t *testing.T) {
 func TestReplaceKeyedWithoutCaptureGroup(t *testing.T) {
 	noGroupRe := regexp.MustCompile(`secret-\d+`)
 	result := replaceKeyed("token=secret-12345 remains", noGroupRe, "sel:")
-assert.Equal(t, "token=sel:539332b4288f1cd7 remains", result)
+	assert.Equal(t, "token=sel:539332b4288f1cd7 remains", result)
 }
 
 func TestRedactPrivateSelectors(t *testing.T) {
