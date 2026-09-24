@@ -828,7 +828,6 @@ func TestRestBackendCaller_CollaboratorPermission_SensitiveLogging(t *testing.T)
 		assert.Contains(t, logs, "get_collaborator_permission missing args")
 		assert.NotContains(t, logs, secretOwner, "the raw owner must never be logged in enclave mode")
 		assert.NotContains(t, logs, secretRepo, "the raw repository name must never be logged in enclave mode")
-		assert.NotContains(t, logs, secretOwner+"/"+secretRepo, "the raw selector must never be logged in enclave mode")
 	})
 }
 

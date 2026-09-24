@@ -88,6 +88,9 @@ func TestParseCollaboratorPermissionArgs(t *testing.T) {
 // package's debug logger wrote to stderr. The package-level logger resolves
 // DEBUG once, at package initialization, so it has to be rebuilt after the
 // environment is set or it stays disabled and the assertions become vacuous.
+//
+// This helper swaps the package-level logger and os.Stderr, so tests using it
+// must not call t.Parallel().
 func captureCollaboratorLogs(t *testing.T, f func()) string {
 	t.Helper()
 	t.Setenv("DEBUG", "*")
