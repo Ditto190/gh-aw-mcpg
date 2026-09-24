@@ -782,19 +782,29 @@ func TestRestBackendCaller_SearchRepositories_EnclaveMode(t *testing.T) {
 // enclave or delegation mode, the owner/repo/username values must not appear
 // in the log line, but in ordinary mode they may (for diagnosability).
 func TestRestBackendCaller_CollaboratorPermission_SensitiveLogging(t *testing.T) {
-	t.Run("non-sensitive mode returns missing args error", func(t *testing.T) {
+	const (
+		secretOwner = "octosecretorg"
+		secretRepo  = "privaterepo9"
+	)
+
+	t.Run("non-sensitive mode logs the selectors and returns missing args error", func(t *testing.T) {
 		proxyServer := &Server{
 			githubAPIURL: "http://unused",
 			httpClient:   http.DefaultClient,
 		}
 		caller := &restBackendCaller{server: proxyServer}
 
-		_, err := caller.CallTool(context.Background(), "get_collaborator_permission", map[string]interface{}{
-			"owner": "myorg",
-			// repo and username both missing
+		var err error
+		logs := captureProxyLogs(t, func() {
+			_, err = caller.CallTool(context.Background(), "get_collaborator_permission", map[string]interface{}{
+				"owner": secretOwner,
+				// repo and username both missing
+			})
 		})
 		require.Error(t, err)
 		assert.ErrorContains(t, err, "missing owner/repo/username")
+		assert.Contains(t, logs, "get_collaborator_permission missing args")
+		assert.Contains(t, logs, secretOwner, "public-mode diagnostics keep the raw selector")
 	})
 
 	t.Run("enclave (sensitive) mode returns missing args error without leaking selectors", func(t *testing.T) {
@@ -805,14 +815,32 @@ func TestRestBackendCaller_CollaboratorPermission_SensitiveLogging(t *testing.T)
 		}
 		caller := &restBackendCaller{server: proxyServer}
 
-		_, err := caller.CallTool(context.Background(), "get_collaborator_permission", map[string]interface{}{
-			"owner": "myorg",
-			"repo":  "myrepo",
-			// username missing
+		var err error
+		logs := captureProxyLogs(t, func() {
+			_, err = caller.CallTool(context.Background(), "get_collaborator_permission", map[string]interface{}{
+				"owner": secretOwner,
+				"repo":  secretRepo,
+				// username missing
+			})
 		})
 		require.Error(t, err)
 		assert.ErrorContains(t, err, "missing owner/repo/username")
+		assert.Contains(t, logs, "get_collaborator_permission missing args")
+		assert.NotContains(t, logs, secretOwner, "the raw owner must never be logged in enclave mode")
+		assert.NotContains(t, logs, secretRepo, "the raw repository name must never be logged in enclave mode")
+		assert.NotContains(t, logs, secretOwner+"/"+secretRepo, "the raw selector must never be logged in enclave mode")
 	})
+}
+
+// unreachableUpstreamURL returns the URL of an httptest server that has already
+// been shut down, so dialing it fails deterministically with a connection error
+// (as opposed to a hard-coded port that some other process might be serving).
+func unreachableUpstreamURL(t *testing.T) string {
+	t.Helper()
+	closed := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	url := closed.URL
+	closed.Close()
+	return url
 }
 
 // TestRestBackendCaller_CollaboratorPermission_UpstreamUnreachable covers the
@@ -821,10 +849,7 @@ func TestRestBackendCaller_CollaboratorPermission_SensitiveLogging(t *testing.T)
 // upstream connection itself fails (as opposed to returning a non-2xx status).
 func TestRestBackendCaller_CollaboratorPermission_UpstreamUnreachable(t *testing.T) {
 	proxyServer := &Server{
-		// Port 1 is a reserved/unassigned low port that nothing listens on,
-		// so the outbound dial fails with a network error rather than the
-		// server responding with an HTTP error status.
-		githubAPIURL: "http://127.0.0.1:1",
+		githubAPIURL: unreachableUpstreamURL(t),
 		httpClient:   &http.Client{Timeout: 2 * time.Second},
 	}
 	caller := &restBackendCaller{server: proxyServer}
@@ -844,7 +869,7 @@ func TestRestBackendCaller_CollaboratorPermission_UpstreamUnreachable(t *testing
 // connection itself fails.
 func TestRestBackendCaller_UpstreamUnreachable(t *testing.T) {
 	proxyServer := &Server{
-		githubAPIURL: "http://127.0.0.1:1",
+		githubAPIURL: unreachableUpstreamURL(t),
 		httpClient:   &http.Client{Timeout: 2 * time.Second},
 	}
 	caller := &restBackendCaller{server: proxyServer}
