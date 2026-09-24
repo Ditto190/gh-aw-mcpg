@@ -148,8 +148,7 @@ func TestParseCollaboratorPermissionArgs_Logging(t *testing.T) {
 		logs := captureCollaboratorLogs(t, func() {
 			_, _, _, err = ParseCollaboratorPermissionArgs(argsMap, true)
 		})
-		require.Error(t, err)
-		assert.ErrorContains(t, err, "missing owner/repo/username")
+		require.ErrorContains(t, err, "missing owner/repo/username")
 
 		assert.Contains(t, logs, "ParseCollaboratorPermissionArgs: missing required fields", "the diagnostic log line must still be emitted")
 		assert.NotContains(t, logs, secretOwner, "the raw owner must never be logged in sensitive mode")
