@@ -48,6 +48,7 @@ Quick reference for AI agents working with MCP Gateway (Go-based MCP proxy serve
 - `internal/mountspec/` - Container bind-mount declaration parsing
 - `internal/oidc/` - GitHub Actions OIDC token provider and caching
 - `internal/proxy/` - Filtering HTTP proxy for the GitHub API with DIFC enforcement
+- `internal/reposelector/` - Canonical/legacy GitHub owner and repository selector validation shared by guard policies, enclave policies, and delegated identities
 - `internal/restroute/` - Shared REST path-matching helpers
 - `internal/sanitize/` - Sensitive data redaction utilities (`SanitizeString`, `SanitizeJSON`, `RedactSecret`) for safe log output
 - `internal/server/` - HTTP server (routed/unified modes)
