@@ -11,23 +11,23 @@ import (
 )
 
 func TestSecureCompileOpts_DisablesENV(t *testing.T) {
-	// Compile a filter that tries to read $ENV — the secure options should
-	// make it return null instead of actual environment data.
-	query, err := gojq.Parse("$ENV")
-	require.NoError(t, err)
+	for _, filter := range []string{"$ENV", "env"} {
+		t.Run(filter, func(t *testing.T) {
+			query, err := gojq.Parse(filter)
+			require.NoError(t, err)
 
-	code, err := gojq.Compile(query, SecureCompileOpts...)
-	require.NoError(t, err)
+			code, err := gojq.Compile(query, SecureCompileOpts...)
+			require.NoError(t, err)
 
-	iter := code.RunWithContext(context.Background(), nil)
-	v, ok := iter.Next()
-	require.True(t, ok, "expected a result from $ENV query")
+			iter := code.RunWithContext(context.Background(), nil)
+			v, ok := iter.Next()
+			require.True(t, ok, "expected a result from %s query", filter)
 
-	// With the environment loader returning nil, $ENV should produce an empty
-	// object (no keys) rather than the real process environment.
-	envMap, ok := v.(map[string]any)
-	require.True(t, ok, "expected $ENV to return a map, got %T", v)
-	assert.Empty(t, envMap, "$ENV should be empty when environment loader is disabled")
+			envMap, ok := v.(map[string]any)
+			require.True(t, ok, "expected %s to return a map, got %T", filter, v)
+			assert.Empty(t, envMap, "%s should be empty when environment loader is disabled", filter)
+		})
+	}
 }
 
 func TestSecureCompileOpts_AllowsNormalFilters(t *testing.T) {
