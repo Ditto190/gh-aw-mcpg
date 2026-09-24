@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -708,4 +709,151 @@ func TestRestBackendCaller_IssueRead_ResponseFormat(t *testing.T) {
 	text, ok := content[0]["text"].(string)
 	require.True(t, ok)
 	assert.Contains(t, text, "Bug report", "response text should contain the issue title")
+}
+
+// TestRestBackendCaller_SearchRepositories_EnclaveMode covers the enclave branch
+// of the search_repositories case (proxy.go ~368-374), which is only reachable
+// when r.server.enclave is non-nil. In enclave mode, search_repositories is
+// restricted to an exact "repo:owner/name" lookup instead of a free-text query.
+func TestRestBackendCaller_SearchRepositories_EnclaveMode(t *testing.T) {
+	t.Run("valid exact repo lookup succeeds", func(t *testing.T) {
+		mux := http.NewServeMux()
+		mux.HandleFunc("/repos/myorg/myrepo", func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, "GET", r.Method)
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"full_name": "myorg/myrepo",
+				"private":   false,
+			})
+		})
+		mockServer := httptest.NewServer(mux)
+		defer mockServer.Close()
+
+		proxyServer := &Server{
+			githubAPIURL: mockServer.URL,
+			githubToken:  "test-token",
+			httpClient:   http.DefaultClient,
+			enclave:      newEnclaveState(nil, nil),
+		}
+		caller := &restBackendCaller{server: proxyServer}
+
+		result, err := caller.CallTool(context.Background(), "search_repositories", map[string]interface{}{
+			"query": "repo:MyOrg/MyRepo",
+		})
+		require.NoError(t, err)
+		text := extractContentText(t, result)
+		assert.Contains(t, text, "myorg/myrepo")
+	})
+
+	t.Run("query without repo: prefix is rejected", func(t *testing.T) {
+		proxyServer := &Server{
+			githubAPIURL: "http://unused",
+			httpClient:   http.DefaultClient,
+			enclave:      newEnclaveState(nil, nil),
+		}
+		caller := &restBackendCaller{server: proxyServer}
+
+		_, err := caller.CallTool(context.Background(), "search_repositories", map[string]interface{}{
+			"query": "language:go",
+		})
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "must use an exact repository")
+	})
+
+	t.Run("repo: prefix with an invalid repository selector is rejected", func(t *testing.T) {
+		proxyServer := &Server{
+			githubAPIURL: "http://unused",
+			httpClient:   http.DefaultClient,
+			enclave:      newEnclaveState(nil, nil),
+		}
+		caller := &restBackendCaller{server: proxyServer}
+
+		_, err := caller.CallTool(context.Background(), "search_repositories", map[string]interface{}{
+			"query": "repo:not-a-valid-selector",
+		})
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "must use an exact repository")
+	})
+}
+
+// TestRestBackendCaller_CollaboratorPermission_SensitiveLogging covers both
+// branches of the sensitive/non-sensitive missing-args log line inside the
+// get_collaborator_permission case (proxy.go ~387-389): when the server is in
+// enclave or delegation mode, the owner/repo/username values must not appear
+// in the log line, but in ordinary mode they may (for diagnosability).
+func TestRestBackendCaller_CollaboratorPermission_SensitiveLogging(t *testing.T) {
+	t.Run("non-sensitive mode returns missing args error", func(t *testing.T) {
+		proxyServer := &Server{
+			githubAPIURL: "http://unused",
+			httpClient:   http.DefaultClient,
+		}
+		caller := &restBackendCaller{server: proxyServer}
+
+		_, err := caller.CallTool(context.Background(), "get_collaborator_permission", map[string]interface{}{
+			"owner": "myorg",
+			// repo and username both missing
+		})
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "missing owner/repo/username")
+	})
+
+	t.Run("enclave (sensitive) mode returns missing args error without leaking selectors", func(t *testing.T) {
+		proxyServer := &Server{
+			githubAPIURL: "http://unused",
+			httpClient:   http.DefaultClient,
+			enclave:      newEnclaveState(nil, nil),
+		}
+		caller := &restBackendCaller{server: proxyServer}
+
+		_, err := caller.CallTool(context.Background(), "get_collaborator_permission", map[string]interface{}{
+			"owner": "myorg",
+			"repo":  "myrepo",
+			// username missing
+		})
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "missing owner/repo/username")
+	})
+}
+
+// TestRestBackendCaller_CollaboratorPermission_UpstreamUnreachable covers the
+// forwardToGitHub error branch inside the get_collaborator_permission REST
+// call helper closure (proxy.go ~420-423), which is only exercised when the
+// upstream connection itself fails (as opposed to returning a non-2xx status).
+func TestRestBackendCaller_CollaboratorPermission_UpstreamUnreachable(t *testing.T) {
+	proxyServer := &Server{
+		// Port 1 is a reserved/unassigned low port that nothing listens on,
+		// so the outbound dial fails with a network error rather than the
+		// server responding with an HTTP error status.
+		githubAPIURL: "http://127.0.0.1:1",
+		httpClient:   &http.Client{Timeout: 2 * time.Second},
+	}
+	caller := &restBackendCaller{server: proxyServer}
+
+	_, err := caller.CallTool(context.Background(), "get_collaborator_permission", map[string]interface{}{
+		"owner":    "myorg",
+		"repo":     "myrepo",
+		"username": "someone",
+	})
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "REST call failed")
+}
+
+// TestRestBackendCaller_UpstreamUnreachable covers the outer forwardToGitHub
+// error branch shared by pull_request_read, issue_read, and non-enclave
+// search_repositories (proxy.go ~436-439), exercised only when the upstream
+// connection itself fails.
+func TestRestBackendCaller_UpstreamUnreachable(t *testing.T) {
+	proxyServer := &Server{
+		githubAPIURL: "http://127.0.0.1:1",
+		httpClient:   &http.Client{Timeout: 2 * time.Second},
+	}
+	caller := &restBackendCaller{server: proxyServer}
+
+	_, err := caller.CallTool(context.Background(), "pull_request_read", map[string]interface{}{
+		"owner":      "myorg",
+		"repo":       "myrepo",
+		"pullNumber": "1",
+	})
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "REST call failed")
 }
