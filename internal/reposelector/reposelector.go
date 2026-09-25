@@ -41,6 +41,8 @@ var (
 	repoNamePattern       = regexp.MustCompile(`^[a-z0-9._-]{1,100}$`)
 )
 
+const repoNameRejectionTraversal = "traversal"
+
 // IsCanonicalOwner reports whether owner is the exact canonical ASCII byte
 // sequence required for a repository owner: ^[a-z0-9](?:[a-z0-9-]{0,38})$.
 func IsCanonicalOwner(owner string) bool {
@@ -60,8 +62,8 @@ func IsLegacyOwner(owner string) bool {
 // IsCanonicalRepoName reports whether name is a valid repository-name segment:
 // ^(?!\.\.?$)(?!.*\.\.)[a-z0-9._-]{1,100}$.
 func IsCanonicalRepoName(name string) bool {
-	if !matchesCanonicalRepoName(name) {
-		if IsTraversalRepoName(name) {
+	if rejection := canonicalRepoNameRejection(name); rejection != "" {
+		if rejection == repoNameRejectionTraversal {
 			logReposelector.Print("IsCanonicalRepoName: rejected path-traversal-like name")
 		}
 		return false
@@ -73,8 +75,14 @@ func matchesCanonicalOwner(owner string) bool {
 	return canonicalOwnerPattern.MatchString(owner)
 }
 
-func matchesCanonicalRepoName(name string) bool {
-	return repoNamePattern.MatchString(name) && !IsTraversalRepoName(name)
+func canonicalRepoNameRejection(name string) string {
+	if IsTraversalRepoName(name) {
+		return repoNameRejectionTraversal
+	}
+	if !repoNamePattern.MatchString(name) {
+		return "pattern"
+	}
+	return ""
 }
 
 func isASCII(s string) bool {
@@ -105,8 +113,12 @@ func IsCanonicalRepositorySelector(selector string) bool {
 		logReposelector.Print("rejected repository selector: does not match canonical owner/repo pattern")
 		return false
 	}
-	if !matchesCanonicalOwner(owner) || !matchesCanonicalRepoName(name) {
-		if IsTraversalRepoName(name) {
+	if !matchesCanonicalOwner(owner) {
+		logReposelector.Print("rejected repository selector: does not match canonical owner/repo pattern")
+		return false
+	}
+	if rejection := canonicalRepoNameRejection(name); rejection != "" {
+		if rejection == repoNameRejectionTraversal {
 			logReposelector.Print("rejected repository selector: repo segment is '.', '..', or contains '..'")
 		} else {
 			logReposelector.Print("rejected repository selector: does not match canonical owner/repo pattern")
