@@ -44,7 +44,7 @@ var (
 // IsCanonicalOwner reports whether owner is the exact canonical ASCII byte
 // sequence required for a repository owner: ^[a-z0-9](?:[a-z0-9-]{0,38})$.
 func IsCanonicalOwner(owner string) bool {
-	valid := isASCII(owner) && canonicalOwnerPattern.MatchString(owner)
+	valid := isASCII(owner) && matchesCanonicalOwner(owner)
 	if !valid {
 		logReposelector.Print("rejected owner selector: not a canonical ASCII owner segment")
 	}
@@ -60,12 +60,28 @@ func IsLegacyOwner(owner string) bool {
 // IsCanonicalRepoName reports whether name is a valid repository-name segment:
 // ^(?!\.\.?$)(?!.*\.\.)[a-z0-9._-]{1,100}$.
 func IsCanonicalRepoName(name string) bool {
-	if !repoNamePattern.MatchString(name) {
+	if !matchesCanonicalRepoName(name) {
+		if IsTraversalRepoName(name) {
+			logReposelector.Print("IsCanonicalRepoName: rejected path-traversal-like name")
+		}
 		return false
 	}
-	if IsTraversalRepoName(name) {
-		logReposelector.Print("IsCanonicalRepoName: rejected path-traversal-like name")
-		return false
+	return true
+}
+
+func matchesCanonicalOwner(owner string) bool {
+	return canonicalOwnerPattern.MatchString(owner)
+}
+
+func matchesCanonicalRepoName(name string) bool {
+	return repoNamePattern.MatchString(name) && !IsTraversalRepoName(name)
+}
+
+func isASCII(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] > 0x7f {
+			return false
+		}
 	}
 	return true
 }
@@ -89,16 +105,12 @@ func IsCanonicalRepositorySelector(selector string) bool {
 		logReposelector.Print("rejected repository selector: does not match canonical owner/repo pattern")
 		return false
 	}
-	if !canonicalOwnerPattern.MatchString(owner) {
-		logReposelector.Print("rejected repository selector: does not match canonical owner/repo pattern")
-		return false
-	}
-	if !repoNamePattern.MatchString(name) {
-		logReposelector.Print("rejected repository selector: does not match canonical owner/repo pattern")
-		return false
-	}
-	if IsTraversalRepoName(name) {
-		logReposelector.Print("rejected repository selector: repo segment is '.', '..', or contains '..'")
+	if !matchesCanonicalOwner(owner) || !matchesCanonicalRepoName(name) {
+		if IsTraversalRepoName(name) {
+			logReposelector.Print("rejected repository selector: repo segment is '.', '..', or contains '..'")
+		} else {
+			logReposelector.Print("rejected repository selector: does not match canonical owner/repo pattern")
+		}
 		return false
 	}
 	return true
@@ -128,13 +140,4 @@ func splitSelector(selector string) (owner, name string, ok bool) {
 		return "", "", false
 	}
 	return owner, name, true
-}
-
-func isASCII(s string) bool {
-	for i := 0; i < len(s); i++ {
-		if s[i] > 0x7f {
-			return false
-		}
-	}
-	return true
 }
