@@ -1314,10 +1314,14 @@ args = ["run", "--rm", "-i", "ghcr.io/github/github-mcp-server:latest"]
 // LoadFromFile propagates the error from expandTracingVariables when the
 // [gateway.opentelemetry] section references an undefined ${VAR} expression.
 func TestLoadFromFile_OpenTelemetryUndefinedVariableRejected(t *testing.T) {
-	const undefinedVarName = "GH_AW_TEST_UNDEFINED_OTEL_VAR_XYZ"
-	// Ensure the referenced variable really is undefined in this test process.
-	_, isSet := os.LookupEnv(undefinedVarName)
-	require.False(t, isSet, "test precondition: environment variable must not be set")
+const undefinedVarName = "GH_AW_TEST_UNDEFINED_OTEL_VAR_XYZ"
+originalValue, wasSet := os.LookupEnv(undefinedVarName)
+require.NoError(t, os.Unsetenv(undefinedVarName))
+t.Cleanup(func() {
+	if wasSet {
+		require.NoError(t, os.Setenv(undefinedVarName, originalValue))
+	}
+})
 
 	path := writeTempTOML(t, fmt.Sprintf(`
 [gateway]
