@@ -102,6 +102,8 @@ func TestIsCanonicalRepositorySelector(t *testing.T) {
 		{"empty repo", "github/", false},
 		{"traversal repo", "github/..", false},
 		{"embedded traversal", "github/foo..bar", false},
+		{"non-ASCII owner", "gi™thub/gh-aw", false},
+		{"non-ASCII repo", "github/gh™aw", false},
 	}
 
 	for _, tt := range tests {

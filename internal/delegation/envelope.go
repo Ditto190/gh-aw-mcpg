@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/github/gh-aw-mcpg/internal/logger"
+	"github.com/github/gh-aw-mcpg/internal/reposelector"
 	"github.com/github/gh-aw-mcpg/internal/util"
 )
 
@@ -80,7 +81,7 @@ func (e *Envelope) Validate() error {
 		return fmt.Errorf("envelope must admit at least one repository or owner")
 	}
 	if err := util.ValidateUnique(e.AllowedRepositories, func(repo string) error {
-		if !IsCanonicalRepositorySelector(repo) {
+		if !reposelector.IsCanonicalRepositorySelector(repo) {
 			return fmt.Errorf("envelope repository %s is not a canonical selector", selectorLogID(repo))
 		}
 		return nil
@@ -92,7 +93,7 @@ func (e *Envelope) Validate() error {
 		return err
 	}
 	if err := util.ValidateUnique(e.AllowedOwners, func(owner string) error {
-		if !IsCanonicalOwner(owner) {
+		if !reposelector.IsCanonicalOwner(owner) {
 			return fmt.Errorf("envelope owner %s is not a canonical selector", selectorLogID(owner))
 		}
 		return nil
@@ -128,7 +129,7 @@ func (e *Envelope) AllowsRepository(repo string) bool {
 	if slices.Contains(e.AllowedRepositories, repo) {
 		return true
 	}
-	if len(e.AllowedOwners) == 0 || !IsCanonicalRepositorySelector(repo) {
+	if len(e.AllowedOwners) == 0 || !reposelector.IsCanonicalRepositorySelector(repo) {
 		logEnvelope.Printf("AllowsRepository: denied repo=%s (no owner-based admission possible)", selectorLogID(repo))
 		return false
 	}

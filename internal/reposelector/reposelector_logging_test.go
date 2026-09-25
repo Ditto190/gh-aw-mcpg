@@ -1,4 +1,4 @@
-package delegation
+package reposelector
 
 import (
 	"bytes"
@@ -13,21 +13,15 @@ import (
 	"github.com/github/gh-aw-mcpg/internal/logger"
 )
 
-// captureSelectorLogs runs f with DEBUG=* and returns what logSelector wrote
-// to stderr. The logger resolves DEBUG once at package initialization, so it
-// must be rebuilt after the environment is set or the capture would be empty
-// and every assertion would pass vacuously. This must not run in parallel
-// with other tests in this package: it mutates the shared logSelector
-// package variable and os.Stderr for its duration.
-func captureSelectorLogs(t *testing.T, f func()) string {
+func captureReposelectorLogs(t *testing.T, f func()) string {
 	t.Helper()
 	t.Setenv("DEBUG", "*")
 	t.Setenv("DEBUG_COLORS", "0")
 
-	previous := logSelector
-	logSelector = logger.New("delegation:selector")
-	require.True(t, logSelector.Enabled(), "the capture harness must actually enable debug logging")
-	t.Cleanup(func() { logSelector = previous })
+	previous := logReposelector
+	logReposelector = logger.New("reposelector:reposelector")
+	require.True(t, logReposelector.Enabled(), "the capture harness must actually enable debug logging")
+	t.Cleanup(func() { logReposelector = previous })
 
 	original := os.Stderr
 	r, w, err := os.Pipe()
@@ -56,10 +50,7 @@ func captureSelectorLogs(t *testing.T, f func()) string {
 	return buf.String()
 }
 
-// TestIsCanonicalRepositorySelector_LogsRejectionReason verifies that each
-// distinct rejection branch in IsCanonicalRepositorySelector emits a
-// distinguishing log message, so admission failures remain diagnosable.
-func TestIsCanonicalRepositorySelector_LogsRejectionReason(t *testing.T) {
+func TestIsCanonicalRepositorySelectorLogsRejectionReason(t *testing.T) {
 	tests := []struct {
 		name      string
 		selector  string
@@ -77,7 +68,7 @@ func TestIsCanonicalRepositorySelector_LogsRejectionReason(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var got bool
-			logs := captureSelectorLogs(t, func() {
+			logs := captureReposelectorLogs(t, func() {
 				got = IsCanonicalRepositorySelector(tt.selector)
 			})
 			assert.Equal(t, tt.wantValid, got, "selector %q", tt.selector)
@@ -90,9 +81,7 @@ func TestIsCanonicalRepositorySelector_LogsRejectionReason(t *testing.T) {
 	}
 }
 
-// TestIsCanonicalOwner_LogsRejectionReason verifies that IsCanonicalOwner
-// logs when an owner selector fails canonical validation.
-func TestIsCanonicalOwner_LogsRejectionReason(t *testing.T) {
+func TestIsCanonicalOwnerLogsRejectionReason(t *testing.T) {
 	tests := []struct {
 		name      string
 		owner     string
@@ -107,7 +96,7 @@ func TestIsCanonicalOwner_LogsRejectionReason(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var got bool
-			logs := captureSelectorLogs(t, func() {
+			logs := captureReposelectorLogs(t, func() {
 				got = IsCanonicalOwner(tt.owner)
 			})
 			assert.Equal(t, tt.wantValid, got, "owner %q", tt.owner)

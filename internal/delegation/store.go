@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/github/gh-aw-mcpg/internal/logger"
+	"github.com/github/gh-aw-mcpg/internal/reposelector"
 	"github.com/github/gh-aw-mcpg/internal/util"
 )
 
@@ -131,7 +132,7 @@ func (s *Store) validateAgainstEnvelope(req CreateOrConfirmRequest, now time.Tim
 	if req.IdempotencyKey == "" {
 		return fmt.Errorf("idempotency key is required")
 	}
-	if !IsCanonicalRepositorySelector(req.Repository) || !s.envelope.AllowsRepository(req.Repository) {
+	if !reposelector.IsCanonicalRepositorySelector(req.Repository) || !s.envelope.AllowsRepository(req.Repository) {
 		return fmt.Errorf("repository outside envelope")
 	}
 	if req.ToolPolicy != s.envelope.ToolPolicy {

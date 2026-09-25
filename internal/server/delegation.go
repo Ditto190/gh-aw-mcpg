@@ -12,6 +12,7 @@ import (
 	"github.com/github/gh-aw-mcpg/internal/httputil"
 	"github.com/github/gh-aw-mcpg/internal/logger"
 	"github.com/github/gh-aw-mcpg/internal/mcp"
+	"github.com/github/gh-aw-mcpg/internal/reposelector"
 	"github.com/github/gh-aw-mcpg/internal/util"
 )
 
@@ -91,7 +92,7 @@ func delegatedToolRepository(toolName string, args interface{}) (string, bool) {
 		return "", false
 	}
 	repository := owner + "/" + repo
-	return repository, delegation.IsCanonicalRepositorySelector(repository)
+	return repository, reposelector.IsCanonicalRepositorySelector(repository)
 }
 
 func delegatedToolAuthorized(ctx context.Context, serverID, toolName string) bool {
