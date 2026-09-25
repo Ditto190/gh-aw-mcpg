@@ -44,7 +44,11 @@ var (
 // IsCanonicalOwner reports whether owner is the exact canonical ASCII byte
 // sequence required for a repository owner: ^[a-z0-9](?:[a-z0-9-]{0,38})$.
 func IsCanonicalOwner(owner string) bool {
-	return canonicalOwnerPattern.MatchString(owner)
+	valid := isASCII(owner) && canonicalOwnerPattern.MatchString(owner)
+	if !valid {
+		logReposelector.Print("rejected owner selector: not a canonical ASCII owner segment")
+	}
+	return valid
 }
 
 // IsLegacyOwner reports whether owner matches the canonical owner grammar
@@ -76,16 +80,28 @@ func IsTraversalRepoName(name string) bool {
 // IsCanonicalRepositorySelector reports whether selector is an exact canonical
 // "owner/repo" selector, combining IsCanonicalOwner and IsCanonicalRepoName.
 func IsCanonicalRepositorySelector(selector string) bool {
-	owner, name, ok := splitSelector(selector)
-	if !ok {
-		logReposelector.Print("IsCanonicalRepositorySelector: rejected selector that does not split into owner/repo")
+	if !isASCII(selector) {
+		logReposelector.Print("rejected repository selector: non-ASCII bytes present")
 		return false
 	}
-	valid := IsCanonicalOwner(owner) && IsCanonicalRepoName(name)
-	if !valid {
-		logReposelector.Printf("IsCanonicalRepositorySelector: rejected %q (owner=%q, repo=%q)", selector, owner, name)
+	owner, name, ok := splitSelector(selector)
+	if !ok {
+		logReposelector.Print("rejected repository selector: does not match canonical owner/repo pattern")
+		return false
 	}
-	return valid
+	if !canonicalOwnerPattern.MatchString(owner) {
+		logReposelector.Print("rejected repository selector: does not match canonical owner/repo pattern")
+		return false
+	}
+	if !repoNamePattern.MatchString(name) {
+		logReposelector.Print("rejected repository selector: does not match canonical owner/repo pattern")
+		return false
+	}
+	if IsTraversalRepoName(name) {
+		logReposelector.Print("rejected repository selector: repo segment is '.', '..', or contains '..'")
+		return false
+	}
+	return true
 }
 
 // IsLegacyRepositorySelector reports whether selector is an "owner/repo"
@@ -112,4 +128,13 @@ func splitSelector(selector string) (owner, name string, ok bool) {
 		return "", "", false
 	}
 	return owner, name, true
+}
+
+func isASCII(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] > 0x7f {
+			return false
+		}
+	}
+	return true
 }
