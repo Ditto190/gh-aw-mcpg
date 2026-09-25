@@ -25,7 +25,11 @@ package reposelector
 import (
 	"regexp"
 	"strings"
+
+	"github.com/github/gh-aw-mcpg/internal/logger"
 )
+
+var logReposelector = logger.ForFile()
 
 // Go's RE2 engine does not support the lookahead assertions in the ADR's PCRE
 // expression (?!\.\.?$)(?!.*\.\.), so those two invariants (repo segment is
@@ -55,7 +59,11 @@ func IsCanonicalRepoName(name string) bool {
 	if !repoNamePattern.MatchString(name) {
 		return false
 	}
-	return !IsTraversalRepoName(name)
+	if IsTraversalRepoName(name) {
+		logReposelector.Print("IsCanonicalRepoName: rejected path-traversal-like name")
+		return false
+	}
+	return true
 }
 
 // IsTraversalRepoName reports whether name is one of the traversal-like
@@ -69,7 +77,15 @@ func IsTraversalRepoName(name string) bool {
 // "owner/repo" selector, combining IsCanonicalOwner and IsCanonicalRepoName.
 func IsCanonicalRepositorySelector(selector string) bool {
 	owner, name, ok := splitSelector(selector)
-	return ok && IsCanonicalOwner(owner) && IsCanonicalRepoName(name)
+	if !ok {
+		logReposelector.Print("IsCanonicalRepositorySelector: rejected selector that does not split into owner/repo")
+		return false
+	}
+	valid := IsCanonicalOwner(owner) && IsCanonicalRepoName(name)
+	if !valid {
+		logReposelector.Printf("IsCanonicalRepositorySelector: rejected %q (owner=%q, repo=%q)", selector, owner, name)
+	}
+	return valid
 }
 
 // IsLegacyRepositorySelector reports whether selector is an "owner/repo"
@@ -77,7 +93,15 @@ func IsCanonicalRepositorySelector(selector string) bool {
 // whose repository name matches IsCanonicalRepoName.
 func IsLegacyRepositorySelector(selector string) bool {
 	owner, name, ok := splitSelector(selector)
-	return ok && IsLegacyOwner(owner) && IsCanonicalRepoName(name)
+	if !ok {
+		logReposelector.Print("IsLegacyRepositorySelector: rejected selector that does not split into owner/repo")
+		return false
+	}
+	valid := IsLegacyOwner(owner) && IsCanonicalRepoName(name)
+	if !valid {
+		logReposelector.Printf("IsLegacyRepositorySelector: rejected %q (owner=%q, repo=%q)", selector, owner, name)
+	}
+	return valid
 }
 
 // splitSelector splits selector into its owner and repository-name segments,
