@@ -78,7 +78,7 @@ func IsTraversalRepoName(name string) bool {
 func IsCanonicalRepositorySelector(selector string) bool {
 	owner, name, ok := splitSelector(selector)
 	if !ok {
-		logReposelector.Printf("IsCanonicalRepositorySelector: rejected %q, does not split into owner/repo", selector)
+		logReposelector.Print("IsCanonicalRepositorySelector: rejected selector that does not split into owner/repo")
 		return false
 	}
 	valid := IsCanonicalOwner(owner) && IsCanonicalRepoName(name)
