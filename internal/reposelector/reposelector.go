@@ -60,7 +60,7 @@ func IsCanonicalRepoName(name string) bool {
 		return false
 	}
 	if IsTraversalRepoName(name) {
-		logReposelector.Printf("IsCanonicalRepoName: rejected %q as a path-traversal-like name", name)
+		logReposelector.Print("IsCanonicalRepoName: rejected path-traversal-like name")
 		return false
 	}
 	return true
