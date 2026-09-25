@@ -94,7 +94,7 @@ func IsCanonicalRepositorySelector(selector string) bool {
 func IsLegacyRepositorySelector(selector string) bool {
 	owner, name, ok := splitSelector(selector)
 	if !ok {
-		logReposelector.Printf("IsLegacyRepositorySelector: rejected %q, does not split into owner/repo", selector)
+		logReposelector.Print("IsLegacyRepositorySelector: rejected selector that does not split into owner/repo")
 		return false
 	}
 	valid := IsLegacyOwner(owner) && IsCanonicalRepoName(name)
