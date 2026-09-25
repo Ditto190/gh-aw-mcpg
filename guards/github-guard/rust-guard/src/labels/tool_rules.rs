@@ -196,7 +196,7 @@ fn resolve_author_integrity(
 
     if let Some(login) = author_login {
         if is_any_trusted_actor(login, ctx) {
-            floor = max_integrity(repo_id, floor, writer_integrity(repo_id, ctx), ctx);
+            floor = max_integrity(repo_id, &floor, &writer_integrity(repo_id, ctx), ctx);
         }
         let resource_id = format!("{}/{}#{}", owner, repo, resource_num);
         floor = elevate_via_collaborator_permission(
@@ -209,7 +209,7 @@ fn resolve_author_integrity(
         );
     }
 
-    max_integrity(repo_id, base_integrity, floor, ctx)
+    max_integrity(repo_id, &base_integrity, &floor, ctx)
 }
 
 // ============================================================================
@@ -401,8 +401,8 @@ pub fn apply_tool_labels(
                         if repo_private == Some(true) {
                             integrity = max_integrity(
                                 repo_id,
-                                integrity,
-                                writer_integrity(repo_id, ctx),
+                                &integrity,
+                                &writer_integrity(repo_id, ctx),
                                 ctx,
                             );
                         } else {
@@ -410,16 +410,16 @@ pub fn apply_tool_labels(
                                 Some(true) => {
                                     integrity = max_integrity(
                                         repo_id,
-                                        integrity,
-                                        reader_integrity(repo_id, ctx),
+                                        &integrity,
+                                        &reader_integrity(repo_id, ctx),
                                         ctx,
                                     );
                                 }
                                 Some(false) => {
                                     integrity = max_integrity(
                                         repo_id,
-                                        integrity,
-                                        writer_integrity(repo_id, ctx),
+                                        &integrity,
+                                        &writer_integrity(repo_id, ctx),
                                         ctx,
                                     );
                                 }
@@ -430,8 +430,8 @@ pub fn apply_tool_labels(
                         if facts.is_merged {
                             integrity = max_integrity(
                                 repo_id,
-                                integrity,
-                                merged_integrity(repo_id, ctx),
+                                &integrity,
+                                &merged_integrity(repo_id, ctx),
                                 ctx,
                             );
                         }
