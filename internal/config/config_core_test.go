@@ -1167,3 +1167,249 @@ func TestEnsureGatewayDefaults(t *testing.T) {
 		assert.Equal(t, firstPort, cfg.Gateway.Port, "Second call should not change already-defaulted values")
 	})
 }
+
+// TestLoadFromFile_MissingGatewaySectionInitialized verifies that LoadFromFile
+// initializes cfg.Gateway to a non-nil zero-value struct when the TOML file
+// omits the [gateway] section entirely, but still enforces that an agent_id
+// or agent_ids selection is required (exercising the cfg.Gateway == nil branch).
+func TestLoadFromFile_MissingGatewaySectionInitialized(t *testing.T) {
+	path := writeTempTOML(t, `
+[servers.github]
+command = "docker"
+args = ["run", "--rm", "-i", "ghcr.io/github/github-mcp-server:latest"]
+`)
+	cfg, err := LoadFromFile(path)
+	require.Error(t, err)
+	assert.Nil(t, cfg)
+	assert.ErrorContains(t, err, "gateway.agent_id or gateway.agent_ids must be configured")
+}
+
+// TestLoadFromFile_EmptyAgentIDRejected verifies that LoadFromFile rejects a
+// gateway.agent_id that is explicitly set but empty/whitespace-only.
+func TestLoadFromFile_EmptyAgentIDRejected(t *testing.T) {
+	path := writeTempTOML(t, `
+[gateway]
+agent_id = "   "
+
+[servers.github]
+command = "docker"
+args = ["run", "--rm", "-i", "ghcr.io/github/github-mcp-server:latest"]
+`)
+	cfg, err := LoadFromFile(path)
+	require.Error(t, err)
+	assert.Nil(t, cfg)
+	assert.ErrorContains(t, err, "gateway.agent_id must be a non-empty string when provided")
+}
+
+// TestLoadFromFile_EmptyAPIKeyRejected verifies that LoadFromFile rejects a
+// gateway.api_key that is explicitly set but empty/whitespace-only.
+func TestLoadFromFile_EmptyAPIKeyRejected(t *testing.T) {
+	path := writeTempTOML(t, `
+[gateway]
+api_key = "   "
+
+[servers.github]
+command = "docker"
+args = ["run", "--rm", "-i", "ghcr.io/github/github-mcp-server:latest"]
+`)
+	cfg, err := LoadFromFile(path)
+	require.Error(t, err)
+	assert.Nil(t, cfg)
+	assert.ErrorContains(t, err, "gateway.api_key must be a non-empty string when provided")
+}
+
+// TestLoadFromFile_WhitespaceContainerRuntimeCommandRejected verifies that
+// LoadFromFile rejects a gateway.container_runtime_command that is set to a
+// whitespace-only string via validateContainerRuntimeCommandNotBlank.
+func TestLoadFromFile_WhitespaceContainerRuntimeCommandRejected(t *testing.T) {
+	path := writeTempTOML(t, `
+[gateway]
+agent_id = "test-agent"
+container_runtime_command = "   "
+
+[servers.github]
+command = "docker"
+args = ["run", "--rm", "-i", "ghcr.io/github/github-mcp-server:latest"]
+`)
+	cfg, err := LoadFromFile(path)
+	require.Error(t, err)
+	assert.Nil(t, cfg)
+	assert.ErrorContains(t, err, "container_runtime_command cannot be empty or whitespace only")
+}
+
+// TestLoadFromFile_AgentIDsCombinedWithAgentIDRejected verifies that
+// LoadFromFile rejects a configuration combining gateway.agent_ids with
+// gateway.agent_id (spec: exactly one selection is required).
+func TestLoadFromFile_AgentIDsCombinedWithAgentIDRejected(t *testing.T) {
+	path := writeTempTOML(t, `
+[gateway]
+agent_id = "solo-agent"
+agent_ids = ["agent-a", "agent-b"]
+
+[servers.github]
+command = "docker"
+args = ["run", "--rm", "-i", "ghcr.io/github/github-mcp-server:latest"]
+`)
+	cfg, err := LoadFromFile(path)
+	require.Error(t, err)
+	assert.Nil(t, cfg)
+	assert.ErrorContains(t, err, "gateway.agent_ids cannot be combined with gateway.agent_id or gateway.api_key")
+}
+
+// TestLoadFromFile_AgentIDsCombinedWithAPIKeyRejected verifies that
+// LoadFromFile rejects a configuration combining gateway.agent_ids with the
+// legacy gateway.api_key field.
+func TestLoadFromFile_AgentIDsCombinedWithAPIKeyRejected(t *testing.T) {
+	path := writeTempTOML(t, `
+[gateway]
+api_key = "solo-key"
+agent_ids = ["agent-a", "agent-b"]
+
+[servers.github]
+command = "docker"
+args = ["run", "--rm", "-i", "ghcr.io/github/github-mcp-server:latest"]
+`)
+	cfg, err := LoadFromFile(path)
+	require.Error(t, err)
+	assert.Nil(t, cfg)
+	assert.ErrorContains(t, err, "gateway.agent_ids cannot be combined with gateway.agent_id or gateway.api_key")
+}
+
+// TestLoadFromFile_DuplicateAgentIDsRejected verifies that LoadFromFile
+// propagates the error from validateAgentIDs when gateway.agent_ids contains
+// a duplicate entry.
+func TestLoadFromFile_DuplicateAgentIDsRejected(t *testing.T) {
+	path := writeTempTOML(t, `
+[gateway]
+agent_ids = ["agent-a", "agent-a"]
+
+[servers.github]
+command = "docker"
+args = ["run", "--rm", "-i", "ghcr.io/github/github-mcp-server:latest"]
+`)
+	cfg, err := LoadFromFile(path)
+	require.Error(t, err)
+	assert.Nil(t, cfg)
+	assert.ErrorContains(t, err, "must not contain duplicate agent ID")
+}
+
+// TestLoadFromFile_ValidAgentIDsAccepted verifies that a valid, unique
+// gateway.agent_ids list is accepted without error and populates cfg.Gateway.AgentIDs.
+func TestLoadFromFile_ValidAgentIDsAccepted(t *testing.T) {
+	path := writeTempTOML(t, `
+[gateway]
+agent_ids = ["solo-agent"]
+
+[servers.github]
+command = "docker"
+args = ["run", "--rm", "-i", "ghcr.io/github/github-mcp-server:latest"]
+`)
+	cfg, err := LoadFromFile(path)
+	require.NoError(t, err)
+	require.NotNil(t, cfg)
+	assert.Equal(t, []string{"solo-agent"}, cfg.Gateway.AgentIDs)
+}
+
+// TestLoadFromFile_OpenTelemetryUndefinedVariableRejected verifies that
+// LoadFromFile propagates the error from expandTracingVariables when the
+// [gateway.opentelemetry] section references an undefined ${VAR} expression.
+func TestLoadFromFile_OpenTelemetryUndefinedVariableRejected(t *testing.T) {
+	const undefinedVarName = "GH_AW_TEST_UNDEFINED_OTEL_VAR_XYZ"
+	originalValue, wasSet := os.LookupEnv(undefinedVarName)
+	require.NoError(t, os.Unsetenv(undefinedVarName))
+	t.Cleanup(func() {
+		if wasSet {
+			require.NoError(t, os.Setenv(undefinedVarName, originalValue))
+		}
+	})
+
+	path := writeTempTOML(t, fmt.Sprintf(`
+[gateway]
+agent_id = "test-agent"
+
+[gateway.opentelemetry]
+endpoint = "${%s}"
+
+[servers.github]
+command = "docker"
+args = ["run", "--rm", "-i", "ghcr.io/github/github-mcp-server:latest"]
+`, undefinedVarName))
+
+	cfg, err := LoadFromFile(path)
+	require.Error(t, err)
+	assert.Nil(t, cfg)
+	assert.ErrorContains(t, err, undefinedVarName)
+}
+
+// TestLoadFromFile_OpenTelemetryMissingEndpointRejected verifies that
+// LoadFromFile propagates the error from validateOpenTelemetryConfig when the
+// [gateway.opentelemetry] section is present but omits the required endpoint.
+func TestLoadFromFile_OpenTelemetryMissingEndpointRejected(t *testing.T) {
+	path := writeTempTOML(t, `
+[gateway]
+agent_id = "test-agent"
+
+[gateway.opentelemetry]
+service_name = "my-service"
+
+[servers.github]
+command = "docker"
+args = ["run", "--rm", "-i", "ghcr.io/github/github-mcp-server:latest"]
+`)
+	cfg, err := LoadFromFile(path)
+	require.Error(t, err)
+	assert.Nil(t, cfg)
+	assert.ErrorContains(t, err, "endpoint")
+}
+
+// TestLoadFromFile_InvalidGuardPolicyRejected verifies that LoadFromFile
+// propagates the error from validateGuardPolicies when a guard's [guards.<name>.policy]
+// section is present but includes neither allow-only nor write-sink.
+func TestLoadFromFile_InvalidGuardPolicyRejected(t *testing.T) {
+	path := writeTempTOML(t, `
+[gateway]
+agent_id = "test-agent"
+
+[servers.github]
+command = "docker"
+args = ["run", "--rm", "-i", "ghcr.io/github/github-mcp-server:latest"]
+
+[guards.myfence]
+type = "wasm"
+path = "/path/to/guard.wasm"
+
+[guards.myfence.policy]
+`)
+	cfg, err := LoadFromFile(path)
+	require.Error(t, err)
+	assert.Nil(t, cfg)
+	assert.ErrorContains(t, err, "invalid policy for guard 'myfence'")
+}
+
+// TestLoadFromFile_ValidAllowOnlyGuardPolicyAccepted verifies that a guard
+// carrying a well-formed allow-only policy passes validateGuardPolicies and
+// LoadFromFile succeeds.
+func TestLoadFromFile_ValidAllowOnlyGuardPolicyAccepted(t *testing.T) {
+	path := writeTempTOML(t, `
+[gateway]
+agent_id = "test-agent"
+
+[servers.github]
+command = "docker"
+args = ["run", "--rm", "-i", "ghcr.io/github/github-mcp-server:latest"]
+
+[guards.myfence]
+type = "wasm"
+path = "/path/to/guard.wasm"
+
+[guards.myfence.policy.allow-only]
+repos = "public"
+min-integrity = "none"
+`)
+	cfg, err := LoadFromFile(path)
+	require.NoError(t, err)
+	require.NotNil(t, cfg)
+	require.Contains(t, cfg.Guards, "myfence")
+	require.NotNil(t, cfg.Guards["myfence"].Policy)
+	require.NotNil(t, cfg.Guards["myfence"].Policy.AllowOnly)
+}
