@@ -687,11 +687,7 @@ fn extract_repo_private_flag(response: &Value, repo_id: &str) -> Option<bool> {
 }
 
 fn extract_backend_error_text(response: &Value) -> Option<&str> {
-    if response
-        .get(field_names::IS_ERROR)
-        .and_then(|v| v.as_bool())
-        != Some(true)
-    {
+    if response.get(field_names::IS_ERROR).and_then(Value::as_bool) != Some(true) {
         return None;
     }
 
@@ -1566,7 +1562,7 @@ fn private_flag_from_repo_object(item: &Value) -> Option<bool> {
         field_names::IS_PRIVATE,
         field_names::IS_PRIVATE_CAMEL,
     ] {
-        if let Some(is_private) = item.get(*field).and_then(|v| v.as_bool()) {
+        if let Some(is_private) = item.get(*field).and_then(Value::as_bool) {
             return Some(is_private);
         }
     }
@@ -1593,11 +1589,15 @@ mod tests_private_flag {
     #[test]
     fn test_private_flag_from_repo_object_field_priority_and_visibility() {
         assert_eq!(
-            private_flag_from_repo_object(&json!({"private": false, "is_private": true, "isPrivate": true, "visibility": "private"})),
+            private_flag_from_repo_object(
+                &json!({"private": false, "is_private": true, "isPrivate": true, "visibility": "private"})
+            ),
             Some(false)
         );
         assert_eq!(
-            private_flag_from_repo_object(&json!({"is_private": false, "isPrivate": true, "visibility": "private"})),
+            private_flag_from_repo_object(
+                &json!({"is_private": false, "isPrivate": true, "visibility": "private"})
+            ),
             Some(false)
         );
         assert_eq!(

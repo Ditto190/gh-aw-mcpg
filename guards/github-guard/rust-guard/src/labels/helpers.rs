@@ -47,7 +47,7 @@ impl ReactionKind {
 /// number segment from `html_url` or `url` (e.g. `.../issues/123` → `123`).
 /// Returns "unknown" (with a log warning) if no number can be determined.
 pub(crate) fn extract_resource_number(item: &Value, resource_type: &str, repo: &str) -> String {
-    if let Some(n) = item.get(field_names::NUMBER).and_then(|v| v.as_u64()) {
+    if let Some(n) = item.get(field_names::NUMBER).and_then(Value::as_u64) {
         return n.to_string();
     }
     // Fallback: extract trailing number from html_url or url
@@ -70,7 +70,7 @@ pub(crate) fn extract_resource_number(item: &Value, resource_type: &str, repo: &
 #[inline]
 fn item_number(item: &Value) -> u64 {
     item.get(field_names::NUMBER)
-        .and_then(|v| v.as_u64())
+        .and_then(Value::as_u64)
         .unwrap_or(0)
 }
 
@@ -94,7 +94,7 @@ fn extract_number_from_url(item: &Value) -> Option<String> {
 /// Returns `None` when neither the `number` field nor a URL-embedded number is present.
 fn extract_item_number_opt(item: &Value) -> Option<String> {
     item.get(field_names::NUMBER)
-        .and_then(|v| v.as_u64())
+        .and_then(Value::as_u64)
         .map(|n| n.to_string())
         .or_else(|| extract_number_from_url(item))
 }
@@ -338,7 +338,7 @@ fn format_integrity_label(prefix: &str, scope: &str, base: &str) -> String {
     } else if scope.contains('|') {
         let scopes = scope
             .split('|')
-            .map(|value| value.trim())
+            .map(str::trim)
             .filter(|value| !value.is_empty())
             .collect::<Vec<_>>()
             .join(",");
@@ -470,8 +470,8 @@ fn apply_approval_label_promotion(
         ));
         max_integrity(
             repo_full_name,
-            integrity,
-            writer_integrity(repo_full_name, ctx),
+            &integrity,
+            &writer_integrity(repo_full_name, ctx),
             ctx,
         )
     } else {
@@ -496,8 +496,8 @@ fn apply_refusal_label_demotion(
         ));
         cap_integrity(
             repo_full_name,
-            integrity,
-            none_integrity(repo_full_name, ctx),
+            &integrity,
+            &none_integrity(repo_full_name, ctx),
             ctx,
         )
     } else {
@@ -549,8 +549,8 @@ fn apply_promotion_label_promotion(
         ));
         max_integrity(
             repo_full_name,
-            integrity,
-            writer_integrity(repo_full_name, ctx),
+            &integrity,
+            &writer_integrity(repo_full_name, ctx),
             ctx,
         )
     } else {
@@ -576,8 +576,8 @@ fn apply_demotion_label_demotion(
         ));
         cap_integrity(
             repo_full_name,
-            integrity,
-            none_integrity(repo_full_name, ctx),
+            &integrity,
+            &none_integrity(repo_full_name, ctx),
             ctx,
         )
     } else {
@@ -653,13 +653,13 @@ fn integrity_level_rank(level: &str) -> u8 {
 /// Cap integrity at the given level. Returns `min(current, cap)` using the integrity hierarchy.
 fn cap_integrity(
     scope: &str,
-    current: Vec<String>,
-    cap: Vec<String>,
+    current: &[String],
+    cap: &[String],
     ctx: &PolicyContext,
 ) -> Vec<String> {
     let normalized_scope = normalize_scope(scope, ctx);
-    let current_rank = integrity_rank_normalized(&normalized_scope, &current);
-    let cap_rank = integrity_rank_normalized(&normalized_scope, &cap);
+    let current_rank = integrity_rank_normalized(&normalized_scope, current);
+    let cap_rank = integrity_rank_normalized(&normalized_scope, cap);
     build_integrity_labels(
         &normalized_scope,
         current_rank.min(cap_rank).saturating_sub(1) as usize,
@@ -883,8 +883,8 @@ fn apply_endorsement_promotion(
         ));
         max_integrity(
             repo_full_name,
-            integrity,
-            writer_integrity(repo_full_name, ctx),
+            &integrity,
+            &writer_integrity(repo_full_name, ctx),
             ctx,
         )
     } else {
@@ -910,7 +910,7 @@ fn apply_disapproval_demotion(
             resource_type, repo_full_name, number, demote_level
         ));
         let cap = integrity_for_level(demote_level, repo_full_name, ctx);
-        cap_integrity(repo_full_name, integrity, cap, ctx)
+        cap_integrity(repo_full_name, &integrity, &cap, ctx)
     } else {
         integrity
     }
@@ -924,7 +924,7 @@ pub fn ensure_integrity_baseline(
     if integrity.is_empty() {
         none_integrity(scope, ctx)
     } else {
-        max_integrity(scope, integrity, none_integrity(scope, ctx), ctx)
+        max_integrity(scope, &integrity, &none_integrity(scope, ctx), ctx)
     }
 }
 
@@ -1145,10 +1145,7 @@ pub(crate) fn get_nested_str<'a>(value: &'a Value, outer: &str, inner: &str) -> 
 /// Extract a boolean field from a JSON value, returning a default if missing
 #[inline]
 pub(crate) fn get_bool_or(value: &Value, field: &str, default: bool) -> bool {
-    value
-        .get(field)
-        .and_then(|v| v.as_bool())
-        .unwrap_or(default)
+    value.get(field).and_then(Value::as_bool).unwrap_or(default)
 }
 
 /// Limit a slice to MAX_ITEMS_PER_RESPONSE, logging a warning when truncated
@@ -1644,13 +1641,13 @@ fn label_matches_normalized(label: &str, prefix: &str, scope: &str, base: &str) 
 /// Elevate integrity to the max of current and candidate levels for a scope.
 pub(crate) fn max_integrity(
     scope: &str,
-    current: Vec<String>,
-    candidate: Vec<String>,
+    current: &[String],
+    candidate: &[String],
     ctx: &PolicyContext,
 ) -> Vec<String> {
     let normalized_scope = normalize_scope(scope, ctx);
-    let left = integrity_rank_normalized(&normalized_scope, &current);
-    let right = integrity_rank_normalized(&normalized_scope, &candidate);
+    let left = integrity_rank_normalized(&normalized_scope, current);
+    let right = integrity_rank_normalized(&normalized_scope, candidate);
     build_integrity_labels(
         &normalized_scope,
         left.max(right).saturating_sub(1) as usize,
@@ -1750,7 +1747,7 @@ pub(crate) fn is_pr_merged(item: &Value) -> bool {
         true
     } else {
         item.get(field_names::MERGED)
-            .and_then(|v| v.as_bool())
+            .and_then(Value::as_bool)
             .unwrap_or(false)
     }
 }
@@ -1846,7 +1843,7 @@ pub(crate) fn elevate_via_collaborator_permission(
     if let Some(collab) = super::backend::get_collaborator_permission(owner, repo, author_login) {
         let perm_floor =
             collaborator_permission_floor(repo_full_name, collab.permission.as_deref(), ctx);
-        let merged = max_integrity(repo_full_name, integrity, perm_floor, ctx);
+        let merged = max_integrity(repo_full_name, &integrity, &perm_floor, ctx);
         crate::log_debug(&format!(
             "[integrity] {}:{}: collaborator permission={:?} → merged rank={}",
             resource_label,
@@ -1979,8 +1976,8 @@ pub(crate) fn pr_integrity(
                         if is_any_trusted_actor(login, ctx) {
                             max_integrity(
                                 repo_full_name,
-                                enriched_floor,
-                                writer_integrity(repo_full_name, ctx),
+                                &enriched_floor,
+                                &writer_integrity(repo_full_name, ctx),
                                 ctx,
                             )
                         } else {
@@ -1989,7 +1986,7 @@ pub(crate) fn pr_integrity(
                     } else {
                         enriched_floor
                     };
-                    integrity = max_integrity(repo_full_name, integrity, enriched_floor, ctx);
+                    integrity = max_integrity(repo_full_name, &integrity, &enriched_floor, ctx);
                     // Use enriched fork/merge status if missing from item
                     if effective_is_forked.is_none() {
                         effective_is_forked = facts.is_forked;
@@ -2024,22 +2021,22 @@ pub(crate) fn pr_integrity(
     if repo_private {
         integrity = max_integrity(
             repo_full_name,
-            integrity,
-            writer_integrity(repo_full_name, ctx),
+            &integrity,
+            &writer_integrity(repo_full_name, ctx),
             ctx,
         );
     } else {
         integrity = match effective_is_forked {
             Some(true) => max_integrity(
                 repo_full_name,
-                integrity,
-                reader_integrity(repo_full_name, ctx),
+                &integrity,
+                &reader_integrity(repo_full_name, ctx),
                 ctx,
             ),
             Some(false) => max_integrity(
                 repo_full_name,
-                integrity,
-                writer_integrity(repo_full_name, ctx),
+                &integrity,
+                &writer_integrity(repo_full_name, ctx),
                 ctx,
             ),
             None => integrity,
@@ -2049,8 +2046,8 @@ pub(crate) fn pr_integrity(
     if is_merged {
         integrity = max_integrity(
             repo_full_name,
-            integrity,
-            merged_integrity(repo_full_name, ctx),
+            &integrity,
+            &merged_integrity(repo_full_name, ctx),
             ctx,
         );
     }
@@ -2107,7 +2104,7 @@ pub(crate) fn issue_integrity(
                     // Re-check trusted bot status with enriched login
                     let enriched_floor =
                         author_association_floor_from_str(repo_full_name, Some(&association), ctx);
-                    integrity = max_integrity(repo_full_name, integrity, enriched_floor, ctx);
+                    integrity = max_integrity(repo_full_name, &integrity, &enriched_floor, ctx);
                 } else {
                     crate::log_debug(&format!(
                         "[integrity] issue:{}#{} enrichment failed (backend returned None)",
@@ -2135,8 +2132,8 @@ pub(crate) fn issue_integrity(
     if repo_private {
         integrity = max_integrity(
             repo_full_name,
-            integrity,
-            writer_integrity(repo_full_name, ctx),
+            &integrity,
+            &writer_integrity(repo_full_name, ctx),
             ctx,
         );
     }
@@ -2188,8 +2185,8 @@ pub(crate) fn commit_integrity(
             if author_login.eq_ignore_ascii_case(owner) {
                 integrity = max_integrity(
                     repo_full_name,
-                    integrity,
-                    writer_integrity(repo_full_name, ctx),
+                    &integrity,
+                    &writer_integrity(repo_full_name, ctx),
                     ctx,
                 );
             }
@@ -2212,8 +2209,8 @@ pub(crate) fn commit_integrity(
     if repo_private {
         integrity = max_integrity(
             repo_full_name,
-            integrity,
-            writer_integrity(repo_full_name, ctx),
+            &integrity,
+            &writer_integrity(repo_full_name, ctx),
             ctx,
         );
     }
@@ -2221,8 +2218,8 @@ pub(crate) fn commit_integrity(
     if is_default_branch {
         integrity = max_integrity(
             repo_full_name,
-            integrity,
-            merged_integrity(repo_full_name, ctx),
+            &integrity,
+            &merged_integrity(repo_full_name, ctx),
             ctx,
         );
     }
@@ -3395,7 +3392,7 @@ mod tests {
         let scope = "owner/repo";
         let current = writer_integrity(scope, &ctx);
         let cap = none_integrity(scope, &ctx);
-        let result = cap_integrity(scope, current, cap, &ctx);
+        let result = cap_integrity(scope, &current, &cap, &ctx);
         assert_eq!(
             result,
             none_integrity(scope, &ctx),
@@ -3410,7 +3407,7 @@ mod tests {
         let current = reader_integrity(scope, &ctx);
         let cap = writer_integrity(scope, &ctx);
         // cap > current → should stay at current (min(reader, writer) = reader)
-        let result = cap_integrity(scope, current.clone(), cap, &ctx);
+        let result = cap_integrity(scope, &current, &cap, &ctx);
         assert_eq!(
             result, current,
             "cap higher than current should not change integrity"
@@ -3423,7 +3420,7 @@ mod tests {
         let scope = "owner/repo";
         let current = reader_integrity(scope, &ctx);
         let candidate = merged_integrity(scope, &ctx);
-        let result = max_integrity(scope, current, candidate.clone(), &ctx);
+        let result = max_integrity(scope, &current, &candidate, &ctx);
         assert_eq!(
             result, candidate,
             "max_integrity should keep the higher integrity rank"
@@ -3607,7 +3604,7 @@ mod tests {
         // Simulate the integrity chain: start with none (external contributor),
         // apply endorsement (promotes to approved), then apply disapproval (caps to none).
         let base = none_integrity(repo, &ctx);
-        let after_endorsement = max_integrity(repo, base, writer_integrity(repo, &ctx), &ctx);
+        let after_endorsement = max_integrity(repo, &base, &writer_integrity(repo, &ctx), &ctx);
         assert_eq!(
             after_endorsement,
             writer_integrity(repo, &ctx),
@@ -3615,7 +3612,7 @@ mod tests {
         );
 
         let demote_cap = integrity_for_level("none", repo, &ctx);
-        let after_disapproval = cap_integrity(repo, after_endorsement, demote_cap, &ctx);
+        let after_disapproval = cap_integrity(repo, &after_endorsement, &demote_cap, &ctx);
         assert_eq!(
             after_disapproval,
             none_integrity(repo, &ctx),
