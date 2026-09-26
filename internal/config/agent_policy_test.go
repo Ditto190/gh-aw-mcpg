@@ -22,6 +22,25 @@ func TestAgentPolicy_AllowsServer(t *testing.T) {
 	assert.False(t, nilPolicy.AllowsServer("github"))
 }
 
+func TestAgentPolicy_IsEnclave(t *testing.T) {
+	tests := []struct {
+		name   string
+		policy *AgentPolicy
+		want   bool
+	}{
+		{name: "nil policy is not enclave (fail-closed)", policy: nil, want: false},
+		{name: "policy with Enclave unset defaults to false", policy: &AgentPolicy{}, want: false},
+		{name: "policy with Enclave explicitly false", policy: &AgentPolicy{Enclave: false}, want: false},
+		{name: "policy with Enclave true", policy: &AgentPolicy{Enclave: true}, want: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, tt.policy.IsEnclave())
+		})
+	}
+}
+
 func TestAgentPolicy_AllowsTool(t *testing.T) {
 	p := &AgentPolicy{
 		Servers: []string{"github", "fetch"},

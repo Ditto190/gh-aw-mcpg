@@ -918,13 +918,13 @@ fn apply_disapproval_demotion(
 
 pub fn ensure_integrity_baseline(
     scope: &str,
-    integrity: Vec<String>,
+    integrity: &[String],
     ctx: &PolicyContext,
 ) -> Vec<String> {
     if integrity.is_empty() {
         none_integrity(scope, ctx)
     } else {
-        max_integrity(scope, &integrity, &none_integrity(scope, ctx), ctx)
+        max_integrity(scope, integrity, &none_integrity(scope, ctx), ctx)
     }
 }
 
@@ -2052,7 +2052,7 @@ pub(crate) fn pr_integrity(
         );
     }
 
-    let integrity = ensure_integrity_baseline(repo_full_name, integrity, ctx);
+    let integrity = ensure_integrity_baseline(repo_full_name, &integrity, ctx);
 
     // Post-adjustments: approval/promotion/endorsement → refusal demotion → demotions.
     apply_post_integrity_adjustments(item, "pr", repo_full_name, integrity, ctx)
@@ -2137,7 +2137,7 @@ pub(crate) fn issue_integrity(
             ctx,
         );
     }
-    let integrity = ensure_integrity_baseline(repo_full_name, integrity, ctx);
+    let integrity = ensure_integrity_baseline(repo_full_name, &integrity, ctx);
 
     // Post-adjustments: approval/promotion/endorsement → refusal demotion → demotions.
     apply_post_integrity_adjustments(item, "issue", repo_full_name, integrity, ctx)
@@ -2224,7 +2224,7 @@ pub(crate) fn commit_integrity(
         );
     }
 
-    ensure_integrity_baseline(repo_full_name, integrity, ctx)
+    ensure_integrity_baseline(repo_full_name, &integrity, ctx)
 }
 
 /// Known username variants for trusted first-party GitHub platform bots.

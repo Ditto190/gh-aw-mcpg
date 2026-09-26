@@ -419,7 +419,7 @@ fn apply_singleton_fallback_if_needed(
         ctx,
     );
 
-    let integrity = labels::ensure_integrity_baseline(&baseline_scope, integrity, ctx);
+    let integrity = labels::ensure_integrity_baseline(&baseline_scope, &integrity, ctx);
 
     log_info(&format!(
         "    fallback labels: secrecy={:?}, integrity={:?}",
@@ -587,7 +587,7 @@ fn build_label_resource_output(
     );
 
     let baseline_scope = infer_scope_for_baseline(&input.tool_name, &input.tool_args, &repo_id);
-    let final_integrity = labels::ensure_integrity_baseline(&baseline_scope, final_integrity, ctx);
+    let final_integrity = labels::ensure_integrity_baseline(&baseline_scope, &final_integrity, ctx);
 
     // Unconditionally blocked tools: override integrity to blocked_integrity so the
     // DIFC evaluator always denies them.  This must happen after ensure_integrity_baseline
@@ -1373,7 +1373,7 @@ mod tests {
         );
 
         let inferred_scope = infer_scope_for_baseline(tool_names::SEARCH_CODE, &tool_args, "");
-        let baseline = labels::ensure_integrity_baseline(&inferred_scope, integrity, &ctx);
+        let baseline = labels::ensure_integrity_baseline(&inferred_scope, &integrity, &ctx);
 
         assert_eq!(
             baseline,
@@ -1484,7 +1484,7 @@ mod tests {
             );
             let baseline_scope = infer_scope_for_baseline(tool, &tool_args, "");
             let after_baseline =
-                labels::ensure_integrity_baseline(&baseline_scope, integrity, &ctx);
+                labels::ensure_integrity_baseline(&baseline_scope, &integrity, &ctx);
 
             assert_eq!(
                 after_baseline,
@@ -1513,7 +1513,7 @@ mod tests {
             );
             let baseline_scope = infer_scope_for_baseline(tool, &tool_args, repo_id);
             let after_baseline =
-                labels::ensure_integrity_baseline(&baseline_scope, integrity, &ctx);
+                labels::ensure_integrity_baseline(&baseline_scope, &integrity, &ctx);
 
             assert_eq!(
                 after_baseline,
@@ -1540,7 +1540,7 @@ mod tests {
             );
             let baseline_scope = infer_scope_for_baseline(tool, &tool_args, "");
             let after_baseline =
-                labels::ensure_integrity_baseline(&baseline_scope, integrity, &ctx);
+                labels::ensure_integrity_baseline(&baseline_scope, &integrity, &ctx);
 
             assert_eq!(
                 after_baseline,
@@ -1666,7 +1666,7 @@ mod tests {
             );
             let baseline_scope = infer_scope_for_baseline(tool, &tool_args, "");
             let after_baseline =
-                labels::ensure_integrity_baseline(&baseline_scope, integrity, &ctx);
+                labels::ensure_integrity_baseline(&baseline_scope, &integrity, &ctx);
 
             assert_eq!(
                 after_baseline,
@@ -1693,7 +1693,7 @@ mod tests {
                 labels::apply_tool_labels(tool, &org_args, "", vec![], vec![], String::new(), &ctx);
             let baseline_scope = infer_scope_for_baseline(tool, &org_args, "");
             let after_baseline =
-                labels::ensure_integrity_baseline(&baseline_scope, integrity, &ctx);
+                labels::ensure_integrity_baseline(&baseline_scope, &integrity, &ctx);
 
             assert_eq!(
                 after_baseline,
@@ -1714,7 +1714,7 @@ mod tests {
             );
             let baseline_scope = infer_scope_for_baseline(tool, &user_args, "");
             let after_baseline =
-                labels::ensure_integrity_baseline(&baseline_scope, integrity, &ctx);
+                labels::ensure_integrity_baseline(&baseline_scope, &integrity, &ctx);
 
             assert_eq!(
                 after_baseline,
@@ -1787,7 +1787,7 @@ mod tests {
         );
         let baseline_scope =
             infer_scope_for_baseline(tool_names::TRANSFER_REPOSITORY, &tool_args, repo_id);
-        let after_baseline = labels::ensure_integrity_baseline(&baseline_scope, integrity, &ctx);
+        let after_baseline = labels::ensure_integrity_baseline(&baseline_scope, &integrity, &ctx);
 
         // Simulate the is_blocked_tool override performed in label_resource
         let final_integrity = if tools::is_blocked_tool(tool_names::TRANSFER_REPOSITORY) {

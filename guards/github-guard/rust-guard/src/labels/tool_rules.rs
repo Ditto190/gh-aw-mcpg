@@ -189,7 +189,7 @@ fn resolve_author_integrity(
     author_association: Option<&str>,
     resource_label: &str,
     resource_num: &str,
-    base_integrity: Vec<String>,
+    base_integrity: &[String],
     ctx: &PolicyContext,
 ) -> Vec<String> {
     let mut floor = author_association_floor_from_str(repo_id, author_association, ctx);
@@ -209,7 +209,7 @@ fn resolve_author_integrity(
         );
     }
 
-    max_integrity(repo_id, &base_integrity, &floor, ctx)
+    max_integrity(repo_id, base_integrity, &floor, ctx)
 }
 
 // ============================================================================
@@ -250,7 +250,7 @@ fn apply_issue_read_enrichment(
                         info.author_association.as_deref(),
                         tool_names::ISSUE_READ,
                         &issue_num,
-                        integrity,
+                        &integrity,
                         ctx,
                     );
                 }
@@ -395,7 +395,7 @@ pub fn apply_tool_labels(
                             facts.author_login.as_deref(),
                             facts.author_association.as_deref(),
                             tool_names::PULL_REQUEST_READ, number,
-                            integrity, ctx,
+                            &integrity, ctx,
                         );
 
                         if repo_private == Some(true) {
@@ -1071,7 +1071,7 @@ pub fn apply_tool_labels(
 
     (
         secrecy,
-        ensure_integrity_baseline(&baseline_scope, integrity, ctx),
+        ensure_integrity_baseline(&baseline_scope, &integrity, ctx),
         desc,
     )
 }
