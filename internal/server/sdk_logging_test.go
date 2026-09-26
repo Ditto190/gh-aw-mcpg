@@ -485,6 +485,8 @@ func TestWithSDKLogging_JSONRPCSuccessWithResultNil(t *testing.T) {
 // captureSDKLog enables the server:sdk-frontend debug logger for the duration
 // of fn and returns everything it wrote to stderr. The package-level logSDK is
 // swapped for a freshly constructed (enabled) logger and restored afterwards.
+// Because it mutates process-wide state (os.Stderr, logSDK), callers must not
+// use t.Parallel (t.Setenv enforces this).
 func captureSDKLog(t *testing.T, fn func()) string {
 	t.Helper()
 	t.Setenv(logger.EnvDebug, "server:sdk-frontend")
