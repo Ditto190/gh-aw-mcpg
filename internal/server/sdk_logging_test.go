@@ -6,10 +6,12 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 
 	"github.com/github/gh-aw-mcpg/internal/config"
+	"github.com/github/gh-aw-mcpg/internal/logger"
 	"github.com/github/gh-aw-mcpg/internal/mcp"
 	"github.com/github/gh-aw-mcpg/internal/sanitize"
 	"github.com/stretchr/testify/assert"
@@ -480,6 +482,43 @@ func TestWithSDKLogging_JSONRPCSuccessWithResultNil(t *testing.T) {
 // message digest), :140-142 (non-JSON raw response), and sdkErrorMessageForLog's
 // :161-163 (redact=true) are exercised without needing a full session lifecycle.
 
+// captureSDKLog enables the server:sdk-frontend debug logger for the duration
+// of fn and returns everything it wrote to stderr. The package-level logSDK is
+// swapped for a freshly constructed (enabled) logger and restored afterwards.
+func captureSDKLog(t *testing.T, fn func()) string {
+	t.Helper()
+	t.Setenv(logger.EnvDebug, "server:sdk-frontend")
+	t.Setenv(logger.EnvDebugColors, "0")
+
+	origLogger := logSDK
+	logSDK = logger.New("server:sdk-frontend")
+	t.Cleanup(func() { logSDK = origLogger })
+	require.True(t, logSDK.Enabled(), "sdk-frontend logger must be enabled for capture")
+
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+	origStderr := os.Stderr
+	os.Stderr = w
+
+	done := make(chan string)
+	go func() {
+		var buf bytes.Buffer
+		_, _ = io.Copy(&buf, r)
+		done <- buf.String()
+	}()
+
+	func() {
+		defer func() {
+			os.Stderr = origStderr
+			_ = w.Close()
+		}()
+		fn()
+	}()
+	out := <-done
+	_ = r.Close()
+	return out
+}
+
 // makeEnclaveMarkingHandler returns an http.Handler that mutates the incoming
 // *http.Request in place to carry the enclave-session context marker (mirroring
 // how the real session-injection callback mutates *r), then writes the given
@@ -517,7 +556,7 @@ func TestWithSDKLogging_EnclaveSession_ErrorResponseRedacted(t *testing.T) {
 	req := httptest.NewRequest("POST", "/mcp", bytes.NewBuffer(requestBody))
 	w := httptest.NewRecorder()
 
-	assert.NotPanics(t, func() {
+	logOutput := captureSDKLog(t, func() {
 		wrapped.ServeHTTP(w, req)
 	})
 	require.True(t, capture.called)
@@ -525,12 +564,11 @@ func TestWithSDKLogging_EnclaveSession_ErrorResponseRedacted(t *testing.T) {
 	// applies only to what gets logged, not to what is returned.
 	assert.Equal(t, responseBody, w.Body.Bytes())
 
-	// sdkErrorMessageForLog must reduce the error message to a keyed digest
-	// when redact=true, never leaking the raw error text.
-	digest := sanitize.KeyedDigest(rawErrorMsg)
-	logged := sdkErrorMessageForLog(rawErrorMsg, true)
-	assert.Equal(t, digest, logged)
-	assert.NotEqual(t, rawErrorMsg, logged)
+	// The logged JSON-RPC error must carry the keyed digest, never the raw text.
+	assert.Contains(t, logOutput, "JSON-RPC Error: code=-32000")
+	assert.Contains(t, logOutput, sanitize.KeyedDigest(rawErrorMsg))
+	assert.NotContains(t, logOutput, rawErrorMsg)
+	assert.NotContains(t, logOutput, "super-secret-token-xyz")
 }
 
 // TestWithSDKLogging_EnclaveSession_NonJSONResponseRedacted verifies that a
@@ -549,13 +587,17 @@ func TestWithSDKLogging_EnclaveSession_NonJSONResponseRedacted(t *testing.T) {
 	req := httptest.NewRequest("POST", "/mcp", bytes.NewBuffer(requestBody))
 	w := httptest.NewRecorder()
 
-	assert.NotPanics(t, func() {
+	logOutput := captureSDKLog(t, func() {
 		wrapped.ServeHTTP(w, req)
 	})
 	require.True(t, capture.called)
 	// Raw body must pass through to the client unchanged even though the log
 	// line for it is redacted.
 	assert.Equal(t, sseBody, w.Body.Bytes())
+
+	assert.Contains(t, logOutput, "Raw response: "+sanitize.RedactedPayloadText(sseBody))
+	assert.NotContains(t, logOutput, "Raw response (sanitized")
+	assert.NotContains(t, logOutput, "event: message")
 }
 
 // TestWithSDKLogging_EnclaveSession_ToolNotFoundError_StillRedacted verifies
@@ -574,11 +616,16 @@ func TestWithSDKLogging_EnclaveSession_ToolNotFoundError_StillRedacted(t *testin
 	req := httptest.NewRequest("POST", "/mcp", bytes.NewBuffer(requestBody))
 	w := httptest.NewRecorder()
 
-	assert.NotPanics(t, func() {
+	logOutput := captureSDKLog(t, func() {
 		wrapped.ServeHTTP(w, req)
 	})
 	require.True(t, capture.called)
 	assert.Equal(t, responseBody, w.Body.Bytes())
+
+	assert.Contains(t, logOutput, "TOOL NOT FOUND ERROR")
+	assert.Contains(t, logOutput, sanitize.KeyedDigest(rawErrorMsg))
+	assert.NotContains(t, logOutput, rawErrorMsg)
+	assert.NotContains(t, logOutput, "private-repo/secret-name")
 }
 
 // TestSdkErrorMessageForLog_NoRedaction verifies sdkErrorMessageForLog passes
@@ -615,12 +662,18 @@ func TestWithSDKLogging_EnclaveAgentSession_InvalidRequestBodyRedacted(t *testin
 	req.Header.Set("X-Agent-ID", "enclave-agent")
 	w := httptest.NewRecorder()
 
-	assert.NotPanics(t, func() {
+	logOutput := captureSDKLog(t, func() {
 		wrapped.ServeHTTP(w, req)
 	})
 	require.True(t, capture.called)
 	// The inner handler must still receive the complete, unredacted original body.
 	assert.Equal(t, invalidBody, capture.body)
+
+	assert.Contains(t, logOutput, "Failed to parse JSON-RPC request: error ")
+	assert.NotContains(t, logOutput, "invalid character")
+	assert.Contains(t, logOutput, "Raw body: "+sanitize.RedactedPayloadText(invalidBody))
+	assert.NotContains(t, logOutput, "Raw body (sanitized)")
+	assert.NotContains(t, logOutput, "private-repo/secret-token")
 }
 
 // TestSdkErrorMessageForLog_Redaction verifies sdkErrorMessageForLog returns a
