@@ -101,7 +101,7 @@ pub fn label_response_paths(
 pub(crate) fn extract_mcp_response(response: &Value) -> Cow<'_, Value> {
     // Log the top-level keys to understand the structure
     if let Some(obj) = response.as_object() {
-        let keys: Vec<&str> = obj.keys().map(|s| s.as_str()).collect();
+        let keys: Vec<&str> = obj.keys().map(String::as_str).collect();
         crate::log_debug(&format!("extract_mcp_response: top-level keys={:?}", keys));
     } else {
         crate::log_debug(&format!(
