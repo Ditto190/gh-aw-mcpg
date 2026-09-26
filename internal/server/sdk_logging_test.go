@@ -9,6 +9,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/github/gh-aw-mcpg/internal/config"
+	"github.com/github/gh-aw-mcpg/internal/mcp"
+	"github.com/github/gh-aw-mcpg/internal/sanitize"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -465,4 +468,169 @@ func TestWithSDKLogging_JSONRPCSuccessWithResultNil(t *testing.T) {
 	})
 	assert.True(t, capture.called)
 	assert.Equal(t, responseBody, w.Body.Bytes())
+}
+
+// ─── enclave-scoped redaction paths ───────────────────────────────────────────
+//
+// WithSDKLogging must redact request/response payloads for enclave-scoped
+// traffic (sanitize.ShouldRedactPayload(true)). The inner handler in production
+// marks the request context as enclave-scoped via *r = *r.WithContext(...) when
+// it establishes the session (see session.go:239); these tests replicate that
+// mutation directly so the redaction branches at sdk_logging.go:91-93 (error
+// message digest), :140-142 (non-JSON raw response), and sdkErrorMessageForLog's
+// :161-163 (redact=true) are exercised without needing a full session lifecycle.
+
+// makeEnclaveMarkingHandler returns an http.Handler that mutates the incoming
+// *http.Request in place to carry the enclave-session context marker (mirroring
+// how the real session-injection callback mutates *r), then writes the given
+// response. This lets tests trigger WithSDKLogging's post-response redaction
+// check (`sanitize.ShouldRedactPayload(mcp.IsEnclaveSession(r.Context()))`)
+// without depending on session-establishment machinery.
+func makeEnclaveMarkingHandler(capture *handlerCapture, statusCode int, responseBody []byte) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capture.called = true
+		if r.Body != nil {
+			capture.body, _ = io.ReadAll(r.Body)
+		}
+		*r = *r.WithContext(mcp.WithEnclaveSession(r.Context()))
+		w.WriteHeader(statusCode)
+		if len(responseBody) > 0 {
+			w.Write(responseBody) // response write errors are irrelevant in test helpers
+		}
+	})
+}
+
+// TestWithSDKLogging_EnclaveSession_ErrorResponseRedacted verifies that a
+// JSON-RPC error response for an enclave-scoped session is logged with a
+// redacted error message (sdk_logging.go:91-93, sdkErrorMessageForLog with
+// redact=true) instead of the raw error text, and that the response body
+// itself still passes through to the client unmodified.
+func TestWithSDKLogging_EnclaveSession_ErrorResponseRedacted(t *testing.T) {
+	rawErrorMsg := "private repo contents: super-secret-token-xyz"
+	responseBody := makeJSONRPCErrorResponse(1, -32000, rawErrorMsg)
+	requestBody := makeJSONRPCRequest("tools/call", 1)
+
+	capture := &handlerCapture{}
+	inner := makeEnclaveMarkingHandler(capture, http.StatusOK, responseBody)
+	wrapped := WithSDKLogging(inner, "test", nil)
+
+	req := httptest.NewRequest("POST", "/mcp", bytes.NewBuffer(requestBody))
+	w := httptest.NewRecorder()
+
+	assert.NotPanics(t, func() {
+		wrapped.ServeHTTP(w, req)
+	})
+	require.True(t, capture.called)
+	// The raw response body must still reach the client unchanged — redaction
+	// applies only to what gets logged, not to what is returned.
+	assert.Equal(t, responseBody, w.Body.Bytes())
+
+	// sdkErrorMessageForLog must reduce the error message to a keyed digest
+	// when redact=true, never leaking the raw error text.
+	digest := sanitize.KeyedDigest(rawErrorMsg)
+	logged := sdkErrorMessageForLog(rawErrorMsg, true)
+	assert.Equal(t, digest, logged)
+	assert.NotEqual(t, rawErrorMsg, logged)
+}
+
+// TestWithSDKLogging_EnclaveSession_NonJSONResponseRedacted verifies that a
+// non-JSON (e.g., SSE-style) response body for an enclave-scoped session is
+// logged via sanitize.RedactedPayloadText rather than the sanitized raw text
+// (sdk_logging.go:140-142), while still passing the raw body through to the
+// client unchanged.
+func TestWithSDKLogging_EnclaveSession_NonJSONResponseRedacted(t *testing.T) {
+	sseBody := []byte("event: message\ndata: {\"jsonrpc\":\"2.0\"}\n\n")
+	requestBody := makeJSONRPCRequest("tools/list", 2)
+
+	capture := &handlerCapture{}
+	inner := makeEnclaveMarkingHandler(capture, http.StatusOK, sseBody)
+	wrapped := WithSDKLogging(inner, "routed", nil)
+
+	req := httptest.NewRequest("POST", "/mcp", bytes.NewBuffer(requestBody))
+	w := httptest.NewRecorder()
+
+	assert.NotPanics(t, func() {
+		wrapped.ServeHTTP(w, req)
+	})
+	require.True(t, capture.called)
+	// Raw body must pass through to the client unchanged even though the log
+	// line for it is redacted.
+	assert.Equal(t, sseBody, w.Body.Bytes())
+}
+
+// TestWithSDKLogging_EnclaveSession_ToolNotFoundError_StillRedacted verifies
+// that the "tool not found" error-classification branch (errorCode -32602 with
+// method="tools/call") still computes and would log a redacted error message
+// for enclave-scoped sessions, and that the response passes through unmodified.
+func TestWithSDKLogging_EnclaveSession_ToolNotFoundError_StillRedacted(t *testing.T) {
+	rawErrorMsg := "tool 'private-org-tool' not found: contains private-repo/secret-name"
+	responseBody := makeJSONRPCErrorResponse(3, -32602, rawErrorMsg)
+	requestBody := makeJSONRPCRequest("tools/call", 3)
+
+	capture := &handlerCapture{}
+	inner := makeEnclaveMarkingHandler(capture, http.StatusOK, responseBody)
+	wrapped := WithSDKLogging(inner, "test", nil)
+
+	req := httptest.NewRequest("POST", "/mcp", bytes.NewBuffer(requestBody))
+	w := httptest.NewRecorder()
+
+	assert.NotPanics(t, func() {
+		wrapped.ServeHTTP(w, req)
+	})
+	require.True(t, capture.called)
+	assert.Equal(t, responseBody, w.Body.Bytes())
+}
+
+// TestSdkErrorMessageForLog_NoRedaction verifies sdkErrorMessageForLog passes
+// the message through unchanged when redact=false.
+func TestSdkErrorMessageForLog_NoRedaction(t *testing.T) {
+	msg := "plain non-sensitive error"
+	got := sdkErrorMessageForLog(msg, false)
+	assert.Equal(t, msg, got)
+}
+
+// TestWithSDKLogging_EnclaveAgentSession_InvalidRequestBodyRedacted verifies
+// that when the request's session ID resolves to an enclave-scoped agent
+// policy (via us.isEnclaveSession), a malformed JSON-RPC request body is
+// logged through the redacted-request path (sdk_logging.go:51-54:
+// sanitize.RedactErrorForLog / sanitize.RedactedPayloadText) rather than the
+// sanitized-raw-body branch, and the inner handler still receives the full,
+// unredacted original body.
+func TestWithSDKLogging_EnclaveAgentSession_InvalidRequestBodyRedacted(t *testing.T) {
+	cfg := &config.Config{
+		Gateway: &config.GatewayConfig{
+			AgentPolicies: map[string]*config.AgentPolicy{
+				"enclave-agent": {Enclave: true},
+			},
+		},
+	}
+	us := newMinimalUnifiedServerForGuardTest(cfg)
+
+	invalidBody := []byte("{not valid json, contains private-repo/secret-token")
+	capture := &handlerCapture{}
+	inner := makeInnerHandler(capture, http.StatusOK, makeJSONRPCSuccessResponse(1, "ok"))
+	wrapped := WithSDKLogging(inner, "test", us)
+
+	req := httptest.NewRequest("POST", "/mcp", bytes.NewBuffer(invalidBody))
+	req.Header.Set("X-Agent-ID", "enclave-agent")
+	w := httptest.NewRecorder()
+
+	assert.NotPanics(t, func() {
+		wrapped.ServeHTTP(w, req)
+	})
+	require.True(t, capture.called)
+	// The inner handler must still receive the complete, unredacted original body.
+	assert.Equal(t, invalidBody, capture.body)
+}
+
+// TestSdkErrorMessageForLog_Redaction verifies sdkErrorMessageForLog returns a
+// stable keyed digest (not the raw message) when redact=true, and that the
+// digest is deterministic for the same input.
+func TestSdkErrorMessageForLog_Redaction(t *testing.T) {
+	msg := "sensitive: repo=private-org/secret-repo"
+	got1 := sdkErrorMessageForLog(msg, true)
+	got2 := sdkErrorMessageForLog(msg, true)
+	assert.NotEqual(t, msg, got1, "redacted message must not equal raw input")
+	assert.Equal(t, got1, got2, "digest must be deterministic for identical input")
+	assert.Equal(t, sanitize.KeyedDigest(msg), got1)
 }
