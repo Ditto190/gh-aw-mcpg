@@ -8,6 +8,7 @@ on:
 permissions:
   contents: read
   issues: read
+  pull-requests: read
   copilot-requests: write
 
 model: gpt-5.6
@@ -382,6 +383,8 @@ After creating the issue (or calling noop), update cache-memory:
 - `last_all_gaps`: the complete list of ALL gaps found this run (not just new ones — this enables regression detection next run)
 - `last_upstream_tools_hash`: total count of upstream MCP tools (as string)
 - `last_cli_commands_hash`: total count of CLI write commands scanned (as string)
+
+Use a deterministic `bash`/Python write step for cache updates. Do **not** use patch-style edits or the Edit tool on files under `/tmp/gh-aw/cache-memory/`; those files may have changed during the run, so exact-line patch preconditions are fragile. Instead, read the existing values, compute the next full contents, write each updated cache file to a temporary file in `/tmp/gh-aw/cache-memory/`, and atomically replace the target with `mv`.
 
 Keep `known_gaps` bounded to the last 200 entries — remove the oldest if it exceeds this limit.
 
