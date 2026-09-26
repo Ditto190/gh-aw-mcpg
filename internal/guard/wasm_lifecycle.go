@@ -447,6 +447,7 @@ func cloneWasmGuardOptions(opts *WasmGuardOptions) *WasmGuardOptions {
 // NewSessionGuard instantiates a WASM module with independent linear memory and
 // failure state while reusing the configured compilation cache.
 func (g *WasmGuard) NewSessionGuard(ctx context.Context) (Guard, error) {
+	logWasm.Printf("Creating new session guard instance: guard=%s, wasmSize=%d", g.name, len(g.wasm))
 	return NewWasmGuardWithOptions(ctx, g.name, g.wasm, nil, g.options)
 }
 
@@ -513,6 +514,7 @@ func (g *WasmGuard) hostCallBackend(ctx context.Context, m api.Module, stack []u
 	// Read tool name from WASM memory
 	toolNameBytes, ok := m.Memory().Read(toolNamePtr, toolNameLen)
 	if !ok {
+		logWasm.Printf("hostCallBackend: failed to read tool name from WASM memory: guard=%s, ptr=%d, len=%d", g.name, toolNamePtr, toolNameLen)
 		setError()
 		return
 	}
@@ -521,6 +523,7 @@ func (g *WasmGuard) hostCallBackend(ctx context.Context, m api.Module, stack []u
 	// Read args JSON from WASM memory
 	argsBytes, ok := m.Memory().Read(argsPtr, argsLen)
 	if !ok {
+		logWasm.Printf("hostCallBackend: failed to read args from WASM memory: guard=%s, tool=%s, ptr=%d, len=%d", g.name, toolName, argsPtr, argsLen)
 		setError()
 		return
 	}
@@ -679,6 +682,7 @@ func (g *WasmGuard) callWasmGuardFunction(ctx context.Context, funcName string, 
 
 // Close releases WASM runtime resources
 func (g *WasmGuard) Close(ctx context.Context) error {
+	logWasm.Printf("Closing WASM guard: guard=%s", g.name)
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -690,5 +694,11 @@ func (g *WasmGuard) Close(ctx context.Context) error {
 	if g.runtime != nil {
 		runtimeErr = g.runtime.Close(cleanupCtx)
 	}
-	return errors.Join(moduleErr, runtimeErr)
+	err := errors.Join(moduleErr, runtimeErr)
+	if err != nil {
+		logWasm.Printf("WASM guard close completed with errors: guard=%s, error=%v", g.name, err)
+	} else {
+		logWasm.Printf("WASM guard closed successfully: guard=%s", g.name)
+	}
+	return err
 }
