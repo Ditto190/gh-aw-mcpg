@@ -111,9 +111,11 @@ func logHTTPRequestBody(r *http.Request, sessionID, backendID string, enclaveSes
 
 	logServerHelpers.Printf("Request body read: size=%d bytes, sessionID=%s, backendID=%s", len(bodyBytes), util.FormatSessionIDForLog(sessionID), backendID)
 
-	sanitizedBody := sanitize.SanitizeString(string(bodyBytes))
+	var sanitizedBody string
 	if sanitize.ShouldRedactPayload(enclaveSession) {
 		sanitizedBody = sanitize.RedactedPayloadText(bodyBytes)
+	} else {
+		sanitizedBody = sanitize.SanitizeString(string(bodyBytes))
 	}
 
 	if backendID != "" {
