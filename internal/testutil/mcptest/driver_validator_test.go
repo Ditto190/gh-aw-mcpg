@@ -136,7 +136,8 @@ func TestValidatorClient_ErrorPaths(t *testing.T) {
 func TestTestDriver_StopIdempotentWithoutServers(t *testing.T) {
 	driver := mcptest.NewTestDriver()
 
-	assert.NotPanics(t, func() {
+assert.NotPanics(t, func() {
+		driver.Stop()
 		driver.Stop()
 	})
 }
