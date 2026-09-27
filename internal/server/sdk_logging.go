@@ -77,20 +77,18 @@ func WithSDKLogging(handler http.Handler, mode string, us *UnifiedServer) http.H
 			if err := json.Unmarshal(responseBody, &jsonrpcResp); err == nil {
 				if jsonrpcResp.Error != nil {
 					// Error response - this is what we're particularly interested in
-					logSDK.Printf("<<< SDK Response [%s] ERROR status=%d duration=%v",
-						mode, lw.StatusCode, duration)
-					logSDK.Printf("    JSON-RPC Error: code=%d message=%q",
-						jsonrpcResp.Error.Code, sdkErrorMessageForLog(jsonrpcResp.Error.Message, redactPayload))
-
-					// Check for specific error types
 					errorCode := jsonrpcResp.Error.Code
 					errorMsg := jsonrpcResp.Error.Message
 					// Backend error messages routinely quote the failing request or response
 					// content, so enclave traffic logs only a correlatable token.
-					loggedErrorMsg := errorMsg
-					if redactPayload {
-						loggedErrorMsg = sanitize.KeyedDigest(errorMsg)
-					}
+					loggedErrorMsg := sanitize.RedactMessageForLog(errorMsg, redactPayload)
+
+					logSDK.Printf("<<< SDK Response [%s] ERROR status=%d duration=%v",
+						mode, lw.StatusCode, duration)
+					logSDK.Printf("    JSON-RPC Error: code=%d message=%q",
+						errorCode, loggedErrorMsg)
+
+					// Check for specific error types
 
 					// Log tool not found errors specifically for better monitoring
 					// Error code -32602 (Invalid params) is used by the SDK for unknown tools
@@ -153,15 +151,6 @@ func WithSDKLogging(handler http.Handler, mode string, us *UnifiedServer) http.H
 				mode, lw.StatusCode, duration)
 		}
 	})
-}
-
-// sdkErrorMessageForLog renders a JSON-RPC error message for a log line, reducing it
-// to a keyed token when the traffic is enclave-scoped.
-func sdkErrorMessageForLog(message string, redact bool) string {
-	if redact {
-		return sanitize.KeyedDigest(message)
-	}
-	return message
 }
 
 // withResponseLogging wraps an http.Handler to log response bodies
