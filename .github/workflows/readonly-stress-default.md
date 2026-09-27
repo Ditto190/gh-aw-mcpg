@@ -3,6 +3,7 @@ emoji: 🔒
 description: PR stress test proving mcpg enforces read-only GitHub access (MCP tool calls + proxied CLI) under the default AWF runtime
 on:
   roles: all
+  skip-bots: [copilot]
   pull_request:
     types: [opened, synchronize, reopened]
   workflow_dispatch:
