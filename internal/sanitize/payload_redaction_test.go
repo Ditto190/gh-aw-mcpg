@@ -68,16 +68,6 @@ func TestRedactedPayloadRenderings(t *testing.T) {
 	assert.NotContains(text, hex.EncodeToString(plain[:])[:16])
 }
 
-func TestPayloadTextForLog(t *testing.T) {
-	payload := []byte("token=ghp_SENSITIVE_VALUE")
-
-	assert.Contains(t, PayloadTextForLog(payload, false), "[REDACTED]")
-
-	redacted := PayloadTextForLog(payload, true)
-	assert.Equal(t, RedactedPayloadText(payload), redacted)
-	assert.NotContains(t, redacted, "SENSITIVE_VALUE")
-}
-
 func TestKeyedDigestEmptyValue(t *testing.T) {
 	assert.Equal(t, "(none)", KeyedDigest(""), "empty values must not hash to a guessable token")
 }
@@ -180,4 +170,44 @@ func TestRedactErrorForLog(t *testing.T) {
 	category := RedactErrorForLog(errors.New("backend returned SENTINEL-PRIVATE"))
 	assert.NotContains(category, "SENTINEL-PRIVATE")
 	assert.Contains(category, "error hmac:")
+}
+
+func TestPayloadTextForLog(t *testing.T) {
+	// The payload carries both a sentinel value (which must never survive the
+	// redacted path) and a secret assignment (which the sanitized path must
+	// still scrub), so an inverted condition fails this test in both directions.
+	payload := []byte(`{"body":"SENTINEL-PRIVATE","token":"abcd1234efgh5678ijkl"}`)
+
+	tests := []struct {
+		name   string
+		redact bool
+	}{
+		{name: "redacted", redact: true},
+		{name: "sanitized", redact: false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert := assert.New(t)
+
+			text := PayloadTextForLog(payload, tc.redact)
+			assert.NotContains(text, "abcd1234efgh5678ijkl", "secret must never be logged")
+
+			if tc.redact {
+				assert.Equal(RedactedPayloadText(payload), text)
+				assert.NotContains(text, "SENTINEL-PRIVATE", "redacted rendering must not expose payload content")
+			} else {
+				assert.Equal(SanitizeString(string(payload)), text)
+				assert.Contains(text, "SENTINEL-PRIVATE", "sanitized rendering keeps non-secret content")
+				assert.Contains(text, "[REDACTED]")
+			}
+		})
+	}
+}
+
+func TestPayloadTextForLogEmptyPayload(t *testing.T) {
+	assert := assert.New(t)
+
+	assert.Equal(RedactedPayloadText(nil), PayloadTextForLog(nil, true))
+	assert.Empty(PayloadTextForLog(nil, false))
 }

@@ -158,7 +158,9 @@ func RedactedPayloadText(payload []byte) string {
 }
 
 // PayloadTextForLog renders payload for a text log line. Redacted payloads are
-// reduced to metadata, while other payloads have secrets sanitized.
+// reduced to metadata, while other payloads have secrets sanitized. This is the
+// shared decision point for every call site that must choose between a redacted
+// and a sanitized rendering of an MCP request/response payload.
 func PayloadTextForLog(payload []byte, redact bool) string {
 	if redact {
 		return RedactedPayloadText(payload)
