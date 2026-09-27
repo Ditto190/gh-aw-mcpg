@@ -199,3 +199,40 @@ func RedactErrorForLog(err error) string {
 		return "error " + KeyedDigest(err.Error())
 	}
 }
+
+// RedactErrorOrPlain renders err for a log line, gated by redact: it returns
+// RedactErrorForLog(err) when redact is true, or a plain "%v" rendering
+// otherwise. Callers that already have an error value (rather than a
+// pre-extracted message string) use this instead of RedactMessageForLog.
+func RedactErrorOrPlain(redact bool, err error) string {
+	if redact {
+		return RedactErrorForLog(err)
+	}
+	if err == nil {
+		return ""
+	}
+	return fmt.Sprintf("%v", err)
+}
+
+// RedactMessageForLog renders a pre-extracted message string for a log line,
+// gated by redact: it returns a keyed digest when redact is true, or message
+// unchanged otherwise. Callers that already hold an error value should use
+// RedactErrorOrPlain instead so the coarse category short-circuits (timeout,
+// canceled) still apply.
+func RedactMessageForLog(message string, redact bool) string {
+	if redact {
+		return KeyedDigest(message)
+	}
+	return message
+}
+
+// PayloadTextForLog renders payload for a log line: a stable metadata-only
+// digest when redact is true, or the sanitized string otherwise. This is the
+// shared decision point for every call site that must choose between a
+// redacted and a sanitized rendering of an MCP request/response payload.
+func PayloadTextForLog(payload []byte, redact bool) string {
+	if redact {
+		return RedactedPayloadText(payload)
+	}
+	return SanitizeString(string(payload))
+}

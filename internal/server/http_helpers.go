@@ -111,12 +111,7 @@ func logHTTPRequestBody(r *http.Request, sessionID, backendID string, enclaveSes
 
 	logServerHelpers.Printf("Request body read: size=%d bytes, sessionID=%s, backendID=%s", len(bodyBytes), util.FormatSessionIDForLog(sessionID), backendID)
 
-	var sanitizedBody string
-	if sanitize.ShouldRedactPayload(enclaveSession) {
-		sanitizedBody = sanitize.RedactedPayloadText(bodyBytes)
-	} else {
-		sanitizedBody = sanitize.SanitizeString(string(bodyBytes))
-	}
+	sanitizedBody := sanitize.PayloadTextForLog(bodyBytes, sanitize.ShouldRedactPayload(enclaveSession))
 
 	if backendID != "" {
 		logger.LogDebug("client", "MCP client request body, backend=%s, body=%s", backendID, sanitizedBody)
