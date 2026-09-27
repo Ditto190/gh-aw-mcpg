@@ -1,5 +1,7 @@
 package logger
 
+var logRegistry = ForFile()
+
 type loggerInitEntry struct {
 	name string
 	init func(logDir string) error
@@ -89,16 +91,21 @@ var globalLoggerClosers = []loggerCloseEntry{
 }
 
 func initLoggerSet(logDir string, entries []loggerInitEntry) {
+	logRegistry.Printf("initializing %d loggers in logDir=%s", len(entries), logDir)
 	for _, entry := range entries {
 		initWithWarning(entry.init(logDir), entry.name)
 	}
 }
 
 func closeLoggerSet(entries []loggerCloseEntry) error {
+	logRegistry.Printf("closing %d loggers", len(entries))
 	var firstErr error
 	for _, entry := range entries {
-		if err := entry.close(); err != nil && firstErr == nil {
-			firstErr = err
+		if err := entry.close(); err != nil {
+			logRegistry.Printf("error closing %s: %v", entry.name, err)
+			if firstErr == nil {
+				firstErr = err
+			}
 		}
 	}
 	return firstErr
