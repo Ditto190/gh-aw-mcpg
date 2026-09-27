@@ -157,6 +157,17 @@ func RedactedPayloadText(payload []byte) string {
 	return fmt.Sprintf("[REDACTED enclave payload bytes=%d digest=%s]", len(payload), PayloadDigest(payload))
 }
 
+// PayloadTextForLog renders payload for a text log line. Redacted payloads are
+// reduced to metadata, while other payloads have secrets sanitized. This is the
+// shared decision point for every call site that must choose between a redacted
+// and a sanitized rendering of an MCP request/response payload.
+func PayloadTextForLog(payload []byte, redact bool) string {
+	if redact {
+		return RedactedPayloadText(payload)
+	}
+	return SanitizeString(string(payload))
+}
+
 // redactedPayload is the metadata-only JSON object written in place of an
 // enclave payload in the JSONL log.
 type redactedPayload struct {
@@ -183,6 +194,25 @@ func RedactedPayloadJSON(payload []byte) json.RawMessage {
 	return encoded
 }
 
+// RedactMessageForLog renders an error-like message for a log line. When redact
+// is set, the message is reduced to a keyed digest so enclave-scoped content is
+// never persisted; otherwise the message is returned unchanged.
+func RedactMessageForLog(message string, redact bool) string {
+	if redact {
+		return KeyedDigest(message)
+	}
+	return message
+}
+
+// RedactErrorForLogIf renders err for a log line. When redact is set, the error
+// is reduced via RedactErrorForLog; otherwise it is rendered with %v.
+func RedactErrorForLogIf(err error, redact bool) string {
+	if redact {
+		return RedactErrorForLog(err)
+	}
+	return fmt.Sprintf("%v", err)
+}
+
 // RedactErrorForLog reduces an error to a coarse category plus a stable digest.
 // Backend errors frequently embed response bodies, so the message itself cannot
 // be persisted for enclave-scoped traffic.
@@ -198,41 +228,4 @@ func RedactErrorForLog(err error) string {
 	default:
 		return "error " + KeyedDigest(err.Error())
 	}
-}
-
-// RedactErrorOrPlain renders err for a log line, gated by redact: it returns
-// RedactErrorForLog(err) when redact is true, or a plain "%v" rendering
-// otherwise. Callers that already have an error value (rather than a
-// pre-extracted message string) use this instead of RedactMessageForLog.
-func RedactErrorOrPlain(redact bool, err error) string {
-	if redact {
-		return RedactErrorForLog(err)
-	}
-	if err == nil {
-		return ""
-	}
-	return fmt.Sprintf("%v", err)
-}
-
-// RedactMessageForLog renders a pre-extracted message string for a log line,
-// gated by redact: it returns a keyed digest when redact is true, or message
-// unchanged otherwise. Callers that already hold an error value should use
-// RedactErrorOrPlain instead so the coarse category short-circuits (timeout,
-// canceled) still apply.
-func RedactMessageForLog(message string, redact bool) string {
-	if redact {
-		return KeyedDigest(message)
-	}
-	return message
-}
-
-// PayloadTextForLog renders payload for a log line: a stable metadata-only
-// digest when redact is true, or the sanitized string otherwise. This is the
-// shared decision point for every call site that must choose between a
-// redacted and a sanitized rendering of an MCP request/response payload.
-func PayloadTextForLog(payload []byte, redact bool) string {
-	if redact {
-		return RedactedPayloadText(payload)
-	}
-	return SanitizeString(string(payload))
 }

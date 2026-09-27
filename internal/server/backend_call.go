@@ -131,7 +131,7 @@ func (g *guardBackendCaller) callCollaboratorPermission(ctx context.Context, arg
 			resp, err := githubhttp.DoGitHubGET(ctx, apiURL, apiPath, "token "+token)
 			if err != nil {
 				logUnified.Printf("get_collaborator_permission: REST call failed for %s/%s user %s: %s",
-					logOwner, logRepo, logUser, sanitize.RedactErrorOrPlain(sensitive, err))
+					logOwner, logRepo, logUser, sanitize.RedactErrorForLogIf(err, sensitive))
 				return nil, fmt.Errorf("REST call failed: %w", err)
 			}
 			return resp, nil
@@ -141,7 +141,7 @@ func (g *guardBackendCaller) callCollaboratorPermission(ctx context.Context, arg
 	)
 	if err != nil {
 		logUnified.Printf("get_collaborator_permission: request failed for %s/%s user %s: %s",
-			logOwner, logRepo, logUser, sanitize.RedactErrorOrPlain(sensitive, err))
+			logOwner, logRepo, logUser, sanitize.RedactErrorForLogIf(err, sensitive))
 		return nil, fmt.Errorf("get_collaborator_permission: %w", err)
 	}
 	return result, nil
@@ -339,7 +339,7 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 			httpStatusCode = 403
 			return mcp.NewErrorCallToolResult(detailedErr)
 		}
-		logger.LogWarn("difc", "Guard labeling failed: %s", sanitize.RedactErrorOrPlain(redactEnclave, err))
+		logger.LogWarn("difc", "Guard labeling failed: %s", sanitize.RedactErrorForLogIf(err, redactEnclave))
 		httpStatusCode = 500
 		return mcp.NewErrorCallToolResult(fmt.Errorf("guard labeling failed: %w", err))
 	}
@@ -409,7 +409,7 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 	// **Phase 4: Guard labels the response data (for fine-grained filtering)**
 	labeledData, err := guard.RunPipelinePhase4(ctx, pipelineIn, pre, backendResult)
 	if err != nil {
-		logger.LogWarn("difc", "Response labeling failed: %s", sanitize.RedactErrorOrPlain(redactEnclave, err))
+		logger.LogWarn("difc", "Response labeling failed: %s", sanitize.RedactErrorForLogIf(err, redactEnclave))
 		httpStatusCode = 500
 		return mcp.NewErrorCallToolResult(fmt.Errorf("response labeling failed: %w", err))
 	}
@@ -456,7 +456,7 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 			// rather than an unexpected error.
 			if IsSingularReadTool(toolName) && difcFiltered.GetAccessibleCount() == 0 && difcFiltered.GetFilteredCount() == 1 {
 				filteredErr := buildDIFCSingleItemFilteredError(ctx, difcFiltered.Filtered[0])
-				logger.LogWarn("difc", "Single item filtered — returning MCP error: %s", sanitize.RedactErrorOrPlain(redactEnclave, filteredErr))
+				logger.LogWarn("difc", "Single item filtered — returning MCP error: %s", sanitize.RedactErrorForLogIf(filteredErr, redactEnclave))
 				httpStatusCode = 403
 				return mcp.NewErrorCallToolResult(filteredErr)
 			}

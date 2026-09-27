@@ -49,12 +49,13 @@ func WithSDKLogging(handler http.Handler, mode string, us *UnifiedServer) http.H
 				logger.LogDebug("sdk-frontend", "JSON-RPC request parsed: mode=%s, method=%s, id=%v, session=%s",
 					mode, jsonrpcReq.Method, jsonrpcReq.ID, util.FormatSessionIDForLog(sessionID))
 			} else {
-				logSDK.Printf("    Failed to parse JSON-RPC request: %s", sanitize.RedactErrorOrPlain(redactPayload, err))
-				bodyText := sanitize.PayloadTextForLog(requestBody, redactPayload)
+				payloadText := sanitize.PayloadTextForLog(requestBody, redactPayload)
 				if redactPayload {
-					logSDK.Printf("    Raw body: %s", bodyText)
+					logSDK.Printf("    Failed to parse JSON-RPC request: %s", sanitize.RedactErrorForLog(err))
+					logSDK.Printf("    Raw body: %s", payloadText)
 				} else {
-					logSDK.Printf("    Raw body (sanitized): %.500s", bodyText)
+					logSDK.Printf("    Failed to parse JSON-RPC request: %v", err)
+					logSDK.Printf("    Raw body (sanitized): %.500s", payloadText)
 				}
 			}
 		}
@@ -78,17 +79,18 @@ func WithSDKLogging(handler http.Handler, mode string, us *UnifiedServer) http.H
 			if err := json.Unmarshal(responseBody, &jsonrpcResp); err == nil {
 				if jsonrpcResp.Error != nil {
 					// Error response - this is what we're particularly interested in
-					logSDK.Printf("<<< SDK Response [%s] ERROR status=%d duration=%v",
-						mode, lw.StatusCode, duration)
-					logSDK.Printf("    JSON-RPC Error: code=%d message=%q",
-						jsonrpcResp.Error.Code, sanitize.RedactMessageForLog(jsonrpcResp.Error.Message, redactPayload))
-
-					// Check for specific error types
 					errorCode := jsonrpcResp.Error.Code
 					errorMsg := jsonrpcResp.Error.Message
 					// Backend error messages routinely quote the failing request or response
 					// content, so enclave traffic logs only a correlatable token.
 					loggedErrorMsg := sanitize.RedactMessageForLog(errorMsg, redactPayload)
+
+					logSDK.Printf("<<< SDK Response [%s] ERROR status=%d duration=%v",
+						mode, lw.StatusCode, duration)
+					logSDK.Printf("    JSON-RPC Error: code=%d message=%q",
+						errorCode, loggedErrorMsg)
+
+					// Check for specific error types
 
 					// Log tool not found errors specifically for better monitoring
 					// Error code -32602 (Invalid params) is used by the SDK for unknown tools
@@ -135,14 +137,15 @@ func WithSDKLogging(handler http.Handler, mode string, us *UnifiedServer) http.H
 				// Could be SSE stream or other format
 				logSDK.Printf("<<< SDK Response [%s] status=%d duration=%v (non-JSON or stream)",
 					mode, lw.StatusCode, duration)
-				respText := sanitize.PayloadTextForLog(responseBody, redactPayload)
-				switch {
-				case redactPayload:
-					logSDK.Printf("    Raw response: %s", respText)
-				case len(respText) < 500:
-					logSDK.Printf("    Raw response (sanitized): %s", respText)
-				default:
-					logSDK.Printf("    Raw response (sanitized, truncated): %.500s...", respText)
+				payloadText := sanitize.PayloadTextForLog(responseBody, redactPayload)
+				if redactPayload {
+					logSDK.Printf("    Raw response: %s", payloadText)
+				} else {
+					if len(payloadText) < 500 {
+						logSDK.Printf("    Raw response (sanitized): %s", payloadText)
+					} else {
+						logSDK.Printf("    Raw response (sanitized, truncated): %.500s...", payloadText)
+					}
 				}
 			}
 		} else {

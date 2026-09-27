@@ -323,7 +323,7 @@ func (us *UnifiedServer) registerToolsFromBackendContext(ctx context.Context, se
 
 			// Log the MCP tool call response
 			if err != nil {
-				logger.LogError("client", "MCP tool call error, session=%s, tool=%s, error=%s", util.FormatSessionIDForLog(sessionID), toolNameCopy, sanitize.RedactErrorOrPlain(redactPayload, err))
+				logger.LogError("client", "MCP tool call error, session=%s, tool=%s, error=%s", util.FormatSessionIDForLog(sessionID), toolNameCopy, sanitize.RedactErrorForLogIf(err, redactPayload))
 			} else {
 				resultJSON, _ := json.Marshal(data)
 				logger.LogInfo("client", "MCP tool call response, session=%s, tool=%s, result=%s", util.FormatSessionIDForLog(sessionID), toolNameCopy, sanitize.PayloadTextForLog(resultJSON, redactPayload))

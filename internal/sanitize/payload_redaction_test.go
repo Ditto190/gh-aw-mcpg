@@ -136,6 +136,30 @@ func boolString(b bool) string {
 	return "false"
 }
 
+func TestRedactMessageForLog(t *testing.T) {
+	assert := assert.New(t)
+
+	msg := "sensitive: repo=private-org/secret-repo"
+	assert.Equal(msg, RedactMessageForLog(msg, false))
+
+	got1 := RedactMessageForLog(msg, true)
+	got2 := RedactMessageForLog(msg, true)
+	assert.NotContains(got1, "private-org/secret-repo")
+	assert.Equal(got1, got2, "digest must be deterministic for identical input")
+	assert.Equal(KeyedDigest(msg), got1)
+}
+
+func TestRedactErrorForLogIf(t *testing.T) {
+	assert := assert.New(t)
+
+	err := errors.New("backend returned SENTINEL-PRIVATE")
+	assert.Equal("backend returned SENTINEL-PRIVATE", RedactErrorForLogIf(err, false))
+	assert.Equal("<nil>", RedactErrorForLogIf(nil, false))
+	assert.Equal(RedactErrorForLog(err), RedactErrorForLogIf(err, true))
+	assert.NotContains(RedactErrorForLogIf(err, true), "SENTINEL-PRIVATE")
+	assert.Equal("timeout", RedactErrorForLogIf(context.DeadlineExceeded, true))
+}
+
 func TestRedactErrorForLog(t *testing.T) {
 	assert := assert.New(t)
 
