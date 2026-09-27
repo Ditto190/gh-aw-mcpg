@@ -157,6 +157,15 @@ func RedactedPayloadText(payload []byte) string {
 	return fmt.Sprintf("[REDACTED enclave payload bytes=%d digest=%s]", len(payload), PayloadDigest(payload))
 }
 
+// PayloadTextForLog renders payload for a text log line. Redacted payloads are
+// reduced to metadata, while other payloads have secrets sanitized.
+func PayloadTextForLog(payload []byte, redact bool) string {
+	if redact {
+		return RedactedPayloadText(payload)
+	}
+	return SanitizeString(string(payload))
+}
+
 // redactedPayload is the metadata-only JSON object written in place of an
 // enclave payload in the JSONL log.
 type redactedPayload struct {

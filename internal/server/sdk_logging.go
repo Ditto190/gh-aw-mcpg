@@ -48,13 +48,15 @@ func WithSDKLogging(handler http.Handler, mode string, us *UnifiedServer) http.H
 				logSDK.Printf("    JSON-RPC Request: method=%s id=%v", jsonrpcReq.Method, jsonrpcReq.ID)
 				logger.LogDebug("sdk-frontend", "JSON-RPC request parsed: mode=%s, method=%s, id=%v, session=%s",
 					mode, jsonrpcReq.Method, jsonrpcReq.ID, util.FormatSessionIDForLog(sessionID))
-			} else if redactPayload {
-				logSDK.Printf("    Failed to parse JSON-RPC request: %s", sanitize.RedactErrorForLog(err))
-				logSDK.Printf("    Raw body: %s", sanitize.RedactedPayloadText(requestBody))
 			} else {
-				logSDK.Printf("    Failed to parse JSON-RPC request: %v", err)
-				sanitizedBody := sanitize.SanitizeString(string(requestBody))
-				logSDK.Printf("    Raw body (sanitized): %.500s", sanitizedBody)
+				payloadText := sanitize.PayloadTextForLog(requestBody, redactPayload)
+				if redactPayload {
+					logSDK.Printf("    Failed to parse JSON-RPC request: %s", sanitize.RedactErrorForLog(err))
+					logSDK.Printf("    Raw body: %s", payloadText)
+				} else {
+					logSDK.Printf("    Failed to parse JSON-RPC request: %v", err)
+					logSDK.Printf("    Raw body (sanitized): %.500s", payloadText)
+				}
 			}
 		}
 
@@ -137,14 +139,14 @@ func WithSDKLogging(handler http.Handler, mode string, us *UnifiedServer) http.H
 				// Could be SSE stream or other format
 				logSDK.Printf("<<< SDK Response [%s] status=%d duration=%v (non-JSON or stream)",
 					mode, lw.StatusCode, duration)
+				payloadText := sanitize.PayloadTextForLog(responseBody, redactPayload)
 				if redactPayload {
-					logSDK.Printf("    Raw response: %s", sanitize.RedactedPayloadText(responseBody))
+					logSDK.Printf("    Raw response: %s", payloadText)
 				} else {
-					sanitizedResp := sanitize.SanitizeString(string(responseBody))
-					if len(sanitizedResp) < 500 {
-						logSDK.Printf("    Raw response (sanitized): %s", sanitizedResp)
+					if len(payloadText) < 500 {
+						logSDK.Printf("    Raw response (sanitized): %s", payloadText)
 					} else {
-						logSDK.Printf("    Raw response (sanitized, truncated): %.500s...", sanitizedResp)
+						logSDK.Printf("    Raw response (sanitized, truncated): %.500s...", payloadText)
 					}
 				}
 			}

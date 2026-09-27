@@ -68,6 +68,16 @@ func TestRedactedPayloadRenderings(t *testing.T) {
 	assert.NotContains(text, hex.EncodeToString(plain[:])[:16])
 }
 
+func TestPayloadTextForLog(t *testing.T) {
+	payload := []byte("token=ghp_SENSITIVE_VALUE")
+
+	assert.Contains(t, PayloadTextForLog(payload, false), "[REDACTED]")
+
+	redacted := PayloadTextForLog(payload, true)
+	assert.Equal(t, RedactedPayloadText(payload), redacted)
+	assert.NotContains(t, redacted, "SENSITIVE_VALUE")
+}
+
 func TestKeyedDigestEmptyValue(t *testing.T) {
 	assert.Equal(t, "(none)", KeyedDigest(""), "empty values must not hash to a guessable token")
 }
