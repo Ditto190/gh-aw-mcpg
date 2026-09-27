@@ -48,13 +48,15 @@ func WithSDKLogging(handler http.Handler, mode string, us *UnifiedServer) http.H
 				logSDK.Printf("    JSON-RPC Request: method=%s id=%v", jsonrpcReq.Method, jsonrpcReq.ID)
 				logger.LogDebug("sdk-frontend", "JSON-RPC request parsed: mode=%s, method=%s, id=%v, session=%s",
 					mode, jsonrpcReq.Method, jsonrpcReq.ID, util.FormatSessionIDForLog(sessionID))
-			} else if redactPayload {
-				logSDK.Printf("    Failed to parse JSON-RPC request: %s", sanitize.RedactErrorForLog(err))
-				logSDK.Printf("    Raw body: %s", sanitize.RedactedPayloadText(requestBody))
 			} else {
-				logSDK.Printf("    Failed to parse JSON-RPC request: %v", err)
-				sanitizedBody := sanitize.SanitizeString(string(requestBody))
-				logSDK.Printf("    Raw body (sanitized): %.500s", sanitizedBody)
+				payloadText := sanitize.PayloadTextForLog(requestBody, redactPayload)
+				if redactPayload {
+					logSDK.Printf("    Failed to parse JSON-RPC request: %s", sanitize.RedactErrorForLog(err))
+					logSDK.Printf("    Raw body: %s", payloadText)
+				} else {
+					logSDK.Printf("    Failed to parse JSON-RPC request: %v", err)
+					logSDK.Printf("    Raw body (sanitized): %.500s", payloadText)
+				}
 			}
 		}
 
@@ -77,20 +79,18 @@ func WithSDKLogging(handler http.Handler, mode string, us *UnifiedServer) http.H
 			if err := json.Unmarshal(responseBody, &jsonrpcResp); err == nil {
 				if jsonrpcResp.Error != nil {
 					// Error response - this is what we're particularly interested in
-					logSDK.Printf("<<< SDK Response [%s] ERROR status=%d duration=%v",
-						mode, lw.StatusCode, duration)
-					logSDK.Printf("    JSON-RPC Error: code=%d message=%q",
-						jsonrpcResp.Error.Code, sdkErrorMessageForLog(jsonrpcResp.Error.Message, redactPayload))
-
-					// Check for specific error types
 					errorCode := jsonrpcResp.Error.Code
 					errorMsg := jsonrpcResp.Error.Message
 					// Backend error messages routinely quote the failing request or response
 					// content, so enclave traffic logs only a correlatable token.
-					loggedErrorMsg := errorMsg
-					if redactPayload {
-						loggedErrorMsg = sanitize.KeyedDigest(errorMsg)
-					}
+					loggedErrorMsg := sanitize.RedactMessageForLog(errorMsg, redactPayload)
+
+					logSDK.Printf("<<< SDK Response [%s] ERROR status=%d duration=%v",
+						mode, lw.StatusCode, duration)
+					logSDK.Printf("    JSON-RPC Error: code=%d message=%q",
+						errorCode, loggedErrorMsg)
+
+					// Check for specific error types
 
 					// Log tool not found errors specifically for better monitoring
 					// Error code -32602 (Invalid params) is used by the SDK for unknown tools
@@ -137,14 +137,14 @@ func WithSDKLogging(handler http.Handler, mode string, us *UnifiedServer) http.H
 				// Could be SSE stream or other format
 				logSDK.Printf("<<< SDK Response [%s] status=%d duration=%v (non-JSON or stream)",
 					mode, lw.StatusCode, duration)
+				payloadText := sanitize.PayloadTextForLog(responseBody, redactPayload)
 				if redactPayload {
-					logSDK.Printf("    Raw response: %s", sanitize.RedactedPayloadText(responseBody))
+					logSDK.Printf("    Raw response: %s", payloadText)
 				} else {
-					sanitizedResp := sanitize.SanitizeString(string(responseBody))
-					if len(sanitizedResp) < 500 {
-						logSDK.Printf("    Raw response (sanitized): %s", sanitizedResp)
+					if len(payloadText) < 500 {
+						logSDK.Printf("    Raw response (sanitized): %s", payloadText)
 					} else {
-						logSDK.Printf("    Raw response (sanitized, truncated): %.500s...", sanitizedResp)
+						logSDK.Printf("    Raw response (sanitized, truncated): %.500s...", payloadText)
 					}
 				}
 			}
@@ -153,15 +153,6 @@ func WithSDKLogging(handler http.Handler, mode string, us *UnifiedServer) http.H
 				mode, lw.StatusCode, duration)
 		}
 	})
-}
-
-// sdkErrorMessageForLog renders a JSON-RPC error message for a log line, reducing it
-// to a keyed token when the traffic is enclave-scoped.
-func sdkErrorMessageForLog(message string, redact bool) string {
-	if redact {
-		return sanitize.KeyedDigest(message)
-	}
-	return message
 }
 
 // withResponseLogging wraps an http.Handler to log response bodies

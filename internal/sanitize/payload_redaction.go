@@ -157,6 +157,15 @@ func RedactedPayloadText(payload []byte) string {
 	return fmt.Sprintf("[REDACTED enclave payload bytes=%d digest=%s]", len(payload), PayloadDigest(payload))
 }
 
+// PayloadTextForLog renders payload for a text log line. Redacted payloads are
+// reduced to metadata, while other payloads have secrets sanitized.
+func PayloadTextForLog(payload []byte, redact bool) string {
+	if redact {
+		return RedactedPayloadText(payload)
+	}
+	return SanitizeString(string(payload))
+}
+
 // redactedPayload is the metadata-only JSON object written in place of an
 // enclave payload in the JSONL log.
 type redactedPayload struct {
@@ -181,6 +190,25 @@ func RedactedPayloadJSON(payload []byte) json.RawMessage {
 		return json.RawMessage(`{"redacted":true,"reason":"enclave_payload_redacted"}`)
 	}
 	return encoded
+}
+
+// RedactMessageForLog renders an error-like message for a log line. When redact
+// is set, the message is reduced to a keyed digest so enclave-scoped content is
+// never persisted; otherwise the message is returned unchanged.
+func RedactMessageForLog(message string, redact bool) string {
+	if redact {
+		return KeyedDigest(message)
+	}
+	return message
+}
+
+// RedactErrorForLogIf renders err for a log line. When redact is set, the error
+// is reduced via RedactErrorForLog; otherwise it is rendered with %v.
+func RedactErrorForLogIf(err error, redact bool) string {
+	if redact {
+		return RedactErrorForLog(err)
+	}
+	return fmt.Sprintf("%v", err)
 }
 
 // RedactErrorForLog reduces an error to a coarse category plus a stable digest.

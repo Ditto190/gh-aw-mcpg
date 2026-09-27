@@ -68,6 +68,16 @@ func TestRedactedPayloadRenderings(t *testing.T) {
 	assert.NotContains(text, hex.EncodeToString(plain[:])[:16])
 }
 
+func TestPayloadTextForLog(t *testing.T) {
+	payload := []byte("token=ghp_SENSITIVE_VALUE")
+
+	assert.Contains(t, PayloadTextForLog(payload, false), "[REDACTED]")
+
+	redacted := PayloadTextForLog(payload, true)
+	assert.Equal(t, RedactedPayloadText(payload), redacted)
+	assert.NotContains(t, redacted, "SENSITIVE_VALUE")
+}
+
 func TestKeyedDigestEmptyValue(t *testing.T) {
 	assert.Equal(t, "(none)", KeyedDigest(""), "empty values must not hash to a guessable token")
 }
@@ -134,6 +144,30 @@ func boolString(b bool) string {
 		return "true"
 	}
 	return "false"
+}
+
+func TestRedactMessageForLog(t *testing.T) {
+	assert := assert.New(t)
+
+	msg := "sensitive: repo=private-org/secret-repo"
+	assert.Equal(msg, RedactMessageForLog(msg, false))
+
+	got1 := RedactMessageForLog(msg, true)
+	got2 := RedactMessageForLog(msg, true)
+	assert.NotContains(got1, "private-org/secret-repo")
+	assert.Equal(got1, got2, "digest must be deterministic for identical input")
+	assert.Equal(KeyedDigest(msg), got1)
+}
+
+func TestRedactErrorForLogIf(t *testing.T) {
+	assert := assert.New(t)
+
+	err := errors.New("backend returned SENTINEL-PRIVATE")
+	assert.Equal("backend returned SENTINEL-PRIVATE", RedactErrorForLogIf(err, false))
+	assert.Equal("<nil>", RedactErrorForLogIf(nil, false))
+	assert.Equal(RedactErrorForLog(err), RedactErrorForLogIf(err, true))
+	assert.NotContains(RedactErrorForLogIf(err, true), "SENTINEL-PRIVATE")
+	assert.Equal("timeout", RedactErrorForLogIf(context.DeadlineExceeded, true))
 }
 
 func TestRedactErrorForLog(t *testing.T) {
