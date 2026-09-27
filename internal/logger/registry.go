@@ -101,9 +101,11 @@ func closeLoggerSet(entries []loggerCloseEntry) error {
 	logRegistry.Printf("closing %d loggers", len(entries))
 	var firstErr error
 	for _, entry := range entries {
-		if err := entry.close(); err != nil && firstErr == nil {
+		if err := entry.close(); err != nil {
 			logRegistry.Printf("error closing %s: %v", entry.name, err)
-			firstErr = err
+			if firstErr == nil {
+				firstErr = err
+			}
 		}
 	}
 	return firstErr
