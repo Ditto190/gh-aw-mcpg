@@ -53,10 +53,10 @@ func TestCreateStdioTransport_UnknownServer(t *testing.T) {
 func TestCreateCommandTransport(t *testing.T) {
 	ctx := context.Background()
 
-transport := mcptest.CreateCommandTransport(ctx, "echo", "hello")
-commandTransport, ok := transport.(*sdk.CommandTransport)
-require.True(t, ok, "expected *sdk.CommandTransport")
-assert.Equal(t, []string{"echo", "hello"}, commandTransport.Command.Args)
+	transport := mcptest.CreateCommandTransport(ctx, "echo", "hello")
+	commandTransport, ok := transport.(*sdk.CommandTransport)
+	require.True(t, ok, "expected *sdk.CommandTransport")
+	assert.Equal(t, []string{"echo", "hello"}, commandTransport.Command.Args)
 }
 
 // TestToolHandlerError verifies that a tool.Handler returning an error is
@@ -136,7 +136,7 @@ func TestValidatorClient_ErrorPaths(t *testing.T) {
 func TestTestDriver_StopIdempotentWithoutServers(t *testing.T) {
 	driver := mcptest.NewTestDriver()
 
-assert.NotPanics(t, func() {
+	assert.NotPanics(t, func() {
 		driver.Stop()
 		driver.Stop()
 	})
