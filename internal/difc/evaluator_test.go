@@ -1247,3 +1247,33 @@ func TestNewComponents(t *testing.T) {
 		assert.NotNil(t, components.Evaluator)
 	})
 }
+
+// BenchmarkFilterCollection measures FilterCollection throughput for a large,
+// mostly-accessible collection (the common case for list-returning tools such as
+// list_issues/list_pull_requests/list_commits). It guards against a regression of
+// the Accessible slice pre-allocation optimization, which avoids repeated append
+// reallocations on this hot path.
+func BenchmarkFilterCollection(b *testing.B) {
+	eval := NewEvaluator()
+	agentSecrecy := NewSecrecyLabel([]Tag{"public"}...)
+	agentIntegrity := NewIntegrityLabel()
+
+	const itemCount = 500
+	items := make([]LabeledItem, itemCount)
+	for i := 0; i < itemCount; i++ {
+		items[i] = LabeledItem{
+			Data: i,
+			Labels: &LabeledResource{
+				Description: "benchmark item",
+				Secrecy:     *NewSecrecyLabel([]Tag{"public"}...),
+				Integrity:   *NewIntegrityLabel(),
+			},
+		}
+	}
+	collection := &CollectionLabeledData{Items: items}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		eval.FilterCollection(agentSecrecy, agentIntegrity, collection, OperationRead)
+	}
+}
