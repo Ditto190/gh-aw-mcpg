@@ -121,6 +121,20 @@ func CheckPortMapping(containerID, port string) (bool, error) {
 	return mapped, nil
 }
 
+// IsHostNetwork reports whether the container uses the host network.
+func IsHostNetwork(containerID string) (bool, error) {
+	logDocker.Printf("Checking network mode: containerID=%s", containerID)
+
+	output, err := runDockerInspect(containerID, "{{.HostConfig.NetworkMode}}")
+	if err != nil {
+		return false, err
+	}
+
+	hostNetwork := strings.EqualFold(output, "host")
+	logDocker.Printf("Network mode check result: hostNetwork=%v", hostNetwork)
+	return hostNetwork, nil
+}
+
 // CheckStdinInteractive uses docker inspect to verify the container was started with -i flag.
 func CheckStdinInteractive(containerID string) bool {
 	output, err := runDockerInspect(containerID, "{{.Config.OpenStdin}}")
