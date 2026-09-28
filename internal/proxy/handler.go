@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -590,11 +591,28 @@ func clientAPIURL(r *http.Request) string {
 // rewriteUpstreamAPIURL replaces an upstream API URL prefix with the client API base.
 // URLs outside the configured upstream API base are returned unchanged.
 func rewriteUpstreamAPIURL(value, upstreamAPIURL, clientAPIURL string) string {
-	suffix, ok := strings.CutPrefix(value, upstreamAPIURL)
-	if !ok || (suffix != "" && suffix[0] != '/' && suffix[0] != '?' && suffix[0] != '#') {
+	upstream, err := url.Parse(strings.TrimRight(upstreamAPIURL, "/"))
+	if err != nil {
 		return value
 	}
-	return clientAPIURL + suffix
+	client, err := url.Parse(clientAPIURL)
+	if err != nil {
+		return value
+	}
+	target, err := url.Parse(value)
+	if err != nil || !strings.EqualFold(target.Scheme, upstream.Scheme) || !strings.EqualFold(target.Host, upstream.Host) {
+		return value
+	}
+
+	upstreamPath := strings.TrimRight(upstream.Path, "/")
+	if target.Path != upstreamPath && !strings.HasPrefix(target.Path, upstreamPath+"/") {
+		return value
+	}
+	target.Scheme = client.Scheme
+	target.Host = client.Host
+	target.Path = client.Path + strings.TrimPrefix(target.Path, upstreamPath)
+	target.RawPath = ""
+	return target.String()
 }
 
 // rewriteLinkHeader rewrites only upstream API URLs enclosed in a Link header's
