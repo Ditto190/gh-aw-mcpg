@@ -291,6 +291,49 @@ func TestCheckPortMapping(t *testing.T) {
 	}
 }
 
+func TestIsHostNetworkMode(t *testing.T) {
+	tests := []struct {
+		name        string
+		containerID string
+		port        string
+		shouldError bool
+		dockerHost  string // if set, DOCKER_HOST is overridden for this subtest
+	}{
+		{
+			name:        "empty container ID",
+			containerID: "",
+			shouldError: true,
+		},
+		{
+			name:        "invalid container ID",
+			containerID: "invalid;id",
+			shouldError: true,
+		},
+		{
+			name:        "valid container ID format - container absent",
+			containerID: "abc123def4567890",
+			shouldError: true, // docker inspect will fail: socket doesn't exist
+			dockerHost:  "unix:///nonexistent/docker.sock",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.dockerHost != "" {
+				t.Setenv("DOCKER_HOST", tt.dockerHost)
+			}
+			hostNetwork, err := IsHostNetworkMode(tt.containerID)
+
+			if tt.shouldError {
+				require.Error(t, err, "Expected error for %s", tt.name)
+				assert.False(t, hostNetwork, "Should not be reported as host network on error")
+			} else {
+				require.NoError(t, err, "Unexpected error")
+			}
+		})
+	}
+}
+
 func TestCheckStdinInteractive(t *testing.T) {
 	tests := []struct {
 		name        string
