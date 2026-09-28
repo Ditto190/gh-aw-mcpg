@@ -564,7 +564,7 @@ func TestIsGraphQLPath(t *testing.T) {
 // correct empty sentinel value for each response shape (array, GraphQL
 // object, plain object, and nil/unknown).
 func TestWriteEmptyResponse(t *testing.T) {
-	h := &proxyHandler{server: nil}
+	h := &proxyHandler{server: &Server{githubAPIURL: DefaultGitHubAPIBase}}
 
 	tests := []struct {
 		name         string
@@ -617,7 +617,7 @@ func TestWriteEmptyResponse(t *testing.T) {
 				StatusCode: tt.wantStatus,
 				Header:     make(http.Header),
 			}
-			h.writeEmptyResponse(w, resp, tt.originalData)
+			h.writeEmptyResponse(w, httptest.NewRequest(http.MethodGet, "/repos/o/r/issues", nil), resp, tt.originalData)
 
 			result := w.Result()
 			body, err := io.ReadAll(result.Body)
@@ -633,6 +633,10 @@ func TestWriteEmptyResponse(t *testing.T) {
 // expected GitHub API rate-limit and pagination headers, and does NOT
 // copy unrelated headers.
 func TestCopyResponseHeaders(t *testing.T) {
+	newRequest := func() *http.Request {
+		return httptest.NewRequest(http.MethodGet, "https://localhost:18443/api/v3/repos/o/r/issues", nil)
+	}
+
 	t.Run("copies rate limit headers", func(t *testing.T) {
 		w := httptest.NewRecorder()
 		resp := &http.Response{Header: http.Header{
@@ -642,7 +646,7 @@ func TestCopyResponseHeaders(t *testing.T) {
 			"X-Ratelimit-Resource":  []string{"core"},
 			"X-Ratelimit-Used":      []string{"2"},
 		}}
-		copyResponseHeaders(w, resp)
+		copyResponseHeaders(w, newRequest(), resp, DefaultGitHubAPIBase)
 		assert.Equal(t, "60", w.Header().Get("X-Ratelimit-Limit"))
 		assert.Equal(t, "58", w.Header().Get("X-Ratelimit-Remaining"))
 		assert.Equal(t, "1609459200", w.Header().Get("X-Ratelimit-Reset"))
@@ -650,21 +654,54 @@ func TestCopyResponseHeaders(t *testing.T) {
 		assert.Equal(t, "2", w.Header().Get("X-Ratelimit-Used"))
 	})
 
-	t.Run("copies pagination and request ID headers", func(t *testing.T) {
+	t.Run("rewrites pagination links to the client proxy", func(t *testing.T) {
 		w := httptest.NewRecorder()
 		resp := &http.Response{Header: http.Header{
-			"Link":                []string{`<https://api.github.com/repos/o/r/issues?page=2>; rel="next"`},
+			"Link": []string{
+				`<https://api.github.com/repos/o/r/issues?page=2>; rel="next"`,
+				`<https://api.github.com/repos/o/r/issues?page=1>; rel="prev"`,
+			},
 			"X-Github-Request-Id": []string{"abc-123"},
 		}}
-		copyResponseHeaders(w, resp)
-		assert.Equal(t, `<https://api.github.com/repos/o/r/issues?page=2>; rel="next"`, w.Header().Get("Link"))
+		copyResponseHeaders(w, newRequest(), resp, DefaultGitHubAPIBase)
+		assert.Equal(t, []string{
+			`<https://localhost:18443/api/v3/repos/o/r/issues?page=2>; rel="next"`,
+			`<https://localhost:18443/api/v3/repos/o/r/issues?page=1>; rel="prev"`,
+		}, w.Header().Values("Link"))
 		assert.Equal(t, "abc-123", w.Header().Get("X-Github-Request-Id"))
+	})
+
+	t.Run("rewrites upstream locations but not external locations", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		resp := &http.Response{Header: http.Header{
+			"Location": []string{"https://api.github.com/repos/o/r/releases/1"},
+		}}
+		copyResponseHeaders(w, newRequest(), resp, DefaultGitHubAPIBase)
+		assert.Equal(t, "https://localhost:18443/api/v3/repos/o/r/releases/1", w.Header().Get("Location"))
+
+		w = httptest.NewRecorder()
+		resp.Header.Set("Location", "https://objects.githubusercontent.com/archive.zip")
+		copyResponseHeaders(w, newRequest(), resp, DefaultGitHubAPIBase)
+		assert.Equal(t, "https://objects.githubusercontent.com/archive.zip", w.Header().Get("Location"))
+	})
+
+	t.Run("normalizes upstream URL and preserves malformed links", func(t *testing.T) {
+		assert.Equal(t,
+			"https://localhost:18443/api/v3/repos/o/r/issues?page=2",
+			rewriteUpstreamAPIURL("HTTPS://API.GITHUB.COM/repos/o/r/issues?page=2", "https://api.github.com/", "https://localhost:18443/api/v3"),
+		)
+		assert.Equal(t,
+			"https://localhost:18443/api/v3/repos/o/r/contents/a%2Fb",
+			rewriteUpstreamAPIURL("https://api.github.com/repos/o/r/contents/a%2Fb", DefaultGitHubAPIBase, "https://localhost:18443/api/v3"),
+		)
+		assert.Equal(t, "not a link", rewriteLinkHeader("not a link", DefaultGitHubAPIBase, "https://localhost:18443/api/v3"))
+		assert.Equal(t, `<https://api.github.com/repos/o/r/issues?page=2`, rewriteLinkHeader(`<https://api.github.com/repos/o/r/issues?page=2`, DefaultGitHubAPIBase, "https://localhost:18443/api/v3"))
 	})
 
 	t.Run("absent headers are not written", func(t *testing.T) {
 		w := httptest.NewRecorder()
 		resp := &http.Response{Header: make(http.Header)}
-		copyResponseHeaders(w, resp)
+		copyResponseHeaders(w, newRequest(), resp, DefaultGitHubAPIBase)
 		assert.Empty(t, w.Header().Get("X-Ratelimit-Limit"))
 		assert.Empty(t, w.Header().Get("Link"))
 		assert.Empty(t, w.Header().Get("X-Github-Request-Id"))
@@ -677,7 +714,7 @@ func TestCopyResponseHeaders(t *testing.T) {
 			"X-Custom-Header": []string{"secret"},
 			"Authorization":   []string{"token abc"},
 		}}
-		copyResponseHeaders(w, resp)
+		copyResponseHeaders(w, newRequest(), resp, DefaultGitHubAPIBase)
 		assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
 		assert.Empty(t, w.Header().Get("X-Custom-Header"))
 		assert.Empty(t, w.Header().Get("Authorization"))

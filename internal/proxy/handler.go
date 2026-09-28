@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -145,7 +147,7 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			if resp == nil {
 				return
 			}
-			h.writeResponse(w, resp, respBody)
+			h.writeResponse(w, r, resp, respBody)
 			return
 		}
 		toolName = match.ToolName
@@ -194,7 +196,7 @@ func (h *proxyHandler) handleUnrecognizedPassthrough(w http.ResponseWriter, r *h
 	}
 	guard.RunPipelinePhase6(pre, nil, h.server.Mode)
 
-	h.writeResponse(w, resp, respBody)
+	h.writeResponse(w, r, resp, respBody)
 }
 
 // handleWithDIFC runs the 6-phase DIFC pipeline on a request.
@@ -298,7 +300,7 @@ func (h *proxyHandler) handleWithDIFC(w http.ResponseWriter, r *http.Request, pa
 			writeEnclaveDenied(w)
 			return
 		}
-		h.writeResponse(w, resp, respBody)
+		h.writeResponse(w, r, resp, respBody)
 		return
 	}
 
@@ -311,7 +313,7 @@ func (h *proxyHandler) handleWithDIFC(w http.ResponseWriter, r *http.Request, pa
 		}
 		// Non-JSON response — pass through
 		logHandler.Printf("[DIFC] response is not JSON, passing through")
-		h.writeResponse(w, resp, respBody)
+		h.writeResponse(w, r, resp, respBody)
 		return
 	}
 
@@ -325,9 +327,9 @@ func (h *proxyHandler) handleWithDIFC(w http.ResponseWriter, r *http.Request, pa
 		logHandler.Printf("[DIFC] Phase 4 failed: %v", err)
 		// On labeling failure, fall back to coarse-grained result
 		if pre.EvalResult.IsAllowed() {
-			h.writeResponse(w, resp, respBody)
+			h.writeResponse(w, r, resp, respBody)
 		} else {
-			h.writeEmptyResponse(w, resp, responseData)
+			h.writeEmptyResponse(w, r, resp, responseData)
 		}
 		return
 	}
@@ -349,7 +351,7 @@ func (h *proxyHandler) handleWithDIFC(w http.ResponseWriter, r *http.Request, pa
 			writeEnclaveDenied(w)
 			return
 		}
-		h.writeEmptyResponse(w, resp, responseData)
+		h.writeEmptyResponse(w, r, resp, responseData)
 		return
 	}
 
@@ -403,7 +405,7 @@ func (h *proxyHandler) handleWithDIFC(w http.ResponseWriter, r *http.Request, pa
 		if pre.EvalResult.IsAllowed() {
 			finalData = responseData
 		} else {
-			h.writeEmptyResponse(w, resp, responseData)
+			h.writeEmptyResponse(w, r, resp, responseData)
 			return
 		}
 	}
@@ -415,14 +417,14 @@ func (h *proxyHandler) handleWithDIFC(w http.ResponseWriter, r *http.Request, pa
 	if useOriginalBody {
 		// GraphQL: return original upstream response to preserve exact format
 		logHandler.Printf("[DIFC] returning original response body (GraphQL, no items filtered)")
-		h.writeResponse(w, resp, respBody)
+		h.writeResponse(w, r, resp, respBody)
 	} else {
 		filteredJSON, err := json.Marshal(finalData)
 		if err != nil {
 			rejectProxyRequest(w, difcSpan, http.StatusInternalServerError, "internal_error", "failed to serialize filtered response", err)
 			return
 		}
-		copyResponseHeaders(w, resp)
+		copyResponseHeaders(w, r, resp, h.server.githubAPIURL)
 		httputil.WriteJSONResponse(w, resp.StatusCode, json.RawMessage(filteredJSON))
 	}
 }
@@ -442,14 +444,14 @@ func (h *proxyHandler) passthrough(w http.ResponseWriter, r *http.Request, path 
 		return
 	}
 
-	h.writeResponse(w, resp, respBody)
+	h.writeResponse(w, r, resp, respBody)
 }
 
 // writeResponse writes an upstream response to the client.
 // When the upstream signals rate-limiting (HTTP 429 or X-RateLimit-Remaining == 0),
 // it injects a Retry-After header and logs the event at ERROR level.
-func (h *proxyHandler) writeResponse(w http.ResponseWriter, resp *http.Response, body []byte) {
-	copyResponseHeaders(w, resp)
+func (h *proxyHandler) writeResponse(w http.ResponseWriter, r *http.Request, resp *http.Response, body []byte) {
+	copyResponseHeaders(w, r, resp, h.server.githubAPIURL)
 	injectRetryAfterIfRateLimited(w, resp)
 	w.WriteHeader(resp.StatusCode)
 	w.Write(body)
@@ -459,8 +461,8 @@ func (h *proxyHandler) writeResponse(w http.ResponseWriter, resp *http.Response,
 // originalData should be the parsed upstream response; nil or unrecognized types fall back to "[]".
 // For JSON arrays it writes "[]", for GraphQL objects with a "data" key it writes {"data":null},
 // and for other JSON objects it writes "{}".
-func (h *proxyHandler) writeEmptyResponse(w http.ResponseWriter, resp *http.Response, originalData interface{}) {
-	copyResponseHeaders(w, resp)
+func (h *proxyHandler) writeEmptyResponse(w http.ResponseWriter, r *http.Request, resp *http.Response, originalData interface{}) {
+	copyResponseHeaders(w, r, resp, h.server.githubAPIURL)
 
 	var empty string
 	switch obj := originalData.(type) {
@@ -540,7 +542,7 @@ func (h *proxyHandler) streamArtifactResponse(
 	fwdSpan.SetAttributes(tracing.HTTPResponseStatusCodeKey.Int(resp.StatusCode))
 	recordRateLimitSpanEvent(resp, fwdSpan, difcSpan)
 
-	copyResponseHeaders(w, resp)
+	copyResponseHeaders(w, r, resp, h.server.githubAPIURL)
 	injectRetryAfterIfRateLimited(w, resp)
 	w.WriteHeader(resp.StatusCode)
 	if _, copyErr := io.Copy(w, resp.Body); copyErr != nil {
@@ -551,19 +553,92 @@ func (h *proxyHandler) streamArtifactResponse(
 }
 
 // copyResponseHeaders copies relevant headers from upstream to the client response.
-func copyResponseHeaders(w http.ResponseWriter, resp *http.Response) {
+// It rewrites upstream API URLs in Location and every Link value to the API base
+// derived from r, using upstreamAPIURL to leave external URLs unchanged.
+func copyResponseHeaders(w http.ResponseWriter, r *http.Request, resp *http.Response, upstreamAPIURL string) {
 	for _, h := range []string{
 		"Content-Type",
 		"Content-Disposition",
-		"Location",
 		"X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset",
 		"X-RateLimit-Resource", "X-RateLimit-Used",
-		"Link", // pagination
 		"X-GitHub-Request-Id",
 	} {
 		if v := resp.Header.Get(h); v != "" {
 			w.Header().Set(h, v)
 		}
+	}
+
+	clientBase := clientAPIURL(r)
+	if location := resp.Header.Get("Location"); location != "" {
+		w.Header().Set("Location", rewriteUpstreamAPIURL(location, upstreamAPIURL, clientBase))
+	}
+	for _, link := range resp.Header.Values("Link") {
+		w.Header().Add("Link", rewriteLinkHeader(link, upstreamAPIURL, clientBase))
+	}
+}
+
+// clientAPIURL returns the API base URL used by the inbound client request.
+func clientAPIURL(r *http.Request) string {
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
+	}
+	apiURL := scheme + "://" + r.Host
+	if r.URL.Path == ghHostPathPrefix || strings.HasPrefix(r.URL.Path, ghHostPathPrefix+"/") {
+		apiURL += ghHostPathPrefix
+	}
+	return apiURL
+}
+
+// rewriteUpstreamAPIURL replaces an upstream API URL prefix with the client API base.
+// URLs outside the configured upstream API base are returned unchanged.
+func rewriteUpstreamAPIURL(value, upstreamAPIURL, clientAPIURL string) string {
+	upstream, err := url.Parse(strings.TrimRight(upstreamAPIURL, "/"))
+	if err != nil {
+		return value
+	}
+	client, err := url.Parse(clientAPIURL)
+	if err != nil {
+		return value
+	}
+	target, err := url.Parse(value)
+	if err != nil || !strings.EqualFold(target.Scheme, upstream.Scheme) || !strings.EqualFold(target.Host, upstream.Host) {
+		return value
+	}
+
+	upstreamPath := strings.TrimRight(upstream.Path, "/")
+	if target.Path != upstreamPath && !strings.HasPrefix(target.Path, upstreamPath+"/") {
+		return value
+	}
+	escapedUpstreamPath := strings.TrimRight(upstream.EscapedPath(), "/")
+	escapedSuffix := strings.TrimPrefix(target.EscapedPath(), escapedUpstreamPath)
+	target.Scheme = client.Scheme
+	target.Host = client.Host
+	target.Path = client.Path + strings.TrimPrefix(target.Path, upstreamPath)
+	target.RawPath = client.EscapedPath() + escapedSuffix
+	return target.String()
+}
+
+// rewriteLinkHeader rewrites only upstream API URLs enclosed in a Link header's
+// angle brackets, preserving link parameters and external URLs.
+func rewriteLinkHeader(value, upstreamAPIURL, clientAPIURL string) string {
+	var rewritten strings.Builder
+	for {
+		start := strings.IndexByte(value, '<')
+		if start < 0 {
+			rewritten.WriteString(value)
+			return rewritten.String()
+		}
+		end := strings.IndexByte(value[start:], '>')
+		if end < 0 {
+			rewritten.WriteString(value)
+			return rewritten.String()
+		}
+		end += start
+		rewritten.WriteString(value[:start+1])
+		rewritten.WriteString(rewriteUpstreamAPIURL(value[start+1:end], upstreamAPIURL, clientAPIURL))
+		rewritten.WriteByte('>')
+		value = value[end+1:]
 	}
 }
 
