@@ -646,6 +646,11 @@ func (g *WasmGuard) IsHealthy() bool {
 // As a fallback for wazero execution faults (e.g. Rust panic → unreachable),
 // the function also matches on wazero's "wasm error:" message prefix
 // (verified against wazero v1.12.0; re-verify on upgrades).
+//
+// Host-side context cancellation and deadline expiry are NOT traps: the runtime
+// is configured with WithCloseOnContextDone(true), so those exit codes mean the
+// host tore the module down, not that the guest misbehaved. Poisoning the guard
+// in that case would disable it for every other caller of the shared module.
 func isWasmTrap(err error) bool {
 	if err == nil {
 		return false
@@ -653,7 +658,11 @@ func isWasmTrap(err error) bool {
 	// A normal WASI process exit (exit code 0) is not a trap — don't poison the guard.
 	var exitErr *sys.ExitError
 	if errors.As(err, &exitErr) {
-		return exitErr.ExitCode() != 0
+		switch exitErr.ExitCode() {
+		case 0, sys.ExitCodeContextCanceled, sys.ExitCodeDeadlineExceeded:
+			return false
+		}
+		return true
 	}
 	// Fallback for wazero execution traps (e.g. Rust panic → unreachable).
 	return strings.Contains(err.Error(), "wasm error:")
@@ -668,6 +677,14 @@ func (g *WasmGuard) callWasmGuardFunction(ctx context.Context, funcName string, 
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
+	// Callers can wait a long time for the mutex, so their context may already
+	// be canceled by the time the lock is acquired.
+	execCtx, err := wasmExecContext(ctx)
+	if err != nil {
+		logWasm.Printf("callWasmGuardFunction: guard=%s, func=%s aborted before execution: %v", g.name, funcName, err)
+		return nil, fmt.Errorf("guard call %s aborted before WASM execution: %w", funcName, err)
+	}
+
 	g.backend = backend
 	g.backendCallCount = 0 // reset per-invocation backend call counter
 
@@ -677,7 +694,28 @@ func (g *WasmGuard) callWasmGuardFunction(ctx context.Context, funcName string, 
 	}
 	logWasm.Printf("%s input JSON: %d bytes", funcName, len(inputJSON))
 
-	return g.callWasmFunction(ctx, funcName, inputJSON)
+	return g.callWasmFunction(execCtx, funcName, inputJSON)
+}
+
+// wasmExecContext derives the context used to execute a WASM guard call.
+//
+// The wazero runtime is configured with WithCloseOnContextDone(true), so a
+// canceled context closes the module that every caller of this guard shares.
+// Guard calls are short and mutate module-global state, so they must not be
+// interrupted by a caller that goes away:
+//   - if ctx is already done (e.g. the client disconnected while the call was
+//     queued behind the guard mutex) the call is refused before it can reach
+//     the module;
+//   - otherwise the call runs under a context that cannot be canceled by the
+//     caller, while keeping its values (tracing, logging) intact.
+func wasmExecContext(ctx context.Context) (context.Context, error) {
+	if ctx == nil {
+		return context.Background(), nil
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return context.WithoutCancel(ctx), nil
 }
 
 // Close releases WASM runtime resources
