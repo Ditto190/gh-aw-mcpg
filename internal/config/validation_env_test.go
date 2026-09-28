@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -592,87 +593,79 @@ func TestValidateContainerizedEnvironmentForRuntime_PodmanSkipsDockerInspection(
 	assert.False(t, result.LogDirMounted)
 }
 
-func TestValidateContainerizedEnvironmentForRuntime_NetworkModePortMapping(t *testing.T) {
+func TestValidateContainerizedEnvironment_NetworkModePortMapping(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("mock docker binary requires a Unix-like shell")
+	}
+
+	tempDir := t.TempDir()
+	dockerPath := filepath.Join(tempDir, "docker")
+	dockerScript := `#!/bin/sh
+case "$1:$3" in
+info:*) exit 0 ;;
+inspect:*NetworkMode*)
+  if [ "$MOCK_NETWORK_MODE" = fail ]; then exit 1; fi
+  echo "$MOCK_NETWORK_MODE"
+  ;;
+inspect:*NetworkSettings.Ports*) echo '{}' ;;
+inspect:*OpenStdin*) echo true ;;
+inspect:*Mounts*) echo '[]' ;;
+*) exit 1 ;;
+esac
+`
+	require.NoError(t, os.WriteFile(dockerPath, []byte(dockerScript), 0o755))
+	socketPath := filepath.Join(tempDir, "docker.sock")
+	require.NoError(t, os.WriteFile(socketPath, nil, 0o600))
+
+	t.Setenv("PATH", tempDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("DOCKER_HOST", socketPath)
+	t.Setenv("MCP_GATEWAY_PORT", "8080")
+	t.Setenv("MCP_GATEWAY_DOMAIN", "localhost")
+	t.Setenv("MCP_GATEWAY_AGENT_ID", "test-key")
+
 	tests := []struct {
-		name                 string
-		networkMode          string
-		failNetworkModeCheck bool
-		wantPortMapped       bool
-		wantPortMappingError bool
-		wantNetworkWarning   bool
-		wantValid            bool
+		name             string
+		networkMode      string
+		wantValid        bool
+		wantPortMapped   bool
+		wantPortMapError bool
+		wantNetworkWarn  bool
 	}{
 		{
-			name:           "host network skips port mapping check",
+			name:           "host network skips port mapping",
 			networkMode:    "host",
-			wantPortMapped: true,
 			wantValid:      true,
+			wantPortMapped: true,
 		},
 		{
-			name:                 "bridge network still requires port mapping",
-			networkMode:          "bridge",
-			wantPortMappingError: true,
+			name:             "bridge network requires port mapping",
+			networkMode:      "bridge",
+			wantPortMapError: true,
 		},
 		{
-			name:                 "network mode inspection failure falls back to port mapping",
-			failNetworkModeCheck: true,
-			wantPortMappingError: true,
-			wantNetworkWarning:   true,
+			name:             "network inspection failure falls back to port mapping",
+			networkMode:      "fail",
+			wantPortMapError: true,
+			wantNetworkWarn:  true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tempDir := t.TempDir()
-			dockerPath := filepath.Join(tempDir, "docker")
-			dockerScript := `#!/bin/sh
-if [ "$1" = "info" ]; then
-  exit 0
-fi
-if [ "$1" = "inspect" ]; then
-  case "$3" in
-    "{{.HostConfig.NetworkMode}}")
-      if [ "$MOCK_FAIL_NETWORK_MODE_CHECK" = "true" ]; then
-        exit 1
-      fi
-      printf '%s\n' "$MOCK_NETWORK_MODE"
-      ;;
-    "{{json .NetworkSettings.Ports}}")
-      printf '{}\n'
-      ;;
-    "{{.Config.OpenStdin}}")
-      printf 'true\n'
-      ;;
-    "{{json .Mounts}}")
-      printf '[]\n'
-      ;;
-  esac
-  exit 0
-fi
-exit 1
-`
-			require.NoError(t, os.WriteFile(dockerPath, []byte(dockerScript), 0o755))
-			dockerHost := filepath.Join(tempDir, "docker.sock")
-			require.NoError(t, os.WriteFile(dockerHost, nil, 0o600))
-
-			t.Setenv("PATH", tempDir)
-			t.Setenv("DOCKER_HOST", dockerHost)
-			t.Setenv("MCP_GATEWAY_PORT", "8080")
-			t.Setenv("MCP_GATEWAY_DOMAIN", "localhost")
-			t.Setenv("MCP_GATEWAY_AGENT_ID", "test-agent")
 			t.Setenv("MOCK_NETWORK_MODE", tt.networkMode)
-			if tt.failNetworkModeCheck {
-				t.Setenv("MOCK_FAIL_NETWORK_MODE_CHECK", "true")
-			} else {
-				t.Setenv("MOCK_FAIL_NETWORK_MODE_CHECK", "false")
-			}
 
-			result := ValidateContainerizedEnvironmentForRuntime("abcdef123456", "docker")
+			result := ValidateContainerizedEnvironment("abcdef123456")
 
-			assert.Equal(t, tt.wantPortMapped, result.PortMapped)
-			assert.Equal(t, tt.wantPortMappingError, strings.Contains(strings.Join(result.ValidationErrors, "\n"), "is not mapped to a host port"))
-			assert.Equal(t, tt.wantNetworkWarning, strings.Contains(strings.Join(result.ValidationWarnings, "\n"), "Could not verify network mode"))
 			assert.Equal(t, tt.wantValid, result.IsValid())
+			assert.Equal(t, tt.wantPortMapped, result.PortMapped)
+			if tt.wantPortMapError {
+				assert.Contains(t, result.ValidationErrors, "MCP_GATEWAY_PORT (8080) is not mapped to a host port. Use: -p <host_port>:8080")
+			} else {
+				assert.NotContains(t, result.ValidationErrors, "MCP_GATEWAY_PORT (8080) is not mapped to a host port. Use: -p <host_port>:8080")
+			}
+			if tt.wantNetworkWarn {
+				assert.Contains(t, result.ValidationWarnings, "Could not verify container network mode: docker inspect failed: exit status 1")
+			}
 		})
 	}
 }

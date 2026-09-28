@@ -129,22 +129,20 @@ func ValidateContainerizedEnvironmentForRuntime(containerID, runtimeCommand stri
 		return result
 	}
 
-	// Validate port mapping. Host-networked containers (--network host) do not have
-	// published port mappings in NetworkSettings.Ports -- Docker discards them --
-	// so the check is skipped for them, matching run_containerized.sh's handling
-	// of the same case (see #7647).
+	// Validate port mapping
 	port := os.Getenv("MCP_GATEWAY_PORT")
 	if port != "" {
-		hostNetwork, netErr := sys.IsHostNetworkMode(containerID)
-		if netErr != nil {
+		logEnv.Printf("Checking port mapping: port=%s", port)
+		hostNetwork, err := sys.IsHostNetwork(containerID)
+		if err != nil {
+			logEnv.Printf("Could not determine network mode; checking port mapping: %v", err)
 			result.ValidationWarnings = append(result.ValidationWarnings,
-				fmt.Sprintf("Could not verify network mode: %v", netErr))
+				fmt.Sprintf("Could not verify container network mode: %v", err))
 		}
 		if hostNetwork {
-			logEnv.Printf("Host network mode detected: skipping port mapping check for port=%s", port)
 			result.PortMapped = true
+			logEnv.Print("Skipping port mapping check for host-networked container")
 		} else {
-			logEnv.Printf("Checking port mapping: port=%s", port)
 			portMapped, err := sys.CheckPortMapping(containerID, port)
 			if err != nil {
 				result.ValidationWarnings = append(result.ValidationWarnings,

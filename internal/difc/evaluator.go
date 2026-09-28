@@ -396,8 +396,13 @@ func (e *Evaluator) FilterCollection(
 ) *FilteredCollectionLabeledData {
 	logEvaluator.Printf("Filtering collection: operation=%s, totalItems=%d", operation, len(collection.Items))
 
+	// Pre-size Accessible to the full item count: in the common case (no filtering,
+	// or only a small minority of items denied) every item ends up in Accessible, so
+	// this avoids the repeated doubling reallocations append would otherwise trigger
+	// on every list-returning tool response (issues, PRs, commits, etc.) that passes
+	// through this hot path. Filtered starts empty since denials are the exception.
 	filtered := &FilteredCollectionLabeledData{
-		Accessible:   []LabeledItem{},
+		Accessible:   make([]LabeledItem, 0, len(collection.Items)),
 		Filtered:     []FilteredItemDetail{},
 		TotalCount:   len(collection.Items),
 		FilterReason: "DIFC policy",
