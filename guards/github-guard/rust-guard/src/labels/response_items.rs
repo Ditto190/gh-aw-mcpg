@@ -169,7 +169,7 @@ pub fn label_response_items(
                     };
                     let secrecy_shared: SharedLabels = secrecy.into();
 
-                    for item in items_to_process.iter() {
+                    for item in items_to_process {
                         let number = extract_resource_number(item, "pr", &arg_repo_full);
 
                         // Get repo info from the PR's base or head, with fallback to
@@ -264,7 +264,7 @@ pub fn label_response_items(
                 };
                 let secrecy_shared: SharedLabels = secrecy.into();
 
-                for item in items_limited.iter() {
+                for item in items_limited {
                     let item_repo = extract_repo_from_item(item);
                     let repo_full_name: Cow<'_, str> = if item_repo.is_empty() {
                         Cow::Borrowed(default_repo_full_name.as_str())
@@ -315,7 +315,7 @@ pub fn label_response_items(
             let secrecy_shared: SharedLabels = secrecy.into();
             let file_integrity_shared: SharedLabels = file_integrity.into();
 
-            for &item in items_limited.iter() {
+            for &item in items_limited {
                 labeled_items.push(LabeledItem {
                     data: item.clone(),
                     labels: ResourceLabels {
@@ -410,7 +410,7 @@ pub fn label_response_items(
                 let notif_integrity = none_integrity("", ctx);
                 let notif_secrecy_shared: SharedLabels = notif_secrecy.into();
                 let notif_integrity_shared: SharedLabels = notif_integrity.into();
-                for item in items.iter() {
+                for item in items {
                     let id = get_str_or(item, "id", "unknown");
                     labeled_items.push(LabeledItem {
                         data: item.clone(),
