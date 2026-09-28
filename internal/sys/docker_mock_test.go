@@ -109,6 +109,40 @@ func TestCheckPortMapping_SuccessPath(t *testing.T) {
 	}
 }
 
+func TestIsHostNetwork(t *testing.T) {
+	tests := []struct {
+		name        string
+		dockerOut   string
+		containerID string
+		want        bool
+	}{
+		{
+			name:        "host network",
+			dockerOut:   "host",
+			containerID: "abc123def4567890",
+			want:        true,
+		},
+		{
+			name:        "bridge network",
+			dockerOut:   "bridge",
+			containerID: "abc123def4567890",
+			want:        false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := mockDockerBinary(t, tt.dockerOut, 0)
+			prependPath(t, dir)
+
+			hostNetwork, err := IsHostNetwork(tt.containerID)
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, hostNetwork)
+		})
+	}
+}
+
 // TestCheckStdinInteractive_SuccessPath verifies the happy-path branches of
 // CheckStdinInteractive where docker inspect returns "true" or "false".
 func TestCheckStdinInteractive_SuccessPath(t *testing.T) {
