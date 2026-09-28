@@ -189,6 +189,41 @@ func TestValidateSingleAgentPolicy_ValidPolicySucceeds(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+// TestValidateAgentPolicies_MultiAgentNoPoliciesFailsClosed exercises the
+// early fail-closed branch in validateAgentPolicies directly (bypassing TOML
+// parsing): when more than one agent ID is configured and gateway.agent_policies
+// is entirely absent, startup must be rejected rather than silently granting
+// full access to every agent.
+func TestValidateAgentPolicies_MultiAgentNoPoliciesFailsClosed(t *testing.T) {
+	cfg := &Config{Gateway: &GatewayConfig{AgentIDs: []string{"a", "b"}}}
+
+	err := validateAgentPolicies(cfg)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "must define a policy for every configured agent ID")
+}
+
+// TestValidateAgentPolicies_NilPolicyEntryRejected exercises the defensive
+// null-policy-value branch in validateAgentPolicies: a policy map entry whose
+// value is a nil *AgentPolicy (possible via direct construction or malformed
+// stdin JSON that omits required object fields) must be rejected with a clear
+// error rather than causing a nil-pointer dereference downstream.
+func TestValidateAgentPolicies_NilPolicyEntryRejected(t *testing.T) {
+	cfg := &Config{
+		Gateway: &GatewayConfig{
+			AgentID: "solo",
+			AgentPolicies: map[string]*AgentPolicy{
+				"solo": nil,
+			},
+		},
+	}
+
+	err := validateAgentPolicies(cfg)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "must not be null")
+}
+
 // --- Config accessor tests ---
 
 func TestConfig_AgentPolicyAccessors(t *testing.T) {
