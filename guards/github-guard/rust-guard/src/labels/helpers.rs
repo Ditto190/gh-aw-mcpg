@@ -1488,8 +1488,7 @@ pub(crate) fn is_mcp_text_wrapper(response: &Value) -> bool {
     mcp_first_content_item(response)
         .and_then(|item| item.get("type"))
         .and_then(|t| t.as_str())
-        .map(|t| t == "text")
-        .unwrap_or(false)
+        .is_some_and(|t| t == "text")
 }
 
 /// Returns true if `tool_name` is one of the `search_pull_requests` tool
