@@ -591,3 +591,88 @@ func TestValidateContainerizedEnvironmentForRuntime_PodmanSkipsDockerInspection(
 	assert.False(t, result.StdinInteractive)
 	assert.False(t, result.LogDirMounted)
 }
+
+func TestValidateContainerizedEnvironmentForRuntime_NetworkModePortMapping(t *testing.T) {
+	tests := []struct {
+		name                 string
+		networkMode          string
+		failNetworkModeCheck bool
+		wantPortMapped       bool
+		wantPortMappingError bool
+		wantNetworkWarning   bool
+		wantValid            bool
+	}{
+		{
+			name:           "host network skips port mapping check",
+			networkMode:    "host",
+			wantPortMapped: true,
+			wantValid:      true,
+		},
+		{
+			name:                 "bridge network still requires port mapping",
+			networkMode:          "bridge",
+			wantPortMappingError: true,
+		},
+		{
+			name:                 "network mode inspection failure falls back to port mapping",
+			failNetworkModeCheck: true,
+			wantPortMappingError: true,
+			wantNetworkWarning:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tempDir := t.TempDir()
+			dockerPath := filepath.Join(tempDir, "docker")
+			dockerScript := `#!/bin/sh
+if [ "$1" = "info" ]; then
+  exit 0
+fi
+if [ "$1" = "inspect" ]; then
+  case "$3" in
+    "{{.HostConfig.NetworkMode}}")
+      if [ "$MOCK_FAIL_NETWORK_MODE_CHECK" = "true" ]; then
+        exit 1
+      fi
+      printf '%s\n' "$MOCK_NETWORK_MODE"
+      ;;
+    "{{json .NetworkSettings.Ports}}")
+      printf '{}\n'
+      ;;
+    "{{.Config.OpenStdin}}")
+      printf 'true\n'
+      ;;
+    "{{json .Mounts}}")
+      printf '[]\n'
+      ;;
+  esac
+  exit 0
+fi
+exit 1
+`
+			require.NoError(t, os.WriteFile(dockerPath, []byte(dockerScript), 0o755))
+			dockerHost := filepath.Join(tempDir, "docker.sock")
+			require.NoError(t, os.WriteFile(dockerHost, nil, 0o600))
+
+			t.Setenv("PATH", tempDir)
+			t.Setenv("DOCKER_HOST", dockerHost)
+			t.Setenv("MCP_GATEWAY_PORT", "8080")
+			t.Setenv("MCP_GATEWAY_DOMAIN", "localhost")
+			t.Setenv("MCP_GATEWAY_AGENT_ID", "test-agent")
+			t.Setenv("MOCK_NETWORK_MODE", tt.networkMode)
+			if tt.failNetworkModeCheck {
+				t.Setenv("MOCK_FAIL_NETWORK_MODE_CHECK", "true")
+			} else {
+				t.Setenv("MOCK_FAIL_NETWORK_MODE_CHECK", "false")
+			}
+
+			result := ValidateContainerizedEnvironmentForRuntime("abcdef123456", "docker")
+
+			assert.Equal(t, tt.wantPortMapped, result.PortMapped)
+			assert.Equal(t, tt.wantPortMappingError, strings.Contains(strings.Join(result.ValidationErrors, "\n"), "is not mapped to a host port"))
+			assert.Equal(t, tt.wantNetworkWarning, strings.Contains(strings.Join(result.ValidationWarnings, "\n"), "Could not verify network mode"))
+			assert.Equal(t, tt.wantValid, result.IsValid())
+		})
+	}
+}
