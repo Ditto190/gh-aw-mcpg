@@ -129,20 +129,33 @@ func ValidateContainerizedEnvironmentForRuntime(containerID, runtimeCommand stri
 		return result
 	}
 
-	// Validate port mapping
+	// Validate port mapping. Host-networked containers (--network host) do not have
+	// published port mappings in NetworkSettings.Ports -- Docker discards them --
+	// so the check is skipped for them, matching run_containerized.sh's handling
+	// of the same case (see #7647).
 	port := os.Getenv("MCP_GATEWAY_PORT")
 	if port != "" {
-		logEnv.Printf("Checking port mapping: port=%s", port)
-		portMapped, err := sys.CheckPortMapping(containerID, port)
-		if err != nil {
+		hostNetwork, netErr := sys.IsHostNetworkMode(containerID)
+		if netErr != nil {
 			result.ValidationWarnings = append(result.ValidationWarnings,
-				fmt.Sprintf("Could not verify port mapping: %v", err))
-		} else if !portMapped {
-			result.ValidationErrors = append(result.ValidationErrors,
-				fmt.Sprintf("MCP_GATEWAY_PORT (%s) is not mapped to a host port. Use: -p <host_port>:%s", port, port))
+				fmt.Sprintf("Could not verify network mode: %v", netErr))
 		}
-		result.PortMapped = portMapped
-		logEnv.Printf("Port mapping result: mapped=%v", portMapped)
+		if hostNetwork {
+			logEnv.Printf("Host network mode detected: skipping port mapping check for port=%s", port)
+			result.PortMapped = true
+		} else {
+			logEnv.Printf("Checking port mapping: port=%s", port)
+			portMapped, err := sys.CheckPortMapping(containerID, port)
+			if err != nil {
+				result.ValidationWarnings = append(result.ValidationWarnings,
+					fmt.Sprintf("Could not verify port mapping: %v", err))
+			} else if !portMapped {
+				result.ValidationErrors = append(result.ValidationErrors,
+					fmt.Sprintf("MCP_GATEWAY_PORT (%s) is not mapped to a host port. Use: -p <host_port>:%s", port, port))
+			}
+			result.PortMapped = portMapped
+			logEnv.Printf("Port mapping result: mapped=%v", portMapped)
+		}
 	}
 
 	// Check if stdin is interactive (requires -i flag)
