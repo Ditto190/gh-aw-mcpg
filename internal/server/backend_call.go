@@ -27,9 +27,11 @@ import (
 // result into T. It centralizes: GetOrLaunchForSession → SendRequestWithServerID →
 // error check → unmarshal.
 func executeBackendRequest[T any](ctx context.Context, l *launcher.Launcher, serverID, sessionID, method string, params map[string]interface{}) (T, error) {
+	logUnified.Printf("executeBackendRequest: serverID=%s, method=%s", serverID, method)
 	var zero T
 	conn, err := launcher.GetOrLaunchForSession(l, serverID, sessionID)
 	if err != nil {
+		logUnified.Printf("executeBackendRequest: failed to connect to backend %s: %s", serverID, err)
 		return zero, fmt.Errorf("failed to connect to backend %s: %w", serverID, err)
 	}
 
