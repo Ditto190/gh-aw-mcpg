@@ -90,10 +90,11 @@ func TestLoadFromStdin_ValidJSON(t *testing.T) {
 	assert.True(hasPassthrough, "Passthrough env var PASSTHROUGH_VAR not found")
 
 	// Check that container name is in args
-	assert.True(contains(server.Args, "test/container:latest"), "Container name not found in args")
+	assert.Contains(server.Args, "test/container:latest", "Container name not found in args")
 
 	// Check that entrypoint args are included
-	assert.True(contains(server.Args, "arg1") && contains(server.Args, "arg2"), "Entrypoint args not found")
+	assert.Contains(server.Args, "arg1", "Entrypoint arg1 not found")
+	assert.Contains(server.Args, "arg2", "Entrypoint arg2 not found")
 }
 
 func TestLoadFromStdin_WithGateway(t *testing.T) {
