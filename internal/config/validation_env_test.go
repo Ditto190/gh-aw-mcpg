@@ -603,7 +603,10 @@ func TestValidateContainerizedEnvironment_NetworkModePortMapping(t *testing.T) {
 	dockerScript := `#!/bin/sh
 case "$1:$3" in
 info:*) exit 0 ;;
-inspect:*NetworkMode*) echo "$MOCK_NETWORK_MODE" ;;
+inspect:*NetworkMode*)
+  if [ "$MOCK_NETWORK_MODE" = fail ]; then exit 1; fi
+  echo "$MOCK_NETWORK_MODE"
+  ;;
 inspect:*NetworkSettings.Ports*) echo '{}' ;;
 inspect:*OpenStdin*) echo true ;;
 inspect:*Mounts*) echo '[]' ;;
@@ -626,6 +629,7 @@ esac
 		wantValid        bool
 		wantPortMapped   bool
 		wantPortMapError bool
+		wantNetworkWarn  bool
 	}{
 		{
 			name:           "host network skips port mapping",
@@ -637,6 +641,12 @@ esac
 			name:             "bridge network requires port mapping",
 			networkMode:      "bridge",
 			wantPortMapError: true,
+		},
+		{
+			name:             "network inspection failure falls back to port mapping",
+			networkMode:      "fail",
+			wantPortMapError: true,
+			wantNetworkWarn:  true,
 		},
 	}
 
@@ -652,6 +662,9 @@ esac
 				assert.Contains(t, result.ValidationErrors, "MCP_GATEWAY_PORT (8080) is not mapped to a host port. Use: -p <host_port>:8080")
 			} else {
 				assert.NotContains(t, result.ValidationErrors, "MCP_GATEWAY_PORT (8080) is not mapped to a host port. Use: -p <host_port>:8080")
+			}
+			if tt.wantNetworkWarn {
+				assert.Contains(t, result.ValidationWarnings, "Could not verify container network mode: docker inspect failed: exit status 1")
 			}
 		})
 	}
