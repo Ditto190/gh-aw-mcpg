@@ -565,14 +565,16 @@ func copyResponseHeaders(w http.ResponseWriter, r *http.Request, resp *http.Resp
 		}
 	}
 
-	clientAPIURL := clientAPIURL(r)
-	for _, h := range []string{"Location", "Link"} {
-		if v := resp.Header.Get(h); v != "" {
-			w.Header().Set(h, rewriteUpstreamAPIURLs(v, upstreamAPIURL, clientAPIURL, h == "Link"))
-		}
+	clientBase := clientAPIURL(r)
+	if location := resp.Header.Get("Location"); location != "" {
+		w.Header().Set("Location", rewriteUpstreamAPIURL(location, upstreamAPIURL, clientBase))
+	}
+	if link := resp.Header.Get("Link"); link != "" {
+		w.Header().Set("Link", rewriteLinkHeader(link, upstreamAPIURL, clientBase))
 	}
 }
 
+// clientAPIURL returns the API base URL used by the inbound client request.
 func clientAPIURL(r *http.Request) string {
 	scheme := "http"
 	if r.TLS != nil {
@@ -585,18 +587,19 @@ func clientAPIURL(r *http.Request) string {
 	return apiURL
 }
 
-func rewriteUpstreamAPIURLs(value, upstreamAPIURL, clientAPIURL string, linkHeader bool) string {
-	rewrite := func(url string) string {
-		suffix, ok := strings.CutPrefix(url, upstreamAPIURL)
-		if !ok || (suffix != "" && suffix[0] != '/' && suffix[0] != '?' && suffix[0] != '#') {
-			return url
-		}
-		return clientAPIURL + suffix
+// rewriteUpstreamAPIURL replaces an upstream API URL prefix with the client API base.
+// URLs outside the configured upstream API base are returned unchanged.
+func rewriteUpstreamAPIURL(value, upstreamAPIURL, clientAPIURL string) string {
+	suffix, ok := strings.CutPrefix(value, upstreamAPIURL)
+	if !ok || (suffix != "" && suffix[0] != '/' && suffix[0] != '?' && suffix[0] != '#') {
+		return value
 	}
-	if !linkHeader {
-		return rewrite(value)
-	}
+	return clientAPIURL + suffix
+}
 
+// rewriteLinkHeader rewrites only upstream API URLs enclosed in a Link header's
+// angle brackets, preserving link parameters and external URLs.
+func rewriteLinkHeader(value, upstreamAPIURL, clientAPIURL string) string {
 	var rewritten strings.Builder
 	for {
 		start := strings.IndexByte(value, '<')
@@ -611,7 +614,7 @@ func rewriteUpstreamAPIURLs(value, upstreamAPIURL, clientAPIURL string, linkHead
 		}
 		end += start
 		rewritten.WriteString(value[:start+1])
-		rewritten.WriteString(rewrite(value[start+1 : end]))
+		rewritten.WriteString(rewriteUpstreamAPIURL(value[start+1:end], upstreamAPIURL, clientAPIURL))
 		rewritten.WriteByte('>')
 		value = value[end+1:]
 	}
