@@ -74,7 +74,7 @@ func TestCallWasmGuardFunctionCanceledCaller(t *testing.T) {
 
 	_, err := g.callWasmGuardFunction(canceledCtx, "label_agent", &mockBackendCaller{}, map[string]any{})
 	require.ErrorIs(t, err, context.Canceled)
-	assert.ErrorContains(t, err, "aborted before WASM execution")
+	require.ErrorContains(t, err, "aborted before WASM execution")
 
 	// The guard must remain usable: one disconnected client must not disable the
 	// shared module for the rest of the session.
