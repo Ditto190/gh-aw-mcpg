@@ -114,7 +114,9 @@ func TestIsHostNetwork(t *testing.T) {
 		name        string
 		dockerOut   string
 		containerID string
+		exitCode    int
 		want        bool
+		wantErr     bool
 	}{
 		{
 			name:        "host network",
@@ -128,17 +130,27 @@ func TestIsHostNetwork(t *testing.T) {
 			containerID: "abc123def4567890",
 			want:        false,
 		},
+		{
+			name:        "inspect fails",
+			containerID: "abc123def4567890",
+			exitCode:    1,
+			wantErr:     true,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			dir := mockDockerBinary(t, tt.dockerOut, 0)
+			dir := mockDockerBinary(t, tt.dockerOut, tt.exitCode)
 			prependPath(t, dir)
 
 			hostNetwork, err := IsHostNetwork(tt.containerID)
 
-			require.NoError(t, err)
 			assert.Equal(t, tt.want, hostNetwork)
+			if tt.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
 		})
 	}
 }
