@@ -12,6 +12,9 @@ import (
 )
 
 func TestLoadFromStdin_ValidJSON(t *testing.T) {
+	assert := assert.New(t)
+	require := require.New(t)
+
 	jsonConfig := `{
 		"mcpServers": {
 			"test": {
@@ -43,16 +46,16 @@ func TestLoadFromStdin_ValidJSON(t *testing.T) {
 	cfg, err := LoadFromStdin()
 	os.Stdin = oldStdin
 
-	require.NoError(t, err, "LoadFromStdin() failed")
+	require.NoError(err, "LoadFromStdin() failed")
 
-	require.NotNil(t, cfg, "LoadFromStdin() returned nil config")
+	require.NotNil(cfg, "LoadFromStdin() returned nil config")
 
-	assert.Len(t, cfg.Servers, 1)
+	assert.Len(cfg.Servers, 1)
 
 	server, ok := cfg.Servers["test"]
-	require.True(t, ok, "Server 'test' not found in config")
+	require.True(ok, "Server 'test' not found in config")
 
-	assert.Equal(t, "docker", server.Command)
+	assert.Equal("docker", server.Command)
 
 	// Check that standard Docker env vars are included
 	hasNoColor := false
@@ -80,17 +83,17 @@ func TestLoadFromStdin_ValidJSON(t *testing.T) {
 		}
 	}
 
-	assert.True(t, hasNoColor, "Standard env var NO_COLOR=1 not found")
-	assert.True(t, hasTerm, "Standard env var TERM=dumb not found")
-	assert.True(t, hasPythonUnbuffered, "Standard env var PYTHONUNBUFFERED=1 not found")
-	assert.True(t, hasTestVar, "Custom env var TEST_VAR=value not found")
-	assert.True(t, hasPassthrough, "Passthrough env var PASSTHROUGH_VAR not found")
+	assert.True(hasNoColor, "Standard env var NO_COLOR=1 not found")
+	assert.True(hasTerm, "Standard env var TERM=dumb not found")
+	assert.True(hasPythonUnbuffered, "Standard env var PYTHONUNBUFFERED=1 not found")
+	assert.True(hasTestVar, "Custom env var TEST_VAR=value not found")
+	assert.True(hasPassthrough, "Passthrough env var PASSTHROUGH_VAR not found")
 
 	// Check that container name is in args
-	assert.True(t, contains(server.Args, "test/container:latest"), "Container name not found in args")
+	assert.True(contains(server.Args, "test/container:latest"), "Container name not found in args")
 
 	// Check that entrypoint args are included
-	assert.True(t, contains(server.Args, "arg1") && contains(server.Args, "arg2"), "Entrypoint args not found")
+	assert.True(contains(server.Args, "arg1") && contains(server.Args, "arg2"), "Entrypoint args not found")
 }
 
 func TestLoadFromStdin_WithGateway(t *testing.T) {
