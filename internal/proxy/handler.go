@@ -569,8 +569,8 @@ func copyResponseHeaders(w http.ResponseWriter, r *http.Request, resp *http.Resp
 	if location := resp.Header.Get("Location"); location != "" {
 		w.Header().Set("Location", rewriteUpstreamAPIURL(location, upstreamAPIURL, clientBase))
 	}
-	if link := resp.Header.Get("Link"); link != "" {
-		w.Header().Set("Link", rewriteLinkHeader(link, upstreamAPIURL, clientBase))
+	for _, link := range resp.Header.Values("Link") {
+		w.Header().Add("Link", rewriteLinkHeader(link, upstreamAPIURL, clientBase))
 	}
 }
 

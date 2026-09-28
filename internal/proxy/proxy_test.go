@@ -657,11 +657,17 @@ func TestCopyResponseHeaders(t *testing.T) {
 	t.Run("rewrites pagination links to the client proxy", func(t *testing.T) {
 		w := httptest.NewRecorder()
 		resp := &http.Response{Header: http.Header{
-			"Link":                []string{`<https://api.github.com/repos/o/r/issues?page=2>; rel="next", <https://api.github.com/repos/o/r/issues?page=1>; rel="prev"`},
+			"Link": []string{
+				`<https://api.github.com/repos/o/r/issues?page=2>; rel="next"`,
+				`<https://api.github.com/repos/o/r/issues?page=1>; rel="prev"`,
+			},
 			"X-Github-Request-Id": []string{"abc-123"},
 		}}
 		copyResponseHeaders(w, newRequest(), resp, DefaultGitHubAPIBase)
-		assert.Equal(t, `<https://localhost:18443/api/v3/repos/o/r/issues?page=2>; rel="next", <https://localhost:18443/api/v3/repos/o/r/issues?page=1>; rel="prev"`, w.Header().Get("Link"))
+		assert.Equal(t, []string{
+			`<https://localhost:18443/api/v3/repos/o/r/issues?page=2>; rel="next"`,
+			`<https://localhost:18443/api/v3/repos/o/r/issues?page=1>; rel="prev"`,
+		}, w.Header().Values("Link"))
 		assert.Equal(t, "abc-123", w.Header().Get("X-Github-Request-Id"))
 	})
 
