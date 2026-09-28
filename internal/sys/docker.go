@@ -130,7 +130,7 @@ func IsHostNetwork(containerID string) (bool, error) {
 		return false, err
 	}
 
-	hostNetwork := output == "host"
+	hostNetwork := strings.EqualFold(output, "host")
 	logDocker.Printf("Network mode check result: hostNetwork=%v", hostNetwork)
 	return hostNetwork, nil
 }

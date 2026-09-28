@@ -136,6 +136,8 @@ func ValidateContainerizedEnvironmentForRuntime(containerID, runtimeCommand stri
 		hostNetwork, err := sys.IsHostNetwork(containerID)
 		if err != nil {
 			logEnv.Printf("Could not determine network mode; checking port mapping: %v", err)
+			result.ValidationWarnings = append(result.ValidationWarnings,
+				fmt.Sprintf("Could not verify container network mode: %v", err))
 		}
 		if hostNetwork {
 			result.PortMapped = true
