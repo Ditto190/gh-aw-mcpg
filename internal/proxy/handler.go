@@ -553,6 +553,8 @@ func (h *proxyHandler) streamArtifactResponse(
 }
 
 // copyResponseHeaders copies relevant headers from upstream to the client response.
+// It rewrites upstream API URLs in Location and every Link value to the API base
+// derived from r, using upstreamAPIURL to leave external URLs unchanged.
 func copyResponseHeaders(w http.ResponseWriter, r *http.Request, resp *http.Response, upstreamAPIURL string) {
 	for _, h := range []string{
 		"Content-Type",
