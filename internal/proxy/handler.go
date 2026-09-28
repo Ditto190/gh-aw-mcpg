@@ -610,10 +610,12 @@ func rewriteUpstreamAPIURL(value, upstreamAPIURL, clientAPIURL string) string {
 	if target.Path != upstreamPath && !strings.HasPrefix(target.Path, upstreamPath+"/") {
 		return value
 	}
+	escapedUpstreamPath := strings.TrimRight(upstream.EscapedPath(), "/")
+	escapedSuffix := strings.TrimPrefix(target.EscapedPath(), escapedUpstreamPath)
 	target.Scheme = client.Scheme
 	target.Host = client.Host
 	target.Path = client.Path + strings.TrimPrefix(target.Path, upstreamPath)
-	target.RawPath = ""
+	target.RawPath = client.EscapedPath() + escapedSuffix
 	return target.String()
 }
 

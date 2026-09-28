@@ -690,6 +690,10 @@ func TestCopyResponseHeaders(t *testing.T) {
 			"https://localhost:18443/api/v3/repos/o/r/issues?page=2",
 			rewriteUpstreamAPIURL("HTTPS://API.GITHUB.COM/repos/o/r/issues?page=2", "https://api.github.com/", "https://localhost:18443/api/v3"),
 		)
+		assert.Equal(t,
+			"https://localhost:18443/api/v3/repos/o/r/contents/a%2Fb",
+			rewriteUpstreamAPIURL("https://api.github.com/repos/o/r/contents/a%2Fb", DefaultGitHubAPIBase, "https://localhost:18443/api/v3"),
+		)
 		assert.Equal(t, "not a link", rewriteLinkHeader("not a link", DefaultGitHubAPIBase, "https://localhost:18443/api/v3"))
 		assert.Equal(t, `<https://api.github.com/repos/o/r/issues?page=2`, rewriteLinkHeader(`<https://api.github.com/repos/o/r/issues?page=2`, DefaultGitHubAPIBase, "https://localhost:18443/api/v3"))
 	})
