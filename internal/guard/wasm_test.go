@@ -1610,34 +1610,36 @@ func TestJSONMarshaling(t *testing.T) {
 	})
 }
 
-func TestIsWasmTrap(t *testing.T) {
-	t.Run("actual wazero trap still uses wasm error prefix (verified with wazero v1.12.0)", func(t *testing.T) {
-		ctx := context.Background()
-		runtime := newTestWasmRuntime(ctx)
-		t.Cleanup(func() {
-			require.NoError(t, runtime.Close(ctx))
-		})
-
-		trapWasm := []byte{
-			0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
-			0x01, 0x04, 0x01, 0x60, 0x00, 0x00,
-			0x03, 0x02, 0x01, 0x00,
-			0x07, 0x08, 0x01, 0x04, 0x74, 0x72, 0x61, 0x70, 0x00, 0x00,
-			0x0a, 0x05, 0x01, 0x03, 0x00, 0x00, 0x0b,
-		}
-
-		mod, err := runtime.InstantiateWithConfig(ctx, trapWasm, newTestWasmModuleConfig("trap-check"))
-		require.NoError(t, err)
-		t.Cleanup(func() {
-			require.NoError(t, mod.Close(ctx))
-		})
-
-		_, err = mod.ExportedFunction("trap").Call(ctx)
-		require.Error(t, err)
-		require.ErrorContains(t, err, "wasm error:")
-		assert.True(t, isWasmTrap(err))
+// TestWazeroTrapErrorPrefixCanary guards the wazero error string contract used
+// by isWasmTrap. Review this test before accepting wazero upgrades.
+func TestWazeroTrapErrorPrefixCanary(t *testing.T) {
+	ctx := context.Background()
+	runtime := newTestWasmRuntime(ctx)
+	t.Cleanup(func() {
+		require.NoError(t, runtime.Close(ctx))
 	})
 
+	trapWasm := []byte{
+		0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
+		0x01, 0x04, 0x01, 0x60, 0x00, 0x00,
+		0x03, 0x02, 0x01, 0x00,
+		0x07, 0x08, 0x01, 0x04, 0x74, 0x72, 0x61, 0x70, 0x00, 0x00,
+		0x0a, 0x05, 0x01, 0x03, 0x00, 0x00, 0x0b,
+	}
+
+	mod, err := runtime.InstantiateWithConfig(ctx, trapWasm, newTestWasmModuleConfig("trap-check"))
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, mod.Close(ctx))
+	})
+
+	_, err = mod.ExportedFunction("trap").Call(ctx)
+	require.Error(t, err)
+	require.ErrorContains(t, err, "wasm error:")
+	assert.True(t, isWasmTrap(err))
+}
+
+func TestIsWasmTrap(t *testing.T) {
 	t.Run("nil error is not a trap", func(t *testing.T) {
 		assert.False(t, isWasmTrap(nil))
 	})
