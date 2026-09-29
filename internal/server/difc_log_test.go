@@ -691,11 +691,20 @@ func TestBuildDIFCSingleItemFilteredError_NoReason(t *testing.T) {
 }
 
 // TestLogFilteredItems_EnclaveSessionRedactsIdentifyingFields verifies that enclave-scoped
-// contexts never persist raw item metadata to the text log.
+// contexts never persist raw item metadata to any log sink.
 func TestLogFilteredItems_EnclaveSessionRedactsIdentifyingFields(t *testing.T) {
 	tmpDir := t.TempDir()
 	cleanup := initTestLoggers(t, tmpDir)
 	defer cleanup()
+	require.NoError(t, logger.InitJSONLLogger(tmpDir, "rpc-messages.jsonl"))
+
+	t.Setenv("DEBUG", "server:difc_log")
+	originalLogDifcLog := logDifcLog
+	logDifcLog = logger.New("server:difc_log")
+	require.True(t, logDifcLog.Enabled())
+	defer func() {
+		logDifcLog = originalLogDifcLog
+	}()
 
 	item := newTestFilteredItem(
 		map[string]interface{}{
@@ -725,9 +734,29 @@ func TestLogFilteredItems_EnclaveSessionRedactsIdentifyingFields(t *testing.T) {
 	assert.True(strings.HasPrefix(entry.AuthorLogin, "user:"))
 	assert.True(strings.HasPrefix(entry.HTMLURL, "url:"))
 	assert.True(strings.HasPrefix(entry.Number, "num:"))
+	assert.NotEqual("num:42", entry.Number)
 	assert.True(strings.HasPrefix(entry.SHA, "sha:"))
+
+	textLog, err := os.ReadFile(filepath.Join(tmpDir, "mcp-gateway.log"))
+	require.NoError(t, err)
+	assert.Contains(string(textLog), "Logging filtered items")
 	for _, raw := range []string{"acme/secret", "private-user", "deadbeef"} {
-		assert.NotContains(lines[0], raw)
+		assert.NotContains(string(textLog), raw)
+	}
+
+	jsonlContent, err := os.ReadFile(filepath.Join(tmpDir, "rpc-messages.jsonl"))
+	require.NoError(t, err)
+	var jsonlEntry logger.JSONLFilteredItem
+	require.NoError(t, json.Unmarshal(jsonlContent, &jsonlEntry))
+	assert.Equal("difc_filtered", jsonlEntry.Event)
+	assert.True(strings.HasPrefix(jsonlEntry.Description, "item:"))
+	assert.True(strings.HasPrefix(jsonlEntry.AuthorLogin, "user:"))
+	assert.True(strings.HasPrefix(jsonlEntry.HTMLURL, "url:"))
+	assert.True(strings.HasPrefix(jsonlEntry.Number, "num:"))
+	assert.NotEqual("num:42", jsonlEntry.Number)
+	assert.True(strings.HasPrefix(jsonlEntry.SHA, "sha:"))
+	for _, raw := range []string{"acme/secret", "private-user", "deadbeef", "num:42"} {
+		assert.NotContains(string(jsonlContent), raw)
 	}
 }
 
