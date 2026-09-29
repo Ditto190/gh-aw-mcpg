@@ -139,7 +139,7 @@ pub fn label_response_paths(
                     };
 
                     labeled_paths.push(crate::PathLabel {
-                        path: format!("/{}/{}", items_key, i),
+                        path: format!("/{items_key}/{i}"),
                         labels: crate::ResourceLabels {
                             description: format!("{}{}", desc_prefix::REPO, full_name),
                             secrecy: secrecy.into(),
@@ -370,7 +370,7 @@ pub fn label_response_paths(
                     );
 
                     labeled_paths.push(crate::PathLabel {
-                        path: format!("/{}", i),
+                        path: format!("/{i}"),
                         labels: crate::ResourceLabels {
                             description: format!(
                                 "{}{}@{}",
@@ -423,9 +423,9 @@ pub fn label_response_paths(
 
                 for (i, _item) in limited_items.iter().enumerate() {
                     labeled_paths.push(crate::PathLabel {
-                        path: format!("/{}", i),
+                        path: format!("/{i}"),
                         labels: crate::ResourceLabels {
-                            description: format!("file:{}", arg_repo_full),
+                            description: format!("file:{arg_repo_full}"),
                             secrecy: secrecy_shared.clone(),
                             integrity: file_integrity_shared.clone(),
                         },
@@ -479,7 +479,7 @@ pub fn label_response_paths(
                     };
 
                     labeled_paths.push(crate::PathLabel {
-                        path: format!("/{}", i),
+                        path: format!("/{i}"),
                         labels: crate::ResourceLabels {
                             description: format!(
                                 "{}{}@{}",
@@ -520,7 +520,7 @@ pub fn label_response_paths(
                     let id = get_str_or(item, "id", "unknown");
 
                     labeled_paths.push(crate::PathLabel {
-                        path: format!("/{}", i),
+                        path: format!("/{i}"),
                         labels: crate::ResourceLabels {
                             description: format!("{}{}", desc_prefix::NOTIFICATION, id),
                             secrecy: notif_secrecy.clone(),
@@ -558,7 +558,7 @@ pub fn label_response_paths(
                     let id = get_str_or(item, "id", "unknown");
 
                     labeled_paths.push(crate::PathLabel {
-                        path: format!("/{}", i),
+                        path: format!("/{i}"),
                         labels: crate::ResourceLabels {
                             description: format!("{}{}", desc_prefix::GIST, id),
                             secrecy,
@@ -633,7 +633,7 @@ pub fn label_response_paths(
                                     "DRAFT_ISSUE" => Cow::Borrowed("draft_issue"),
                                     other => Cow::Owned(other.to_lowercase()),
                                 };
-                                format!("project-item:{}", type_lower)
+                                format!("project-item:{type_lower}")
                             },
                             secrecy: secrecy.into(),
                             integrity: integrity.into(),
@@ -982,8 +982,7 @@ mod tests {
         let merged_label = format!("{}octocat/hello-world", label_constants::MERGED_PREFIX);
         assert!(
             default_integrity.contains(&merged_label),
-            "default-branch default_labels should have merged-level integrity; got {:?}",
-            default_integrity
+            "default-branch default_labels should have merged-level integrity; got {default_integrity:?}"
         );
     }
 
@@ -1023,8 +1022,7 @@ mod tests {
             !default_integrity
                 .iter()
                 .any(|l| l.starts_with(label_constants::MERGED_PREFIX)),
-            "feature-branch commit on public repo should NOT have merged-level integrity; got {:?}",
-            default_integrity
+            "feature-branch commit on public repo should NOT have merged-level integrity; got {default_integrity:?}"
         );
     }
 
@@ -1137,8 +1135,7 @@ mod tests {
         let item_integrity = &result.labeled_paths[0].labels.integrity;
         assert!(
             item_integrity.contains(&merged_label),
-            "default-branch file should have merged integrity; got {:?}",
-            item_integrity
+            "default-branch file should have merged integrity; got {item_integrity:?}"
         );
         let default_integrity = &result
             .default_labels
@@ -1147,8 +1144,7 @@ mod tests {
             .integrity;
         assert!(
             default_integrity.contains(&merged_label),
-            "default-branch default_labels should have merged integrity; got {:?}",
-            default_integrity
+            "default-branch default_labels should have merged integrity; got {default_integrity:?}"
         );
         // Public repo → empty secrecy
         assert!(
@@ -1179,14 +1175,12 @@ mod tests {
             !item_integrity
                 .iter()
                 .any(|l| l.starts_with(label_constants::MERGED_PREFIX)),
-            "non-default-branch file should NOT have merged integrity; got {:?}",
-            item_integrity
+            "non-default-branch file should NOT have merged integrity; got {item_integrity:?}"
         );
         let writer_label = format!("{}octocat/hello", label_constants::WRITER_PREFIX);
         assert!(
             item_integrity.contains(&writer_label),
-            "non-default-branch file should have writer integrity; got {:?}",
-            item_integrity
+            "non-default-branch file should have writer integrity; got {item_integrity:?}"
         );
         let default_integrity = &result
             .default_labels
@@ -1197,8 +1191,7 @@ mod tests {
             !default_integrity
                 .iter()
                 .any(|l| l.starts_with(label_constants::MERGED_PREFIX)),
-            "non-default-branch default_labels should NOT have merged integrity; got {:?}",
-            default_integrity
+            "non-default-branch default_labels should NOT have merged integrity; got {default_integrity:?}"
         );
     }
 
@@ -1243,8 +1236,7 @@ mod tests {
             .integrity;
         assert!(
             default_integrity.contains(&merged_label),
-            "list_releases default_labels should have merged integrity; got {:?}",
-            default_integrity
+            "list_releases default_labels should have merged integrity; got {default_integrity:?}"
         );
     }
 

@@ -102,7 +102,7 @@ pub(crate) fn extract_mcp_response(response: &Value) -> Cow<'_, Value> {
     // Log the top-level keys to understand the structure
     if let Some(obj) = response.as_object() {
         let keys: Vec<&str> = obj.keys().map(String::as_str).collect();
-        crate::log_debug(&format!("extract_mcp_response: top-level keys={:?}", keys));
+        crate::log_debug(&format!("extract_mcp_response: top-level keys={keys:?}"));
     } else {
         crate::log_debug(&format!(
             "extract_mcp_response: response is not an object, type={}",
@@ -1544,14 +1544,12 @@ mod tests {
             integrity
                 .iter()
                 .all(|l| l.ends_with(":github") || l.contains("github")),
-            "Expected all labels scoped to 'github', got: {:?}",
-            integrity
+            "Expected all labels scoped to 'github', got: {integrity:?}"
         );
         // Approved level must be present (Bug 2 fix)
         assert!(
             integrity.contains(&"approved:github".to_string()),
-            "Expected 'approved:github' in {:?}",
-            integrity
+            "Expected 'approved:github' in {integrity:?}"
         );
     }
 
@@ -1572,8 +1570,7 @@ mod tests {
 
         assert!(
             integrity.contains(&"approved:myorg".to_string()),
-            "Expected 'approved:myorg' in {:?}",
-            integrity
+            "Expected 'approved:myorg' in {integrity:?}"
         );
     }
 
@@ -1594,8 +1591,7 @@ mod tests {
 
         assert!(
             integrity.contains(&"approved:myorg".to_string()),
-            "Expected 'approved:myorg' in {:?}",
-            integrity
+            "Expected 'approved:myorg' in {integrity:?}"
         );
     }
 
@@ -1616,8 +1612,7 @@ mod tests {
 
         assert!(
             integrity.contains(&"approved:github".to_string()),
-            "Expected 'approved:github' in {:?}",
-            integrity
+            "Expected 'approved:github' in {integrity:?}"
         );
     }
 
@@ -1764,21 +1759,21 @@ mod tests {
 
     fn ctx_with_blocked_users(blocked: Vec<&str>) -> PolicyContext {
         PolicyContext {
-            blocked_users: blocked.into_iter().map(|s| s.to_string()).collect(),
+            blocked_users: blocked.into_iter().map(std::string::ToString::to_string).collect(),
             ..Default::default()
         }
     }
 
     fn ctx_with_approval_labels(labels: Vec<&str>) -> PolicyContext {
         PolicyContext {
-            approval_labels: labels.into_iter().map(|s| s.to_string()).collect(),
+            approval_labels: labels.into_iter().map(std::string::ToString::to_string).collect(),
             ..Default::default()
         }
     }
 
     fn ctx_with_refusal_labels(labels: Vec<&str>) -> PolicyContext {
         PolicyContext {
-            refusal_labels: labels.into_iter().map(|s| s.to_string()).collect(),
+            refusal_labels: labels.into_iter().map(std::string::ToString::to_string).collect(),
             ..Default::default()
         }
     }
@@ -3141,8 +3136,7 @@ mod tests {
 
         assert!(
             integrity.contains(&"approved:github".to_string()),
-            "projects_list with scoped ctx must have 'approved:github', got: {:?}",
-            integrity
+            "projects_list with scoped ctx must have 'approved:github', got: {integrity:?}"
         );
     }
 
@@ -3167,8 +3161,7 @@ mod tests {
 
         assert!(
             integrity.contains(&"approved:myorg".to_string()),
-            "projects_get must have 'approved:myorg' integrity, got: {:?}",
-            integrity
+            "projects_get must have 'approved:myorg' integrity, got: {integrity:?}"
         );
     }
 
@@ -4556,8 +4549,7 @@ mod tests {
         let integrity = issue_integrity(&rest_item, repo, false, &ctx);
         assert!(
             integrity.iter().any(|t| t.contains("approved")),
-            "Bot-authored issue (REST) should have at least approved integrity, got: {:?}",
-            integrity
+            "Bot-authored issue (REST) should have at least approved integrity, got: {integrity:?}"
         );
 
         // GraphQL format: author.login present, no user field
@@ -4570,8 +4562,7 @@ mod tests {
         let integrity = issue_integrity(&graphql_item, repo, false, &ctx);
         assert!(
             integrity.iter().any(|t| t.contains("approved")),
-            "Bot-authored issue (GraphQL) should have at least approved integrity, got: {:?}",
-            integrity
+            "Bot-authored issue (GraphQL) should have at least approved integrity, got: {integrity:?}"
         );
     }
 
@@ -4591,8 +4582,7 @@ mod tests {
         let integrity = pr_integrity(&rest_item, repo, false, None, &ctx);
         assert!(
             integrity.iter().any(|t| t.contains("approved")),
-            "Bot-authored PR (REST) should have at least approved integrity, got: {:?}",
-            integrity
+            "Bot-authored PR (REST) should have at least approved integrity, got: {integrity:?}"
         );
 
         // GraphQL format: author.login present
@@ -4605,8 +4595,7 @@ mod tests {
         let integrity = pr_integrity(&graphql_item, repo, false, None, &ctx);
         assert!(
             integrity.iter().any(|t| t.contains("approved")),
-            "Bot-authored PR (GraphQL) should have at least approved integrity, got: {:?}",
-            integrity
+            "Bot-authored PR (GraphQL) should have at least approved integrity, got: {integrity:?}"
         );
     }
 
@@ -4760,7 +4749,7 @@ mod tests {
             );
             assert_eq!(
                 entry.path,
-                format!("/issues/{}", i),
+                format!("/issues/{i}"),
                 "path should use /issues/ prefix for GraphQL format"
             );
         }
@@ -5014,13 +5003,11 @@ mod tests {
         let integrity = &result.labeled_paths[0].labels.integrity;
         assert!(
             integrity.contains(&"unapproved:licensee".to_string()),
-            "CONTRIBUTOR should have unapproved:licensee, got: {:?}",
-            integrity
+            "CONTRIBUTOR should have unapproved:licensee, got: {integrity:?}"
         );
         assert!(
             integrity.contains(&"none:licensee".to_string()),
-            "CONTRIBUTOR should have none:licensee, got: {:?}",
-            integrity
+            "CONTRIBUTOR should have none:licensee, got: {integrity:?}"
         );
     }
 
@@ -5281,8 +5268,7 @@ mod tests {
         let result = issue_integrity(&issue, repo, false, &ctx);
         assert!(
             result.iter().any(|t| t.contains("blocked")),
-            "Expected blocked integrity when user is in both blocked-users and trusted-users, got: {:?}",
-            result
+            "Expected blocked integrity when user is in both blocked-users and trusted-users, got: {result:?}"
         );
     }
 
@@ -5441,8 +5427,7 @@ mod tests {
         // panicking and returns no unexpected secrecy labels.
         assert!(
             secrecy.is_empty(),
-            "transfer_repository secrecy should be empty in test env (no backend); got: {:?}",
-            secrecy
+            "transfer_repository secrecy should be empty in test env (no backend); got: {secrecy:?}"
         );
     }
 
@@ -5927,8 +5912,7 @@ mod tests {
             assert_eq!(
                 integrity,
                 writer_integrity(repo_id, &ctx),
-                "{} should have writer integrity",
-                tool_name
+                "{tool_name} should have writer integrity"
             );
         }
     }
@@ -5950,14 +5934,12 @@ mod tests {
             assert_eq!(
                 secrecy,
                 private_user_label(),
-                "{} should have private:user secrecy",
-                tool
+                "{tool} should have private:user secrecy"
             );
             assert_eq!(
                 integrity,
                 writer_integrity(scope_names::USER, &ctx),
-                "{} should have writer:user integrity",
-                tool
+                "{tool} should have writer:user integrity"
             );
         }
     }
@@ -6441,12 +6423,11 @@ mod tests {
                 &ctx,
             );
 
-            assert_eq!(secrecy, vec![] as Vec<String>, "{} secrecy mismatch", tool);
+            assert_eq!(secrecy, vec![] as Vec<String>, "{tool} secrecy mismatch");
             assert_eq!(
                 integrity,
                 writer_integrity(repo_id, &ctx),
-                "{} should have writer integrity",
-                tool
+                "{tool} should have writer integrity"
             );
         }
     }
@@ -6480,12 +6461,11 @@ mod tests {
                 &ctx,
             );
 
-            assert_eq!(secrecy, vec![] as Vec<String>, "{} secrecy mismatch", tool);
+            assert_eq!(secrecy, vec![] as Vec<String>, "{tool} secrecy mismatch");
             assert_eq!(
                 integrity,
                 writer_integrity(repo_id, &ctx),
-                "{} should have writer integrity",
-                tool
+                "{tool} should have writer integrity"
             );
         }
     }
@@ -6625,14 +6605,12 @@ mod tests {
             assert_eq!(
                 secrecy,
                 super::helpers::policy_private_scope_label("github", "copilot", repo_id, &ctx),
-                "{} should have private-scoped secrecy",
-                tool_name
+                "{tool_name} should have private-scoped secrecy"
             );
             assert_eq!(
                 integrity,
                 writer_integrity(repo_id, &ctx),
-                "{} should have writer integrity",
-                tool_name
+                "{tool_name} should have writer integrity"
             );
         }
     }
@@ -6643,14 +6621,14 @@ mod tests {
 
     fn ctx_with_endorsement_reactions(reactions: Vec<&str>) -> PolicyContext {
         PolicyContext {
-            endorsement_reactions: reactions.into_iter().map(|s| s.to_string()).collect(),
+            endorsement_reactions: reactions.into_iter().map(std::string::ToString::to_string).collect(),
             ..Default::default()
         }
     }
 
     fn ctx_with_disapproval_reactions(reactions: Vec<&str>, demote_to: &str) -> PolicyContext {
         PolicyContext {
-            disapproval_reactions: reactions.into_iter().map(|s| s.to_string()).collect(),
+            disapproval_reactions: reactions.into_iter().map(std::string::ToString::to_string).collect(),
             disapproval_integrity: demote_to.to_string(),
             ..Default::default()
         }
