@@ -5,7 +5,10 @@ import (
 	"fmt"
 
 	"github.com/github/gh-aw-mcpg/internal/difc"
+	"github.com/github/gh-aw-mcpg/internal/logger"
 )
+
+var logGuard = logger.ForFile()
 
 // BackendCaller provides a way for guards to make read-only calls to the backend
 // to gather information needed for labeling (e.g., fetching issue author)
@@ -55,8 +58,10 @@ type SessionGuardFactory interface {
 
 // NewSessionGuard creates an isolated instance from a registered guard template.
 func NewSessionGuard(ctx context.Context, template Guard) (Guard, error) {
+	logGuard.Printf("Creating isolated session guard from template: guard=%s", template.Name())
 	factory, ok := template.(SessionGuardFactory)
 	if !ok {
+		logGuard.Printf("Guard %q does not implement SessionGuardFactory", template.Name())
 		return nil, fmt.Errorf("guard %q does not support isolated session instances", template.Name())
 	}
 	return factory.NewSessionGuard(ctx)
