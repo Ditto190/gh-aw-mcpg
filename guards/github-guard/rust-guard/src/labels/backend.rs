@@ -54,8 +54,7 @@ fn call_backend_with_retry(
                 // Guard against infinite retries if the next size doesn't actually grow.
                 if next_size <= result_buffer.len() || next_size > BACKEND_MAX_RESULT_BYTES {
                     crate::log_warn(&format!(
-                        "Backend call {} exceeded max retry size (required={}, max={})",
-                        tool, next_size, BACKEND_MAX_RESULT_BYTES
+                        "Backend call {tool} exceeded max retry size (required={next_size}, max={BACKEND_MAX_RESULT_BYTES})"
                     ));
                     return None;
                 }
@@ -68,7 +67,7 @@ fn call_backend_with_retry(
                 result_buffer.resize(next_size, 0);
             }
             Err(code) => {
-                crate::log_warn(&format!("Backend call {} failed with code {}", tool, code));
+                crate::log_warn(&format!("Backend call {tool} failed with code {code}"));
                 return None;
             }
         }
@@ -128,7 +127,7 @@ static CACHE_TEST_LOCK: Mutex<()> = Mutex::new(());
 pub(crate) fn lock_repo_visibility_cache_for_tests() -> MutexGuard<'static, ()> {
     CACHE_TEST_LOCK
         .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
 // Repository visibility overrides installed by `cache_repo_visibility_for_tests` are stored
@@ -249,7 +248,7 @@ pub(crate) fn is_repo_private_with_callback(
         return None;
     }
 
-    let repo_id = format!("{}/{}", owner, repo);
+    let repo_id = format!("{owner}/{repo}");
 
     if let Some(is_private) = get_cached_repo_visibility(&repo_id) {
         crate::log_debug(&format!(
@@ -261,7 +260,7 @@ pub(crate) fn is_repo_private_with_callback(
     }
 
     // Use exact repository scoping for visibility lookup.
-    let query = format!("repo:{}", repo_id);
+    let query = format!("repo:{repo_id}");
     let args = serde_json::json!({
         "query": query,
         "perPage": 10
@@ -269,7 +268,7 @@ pub(crate) fn is_repo_private_with_callback(
 
     let args_str = args.to_string();
 
-    crate::log_debug(&format!("Checking repo visibility for {}", repo_id));
+    crate::log_debug(&format!("Checking repo visibility for {repo_id}"));
 
     let mut did_retry_after_rate_limit = false;
 
@@ -283,8 +282,7 @@ pub(crate) fn is_repo_private_with_callback(
             Some(result) if !result.is_empty() => result,
             Some(_) => {
                 crate::log_warn(&format!(
-                    "Repo visibility lookup result for {}: unknown (empty search response)",
-                    repo_id
+                    "Repo visibility lookup result for {repo_id}: unknown (empty search response)"
                 ));
                 return get_cached_repo_visibility(&repo_id);
             }
@@ -295,8 +293,7 @@ pub(crate) fn is_repo_private_with_callback(
             Ok(value) => value,
             Err(_) => {
                 crate::log_warn(&format!(
-                    "Repo visibility lookup result for {}: unknown (invalid UTF-8 response)",
-                    repo_id
+                    "Repo visibility lookup result for {repo_id}: unknown (invalid UTF-8 response)"
                 ));
                 return get_cached_repo_visibility(&repo_id);
             }
@@ -306,8 +303,7 @@ pub(crate) fn is_repo_private_with_callback(
             Ok(value) => value,
             Err(_) => {
                 crate::log_warn(&format!(
-                    "Repo visibility lookup result for {}: unknown (invalid JSON response)",
-                    repo_id
+                    "Repo visibility lookup result for {repo_id}: unknown (invalid JSON response)"
                 ));
                 return get_cached_repo_visibility(&repo_id);
             }
@@ -329,14 +325,12 @@ pub(crate) fn is_repo_private_with_callback(
                         let wait_secs = wait_secs.min(2);
                         if wait_secs > 0 {
                             crate::log_warn(&format!(
-                                "Repo visibility lookup rate-limited for {}: waiting {}s and retrying once",
-                                repo_id, wait_secs
+                                "Repo visibility lookup rate-limited for {repo_id}: waiting {wait_secs}s and retrying once"
                             ));
                             thread::sleep(Duration::from_secs(wait_secs));
                         } else {
                             crate::log_warn(&format!(
-                                "Repo visibility lookup rate-limited for {}: retrying once immediately",
-                                repo_id
+                                "Repo visibility lookup rate-limited for {repo_id}: retrying once immediately"
                             ));
                         }
                         did_retry_after_rate_limit = true;
@@ -345,8 +339,7 @@ pub(crate) fn is_repo_private_with_callback(
                 }
 
                 crate::log_warn(&format!(
-                    "Repo visibility lookup result for {}: unknown (rate-limited and no cached visibility)",
-                    repo_id
+                    "Repo visibility lookup result for {repo_id}: unknown (rate-limited and no cached visibility)"
                 ));
                 return None;
             }
@@ -365,29 +358,25 @@ pub(crate) fn is_repo_private_with_callback(
             Some(true) => {
                 set_cached_repo_visibility(&repo_id, true);
                 crate::log_info(&format!(
-                    "Repo visibility lookup result for {}: private",
-                    repo_id
+                    "Repo visibility lookup result for {repo_id}: private"
                 ));
                 return Some(true);
             }
             Some(false) => {
                 set_cached_repo_visibility(&repo_id, false);
                 crate::log_info(&format!(
-                    "Repo visibility lookup result for {}: public",
-                    repo_id
+                    "Repo visibility lookup result for {repo_id}: public"
                 ));
                 return Some(false);
             }
             None => {
                 if did_retry_after_rate_limit {
                     crate::log_warn(&format!(
-                        "Repo visibility lookup result for {}: unknown after rate-limit retry (no matching visibility fields found)",
-                        repo_id
+                        "Repo visibility lookup result for {repo_id}: unknown after rate-limit retry (no matching visibility fields found)"
                     ));
                 } else {
                     crate::log_warn(&format!(
-                        "Repo visibility lookup result for {}: unknown (no matching visibility fields found)",
-                        repo_id
+                        "Repo visibility lookup result for {repo_id}: unknown (no matching visibility fields found)"
                     ));
                 }
                 return get_cached_repo_visibility(&repo_id);
@@ -539,8 +528,7 @@ pub(crate) fn get_collaborator_permission_with_callback(
 ) -> Option<CollaboratorPermission> {
     if owner.is_empty() || repo.is_empty() || username.is_empty() {
         crate::log_warn(&format!(
-            "get_collaborator_permission: skipping lookup — owner={:?} repo={:?} username={:?} (empty field)",
-            owner, repo, username
+            "get_collaborator_permission: skipping lookup — owner={owner:?} repo={repo:?} username={username:?} (empty field)"
         ));
         return None;
     }
@@ -558,8 +546,7 @@ pub(crate) fn get_collaborator_permission_with_callback(
     // Return cached permission if available.
     if let Some(cached) = get_cached_collaborator_permission(&cache_key) {
         crate::log_debug(&format!(
-            "get_collaborator_permission: cache hit for {}/{} user {} → permission={:?}",
-            owner, repo, username, cached
+            "get_collaborator_permission: cache hit for {owner}/{repo} user {username} → permission={cached:?}"
         ));
         return cached.map(|permission| CollaboratorPermission {
             permission: Some(permission),
@@ -569,8 +556,7 @@ pub(crate) fn get_collaborator_permission_with_callback(
     }
 
     crate::log_debug(&format!(
-        "get_collaborator_permission: fetching permission for {}/{} user {}",
-        owner, repo, username
+        "get_collaborator_permission: fetching permission for {owner}/{repo} user {username}"
     ));
 
     let args = serde_json::json!({
@@ -589,8 +575,7 @@ pub(crate) fn get_collaborator_permission_with_callback(
         Some(result) if !result.is_empty() => result,
         Some(_) => {
             crate::log_warn(&format!(
-                "get_collaborator_permission: empty response for {}/{} user {}",
-                owner, repo, username
+                "get_collaborator_permission: empty response for {owner}/{repo} user {username}"
             ));
             set_cached_collaborator_permission(&cache_key, None);
             return None;
@@ -604,8 +589,7 @@ pub(crate) fn get_collaborator_permission_with_callback(
         Ok(s) => s,
         Err(e) => {
             crate::log_warn(&format!(
-                "get_collaborator_permission: response is not valid UTF-8 for {}/{} user {}: {}",
-                owner, repo, username, e
+                "get_collaborator_permission: response is not valid UTF-8 for {owner}/{repo} user {username}: {e}"
             ));
             return None;
         }
@@ -615,8 +599,7 @@ pub(crate) fn get_collaborator_permission_with_callback(
         Ok(v) => v,
         Err(e) => {
             crate::log_warn(&format!(
-                "get_collaborator_permission: failed to parse JSON response for {}/{} user {}: {}",
-                owner, repo, username, e
+                "get_collaborator_permission: failed to parse JSON response for {owner}/{repo} user {username}: {e}"
             ));
             return None;
         }
@@ -638,13 +621,11 @@ pub(crate) fn get_collaborator_permission_with_callback(
 
     #[cfg(not(test))]
     crate::log_info(&format!(
-        "get_collaborator_permission: {}/{} user {} → permission={:?}",
-        owner, repo, username, permission
+        "get_collaborator_permission: {owner}/{repo} user {username} → permission={permission:?}"
     ));
     #[cfg(test)]
     crate::log_info(&format!(
-        "get_collaborator_permission: {}/{} user {} → permission={:?} login={:?}",
-        owner, repo, username, permission, login
+        "get_collaborator_permission: {owner}/{repo} user {username} → permission={permission:?} login={login:?}"
     ));
 
     set_cached_collaborator_permission(&cache_key, permission.clone());
@@ -1707,13 +1688,13 @@ fn repo_id_from_repo_object(item: &Value) -> Option<String> {
         .and_then(|v| v.as_str())
     {
         if !owner_login.is_empty() {
-            return Some(format!("{}/{}", owner_login, name));
+            return Some(format!("{owner_login}/{name}"));
         }
     }
 
     if let Some(owner_name) = item.get(field_names::OWNER).and_then(|v| v.as_str()) {
         if !owner_name.is_empty() {
-            return Some(format!("{}/{}", owner_name, name));
+            return Some(format!("{owner_name}/{name}"));
         }
     }
 

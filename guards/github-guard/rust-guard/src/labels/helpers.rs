@@ -53,14 +53,12 @@ pub(crate) fn extract_resource_number(item: &Value, resource_type: &str, repo: &
     // Fallback: extract trailing number from html_url or url
     if let Some(n) = extract_number_from_url(item) {
         crate::log_debug(&format!(
-            "{}:{} — extracted number {} from URL fallback",
-            resource_type, repo, n
+            "{resource_type}:{repo} — extracted number {n} from URL fallback"
         ));
         return n;
     }
     crate::log_warn(&format!(
-        "{}:{} — missing or invalid 'number' field, using 'unknown'",
-        resource_type, repo
+        "{resource_type}:{repo} — missing or invalid 'number' field, using 'unknown'"
     ));
     "unknown".to_string()
 }
@@ -342,9 +340,9 @@ fn format_integrity_label(prefix: &str, scope: &str, base: &str) -> String {
             .filter(|value| !value.is_empty())
             .collect::<Vec<_>>()
             .join(",");
-        format!("integrity={};scopes={}", base, scopes)
+        format!("integrity={base};scopes={scopes}")
     } else {
-        format!("{}{}", prefix, scope)
+        format!("{prefix}{scope}")
     }
 }
 
@@ -465,8 +463,7 @@ fn apply_approval_label_promotion(
     if let Some(label) = first_matching_approval_label(item, ctx) {
         let number = item_number(item);
         crate::log_info(&format!(
-            "[integrity] {}:{}#{} promoted to approved (label '{}' in approval-labels)",
-            resource_type, repo_full_name, number, label
+            "[integrity] {resource_type}:{repo_full_name}#{number} promoted to approved (label '{label}' in approval-labels)"
         ));
         max_integrity(
             repo_full_name,
@@ -491,8 +488,7 @@ fn apply_refusal_label_demotion(
     if let Some(label) = first_matching_refusal_label(item, ctx) {
         let number = item_number(item);
         crate::log_info(&format!(
-            "[integrity] {}:{}#{} demoted to none (label '{}' in refusal-labels)",
-            resource_type, repo_full_name, number, label
+            "[integrity] {resource_type}:{repo_full_name}#{number} demoted to none (label '{label}' in refusal-labels)"
         ));
         cap_integrity(
             repo_full_name,
@@ -878,8 +874,7 @@ fn apply_endorsement_promotion(
     if has_maintainer_endorsement(item, repo_full_name, ctx) {
         let number = item_number(item);
         crate::log_info(&format!(
-            "[integrity] {}:{}#{} promoted to approved (maintainer endorsement reaction)",
-            resource_type, repo_full_name, number
+            "[integrity] {resource_type}:{repo_full_name}#{number} promoted to approved (maintainer endorsement reaction)"
         ));
         max_integrity(
             repo_full_name,
@@ -906,8 +901,7 @@ fn apply_disapproval_demotion(
         let number = item_number(item);
         let demote_level = effective_disapproval_integrity(ctx);
         crate::log_info(&format!(
-            "[integrity] {}:{}#{} demoted to {} (maintainer disapproval reaction)",
-            resource_type, repo_full_name, number, demote_level
+            "[integrity] {resource_type}:{repo_full_name}#{number} demoted to {demote_level} (maintainer disapproval reaction)"
         ));
         let cap = integrity_for_level(demote_level, repo_full_name, ctx);
         cap_integrity(repo_full_name, &integrity, &cap, ctx)
@@ -1025,7 +1019,7 @@ pub(crate) fn policy_private_scope_label(
                 }
             }
         } else {
-            private_scope_label(&format!("{}/{}", resource_owner, resource_repo))
+            private_scope_label(&format!("{resource_owner}/{resource_repo}"))
         }
     } else {
         vec![label_constants::PRIVATE_BASE.to_string()]
@@ -1198,7 +1192,7 @@ pub(crate) fn format_repo_id(owner: &str, repo: &str) -> String {
     if owner.is_empty() || repo.is_empty() {
         String::new()
     } else {
-        format!("{}/{}", owner, repo)
+        format!("{owner}/{repo}")
     }
 }
 
@@ -1266,7 +1260,7 @@ pub(crate) fn extract_repo_from_github_url(url: &str) -> Option<String> {
         let mut parts = path.split('/').filter(|segment| !segment.is_empty());
         let owner = parts.next()?;
         let repo = parts.next()?;
-        Some(format!("{}/{}", owner, repo))
+        Some(format!("{owner}/{repo}"))
     };
 
     // Fast path for well-known github.com URLs
@@ -1546,9 +1540,9 @@ pub(crate) fn short_sha(sha: &str) -> &str {
 #[inline]
 pub(crate) fn make_item_path(items_path: &str, index: usize) -> String {
     if items_path.is_empty() {
-        format!("/{}", index)
+        format!("/{index}")
     } else {
-        format!("{}/{}", items_path, index)
+        format!("{items_path}/{index}")
     }
 }
 
@@ -1853,8 +1847,7 @@ pub(crate) fn elevate_via_collaborator_permission(
         merged
     } else {
         crate::log_debug(&format!(
-            "[integrity] {}:{}: collaborator permission lookup returned None for {}, keeping author_association floor",
-            resource_label, resource_id, author_login
+            "[integrity] {resource_label}:{resource_id}: collaborator permission lookup returned None for {author_login}, keeping author_association floor"
         ));
         integrity
     }
@@ -1936,8 +1929,7 @@ pub(crate) fn pr_integrity(
     if !author_login.is_empty() && is_blocked_user(author_login, ctx) {
         let number = item_number(item);
         crate::log_info(&format!(
-            "[integrity] pr:{}#{} → blocked (author '{}' in blocked-users)",
-            repo_full_name, number, author_login
+            "[integrity] pr:{repo_full_name}#{number} → blocked (author '{author_login}' in blocked-users)"
         ));
         return blocked_integrity(repo_full_name, ctx);
     }
@@ -1995,8 +1987,7 @@ pub(crate) fn pr_integrity(
                     }
                 } else {
                     crate::log_debug(&format!(
-                        "[integrity] pr:{}#{} enrichment failed (backend returned None)",
-                        repo_full_name, number_str
+                        "[integrity] pr:{repo_full_name}#{number_str} enrichment failed (backend returned None)"
                     ));
                 }
             }
@@ -2011,7 +2002,7 @@ pub(crate) fn pr_integrity(
             author_login,
             repo_full_name,
             "pr",
-            &format!("{}#{}", repo_full_name, number),
+            &format!("{repo_full_name}#{number}"),
             integrity,
             ctx,
         );
@@ -2077,8 +2068,7 @@ pub(crate) fn issue_integrity(
     if !author_login.is_empty() && is_blocked_user(author_login, ctx) {
         let number = item_number(item);
         crate::log_info(&format!(
-            "[integrity] issue:{}#{} → blocked (author '{}' in blocked-users)",
-            repo_full_name, number, author_login
+            "[integrity] issue:{repo_full_name}#{number} → blocked (author '{author_login}' in blocked-users)"
         ));
         return blocked_integrity(repo_full_name, ctx);
     }
@@ -2097,8 +2087,7 @@ pub(crate) fn issue_integrity(
                     super::backend::get_issue_author_association(owner, repo, &number_str)
                 {
                     crate::log_debug(&format!(
-                        "[integrity] issue:{}#{} enriched author_association='{}'",
-                        repo_full_name, number_str, association
+                        "[integrity] issue:{repo_full_name}#{number_str} enriched author_association='{association}'"
                     ));
                     // Re-check trusted bot status with enriched login
                     let enriched_floor =
@@ -2106,8 +2095,7 @@ pub(crate) fn issue_integrity(
                     integrity = max_integrity(repo_full_name, &integrity, &enriched_floor, ctx);
                 } else {
                     crate::log_debug(&format!(
-                        "[integrity] issue:{}#{} enrichment failed (backend returned None)",
-                        repo_full_name, number_str
+                        "[integrity] issue:{repo_full_name}#{number_str} enrichment failed (backend returned None)"
                     ));
                 }
             }
@@ -2122,7 +2110,7 @@ pub(crate) fn issue_integrity(
             author_login,
             repo_full_name,
             "issue",
-            &format!("{}#{}", repo_full_name, number),
+            &format!("{repo_full_name}#{number}"),
             integrity,
             ctx,
         );
@@ -2169,8 +2157,7 @@ pub(crate) fn commit_integrity(
     let author_login = extract_author_login(item);
     if !author_login.is_empty() && is_blocked_user(author_login, ctx) {
         crate::log_info(&format!(
-            "[integrity] commit:{}@{} → blocked (author '{}' in blocked-users)",
-            repo_full_name, short_sha, author_login
+            "[integrity] commit:{repo_full_name}@{short_sha} → blocked (author '{author_login}' in blocked-users)"
         ));
         return blocked_integrity(repo_full_name, ctx);
     }
@@ -2199,7 +2186,7 @@ pub(crate) fn commit_integrity(
             author_login,
             repo_full_name,
             "commit",
-            &format!("{}@{}", repo_full_name, short_sha),
+            &format!("{repo_full_name}@{short_sha}"),
             integrity,
             ctx,
         );
@@ -3071,7 +3058,7 @@ mod tests {
 
     fn ctx_with_endorsement_reactions(reactions: Vec<&str>) -> PolicyContext {
         PolicyContext {
-            endorsement_reactions: reactions.into_iter().map(|s| s.to_string()).collect(),
+            endorsement_reactions: reactions.into_iter().map(std::string::ToString::to_string).collect(),
             ..Default::default()
         }
     }

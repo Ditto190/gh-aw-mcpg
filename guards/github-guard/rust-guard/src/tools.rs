@@ -388,8 +388,7 @@ mod tests {
         ] {
             assert!(
                 is_blocked_tool(op),
-                "{} must be unconditionally blocked (modifying gh repo operation)",
-                op
+                "{op} must be unconditionally blocked (modifying gh repo operation)"
             );
         }
     }
@@ -403,7 +402,7 @@ mod tests {
             "pin_issue",
             "unpin_issue",
         ] {
-            assert!(!is_blocked_tool(op), "{} should not be blocked", op);
+            assert!(!is_blocked_tool(op), "{op} should not be blocked");
         }
     }
 
@@ -424,8 +423,7 @@ mod tests {
         ] {
             assert!(
                 is_write_operation(op),
-                "{} must be classified as a write operation",
-                op
+                "{op} must be classified as a write operation"
             );
         }
     }
@@ -454,8 +452,7 @@ mod tests {
         ] {
             assert!(
                 is_write_operation(op),
-                "{} must be classified as a write operation",
-                op
+                "{op} must be classified as a write operation"
             );
         }
     }
@@ -486,8 +483,7 @@ mod tests {
         ] {
             assert!(
                 is_write_operation(op),
-                "{} must be classified as a write operation",
-                op
+                "{op} must be classified as a write operation"
             );
         }
     }
@@ -526,8 +522,7 @@ mod tests {
         ] {
             assert!(
                 is_write_operation(op),
-                "{} (deprecated alias) must be classified as a write operation",
-                op
+                "{op} (deprecated alias) must be classified as a write operation"
             );
         }
     }
@@ -570,8 +565,7 @@ mod tests {
         ] {
             assert!(
                 is_write_operation(op),
-                "{} (pre-emptive CLI) must be classified as a write operation",
-                op
+                "{op} (pre-emptive CLI) must be classified as a write operation"
             );
         }
     }
@@ -589,13 +583,11 @@ mod tests {
         ] {
             assert!(
                 is_read_write_operation(op),
-                "{} must be classified as a read-write operation",
-                op
+                "{op} must be classified as a read-write operation"
             );
             assert!(
                 !is_write_operation(op),
-                "{} should not be in WRITE_OPERATIONS (it is in READ_WRITE_OPERATIONS)",
-                op
+                "{op} should not be in WRITE_OPERATIONS (it is in READ_WRITE_OPERATIONS)"
             );
         }
     }
@@ -605,13 +597,11 @@ mod tests {
         let op = "set_issue_fields";
         assert!(
             is_read_write_operation(op),
-            "{} must be classified as a read-write operation",
-            op
+            "{op} must be classified as a read-write operation"
         );
         assert!(
             !is_write_operation(op),
-            "{} should not be in WRITE_OPERATIONS (it is in READ_WRITE_OPERATIONS)",
-            op
+            "{op} should not be in WRITE_OPERATIONS (it is in READ_WRITE_OPERATIONS)"
         );
     }
 
@@ -620,13 +610,11 @@ mod tests {
         let op = "issue_write_ff_remote_mcp_issue_fields";
         assert!(
             is_read_write_operation(op),
-            "{} must be classified as a read-write operation",
-            op
+            "{op} must be classified as a read-write operation"
         );
         assert!(
             !is_write_operation(op),
-            "{} should not be in WRITE_OPERATIONS (it is in READ_WRITE_OPERATIONS)",
-            op
+            "{op} should not be in WRITE_OPERATIONS (it is in READ_WRITE_OPERATIONS)"
         );
     }
 
@@ -635,13 +623,11 @@ mod tests {
         let op = "issue_dependency_write";
         assert!(
             is_read_write_operation(op),
-            "{} must be classified as a read-write operation",
-            op
+            "{op} must be classified as a read-write operation"
         );
         assert!(
             !is_write_operation(op),
-            "{} should not be in WRITE_OPERATIONS (it is in READ_WRITE_OPERATIONS)",
-            op
+            "{op} should not be in WRITE_OPERATIONS (it is in READ_WRITE_OPERATIONS)"
         );
     }
 
@@ -650,13 +636,11 @@ mod tests {
         let op = "custom_properties_write";
         assert!(
             is_read_write_operation(op),
-            "{} must be classified as a read-write operation",
-            op
+            "{op} must be classified as a read-write operation"
         );
         assert!(
             !is_write_operation(op),
-            "{} should not be in WRITE_OPERATIONS (it is in READ_WRITE_OPERATIONS)",
-            op
+            "{op} should not be in WRITE_OPERATIONS (it is in READ_WRITE_OPERATIONS)"
         );
     }
 
@@ -665,13 +649,11 @@ mod tests {
         let op = "create_repository_ruleset";
         assert!(
             is_write_operation(op),
-            "{} must be classified as a write operation",
-            op
+            "{op} must be classified as a write operation"
         );
         assert!(
             !is_read_write_operation(op),
-            "{} should not be in READ_WRITE_OPERATIONS (it is in WRITE_OPERATIONS)",
-            op
+            "{op} should not be in READ_WRITE_OPERATIONS (it is in WRITE_OPERATIONS)"
         );
     }
 
@@ -685,13 +667,11 @@ mod tests {
         ] {
             assert!(
                 is_read_write_operation(op),
-                "{} must be classified as a read-write operation",
-                op
+                "{op} must be classified as a read-write operation"
             );
             assert!(
                 !is_write_operation(op),
-                "{} should not be in WRITE_OPERATIONS (it is in READ_WRITE_OPERATIONS)",
-                op
+                "{op} should not be in WRITE_OPERATIONS (it is in READ_WRITE_OPERATIONS)"
             );
         }
     }
@@ -709,13 +689,11 @@ mod tests {
         ] {
             assert!(
                 is_read_write_operation(op),
-                "{} must be classified as a read-write operation",
-                op
+                "{op} must be classified as a read-write operation"
             );
             assert!(
                 !is_write_operation(op),
-                "{} should not be in WRITE_OPERATIONS (it is in READ_WRITE_OPERATIONS)",
-                op
+                "{op} should not be in WRITE_OPERATIONS (it is in READ_WRITE_OPERATIONS)"
             );
         }
     }
@@ -1005,13 +983,11 @@ mod tests {
         ] {
             assert!(
                 is_read_write_operation(op),
-                "{} must be classified as a read-write operation",
-                op
+                "{op} must be classified as a read-write operation"
             );
             assert!(
                 !is_write_operation(op),
-                "{} should not be in WRITE_OPERATIONS (it is in READ_WRITE_OPERATIONS)",
-                op
+                "{op} should not be in WRITE_OPERATIONS (it is in READ_WRITE_OPERATIONS)"
             );
         }
     }

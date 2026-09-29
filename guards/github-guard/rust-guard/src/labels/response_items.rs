@@ -101,7 +101,7 @@ pub fn label_response_items(
 
                     if is_private {
                         private_count += 1;
-                        crate::log_info(&format!("  [{}] {} is PRIVATE", i, full_name));
+                        crate::log_info(&format!("  [{i}] {full_name} is PRIVATE"));
                         let secrecy = private_repo_secrecy_label(full_name, ctx);
                         labeled_items.push(LabeledItem {
                             data: item.clone(),
@@ -319,7 +319,7 @@ pub fn label_response_items(
                 labeled_items.push(LabeledItem {
                     data: item.clone(),
                     labels: ResourceLabels {
-                        description: format!("file:{}", repo_full_name),
+                        description: format!("file:{repo_full_name}"),
                         secrecy: secrecy_shared.clone(),
                         integrity: file_integrity_shared.clone(),
                     },
@@ -522,7 +522,7 @@ mod tests {
         let items = extract_items_slice(&response, "pull_requests");
 
         assert_eq!(items.len(), 1);
-        assert_eq!(items[0].get("number").and_then(|v| v.as_u64()), Some(1));
+        assert_eq!(items[0].get("number").and_then(serde_json::Value::as_u64), Some(1));
     }
 
     #[test]
@@ -535,7 +535,7 @@ mod tests {
         let items = extract_items_slice(&response, "issues");
 
         assert_eq!(items.len(), 1);
-        assert_eq!(items[0].get("number").and_then(|v| v.as_u64()), Some(42));
+        assert_eq!(items[0].get("number").and_then(serde_json::Value::as_u64), Some(42));
     }
 
     #[test]

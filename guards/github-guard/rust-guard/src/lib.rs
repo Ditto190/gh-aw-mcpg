@@ -111,8 +111,8 @@ pub fn invoke_backend(
     args_json: &str,
     result_buffer: &mut [u8],
 ) -> Result<usize, i32> {
-    log_info(&format!(">>> call_backend: tool={}", tool_name));
-    log_debug(&format!("    args={}", args_json));
+    log_info(&format!(">>> call_backend: tool={tool_name}"));
+    log_debug(&format!("    args={args_json}"));
 
     let tool_bytes = tool_name.as_bytes();
     let args_bytes = args_json.as_bytes();
@@ -132,11 +132,11 @@ pub fn invoke_backend(
         if result == -2 {
             log_warn("<<< call_backend buffer too small; caller should retry with a larger buffer");
         } else {
-            log_error(&format!("<<< call_backend FAILED with code {}", result));
+            log_error(&format!("<<< call_backend FAILED with code {result}"));
         }
         Err(result)
     } else {
-        log_info(&format!("<<< call_backend returned {} bytes", result));
+        log_info(&format!("<<< call_backend returned {result} bytes"));
         Ok(result as usize)
     }
 }
@@ -209,17 +209,16 @@ fn try_write_json_output(
     };
     if len > output_size {
         log_error(&format!(
-            "    FAILED: output buffer too small ({} > {})",
-            len, output_size
+            "    FAILED: output buffer too small ({len} > {output_size})"
         ));
         return -1;
     }
     unsafe { write_bytes_to_output(output_ptr, output_json.as_bytes()) };
-    log_info(&format!("<<< {} returning {} bytes", fn_name, len));
+    log_info(&format!("<<< {fn_name} returning {len} bytes"));
     match i32::try_from(len) {
         Ok(n) => n,
         Err(_) => {
-            log_error(&format!("    FAILED: byte count {} overflows i32", len));
+            log_error(&format!("    FAILED: byte count {len} overflows i32"));
             -1
         }
     }
@@ -385,8 +384,7 @@ fn apply_singleton_fallback_if_needed(
         let desc = format!("metadata:{}", input.tool_name);
 
         log_info(&format!(
-            "    server metadata (text message or empty search), integrity={:?}",
-            integrity
+            "    server metadata (text message or empty search), integrity={integrity:?}"
         ));
 
         labeled_items.push(LabeledItem {
@@ -422,8 +420,7 @@ fn apply_singleton_fallback_if_needed(
     let integrity = labels::ensure_integrity_baseline(&baseline_scope, &integrity, ctx);
 
     log_info(&format!(
-        "    fallback labels: secrecy={:?}, integrity={:?}",
-        secrecy, integrity
+        "    fallback labels: secrecy={secrecy:?}, integrity={integrity:?}"
     ));
 
     labeled_items.push(LabeledItem {
@@ -608,18 +605,18 @@ fn build_label_resource_output(
     };
 
     // Log computed labels
-    log_info(&format!("    desc={}", final_desc));
+    log_info(&format!("    desc={final_desc}"));
     if final_secrecy.is_empty() {
         log_info("    secrecy=[] (public)");
     } else {
-        log_info(&format!("    secrecy={:?}", final_secrecy));
+        log_info(&format!("    secrecy={final_secrecy:?}"));
     }
     if final_integrity.is_empty() {
         log_info("    integrity=[] (untrusted)");
     } else {
-        log_info(&format!("    integrity={:?}", final_integrity));
+        log_info(&format!("    integrity={final_integrity:?}"));
     }
-    log_info(&format!("    operation={}", operation));
+    log_info(&format!("    operation={operation}"));
 
     LabelResourceOutput {
         resource: ResourceLabels {
@@ -822,11 +819,11 @@ fn scope_string(scope_kind: ScopeKind, owner: Option<&str>, repo: Option<&str>) 
         ScopeKind::Public => POLICY_SCOPE_PUBLIC.to_string(),
         ScopeKind::Owner => owner.unwrap_or("").to_string(),
         ScopeKind::Repo => match (owner, repo) {
-            (Some(o), Some(r)) => format!("{}/{}", o, r),
+            (Some(o), Some(r)) => format!("{o}/{r}"),
             _ => String::new(),
         },
         ScopeKind::RepoPrefix => match (owner, repo) {
-            (Some(o), Some(prefix)) => format!("{}/{}*", o, prefix),
+            (Some(o), Some(prefix)) => format!("{o}/{prefix}*"),
             _ => String::new(),
         },
     }
@@ -853,7 +850,7 @@ pub extern "C" fn label_agent(
     let input: LabelAgentInput = match serde_json::from_slice(input_bytes) {
         Ok(v) => v,
         Err(e) => {
-            log_error(&format!("    FAILED to parse policy input: {}", e));
+            log_error(&format!("    FAILED to parse policy input: {e}"));
             return -1;
         }
     };
@@ -864,7 +861,7 @@ pub extern "C" fn label_agent(
     let scopes = match parse_scope(policy.scope) {
         Ok(v) => v,
         Err(e) => {
-            log_error(&format!("    FAILED policy scope validation: {}", e));
+            log_error(&format!("    FAILED policy scope validation: {e}"));
             return -1;
         }
     };
@@ -872,7 +869,7 @@ pub extern "C" fn label_agent(
     let integrity_floor = match parse_integrity(&policy.min_integrity) {
         Ok(v) => v,
         Err(e) => {
-            log_error(&format!("    FAILED policy integrity validation: {}", e));
+            log_error(&format!("    FAILED policy integrity validation: {e}"));
             return -1;
         }
     };
@@ -929,8 +926,7 @@ pub extern "C" fn label_agent(
         Ok(s) => s,
         Err(e) => {
             log_error(&format!(
-                "    FAILED to serialize label_agent output: {}",
-                e
+                "    FAILED to serialize label_agent output: {e}"
             ));
             return -1;
         }
@@ -952,15 +948,14 @@ pub extern "C" fn label_resource(
     // Read input bytes
     let input_bytes = unsafe { slice::from_raw_parts(input_ptr as *const u8, input_len as usize) };
     log_info(&format!(
-        "    input_len={}, output_size={}",
-        input_len, output_size
+        "    input_len={input_len}, output_size={output_size}"
     ));
 
     // Parse input JSON
     let input: LabelResourceInput = match serde_json::from_slice(input_bytes) {
         Ok(v) => v,
         Err(e) => {
-            log_error(&format!("    FAILED to parse input: {}", e));
+            log_error(&format!("    FAILED to parse input: {e}"));
             return -1;
         }
     };
@@ -974,7 +969,7 @@ pub extern "C" fn label_resource(
     let output_json = match serde_json::to_string(&output) {
         Ok(s) => s,
         Err(e) => {
-            log_error(&format!("    FAILED to serialize output: {}", e));
+            log_error(&format!("    FAILED to serialize output: {e}"));
             return -1;
         }
     };
@@ -994,8 +989,7 @@ pub extern "C" fn label_response(
 ) -> i32 {
     log_info(">>> label_response called");
     log_info(&format!(
-        "    input_len={}, output_size={}",
-        input_len, output_size
+        "    input_len={input_len}, output_size={output_size}"
     ));
 
     // Read input bytes
@@ -1007,7 +1001,7 @@ pub extern "C" fn label_response(
     let input: LabelResponseInput = match serde_json::from_slice(input_bytes) {
         Ok(v) => v,
         Err(e) => {
-            log_error(&format!("    FAILED to parse input: {}", e));
+            log_error(&format!("    FAILED to parse input: {e}"));
             log_info("<<< label_response returning 0 (parse error)");
             return 0; // Return 0 to skip fine-grained labeling
         }
@@ -1036,7 +1030,7 @@ pub extern "C" fn label_response(
         let output_json = match serde_json::to_string(&output) {
             Ok(s) => s,
             Err(e) => {
-                log_error(&format!("    FAILED to serialize path output: {}", e));
+                log_error(&format!("    FAILED to serialize path output: {e}"));
                 log_info("<<< label_response returning 0 (serialize error)");
                 return 0;
             }
@@ -1084,7 +1078,7 @@ pub extern "C" fn label_response(
     let output_json = match serde_json::to_string(&output) {
         Ok(s) => s,
         Err(e) => {
-            log_error(&format!("    FAILED to serialize output: {}", e));
+            log_error(&format!("    FAILED to serialize output: {e}"));
             log_info("<<< label_response returning 0 (serialize error)");
             return 0;
         }
@@ -1113,31 +1107,29 @@ pub extern "C" fn label_response(
 /// Allocate memory for the host to write into
 #[no_mangle]
 pub extern "C" fn alloc(size: u32) -> u32 {
-    log_debug(&format!(">>> alloc({})", size));
+    log_debug(&format!(">>> alloc({size})"));
     let Ok(layout) = Layout::from_size_align(size as usize, 8) else {
         log_error(&format!(
-            "    alloc FAILED: invalid layout for size {}",
-            size
+            "    alloc FAILED: invalid layout for size {size}"
         ));
         return 0;
     };
     let ptr = unsafe { std_alloc(layout) as u32 };
-    log_debug(&format!("<<< alloc returning ptr={}", ptr));
+    log_debug(&format!("<<< alloc returning ptr={ptr}"));
     ptr
 }
 
 /// Deallocate memory previously allocated with alloc
 #[no_mangle]
 pub extern "C" fn dealloc(ptr: u32, size: u32) {
-    log_debug(&format!(">>> dealloc(ptr={}, size={})", ptr, size));
+    log_debug(&format!(">>> dealloc(ptr={ptr}, size={size})"));
     if ptr == 0 || size == 0 {
         log_debug("    dealloc skipped (null ptr or zero size)");
         return;
     }
     let Ok(layout) = Layout::from_size_align(size as usize, 8) else {
         log_error(&format!(
-            "    dealloc FAILED: invalid layout for size {}",
-            size
+            "    dealloc FAILED: invalid layout for size {size}"
         ));
         return;
     };
@@ -1218,14 +1210,12 @@ mod tests {
             assert_eq!(
                 labeled_items[0].labels.secrecy,
                 labels::private_user_label(),
-                "{} plaintext response should retain user secrecy",
-                tool_name
+                "{tool_name} plaintext response should retain user secrecy"
             );
             assert_eq!(
                 labeled_items[0].labels.integrity,
                 labels::writer_integrity(scope_names::USER, &ctx),
-                "{} plaintext response should retain user integrity",
-                tool_name
+                "{tool_name} plaintext response should retain user integrity"
             );
         }
     }
@@ -1437,14 +1427,12 @@ mod tests {
             assert_eq!(
                 inferred,
                 scope_names::USER,
-                "{} should infer user baseline scope",
-                tool
+                "{tool} should infer user baseline scope"
             );
             assert_eq!(
                 infer_scope_for_baseline(tool, &tool_args, "github/gh-aw-mcpg"),
                 scope_names::USER,
-                "{} should keep user baseline scope even with repo context",
-                tool
+                "{tool} should keep user baseline scope even with repo context"
             );
         }
     }
@@ -1457,8 +1445,7 @@ mod tests {
             assert_eq!(
                 inferred,
                 scope_names::GITHUB,
-                "{} should infer github baseline scope",
-                tool
+                "{tool} should infer github baseline scope"
             );
         }
     }
@@ -1489,8 +1476,7 @@ mod tests {
             assert_eq!(
                 after_baseline,
                 labels::writer_integrity(scope_names::USER, &ctx),
-                "{} integrity should remain user-scoped after baseline enforcement",
-                tool
+                "{tool} integrity should remain user-scoped after baseline enforcement"
             );
         }
     }
@@ -1518,8 +1504,7 @@ mod tests {
             assert_eq!(
                 after_baseline,
                 labels::writer_integrity(scope_names::USER, &ctx),
-                "{} integrity should remain user-scoped after baseline enforcement",
-                tool
+                "{tool} integrity should remain user-scoped after baseline enforcement"
             );
         }
     }
@@ -1545,8 +1530,7 @@ mod tests {
             assert_eq!(
                 after_baseline,
                 labels::writer_integrity(scope_names::GITHUB, &ctx),
-                "{} integrity should remain github writer-scoped after baseline enforcement",
-                tool
+                "{tool} integrity should remain github writer-scoped after baseline enforcement"
             );
         }
     }
@@ -1564,8 +1548,7 @@ mod tests {
             assert_eq!(
                 inferred,
                 scope_names::USER,
-                "{} should infer user baseline scope",
-                tool
+                "{tool} should infer user baseline scope"
             );
         }
     }
@@ -1671,8 +1654,7 @@ mod tests {
             assert_eq!(
                 after_baseline,
                 labels::writer_integrity(scope_names::USER, &ctx),
-                "{} integrity should remain user writer-scoped after baseline enforcement",
-                tool
+                "{tool} integrity should remain user writer-scoped after baseline enforcement"
             );
         }
     }
@@ -1804,8 +1786,7 @@ mod tests {
         assert!(
             final_integrity.iter().any(|t| t.contains("blocked")),
             "transfer_repository must have blocked integrity after label_resource override; \
-             got: {:?}",
-            final_integrity
+             got: {final_integrity:?}"
         );
     }
 

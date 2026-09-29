@@ -156,7 +156,7 @@ fn apply_dispatch_repo_labels(
     } else {
         ("", "")
     };
-    let node_scope = format!("node/{}", node_id);
+    let node_scope = format!("node/{node_id}");
     let scope = if repo_id.is_empty() {
         node_scope.as_str()
     } else {
@@ -198,7 +198,7 @@ fn resolve_author_integrity(
         if is_any_trusted_actor(login, ctx) {
             floor = max_integrity(repo_id, &floor, &writer_integrity(repo_id, ctx), ctx);
         }
-        let resource_id = format!("{}/{}#{}", owner, repo, resource_num);
+        let resource_id = format!("{owner}/{repo}#{resource_num}");
         floor = elevate_via_collaborator_permission(
             login,
             repo_id,
@@ -352,7 +352,7 @@ pub fn apply_tool_labels(
         | "search_pull_requests_ff_fields_param" => {
             let (s_owner, s_repo, s_repo_id) = resolve_search_scope(tool_args, &owner, &repo);
             if !s_repo_id.is_empty() {
-                desc = format!("{}:{}", tool_name, s_repo_id);
+                desc = format!("{tool_name}:{s_repo_id}");
                 secrecy =
                     apply_repo_visibility_secrecy(&s_owner, &s_repo, &s_repo_id, secrecy, ctx);
                 // Use the search query's repo for privacy check when tool_args lacks owner/repo
@@ -574,7 +574,7 @@ pub fn apply_tool_labels(
             // then fall back to tool_args owner/repo.
             let (s_owner, s_repo, s_repo_id) = resolve_search_scope(tool_args, &owner, &repo);
             if !s_repo_id.is_empty() {
-                desc = format!("{}:{}", tool_name, s_repo_id);
+                desc = format!("{tool_name}:{s_repo_id}");
                 secrecy =
                     apply_repo_visibility_secrecy(&s_owner, &s_repo, &s_repo_id, secrecy, ctx);
                 integrity = writer_integrity(&s_repo_id, ctx);
@@ -1374,8 +1374,7 @@ mod tests {
         );
         assert!(
             integrity.iter().any(|l| expected_writer_integrity.contains(l)),
-            "discussion_comment_write integrity must contain a writer-level approved label, got: {:?}",
-            integrity
+            "discussion_comment_write integrity must contain a writer-level approved label, got: {integrity:?}"
         );
     }
 
@@ -1407,8 +1406,7 @@ mod tests {
                 integrity
                     .iter()
                     .any(|l| expected_writer_integrity.contains(l)),
-                "{op} integrity must contain a writer-level approved label, got: {:?}",
-                integrity
+                "{op} integrity must contain a writer-level approved label, got: {integrity:?}"
             );
         }
     }
@@ -1430,10 +1428,10 @@ mod tests {
             String::new(),
             &ctx,
         );
-        assert_eq!(secrecy, private_scope_label(&format!("node/{}", node_id)));
+        assert_eq!(secrecy, private_scope_label(&format!("node/{node_id}")));
         assert_eq!(
             integrity,
-            writer_integrity(&format!("node/{}", node_id), &ctx)
+            writer_integrity(&format!("node/{node_id}"), &ctx)
         );
     }
 
@@ -1496,8 +1494,7 @@ mod tests {
                 integrity
                     .iter()
                     .any(|l| expected_writer_integrity.contains(l)),
-                "{tool_name} ({method}) integrity must contain a writer-level approved label, got: {:?}",
-                integrity
+                "{tool_name} ({method}) integrity must contain a writer-level approved label, got: {integrity:?}"
             );
         }
     }
