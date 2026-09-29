@@ -19,6 +19,7 @@ type LabeledResource struct {
 
 // NewLabeledResource creates a new labeled resource with the given description
 func NewLabeledResource(description string) *LabeledResource {
+	logResource.Printf("Creating labeled resource: %s", description)
 	return &LabeledResource{
 		Description: description,
 		Secrecy:     *NewSecrecyLabel(),
@@ -90,6 +91,7 @@ func (c *CollectionLabeledData) Overall() *LabeledResource {
 }
 
 func (c *CollectionLabeledData) ToResult() (interface{}, error) {
+	logResource.Printf("CollectionLabeledData.ToResult: returning %d items", len(c.Items))
 	return itemsToResult(c.Items), nil
 }
 
@@ -123,11 +125,17 @@ func aggregateLabels(items []LabeledItem, emptyDescription, description string) 
 	}
 
 	overall := NewLabeledResource(description)
+	unlabeled := 0
 	for _, item := range items {
 		if item.Labels != nil {
 			overall.Secrecy.Label.Union(item.Labels.Secrecy.Label)
 			overall.Integrity.Label.Union(item.Labels.Integrity.Label)
+		} else {
+			unlabeled++
 		}
+	}
+	if unlabeled > 0 {
+		logResource.Printf("aggregateLabels: %s has %d of %d items without labels (skipped)", description, unlabeled, len(items))
 	}
 	return overall
 }
