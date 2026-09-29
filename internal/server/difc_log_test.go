@@ -12,6 +12,7 @@ import (
 	"github.com/github/gh-aw-mcpg/internal/difc"
 	"github.com/github/gh-aw-mcpg/internal/guard"
 	"github.com/github/gh-aw-mcpg/internal/logger"
+	"github.com/github/gh-aw-mcpg/internal/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -687,4 +688,107 @@ func TestBuildDIFCSingleItemFilteredError_NoReason(t *testing.T) {
 	require.ErrorContains(t, err, "issue:org/repo#7")
 	// No trailing "()" should appear when reason is empty.
 	assert.NotContains(t, err.Error(), "()")
+}
+
+// TestLogFilteredItems_EnclaveSessionRedactsIdentifyingFields verifies that enclave-scoped
+// contexts never persist raw item metadata to any log sink.
+func TestLogFilteredItems_EnclaveSessionRedactsIdentifyingFields(t *testing.T) {
+	tmpDir := t.TempDir()
+	cleanup := initTestLoggers(t, tmpDir)
+	defer cleanup()
+	require.NoError(t, logger.InitJSONLLogger(tmpDir, "rpc-messages.jsonl"))
+
+	t.Setenv("DEBUG", "server:difc_log")
+	originalLogDifcLog := logDifcLog
+	logDifcLog = logger.New("server:difc_log")
+	require.True(t, logDifcLog.Enabled())
+	defer func() {
+		logDifcLog = originalLogDifcLog
+	}()
+
+	item := newTestFilteredItem(
+		map[string]interface{}{
+			"html_url": "https://github.com/acme/secret/issues/42",
+			"number":   float64(42),
+			"sha":      "deadbeef",
+			"user":     map[string]interface{}{"login": "private-user"},
+		},
+		"issue:acme/secret#42", "integrity too low",
+		[]string{"private:acme/secret"}, []string{"none"},
+	)
+	filtered := &difc.FilteredCollectionLabeledData{Filtered: []difc.FilteredItemDetail{item}}
+
+	logFilteredItems(mcp.WithEnclaveSession(context.Background()), "github", "list_issues", filtered)
+	cleanup()
+
+	lines := readLogLines(t, filepath.Join(tmpDir, "mcp-gateway.log"), "[DIFC-FILTERED]")
+	require.Len(t, lines, 1)
+
+	var entry logger.FilteredItemLogEntry
+	require.NoError(t, json.Unmarshal([]byte(extractJSONFromDIFCLine(t, lines[0])), &entry))
+
+	assert := assert.New(t)
+	assert.Equal("github", entry.ServerID)
+	assert.Equal("list_issues", entry.ToolName)
+	assert.True(strings.HasPrefix(entry.Description, "item:"), "description should be hashed: %s", entry.Description)
+	assert.True(strings.HasPrefix(entry.AuthorLogin, "user:"))
+	assert.True(strings.HasPrefix(entry.HTMLURL, "url:"))
+	assert.True(strings.HasPrefix(entry.Number, "num:"))
+	assert.NotEqual("num:42", entry.Number)
+	assert.True(strings.HasPrefix(entry.SHA, "sha:"))
+
+	textLog, err := os.ReadFile(filepath.Join(tmpDir, "mcp-gateway.log"))
+	require.NoError(t, err)
+	assert.Contains(string(textLog), "Logging filtered items")
+	for _, raw := range []string{"acme/secret", "private-user", "deadbeef"} {
+		assert.NotContains(string(textLog), raw)
+	}
+
+	jsonlContent, err := os.ReadFile(filepath.Join(tmpDir, "rpc-messages.jsonl"))
+	require.NoError(t, err)
+	var jsonlEntry logger.JSONLFilteredItem
+	require.NoError(t, json.Unmarshal(jsonlContent, &jsonlEntry))
+	assert.Equal("difc_filtered", jsonlEntry.Event)
+	assert.True(strings.HasPrefix(jsonlEntry.Description, "item:"))
+	assert.True(strings.HasPrefix(jsonlEntry.AuthorLogin, "user:"))
+	assert.True(strings.HasPrefix(jsonlEntry.HTMLURL, "url:"))
+	assert.True(strings.HasPrefix(jsonlEntry.Number, "num:"))
+	assert.NotEqual("num:42", jsonlEntry.Number)
+	assert.True(strings.HasPrefix(jsonlEntry.SHA, "sha:"))
+	for _, raw := range []string{"acme/secret", "private-user", "deadbeef", "num:42"} {
+		assert.NotContains(string(jsonlContent), raw)
+	}
+}
+
+// TestLogCoarseDIFCDenial_EnclaveSessionRedactsEntry verifies the enclave redaction branch
+// of logCoarseDIFCDenial for both the text log and the JSONL log.
+func TestLogCoarseDIFCDenial_EnclaveSessionRedactsEntry(t *testing.T) {
+	tmpDir := t.TempDir()
+	require.NoError(t, logger.InitFileLogger(tmpDir, "mcp-gateway.log"))
+	require.NoError(t, logger.InitServerFileLogger(tmpDir))
+	require.NoError(t, logger.InitJSONLLogger(tmpDir, "rpc-messages.jsonl"))
+	defer logger.CloseAllLoggers()
+
+	resource := difc.NewLabeledResource("issue:acme/secret#7")
+	resource.Secrecy.Label.Add("private:acme/secret")
+	agent := difc.NewAgentLabels("agent")
+
+	logCoarseDIFCDenial(mcp.WithEnclaveSession(context.Background()), "safeoutputs", "create_issue", &guard.PipelineAccessDenied{
+		Resource: resource, AgentLabels: agent,
+		EvalResult: &difc.EvaluationResult{Reason: "denied for repo:acme/secret"},
+	})
+	logger.CloseAllLoggers()
+
+	lines := readLogLines(t, filepath.Join(tmpDir, "mcp-gateway.log"), "[DIFC-DENIED]")
+	require.Len(t, lines, 1)
+	assert.NotContains(t, lines[0], "acme/secret")
+	assert.Contains(t, lines[0], "item:")
+
+	content, err := os.ReadFile(filepath.Join(tmpDir, "rpc-messages.jsonl"))
+	require.NoError(t, err)
+	var entry logger.JSONLFilteredItem
+	require.NoError(t, json.Unmarshal(content, &entry))
+	assert.Equal(t, "difc_filtered", entry.Event)
+	assert.True(t, strings.HasPrefix(entry.Description, "item:"))
+	assert.NotContains(t, string(content), "acme/secret")
 }
